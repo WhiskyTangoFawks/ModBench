@@ -268,6 +268,16 @@ describe('a record row', () => {
     });
   });
 
+  it('carries its record as its Argument: its plugin\'s address in the row\'s origin, and its FormKey', async () => {
+    const record = makeRecord(3);
+
+    const row = await rowOf(record, 'ModA');
+
+    expect(row).toMatchObject({
+      argument: { kind: 'record', plugin: { name: 'Plugin0.esp', origin: 'ModA' }, formKey: record.formKey, editorId: 'Record3' },
+    });
+  });
+
   it('states a record of a tracked plugin', async () => {
     expect((await rowOf(makeRecord(0), 'Data', { tracked: true, editable: true })).contextValue).toBe('record tracked editable');
   });
@@ -407,6 +417,14 @@ describe('worldspace, cell and placed rows state their record', () => {
     expect(row.command).toEqual({
       command: 'modbench.record.open', title: 'Open Record',
       arguments: [{ formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } }],
+    });
+  });
+
+  it.each(['worldspace', 'cell', 'placed'] as const)('a %s row carries its record as its Argument', async (which) => {
+    const row = (await spatialRowsOver('World'))[which];
+
+    expect(row).toMatchObject({
+      argument: { kind: 'record', plugin: { name: 'A.esp', origin: 'ModA' }, formKey: '000801:A.esp', editorId: 'World' },
     });
   });
 

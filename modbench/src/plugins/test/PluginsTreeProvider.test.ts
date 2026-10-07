@@ -240,6 +240,15 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header'
   });
 });
 
+describe('a plugin row carries its plugin as its Argument', () => {
+  it.each([
+    ['a plugin line', new PluginNode({ name: 'A.esp', enabled: true }, 'ModA')],
+    ['a plugin the game loads with none', new ImplicitMasterNode('A.esp', 'ModA')],
+  ])('%s', (_what, node) => {
+    expect(node.argument).toEqual({ kind: 'plugin', plugin: { name: 'A.esp', origin: 'ModA' } });
+  });
+});
+
 describe('PluginNode', () => {
   it('renders a plain row — no icon, no description', () => {
     const node = new PluginNode({ name: 'A.esp', enabled: true }, 'SomeMod');

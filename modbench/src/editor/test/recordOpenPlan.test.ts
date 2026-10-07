@@ -29,14 +29,9 @@ describe('recordOpenPlan', () => {
     expect(recordOpenPlan([A, B], [])).toEqual({ addresses: [A, B], placement: 'active', preview: false });
   });
 
-  it('reads a Plugins record row as its own copy: its record\'s plugin, in the row\'s origin', () => {
-    const row = { kind: 'record', label: 'Gun', record: { formKey: A.formKey, plugin: 'A.esp' }, origin: 'ModA' };
+  it('reads a row as its own copy: the plugin and origin its Argument names', () => {
+    const row = { kind: 'record', label: 'Gun', argument: { kind: 'record', plugin: { name: 'A.esp', origin: 'ModA' }, formKey: A.formKey } };
     expect(recordOpenPlan(row, []).addresses).toEqual([{ ...A, plugin: { name: 'A.esp', origin: 'ModA' } }]);
-  });
-
-  it.each(['worldspace', 'cell', 'placed'])('reads a Plugins %s row as its own copy', (kind) => {
-    expect(recordOpenPlan({ kind, formKey: A.formKey, plugin: 'A.esp', origin: 'ModA' }, []).addresses)
-      .toEqual([{ ...A, plugin: { name: 'A.esp', origin: 'ModA' } }]);
   });
 
   it('keeps the copy an Argument names', () => {
@@ -49,18 +44,15 @@ describe('recordOpenPlan', () => {
     expect(recordOpenPlan({ header }, []).addresses).toEqual([{ formKey: '000000:A.esp', plugin: header }]);
   });
 
-  it('reads a row outside Plugins by its FormKey alone, as giving no plugin', () => {
-    const holder = { formKey: A.formKey, plugin: 'A.esp', origin: 'ModA' };
-    expect(recordOpenPlan(holder, []).addresses).toEqual([A]);
-  });
-
   it('skips a row that states no record', () => {
     expect(recordOpenPlan({ kind: 'recordType' }, []).addresses).toEqual([]);
   });
 
   it('with no Argument, opens the records selected in the focused view, each pinned in a tab of its own', () => {
-    const rows = [{ kind: 'record', record: { formKey: A.formKey } }, { formKey: B.formKey }];
-    expect(recordOpenPlan(undefined, rows)).toEqual({ addresses: [A, B], placement: 'active', preview: false });
+    const rows = [{ argument: { kind: 'record', plugin: { name: 'A.esp', origin: 'ModA' }, formKey: A.formKey } }, { formKey: B.formKey }];
+    expect(recordOpenPlan(undefined, rows)).toEqual({
+      addresses: [{ ...A, plugin: { name: 'A.esp', origin: 'ModA' } }, B], placement: 'active', preview: false,
+    });
   });
 
   it('with no Argument and no record selected, opens nothing', () => {
@@ -81,8 +73,9 @@ describe('besideArgument', () => {
     expect(besideArgument(A, [])).toEqual([{ ...A, placement: 'beside' }]);
   });
 
-  it('reads a tree row by the FormKey it states and skips a row that states none', () => {
-    const row = { kind: 'record', record: { formKey: A.formKey } };
-    expect(besideArgument(row, [row, { kind: 'recordType' }])).toEqual([{ ...A, placement: 'beside' }]);
+  it('reads a tree row by the Argument it carries and skips a row that carries none', () => {
+    const plugin = { name: 'A.esp', origin: 'ModA' };
+    const row = { kind: 'record', argument: { kind: 'record', plugin, formKey: A.formKey } };
+    expect(besideArgument(row, [row, { kind: 'recordType' }])).toEqual([{ ...A, plugin, placement: 'beside' }]);
   });
 });

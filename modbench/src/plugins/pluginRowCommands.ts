@@ -5,11 +5,12 @@ import {
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import { modOfRow } from '../drivingLib/modRow';
-import { modOfOrigin } from './modOfOrigin';
+import { modArgumentOf, pluginArgumentOf } from '../drivingLib/argument';
+import { recordArgumentOf } from '../drivingLib/recordArgument';
+import { modOfOrigin } from '../drivingLib/modOfOrigin';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { trackProgressMessage } from './trackProgress';
-import { PluginNode, type PluginsTreeNode } from './PluginsTreeProvider';
+import type { PluginsTreeNode } from './PluginsTreeProvider';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { compilableSelected, PLUGINS_KEY_ARGS } from './gestureEntry';
 import { gestureEntry, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';
@@ -48,6 +49,8 @@ interface TrackTargets {
   mods: readonly string[];
   /** Plugins no mod provides, such as Overwrite's or the game's own. */
   notInMod: readonly PluginAddress[];
+  /** Rows that carry neither a mod's nor a plugin's Argument. */
+  unreadable: number;
 }
 
 const NOT_IN_A_MOD = 'it is not in a mod';
@@ -59,8 +62,10 @@ export function registerTrackCommand(deps: TrackDeps, paletteSelection: () => re
     'modbench.mod.track',
     async (clicked?: unknown, selected?: readonly unknown[]) => {
       const rows = clicked === undefined ? paletteSelection() : selected ?? [clicked];
-      const invokedFrom = rows.some((row) => modOfRow(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
-      await trackMods(deps, targetsOf(rows, deps.modDirs()), invokedFrom);
+      const invokedFrom = rows.some((row) => modArgumentOf(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
+      const targets = targetsOf(rows, deps.modDirs());
+      if (targets.unreadable > 0) deps.reporter.report('error', `Could not track ${targets.unreadable} of ${rows.length} selected rows: they carry no mod or plugin.`);
+      await trackMods(deps, targets, invokedFrom);
     },
   );
 }
@@ -68,20 +73,21 @@ export function registerTrackCommand(deps: TrackDeps, paletteSelection: () => re
 function targetsOf(rows: readonly unknown[], modDirs: ReadonlyMap<string, string>): TrackTargets {
   const mods = new Set<string>();
   const notInMod: PluginAddress[] = [];
+  let unreadable = 0;
   for (const row of rows) {
-    const mod = modOfRow(row);
-    if (mod !== undefined) { mods.add(mod); continue; }
+    const mod = modArgumentOf(row);
+    if (mod !== undefined) { mods.add(mod.name); continue; }
     const plugin = pluginAddressOf(row);
-    if (plugin === undefined) continue;
+    if (plugin === undefined) { unreadable++; continue; }
     const owner = modOfOrigin(modDirs, plugin.origin);
     if (owner === undefined) notInMod.push(plugin); else mods.add(owner);
   }
-  return { mods: [...mods], notInMod };
+  return { mods: [...mods], notInMod, unreadable };
 }
 
 // A plugin row or a column header acts on its plugin's mod.
 function pluginAddressOf(row: unknown): PluginAddress | undefined {
-  return row instanceof PluginNode ? { name: row.plugin.name, origin: row.origin } : columnHeaderOf(row);
+  return pluginArgumentOf(row)?.plugin ?? columnHeaderOf(row);
 }
 
 // A mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost, so this runs
@@ -161,8 +167,7 @@ export function registerDecompileCommand(
       const header = columnHeaderOf(clicked);
       const plugins = header
         ? [header]
-        : selectionArgument(gestureEntry(clicked, selected, viewSelection), 'plugin')
-          .map((node) => ({ name: node.plugin.name, origin: node.origin }));
+        : selectionArgument(gestureEntry(clicked, selected, viewSelection), 'plugin').map((node) => node.argument.plugin);
       if (plugins.length === 0 || !(await confirmDecompile(deps.ask, plugins))) return;
       await runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
         const outcome = await deps.client.decompile(plugins);
@@ -229,7 +234,7 @@ async function argumentOf(
   if (header) return [header];
   const entry = gestureEntry(clicked, selected, viewSelection);
   if (entry.clicked === undefined) return pickCompilable(deps, entry);
-  return selectionArgument(entry, 'plugin').map((node) => ({ name: node.plugin.name, origin: node.origin }));
+  return selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
 }
 
 // plugins.md, Compile, story 3: from the palette, a pick of the tracked, editable plugins. An
@@ -322,10 +327,8 @@ export class CompileProblems {
   }
 }
 
-// A record tab's column header names its plugin and origin (editor.md, Menus and keys).
-function columnHeaderOf(value: unknown): { name: string; origin: string } | undefined {
-  if (typeof value !== 'object' || value === null || Reflect.get(value, 'webviewSection') !== 'recordHeader') return undefined;
-  const name: unknown = Reflect.get(value, 'plugin');
-  const origin: unknown = Reflect.get(value, 'origin');
-  return typeof name === 'string' && typeof origin === 'string' ? { name, origin } : undefined;
+// A record tab's column header carries its record's Argument, whose plugin the gesture acts on (editor.md, Menus and keys).
+function columnHeaderOf(value: unknown): PluginAddress | undefined {
+  return typeof value === 'object' && value !== null && Reflect.get(value, 'webviewSection') === 'recordHeader'
+    ? recordArgumentOf(value)?.plugin : undefined;
 }

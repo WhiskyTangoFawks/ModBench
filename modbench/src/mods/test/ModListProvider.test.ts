@@ -18,7 +18,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
-import { modOfRow } from '../../drivingLib/modRow';
+import { modArgumentOf } from '../../drivingLib/argument';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -414,9 +414,9 @@ describe('ModListProvider', () => {
     const patch = present((await provider.getChildren(separator)).concat(roots).find((n) => n instanceof ModNode), 'the mod row');
     const overwrite = present(roots.find((n) => n instanceof OverwriteNode), 'the Overwrite row');
 
-    expect(modOfRow(patch)).toBe('Patch');
-    expect(modOfRow(separator)).toBeUndefined();
-    expect(modOfRow(overwrite)).toBeUndefined();
+    expect(modArgumentOf(patch)).toEqual({ kind: 'mod', name: 'Patch' });
+    expect(modArgumentOf(separator)).toBeUndefined();
+    expect(modArgumentOf(overwrite)).toBeUndefined();
   });
 
   it('re-renders on a second, later value published after construction, not only the value handed to the constructor', async () => {

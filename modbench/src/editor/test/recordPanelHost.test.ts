@@ -77,7 +77,7 @@ function register({
     reporterFor: () => reporter,
     ask: vi.fn(),
     focusedView,
-    viewSelections: new Map([['test.view', selection]]),
+    recordViewIds: ['test.view'],
     modFacts: { trackedMods: () => new Set(), modDirs: () => new Map(), onChange: () => ({ dispose: () => undefined }) },
     recordWrite: (command) => command(),
     refreshSourceControlFor: () => undefined,
@@ -99,6 +99,7 @@ beforeEach(() => {
 describe('modbench.record.open from the palette, with no Argument', () => {
   const open = () => commandHandlers.get('modbench.record.open')?.();
   const winner = { name: 'A.esp', origin: 'ModA' };
+  const rowOf = (formKey: string) => ({ argument: { kind: 'record', plugin: winner, formKey } });
   const renderingTheWinner = (): { meditClient: InMemoryMEditClient } => {
     const meditClient = new InMemoryMEditClient();
     meditClient.setQueryAnswer('getRecordOwner', winner);
@@ -108,7 +109,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
   };
 
   it('opens the records selected in the focused view as one grid, pinned, on the first record\'s document', async () => {
-    register({ selection: () => [{ formKey: '000801:A.esp', kind: 'placed' }, { kind: 'record', record: { formKey: '000802:A.esp' } }], ...renderingTheWinner() });
+    register({ selection: () => [rowOf('000801:A.esp'), rowOf('000802:A.esp')], ...renderingTheWinner() });
 
     await open();
 
@@ -152,7 +153,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
   it('reports a record VS Code could not open', async () => {
     reporter.report.mockClear();
-    register({ selection: () => [{ formKey: '000801:A.esp', kind: 'placed' }], ...renderingTheWinner() });
+    register({ selection: () => [rowOf('000801:A.esp')], ...renderingTheWinner() });
     executeCommand.mockRejectedValueOnce(new Error('no editor'));
 
     await open();
@@ -161,7 +162,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
   });
 
   it('does not ask when the selection holds a record', async () => {
-    register({ selection: () => [{ formKey: '000801:A.esp', kind: 'placed' }] });
+    register({ selection: () => [rowOf('000801:A.esp')] });
 
     await open();
 
@@ -213,7 +214,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     const PLACED = '000803:A.esp';
     registerAnswering({ path: null }, PLACED, 'SharedRef - 000803_A.esp.json');
 
-    await commandHandlers.get('modbench.record.open')?.({ kind: 'placed', formKey: PLACED, plugin: plugin.name, origin: plugin.origin });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', plugin, formKey: PLACED } });
 
     expect(opened()).toEqual([['/ModA/A.esp/SharedRef - 000803_A.esp.json?formKey=000803%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
   });

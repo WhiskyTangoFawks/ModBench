@@ -14,6 +14,7 @@ import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
 import { PluginFacts, placeOf, type PluginWarning } from './pluginFacts';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
+import type { PluginArgument } from '../drivingLib/argument';
 import { errorMessage } from '../ports/errorMessage';
 import { DATA_DIRECTORY_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
@@ -91,12 +92,14 @@ function openHeaderCommand(header: PluginAddress): vscode.Command {
  *  plugins.md, The tree, story 3. */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
+  readonly argument: PluginArgument;
   constructor(
     public readonly plugin: PluginEntry,
     /** Which plugin of the name this row stands for (ADR-0012), the join key for every fact. */
     public readonly origin: string,
   ) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
+    this.argument = { kind: 'plugin', plugin: { name: plugin.name, origin } };
     this.id = rowIdentity(this.kind, { name: plugin.name, origin });
     this.contextValue = `plugin ${plugin.enabled ? 'enabled' : 'disabled'}`;
     // xEdit parity: selecting a plugin node shows its File Header, with no separate affordance.
@@ -113,8 +116,10 @@ export class PluginNode extends vscode.TreeItem {
  *  no line). */
 export class ImplicitMasterNode extends vscode.TreeItem {
   readonly kind = 'implicitMaster' as const;
+  readonly argument: PluginArgument;
   constructor(public readonly name: string, public readonly origin: string, path?: string) {
     super(name, vscode.TreeItemCollapsibleState.None);
+    this.argument = { kind: 'plugin', plugin: { name, origin } };
     this.id = rowIdentity(this.kind, { name, origin });
     this.contextValue = 'pluginImplicit';
     this.iconPath = new vscode.ThemeIcon('lock');

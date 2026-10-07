@@ -15,7 +15,7 @@ import { ExtendedFieldDocuments } from './extendedFieldEditor';
 import { commitField, registerRecordPanelContextCommands, type FieldCommitDeps } from './recordPanelContextCommands';
 import { registerGridKeyCommands } from './gridKeyCommands';
 import {
-  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands,
+  registerRecordLifecycleCommands, registerRecordCopyCommands, type ViewSelections,
 } from './recordLifecycleCommands';
 import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from './notificationWiring';
 import { trackLoadOrderStatus } from './loadOrderStatusTracker';
@@ -56,8 +56,8 @@ export interface EditorCommandDeps {
     | 'getRecordFile' | 'getRecordOfFile' | 'getRenderedDocument'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
-  // Each view's own selection, which that view's keys act on.
-  viewSelections: ReadonlyMap<string, () => readonly unknown[]>;
+  // The rows selected in the view `view` names, which a key bound in that view acts on.
+  selectionOf: (view: string) => readonly unknown[];
   recordWrite: RecordWrite;
   // The plugin's Source Control status, which a committed field edit redrives, lives on the session
   // object, narrowed to a callback like focusedViewSelection.
@@ -354,6 +354,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, meditClient,
     outputChannel,
   } = deps;
+  const selections: ViewSelections = { focused: deps.focusedViewSelection, of: deps.selectionOf };
   // Lives for the activation, disposed with the editor commands.
   const loadOrderStatusTracker = trackLoadOrderStatus(
     meditClient, () => announceConflictsComputed(recordPanels, editsInFlight));
@@ -408,10 +409,9 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // Editor owns the record gestures (delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
     ...registerRecordLifecycleCommands(
-      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, deps.focusedViewSelection, deps.recordWrite),
+      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, selections, deps.recordWrite),
     ...registerRecordCopyCommands(
-      meditClient, deps.reporterFor('recordCopy'), deps.ask, deps.focusedViewSelection, deps.recordWrite),
-    ...registerDeleteHereCommands(deps.viewSelections),
+      meditClient, deps.reporterFor('recordCopy'), deps.ask, selections, deps.recordWrite),
     vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {
       const plan = recordOpenPlan(argument, deps.focusedViewSelection());
       const reporter = deps.reporterFor('recordOpen');

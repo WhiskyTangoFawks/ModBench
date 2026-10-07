@@ -26,7 +26,7 @@ vi.mock('vscode', async () => {
 });
 
 import {
-  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands,
+  registerRecordLifecycleCommands, registerRecordCopyCommands,
 } from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { RecordWrite } from '../../drivingLib/writingGesture';
@@ -40,11 +40,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-const RECORD_NODE = {
-  kind: 'record', origin: 'ModA',
-  record: { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', editorId: null },
-};
+const carrying = ({ formKey, plugin, origin }: { formKey: string; plugin: string; origin: string }, editorId?: string) =>
+  ({ argument: { kind: 'record', plugin: { name: plugin, origin }, formKey, editorId } });
+
+let viewSelection: readonly unknown[] = [];
+const selectionsOfViews = new Map<string, readonly unknown[]>();
+const selections = { focused: () => viewSelection, of: (view: string) => selectionsOfViews.get(view) ?? [] };
+
 const RECORD_IDENTITY = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+const RECORD_NODE = carrying(RECORD_IDENTITY);
 
 function recordingWrite(): { write: RecordWrite; writing: string[]; viewsAskedFor: (string | undefined)[] } {
   const writing: string[] = [];
@@ -61,12 +65,11 @@ function recordingWrite(): { write: RecordWrite; writing: string[]; viewsAskedFo
 }
 
 describe('registerRecordLifecycleCommands', () => {
-  let viewSelection: readonly unknown[] = [];
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
     const { write, writing, viewsAskedFor } = recordingWrite();
-    registerRecordLifecycleCommands(client, reporter, ask, () => viewSelection, write);
+    registerRecordLifecycleCommands(client, reporter, ask, selections, write);
     return { reporter, ask, writing, viewsAskedFor };
   }
 
@@ -87,47 +90,27 @@ describe('registerRecordLifecycleCommands', () => {
     });
   });
 
-  describe('a view\'s Delete key, which cannot name its view', () => {
-    const PLUGINS_ROW = { kind: 'record', origin: 'ModA', record: { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', editorId: null } };
-    const HOLDER_ROW = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB', editorId: 'Held' };
+  describe('a view\'s Delete key, which passes its view as args', () => {
+    afterEach(() => { selectionsOfViews.clear(); });
 
     it('deletes the selection of the view it is bound in, not the view last selected in', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { landed: [], refused: [] });
-      viewSelection = [HOLDER_ROW];
+      viewSelection = [carrying({ formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' })];
+      selectionsOfViews.set('modbench.pluginListTree', [RECORD_NODE]);
       invoke(client, 'Delete');
-      registerDeleteHereCommands(new Map<string, () => readonly unknown[]>([
-        ['modbench.pluginListTree', () => [PLUGINS_ROW]],
-        ['modbench.referencedByTree', () => [HOLDER_ROW]],
-      ]));
 
-      await present(handlers.get('modbench.pluginListTree.deleteHere'), 'the Plugins delete key command')();
+      await present(handlers.get('modbench.record.delete'), 'the delete command')({ view: 'modbench.pluginListTree' });
 
-      expect(client.calls.filter(c => c.method === 'deleteRecords').map(c => c.args[0])).toEqual([
-        [{ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' }],
-      ]);
+      expect(client.calls.filter(c => c.method === 'deleteRecords').map(c => c.args[0])).toEqual([[RECORD_IDENTITY]]);
     });
 
-    it('deletes a plugin copy in Referenced By as (plugin, origin) of that copy', async () => {
+    it('deletes nothing with nothing selected in its view, rather than fall back to another view', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { landed: [], refused: [] });
+      viewSelection = [RECORD_NODE];
       invoke(client, 'Delete');
-      registerDeleteHereCommands(new Map([['modbench.referencedByTree', () => [HOLDER_ROW]]]));
 
-      await present(handlers.get('modbench.referencedByTree.deleteHere'), 'the Referenced By delete key command')();
-
-      expect(client.calls.filter(c => c.method === 'deleteRecords').map(c => c.args[0])).toEqual([
-        [{ formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' }],
-      ]);
-    });
-
-    it('does nothing with nothing selected, rather than fall back to another view', async () => {
-      const client = new InMemoryMEditClient();
-      viewSelection = [HOLDER_ROW];
-      invoke(client, 'Delete');
-      registerDeleteHereCommands(new Map([['modbench.pluginListTree', () => []]]));
-
-      await present(handlers.get('modbench.pluginListTree.deleteHere'), 'the Plugins delete key command')();
+      await present(handlers.get('modbench.record.delete'), 'the delete command')({ view: 'modbench.pluginListTree' });
 
       expect(client.calls.filter(c => c.method === 'deleteRecords')).toEqual([]);
     });
@@ -140,13 +123,13 @@ describe('registerRecordLifecycleCommands', () => {
     const FIRST = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
     const SECOND = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
     const UNTRACKED = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
-    const SECOND_NODE = { kind: 'record', origin: 'ModA', record: { formKey: SECOND.formKey, plugin: SECOND.plugin, editorId: 'SecondNpc' } };
-    const UNTRACKED_NODE = { kind: 'record', origin: 'ModB', record: { formKey: UNTRACKED.formKey, plugin: UNTRACKED.plugin, editorId: null } };
+    const SECOND_NODE = carrying(SECOND, 'SecondNpc');
+    const UNTRACKED_NODE = carrying(UNTRACKED);
     const deleteCalls = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'deleteRecords').map(c => c.args);
 
-    const COLUMN_HEADER = { webviewSection: 'recordHeader', ...FIRST, compilable: true, editable: true, preventDefaultContextMenuItems: true };
+    const COLUMN_HEADER = { webviewSection: 'recordHeader', ...carrying(FIRST), compilable: true, editable: true, preventDefaultContextMenuItems: true };
 
-    it.each([['a RecordNode row', RECORD_NODE], ['a plain identity literal', RECORD_IDENTITY], ['the Editor\'s column header', COLUMN_HEADER]])(
+    it.each([['a row', RECORD_NODE], ['the Editor\'s column header', COLUMN_HEADER]])(
       'sends the clicked record alone from %s when no selection comes with it', async (_label, arg) => {
         const client = new InMemoryMEditClient();
         client.setCommandResult('deleteRecords', { landed: [FIRST], refused: [] });
@@ -162,7 +145,7 @@ describe('registerRecordLifecycleCommands', () => {
       client.setCommandResult('deleteRecords', { landed: [SECOND], refused: [] });
       const { ask } = invoke(client, 'Delete');
 
-      await deleteRecords({ kind, ...SECOND, editorId: 'Here' });
+      await deleteRecords({ kind, ...carrying(SECOND, 'Here') });
 
       expect(deleteCalls(client)).toEqual([[[SECOND]]]);
       expect(ask.asked.map((question) => question.message)).toEqual([
@@ -184,14 +167,18 @@ describe('registerRecordLifecycleCommands', () => {
       ]);
     });
 
-    it('asks nothing and deletes nothing for an argument that names no record', async () => {
+    it('asks nothing, deletes nothing and says so for a row whose record field was renamed away from the Argument', async () => {
       const client = new InMemoryMEditClient();
-      const { ask } = invoke(client, 'Delete');
+      const { ask, reporter } = invoke(client, 'Delete');
+      const renamed = { label: 'Armor', kind: 'record', origin: 'ModA', rec: { formKey: FIRST.formKey, plugin: FIRST.plugin } };
 
-      await deleteRecords({ nothing: true });
+      await deleteRecords(renamed);
 
       expect(ask.asked).toEqual([]);
       expect(deleteCalls(client)).toEqual([]);
+      expect(reporter.reports).toEqual([{
+        severity: 'error', message: 'Could not delete 1 of 1 records.', detail: '"Armor" (it carries no record Argument)',
+      }]);
     });
 
     it('sends the whole selection as one call', async () => {
@@ -265,18 +252,18 @@ describe('registerRecordLifecycleCommands', () => {
       }]);
     });
 
-    it('refuses a record whose argument states no origin, naming it, since a filename alone names no one plugin, and still deletes the rest', async () => {
+    it('refuses a row that carries no record Argument, naming it, and still deletes the rest', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { landed: [FIRST], refused: [] });
       const { reporter } = invoke(client, 'Delete');
 
-      await deleteRecords(RECORD_NODE, [RECORD_NODE, { formKey: '000700:Lost.esp', plugin: 'Lost.esp' }]);
+      await deleteRecords(RECORD_NODE, [RECORD_NODE, { label: 'Lost.esp', formKey: '000700:Lost.esp', plugin: 'Lost.esp', origin: 'ModA' }]);
 
       expect(deleteCalls(client)).toEqual([[[FIRST]]]);
       expect(reporter.reports).toEqual([{
         severity: 'error',
         message: 'Could not delete 1 of 2 records.',
-        detail: '"000700:Lost.esp in Lost.esp" (it states no origin)',
+        detail: '"Lost.esp" (it carries no record Argument)',
       }]);
     });
 
@@ -354,16 +341,12 @@ describe('registerRecordLifecycleCommands', () => {
 
 describe('modbench.record.copy, one command over the selection: the mode picked, then the destinations', () => {
   const SOURCE = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
-  const SECOND_NODE = {
-    kind: 'record', origin: 'ModA',
-    record: { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', editorId: 'Second' },
-  };
   const SECOND = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+  const SECOND_NODE = carrying(SECOND, 'Second');
   const PATCH = { name: 'Patch.esp', origin: 'PatchMod' };
   const OTHER = { name: 'Other.esp', origin: 'OtherMod' };
-  const HEADER = { webviewSection: 'recordHeader', ...SOURCE, compilable: true, editable: true, preventDefaultContextMenuItems: true };
+  const HEADER = { webviewSection: 'recordHeader', ...carrying(SOURCE), compilable: true, editable: true, preventDefaultContextMenuItems: true };
 
-  let viewSelection: readonly unknown[] = [];
   afterEach(() => { viewSelection = []; });
   beforeEach(function dropUnansweredPicksSoTheyDoNotAnswerTheNextTest() { showQuickPick.mockReset(); });
 
@@ -373,7 +356,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     const { write, writing, viewsAskedFor } = recordingWrite();
     client.setQueryAnswer('getRecordsWithChildren', []);
     client.setQueryAnswer('getChildrenInDestinations', []);
-    registerRecordCopyCommands(client, reporter, ask, () => viewSelection, write);
+    registerRecordCopyCommands(client, reporter, ask, selections, write);
     return { reporter, ask, writing, viewsAskedFor };
   }
 
@@ -397,7 +380,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
 
   const copyCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'copyRecords').map((c) => c.args);
 
-  it.each([['a RecordNode row', RECORD_NODE], ['a plain identity literal', RECORD_IDENTITY], ['the Editor\'s record header', HEADER]])(
+  it.each([['a row', RECORD_NODE], ['the Editor\'s record header', HEADER]])(
     'copies the record %s names into every destination picked, in the mode picked', async (_what, arg) => {
       const client = new InMemoryMEditClient();
       destinations(client);
@@ -410,20 +393,20 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
       expect(copyCalls(client)).toEqual([[[SOURCE], 'New', [PATCH, OTHER], false]]);
     });
 
-  it('refuses a record whose argument states no origin, naming it, and still copies the rest', async () => {
+  it('refuses a row that carries no record Argument, naming it, and still copies the rest', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
     client.setCommandResult('copyRecords', { landed: [], refused: [] });
     pick('New', [PATCH]);
     const { reporter } = invoke(client);
 
-    await copy(RECORD_NODE, [RECORD_NODE, { formKey: '000700:Lost.esp', plugin: 'Lost.esp' }]);
+    await copy(RECORD_NODE, [RECORD_NODE, { label: 'Lost.esp', formKey: '000700:Lost.esp', plugin: 'Lost.esp', origin: 'ModA' }]);
 
     expect(copyCalls(client)).toEqual([[[SOURCE], 'New', [PATCH], false]]);
     expect(reporter.reports).toEqual([{
       severity: 'error',
       message: 'Could not copy 1 of 2 records.',
-      detail: '"000700:Lost.esp in Lost.esp" (it states no origin)',
+      detail: '"Lost.esp" (it carries no record Argument)',
     }]);
   });
 
@@ -550,7 +533,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     pick('Override', [PATCH, OTHER]);
     const { ask, reporter } = invoke(client);
 
-    await copy(RECORD_NODE, [RECORD_NODE, elsewhere]);
+    await copy(RECORD_NODE, [RECORD_NODE, carrying(elsewhere)]);
 
     expect(ask.asked).toEqual([]);
     expect(copyCalls(client)).toEqual([[[SOURCE, elsewhere], 'Override', [PATCH, OTHER], false]]);

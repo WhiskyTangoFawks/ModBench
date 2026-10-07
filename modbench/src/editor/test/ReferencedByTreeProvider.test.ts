@@ -273,7 +273,7 @@ describe('ReferencedByTreeProvider — a referrer\'s children (where it is held)
     provider.showFor('000001:Fallout4.esm');
     const [referrer] = await provider.getChildren();
     const holders = expectInstancesOf(await provider.getChildren(present(referrer, 'the referrer')), ReferencedByHolderNode);
-    expect(holders.map(h => h.origin)).toEqual(['ModA', 'ModB']);
+    expect(holders.map(h => h.argument.plugin.origin)).toEqual(['ModA', 'ModB']);
     expect(new Set(holders.map(h => h.id)).size).toBe(2);
   });
 
@@ -285,7 +285,9 @@ describe('ReferencedByTreeProvider — a referrer\'s children (where it is held)
     provider.showFor('000001:Fallout4.esm');
     const [referrer] = await provider.getChildren();
     const [holder] = expectInstancesOf(await provider.getChildren(present(referrer, 'the referrer')), ReferencedByHolderNode);
-    expect(holder).toMatchObject({ formKey: '000002:Fallout4.esm', plugin: 'MyMod.esp', origin: 'MyMod', editorId: 'TestNPC' });
+    expect(holder).toMatchObject({
+      argument: { kind: 'record', formKey: '000002:Fallout4.esm', plugin: { name: 'MyMod.esp', origin: 'MyMod' }, editorId: 'TestNPC' },
+    });
   });
 });
 

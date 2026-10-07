@@ -71,8 +71,8 @@ describe('modbench.mod.track', () => {
 
   class ModsRowStandIn extends TreeItem {
     readonly kind = 'mod';
-    readonly mod: { name: string };
-    constructor(name: string) { super(name); this.mod = { name }; }
+    readonly argument: { kind: 'mod'; name: string };
+    constructor(name: string) { super(name); this.argument = { kind: 'mod', name }; }
   }
 
   function row(plugin: { name: string; origin: string }): PluginNode {
@@ -157,12 +157,26 @@ describe('modbench.mod.track', () => {
     expect(reporter.landings).toEqual(['Tracked 2 mods.']);
   });
 
+  it('says so, and tracks the rest, for a row that carries neither a mod nor a plugin', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
+    const { handler, reporter } = invokeTrack(client);
+    const renamed = { kind: 'plugin', plugin: { name: FIRST.name }, origin: FIRST.origin };
+
+    await handler(row(FIRST), [row(FIRST), renamed]);
+
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModA'], expect.anything()] }]);
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not track 1 of 2 selected rows: they carry no mod or plugin.', detail: undefined,
+    }]);
+  });
+
   it('on an Editor column header, tracks the column plugin\'s mod', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
     const { handler } = invokeTrack(client);
     const header = {
-      webviewSection: 'recordHeader', formKey: '000801:Other.esp', plugin: 'Second.esp', origin: 'ModA',
+      webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Other.esp', plugin: { name: 'Second.esp', origin: 'ModA' } },
       compilable: false, editable: false, preventDefaultContextMenuItems: true,
     };
 
@@ -472,7 +486,7 @@ describe('modbench.plugin.compile', () => {
     const { handler } = registered(client, { viewSelection: [row(PATCH)] });
 
     await handler({
-      webviewSection: 'recordHeader', formKey: '000801:Other.esp', plugin: 'Other.esp', origin: 'ModB',
+      webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Other.esp', plugin: { name: 'Other.esp', origin: 'ModB' } },
       compilable: true, editable: true, preventDefaultContextMenuItems: true,
     });
 
@@ -631,7 +645,7 @@ describe('modbench.plugin.decompile', () => {
     const { handler } = registered(client, 'Decompile', [row(FIRST)]);
 
     await handler({
-      webviewSection: 'recordHeader', formKey: '000801:Second.esp', plugin: 'Second.esp', origin: 'ModA',
+      webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Second.esp', plugin: { name: 'Second.esp', origin: 'ModA' } },
       compilable: false, editable: false, preventDefaultContextMenuItems: true,
     });
 

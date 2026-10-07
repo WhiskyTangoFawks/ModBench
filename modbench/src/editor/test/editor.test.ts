@@ -155,7 +155,7 @@ const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =
 const NO_MODS: ModFacts = { trackedMods: () => new Set<string>(), modDirs: () => new Map<string, string>(), onChange: () => ({ dispose: () => undefined }) };
 
 function makeEditor(
-  client = new InMemoryMEditClient(), viewSelections = new Map<string, () => readonly unknown[]>(), modFacts = NO_MODS,
+  client = new InMemoryMEditClient(), recordViewIds = [] as readonly string[], modFacts = NO_MODS,
 ) {
   const focusedView = createFocusedView();
   const outputChannel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn() };
@@ -166,7 +166,7 @@ function makeEditor(
     reporterFor: () => ({ report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() }),
     ask: vi.fn(),
     focusedView,
-    viewSelections,
+    recordViewIds,
     recordWrite: (command) => command(),
     refreshSourceControlFor: () => undefined,
     modFacts,
@@ -494,12 +494,12 @@ describe('an edit of a FormID, fired with no panel', () => {
 
 describe('a record gesture from the palette', () => {
   it('opens the records selected in a view the Editor is handed, while that view has the focus', async () => {
-    const plugins = { selection: [{ formKey: '000803:A.esp', kind: 'placed' }], onDidChangeSelection: (listener: (event: { selection: unknown[] }) => void) => { listener({ selection: [] }); return { dispose: () => undefined }; } };
+    const plugins = { selection: [{ argument: { kind: 'record', plugin: { name: 'A.esp', origin: 'ModA' }, formKey: '000803:A.esp' } }], onDidChangeSelection: (listener: (event: { selection: unknown[] }) => void) => { listener({ selection: [] }); return { dispose: () => undefined }; } };
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getRecordOwner', COPY_PLUGIN);
     client.setQueryAnswer('getRecordFile', { path: null });
     client.setQueryAnswer('getRenderedDocument', { fileName: 'Placed.json', text: '{}' });
-    const { focusedView } = makeEditor(client, new Map([['modbench.pluginListTree', () => plugins.selection]]));
+    const { focusedView } = makeEditor(client, ['modbench.pluginListTree']);
     focusedView.follow('modbench.pluginListTree', plugins);
 
     await h.commands.get('modbench.record.open')?.();
