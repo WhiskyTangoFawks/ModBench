@@ -966,7 +966,7 @@ describe('package.json compile on the record tab', () => {
   it('is on the column header\'s menu of a compilable plugin, and nowhere else on the tab', () => {
     const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
     expect(webviewMenu.filter((e) => e.command === 'modbench.plugin.compile').map((e) => e.when)).toEqual([
-      String.raw`webviewId == 'modbench.record' && webviewSection =~ /\brecordHeader\b/ && editable`,
+      String.raw`webviewId == 'modbench.record' && webviewSection =~ /\brecordHeader\b/ && compilable`,
     ]);
     expect(pkg.contributes.menus['editor/title'] ?? []).toEqual([]);
   });
@@ -1046,13 +1046,16 @@ describe('package.json record tab menus', () => {
   });
 
   it.each([
-    ['an untracked mod', 'Untracked', false, ['modbench.mod.track', 'modbench.record.copy']],
-    ['a tracked mod', 'Tracked', false, ['modbench.plugin.decompile', 'modbench.record.copy']],
-    ['a tracked mod, editable', 'Tracked', true, [
+    ['an untracked mod', 'Untracked', false, false, ['modbench.mod.track', 'modbench.record.copy']],
+    ['a tracked mod', 'Tracked', false, false, ['modbench.plugin.decompile', 'modbench.record.copy']],
+    ['a tracked mod, compilable but not editable', 'Tracked', true, false, [
+      'modbench.plugin.decompile', 'modbench.plugin.compile', 'modbench.record.copy',
+    ]],
+    ['a tracked mod, editable', 'Tracked', true, true, [
       'modbench.plugin.decompile', 'modbench.plugin.compile', 'modbench.record.copy', 'modbench.record.delete',
     ]],
-  ])('offers on the column of a plugin in %s only what applies', (_what, origin, editable, commands) => {
-    expect(offered({ webviewSection: 'recordHeader', origin, editable })).toEqual(commands);
+  ])('offers on the column of a plugin in %s only what applies', (_what, origin, compilable, editable, commands) => {
+    expect(offered({ webviewSection: 'recordHeader', origin, compilable, editable })).toEqual(commands);
   });
 
   it('hides the internal command that follows a reference from the palette', () => {

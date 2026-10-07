@@ -47,6 +47,7 @@ export interface FixturePlugin {
   origin?: string | null;
   isImmutable?: boolean;
   isTracked?: boolean;
+  pluginSourceUnreadable?: boolean;
 }
 
 export interface PanelOpts {
@@ -82,6 +83,7 @@ export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}):
       immutableSet: columnsWhere(p => p.isImmutable === true),
       // ADR-0007: an unstated plugin is untracked.
       trackedSet: columnsWhere(p => p.isTracked === true),
+      sourceUnreadableSet: columnsWhere(p => p.pluginSourceUnreadable === true),
       conflictsComputed: opts.conflictsComputed ?? true,
       loadFailures: opts.loadFailures ?? [],
       fileColumn: opts.fileColumn ?? winnerColumn(compare()),
