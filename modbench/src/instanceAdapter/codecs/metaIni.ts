@@ -10,7 +10,12 @@ export const MOD_META_FILE_NAME = 'meta.ini';
 // The keys Modbench owns in meta.ini, each written only when present.
 type MetaKeys = Partial<OwnedMetaKeys>;
 
-const OWNED_GENERAL_KEYS = ['gameName', 'modid', 'version', 'installationFile'] as const;
+const OWNED_GENERAL_KEYS = [
+  ['gameName', 'gameName'],
+  ['nexusId', 'modid'],
+  ['version', 'version'],
+  ['archiveFilename', 'installationFile'],
+] as const;
 
 // A `[installedFiles]` array line is `<index>\modid=` or `<index>\fileid=`; anything else
 // in the section (its own `size=` key, malformed input) is not one.
@@ -46,7 +51,7 @@ function parseInstalledFiles(text: string): InstalledFileId[] | undefined {
   if (pairs.size === 0) return undefined;
   return [...pairs.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([, { modid, fileid }]) => ({ modid: modid ?? '', fileid: fileid ?? '' }));
+    .map(([, { modid, fileid }]) => ({ nexusId: modid ?? '', fileId: fileid ?? '' }));
 }
 
 export function parseMetaIni(text: string): ModMeta {
@@ -68,8 +73,8 @@ export function parseMetaIni(text: string): ModMeta {
 
 function renderGeneralSection(meta: MetaKeys, eol = '\n'): string {
   const lines = ['[General]'];
-  for (const key of OWNED_GENERAL_KEYS) {
-    const value = meta[key];
+  for (const [field, key] of OWNED_GENERAL_KEYS) {
+    const value = meta[field];
     if (value) lines.push(`${key}=${value}`);
   }
   return lines.join(eol) + eol;
@@ -79,8 +84,8 @@ function renderInstalledFilesSection(pairs: readonly InstalledFileId[] | undefin
   if (!pairs || pairs.length === 0) return '';
   const lines = ['[installedFiles]'];
   pairs.forEach((pair, i) => {
-    lines.push(`${i + 1}\\modid=${pair.modid}`);
-    lines.push(`${i + 1}\\fileid=${pair.fileid}`);
+    lines.push(`${i + 1}\\modid=${pair.nexusId}`);
+    lines.push(`${i + 1}\\fileid=${pair.fileId}`);
   });
   lines.push(`size=${pairs.length}`);
   return lines.join(eol) + eol;
@@ -108,7 +113,7 @@ function setKeyInBody(body: string, key: string, value: string | undefined, eol:
 
 function applyGeneralEdits(body: string, meta: MetaKeys, eol: string): string {
   let next = body;
-  for (const key of [...OWNED_GENERAL_KEYS].reverse()) next = setKeyInBody(next, key, meta[key], eol);
+  for (const [field, key] of [...OWNED_GENERAL_KEYS].reverse()) next = setKeyInBody(next, key, meta[field], eol);
   return next;
 }
 

@@ -45,8 +45,8 @@ export type GameFolder =
 
 /** A Nexus mod and file id pair recorded as installed into a mod. */
 export interface InstalledFileId {
-  modid: string;
-  fileid: string;
+  nexusId: string;
+  fileId: string;
 }
 
 /** What a mod's metadata says; a field is undefined when absent or empty. */
@@ -104,9 +104,9 @@ export type SeparatorsPlace = Extract<MovePlace, { kind: 'separator' | 'modOrder
 /** The metadata keys Modbench writes into a mod's meta. */
 export interface OwnedMetaKeys {
   gameName: string;
-  modid?: string;
+  nexusId?: string;
   version?: string;
-  installationFile?: string;
+  archiveFilename?: string;
   installedFiles?: readonly InstalledFileId[];
 }
 

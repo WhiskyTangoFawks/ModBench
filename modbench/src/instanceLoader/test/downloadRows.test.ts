@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { DownloadedFile, DownloadMeta } from '../../instanceAdapter/instanceAdapter';
-import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from '../downloadRows';
+import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from '../downloadRows';
 
 const metaOf = (fields: Partial<DownloadMeta> = {}): DownloadMeta => ({ status: 'Downloaded', excluded: false, ...fields });
 
@@ -62,21 +62,21 @@ describe('buildDownloadRows', () => {
   });
 });
 
-describe('modsByInstallationFile — which mods each download was installed into', () => {
+describe('modsByArchiveFilename — which mods each download was installed into', () => {
   it('keys a mod under the download its meta names, case-folded', () => {
-    expect(modsByInstallationFile([{ name: 'UFO4P', archiveFilename: 'UFO4P-4598.7z' }]))
+    expect(modsByArchiveFilename([{ name: 'UFO4P', archiveFilename: 'UFO4P-4598.7z' }]))
       .toEqual(new Map([['ufo4p-4598.7z', ['UFO4P']]]));
   });
 
   it('keys every mod naming the same download under it, in mod order, a download installed into several mods never being forced to one', () => {
-    expect(modsByInstallationFile([
+    expect(modsByArchiveFilename([
       { name: 'Textures', archiveFilename: 'Pack.7z' },
       { name: 'Meshes', archiveFilename: 'pack.7z' },
     ])).toEqual(new Map([['pack.7z', ['Textures', 'Meshes']]]));
   });
 
-  it('claims no download for a mod with no installation file: unknown, never an uninstall', () => {
-    expect(modsByInstallationFile([{ name: 'Hand Made' }])).toEqual(new Map());
+  it('claims no download for a mod with no archive filename: unknown, never an uninstall', () => {
+    expect(modsByArchiveFilename([{ name: 'Hand Made' }])).toEqual(new Map());
   });
 });
 
