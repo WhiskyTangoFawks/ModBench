@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
-import { logGameFolderNotFound } from './gameFolderNotFoundLog';
+import { gameFolderNotFoundLine } from './gameFolderNotFoundLog';
+import { ErrorNode } from '../drivingLib/errorNode';
+import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 
 /** `instance` is `undefined` with no instance open. The view still registers then — it is the
@@ -38,14 +40,6 @@ function profileRow({ activeProfile }: InstanceValue): vscode.TreeItem {
   return row;
 }
 
-// The error row (common.md, States, story 2).
-function failedReadRow(reason: string): vscode.TreeItem {
-  const row = new vscode.TreeItem(`Failed to load: ${reason}`);
-  row.tooltip = reason;
-  row.iconPath = new vscode.ThemeIcon('error');
-  return row;
-}
-
 /** A readout of the instance itself, one fact per row, read from the instance value alone
  *  (ADR-0015). */
 export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>, vscode.Disposable {
@@ -60,7 +54,7 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
     this.subscriptions = deps.instance
       ? [
         deps.instance.subscribe(changed), deps.instance.onReadFailure(changed),
-        logGameFolderNotFound(deps.instance, (line) => deps.channel.warn(line)),
+        logOncePerFailure(deps.instance, gameFolderNotFoundLine, (line) => deps.channel.warn(line)),
       ]
       : [];
   }
@@ -82,7 +76,7 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
     const { instance } = this.deps;
     if (element || !instance) return [];
     if (instance.sequence === 0) {
-      return instance.readFailure === undefined ? [] : [failedReadRow(instance.readFailure)];
+      return instance.readFailure === undefined ? [] : [new ErrorNode(instance.readFailure)];
     }
     return [gameRow(instance.value), profileRow(instance.value)];
   }
