@@ -473,8 +473,26 @@ describe('the record filter, from the commands that set and clear it', () => {
       expect(view.filterActive()).toEqual([true, false]);
       expect(view.recordBrowserRefreshes).toHaveLength(1);
       expect(view.reporter.reports).toEqual([
-        { severity: 'warning', message: 'The record filter a was cleared — Conversion Error', detail: undefined },
+        { severity: 'warning', message: 'The record filter a was cleared', detail: 'Conversion Error' },
       ]);
+    });
+  });
+
+  describe('a stale clearing of an older record filter', () => {
+    it('leaves the newer filter shown and says nothing', async () => {
+      const source = { scheme: 'untitled', path: 'a' };
+      h.document = { uri: source, fileName: 'a', getText: () => ARMOR_SQL };
+      const view = filtering();
+      await view.filter(source);
+
+      view.client.emit({
+        kind: 'record-filter-cleared', plugin: '', origin: '', keys: [], sequence: 0,
+        recordFilterCleared: { source: 'older.sql', reason: 'Conversion Error' },
+      });
+
+      expect(view.description()).toBe('records: a');
+      expect(view.filterActive()).toEqual([true]);
+      expect(view.reporter.reports).toEqual([]);
     });
   });
 

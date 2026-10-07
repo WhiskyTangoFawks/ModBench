@@ -55,7 +55,7 @@ export interface NotificationPayloads {
   'track-progress': TrackStatus;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
   'plugin-source-unreadable': { plugins: PluginAddress[] };
-  'record-filter-cleared': { source: string; reason: string };
+  'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
   'rows-changed': { plugin: PluginAddress; keys: string[] };
   'plugin-changed': { plugin: PluginAddress };
 }

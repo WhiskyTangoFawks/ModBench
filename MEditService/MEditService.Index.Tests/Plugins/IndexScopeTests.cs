@@ -227,7 +227,11 @@ public class IndexScopeTests(TestPluginFixture fixture)
         var holder = new LoadOrderHolder();
         FormKey npcKey = default;
         var data = new PluginFixtureBuilder("reindex-filter-fault")
-            .WithPlugin("Plugin.esp", mod => npcKey = mod.Npcs.AddNew("7").FormKey)
+            .WithPlugin("Plugin.esp", mod =>
+            {
+                npcKey = mod.Npcs.AddNew("7").FormKey;
+                mod.Npcs.AddNew("8");
+            })
             .Build();
         using (data)
         {
@@ -259,7 +263,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             Assert.Equal("filter.sql", cleared.Source);
             Assert.Contains("NotANumber", cleared.Reason, StringComparison.Ordinal);
             var listing = manager.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0));
-            Assert.Equal(1, listing.Total);
+            Assert.Equal(2, listing.Total);
         }
     }
 

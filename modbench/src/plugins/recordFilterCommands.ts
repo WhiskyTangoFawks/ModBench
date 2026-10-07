@@ -9,7 +9,7 @@ export interface FilterCommandDeps {
   /** Symmetric on purpose: a stale `false` surviving a clear would leave a plugin permanently
    *  hidden (plugins.md). */
   refreshMatchingPlugins: () => void;
-  showRecordFilter: (filter: RecordFilter | null) => void;
+  showRecordFilter: ShowRecordFilter;
   reporter: Reporter;
 }
 
@@ -21,15 +21,20 @@ export interface RecordFilterViews {
 
 /** The record filter's single writer. Each surface names the filter by its source, never by its
  *  SQL (plugins.md, Order and view state, story 3). */
+export type ShowRecordFilter = ((filter: RecordFilter | null) => void) & { shownSource(): string | undefined };
+
 export function makeShowRecordFilter(
   lens: { setActiveSql(sql: string | null): void }, views: RecordFilterViews,
-): (filter: RecordFilter | null) => void {
-  return (filter) => {
+): ShowRecordFilter {
+  let shown: string | undefined;
+  const show = (filter: RecordFilter | null): void => {
+    shown = filter?.source;
     void vscode.commands.executeCommand('setContext', 'modbench.record.filterActive', filter !== null);
     lens.setActiveSql(filter?.sql ?? null);
     views.pluginsNameFilter.setBaseDescription(filter === null ? undefined : `records: ${filter.source}`);
     views.pluginsTree.setRecordFilterSource(filter?.source);
   };
+  return Object.assign(show, { shownSource: () => shown });
 }
 
 const NEW_FILTER_LABEL = '$(add) New filter…';
@@ -77,8 +82,9 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
 
   return [
     { dispose: client.onNotification('record-filter-cleared', ({ source, reason }) => {
+      if (showRecordFilter.shownSource() !== source) return;
       show(null);
-      reporter.report('warning', `The record filter ${source} was cleared — ${reason}`);
+      reporter.report('warning', `The record filter ${source} was cleared`, reason);
     }) },
     vscode.commands.registerCommand('modbench.record.filter', (source?: vscode.Uri) =>
       source === undefined ? fromPick() : fromDocument(source)),
