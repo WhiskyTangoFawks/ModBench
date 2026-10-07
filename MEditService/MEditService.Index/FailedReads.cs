@@ -72,7 +72,7 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
     private ReadState ReadStateOf(RegisteredPlugin plugin)
     {
         var binary = index.FileContentHash(plugin.Path);
-        return Projector.TreeModOf(plugin.Key, plugin.Provider) is { } mod
+        return Projector.TreeModOf(plugin) is { } mod
             ? new ReadState(binary, SourceRepository.Over(mod, index.Release).StampsOf(plugin.Key))
             : new ReadState(binary, null);
     }

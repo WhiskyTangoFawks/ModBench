@@ -104,7 +104,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.NotInTrackedMod, refused.Refusal);
         Assert.Contains("Other.esp", refused.Message, StringComparison.Ordinal);
-        Assert.False(SourceRepository.HoldsTreeFor(_untrackedMod, "Other.esp"));
+        Assert.False(SourceRepository.SourceReads(new RegisteredPlugin("Other.esp", UntrackedModName, "", new PluginProvider.FromMod(UntrackedModName, _untrackedMod))));
     }
 
     [Fact]

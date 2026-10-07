@@ -153,7 +153,7 @@ public sealed class RecordQueryService(
         IRecordReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string text)
     {
         var snapshot = _loadOrder.Require();
-        if (SourceRepository.TrackedModOf(snapshot, plugin) is not { } mod || !SourceRepository.HoldsTreeFor(mod.Folder, plugin.Name))
+        if (snapshot.Plugin(plugin) is not { Provider: PluginProvider.FromMod mod } registered || !SourceRepository.SourceReads(registered))
             return reads.DocumentFromText(formKey, plugin, loadOrderIndex, text);
 
         try
@@ -256,7 +256,9 @@ public sealed class RecordQueryService(
         if (RequireReads().GetDocument(formKey, plugin) is not { Body: { } body } copy) return null;
         var identity = new RecordIdentity(formKey, copy.RecordType, copy.EditorId);
         var snapshot = _loadOrder.Require();
-        var tree = SourceRepository.TrackedModOf(snapshot, plugin) is { } mod ? SourceRepository.Over(mod, snapshot.GameRelease) : null;
+        var tree = snapshot.Plugin(plugin) is { Provider: PluginProvider.FromMod mod } registered && SourceRepository.IsTracked(registered)
+            ? SourceRepository.Over(mod, snapshot.GameRelease)
+            : null;
         return new RenderedDocument(tree?.FileNameOf(plugin, identity) ?? SourceRepository.FileNameOf(identity), body);
     }
 
@@ -265,7 +267,7 @@ public sealed class RecordQueryService(
     {
         if (RequireReads().GetDocument(formKey, plugin) is not { } copy) return null;
         var snapshot = _loadOrder.Require();
-        if (snapshot.ProviderOf(plugin) is not PluginProvider.FromMod mod || !SourceRepository.HoldsTreeFor(mod.Folder, plugin.Name))
+        if (snapshot.Plugin(plugin) is not { Provider: PluginProvider.FromMod mod } registered || !SourceRepository.SourceReads(registered))
             return new RecordFile(null);
         return SourceRepository.Over(mod, snapshot.GameRelease).FullPathOf(plugin, new RecordIdentity(formKey, copy.RecordType, copy.EditorId))
             is { } path

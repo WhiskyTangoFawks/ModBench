@@ -40,12 +40,12 @@ public sealed class RenameSourceHandler
         }
 
         if (loaded.Provider is not PluginProvider.FromMod mod
-            || SourceRepository.Open(mod, loadOrder.GameRelease) is not { } repository
-            || !repository.HoldsTreeFor(plugin))
+            || !SourceRepository.SourceReads(loaded))
         {
             return Refused(RenameSourceRefusal.NotTracked, $"{plugin.Name} has no plugin source, so there is none to rename.");
         }
 
+        var repository = SourceRepository.Over(mod, loadOrder.GameRelease);
         try
         {
             return repository.RenameSource(plugin, newName)
