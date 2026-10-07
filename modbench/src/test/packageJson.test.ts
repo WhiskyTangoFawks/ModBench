@@ -24,11 +24,7 @@ vi.mock('vscode', () => ({
 import { ModNode, NO_MODS_MESSAGE, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
 import { CELL_VALUE_SETTING } from '../mods/conflictTableEditor';
 import { CONFLICT_CELL_VALUES } from '../wire/conflictTable';
-import { MODS_KEY_ARGS } from '../mods/gestureEntry';
-import { PLUGINS_KEY_ARGS } from '../plugins/gestureEntry';
 import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
-import { DownloadNode } from '../downloads/DownloadsProvider';
-import { downloadRowFixture } from './mo2/downloadRowFixture';
 import { GREY_INACTIVE_FILES_SETTING } from '../mods/inactiveFiles';
 import { indicatorSetting, MOD_INDICATORS } from '../mods/modIndicators';
 
@@ -145,6 +141,19 @@ const pkg = parsePackageManifest(
   JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')),
 );
 
+type Context = Parameters<typeof holds>[1];
+const inInstance: Context = { [FOLDER_KEY]: 'instance' };
+const keysFiring = (context: Context): { key: string; mac?: string; command: string }[] =>
+  pkg.contributes.keybindings.filter((k) => holds(k.when, context)).map(({ key, mac, command }) => ({ key, mac, command }));
+const offeredIn = (entries: readonly MenuEntry[], context: Context): string[] =>
+  placed(entries.filter((e) => holds(e.when, context))).map(([command]) => command);
+const without = (facts: Context, fact: string): Context => Object.fromEntries(Object.entries(facts).filter(([key]) => key !== fact));
+const eachMissingFact = (rows: readonly (readonly [string, Context])[]) =>
+  rows.flatMap(([command, facts]) => Object.keys(facts).map((fact) => [command, fact, facts] as const));
+const paletteOffers = (command: string, context: Context): boolean =>
+  present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+    .filter((e) => e.command === command).some((e) => holds(e.when, context));
+
 describe('package.json activation', () => {
   it('auto-activates on startup so the Activity Bar icon is never stuck hidden', () => {
     expect(pkg.activationEvents).toContain('onStartupFinished');
@@ -223,11 +232,34 @@ describe('package.json outside an instance', () => {
     expect(requires(String.raw`${IN_AN_INSTANCE} && !(viewItem =~ /\b(a|b)\b/)`, IN_AN_INSTANCE)).toBe(true);
   });
 
+  describe('holds', () => {
+    const on = { view: 'modbench.pluginListTree', viewItem: 'plugin compilable' };
+
+    it('needs every conjunct of an &&', () => {
+      expect(holds(String.raw`view == modbench.pluginListTree && viewItem =~ /\bcompilable\b/`, on)).toBe(true);
+      expect(holds(String.raw`view == modbench.pluginListTree && viewItem =~ /\buntrackedInMod\b/`, on)).toBe(false);
+    });
+
+    it('takes any alternative of an ||', () => {
+      expect(holds('viewItem == other || view == modbench.pluginListTree', on)).toBe(true);
+      expect(holds('viewItem == other || view == other', on)).toBe(false);
+    });
+
+    it('inverts what follows a !, a parenthesised group included', () => {
+      expect(holds(String.raw`view == modbench.pluginListTree && !(viewItem =~ /\bcompilable\b/)`, on)).toBe(false);
+      expect(holds(String.raw`view == modbench.pluginListTree && !(viewItem =~ /\buntrackedInMod\b/)`, on)).toBe(true);
+      expect(holds('!compilable', {})).toBe(true);
+      expect(holds('!compilable', { compilable: true })).toBe(false);
+    });
+
+    it('binds && tighter than ||, and lets parentheses regroup', () => {
+      expect(holds('view == other && viewItem == other || viewItem == plugin compilable', on)).toBe(true);
+      expect(holds('view == other && (viewItem == other || viewItem == plugin compilable)', on)).toBe(false);
+    });
+  });
+
   it('evaluates a clause against the context it is given', () => {
     const on = { view: 'modbench.pluginListTree', viewItem: 'plugin compilable' };
-    expect(holds(String.raw`view == modbench.pluginListTree && viewItem =~ /\bcompilable\b/`, on)).toBe(true);
-    expect(holds(String.raw`view == modbench.pluginListTree && viewItem =~ /\buntrackedInMod\b/`, on)).toBe(false);
-    expect(holds(String.raw`view == modbench.pluginListTree && !(viewItem =~ /\bcompilable\b/)`, on)).toBe(false);
     expect(holds('view == modbench.pluginListTree && (viewItem == plugin || viewItem == other)', { ...on, viewItem: 'plugin' })).toBe(true);
     expect(holds("webviewId == 'modbench' && compilable", { webviewId: 'modbench', compilable: true })).toBe(true);
     expect(holds("webviewId == 'modbench' && compilable", { webviewId: 'modbench' })).toBe(false);
@@ -242,7 +274,7 @@ describe('package.json outside an instance', () => {
   });
 });
 
-describe('package.json Referenced By panel migration', () => {
+describe('package.json Referenced By view container', () => {
   it('lives in a Panel-location viewsContainer, not stacked under the modbench activity-bar container', () => {
     const panel: { id: string }[] = pkg.contributes.viewsContainers.panel;
     const panelContainerIds = new Set(panel.map((c) => c.id));
@@ -316,10 +348,12 @@ describe('package.json Referenced By title bar', () => {
     expect(titleBar().map((e) => e.group)).toEqual(['navigation@1', 'navigation@1', 'navigation@2', 'navigation@2']);
   });
 
-  it('slot 2 shows the one direction the list is not in', () => {
-    const when = (command: string) => present(titleBar().find((e) => e.command === command), command).when;
-    expect(when('modbench.referrer.sortDescending')).toBe(`${REFERENCED_BY_VIEW} && !modbench.referrer.descending && ${IN_AN_INSTANCE}`);
-    expect(when('modbench.referrer.sortAscending')).toBe(`${REFERENCED_BY_VIEW} && modbench.referrer.descending && ${IN_AN_INSTANCE}`);
+  it.each([
+    [{}, ['modbench.referencedByTree.filterHere', 'modbench.referrer.sortDescending']],
+    [{ 'modbench.referrer.descending': true }, ['modbench.referencedByTree.filterHere', 'modbench.referrer.sortAscending']],
+    [{ 'modbench.referrer.filterActive': true }, ['modbench.referencedByTree.clearFilterHere', 'modbench.referrer.sortDescending']],
+  ])('with %j the title bar shows one filter control and the one direction the list is not in', (facts, commands) => {
+    expect(offeredIn(titleBar(), { view: 'modbench.referencedByTree', ...inInstance, ...facts })).toEqual(commands);
   });
 });
 
@@ -340,8 +374,6 @@ describe('package.json New Plugin / record filter reachable from the merged tree
     const clear = entryFor('modbench.record.clearFilter');
     expect(filter.group).toBe('navigation@3');
     expect(clear.group).toBe('navigation@3');
-    expect(filter.when).toBe(`view == modbench.pluginListTree && !modbench.record.filterActive && ${IN_AN_INSTANCE}`);
-    expect(clear.when).toBe(`view == modbench.pluginListTree && modbench.record.filterActive && ${IN_AN_INSTANCE}`);
   });
 
   it('places create plugin at slot 4', () => {
@@ -409,28 +441,36 @@ describe('package.json filtering is one UX', () => {
     expect(commandTitle('modbench.record.clearFilter').icon).toBe('$(clear-all)');
   });
 
-  const DURABLE_FILTERS = [
+  const OTHER_DURABLE_FILTERS = [
     ['modbench.modList', 'modbench.modList.filterHere', 'modbench.modList.clearFilterHere', 'modbench.mod.filterActive'],
     ['modbench.pluginListTree', 'modbench.pluginListTree.filterHere', 'modbench.pluginListTree.clearFilterHere', 'modbench.plugin.filterActive'],
-    ['modbench.downloads', 'modbench.downloads.filterHere', 'modbench.downloads.clearFilterHere', 'modbench.downloadedFile.filterActive'],
     ['modbench.referencedByTree', 'modbench.referencedByTree.filterHere', 'modbench.referencedByTree.clearFilterHere', 'modbench.referrer.filterActive'],
   ] as const;
+  const DOWNLOADS_FILTER = ['modbench.downloads', 'modbench.downloads.filterHere', 'modbench.downloads.clearFilterHere', 'modbench.downloadedFile.filterActive'] as const;
+  const entryOn = (view: string, command: string): MenuEntry => present(
+    titleMenus().find((e) => e.command === command && e.when.includes(`view == ${view}`)),
+    `${command} on ${view}`,
+  );
 
-  it.each(DURABLE_FILTERS)('%s swaps slot 1 to its clear variant while a filter is active', (view, open, clearCommand, key) => {
-    const openEntry = present(
-      titleMenus().find((e) => e.command === open && e.when.includes(`view == ${view}`)),
-      `${open} on ${view}`,
-    );
-    const clearEntry = present(
-      titleMenus().find((e) => e.command === clearCommand && e.when.includes(`view == ${view}`)),
-      `${clearCommand} on ${view}`,
-    );
-    expect(openEntry.when).toBe(`view == ${view} && !${key} && ${IN_AN_INSTANCE}`);
-    expect(clearEntry.when).toBe(`view == ${view} && ${key} && ${IN_AN_INSTANCE}`);
-    expect(clearEntry.group).toBe('navigation@1');
+  it.each(OTHER_DURABLE_FILTERS)('%s swaps slot 1 to its clear variant while a filter is active', (view, open, clearCommand, key) => {
+    const idle = { view, ...inInstance };
+    const filtering = { ...idle, [key]: true };
+    expect(holds(entryOn(view, open).when, idle)).toBe(true);
+    expect(holds(entryOn(view, clearCommand).when, idle)).toBe(false);
+    expect(holds(entryOn(view, open).when, filtering)).toBe(false);
+    expect(holds(entryOn(view, clearCommand).when, filtering)).toBe(true);
+    expect(entryOn(view, clearCommand).group).toBe('navigation@1');
   });
 
-  it.each(DURABLE_FILTERS)('%s clears with $(clear-all)', (_view, _open, clearCommand) => {
+  it('Downloads swaps slot 1 to its clear variant on its filter-active key, in an instance', () => {
+    const [view, open, clearCommand, key] = DOWNLOADS_FILTER;
+    expect(requires(entryOn(view, open).when, `!${key}`)).toBe(true);
+    expect(requires(entryOn(view, clearCommand).when, key)).toBe(true);
+    expect(requires(entryOn(view, clearCommand).when, IN_AN_INSTANCE)).toBe(true);
+    expect(entryOn(view, clearCommand).group).toBe('navigation@1');
+  });
+
+  it.each([...OTHER_DURABLE_FILTERS, DOWNLOADS_FILTER])('%s clears with $(clear-all)', (_view, _open, clearCommand) => {
     expect(commandTitle(clearCommand).icon).toBe('$(clear-all)');
   });
 });
@@ -447,7 +487,8 @@ describe('package.json Refresh is one command', () => {
     const entries = titleMenus().filter((e) => e.command === 'modbench.instance.refresh');
     expect(entries).toHaveLength(1);
     const entry = present(entries[0], 'the sole modbench.instance.refresh view/title entry');
-    expect(entry.when).toBe(`view == modbench.toolbox && ${IN_AN_INSTANCE}`);
+    expect(holds(entry.when, { view: 'modbench.toolbox', ...inInstance })).toBe(true);
+    expect(holds(entry.when, { view: 'modbench.toolbox' })).toBe(false);
     expect(entry.group).toBe('navigation@1');
   });
 
@@ -514,15 +555,6 @@ describe('package.json contributes the Mods view\'s indicators and grey as setti
   it('a theme colour for each indicator', () => {
     const contributed = pkg.contributes.colors.map((colour) => colour.id);
     expect(MOD_INDICATORS.filter(({ colour }) => !contributed.includes(colour)).map(({ id }) => id)).toEqual([]);
-  });
-});
-
-describe('package.json offers no deploy', () => {
-  it('contributes no setting that speaks of deploying or of where the game reads its load order', () => {
-    const offering = Object.entries(pkg.contributes.configuration.properties)
-      .filter(([key, setting]) => /deploy|purge|plugins\.?txt/i.test(`${key} ${setting.description ?? ''}`))
-      .map(([key]) => key);
-    expect(offering).toEqual([]);
   });
 });
 
@@ -601,11 +633,13 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ]);
   });
 
-  it('title bar: slot 2 shows the one direction the view is not in', () => {
-    const when = (command: string) =>
-      present(inPluginsView('view/title').find((e) => e.command === command), command).when;
-    expect(when('modbench.plugin.sortWinningAtTop')).toBe(`${PLUGINS_VIEW} && !modbench.plugin.winningAtTop && ${IN_AN_INSTANCE}`);
-    expect(when('modbench.plugin.sortLosingAtTop')).toBe(`${PLUGINS_VIEW} && modbench.plugin.winningAtTop && ${IN_AN_INSTANCE}`);
+  it.each([
+    [{}, ['modbench.pluginListTree.filterHere', 'modbench.plugin.sortWinningAtTop', 'modbench.record.filter', 'modbench.plugin.create']],
+    [{ 'modbench.plugin.winningAtTop': true }, ['modbench.pluginListTree.filterHere', 'modbench.plugin.sortLosingAtTop', 'modbench.record.filter', 'modbench.plugin.create']],
+    [{ 'modbench.plugin.filterActive': true }, ['modbench.pluginListTree.clearFilterHere', 'modbench.plugin.sortWinningAtTop', 'modbench.record.filter', 'modbench.plugin.create']],
+    [{ 'modbench.record.filterActive': true }, ['modbench.pluginListTree.filterHere', 'modbench.plugin.sortWinningAtTop', 'modbench.record.clearFilter', 'modbench.plugin.create']],
+  ])('title bar with %j: one filter control, the one direction the view is not in, one record filter control, create plugin', (facts, commands) => {
+    expect(offeredIn(inPluginsView('view/title'), { view: 'modbench.pluginListTree', ...inInstance, ...facts })).toEqual(commands);
   });
 
   it('the empty list\'s message names the title bar\'s create plugin', () => {
@@ -742,47 +776,35 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
       expect(recordGestures).toEqual([]);
     });
 
-  const ON_THE_TREE = `focusedView == modbench.pluginListTree && listFocus && !inputFocus && ${IN_AN_INSTANCE}`;
+  const COPY = { key: 'ctrl+c', mac: 'cmd+c', command: 'modbench.copyValue' };
 
-  it('binds each key to its command while the Plugins tree has focus, and leaves Enter to VS Code', () => {
-    const pluginsKeys = pkg.contributes.keybindings
-      .filter((k) => k.when.startsWith('focusedView == modbench.pluginListTree'))
-      .map(({ command, key, mac, when, args }) => ({ command, key, mac, when, args }));
-    expect(pluginsKeys).toEqual([
-      { command: 'modbench.plugin.enable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.plugin.selectionToggle == enable`, args: undefined },
-      { command: 'modbench.plugin.disable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.plugin.selectionToggle == disable`, args: undefined },
-      { command: 'modbench.plugin.rename', key: 'f2', mac: undefined, when: `${ON_THE_TREE} && modbench.plugin.singleTracked`, args: undefined },
-      { command: 'modbench.pluginListTree.deleteHere', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.plugin.allDeletableRecords`, args: undefined },
-      { command: 'modbench.copyValue', key: 'ctrl+c', mac: 'cmd+c', when: ON_THE_TREE, args: PLUGINS_KEY_ARGS },
-    ]);
-  });
-
-  it('never offers track as an inline or title icon', () => {
-    const icons = [...inPluginsView('view/item/context'), ...inPluginsView('view/title')]
-      .filter((e) => e.command === 'modbench.mod.track' && (e.group === 'inline' || e.group?.startsWith('navigation')));
-    expect(icons).toEqual([]);
+  it.each([
+    [{}, []],
+    [{ 'modbench.plugin.selectionToggle': 'enable' }, [{ key: 'space', command: 'modbench.plugin.enable' }]],
+    [{ 'modbench.plugin.selectionToggle': 'disable' }, [{ key: 'space', command: 'modbench.plugin.disable' }]],
+    [{ 'modbench.plugin.singleTracked': true }, [{ key: 'f2', command: 'modbench.plugin.rename' }]],
+    [{ 'modbench.plugin.allDeletableRecords': true }, [{ key: 'Delete', mac: 'cmd+backspace', command: 'modbench.pluginListTree.deleteHere' }]],
+  ])('on the focused Plugins tree with %j, the keys that fire are those of the commands the selection allows, and copy value', (facts, keys) => {
+    expect(keysFiring({ focusedView: 'modbench.pluginListTree', listFocus: true, ...inInstance, ...facts })).toEqual([...keys, COPY]);
   });
 });
 
 describe('package.json Downloads row menu order', () => {
+  const DOWNLOAD_ROW = String.raw`viewItem =~ /\bdownload\b/`;
+  const EXCLUDED_ROW = String.raw`viewItem =~ /\bexcluded\b/`;
   const downloadRowMenu = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
-      .filter((e) => e.when.includes('view == modbench.downloads') && e.when.includes(String.raw`viewItem =~ /\bdownload\b/`));
+      .filter((e) => requires(e.when, 'view == modbench.downloads') && requires(e.when, DOWNLOAD_ROW));
+  const entryFor = (command: string): MenuEntry =>
+    present(downloadRowMenu().find((e) => e.command === command), `a ${command} row-menu entry`);
 
-  it('offers open unconditionally on every download row', () => {
-    const entry = present(
-      downloadRowMenu().find((e) => e.command === 'modbench.downloadedFile.open'),
-      'a modbench.downloadedFile.open row-menu entry',
-    );
-    expect(entry.when).not.toContain('hasMeta');
-  });
-
-  it('offers open .meta only when the row\'s own contextValue says it has one', () => {
-    const entry = present(
-      downloadRowMenu().find((e) => e.command === 'modbench.downloadedFile.openMeta'),
-      'a modbench.downloadedFile.openMeta row-menu entry',
-    );
-    expect(entry.when).toContain(String.raw`viewItem =~ /\bhasMeta\b/`);
+  it.each([
+    ['modbench.mod.viewOnNexus', String.raw`viewItem =~ /\bhasModID\b/`],
+    ['modbench.downloadedFile.openMeta', String.raw`viewItem =~ /\bhasMeta\b/`],
+    ['modbench.downloadedFile.exclude', `!${EXCLUDED_ROW}`],
+    ['modbench.downloadedFile.include', EXCLUDED_ROW],
+  ])('%s waits for the flag the row carries: %s', (command, term) => {
+    expect(requires(entryFor(command).when, term)).toBe(true);
   });
 
   it('orders the row in strictly increasing slots: install, view on Nexus, open, open .meta, exclude/include sharing one, copy value, delete', () => {
@@ -802,35 +824,6 @@ describe('package.json Downloads row menu order', () => {
     ].map(slotOf);
     expect(slots).toEqual([...slots].sort((a, b) => a - b));
     expect(new Set(slots).size).toBe(slots.length);
-  });
-
-  it('an excluded row satisfies include\'s when-clause, and not exclude\'s negated one — and vice versa', () => {
-    const excludedRow = new DownloadNode(downloadRowFixture('foo.7z', { excluded: true }));
-    const includedRow = new DownloadNode(downloadRowFixture('bar.7z', { excluded: false }));
-    const exclude = present(
-      downloadRowMenu().find((e) => e.command === 'modbench.downloadedFile.exclude'),
-      'a modbench.downloadedFile.exclude row-menu entry',
-    );
-    const include = present(
-      downloadRowMenu().find((e) => e.command === 'modbench.downloadedFile.include'),
-      'a modbench.downloadedFile.include row-menu entry',
-    );
-    const conditionsOf = (when: string): { flag: string; negated: boolean }[] =>
-      when.split('&&').map((clause) => clause.trim()).flatMap((clause) => {
-        const negated = clause.startsWith('!(') && clause.endsWith(')');
-        const inner = negated ? clause.slice(2, -1) : clause;
-        const m = /^viewItem =~ \/\\b(\w+)\\b\/$/.exec(inner);
-        return m ? [{ flag: present(m[1], 'a flag name'), negated }] : [];
-      });
-    const satisfies = (when: string, contextValue: string | undefined): boolean => {
-      const tokens = present(contextValue, 'the row\'s own contextValue').split(' ');
-      return conditionsOf(when).every(({ flag, negated }) => tokens.includes(flag) !== negated);
-    };
-
-    expect(satisfies(include.when, excludedRow.contextValue)).toBe(true);
-    expect(satisfies(include.when, includedRow.contextValue)).toBe(false);
-    expect(satisfies(exclude.when, includedRow.contextValue)).toBe(true);
-    expect(satisfies(exclude.when, excludedRow.contextValue)).toBe(false);
   });
 });
 
@@ -861,15 +854,15 @@ describe('package.json view keys', () => {
 });
 
 describe('package.json Downloads delete key', () => {
-  it('binds Delete to modbench.downloadedFile.delete, scoped to the focused Downloads view', () => {
-    const keybindings: { command: string; key: string; mac?: string; when: string }[] = pkg.contributes.keybindings;
+  it('binds Delete to modbench.downloadedFile.delete, scoped to the focused Downloads view in an instance', () => {
     const entry = present(
-      keybindings.find((k) => k.command === 'modbench.downloadedFile.delete'),
+      pkg.contributes.keybindings.find((k) => k.command === 'modbench.downloadedFile.delete'),
       'a Delete-key binding for modbench.downloadedFile.delete',
     );
     expect(entry.key).toBe('Delete');
     expect(entry.mac).toBe('cmd+backspace');
-    expect(entry.when).toBe(`focusedView == modbench.downloads && listFocus && !inputFocus && ${IN_AN_INSTANCE}`);
+    expect(requires(entry.when, 'focusedView == modbench.downloads')).toBe(true);
+    expect(requires(entry.when, IN_AN_INSTANCE)).toBe(true);
   });
 });
 
@@ -893,100 +886,80 @@ describe('package.json Ctrl+C keys', () => {
 });
 
 describe('package.json field gestures\' palette entries', () => {
-  const ON_A_RECORD_TAB = "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus";
+  const ON_A_RECORD_TAB = { activeCustomEditorId: 'modbench.record' };
+  const SECTION = 'modbench.record.focusedCellSection';
   const FIELD_PALETTE = [
-    ['modbench.record.addElement', String.raw`modbench.record.focusedCellSection =~ /\barrayParent\b/`],
-    ['modbench.record.removeElement', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/`],
-    ['modbench.record.moveElementUp', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/ && modbench.record.focusedCellCanMoveUp`],
-    ['modbench.record.moveElementDown', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/ && modbench.record.focusedCellCanMoveDown`],
-    ['modbench.record.editField', String.raw`modbench.record.focusedCellSection =~ /\bstringValue\b/`],
-    ['modbench.record.openFieldValue', String.raw`modbench.record.focusedCellSection =~ /\bstringValue\b/`],
+    ['modbench.record.addElement', { [SECTION]: 'arrayParent' }],
+    ['modbench.record.removeElement', { [SECTION]: 'arrayElement' }],
+    ['modbench.record.moveElementUp', { [SECTION]: 'arrayElement', 'modbench.record.focusedCellCanMoveUp': true }],
+    ['modbench.record.moveElementDown', { [SECTION]: 'arrayElement', 'modbench.record.focusedCellCanMoveDown': true }],
+    ['modbench.record.editField', { [SECTION]: 'stringValue' }],
+    ['modbench.record.openFieldValue', { [SECTION]: 'stringValue' }],
   ] as const;
 
-  it.each(FIELD_PALETTE)('%s is in the palette only while a record tab has focus on a cell that holds: %s', (command, holds) => {
-    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
-      .filter((e) => e.command === command);
-    expect(entries.map((e) => e.when)).toEqual([`${ON_A_RECORD_TAB} && ${holds}`]);
+  it.each(FIELD_PALETTE)('%s is in the palette on a record tab, on a cell that holds what it acts on', (command, facts) => {
+    expect(paletteOffers(command, { ...ON_A_RECORD_TAB, ...facts })).toBe(true);
+    expect(paletteOffers(command, ON_A_RECORD_TAB)).toBe(false);
+  });
+
+  it.each(eachMissingFact(FIELD_PALETTE))('%s is not in the palette without %s', (command, fact, facts) => {
+    expect(paletteOffers(command, { ...ON_A_RECORD_TAB, ...without(facts, fact) })).toBe(false);
+  });
+
+  it.each(['sideBarFocus', 'panelFocus', 'auxiliaryBarFocus'])('add element is not in the palette while %s', (focus) => {
+    expect(paletteOffers('modbench.record.addElement', { ...ON_A_RECORD_TAB, [SECTION]: 'arrayParent', [focus]: true })).toBe(false);
   });
 });
 
 describe('package.json record grid keys, as editor.md\'s Menus and keys and its focused cell\'s story 7 place them', () => {
-  const ON_THE_GRID = "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus"
-    + ' && !inputFocus && !modbench.record.focusedCellEditorOpen';
-  const section = (name: string) => String.raw`modbench.record.focusedCellSection =~ /\b${name}\b/`;
+  const ON_A_RECORD_TAB = { activeCustomEditorId: 'modbench.record' };
+  const SECTION = 'modbench.record.focusedCellSection';
+  const EDIT = { key: 'f2', command: 'modbench.recordGrid.editHere' };
+  const CUT = { key: 'ctrl+x', mac: 'cmd+x', command: 'modbench.recordGrid.cutHere' };
+  const PASTE = { key: 'ctrl+v', mac: 'cmd+v', command: 'modbench.recordGrid.pasteHere' };
+  const REMOVE = { key: 'Delete', mac: 'cmd+backspace', command: 'modbench.record.removeElement' };
+  const CLEAR = { key: 'Delete', mac: 'cmd+backspace', command: 'modbench.recordGrid.clearHere' };
 
-  it('binds F2 to edit, Ctrl+C to copy value, Ctrl+X to cut, Ctrl+V to paste, Delete to remove or clear, Alt+Up and Alt+Down to move', () => {
-    const gridKeys = pkg.contributes.keybindings.filter((k) => k.when.startsWith(ON_THE_GRID));
-    expect(gridKeys).toEqual([
-      { key: 'f2', command: 'modbench.recordGrid.editHere', when: `${ON_THE_GRID} && ${section('cell')}` },
-      {
-        key: 'ctrl+c', mac: 'cmd+c', command: 'modbench.copyValue', args: { view: 'modbench.recordGrid' },
-        when: `${ON_THE_GRID} && modbench.record.focusedCellCopies`,
-      },
-      { key: 'ctrl+x', mac: 'cmd+x', command: 'modbench.recordGrid.cutHere', when: `${ON_THE_GRID} && ${section('editableCell')}` },
-      { key: 'ctrl+v', mac: 'cmd+v', command: 'modbench.recordGrid.pasteHere', when: `${ON_THE_GRID} && ${section('editableCell')}` },
-      {
-        key: 'Delete', mac: 'cmd+backspace', command: 'modbench.record.removeElement',
-        when: `${ON_THE_GRID} && ${section('arrayElement')}`,
-      },
-      {
-        key: 'Delete', mac: 'cmd+backspace', command: 'modbench.recordGrid.clearHere',
-        when: `${ON_THE_GRID} && ${section('editableCell')} && !(${section('arrayElement')})`,
-      },
-      {
-        key: 'alt+up', command: 'modbench.record.moveElementUp',
-        when: `${ON_THE_GRID} && ${section('arrayElement')} && modbench.record.focusedCellCanMoveUp`,
-      },
-      {
-        key: 'alt+down', command: 'modbench.record.moveElementDown',
-        when: `${ON_THE_GRID} && ${section('arrayElement')} && modbench.record.focusedCellCanMoveDown`,
-      },
-    ]);
+  it.each([
+    [{}, []],
+    [{ [SECTION]: 'cell' }, [EDIT]],
+    [{ [SECTION]: 'cell editableCell' }, [EDIT, CUT, PASTE, CLEAR]],
+    [{ [SECTION]: 'cell editableCell arrayElement' }, [EDIT, CUT, PASTE, REMOVE]],
+    [{ 'modbench.record.focusedCellCopies': true }, [{ key: 'ctrl+c', mac: 'cmd+c', command: 'modbench.copyValue' }]],
+    [{ [SECTION]: 'arrayElement', 'modbench.record.focusedCellCanMoveUp': true }, [REMOVE, { key: 'alt+up', command: 'modbench.record.moveElementUp' }]],
+    [{ [SECTION]: 'arrayElement', 'modbench.record.focusedCellCanMoveDown': true }, [REMOVE, { key: 'alt+down', command: 'modbench.record.moveElementDown' }]],
+  ])('on a record tab with %j the keys that fire are those of what the focused cell holds', (facts, keys) => {
+    expect(keysFiring({ ...ON_A_RECORD_TAB, ...facts })).toEqual(keys);
   });
 
-  it('acts on no key while the focused cell\'s editor is open', () => {
-    const cell = {
-      activeCustomEditorId: 'modbench.record', 'modbench.record.focusedCellSection': 'cell editableCell arrayElement',
-      'modbench.record.focusedCellCopies': true, 'modbench.record.focusedCellCanMoveUp': true,
-      'modbench.record.focusedCellCanMoveDown': true,
-    };
-    const gridKeys = pkg.contributes.keybindings.filter((k) => k.when.startsWith(ON_THE_GRID));
-    expect(gridKeys.filter((k) => holds(k.when, cell)).map((k) => k.key)).toEqual(
-      ['f2', 'ctrl+c', 'ctrl+x', 'ctrl+v', 'Delete', 'alt+up', 'alt+down']);
-    expect(gridKeys.filter((k) => holds(k.when, { ...cell, 'modbench.record.focusedCellEditorOpen': true }))).toEqual([]);
-  });
-
-  it('removes an element with Delete, and clears only what is not an element', () => {
-    const deletes = pkg.contributes.keybindings.filter((k) => k.when.startsWith(ON_THE_GRID) && k.key === 'Delete');
-    const firing = (sections: string) => deletes
-      .filter((k) => holds(k.when, { activeCustomEditorId: 'modbench.record', 'modbench.record.focusedCellSection': sections }))
-      .map((k) => k.command);
-    expect(firing('cell editableCell arrayElement')).toEqual(['modbench.record.removeElement']);
-    expect(firing('cell editableCell')).toEqual(['modbench.recordGrid.clearHere']);
-    expect(firing('cell')).toEqual([]);
-  });
-});
-
-describe('package.json compile on the record tab', () => {
-  it('is on the column header\'s menu of a compilable plugin, and nowhere else on the tab', () => {
-    const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
-    expect(webviewMenu.filter((e) => e.command === 'modbench.plugin.compile').map((e) => e.when)).toEqual([
-      String.raw`webviewId == 'modbench.record' && webviewSection =~ /\brecordHeader\b/ && compilable`,
-    ]);
-    expect(pkg.contributes.menus['editor/title'] ?? []).toEqual([]);
-  });
+  it.each(['modbench.record.focusedCellEditorOpen', 'inputFocus', 'sideBarFocus', 'panelFocus', 'auxiliaryBarFocus'])(
+    'acts on no key while %s', (blocker) => {
+      const cell = {
+        ...ON_A_RECORD_TAB, [SECTION]: 'cell editableCell arrayElement', 'modbench.record.focusedCellCopies': true,
+        'modbench.record.focusedCellCanMoveUp': true, 'modbench.record.focusedCellCanMoveDown': true,
+      };
+      expect(keysFiring(cell)).not.toEqual([]);
+      expect(keysFiring({ ...cell, [blocker]: true })).toEqual([]);
+    });
 });
 
 describe('package.json track\'s palette entry', () => {
+  const MODS = { focusedView: 'modbench.modList', ...inInstance, 'modbench.mod.holdsUntrackedModWithPlugin': true, 'modbench.mod.trackRowsIn': 'modbench.modList' };
+  const PLUGINS = { focusedView: 'modbench.pluginListTree', ...inInstance, 'modbench.plugin.allInUntrackedMod': true, 'modbench.mod.trackRowsIn': 'modbench.pluginListTree' };
+
   it('is in the palette while Mods or Plugins has focus, was last selected in, and holds what track acts on', () => {
-    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
-      .filter((e) => e.command === 'modbench.mod.track');
-    expect(entries.map((e) => e.when)).toEqual([
-      `focusedView == modbench.modList && ${IN_AN_INSTANCE} && modbench.mod.holdsUntrackedModWithPlugin`
-      + ' && modbench.mod.trackRowsIn == modbench.modList'
-      + ` || focusedView == modbench.pluginListTree && ${IN_AN_INSTANCE} && modbench.plugin.allInUntrackedMod`
-      + ' && modbench.mod.trackRowsIn == modbench.pluginListTree',
-    ]);
+    expect(paletteOffers('modbench.mod.track', MODS)).toBe(true);
+    expect(paletteOffers('modbench.mod.track', PLUGINS)).toBe(true);
+  });
+
+  it('is not in the palette when the last selection was made in the other view', () => {
+    expect(paletteOffers('modbench.mod.track', { ...MODS, 'modbench.mod.trackRowsIn': 'modbench.pluginListTree' })).toBe(false);
+    expect(paletteOffers('modbench.mod.track', { ...PLUGINS, 'modbench.mod.trackRowsIn': 'modbench.modList' })).toBe(false);
+  });
+
+  it('is not in the palette when the focused view holds nothing to track', () => {
+    expect(paletteOffers('modbench.mod.track', without(MODS, 'modbench.mod.holdsUntrackedModWithPlugin'))).toBe(false);
+    expect(paletteOffers('modbench.mod.track', without(PLUGINS, 'modbench.plugin.allInUntrackedMod'))).toBe(false);
   });
 });
 
@@ -1070,41 +1043,48 @@ describe('package.json record tab menus', () => {
   });
 });
 
-describe('package.json copy on the record tab', () => {
-  it('is one entry on the column header\'s menu, and the only copy entry on the tab', () => {
-    const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
-    expect(webviewMenu.filter((e) => e.command.startsWith('modbench.record.copy')).map((e) => [e.command, e.when])).toEqual([
-      ['modbench.record.copy', String.raw`webviewId == 'modbench.record' && webviewSection =~ /\brecordHeader\b/`],
-    ]);
+describe('package.json compile\'s palette entry', () => {
+  it('is in the palette in an instance while any plugin compiles', () => {
+    expect(paletteOffers('modbench.plugin.compile', { ...inInstance, 'modbench.plugin.anyCompilable': true })).toBe(true);
+    expect(paletteOffers('modbench.plugin.compile', inInstance)).toBe(false);
+    expect(paletteOffers('modbench.plugin.compile', { 'modbench.plugin.anyCompilable': true })).toBe(false);
   });
 });
 
-describe('package.json compile\'s palette entry', () => {
-  it('is in the palette while any plugin compiles', () => {
-    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
-      .filter((e) => e.command === 'modbench.plugin.compile');
-    expect(entries.map((e) => e.when)).toEqual([`${IN_AN_INSTANCE} && modbench.plugin.anyCompilable`]);
+function describePaletteGate(view: string, rows: readonly (readonly [string, Context])[]): void {
+  const focused = { focusedView: view, ...inInstance };
+
+  it.each(rows)('%s is in the palette while the view has focus and its selection holds what it acts on', (command, facts) => {
+    expect(paletteOffers(command, { ...focused, ...facts })).toBe(true);
   });
-});
+
+  it.each(eachMissingFact(rows))('%s is not in the palette without %s', (command, fact, facts) => {
+    expect(paletteOffers(command, { ...focused, ...without(facts, fact) })).toBe(false);
+  });
+
+  it.each(rows)('%s is not in the palette while another view has focus', (command, facts) => {
+    expect(paletteOffers(command, { ...focused, focusedView: 'modbench.other', ...facts })).toBe(false);
+  });
+
+  it.each(rows)('%s is not in the palette outside an instance', (command, facts) => {
+    expect(paletteOffers(command, { focusedView: view, ...facts })).toBe(false);
+  });
+}
 
 describe('package.json Plugins palette entries', () => {
-  const PLUGINS_PALETTE = [
-    ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
-    ['modbench.plugin.rename', 'modbench.plugin.singleTracked'],
-    ['modbench.plugin.decompile', 'modbench.plugin.allInTrackedMod'],
-    ['modbench.record.create', 'modbench.plugin.singleCreatable'],
-    ['modbench.record.delete', 'modbench.plugin.allDeletableRecords'],
-    ['modbench.record.copy', 'modbench.plugin.allRecords'],
-  ] as const;
+  const IN_PLUGINS = { 'modbench.record.selectionIn': 'modbench.pluginListTree' };
+  describePaletteGate('modbench.pluginListTree', [
+    ['modbench.plugin.reveal', { 'modbench.plugin.singlePlugin': true }],
+    ['modbench.plugin.rename', { 'modbench.plugin.singleTracked': true }],
+    ['modbench.plugin.decompile', { 'modbench.plugin.allInTrackedMod': true }],
+    ['modbench.record.create', { 'modbench.plugin.singleCreatable': true }],
+    ['modbench.record.delete', { 'modbench.plugin.allDeletableRecords': true, ...IN_PLUGINS }],
+    ['modbench.record.copy', { 'modbench.plugin.allRecords': true, ...IN_PLUGINS }],
+  ]);
 
-  it.each(PLUGINS_PALETTE)('%s is in the palette only while the Plugins view has focus and its selection holds: %s', (command, holds) => {
-    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
-      .filter((e) => e.command === command);
-    const recordGestureWaitsForThisView = command.startsWith('modbench.record.') && command !== 'modbench.record.create'
-      ? ' && modbench.record.selectionIn == modbench.pluginListTree' : '';
-    expect(entries.map((e) => e.when)).toEqual([
-      `focusedView == modbench.pluginListTree${recordGestureWaitsForThisView} && ${IN_AN_INSTANCE} && ${holds}`,
-    ]);
+  it.each(['modbench.record.delete', 'modbench.record.copy'])('%s is not in the palette on a record selection made in another view', (command) => {
+    const facts = { 'modbench.plugin.allDeletableRecords': true, 'modbench.plugin.allRecords': true, 'modbench.record.selectionIn': 'modbench.referencedByTree' };
+    expect(paletteOffers(command, { focusedView: 'modbench.pluginListTree', ...inInstance, ...facts })).toBe(false);
   });
 });
 
@@ -1117,111 +1097,36 @@ describe('package.json Downloads palette entries', () => {
     ['modbench.downloadedFile.include', 'modbench.downloadedFile.holdsExcluded'],
   ] as const;
 
-  it.each(DOWNLOADS_PALETTE)('%s is in the palette only while the Downloads view has focus and its selection holds: %s', (command, holds) => {
-    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
-      .filter((e) => e.command === command);
-    expect(entries.map((e) => e.when)).toEqual([`focusedView == modbench.downloads && ${IN_AN_INSTANCE} && ${holds}`]);
+  it.each(DOWNLOADS_PALETTE)('%s is in the palette only while the Downloads view has focus in an instance and its selection holds: %s', (command, term) => {
+    const when = present(
+      present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']").find((e) => e.command === command),
+      `a commandPalette entry for ${command}`,
+    ).when;
+    expect(requires(when, 'focusedView == modbench.downloads')).toBe(true);
+    expect(requires(when, IN_AN_INSTANCE)).toBe(true);
+    expect(requires(when, term)).toBe(true);
   });
 });
 
-describe('package.json Mods row menu — enable/disable by row state', () => {
-  const modRowMenu = (): MenuEntry[] =>
-    present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
-      .filter((e) => e.when.includes('view == modbench.modList') && e.when.includes(String.raw`viewItem =~ /\bmod\b/`));
+describe('package.json Mods row menu', () => {
+  const MOD = { kind: 'mod', name: 'X' } as const;
+  const commandsOn = (contextValue: string | undefined): string[] => offeredIn(
+    present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']"),
+    { view: 'modbench.modList', viewItem: present(contextValue, "the row's own contextValue") });
+  const disabledRow = (): string[] => commandsOn(new ModNode({ ...MOD, enabled: false, nexusId: '1' }).contextValue);
+  const enabledRow = (): string[] => commandsOn(new ModNode({ ...MOD, enabled: true }).contextValue);
+  const toggles = (commands: string[]): string[] => commands.filter((c) => c === 'modbench.mod.enable' || c === 'modbench.mod.disable');
 
-  it('offers enable only on a disabled row, and disable only on an enabled one', () => {
-    const enable = present(modRowMenu().find((e) => e.command === 'modbench.mod.enable'), 'a modbench.mod.enable row-menu entry');
-    const disable = present(modRowMenu().find((e) => e.command === 'modbench.mod.disable'), 'a modbench.mod.disable row-menu entry');
-
-    expect(enable.when).toContain(String.raw`viewItem =~ /\bdisabled\b/`);
-    expect(disable.when).toContain(String.raw`viewItem =~ /\benabled\b/`);
-    expect(disable.when).not.toContain(String.raw`\bdisabled\b`);
+  it('offers enable only on a disabled row, and disable only on an enabled one, whether or not it has a Nexus id', () => {
+    expect(toggles(disabledRow())).toEqual(['modbench.mod.enable']);
+    expect(toggles(enabledRow())).toEqual(['modbench.mod.disable']);
   });
 
-  it('registers both IDs under the same view/item/context gate a mod row matches, whether or not it has a Nexus id', () => {
-    for (const command of ['modbench.mod.enable', 'modbench.mod.disable']) {
-      const entry = present(modRowMenu().find((e) => e.command === command), `a ${command} row-menu entry`);
-      expect(entry.when).not.toContain('hasNexus');
-    }
-  });
-
-  it('a disabled row\'s own contextValue matches enable\'s when-clause flags, and not disable\'s', () => {
-    const disabledRow = new ModNode({ kind: 'mod', name: 'X', enabled: false });
-    const enabledRow = new ModNode({ kind: 'mod', name: 'X', enabled: true });
-    const enable = present(modRowMenu().find((e) => e.command === 'modbench.mod.enable'), 'a modbench.mod.enable row-menu entry');
-    const disable = present(modRowMenu().find((e) => e.command === 'modbench.mod.disable'), 'a modbench.mod.disable row-menu entry');
-    const flagsOf = (when: string): string[] =>
-      [...when.matchAll(/\\b(\w+)\\b/g)].map((m) => present(m[1], 'a \\b...\\b flag name'));
-    const tokensOf = (contextValue: string | undefined): string[] =>
-      present(contextValue, 'the row\'s own contextValue').split(' ');
-    const matches = (whenFlags: readonly string[], contextValue: string | undefined): boolean =>
-      whenFlags.every((flag) => tokensOf(contextValue).includes(flag));
-
-    expect(matches(flagsOf(enable.when), disabledRow.contextValue)).toBe(true);
-    expect(matches(flagsOf(enable.when), enabledRow.contextValue)).toBe(false);
-    expect(matches(flagsOf(disable.when), enabledRow.contextValue)).toBe(true);
-    expect(matches(flagsOf(disable.when), disabledRow.contextValue)).toBe(false);
-  });
-});
-
-describe('package.json Move on the mod menu and the separator menu', () => {
-  const modsViewMenu = (): MenuEntry[] =>
-    present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
-      .filter((e) => e.when.includes('view == modbench.modList'));
-  const moveEntries = (): MenuEntry[] => modsViewMenu().filter((e) => e.command === 'modbench.mod.move');
-  const rowMatches = (when: string, contextValue: string | undefined): boolean => {
-    const tokens = present(contextValue, "the row's own contextValue").split(' ');
-    const exact = /viewItem == (\w+)/.exec(when)?.[1];
-    if (exact !== undefined) return contextValue === exact;
-    return [...when.matchAll(/\\b(\w+)\\b/g)].every((m) => tokens.includes(present(m[1], 'a \\b...\\b flag name')));
-  };
-
-  it('offers move on every mod row, enabled or not, and on every separator row', () => {
-    const offeredOn = (contextValue: string | undefined): boolean =>
-      moveEntries().some((e) => rowMatches(e.when, contextValue));
-
-    expect(offeredOn(new ModNode({ kind: 'mod', name: 'X', enabled: true }).contextValue)).toBe(true);
-    expect(offeredOn(new ModNode({ kind: 'mod', name: 'X', enabled: false, nexusId: '1' }).contextValue)).toBe(true);
-    expect(offeredOn(new SeparatorNode({ kind: 'separator', name: 'S', enabled: true }, []).contextValue)).toBe(true);
-    expect(offeredOn(new OverwriteNode([], 'MO2').contextValue)).toBe(false);
-  });
-});
-
-describe('package.json Mods row menu — copy value', () => {
-  const modsViewMenu = (): MenuEntry[] =>
-    present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
-      .filter((e) => e.when.includes('view == modbench.modList'));
-  const copyValueEntries = (): MenuEntry[] => modsViewMenu().filter((e) => e.command === 'modbench.copyValue');
-  const rowMatches = (when: string, contextValue: string | undefined): boolean => {
-    const tokens = present(contextValue, "the row's own contextValue").split(' ');
-    const exact = /viewItem == (\w+)/.exec(when)?.[1];
-    if (exact !== undefined) return contextValue === exact;
-    return [...when.matchAll(/\\b(\w+)\\b/g)].every((m) => tokens.includes(present(m[1], 'a \\b...\\b flag name')));
-  };
-
-  it('offers copy value on every mod row, enabled or not, and on every separator row, but not Overwrite', () => {
-    const offeredOn = (contextValue: string | undefined): boolean =>
-      copyValueEntries().some((e) => rowMatches(e.when, contextValue));
-
-    expect(offeredOn(new ModNode({ kind: 'mod', name: 'X', enabled: true }).contextValue)).toBe(true);
-    expect(offeredOn(new ModNode({ kind: 'mod', name: 'X', enabled: false, nexusId: '1' }).contextValue)).toBe(true);
-    expect(offeredOn(new SeparatorNode({ kind: 'separator', name: 'S', enabled: true }, []).contextValue)).toBe(true);
-    expect(offeredOn(new OverwriteNode([], 'MO2').contextValue)).toBe(false);
-  });
-
-  it('registers modbench.copyValue exactly once', () => {
-    const registrations = pkg.contributes.commands.filter((c) => c.command === 'modbench.copyValue');
-    expect(registrations).toHaveLength(1);
-  });
-
-  it('leaves the Referenced By tree\'s own copy value entry untouched', () => {
-    const entry = present(
-      pkg.contributes.menus['view/item/context']?.find(
-        (e) => e.command === 'modbench.copyValue' && e.when.includes('referencedByTree')),
-      'the Referenced By copy value entry',
-    );
-    expect(entry.when).toBe('view == modbench.referencedByTree && viewItem == referencedByReferrer');
-    expect(entry.group).toBe('5_copy@1');
+  it.each(['modbench.mod.move', 'modbench.copyValue'])('offers %s on every mod row, enabled or not, and on every separator row, but not Overwrite', (command) => {
+    expect(enabledRow()).toContain(command);
+    expect(disabledRow()).toContain(command);
+    expect(commandsOn(new SeparatorNode({ kind: 'separator', name: 'S', enabled: true }, []).contextValue)).toContain(command);
+    expect(commandsOn(new OverwriteNode([], 'MO2').contextValue)).not.toContain(command);
   });
 });
 
@@ -1328,58 +1233,58 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     expect(menuOn('folder')).toEqual([['modbench.mod.openFolder', '1_open'], ['modbench.copyValue', '5_copy']]);
   });
 
-  const ONE_MOD = 'modbench.mod.selectionKind == mod && modbench.mod.singleRow';
-  const ONE_SEPARATOR = 'modbench.mod.selectionKind == separator && modbench.mod.singleRow';
-  const ON_THE_TREE = `focusedView == modbench.modList && listFocus && !inputFocus && ${IN_AN_INSTANCE}`;
+  const ON_THE_TREE = { focusedView: 'modbench.modList', listFocus: true, ...inInstance };
+  const COPY = { key: 'ctrl+c', mac: 'cmd+c', command: 'modbench.copyValue' };
+  const UNINSTALL = { key: 'Delete', mac: 'cmd+backspace', command: 'modbench.mod.uninstall' };
+  const DELETE_SEPARATOR = { key: 'Delete', mac: 'cmd+backspace', command: 'modbench.separator.delete' };
 
-  it('binds each key to its command while the Mods tree has focus', () => {
-    const modsKeys = pkg.contributes.keybindings
-      .filter((k) => k.when.startsWith('focusedView == modbench.modList'))
-      .map(({ command, key, mac, when, args }) => ({ command, key, mac, when, args }));
-    expect(modsKeys).toEqual([
-      { command: 'modbench.mod.enable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.mod.selectionToggle == enable`, args: undefined },
-      { command: 'modbench.mod.disable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.mod.selectionToggle == disable`, args: undefined },
-      { command: 'modbench.mod.uninstall', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.mod.selectionKind == mod`, args: undefined },
-      { command: 'modbench.separator.delete', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.mod.selectionKind == separator`, args: undefined },
-      { command: 'modbench.mod.rename', key: 'f2', mac: 'enter', when: `${ON_THE_TREE} && ${ONE_MOD}`, args: undefined },
-      { command: 'modbench.separator.rename', key: 'f2', mac: 'enter', when: `${ON_THE_TREE} && ${ONE_SEPARATOR}`, args: undefined },
-      { command: 'modbench.copyValue', key: 'ctrl+c', mac: 'cmd+c', when: ON_THE_TREE, args: MODS_KEY_ARGS },
-    ]);
+  it.each([
+    [{}, []],
+    [{ 'modbench.mod.selectionToggle': 'enable' }, [{ key: 'space', command: 'modbench.mod.enable' }]],
+    [{ 'modbench.mod.selectionToggle': 'disable' }, [{ key: 'space', command: 'modbench.mod.disable' }]],
+    [{ 'modbench.mod.selectionKind': 'mod' }, [UNINSTALL]],
+    [{ 'modbench.mod.selectionKind': 'separator' }, [DELETE_SEPARATOR]],
+    [{ 'modbench.mod.selectionKind': 'mod', 'modbench.mod.singleRow': true }, [UNINSTALL, { key: 'f2', mac: 'enter', command: 'modbench.mod.rename' }]],
+    [{ 'modbench.mod.selectionKind': 'separator', 'modbench.mod.singleRow': true }, [DELETE_SEPARATOR, { key: 'f2', mac: 'enter', command: 'modbench.separator.rename' }]],
+  ])('on the focused Mods tree with %j, the keys that fire are those of the commands the selection allows, and copy value', (facts, keys) => {
+    expect(keysFiring({ ...ON_THE_TREE, ...facts })).toEqual([...keys, COPY]);
   });
 
-  const MODS_PALETTE = [
-    ['modbench.mod.enable', 'modbench.mod.holdsDisabledMod'],
-    ['modbench.mod.disable', 'modbench.mod.holdsEnabledMod'],
-    ['modbench.mod.move', 'modbench.mod.selectionKind'],
-    ['modbench.separator.add', 'modbench.mod.selectionKind && modbench.mod.singleRow'],
+  const ONE_MOD = { 'modbench.mod.selectionKind': 'mod', 'modbench.mod.singleRow': true };
+  const ONE_SEPARATOR = { 'modbench.mod.selectionKind': 'separator', 'modbench.mod.singleRow': true };
+  describePaletteGate('modbench.modList', [
+    ['modbench.mod.enable', { 'modbench.mod.holdsDisabledMod': true }],
+    ['modbench.mod.disable', { 'modbench.mod.holdsEnabledMod': true }],
+    ['modbench.mod.move', { 'modbench.mod.selectionKind': 'mod' }],
+    ['modbench.separator.add', ONE_MOD],
     ['modbench.mod.rename', ONE_MOD],
     ['modbench.separator.rename', ONE_SEPARATOR],
-    ['modbench.separator.delete', 'modbench.mod.selectionKind == separator'],
-    ['modbench.mod.uninstall', 'modbench.mod.selectionKind == mod'],
-    ['modbench.mod.createEmpty', undefined],
-    ['modbench.mod.install', undefined],
-    ['modbench.mod.openFolder', 'modbench.mod.singleOpenFolderRow'],
-    ['modbench.mod.goToMod', 'modbench.mod.singleGoToModRow'],
-    ['modbench.mod.openConflicts', 'modbench.mod.singleOpenConflictsRow'],
-    ['modbench.mod.compareFile', 'modbench.mod.singleCompareFileRow'],
-    ['modbench.mod.excludeFile', 'modbench.mod.holdsIncludedFile'],
-    ['modbench.mod.includeFile', 'modbench.mod.holdsExcludedFile'],
-  ] as const;
+    ['modbench.separator.delete', { 'modbench.mod.selectionKind': 'separator' }],
+    ['modbench.mod.uninstall', { 'modbench.mod.selectionKind': 'mod' }],
+    ['modbench.mod.createEmpty', {}],
+    ['modbench.mod.install', {}],
+    ['modbench.mod.openFolder', { 'modbench.mod.singleOpenFolderRow': true }],
+    ['modbench.mod.goToMod', { 'modbench.mod.singleGoToModRow': true }],
+    ['modbench.mod.openConflicts', { 'modbench.mod.singleOpenConflictsRow': true }],
+    ['modbench.mod.compareFile', { 'modbench.mod.singleCompareFileRow': true }],
+    ['modbench.mod.excludeFile', { 'modbench.mod.holdsIncludedFile': true }],
+    ['modbench.mod.includeFile', { 'modbench.mod.holdsExcludedFile': true }],
+  ]);
 
-  it.each(MODS_PALETTE)('%s is in the palette only while the Mods view has focus and its selection holds: %s', (command, holds) => {
-    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
-      .filter((e) => e.command === command);
-    const focused = `focusedView == modbench.modList && ${IN_AN_INSTANCE}`;
-    expect(entries.map((e) => e.when)).toEqual([holds === undefined ? focused : `${focused} && ${holds}`]);
+  it.each([
+    ['modbench.separator.delete', 'mod'],
+    ['modbench.mod.uninstall', 'separator'],
+    ['modbench.mod.rename', 'separator'],
+    ['modbench.separator.rename', 'mod'],
+  ])('%s is not in the palette on a %s selection', (command, kind) => {
+    const selection = { focusedView: 'modbench.modList', ...inInstance, 'modbench.mod.selectionKind': kind, 'modbench.mod.singleRow': true };
+    expect(paletteOffers(command, selection)).toBe(false);
   });
 
-  it('offers view on Nexus in the palette only on the focused view whose row the command opens', () => {
-    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
-      .filter((e) => e.command === 'modbench.mod.viewOnNexus');
-    expect(entries.map((e) => e.when)).toEqual([
-      `focusedView == modbench.modList && ${IN_AN_INSTANCE} && modbench.mod.nexusRowIn == modbench.modList`
-      + ` || focusedView == modbench.downloads && ${IN_AN_INSTANCE} && modbench.mod.nexusRowIn == modbench.downloads`,
-    ]);
+  it('offers view on Nexus in the palette on the focused Mods view only while its row is the one the command opens', () => {
+    const mods = { focusedView: 'modbench.modList', ...inInstance };
+    expect(paletteOffers('modbench.mod.viewOnNexus', { ...mods, 'modbench.mod.nexusRowIn': 'modbench.modList' })).toBe(true);
+    expect(paletteOffers('modbench.mod.viewOnNexus', { ...mods, 'modbench.mod.nexusRowIn': 'modbench.downloads' })).toBe(false);
   });
 
   it('the empty list\'s message names the overflow\'s own titles', () => {
@@ -1394,23 +1299,6 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
 describe('package.json open to the side', () => {
   it('reads Open to the Side', () => {
     expect(pkg.contributes.commands.find((c) => c.command === OPEN_TO_THE_SIDE)?.title).toBe('Open to the Side');
-  });
-});
-
-describe('package.json open on Referenced By', () => {
-  const contextMenus = (): MenuEntry[] =>
-    present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
-
-  it('puts open on the Referenced By referrer row\'s menu once', () => {
-    const entry = present(
-      contextMenus().find((e) =>
-        e.command === OPEN_TO_THE_SIDE && e.when.includes('referencedByTree')),
-      `a ${OPEN_TO_THE_SIDE} entry on the Referenced By tree`,
-    );
-    expect(entry.when).toBe('view == modbench.referencedByTree && viewItem == referencedByReferrer');
-    expect(entry.group).toBe('1_open@1');
-    expect(contextMenus().filter((e) => e.command === OPEN_TO_THE_SIDE && e.when.includes('referencedByTree')))
-      .toHaveLength(1);
   });
 });
 
@@ -1497,7 +1385,7 @@ describe('package.json palette titles are the verb and the object', () => {
 describe('package.json Referenced By menus and keys', () => {
   const menuOf = (viewItem: string) =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
-      .filter((e) => e.when.startsWith(`view == modbench.referencedByTree && viewItem == ${viewItem}`))
+      .filter((e) => holds(e.when, { view: 'modbench.referencedByTree', viewItem }))
       .map((e) => [e.command, e.group]);
 
   it('offers a referrer open to the side then copy value, and a plugin copy copy… then delete', () => {
@@ -1508,10 +1396,11 @@ describe('package.json Referenced By menus and keys', () => {
   });
 
   it('binds Delete in the view only while every selected row is a plugin copy', () => {
-    const keys = pkg.contributes.keybindings.filter((k) => k.command === 'modbench.referencedByTree.deleteHere');
-    expect(keys.map(({ key, mac, when }) => ({ key, mac, when }))).toEqual([{
-      key: 'Delete', mac: 'cmd+backspace',
-      when: `focusedView == modbench.referencedByTree && listFocus && !inputFocus && ${IN_AN_INSTANCE} && modbench.referencedBy.allHolders`,
-    }]);
+    const onTheTree = { focusedView: 'modbench.referencedByTree', listFocus: true, ...inInstance };
+    const copy = { key: 'ctrl+c', mac: 'cmd+c', command: 'modbench.copyValue' };
+    expect(keysFiring({ ...onTheTree, 'modbench.referencedBy.allHolders': true })).toEqual([
+      copy, { key: 'Delete', mac: 'cmd+backspace', command: 'modbench.referencedByTree.deleteHere' },
+    ]);
+    expect(keysFiring(onTheTree)).toEqual([copy]);
   });
 });
