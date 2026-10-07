@@ -64,7 +64,8 @@ public sealed record NotificationEvent(
     string Kind, string Plugin, string Origin, IReadOnlyList<string> Keys, long Sequence,
     LoadOrderStatus? LoadOrderStatus = null,
     TrackProgress? TrackProgress = null,
-    IReadOnlyList<ChangedPlugin>? ChangedPlugins = null)
+    IReadOnlyList<ChangedPlugin>? ChangedPlugins = null,
+    RecordFilterClearedNotification? RecordFilterCleared = null)
 {
     public static NotificationEvent From(INotification notification) => notification switch
     {
@@ -74,6 +75,7 @@ public sealed record NotificationEvent(
         TrackProgressNotification n => new("track-progress", "", n.Progress.Mod ?? "", [], 0, TrackProgress: n.Progress),
         ExternalChangeNotification n => new("external-change", "", n.Origin, [], 0, ChangedPlugins: n.Plugins),
         PluginSourceUnreadableNotification n => new("plugin-source-unreadable", "", n.Origin, n.Plugins, 0),
+        RecordFilterClearedNotification n => new("record-filter-cleared", "", "", [], 0, RecordFilterCleared: n),
         _ => throw new ArgumentOutOfRangeException(nameof(notification), notification.GetType().Name, null),
     };
 }

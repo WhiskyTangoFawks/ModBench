@@ -48,6 +48,7 @@ indexer."winners and conflicts"
 indexer -> port: "index status: reconciling · ready · held elsewhere · failed" {class: push}
 store -> port: "rows changed: keys, sequence" {class: push}
 indexer -> port: "plugin changed: the plugin, sequence" {class: push}
+indexer -> port: "record filter cleared: its source, the database's reason" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
-client -> views: "index status · rows changed · plugin changed" {class: push}
+client -> views: "index status · rows changed · plugin changed · record filter cleared" {class: push}

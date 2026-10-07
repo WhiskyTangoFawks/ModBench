@@ -455,6 +455,29 @@ describe('the record filter, from the commands that set and clear it', () => {
     });
   });
 
+  describe('a record filter the index could not apply again', () => {
+    it('shows no filter, re-reads the records, and warns naming the source and the reason', async () => {
+      const source = { scheme: 'untitled', path: 'a' };
+      h.document = { uri: source, fileName: 'a', getText: () => ARMOR_SQL };
+      const view = filtering();
+      await view.filter(source);
+      view.recordBrowserRefreshes.length = 0;
+
+      view.client.emit({
+        kind: 'record-filter-cleared', plugin: '', origin: '', keys: [], sequence: 0,
+        recordFilterCleared: { source: 'a', reason: 'Conversion Error' },
+      });
+
+      expect(view.description()).toBeUndefined();
+      expect(view.lensOn(ARMOR_SQL)).toBe('modbench.record.filter');
+      expect(view.filterActive()).toEqual([true, false]);
+      expect(view.recordBrowserRefreshes).toHaveLength(1);
+      expect(view.reporter.reports).toEqual([
+        { severity: 'warning', message: 'The record filter a was cleared — Conversion Error', detail: undefined },
+      ]);
+    });
+  });
+
   describe('modbench.record.clearFilter', () => {
     const source = { scheme: 'untitled', path: 'a' };
     const applied = async () => {

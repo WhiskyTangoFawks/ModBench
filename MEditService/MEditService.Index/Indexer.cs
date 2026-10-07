@@ -31,7 +31,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
         _indexFactory = new DuckDbRecordIndexFactory(
             schemaReflector, new TableDdlBuilder(schemaReflector),
             loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>(), timeProvider);
-        _filter = new FilterInForce(logger);
+        _filter = new FilterInForce(logger, notifications);
         _reconciler = new Reconciler(
             holder, adapter, _indexFactory, _filter, logger, notifications, timeProvider ?? TimeProvider.System);
     }

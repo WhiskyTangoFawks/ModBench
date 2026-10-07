@@ -4,7 +4,7 @@ import type { Reporter } from '../ports/reporter';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 
 export interface FilterCommandDeps {
-  client: Pick<MEditClient, 'setFilter' | 'clearFilter'>;
+  client: Pick<MEditClient, 'setFilter' | 'clearFilter' | 'onNotification'>;
   treeProvider: Pick<PluginTreeProvider, 'refresh'>;
   /** Symmetric on purpose: a stale `false` surviving a clear would leave a plugin permanently
    *  hidden (plugins.md). */
@@ -76,6 +76,10 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
   };
 
   return [
+    { dispose: client.onNotification('record-filter-cleared', ({ source, reason }) => {
+      show(null);
+      reporter.report('warning', `The record filter ${source} was cleared — ${reason}`);
+    }) },
     vscode.commands.registerCommand('modbench.record.filter', (source?: vscode.Uri) =>
       source === undefined ? fromPick() : fromDocument(source)),
     vscode.commands.registerCommand('modbench.record.clearFilter', async () => {
