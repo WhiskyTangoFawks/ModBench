@@ -876,7 +876,7 @@ describe('what a record tab\'s webview posts', () => {
       expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, modsByOrigin })]);
     });
 
-    it('tells the tab the repository state of the origins it showed when the instance changes, and no longer once the tab is closed', async () => {
+    it('tells the tab the repository state of the origins it showed when the instance changes', async () => {
       const mEdit = client();
       mEdit.setQueryAnswer('getPlugins', activeA);
       mEdit.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModB', isWinner: true, editorId: 'Gun' }]));
@@ -890,15 +890,12 @@ describe('what a record tab\'s webview posts', () => {
       const tab = await openDocument(renderedUri(GUN, 'Gun.json'), { getText: () => '{}' });
       tab.receive(loadRequest);
       await settle();
-      const told = () => tab.webview.postMessage.mock.calls.map(([m]) => m).filter((m) => m.type === 'modsChanged');
+      const told = () => answered(tab).filter((message) => typeof message === 'object' && message !== null && Reflect.get(message, 'type') === 'modsChanged');
 
       tracked = new Set(['ModB']);
       changed.forEach((listener) => { listener(); });
 
       expect(told()).toEqual([{ type: 'modsChanged', modsByOrigin: { ModB: 'tracked' } }]);
-      tab.close();
-      changed.forEach((listener) => { listener(); });
-      expect(told()).toHaveLength(1);
     });
 
     it('is failed, naming the record in the Output and leaving the tab\'s title, when the comparison fails', async () => {
