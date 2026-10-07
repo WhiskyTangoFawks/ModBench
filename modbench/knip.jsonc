@@ -8,15 +8,5 @@
     "!**/test/**!",
     "!src/test/**!",
     "!src/wire/generated/**!"
-  ],
-  "ignoreIssues": {
-    // The game-name scan reads GAME_RELEASES and nothing else does.
-    "src/tables/gamePaths.ts": ["exports"],
-    // packageJson.test reads these constants to hold package.json to the code.
-    "src/mods/conflictTableEditor.ts": ["exports"],
-    "src/mods/inactiveFiles.ts": ["exports"],
-    "src/mods/modIndicators.ts": ["exports"],
-    "src/mods/ModListProvider.ts": ["exports"],
-    "src/plugins/PluginsTreeProvider.ts": ["exports"]
-  }
+  ]
 }

@@ -164,8 +164,6 @@ export function renameSeparator(
   return changeModOrder(access, profile, () => [{ kind: 'renameSeparator', from: oldName, to: requested }]);
 }
 
-// A landed entry. `lineRefusal` is set when its folder reached the trash but its line then
-// could not go — the part that failed, not a refusal (common.md, Reporting).
 interface TrashedEntry {
   name: string;
   lineRefusal?: string;
@@ -236,7 +234,6 @@ export interface ModToUninstall {
 
 // A landed mod. `markRefusal` is set when its downloaded file could not be marked uninstalled,
 // and the uninstall still stands. A line not truly gone marks nothing, so never beside
-// `lineRefusal`.
 interface UninstalledMod extends TrashedEntry {
   markRefusal?: string;
 }

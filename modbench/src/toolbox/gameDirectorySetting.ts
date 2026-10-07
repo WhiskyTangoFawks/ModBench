@@ -1,8 +1,6 @@
 // The Instance watches files, so an edit to the game-directory setting reaches it as the same
 // recompute Refresh's re-read runs.
 
-// The Toolbox's own settle: a burst of edits (a pasted path, keystroke by keystroke) becomes
-// one recompute, as a burst of file events does under the Instance's own settle.
 const SETTING_SETTLE_MS = 200;
 
 /** VS Code's `ConfigurationChangeEvent`, as much of it as the trigger reads. */

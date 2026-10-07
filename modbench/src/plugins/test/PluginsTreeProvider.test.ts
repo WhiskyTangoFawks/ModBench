@@ -4,11 +4,10 @@ import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/
 import type { PluginAddress } from '../../wire/pluginAddress';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import {
-  type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata,
+  type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,
   type WorldspaceSummary, type InteriorCellBlock, type RecordSummary, type CellChildRecords,
   type ContainerChildSummary, type CellSummary, type ChildRecordSummary,
 } from '../../client';
-type RecordPage = { items: RecordSummary[]; total: number };
 import type { WorldspaceBlocks } from '../../client/apiClient';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import {

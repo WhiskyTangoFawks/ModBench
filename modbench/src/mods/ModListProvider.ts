@@ -124,6 +124,7 @@ export class OverwriteNode extends vscode.TreeItem {
 
 export type ModlistNode = SeparatorNode | ModNode | OverwriteNode | FolderNode | FileNode | ErrorNode;
 
+/** @public Read by packageJson.test, which holds package.json to it. */
 export const NO_MODS_MESSAGE =
   'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
 

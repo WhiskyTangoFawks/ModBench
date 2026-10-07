@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ErrorNode } from '../drivingLib/errorNode';
 import type {
-  RecordSummary,
+  RecordSummary, RecordPage,
   WorldspaceSummary, CellSummary, ChildRecordSummary, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords,
   ContainerChildSummary, MEditClient, PluginRecordTypeCount, InteriorCellBlock, InteriorCellSubBlock,
 } from '../client';
@@ -260,7 +260,6 @@ export type PluginTreeNode =
 export const CELL_RECORD_TYPE = 'cell';
 const WORLDSPACE_RECORD_TYPE = 'wrld';
 
-type RecordPage = { items: RecordSummary[]; total: number };
 type PageCache = Map<string, RecordPage>;
 
 type RecordBrowserClient = Pick<
