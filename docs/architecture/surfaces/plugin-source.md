@@ -6,9 +6,9 @@ The plugin source is a tracked plugin's text, and compile builds the plugin from
 
 As a user, I want:
 
-1. To find a record by its file: one folder for each plugin, and one file for each record, named by its EditorID when it has one, then its FormKey.
+1. To find a record by its file: one folder for each plugin, and one file for each record, named by its EditorID when it has one, then its FormKey, except a child record (story 3).
 2. A diff to hold only what changed in the plugin. An insert or a delete touches one record's file, a reorder reads as a reorder, nothing is re-sorted, and decompiling an unchanged plugin changes nothing. Source: ADR-0006
-3. A record and its child records in one file, so a change to a cell or a quest is one file to review. Child records are never files of their own: Mutagen's serializer numbers them by their place, so a reorder would rename every sibling. Source: Ruling
+3. A record and its child records in one file, so a change to a cell or a quest is one file to review. A worldspace's grid cells are each a file of their own. Source: ADR-0020
 4. Never to edit or merge a value the plugin derives. The masters, the next FormID and the record count are not in the source, so two branches that add records never conflict over them. Source: ADR-0008; ruling
 
 ## Decompile and compile
