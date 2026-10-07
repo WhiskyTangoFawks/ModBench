@@ -35,9 +35,10 @@ A FormKey is a symbol, and the index answers for it ([ADR-0001](../../adr/0001-m
 As a user, I want:
 
 1. Go to Definition on a FormKey to open the record, as Opening in [editor.md](editor.md) opens a record given without a plugin. Source: VS Code; xEdit Ctrl + click
-2. Find All References on a FormKey to list every record that references it, one entry for each plugin's copy, in the peek and in the References view. Source: VS Code; [editor-referenced-by.md](editor-referenced-by.md), The tree, stories 1 to 4
+2. Find All References on a FormKey to list every record that references it, one entry for each plugin's copy, in the peek and in the References view. Source: VS Code; [editor-referenced-by.md](editor-referenced-by.md), The tree, stories 1, 2 and 4
 3. Hovering a FormKey to show `EditorID [FormKey]`, the record type, and the plugin whose copy wins. Source: xedit.md, divergence 10
 4. Go to Symbol in Workspace to find a record by EditorID or FormKey across every tracked plugin, and to open it. Source: VS Code; catalog `open` with no Argument
 5. Completion inside a reference field to offer records by EditorID and insert the FormKey, and inside an enum field to offer its values. Source: VS Code; ADR-0005
-6. The Problems panel to carry, on the file, what compile would refuse and a reference to a record no active plugin holds. A problem appears when the file is saved and clears the same way, since the index reads the file. Source: Changes outside Modbench, story 2; ADR-0015
+6. The Problems panel to carry, on the file of every tracked plugin, active or not, what compile would refuse and a reference to a record that neither its plugin nor an active plugin holds. A problem appears when the file is saved and clears the same way, since the index reads the file. When mEdit cannot answer, the problems stay, and the language status says "Showing the last good read:" and the reason, with one line in the Output. No notification. The next good answer clears it. Source: Changes outside Modbench, story 2; ADR-0015; ADR-0012; common, States, story 6; ADR-0019; VS Code's language status
 7. Rename Symbol and the quick fixes to offer nothing on plugin source: changing a FormKey is editing the FormID field, and updating the references is a script. Source: xedit.md, divergence 9
+8. A language feature that fails to answer as any language server's feature does: with what it found, and a line in the Output for each reason. Source: VS Code; ADR-0019

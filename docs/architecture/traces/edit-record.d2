@@ -6,38 +6,35 @@ client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
-commands: @../target-architecture.medit_core.commands
-commands.label: Commands
 queries: @../target-architecture.medit_readmodel.index.queries
 queries.label: Queries
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
+source: @../target-architecture.medit_data.source
 sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
-source: @../target-architecture.medit_data.source
-instanceloader: @../target-architecture.modbench_readmodel.instanceloader
-instanceloader.label: Instance loader
+vscode: "VS Code" {class: other}
 
-create: "create, on a plugin: the type pick first" {
-  editor -> client: "the record types the game can create" {class: query}
+create: "create: the type pick first" {
+  editor -> client: "on a plugin, the record types the game can create; on a container, the types it holds" {class: query}
   client -> http: question {class: query}
   http -> queries: question {class: query}
-  queries -> http: "answer: the creatable record types" {class: query}
+  queries -> http: "answer: the record types" {class: query}
   http -> client: answer {class: query}
-  client -> editor: the creatable record types {class: query}
+  client -> editor: the record types {class: query}
 }
 
-editor -> client: "the gesture: the records and its Options" {class: edit}
+editor -> client: "the gesture, its Options and any unsaved document text" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 source -> sourceadapter: documents {class: edit}
-sourceadapter -> commands: current document {class: edit}
-commands -> sourceadapter: new document {class: edit}
-sourceadapter -> source: documents {class: edit}
-commands -> http: "applied or refusal, per item" {class: edit}
-http -> client: "applied or refusal, per item" {class: edit}
-client -> editor: "applied or refusal, per item" {class: edit}
-editor -> instanceloader: refresh {class: loadorder}
-instanceloader."index-load-order"
-client -> editor: "rows changed" {class: push}
+sourceadapter -> commands: "the documents it reads" {class: edit}
+commands -> http: "each document's new text, each create, delete and move, per item" {class: edit}
+http -> client: "the changes, per item" {class: edit}
+client -> editor: "the changes, per item" {class: edit}
+editor -> vscode: "the changes, as one workspace edit" {class: outside}
+vscode."apply; save"
+vscode -> source: "the saved files" {class: outside}
 
 refused: "refused, nothing written for that record" {
   commands -> http: "the refusal" {class: edit}

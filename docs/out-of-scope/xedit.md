@@ -13,7 +13,7 @@ What xEdit does: [the surface audit](../research/xedit-surface-audit.md) and [th
 | An ADR decides it | A decision covers the gesture. Masters are derived ([ADR-0008](../adr/0008-masters-are-derived-from-content.md)). Edits are git changes ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)). The index is always current ([ADR-0003](../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md), [ADR-0012](../adr/0012-index-every-plugin-filter-to-the-active-ones.md)). | 7 | Compare to another plugin file; Add masters; Sort masters |
 | Platform | The gesture relies on something Modbench lacks, such as dragging from a tree into a webview. | 1 | Drag a record onto a reference field |
 | Game-specific | It serves one or two games, or one engine. Modbench generalizes across Bethesda games. | 6 | Set the game-link mode (Pluggy); Create SEQ file (Skyrim); Set VWD on all REFRs with a VWD mesh (Oblivion) |
-| Scripts, tasks or the agent | The operation is multi-step. A Python script, a task or the agent delivers it. It is not a gesture. | 19 | Compact FormIDs for ESL; BOSS / LOOT cleaning report; Batch change referencing records |
+| Scripts, tasks or the agent | The operation is multi-step. A Python script, a task or the agent delivers it. It is not a gesture. | 20 | Compact FormIDs for ESL; BOSS / LOOT cleaning report; Batch change referencing records |
 | Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 15 | Hide a plugin in the navigator (filters hide a class of things); Hide or unhide one record; unhide all overrides (filters hide a class of things); Stick to (a view preference) |
 | Dead in xEdit | xEdit documents or ships it, and no working handler exists. | 3 | Temporary and Persistent nav items; Element detail form; Bookmarks (Ctrl+1 to 5, Alt+1 to 5), F5, Ctrl+F3, Alt+F3, Ctrl+W |
 
@@ -48,10 +48,10 @@ Gestures Modbench does differently.
 | 23 | A deleted reference | Keeps only its record header | Keeps its base record from FO4 on | Mutagen decides the data: Mutagen writes a deleted record as its header alone. |
 | 24 | Persistent on a deleted record | Refused, naming the reason | Reverts the change in silence | Principle: Never silently wrong. |
 | 25 | Two flag changes in one write | Clearing Partial Form and setting Deleted on a Partial Form copy leaves it Deleted | Reverts it to Partial Form, by the order it applies the two changes | Ruling: a write ends as it asks. |
-| 26 | Deep copy as override into a plugin that holds some of the child records | One confirmation for the selection | Two items: one keeps each record the destination holds; one, with overwriting, asks for each | Principle, Minimal by default: one gesture asks once. |
-| 27 | Create a cell at a grid position the worldspace already has | Refused, naming the cell. The refusal for a master's cell points at copy as override. | Returns the plugin's cell, or makes an override of the master's | Ruling: create never turns into an override (commands.md, Principles). |
+| 27 | Create a cell at a grid position the worldspace already has | Refused, naming the cell. The refusal for a master's cell points at copy as override. | Returns the plugin's cell, or makes an override of the master's | Ruling: create never turns into an override (commands.md, Principles, Refuse, do not repair). |
 | 28 | A plugin whose master is not active | Stays active and indexed, its row flagged with a master issue; its dependants are untouched | Deactivates it and every plugin that depends on it | Mutagen decides the data: xEdit cannot load a plugin without its master; Mutagen can. The picture then shows the load order the user has, as MO2's does. |
 | 29 | The order of a container's child records | Kept as the plugin holds it | Sorts a changed group by FormID when it saves it. For Oblivion to Skyrim it orders a topic's responses by their previous-response chain. | Ruling: [ADR-0020](../adr/0020-a-child-record-lives-in-its-containers-document.md). |
+| 30 | A container copied in to hold a copied child record | A Partial Form, where the game lets it be one | A full override, unless xEdit started with -IKnowWhatImDoing -AllowMakePartial | Ruling: a container copied in only to hold a child overrides none of its fields. |
 
 ## Omissions by object
 
@@ -110,6 +110,7 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Copy as disabled override | Referenced By | Scripts, tasks or the agent |
 | Copy as override for spawn rate (leveled lists) | Navigator | Game-specific |
 | Clean up references to injected records | Navigator | Scripts, tasks or the agent |
+| Deep copy as override | Navigator, Referenced By, View header: Deep copy as override into…, with overwriting | Scripts, tasks or the agent |
 | Drag a record onto a reference field | Navigator drag, View drop | Platform |
 | Stick to (a view preference) | View grid | Maintainer ruling |
 | Create a ModGroup from columns (ModGroups are dropped as a feature) | View grid: Ctrl+M | Maintainer ruling |
