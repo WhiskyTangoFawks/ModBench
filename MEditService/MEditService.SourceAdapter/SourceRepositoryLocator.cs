@@ -554,7 +554,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             return null;
 
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
-                         ?? DocumentText.RootStringIn(text, "MutagenObjectType");
+                         ?? DocumentText.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator);
         return recordType == null ? null : (formKey, recordType, DocumentText.EditorIdIn(text));
     }
 

@@ -77,4 +77,38 @@ public sealed class EmbeddedChildSearchTests
 
         Assert.Null(RekeyedViaRecordDocumentEditsBecauseTheSearchIsCodecInternal(cell, stranger.FormKey.ToString()));
     }
+
+    private static EmbeddedChildSpan? Located(IMajorRecordGetter owner, string formKey)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(Codec.SerializeToText(owner, GameRelease.Fallout4));
+        return EmbeddedChildLocator.Find(
+            bytes, EmbeddedChildLocator.ContainerTypeName(null, bytes, GameRelease.Fallout4), formKey, GameRelease.Fallout4);
+    }
+
+    [Fact]
+    public void AnswersThePathOfAChildOneLevelDown_AsTheSlotAndItsPosition()
+    {
+        var mod = NewMod();
+        var cell = new Cell(mod) { EditorID = "Cell" };
+        cell.Temporary.Add(new PlacedObject(mod) { EditorID = "First" });
+        var placed = new PlacedObject(mod) { EditorID = "Second" };
+        cell.Temporary.Add(placed);
+
+        Assert.Equal(
+            [new ChildStep("Temporary", 1)], Located(cell, placed.FormKey.ToString())?.Path);
+    }
+
+    [Fact]
+    public void AnswersThePathOfAChildTwoEmbedLevelsDown_ThroughAWorldspacesTopCell()
+    {
+        var mod = NewMod();
+        var worldspace = new Worldspace(mod) { EditorID = "World" };
+        var topCell = new Cell(mod) { EditorID = "TopCell" };
+        var placed = new PlacedObject(mod) { EditorID = "TopRef" };
+        topCell.Temporary.Add(placed);
+        worldspace.TopCell = topCell;
+
+        Assert.Equal(
+            [new ChildStep("TopCell", null), new ChildStep("Temporary", 0)], Located(worldspace, placed.FormKey.ToString())?.Path);
+    }
 }

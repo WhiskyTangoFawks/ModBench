@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
@@ -105,11 +106,11 @@ internal static class EmbeddedChildSplice
         var reader = new Utf8JsonReader(bytes);
         reader.Read();
         if (!reader.Read() || reader.TokenType != JsonTokenType.PropertyName) return childText;
-        if (reader.ValueTextEquals(EmbeddedChildLocator.DiscriminatorMember)) return childText;
+        if (reader.ValueTextEquals(LoquiUnions.UnionTypeDiscriminator)) return childText;
 
         var at = (int)reader.TokenStartIndex;
         var declaration = Encoding.UTF8.GetBytes(
-            $"\"{EmbeddedChildLocator.DiscriminatorMember}\": \"{discriminator}\",\n{new string(' ', IndentAt(bytes, at))}");
+            $"\"{LoquiUnions.UnionTypeDiscriminator}\": \"{discriminator}\",\n{new string(' ', IndentAt(bytes, at))}");
         return Encoding.UTF8.GetString([.. bytes[..at], .. declaration, .. bytes[at..]]);
     }
 
