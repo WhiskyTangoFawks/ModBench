@@ -13,7 +13,7 @@ export interface FieldCommitDeps {
   edit: (address: EditAddress, envelope: RecordEditEnvelope) => Promise<string | undefined>;
 }
 
-export interface RecordPanelContextCommandDeps extends FieldCommitDeps {
+interface RecordPanelContextCommandDeps extends FieldCommitDeps {
   // The one set of extended-field documents every panel's tabs open into.
   extendedFields: Pick<ExtendedFieldDocuments, 'open'>;
   // The palette hands a field gesture no cell: it acts on the record tab in focus's focused cell.

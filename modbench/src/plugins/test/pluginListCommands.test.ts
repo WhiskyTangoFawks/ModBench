@@ -33,7 +33,7 @@ import { PLUGINS_KEY_ARGS } from '../gestureEntry';
 import type { PluginTreeNode } from '../PluginTreeProvider';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 import { cellRow, placedRow, recordGroupRow, recordRow, worldspaceRow } from './browserRows';
-import { ImplicitMasterNode, PluginNode, pluginFileOf, type PluginsTreeNode } from '../PluginsTreeProvider';
+import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
 import { pluginsTreeOver } from './pluginsTreeOver';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -329,7 +329,7 @@ describe('registerRevealInExplorerCommand', () => {
   function invoke(resolvePluginPath: (name: string) => Promise<string | undefined>, viewSelection: readonly PluginsTreeNode[] = []) {
     const reporter = recordingReporter();
     registerRevealInExplorerCommand(
-      { resolvePluginPath: (row) => resolvePluginPath(pluginFileOf(row)) }, reporter, () => viewSelection);
+      { resolvePluginPath: (row) => resolvePluginPath(row.kind === 'plugin' ? row.plugin.name : row.name) }, reporter, () => viewSelection);
     return { run: present(handlers.get('modbench.plugin.reveal'), "the reveal plugin command's registered handler"), reporter };
   }
 

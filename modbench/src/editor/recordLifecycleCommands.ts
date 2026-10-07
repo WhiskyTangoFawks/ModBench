@@ -17,7 +17,7 @@ export interface RecordArgument {
   editorId?: string;
 }
 
-export function recordArgument(arg: unknown): RecordArgument | undefined {
+function recordArgument(arg: unknown): RecordArgument | undefined {
   if (!arg || typeof arg !== 'object') return undefined;
   const n = arg as {
     record?: { formKey?: string; plugin?: string; editorId?: string | null };

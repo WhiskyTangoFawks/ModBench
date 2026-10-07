@@ -11,7 +11,7 @@ import { selectionInFocusedView } from '../drivingLib/inFocusedView';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { FocusedView } from '../drivingLib/focusedView';
 
-export type EditorDeps = Omit<EditorCommandDeps,
+type EditorDeps = Omit<EditorCommandDeps,
   'recordPanels' | 'activeRecordTracker' | 'editsInFlight' | 'focusedCells' | 'focusedViewSelection' | 'meditClient'
 > & {
   meditClient: EditorCommandDeps['meditClient'] & Parameters<typeof createReferencedByView>[0];

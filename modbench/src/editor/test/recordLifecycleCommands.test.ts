@@ -26,7 +26,7 @@ vi.mock('vscode', async () => {
 });
 
 import {
-  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, recordArgument,
+  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands,
 } from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { RecordWrite } from '../../drivingLib/writingGesture';
@@ -59,25 +59,6 @@ function recordingWrite(): { write: RecordWrite; writing: string[]; viewsAskedFo
     },
   };
 }
-
-describe('recordArgument — structural, not node-typed', () => {
-  it('reads a RecordNode-shaped row', () => {
-    expect(recordArgument(RECORD_NODE)).toEqual({ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA', editorId: undefined });
-  });
-
-  it('reads a plain identity literal the same way', () => {
-    expect(recordArgument(RECORD_IDENTITY)).toEqual({ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA', editorId: undefined });
-  });
-
-  it.each(['worldspace', 'cell', 'placed'])('reads a %s row that states its record\'s FormKey and EditorID beside its plugin', (kind) => {
-    expect(recordArgument({ kind, formKey: '000802:MyPatch.esp', editorId: 'Here', plugin: 'MyPatch.esp', origin: 'ModA' }))
-      .toEqual({ formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA', editorId: 'Here' });
-  });
-
-  it('is undefined for neither shape', () => {
-    expect(recordArgument({ nothing: true })).toBeUndefined();
-  });
-});
 
 describe('registerRecordLifecycleCommands', () => {
   let viewSelection: readonly unknown[] = [];
@@ -175,6 +156,43 @@ describe('registerRecordLifecycleCommands', () => {
 
         expect(deleteCalls(client)).toEqual([[[FIRST]]]);
       });
+
+    it.each(['worldspace', 'cell', 'placed'])('names a %s row\'s record by the FormKey and EditorID the row states beside its plugin', async (kind) => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { landed: [SECOND], refused: [] });
+      const { ask } = invoke(client, 'Delete');
+
+      await deleteRecords({ kind, ...SECOND, editorId: 'Here' });
+
+      expect(deleteCalls(client)).toEqual([[[SECOND]]]);
+      expect(ask.asked.map((question) => question.message)).toEqual([
+        'Delete Here [000802:MyPatch.esp] in MyPatch.esp (ModA)? It leaves its plugin source as a working-tree change you can review.',
+      ]);
+    });
+
+    it('names the plugin copy a Referenced By row stands for, with its origin', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { landed: [SECOND], refused: [] });
+      const { ask } = invoke(client, 'Delete');
+      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'TestNPC', { name: SECOND.plugin, origin: SECOND.origin }, []);
+
+      await deleteRecords(holder);
+
+      expect(deleteCalls(client)).toEqual([[[SECOND]]]);
+      expect(ask.asked.map((question) => question.message)).toEqual([
+        'Delete TestNPC [000802:MyPatch.esp] in MyPatch.esp (ModA)? It leaves its plugin source as a working-tree change you can review.',
+      ]);
+    });
+
+    it('asks nothing and deletes nothing for an argument that names no record', async () => {
+      const client = new InMemoryMEditClient();
+      const { ask } = invoke(client, 'Delete');
+
+      await deleteRecords({ nothing: true });
+
+      expect(ask.asked).toEqual([]);
+      expect(deleteCalls(client)).toEqual([]);
+    });
 
     it('sends the whole selection as one call', async () => {
       const client = new InMemoryMEditClient();
