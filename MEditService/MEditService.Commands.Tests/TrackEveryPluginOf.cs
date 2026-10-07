@@ -22,7 +22,6 @@ internal static class TrackEveryPluginOf
     [
         .. result.SelectionRefusal is { } refusal ? [refusal.Message] : Enumerable.Empty<string>(),
         .. result.Refused.Select(r => r.Message),
-        .. result.Landed.SelectMany(l => l.Outcome.Refused).Select(r => r.Message),
     ];
 
     /// <summary>The answer for a selection of one mod holding one plugin.</summary>
@@ -30,7 +29,7 @@ internal static class TrackEveryPluginOf
         result switch
         {
             { SelectionRefusal: { } refusal } => new PluginTrack(false, refusal.Refusal, refusal.Message),
-            { Landed: [{ Outcome: { Tracked.Count: 1, Refused.Count: 0 } }], Refused.Count: 0 } => new PluginTrack(true, TrackRefusal.None, ""),
+            { Landed: [{ Outcome: { Tracked.Count: 1 } }], Refused.Count: 0 } => new PluginTrack(true, TrackRefusal.None, ""),
             { Landed.Count: 0, Refused: [var refused] } => new PluginTrack(false, refused.Refusal, refused.Message),
             _ => throw new InvalidOperationException(
                 $"Expected one plugin's answer, got {result.Landed.Count} landed and {result.Refused.Count} refused."),

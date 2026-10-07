@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 
 namespace MEditService.Commands;
@@ -27,8 +26,8 @@ public enum TrackRefusal
     /// <summary>The plugin passed its gate, and the file system refused its source files, or git refused the track's one commit.</summary>
     CommitFailed,
 
-    /// <summary>The mod refused for more than one reason, which the message names plugin by plugin.</summary>
-    NoPluginTracked,
+    /// <summary>The mod's refused plugins differ in reason; the message names each plugin and why.</summary>
+    PluginsRefused,
 
     /// <summary>git is not on PATH, so no repository can be created at all (ADR-0007).</summary>
     GitUnavailable,
@@ -36,4 +35,4 @@ public enum TrackRefusal
 
 /// <summary>A mod of the selection that tracked whole: every plugin whose source landed in its commit. A mod
 /// with any plugin refused is refused instead, and writes nothing.</summary>
-public sealed record TrackedMod(IReadOnlyList<PluginAddress> Tracked, IReadOnlyList<ItemRefused<PluginAddress, TrackRefusal>> Refused);
+public sealed record TrackedMod(IReadOnlyList<PluginAddress> Tracked);

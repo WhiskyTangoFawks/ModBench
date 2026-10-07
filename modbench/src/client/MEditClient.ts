@@ -137,7 +137,6 @@ export type { PluginAddress };
 interface TrackedMod {
   mod: string;
   tracked: readonly PluginAddress[];
-  refused: readonly ItemRefusal<PluginAddress>[];
 }
 
 /** Track's answer: each mod tracked or refused, as a mod, with its reason. */

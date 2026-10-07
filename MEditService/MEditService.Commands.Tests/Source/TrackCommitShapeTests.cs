@@ -143,7 +143,7 @@ public sealed class TrackCommitShapeTests : IDisposable
     }
 
     [Fact]
-    public async Task Track_OfAModWhoseEveryPluginIsRefusedForDifferentCauses_RefusesTheModAsNoPluginTracked_NamingEachReason()
+    public async Task Track_OfAModWhoseEveryPluginIsRefusedForDifferentCauses_RefusesTheModAsPluginsRefused_NamingEachReason()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WriteLocalizedPluginWithoutItsStrings("Second.esp");
@@ -151,7 +151,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         var result = await Track(new RoundTripFailsFor("First.esp"));
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((ModName, TrackRefusal.NoPluginTracked), (refused.Item, refused.Refusal));
+        Assert.Equal((ModName, TrackRefusal.PluginsRefused), (refused.Item, refused.Refusal));
         Assert.Contains("FirstNpc", refused.Message, StringComparison.Ordinal);
         Assert.Contains("Second_en.STRINGS", refused.Message, StringComparison.Ordinal);
         Assert.False(SourceRepository.IsTracked(_modFolder));
