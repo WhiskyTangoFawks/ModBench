@@ -725,36 +725,13 @@ internal sealed class RelationReads(
         using var parsed = JsonDocument.Parse(body);
         var root = parsed.RootElement;
         var address = new PluginAddress(plugin, origin);
-        var fields = BuildFields(schema, root, resolveFormKey, store.Release);
+        var fields = schema.FieldsOf(root, RecordLookupEntry.Resolver(resolveFormKey), store.Release);
 
         return new RecordDocument(
             formKey, address, loadOrderIndex, isWinner, editorId, schema.TableName,
             body, schema.IsHeader ? RequiredMasters.InHeader(fields, connection, address) : fields,
-            // A ModHeader cannot carry the Partial Form flag.
-            IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(root, schema.RecordType),
+            IsPartialForm: schema.IsPartialForm(root),
             ParseDiagnosis: parseDiagnosis);
-    }
-
-    private static List<FieldValue> BuildFields(
-        RecordTableSchema schema, JsonElement root,
-        Func<string, RecordLookupEntry?> resolveFormKey, GameRelease release)
-    {
-        ResolvedFormKey? Resolve(string formKey) =>
-            resolveFormKey(formKey) is { } entry ? new ResolvedFormKey(entry.RecordType, entry.EditorId) : null;
-
-        var fields = new List<FieldValue>(schema.RecordColumns.Count);
-        foreach (var col in schema.RecordColumns)
-        {
-            // A synthetic member is the bit it stands for, read off the member the document spells.
-            var value = col.Synthetic is { } bit
-                ? JsonSerializer.SerializeToElement(SyntheticBits.IsSet(root, bit))
-                : DocumentNodes.At(root, col.PropertyName);
-            var meta = col.ToFieldMetadata();
-            // The check reads the shape this record's own class gives the column; the wire keeps the
-            // column's whole metadata, variants included, so the editor can pick the same.
-            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, root), value, Resolve, release)));
-        }
-        return fields;
     }
 
     private static int LoadOrderSortKey(DuckDBDataReader reader, int ordinal) =>

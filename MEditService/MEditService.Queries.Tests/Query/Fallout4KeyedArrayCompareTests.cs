@@ -41,31 +41,31 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static readonly FormKey B = new(Base, 0x901);
     private static readonly FormKey Cell = new(Base, 0x902);
 
-    private static readonly (FormKey Key, string RecordType, string[] Fields, Func<bool, IMajorRecordGetter> Build)[] Records =
+    private static readonly (FormKey Key, string[] Fields, Func<bool, IMajorRecordGetter> Build)[] Records =
     [
-        (NpcKey, "npc_", ["Factions", "Perks", "Items", "Attacks", "Sounds", "FaceMorphs", "FaceTintingLayers", "Properties", "ObjectTemplates"], Npc),
-        (FactionKey, "fact", ["Relations", "Ranks"], Faction),
-        (LeveledItemKey, "lvli", ["Entries", "FilterKeywordChances"], LeveledItem),
-        (LeveledNpcKey, "lvln", ["Entries"], LeveledNpc),
-        (ObjectModKey, "omod", ["Properties"], WeaponModification),
-        (ContainerKey, "cont", ["Items"], Container),
-        (FurnitureKey, "furn", ["Items"], Furniture),
-        (LensFlareKey, "lens", ["Sprites"], LensFlare),
-        (MaterialSwapKey, "mswp", ["Substitutions"], MaterialSwap),
-        (RegionKey, "regn", ["Sounds"], Region),
-        (MiscItemKey, "misc", ["Components"], MiscItem),
-        (PerkKey, "perk", ["Effects"], Perk),
-        (QuestKey, "qust", ["Stages", "Aliases"], Quest),
-        (LocationKey, "lctn", [
+        (NpcKey, ["Factions", "Perks", "Items", "Attacks", "Sounds", "FaceMorphs", "FaceTintingLayers", "Properties", "ObjectTemplates"], Npc),
+        (FactionKey, ["Relations", "Ranks"], Faction),
+        (LeveledItemKey, ["Entries", "FilterKeywordChances"], LeveledItem),
+        (LeveledNpcKey, ["Entries"], LeveledNpc),
+        (ObjectModKey, ["Properties"], WeaponModification),
+        (ContainerKey, ["Items"], Container),
+        (FurnitureKey, ["Items"], Furniture),
+        (LensFlareKey, ["Sprites"], LensFlare),
+        (MaterialSwapKey, ["Substitutions"], MaterialSwap),
+        (RegionKey, ["Sounds"], Region),
+        (MiscItemKey, ["Components"], MiscItem),
+        (PerkKey, ["Effects"], Perk),
+        (QuestKey, ["Stages", "Aliases"], Quest),
+        (LocationKey, [
             "PersistentActorReferencesAdded", "PersistentActorReferencesStatic", "UniqueActorReferencesAdded",
             "UniqueActorReferencesStatic", "LocationRefTypeReferencesAdded", "LocationRefTypeReferencesStatic", "WorldspaceCellsAdded", "WorldspaceCellsStatic", "WorldspaceCellsRemoved"], Location),
-        (TerminalKey, "term", ["VirtualMachineAdapter", "Properties"], Terminal),
-        (MagicEffectKey, "mgef", ["Sounds"], MagicEffect),
-        (PlacedNpcKey, "achr", ["LinkedReferences", "ActivateParents"], PlacedNpc),
-        (PlacedObjectKey, "refr", ["LinkedReferences"], PlacedObject),
-        (NavmeshKey, "navm", ["NavmeshGeometry", "PreCutMapEntries"], Navmesh),
-        (InfoMapKey, "navi", ["MapInfos", "PreferredPathing"], InfoMap),
-        (LandscapeKey, "land", ["Layers"], Landscape),
+        (TerminalKey, ["VirtualMachineAdapter", "Properties"], Terminal),
+        (MagicEffectKey, ["Sounds"], MagicEffect),
+        (PlacedNpcKey, ["LinkedReferences", "ActivateParents"], PlacedNpc),
+        (PlacedObjectKey, ["LinkedReferences"], PlacedObject),
+        (NavmeshKey, ["NavmeshGeometry", "PreCutMapEntries"], Navmesh),
+        (InfoMapKey, ["MapInfos", "PreferredPathing"], InfoMap),
+        (LandscapeKey, ["Layers"], Landscape),
     ];
 
     private readonly IRecordQueryService _service;
@@ -74,8 +74,8 @@ public sealed class Fallout4KeyedArrayCompareTests
     {
         var rows = Records.SelectMany(r => new[]
         {
-            Row(r.Build(false), BasePlugin, 0, isWinner: false, r.RecordType, r.Fields),
-            Row(r.Build(true), TopPlugin, 1, isWinner: true, r.RecordType, r.Fields),
+            Row(r.Build(false), BasePlugin, 0),
+            Row(r.Build(true), TopPlugin, 1),
         }).ToArray();
         var opened = new Dictionary<PluginAddress, PluginContent>
         {
@@ -369,8 +369,8 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static LayerHeader Layer(Quadrant quadrant, ushort number) =>
         new() { Texture = new FormLink<ILandscapeTextureGetter>(A), Quadrant = quadrant, LayerNumber = number };
 
-    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex, bool isWinner, string recordType, string[] fields) =>
-        new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, Release, recordType, fields));
+    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex) =>
+        new(RealDocuments.Of(record, plugin, loadOrderIndex, Release));
 
     private void AssertTopCopyIsIdenticalToMaster(FormKey record)
     {
@@ -386,10 +386,11 @@ public sealed class Fallout4KeyedArrayCompareTests
         var compare = _service.GetCompare(record.ToString())
             ?? throw new InvalidOperationException($"Expected {record} to resolve to a compare result.");
 
-        var topCells = compare.Diffs.Select(d => (d.FieldName, State: d.CellStates[TopPlugin.Name])).ToList();
-        Assert.Equal(Records.Single(r => r.Key == record).Fields.Order(), topCells.Select(c => c.FieldName).Distinct().Order());
-        Assert.All(topCells, cell => Assert.Equal(expected, cell.State));
-        return compare.Diffs;
+        var keyedArrays = Records.Single(r => r.Key == record).Fields;
+        var diffs = compare.Diffs.Where(d => keyedArrays.Contains(d.FieldName)).ToList();
+        Assert.Equal(keyedArrays.Order(), diffs.Select(d => d.FieldName).Order());
+        Assert.All(diffs, d => Assert.Equal(expected, d.CellStates[TopPlugin.Name]));
+        return diffs;
     }
 
     [Fact]

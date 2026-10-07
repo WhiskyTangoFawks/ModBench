@@ -1,6 +1,4 @@
-using MEditService.Codec.Schema;
-
-namespace MEditService.Index;
+namespace MEditService.Codec.Schema;
 
 /// <summary>Value is the stored document's own node for this field, verbatim, or null when the
 /// document omits the member (which the codec does for a member equal to its default).</summary>
