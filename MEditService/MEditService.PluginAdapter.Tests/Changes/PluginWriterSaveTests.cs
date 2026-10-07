@@ -29,18 +29,16 @@ public sealed class PluginWriterSaveTests
     }
 
     [Fact]
-    public async Task Commit_LeavesNoTempSubdirectory()
+    public async Task Commit_LeavesTheDataFolderHoldingTheSameFiles()
     {
         using var data = new PluginFixtureBuilder("pw-save-no-tmpdir")
             .WithPlugin("TestPlugin.esp")
             .Build();
+        var before = FolderEntries.Of(data.DataFolder);
 
-        var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
+        await RewriteAsync(Path.Combine(data.DataFolder, "TestPlugin.esp"));
 
-        await RewriteAsync(pluginPath);
-
-        var leftoverDirs = Directory.GetDirectories(data.DataFolder, ".medit_tmp_*");
-        Assert.Empty(leftoverDirs);
+        Assert.Equal(before, FolderEntries.Of(data.DataFolder));
     }
 
     [Fact]
@@ -54,10 +52,15 @@ public sealed class PluginWriterSaveTests
 
         using (var prep = await TreeSaves.PrepareAsync(pluginPath))
         {
-            var tempDir = Assert.Single(Directory.GetDirectories(data.DataFolder, ".medit_tmp_*"));
-            File.Delete(Path.Combine(tempDir, "TestPlugin.esp"));
-
-            Assert.ThrowsAny<IOException>(prep.Commit);
+            FileModes.Set(data.DataFolder, "555");
+            try
+            {
+                Assert.ThrowsAny<Exception>(prep.Commit);
+            }
+            finally
+            {
+                FileModes.Set(data.DataFolder, "755");
+            }
         }
 
         Assert.Equal(before, File.ReadAllBytes(pluginPath));

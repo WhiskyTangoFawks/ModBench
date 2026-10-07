@@ -93,7 +93,7 @@ public sealed class RenameSourceApiTests : HostedTests
     public async Task RenamingWhenGitRefusesTheWrite_Is500()
     {
         await Tracked();
-        File.WriteAllText(Path.Combine(ModFolder, ".git", "refs", "medit", "last-compile", "Renamed.esp.lock"), "");
+        GitHooks.Write(ModFolder, "reference-transaction", "[ \"$1\" = prepared ] && exit 1\nexit 0");
 
         var response = await RenameSource(Plugin, Origin, "Renamed.esp");
 

@@ -1,8 +1,10 @@
 using MEditService.Codec.Serialization;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
+[Collection(ProcessEnvironmentCollection.Name)]
 public sealed class SourceRepositoryTrackCleanupTests : IDisposable
 {
     private const string ModName = "SomeMod";
@@ -42,21 +44,20 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     [Fact]
     public void Track_WhenEveryPluginIsRefused_LeavesTheHalfMadeRepositoryAsItWas()
     {
-        var theirs = Directory.CreateDirectory(Path.Combine(_modFolder, ".git")).FullName;
-        File.WriteAllText(Path.Combine(theirs, "config"), "[medit]\n\ttrack = true\n[remote \"origin\"]\n");
+        LeaveAHalfMadeRepository();
+        var before = GitDirContents();
 
         SourceRepository.Track(
             _modFolder, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
 
-        Assert.Equal("[medit]\n\ttrack = true\n[remote \"origin\"]\n", File.ReadAllText(Path.Combine(theirs, "config")));
+        Assert.Equal(before, GitDirContents());
     }
 
     [Fact]
     public void Track_WhenTheCommitFails_LeavesTheHalfMadeRepositoryAsItWas()
     {
-        var theirs = Directory.CreateDirectory(Path.Combine(_modFolder, ".git")).FullName;
-        File.WriteAllText(Path.Combine(theirs, "config"), "[medit]\n\ttrack = true\n");
-        File.WriteAllText(Path.Combine(theirs, "marker"), "theirs");
+        LeaveAHalfMadeRepository();
+        var before = GitDirContents();
         var asset = UnreadableFileTheCommitCannotAdd();
         FileModes.Set(asset, "000");
         try
@@ -69,7 +70,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
             FileModes.Set(asset, "600");
         }
 
-        Assert.Equal("theirs", File.ReadAllText(Path.Combine(theirs, "marker")));
+        Assert.Subset(GitDirContents().ToHashSet(), before.ToHashSet());
     }
 
     [Fact]
@@ -141,8 +142,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
 
     private Exception TrackWhoseCommitHookRuns(string script)
     {
-        Directory.CreateDirectory(Path.Combine(_modFolder, ".git"));
-        File.WriteAllText(Path.Combine(_modFolder, ".git", "config"), "[medit]\n\ttrack = true\n");
+        LeaveAHalfMadeRepository();
         GitHooks.Write(_modFolder, "pre-commit", $"{script}\nexit 1");
         return Assert.ThrowsAny<IOException>(() => SourceRepository.Track(_modFolder, [Baseline("A.esp")]));
     }
@@ -211,14 +211,33 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     [Fact]
     public void Track_IntoTheHalfMadeRepositoryOfACrashedTrack_Recovers()
     {
-        Git("init", "-q", "-b", "main");
-        Git("config", "medit.track", "true");
+        LeaveAHalfMadeRepository();
 
         Assert.False(SourceRepository.HoldsAnotherRepository(_modFolder));
         var refused = SourceRepository.Track(_modFolder, [Baseline("A.esp")]);
 
         Assert.Empty(refused);
         Assert.Equal(["Track SomeMod"], SubjectsOnMain());
+    }
+
+    // A Track whose commit fails and whose rollback cannot delete the repository it made: the state a crashed Track leaves.
+    private void LeaveAHalfMadeRepository()
+    {
+        using var template = new ScratchDirectory("medit-track-template-");
+        GitHooks.Write(template, "pre-commit", "chmod 555 \"$(dirname \"$0\")/..\"\nexit 1");
+        var previous = Environment.GetEnvironmentVariable("GIT_TEMPLATE_DIR");
+        Environment.SetEnvironmentVariable("GIT_TEMPLATE_DIR", Path.Combine(template, ".git"));
+        var gitDir = Path.Combine(_modFolder, ".git");
+        try
+        {
+            Assert.ThrowsAny<UnauthorizedAccessException>(() => SourceRepository.Track(_modFolder, [Baseline("Crashed.esp")]));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GIT_TEMPLATE_DIR", previous);
+            FileModes.Set(gitDir, "755");
+        }
+        File.Delete(Path.Combine(gitDir, "hooks", "pre-commit"));
     }
 
     private List<(string Path, string Hash)> GitDirContents() =>
