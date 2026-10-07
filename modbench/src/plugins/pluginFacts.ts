@@ -6,7 +6,7 @@ import { ByPluginAddress } from './pluginAddress';
 /** A warning on one plugin's file, as the Problems panel shows it. */
 export type PluginWarning = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
 
-export type StatusKind = 'failedToRead' | 'masterIssues' | 'unreadableRecords' | 'changedOutside' | 'malformed';
+export type StatusKind = 'failedToRead' | 'masterIssues' | 'unreadableRecords' | 'sourceUnreadable' | 'changedOutside' | 'malformed';
 
 export interface PluginStatus {
   kind: StatusKind;
@@ -43,11 +43,14 @@ export interface HeldMessageInputs {
 // snapshot's index failed.
 type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 
+const WARNING_KINDS: ReadonlySet<StatusKind> = new Set(['sourceUnreadable', 'changedOutside', 'malformed']);
+
 const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
 
 interface PluginRead {
   readOnly: boolean;
   tracked: boolean;
+  sourceUnreadable: boolean;
   masterIssues?: string[];
   parseFailure: boolean;
 }
@@ -68,6 +71,12 @@ const unreadableRecords = (held: boolean): PluginStatus | undefined => !held ? u
   : {
     kind: 'unreadableRecords', words: 'unreadable records',
     tooltipLine: 'This plugin holds a record that could not be read into its document.',
+  };
+
+const sourceUnreadable = (unreadable: boolean): PluginStatus | undefined => !unreadable ? undefined
+  : {
+    kind: 'sourceUnreadable', words: 'plugin source unreadable',
+    tooltipLine: 'Plugin source unreadable: its records are those of its plugin file, until decompile writes its source.',
   };
 
 const changedOutside = (changed: boolean): PluginStatus | undefined => !changed ? undefined
@@ -147,7 +156,8 @@ export class PluginFacts {
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
       reads.set(p, {
-        readOnly: p.isImmutable, tracked: p.isTracked, parseFailure: p.hasParseFailure,
+        readOnly: p.isImmutable || p.pluginSourceUnreadable, tracked: p.isTracked,
+        sourceUnreadable: p.pluginSourceUnreadable, parseFailure: p.hasParseFailure,
         masterIssues: p.masterIssues ?? this.reads.get(p)?.masterIssues,
       });
       matches.set(p, p.hasMatchingRecords);
@@ -224,17 +234,17 @@ export class PluginFacts {
       failedToRead(this.loadFailures.get(address)),
       masterIssues(read?.masterIssues ?? []),
       unreadableRecords(read?.parseFailure === true),
+      sourceUnreadable(read?.sourceUnreadable === true),
       changedOutside(this.changed.has(address)),
       malformed(this.diagnosisTexts.get(address) ?? []),
     ].filter((s): s is PluginStatus => s !== undefined);
   }
 
-  /** The red or yellow icon of the first status; none when the plugin has none. A plugin changed
-   *  outside Modbench or malformed still loads and plays, unlike the three red statuses. */
+  /** The red or yellow icon of the first status; none when the plugin has none. */
   icon(address: PluginAddress): StatusIcon | undefined {
     const [first] = this.statuses(address);
     if (first === undefined) return undefined;
-    return first.kind === 'changedOutside' || first.kind === 'malformed' ? 'warning' : 'error';
+    return WARNING_KINDS.has(first.kind) ? 'warning' : 'error';
   }
 
   /** The status words, left out when the plugin has none. */
