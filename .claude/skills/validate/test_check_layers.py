@@ -59,6 +59,7 @@ modbench_driving: "MODBENCH · Driving adapters" {
   class: band; grid-rows: 1
   mods: "Mods" {class: driving}
   plugins: "Plugins" {class: driving}
+  webview: "Webview pages" {class: driving}
   drivinglib: "driving lib" {class: driving}
 }
 medit_core: "MEDIT · Core" {
@@ -195,6 +196,15 @@ class ModbenchProjectReferencesAgainstLayers(unittest.TestCase):
             self.assertEqual(len(failures), 1)
             self.assertIn('modbench/src/helpers/tsconfig.json', failures[0])
             self.assertIn('target-architecture.d2', failures[0])
+
+    def test_the_webview_project_is_the_webview_box(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = fixture(pathlib.Path(tmp))
+            write(root, 'modbench/webview/tsconfig.json', '{ "references": [{ "path": "../src/mods" }] }')
+            failures = cl.run(root)
+            self.assertEqual(len(failures), 1)
+            self.assertIn('modbench/webview/tsconfig.json', failures[0])
+            self.assertIn('webview -> mods', failures[0])
 
     def test_a_box_the_code_has_not_built_yet_is_no_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
