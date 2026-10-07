@@ -10,9 +10,6 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 {
     private readonly string _prefix = prefix;
     private readonly List<(string Name, bool Listed, bool Enabled, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>>? Configure, BinaryWriteParameters? WriteParams, string Origin)> _plugins = [];
-    // The game's Creation Club list, not a plugins.txt line: BuildScattered ignores Listed entirely,
-    // having no plugins.txt.
-    private readonly List<string> _cccCatalog = [];
 
     public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, bool listed = true, BinaryWriteParameters? writeParams = null, bool enabled = true, string origin = PluginOrigin.DataDirectory)
     {
@@ -23,12 +20,6 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
     public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, bool listed = true, bool enabled = true, string origin = PluginOrigin.DataDirectory, BinaryWriteParameters? writeParams = null)
     {
         _plugins.Add((name, listed, enabled, configure, writeParams, origin));
-        return this;
-    }
-
-    public PluginFixtureBuilder WithCreationClubCatalog(params string[] names)
-    {
-        _cccCatalog.AddRange(names);
         return this;
     }
 
@@ -60,11 +51,9 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 
     public ScatteredFixtureData BuildScattered()
     {
-        // The plugins the game loads with no line, in the order it loads them: its masters, then its
-        // Creation Club plugins. Their files live in the game directory, never a mod folder.
+        // The game's masters load with no plugins.txt line; their files live in the game directory, never a mod folder.
         var loadedWithNoLine = Implicits.Get(GameRelease.Fallout4).Listings
             .Select(l => l.FileName.ToString())
-            .Concat(_cccCatalog)
             .Where(name => _plugins.Exists(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 

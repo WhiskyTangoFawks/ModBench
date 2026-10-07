@@ -7,24 +7,18 @@ namespace MEditService.TestSupport;
 public static class GitProbe
 {
     public static string Run(string gitDir, string workTree, params string[] args) =>
-        Execute(gitDir, workTree, null, args);
-
-    public static string RunWithIndex(string gitDir, string workTree, string indexFile, params string[] args) =>
-        Execute(gitDir, workTree, indexFile, args);
+        Execute(gitDir, workTree, args, throwOnFailure: true).Stdout;
 
     /// <summary>Non-throwing: a failing exit code is an expected answer here, not a probe failure.</summary>
     public static bool TryRun(string gitDir, string workTree, out string stdout, params string[] args)
     {
-        var (exitCode, output, _) = Execute(gitDir, workTree, null, args, throwOnFailure: false);
+        var (exitCode, output, _) = Execute(gitDir, workTree, args, throwOnFailure: false);
         stdout = output;
         return exitCode == 0;
     }
 
-    private static string Execute(string gitDir, string workTree, string? indexFile, string[] args) =>
-        Execute(gitDir, workTree, indexFile, args, throwOnFailure: true).Stdout;
-
     private static (int ExitCode, string Stdout, string Stderr) Execute(
-        string gitDir, string workTree, string? indexFile, string[] args, bool throwOnFailure)
+        string gitDir, string workTree, string[] args, bool throwOnFailure)
     {
         var psi = new ProcessStartInfo("git")
         {
@@ -36,7 +30,6 @@ public static class GitProbe
         foreach (var arg in args) psi.ArgumentList.Add(arg);
         psi.Environment["GIT_DIR"] = gitDir;
         psi.Environment["GIT_WORK_TREE"] = workTree;
-        if (indexFile != null) psi.Environment["GIT_INDEX_FILE"] = indexFile;
 
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start the git process.");
         process.StandardInput.Close();
