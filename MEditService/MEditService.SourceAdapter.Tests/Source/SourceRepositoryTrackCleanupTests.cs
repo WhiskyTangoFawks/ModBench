@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
@@ -110,7 +109,8 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     public void Track_WhenTheCommitFails_LeavesAFileAnotherProgramPutInADirectoryItMade_AndNamesTheDirectory()
     {
         var theirs = Path.Combine(_modFolder, "plugin-source", "A.esp", "theirs.txt");
-        var failure = TrackWhoseCommitHookRuns("echo theirs > plugin-source/A.esp/theirs.txt", [Baseline("A.esp")]);
+
+        var failure = TrackWhoseCommitHookRuns($"echo theirs > '{theirs}'");
 
         Assert.Equal("theirs", File.ReadAllText(theirs).Trim());
         Assert.Contains("plugin-source/A.esp holds something Modbench did not write", failure.Message.Replace('\\', '/'));
@@ -121,19 +121,30 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     public void Track_WhenTheCommitFails_LeavesAFileAnotherProgramChanged_AndNamesIt()
     {
         var changed = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
-        var failure = TrackWhoseCommitHookRuns("echo theirs > plugin-source/A.esp/npc_/A.esp/000001.json", [Baseline("A.esp")]);
+
+        var failure = TrackWhoseCommitHookRuns($"echo theirs > '{changed}'");
 
         Assert.Equal("theirs", File.ReadAllText(changed).Trim());
         Assert.Contains("000001.json was changed by another program", failure.Message);
     }
 
-    private Exception TrackWhoseCommitHookRuns(
-        string script, IReadOnlyList<(IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin)> plugins)
+    [Fact]
+    public void Track_WhenTheCommitFails_LeavesAGitignoreAnotherProgramChanged_AndNamesIt()
+    {
+        var gitignore = Path.Combine(_modFolder, ".gitignore");
+
+        var failure = TrackWhoseCommitHookRuns($"echo theirs > '{gitignore}'");
+
+        Assert.Equal("theirs", File.ReadAllText(gitignore).Trim());
+        Assert.Contains(".gitignore was changed by another program", failure.Message);
+    }
+
+    private Exception TrackWhoseCommitHookRuns(string script)
     {
         Directory.CreateDirectory(Path.Combine(_modFolder, ".git"));
         File.WriteAllText(Path.Combine(_modFolder, ".git", "config"), "[medit]\n\ttrack = true\n");
-        GitHooks.RunThenRefuse(_modFolder, "pre-commit", script);
-        return Assert.ThrowsAny<IOException>(() => SourceRepository.Track(_modFolder, plugins));
+        GitHooks.Write(_modFolder, "pre-commit", $"{script}\nexit 1");
+        return Assert.ThrowsAny<IOException>(() => SourceRepository.Track(_modFolder, [Baseline("A.esp")]));
     }
 
     [Fact]

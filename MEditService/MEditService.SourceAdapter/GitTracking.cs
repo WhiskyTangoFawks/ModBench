@@ -23,17 +23,16 @@ internal static class GitTracking
         if (refused.Count > 0)
         {
             var left = log.UndoSince(0, modFolder);
-            return left.Count == 0 ? refused : [(refused[0].Plugin, $"{refused[0].Reason} {LeftStanding(left)}"), .. refused.Skip(1)];
+            return [(refused[0].Plugin, WriteLog.WithLeftovers(refused[0].Reason, left)), .. refused.Skip(1)];
         }
 
         var git = new SourceRepositoryGit(modFolder);
         var gitignorePath = Path.Combine(modFolder, ".gitignore");
-        var gitignoreBefore = File.Exists(gitignorePath) ? File.ReadAllBytes(gitignorePath) : null;
         var repositoryExisted = git.Exists;
         try
         {
             CreateRepository(git);
-            File.WriteAllText(gitignorePath, GitignoreContent);
+            log.Write(gitignorePath, System.Text.Encoding.UTF8.GetBytes(GitignoreContent));
             git.Run("add", "-A");
             git.Run("commit", "-q", "-m", $"Track {SourceRepositoryLayout.ModNameIn(modFolder)}");
             foreach (var plugin in written)
@@ -44,11 +43,7 @@ internal static class GitTracking
         catch (Exception ex)
         {
             if (!repositoryExisted && git.Exists) git.Delete();
-            if (gitignoreBefore is null) File.Delete(gitignorePath);
-            else File.WriteAllBytes(gitignorePath, gitignoreBefore);
-            var left = log.UndoSince(0, modFolder);
-            if (left.Count == 0) throw;
-            throw new IOException($"{ex.Message} {LeftStanding(left)}", ex);
+            throw WriteLog.Rethrown(ex, log.UndoSince(0, modFolder));
         }
         return [];
     }
@@ -68,20 +63,15 @@ internal static class GitTracking
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
-                var left = log.UndoSince(mark, workTree);
-                refused.Add((plugin.Plugin, left.Count == 0 ? ex.Message : $"{ex.Message} {LeftStanding(left)}"));
+                refused.Add((plugin.Plugin, WriteLog.WithLeftovers(ex.Message, log.UndoSince(mark, workTree))));
             }
             catch (Exception ex)
             {
-                var left = log.UndoSince(0, workTree);
-                if (left.Count == 0) throw;
-                throw new IOException($"{ex.Message} {LeftStanding(left)}", ex);
+                throw WriteLog.Rethrown(ex, log.UndoSince(0, workTree));
             }
         }
         return (written, refused);
     }
-
-    private static string LeftStanding(List<string> left) => $"Left standing: {string.Join(" ", left)}";
 
     private static void CreateRepository(SourceRepositoryGit git)
     {
@@ -116,57 +106,116 @@ internal static class GitTracking
         "meta.ini\n";
 }
 
-/// <summary>What a write made or replaced, so a rollback takes back only that: a directory once empty, a
-/// file while it holds the bytes this write gave it (ADR-0003). What it leaves is named.</summary>
+/// <summary>Every write and delete a rollback may take back: a directory once empty, a file while it holds
+/// the bytes this write left (ADR-0003). What it cannot take back is named.</summary>
 internal sealed class WriteLog
 {
     private abstract record Entry(string Path);
 
     private sealed record CreatedDirectory(string Path) : Entry(Path);
 
+    private sealed record RemovedDirectory(string Path) : Entry(Path);
+
     private sealed record CreatedFile(string Path, byte[] Written) : Entry(Path);
 
     private sealed record ReplacedFile(string Path, byte[] Original, byte[] Written) : Entry(Path);
+
+    private sealed record DeletedFile(string Path, byte[] Original) : Entry(Path);
 
     private readonly List<Entry> _entries = [];
 
     internal int Mark => _entries.Count;
 
-    internal void CreatedDirectoryAt(string path) => _entries.Add(new CreatedDirectory(path));
+    internal void CreateDirectory(string directory)
+    {
+        var missing = new Stack<string>();
+        for (var ancestor = directory; !Directory.Exists(ancestor); ancestor = PathShape.DirectoryOf(ancestor))
+            missing.Push(ancestor);
+        foreach (var created in missing) _entries.Add(new CreatedDirectory(created));
+        Directory.CreateDirectory(directory);
+    }
 
-    internal void Created(string path, byte[] written) => _entries.Add(new CreatedFile(path, written));
+    internal void Write(string path, byte[] content)
+    {
+        _entries.Add(File.Exists(path) ? new ReplacedFile(path, File.ReadAllBytes(path), content) : new CreatedFile(path, content));
+        File.WriteAllBytes(path, content);
+    }
 
-    internal void Replaced(string path, byte[] original, byte[] written) => _entries.Add(new ReplacedFile(path, original, written));
+    internal void Delete(string path)
+    {
+        _entries.Add(new DeletedFile(path, File.ReadAllBytes(path)));
+        File.Delete(path);
+    }
 
-    /// <summary>Answers what it left standing, each named relative to <paramref name="relativeTo"/>.</summary>
+    internal void DeleteEmptyDirectories(string directory)
+    {
+        if (!Directory.Exists(directory)) return;
+        foreach (var child in Directory.GetDirectories(directory)) DeleteEmptyDirectories(child);
+        if (Directory.EnumerateFileSystemEntries(directory).Any()) return;
+        _entries.Add(new RemovedDirectory(directory));
+        Directory.Delete(directory);
+    }
+
     internal List<string> UndoSince(int mark, string relativeTo)
     {
         List<string> left = [];
         for (var i = _entries.Count - 1; i >= mark; i--)
         {
             var entry = _entries[i];
-            string Name() => System.IO.Path.GetRelativePath(relativeTo, entry.Path);
-            switch (entry)
+            try
             {
-                case CreatedDirectory when Directory.Exists(entry.Path):
-                    if (Directory.EnumerateFileSystemEntries(entry.Path).Any()) left.Add($"{Name()} holds something Modbench did not write.");
-                    else Directory.Delete(entry.Path);
-                    break;
-                case CreatedFile created when File.Exists(entry.Path):
-                    if (Holds(created.Path, created.Written)) File.Delete(created.Path);
-                    else left.Add($"{Name()} was changed by another program.");
-                    break;
-                case ReplacedFile replaced:
-                    if (!Holds(replaced.Path, replaced.Written)) left.Add($"{Name()} was changed by another program.");
-                    else File.WriteAllBytes(replaced.Path, replaced.Original);
-                    break;
+                if (Undo(entry, i) is { } reason) left.Add($"{System.IO.Path.GetRelativePath(relativeTo, entry.Path)} {reason}");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                left.Add($"{System.IO.Path.GetRelativePath(relativeTo, entry.Path)} could not be taken back: {ex.Message}");
             }
         }
         _entries.RemoveRange(mark, _entries.Count - mark);
         return left;
     }
 
-    private static bool Holds(string path, byte[] bytes) => File.Exists(path) && File.ReadAllBytes(path).AsSpan().SequenceEqual(bytes);
+    /// <summary>The cause with what a rollback left standing named in it; a fault that is not a failed write passes through.</summary>
+    internal static Exception Rethrown(Exception cause, List<string> left) =>
+        left.Count == 0 || !IsAFailedWrite(cause) ? cause : new IOException(WithLeftovers(cause.Message, left), cause);
+
+    internal static string WithLeftovers(string message, List<string> left) =>
+        left.Count == 0 ? message : $"{message} Not taken back: {string.Join(" ", left)}";
+
+    internal static bool IsAFailedWrite(Exception cause) =>
+        cause is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception;
+
+    private string? Undo(Entry entry, int index)
+    {
+        switch (entry)
+        {
+            case CreatedDirectory when Directory.Exists(entry.Path):
+                if (!Directory.EnumerateFileSystemEntries(entry.Path).Any()) Directory.Delete(entry.Path);
+                else if (!_entries.Take(index).Any(earlier => earlier is RemovedDirectory removed && removed.Path == entry.Path))
+                    return "holds something Modbench did not write.";
+                return null;
+            case RemovedDirectory:
+                Directory.CreateDirectory(entry.Path);
+                return null;
+            case CreatedFile created when File.Exists(created.Path):
+                if (!Holds(created.Path, created.Written)) return "was changed by another program.";
+                File.Delete(created.Path);
+                return null;
+            case ReplacedFile replaced:
+                if (!File.Exists(replaced.Path)) return "was removed by another program.";
+                if (!Holds(replaced.Path, replaced.Written)) return "was changed by another program.";
+                File.WriteAllBytes(replaced.Path, replaced.Original);
+                return null;
+            case DeletedFile deleted:
+                if (!File.Exists(deleted.Path)) File.WriteAllBytes(deleted.Path, deleted.Original);
+                else if (!Holds(deleted.Path, deleted.Original)) return "was written by another program after Modbench removed it.";
+                return null;
+            default:
+                return null;
+        }
+    }
+
+    private static bool Holds(string path, byte[] bytes) => File.ReadAllBytes(path).AsSpan().SequenceEqual(bytes);
 }
 
 /// <summary>The one way a list of <see cref="TreeFile"/>s becomes real files under a base
@@ -180,15 +229,8 @@ internal static class PristineFileWriter
         foreach (var file in files)
         {
             var fullPath = Path.Combine(baseDirectory, file.RelativePath);
-            var directory = PathShape.DirectoryOf(fullPath);
-            var missing = new Stack<string>();
-            for (var ancestor = directory; !Directory.Exists(ancestor); ancestor = PathShape.DirectoryOf(ancestor))
-                missing.Push(ancestor);
-            foreach (var created in missing) log.CreatedDirectoryAt(created);
-            Directory.CreateDirectory(directory);
-            if (File.Exists(fullPath)) log.Replaced(fullPath, File.ReadAllBytes(fullPath), file.Content);
-            else log.Created(fullPath, file.Content);
-            File.WriteAllBytes(fullPath, file.Content);
+            log.CreateDirectory(PathShape.DirectoryOf(fullPath));
+            log.Write(fullPath, file.Content);
         }
     }
 }

@@ -53,10 +53,8 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     public void ReplaceSourceFrom_WhenItFails_LeavesAFileAnotherProgramPutInADirectoryItMade_AndNamesTheDirectory()
     {
         var theirs = Path.Combine(Root, "armo", "theirs.txt");
-        GitHooks.RunThenRefuse(_modFolder, "reference-transaction", $"[ \"$1\" = prepared ] || exit 0\necho theirs > '{theirs}'");
 
-        var failure = Assert.ThrowsAny<IOException>(() => Repository.ReplaceSourceFrom(
-            Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{}")], Sha));
+        var failure = FailAfterWritingWhile($"echo theirs > '{theirs}'", [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{}")]);
 
         Assert.Equal("theirs", System.IO.File.ReadAllText(theirs).Trim());
         Assert.Contains("armo holds something Modbench did not write", failure.Message.Replace('\\', '/'));
@@ -67,13 +65,75 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     public void ReplaceSourceFrom_WhenItFails_LeavesAFileAnotherProgramChangedAfterItReplacedIt_AndNamesIt()
     {
         var replaced = Path.Combine(Root, "npc_", "A.esp", "000001.json");
-        GitHooks.RunThenRefuse(_modFolder, "reference-transaction", $"[ \"$1\" = prepared ] || exit 0\necho theirs > '{replaced}'");
 
-        var failure = Assert.ThrowsAny<IOException>(() => Repository.ReplaceSourceFrom(
-            Address, [File("npc_/A.esp/000001.json", "{\"now\":2}")], Sha));
+        var failure = FailAfterWritingWhile($"echo theirs > '{replaced}'", [File("npc_/A.esp/000001.json", "{\"now\":2}")]);
 
         Assert.Equal("theirs", System.IO.File.ReadAllText(replaced).Trim());
         Assert.Contains("000001.json was changed by another program", failure.Message);
+    }
+
+    [Fact]
+    public void ReplaceSourceFrom_WhenItFails_DoesNotPutBackAFileAnotherProgramRemovedAfterItReplacedIt()
+    {
+        var replaced = Path.Combine(Root, "npc_", "A.esp", "000001.json");
+
+        var failure = FailAfterWritingWhile($"rm '{replaced}'", [File("npc_/A.esp/000001.json", "{\"now\":2}")]);
+
+        Assert.False(System.IO.File.Exists(replaced));
+        Assert.Contains("000001.json was removed by another program", failure.Message);
+    }
+
+    [Fact]
+    public void ReplaceSourceFrom_WhenItFails_LeavesAFileAnotherProgramWroteWhereItRemovedOne_AndNamesIt()
+    {
+        var removed = Path.Combine(Root, "npc_", "A.esp", "000001.json");
+
+        var failure = FailAfterWritingWhile($"mkdir -p '{Path.GetDirectoryName(removed)}'\necho theirs > '{removed}'", [File("armo/A.esp/000003.json", "{}")]);
+
+        Assert.Equal("theirs", System.IO.File.ReadAllText(removed).Trim());
+        Assert.Contains("000001.json was written by another program", failure.Message);
+    }
+
+    [Fact]
+    public void ReplaceSourceFrom_WhenItFails_PutsBackADirectoryItEmptiedAndAnotherProgramThenFilled_NamingNothing()
+    {
+        var theirs = Path.Combine(Root, "npc_", "A.esp", "theirs.txt");
+
+        var failure = Assert.ThrowsAny<InvalidOperationException>(() => FailAfterWriting(
+            $"echo theirs > '{theirs}'", [File("npc_/A.esp/000002.json", "{}")]));
+
+        Assert.Equal("theirs", System.IO.File.ReadAllText(theirs).Trim());
+        Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(Root, "npc_", "A.esp", "000001.json")));
+        Assert.DoesNotContain("Not taken back", failure.Message);
+    }
+
+    [Fact]
+    public void ReplaceSourceFrom_WhenOneRollbackStepFails_StillPutsBackTheRest_AndKeepsTheCause()
+    {
+        var made = Path.Combine(Root, "armo", "A.esp");
+        var removed = Path.Combine(Root, "npc_", "A.esp", "000001.json");
+
+        try
+        {
+            var failure = FailAfterWritingWhile($"chmod 555 '{made}'", [File("armo/A.esp/000003.json", "{}")]);
+
+            Assert.Contains("000003.json could not be taken back", failure.Message);
+            Assert.NotNull(failure.InnerException);
+            Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(removed));
+        }
+        finally
+        {
+            FileModes.Set(made, "755");
+        }
+    }
+
+    private Exception FailAfterWritingWhile(string script, TreeFile[] files) =>
+        Assert.ThrowsAny<IOException>(() => FailAfterWriting(script, files));
+
+    private void FailAfterWriting(string script, TreeFile[] files)
+    {
+        GitHooks.Write(_modFolder, "reference-transaction", $"[ \"$1\" = prepared ] || exit 0\n{script}\nexit 1");
+        Repository.ReplaceSourceFrom(Address, files, Sha);
     }
 
     [Fact]
