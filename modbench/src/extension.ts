@@ -2,7 +2,7 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { createMEditClient, createLoadOrderSender, type LoadOrderSender, type MEditClient } from './client';
+import { createMEditClient, type MEditClient } from './client';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
@@ -16,7 +16,6 @@ import { registerCopyValueCommand } from './drivingLib/copyValue';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
 import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { dataFolderFile } from './tables/gamePaths';
-import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { createStatusBar, type StatusBar } from './plugins/statusBar';
 import { meditConfig, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
@@ -54,32 +53,26 @@ import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import { openedFolder, whenOpened } from './drivingLib/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
-import { launchBackend } from './toolbox/autoLaunch';
 import { pluginSyncOver } from './pluginsCommands/plugins';
 import { modSyncOver } from './modlist/modlist';
 import { warnIfFomod } from './install/fomodWarning';
 import { refresh } from './instanceCommands/loadOrder';
-import { editingFlow, exitEditing } from './instanceCommands/editing';
+import { editingFlow } from './instanceCommands/editing';
 import { instanceSyncs, loadOrderPutHandler, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
-
-interface ExtensionSession {
-  loadOrderSender?: LoadOrderSender;
-}
 
 // Records a disposable against its owner's teardown and hands it back. `src/test/toolboxScan.test.ts`
 // fails on a registration that skips it.
 type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
-  'putLoadOrder' | 'rebuildIndex' | 'createPlugin' | 'renameSource' | 'getPluginDependants' | 'getCreatablePluginExtensions'
-  | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected'>;
+  'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'start' | 'rebuildIndex' | 'createPlugin' | 'renameSource'
+  | 'getPluginDependants' | 'getCreatablePluginExtensions'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
-  session: ExtensionSession;
   client: ViewsClient;
   recordBrowser: PluginTreeProvider;
   pluginFacts: PluginsViewDeps['client'];
@@ -113,11 +106,9 @@ interface InstanceFacts {
 interface InstanceSide {
   /** Absent together, on the path with no instance to read. */
   instance?: Instance;
-  enterEditing?: () => Promise<void>;
   toolboxProvider: ToolboxProvider;
   facts: InstanceFacts;
   plugins: PluginsHandle;
-  latestSent: LoadOrderSender['latest'];
   originFiles: OriginFilesOf;
   modListSelection: () => readonly ModlistNode[];
   pluginsSelection: () => readonly PluginsTreeNode[];
@@ -140,7 +131,6 @@ function buildBareSide(own: Own): InstanceSide {
       recordRow: () => Promise.resolve(undefined), reveal: () => Promise.resolve(), refreshFacts: () => Promise.resolve(),
       showRecordFilter: () => undefined,
     },
-    latestSent: () => Promise.resolve(undefined),
     originFiles: () => undefined,
     modListSelection: () => [], pluginsSelection: () => [], downloadsSelection: () => [],
     trackSelection: () => [],
@@ -149,7 +139,7 @@ function buildBareSide(own: Own): InstanceSide {
 
 function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): InstanceSide {
   const {
-    outputChannel, session, client, recordBrowser, pluginFacts,
+    outputChannel, client, recordBrowser, pluginFacts,
     statusBar, notifyConflictsComputed, reporterFor, ask, trash, extensionId,
   } = deps;
   const log = (msg: string) => outputChannel.info(msg);
@@ -164,8 +154,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   // what keeps activation from being blocking here.
   void instance.refresh();
   ownAll(own, registerModDecorations(instance, vscode.workspace));
-  const sender = own(createLoadOrderSender(client));
-  session.loadOrderSender = sender;
   const refreshIndex = () => refresh(client, instanceRoot, instance.value);
   const { modSync, pluginSync } = own(instanceSyncs({
     instance, syncMods: modSyncOver(access), syncPlugins: pluginSyncOver(access), channel: outputChannel,
@@ -184,11 +172,13 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     narrator: plugins.narrator, progress: plugins.progress, log: outputChannel, revealLog: () => outputChannel.show(true), loadOrderPut: plugins.loadOrderPut,
     reportPut: (message) => reporterFor('loadOrder').report('error', message),
     reportEntry: (message) => reporterFor('enterEditing').report('error', message),
+    reportLaunch: (message, reason) => reporterFor('launch').report('error', message, reason),
   });
   const editing = own(editingFlow({
-    client, sender, instanceRoot, exitEditing: () => exitEditing(session, client),
-    around: view.around, tell: view.tell, log: (message) => outputChannel.error(message),
+    client, instanceRoot, around: view.around, tell: view.tell, log: (line) => outputChannel.error(line),
   }));
+  void editing.enter(instance.landed());
+  void client.start();
   const putLoadOrder = loadOrderPutHandler(editing);
   own(loadOrderPutOnEachValue(instance, putLoadOrder));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putLoadOrder));
@@ -245,7 +235,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   }));
   return {
     instance, toolboxProvider,
-    enterEditing: () => editing.enter(instance.landed()),
     facts: { trackedMods: () => instance.value.trackedMods, modDirs: () => instance.value.paths.modDirs,
       onChange: (listener) => instance.subscribe(() => { listener(); }), refresh: () => instance.refresh() },
     plugins: {
@@ -255,7 +244,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
       refreshFacts: () => pluginsTree.refreshFacts(),
       showRecordFilter: (filter) => plugins.showRecordFilter(filter),
     },
-    latestSent: () => sender.latest(),
     originFiles: (origin) => originFiles(instance.value, origin),
     modListSelection: () => modListView.selection, pluginsSelection,
     downloadsSelection: () => downloadsView.selection, trackSelection,
@@ -303,7 +291,6 @@ function buildViews(deps: ViewsDeps): Views {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  const session: ExtensionSession = {};
   const attachPort = meditConfig().get<number>('attachToBackendPort');
 
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
@@ -326,7 +313,7 @@ export function activate(context: vscode.ExtensionContext): void {
   };
   const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...modFacts });
   const instance = { refresh: () => views.facts.refresh() };
-  const recordWrite = recordWriteOver(instance, { latest: () => views.latestSent() });
+  const recordWrite = recordWriteOver(instance, meditClient);
   const editor = createEditor({
     context, meditClient, outputChannel,
     reporterFor: (tag) => makeReporter(outputChannel, tag),
@@ -340,7 +327,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const conflictsComputed = trackedRepositories.conflictsComputedOver(() => { editor.announceConflictsComputed(); });
   const notifyConflictsComputed = () => { void conflictsComputed(); };
   const views = buildViews({
-    outputChannel, session, client: meditClient,
+    outputChannel, client: meditClient,
     reporterFor: (tag) => makeReporter(outputChannel, tag),
     ask: askQuestion,
     trash: moveToTrash,
@@ -368,11 +355,6 @@ export function activate(context: vscode.ExtensionContext): void {
       client: meditClient, originFiles: (origin) => views.originFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     }),
     ...registerPluginRowCommands(pluginRowDeps),
-    launchBackend({
-      setting: GAME_FOLDER_SETTING, client: meditClient, enterEditing: views.enterEditing,
-      exitEditing: () => exitEditing(session, meditClient), reporter: makeReporter(outputChannel, 'launch'),
-      onConfigChange: vscode.workspace.onDidChangeConfiguration,
-    }),
   );
 }
 

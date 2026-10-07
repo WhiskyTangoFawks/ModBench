@@ -1,9 +1,7 @@
 // Put load order (ADR-0013) and refresh. What comes back is the caller's to report and apply,
 // never pushed to a view from here.
 
-import type {
-  LoadOrderOutcome, LoadOrderSender, LoadOrderSnapshot, MEditClient,
-} from '../client';
+import type { LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
 
 /** The game the instance is for. */
 export interface InstanceGame {
@@ -32,7 +30,7 @@ export type PutLoadOrderResult =
 const releaseOf = (game: InstanceGame): string => game.gameRelease ?? game.gameName;
 
 export async function putLoadOrder(
-  sender: Pick<LoadOrderSender, 'send'>, instanceRoot: string, value: LoadOrderSource,
+  client: Pick<MEditClient, 'sendLoadOrder'>, instanceRoot: string, value: LoadOrderSource,
 ): Promise<PutLoadOrderResult> {
   if (!value.loadOrderSnapshot) return { sent: false };
   if ('refusal' in value.loadOrderSnapshot) return { sent: false, refusal: value.loadOrderSnapshot.refusal };
@@ -40,7 +38,7 @@ export async function putLoadOrder(
   const snapshot: LoadOrderSnapshot = {
     plugins, active, loadedWithNoLine, gameDirectory: dataFolder, instanceRoot, gameRelease: releaseOf(value),
   };
-  return { sent: true, snapshot, outcome: await sender.send(snapshot) };
+  return { sent: true, snapshot, outcome: await client.sendLoadOrder(snapshot) };
 }
 
 /** The rebuild of commands.md's `refresh`: mEdit reads every plugin again against the load order

@@ -23,6 +23,7 @@ function wired() {
   const said: string[] = [];
   const putReports: string[] = [];
   const entryReports: string[] = [];
+  const launchReports: [string, string][] = [];
   const logged: { info: string[]; error: string[] } = { info: [], error: [] };
   const revealed = { count: 0 };
   const narrator = createReconcileNarrator({
@@ -37,9 +38,10 @@ function wired() {
     narrator, progress, log, loadOrderPut,
     reportPut: (message) => { putReports.push(message); },
     reportEntry: (message) => { entryReports.push(message); },
+    reportLaunch: (message, reason) => { launchReports.push([message, reason]); },
     revealLog: () => { revealed.count++; },
   });
-  return { view, handed, said, putReports, entryReports, logged, revealed, loadOrderPut, lines };
+  return { view, handed, said, putReports, entryReports, launchReports, logged, revealed, loadOrderPut, lines };
 }
 
 describe('the entry shown', () => {
@@ -61,12 +63,12 @@ describe('the entry shown', () => {
     expect(putReports).toEqual([]);
   });
 
-  it('only logs an abandoned launch, which owns no view', async () => {
-    const { view, logged, entryReports, putReports } = wired();
+  it('tells a launch that threw as a failed launch, with its reason', async () => {
+    const { view, launchReports, entryReports, putReports } = wired();
 
-    await view.tell({ kind: 'abandoned' });
+    await view.tell({ kind: 'launchFailed', reason: 'no port' });
 
-    expect(logged.info).toEqual([expect.stringContaining('abandoned')]);
+    expect(launchReports).toEqual([['Failed to launch mEdit.', 'no port']]);
     expect([...entryReports, ...putReports]).toEqual([]);
   });
 });
@@ -134,13 +136,5 @@ describe("a put's own outcome shown", () => {
     await view.tell({ kind: 'put', put: { sent: false } });
 
     expect([putReports, handed, logged.info]).toEqual([[], [], []]);
-  });
-
-  it('logs a put that threw, since no caller is left to hear it', async () => {
-    const { view, logged } = wired();
-
-    await view.tell({ kind: 'putThrew', message: 'boom' });
-
-    expect(logged.error).toEqual(['[loadOrder] handing mEdit the load order threw: boom']);
   });
 });
