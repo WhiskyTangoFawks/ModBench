@@ -30,8 +30,6 @@
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
     <!-- The kernel, by the band's rule (target-architecture.d2 medit_kernel). -->
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
-    <!-- The kernel, by the band's rule (target-architecture.d2 medit_kernel). -->
-    <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
     <!-- The band's lib (target-architecture.d2 medit_repositories). -->
     <ProjectReference Include="..\MEditService.RepositoriesLib\MEditService.RepositoriesLib.csproj" />
   </ItemGroup>

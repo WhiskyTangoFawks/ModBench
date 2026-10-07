@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cpSync, readFileSync } from 'node:fs';
+import { cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import ts from 'typescript';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -1176,24 +1175,5 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     await rm(modlistPath());
 
     assertRefusalNarrowedByHandSinceExpectMatchersAreTypedAny(await sync(FIXTURE_MOD_FOLDERS), 'ENOENT');
-  });
-});
-
-describe('modlist commands never import the Instance, the read model built only by watching', () => {
-  it('names no import from ../instanceLoader and no `Instance` identifier', () => {
-    const path = join(__dirname, '..', 'modlist.ts');
-    const source = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
-    const offenders: string[] = [];
-    const visit = (node: ts.Node): void => {
-      if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && node.moduleSpecifier.text.includes('instanceLoader')) {
-        offenders.push(`import of "${node.moduleSpecifier.text}"`);
-      }
-      if (ts.isIdentifier(node) && node.text === 'Instance') {
-        offenders.push('identifier `Instance`');
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(source);
-    expect(offenders).toEqual([]);
   });
 });

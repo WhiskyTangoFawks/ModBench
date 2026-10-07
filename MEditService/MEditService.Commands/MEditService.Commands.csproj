@@ -23,9 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Drawn: commands -> Source adapter (target-architecture-references.d2). -->
     <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />
-    <!-- Drawn: commands -> Plugin adapter (target-architecture-references.d2). -->
     <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
     <!-- The kernel, by the band's rule (target-architecture.d2 medit_kernel). -->
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
