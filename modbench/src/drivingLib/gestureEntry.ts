@@ -25,7 +25,7 @@ export interface ArgumentCarrier {
 }
 
 /** A tree row, or a webview context, that carries an Argument the wire accepts. */
-export const isArgumentCarrier = (value: unknown): value is ArgumentCarrier =>
+const isArgumentCarrier = (value: unknown): value is ArgumentCarrier =>
   [recordArgumentOf, pluginArgumentOf, modArgumentOf].some((argumentOf) => argumentOf(value) !== undefined);
 
 /** What a gesture that refuses unreadable rows aloud takes as clicked: a tree row, which it refuses

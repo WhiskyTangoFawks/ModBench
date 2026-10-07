@@ -7,7 +7,7 @@ const { registerCommand } = vi.hoisted(() => ({
 
 vi.mock('vscode', () => ({ commands: { registerCommand }, TreeItem }));
 
-import { gestureEntry, isArgumentCarrier, isClickedRow, pluralArgument, registerGesture, selectionArgument, singularArgument, type GestureEntry } from '../gestureEntry';
+import { gestureEntry, isClickedRow, pluralArgument, registerGesture, selectionArgument, singularArgument, type GestureEntry } from '../gestureEntry';
 
 class Row extends TreeItem {
   constructor(readonly kind: 'a' | 'b', label: string) {
@@ -156,24 +156,8 @@ describe('a singular gesture\'s Argument', () => {
   });
 });
 
-describe('isArgumentCarrier', () => {
-  const plugin = { name: 'A.esp', origin: 'Mod' };
-
-  it('accepts a row or context carrying a record, plugin or mod Argument', () => {
-    expect(isArgumentCarrier({ argument: { kind: 'mod', name: 'ModA' } })).toBe(true);
-    expect(isArgumentCarrier({ argument: { kind: 'plugin', plugin } })).toBe(true);
-    expect(isArgumentCarrier({ argument: { kind: 'record', formKey: '000800:A.esp' } })).toBe(true);
-  });
-
-  it('refuses an object that carries no Argument the wire accepts', () => {
-    expect(isArgumentCarrier({ view: 'modbench.test' })).toBe(false);
-    expect(isArgumentCarrier({ argument: { kind: 'mod' } })).toBe(false);
-    expect(isArgumentCarrier(null)).toBe(false);
-  });
-
-});
-
 describe('isClickedRow', () => {
+  const plugin = { name: 'A.esp', origin: 'Mod' };
   const selected = { argument: { kind: 'mod', name: 'ModA' } };
   const viewSelection = () => [selected, selected];
 
@@ -184,6 +168,17 @@ describe('isClickedRow', () => {
 
   it('takes a webview context that carries an Argument', () => {
     expect(gestureEntry(selected, undefined, viewSelection, isClickedRow).selection).toEqual([selected]);
+  });
+
+  it.each([
+    { argument: { kind: 'plugin', plugin } },
+    { argument: { kind: 'record', formKey: '000800:A.esp' } },
+  ])('takes a webview context carrying %o', (context) => {
+    expect(gestureEntry(context, undefined, viewSelection, isClickedRow).selection).toEqual([context]);
+  });
+
+  it('leaves a clicked object whose Argument the wire refuses to the view\'s selection', () => {
+    expect(gestureEntry({ argument: { kind: 'mod' } }, undefined, viewSelection, isClickedRow).selection).toEqual(viewSelection());
   });
 
   it('leaves any other clicked object, such as a key\'s own args, to the view\'s selection', () => {
