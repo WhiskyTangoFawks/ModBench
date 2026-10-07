@@ -73,9 +73,5 @@ public sealed class SourceEditFixture : TestInstance, ITrackedPlugin
 
     public SourceRepository? Repository => RepositoryOf(Plugin);
 
-    /// <summary>Another tool rewrites the plugin: its bytes differ from what Modbench last wrote.</summary>
-    public void ChangeOutsideModbench() =>
-        File.WriteAllBytes(Path.Combine(ModFolder, ActualPluginName), "changed-by-xedit"u8.ToArray());
-
     public RecordIdentity NpcIdentity => new(Npc.ToString(), "npc_", NpcEditorId);
 }

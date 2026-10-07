@@ -102,9 +102,11 @@ public sealed class UntrackedReadOnlyTests
     }
 
     [Fact]
-    public void TrackingTheSameModFolder_TurnsTheRefusalIntoAnAcceptedEdit()
+    public async Task TrackingTheSameModFolder_TurnsTheRefusalIntoAnAcceptedEdit()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceEditFixture.Untracked();
+        var tracked = await TrackEveryPluginOf.ModAsync(mod.LoadOrder, SourceEditFixture.ModFolderOrigin);
+        Assert.Empty(tracked.RefusalMessages());
 
         var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
