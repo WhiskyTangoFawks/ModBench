@@ -457,7 +457,7 @@ internal sealed class Reconciler(
     // A plugin that failed the last re-derivation is not read again until what it reads from changes.
     private static bool TruthMoved(OpenScope scope, RegisteredPlugin plugin, IReadOnlySet<PluginAddress> stampedFromSource)
     {
-        var holdsTree = Projector.HoldsTree(plugin.Key, plugin.Provider);
+        var holdsTree = SourceRepository.SourceReads(plugin.Key, plugin.Provider);
         return holdsTree != stampedFromSource.Contains(plugin.Key) && !scope.Failed.StillFailing(plugin);
     }
 
@@ -470,7 +470,7 @@ internal sealed class Reconciler(
             token.ThrowIfCancellationRequested();
             if (scope.Held.Find(plugin.Key) is not { } metadata) continue;
 
-            var holdsTree = Projector.HoldsTree(plugin.Key, plugin.Provider);
+            var holdsTree = SourceRepository.SourceReads(plugin.Key, plugin.Provider);
             if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation(
@@ -543,7 +543,7 @@ internal sealed class Reconciler(
     private ReadOutcome RegisterOrIndex(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
         var key = plugin.Key;
-        var holdsTree = Projector.HoldsTree(plugin.Key, plugin.Provider);
+        var holdsTree = SourceRepository.SourceReads(plugin.Key, plugin.Provider);
         if (scope.Index.IndexedContentHash(key) != null && WarmRegister(scope, plugin, holdsTree, state))
         {
             if (logger.IsEnabled(LogLevel.Information))
@@ -665,7 +665,7 @@ internal sealed class Reconciler(
     {
         var (held, index) = (scope.Held, scope.Index);
         var key = plugin.Key;
-        var holdsTree = Projector.HoldsTree(key, plugin.Provider);
+        var holdsTree = SourceRepository.SourceReads(key, plugin.Provider);
         try
         {
             if (!holdsTree && !File.Exists(plugin.Path))
@@ -796,7 +796,7 @@ internal sealed class Reconciler(
 
         // Asked here as a bare "is this tracked" question; the door below resolves the tree it reads
         // for itself, so neither trusts the other about a folder either could have lost in between.
-        if (Projector.HoldsTree(metadata.Key, metadata.Provider))
+        if (SourceRepository.SourceReads(metadata.Key, metadata.Provider))
             IngestFromSourceTree(key);
         else
             ReindexOne(metadata, scope);
@@ -814,7 +814,7 @@ internal sealed class Reconciler(
         var (metadata, scope) = RequireHeldPlugin(key);
         var index = scope.Index;
         using var projection = index.BeginProjection();
-        if (!Projector.HoldsTree(metadata.Key, metadata.Provider))
+        if (!SourceRepository.SourceReads(metadata.Key, metadata.Provider))
         {
             throw new InvalidOperationException(
                 $"Plugin '{key.Name}' from '{key.Origin}' has no source tree to re-ingest; it is not tracked.");

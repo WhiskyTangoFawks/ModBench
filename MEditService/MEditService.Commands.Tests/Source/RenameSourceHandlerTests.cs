@@ -61,7 +61,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         var result = RenameSource(Old, newName);
 
         Assert.True(result.Applied, result.Message);
-        Assert.False(SourceRepository.HoldsTreeFor(_trackedMod, Old.Name));
+        Assert.False(SourceRepository.SourceReads(new PluginAddress(Old.Name, "Mod"), new PluginProvider.FromMod("Mod", _trackedMod)));
         TheInstanceAdapterRenamesTheFile(newName);
         Assert.Equal(compiledBefore, await CompiledBytes(Old with { Name = newName }));
     }
@@ -149,8 +149,8 @@ public sealed class RenameSourceHandlerTests : IDisposable
 
         Assert.Equal(RenameSourceRefusal.UnreadableSource, result.Refusal);
         Assert.Contains("SelfNpc", result.Message, StringComparison.Ordinal);
-        Assert.True(SourceRepository.HoldsTreeFor(_trackedMod, Old.Name));
-        Assert.False(SourceRepository.HoldsTreeFor(_trackedMod, "New.esp"));
+        Assert.True(SourceRepository.SourceReads(new PluginAddress(Old.Name, "Mod"), new PluginProvider.FromMod("Mod", _trackedMod)));
+        Assert.False(SourceRepository.SourceReads(new PluginAddress("New.esp", "Mod"), new PluginProvider.FromMod("Mod", _trackedMod)));
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         Assert.Equal(RenameSourceRefusal.WriteFailed, result.Refusal);
         Assert.Contains(Old.Name, result.Message, StringComparison.Ordinal);
         Assert.Equal(before, TrackedTree.Records(_trackedMod, Old));
-        Assert.False(SourceRepository.HoldsTreeFor(_trackedMod, "New.esp"));
+        Assert.False(SourceRepository.SourceReads(new PluginAddress("New.esp", "Mod"), new PluginProvider.FromMod("Mod", _trackedMod)));
     }
 
     private RenameSourceResult RenameSource(PluginAddress plugin, string newName) =>

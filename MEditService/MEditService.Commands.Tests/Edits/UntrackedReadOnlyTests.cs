@@ -41,7 +41,7 @@ public sealed class UntrackedReadOnlyTests
 
         mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        Assert.False(SourceRepository.HoldsTreeFor(mod.ModFolder, mod.Plugin.Name));
+        Assert.False(SourceRepository.SourceReads(new PluginAddress(mod.Plugin.Name, "Mod"), new PluginProvider.FromMod("Mod", mod.ModFolder)));
     }
 
     [Fact]

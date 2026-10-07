@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -15,7 +16,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     public void TheTrackedPluginReallyIngestedFromSource_NotViaTheBinaryFallback()
     {
         Assert.Empty(fixture.FromSource.Status.Failures);
-        Assert.True(SourceRepository.HoldsTreeFor(fixture.ModFolder, RealDataPlugin.PluginFileName));
+        Assert.True(SourceRepository.SourceReads(new PluginAddress(RealDataPlugin.PluginFileName, "Mod"), new PluginProvider.FromMod("Mod", fixture.ModFolder)));
     }
 
     [Fact]

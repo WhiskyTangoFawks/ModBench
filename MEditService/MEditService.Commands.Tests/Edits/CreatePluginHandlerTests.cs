@@ -80,7 +80,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         Assert.True(result.Applied);
         Assert.Equal(firstBefore, TrackedTree.Records(folder, first));
-        Assert.False(SourceRepository.HoldsTreeFor(folder, "Second.esp"));
+        Assert.False(SourceRepository.SourceReads(new PluginAddress("Second.esp", "Mod"), new PluginProvider.FromMod("Mod", folder)));
     }
 
     [Fact]

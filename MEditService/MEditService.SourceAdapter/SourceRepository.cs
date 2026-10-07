@@ -49,23 +49,20 @@ public sealed class SourceRepository
     /// exists.</summary>
     public static bool IsTracked(string modFolder) => SourceRepositoryGit.IsTracked(modFolder);
 
+    /// <summary>Whether the mod providing a plugin is tracked: its folder holds the repository.</summary>
+    public static bool IsTracked(PluginProvider provider) => provider is PluginProvider.FromMod mod && IsTracked(mod.Folder);
+
+    /// <summary>Whether the plugin's source reads: its mod is tracked and holds the plugin's tree. A tracked mod
+    /// can hold none for a plugin another tool put there, or whose source was deleted.</summary>
+    public static bool SourceReads(PluginAddress plugin, PluginProvider provider) =>
+        provider is PluginProvider.FromMod mod && HoldsTreeFor(mod.Folder, plugin.Name);
+
+    private static bool HoldsTreeFor(string modFolder, string pluginFileName) =>
+        IsTracked(modFolder) && Directory.Exists(SourceRepositoryLayout.RootIn(modFolder, pluginFileName));
+
     /// <summary>A <c>.git</c> with no <c>main</c> that Track did not mark as its own: someone else's, which Track never
     /// writes to (ADR-0003).</summary>
     public static bool HoldsAnotherRepository(string modFolder) => SourceRepositoryGit.HoldsAnotherRepository(modFolder);
-
-    /// <summary>The mod folder only when it is tracked — the single condition under which a plugin
-    /// has source text at all.</summary>
-    public static PluginProvider.FromMod? TrackedModOf(LoadOrderSnapshot loadOrder, PluginAddress plugin) =>
-        loadOrder.ProviderOf(plugin) is PluginProvider.FromMod mod && IsTracked(mod.Folder) ? mod : null;
-
-    /// <summary>Whether this folder holds source for the plugin at all: tracked, and a tree written for
-    /// this one. A tracked mod folder holds a tree per plugin, and may hold none for a given
-    /// plugin.</summary>
-    public static bool HoldsTreeFor(string modFolder, string pluginFileName) =>
-        IsTracked(modFolder) && Directory.Exists(SourceRepositoryLayout.RootIn(modFolder, pluginFileName));
-
-    /// <summary>Whether this repository holds a source tree for the plugin.</summary>
-    public bool HoldsTreeFor(PluginAddress plugin) => HoldsTreeFor(_modFolder, plugin.Name);
 
     /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and
     /// decompile write.</summary>
@@ -187,7 +184,7 @@ public sealed class SourceRepository
         var fullPath = Path.GetFullPath(path);
         if (loadOrder.Plugins.FirstOrDefault(plugin => plugin.Provider is PluginProvider.FromMod mod
                 && SourceRepositoryLocator.IsUnder(Path.GetFullPath(SourceRepositoryLayout.RootIn(mod.Folder, plugin.Name)), fullPath)
-                && HoldsTreeFor(mod.Folder, plugin.Name)) is not { Provider: PluginProvider.FromMod source } holder)
+                && SourceReads(plugin.Key, mod)) is not { Provider: PluginProvider.FromMod source } holder)
         {
             whyNone = $"{fullPath} is under no tracked plugin's source.";
             return false;

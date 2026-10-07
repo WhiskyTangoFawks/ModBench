@@ -17,11 +17,9 @@ internal sealed class Projector(
     /// <summary>The mod of the tree this plugin ingests from, or null when it reads its binary.
     /// Re-derived every call: a mod manager can replace the folder wholesale.</summary>
     internal static PluginProvider.FromMod? TreeModOf(PluginAddress key, PluginProvider provider) =>
-        provider is PluginProvider.FromMod mod && SourceRepository.HoldsTreeFor(mod.Folder, key.Name)
+        provider is PluginProvider.FromMod mod && SourceRepository.SourceReads(key, mod)
             ? mod
             : null;
-
-    internal static bool HoldsTree(PluginAddress key, PluginProvider provider) => TreeModOf(key, provider) is not null;
 
     /// <summary>Indexes the whole tree as the plugin. Throws whatever the tree throws: "quietly served
     /// the binary instead" is a silent lie. The plugin's binary path only stamps the rows.</summary>
@@ -86,7 +84,7 @@ internal sealed class Projector(
         // The tree is what these rows are re-derived from, so it is what the plugin is derived from
         // (ADR-0007), bytes moved or not: a plugin tracked after indexing arrives here
         // still stamped from its binary.
-        if (SourceRepository.HoldsTreeFor(mod.Folder, key.Name))
+        if (SourceRepository.SourceReads(key, mod))
             index.RestampDerivation(key, DerivedFrom.SourceTree);
 
         // A key the index does not hold is a record the tree has gained or got back, and no document
@@ -155,7 +153,7 @@ internal sealed class Projector(
     {
         // Nothing to re-derive from: the tree went away between the signal and this line, or the
         // rows came from its binary and a source key is not its to answer for.
-        if (!SourceRepository.HoldsTreeFor(mod.Folder, key.Name)) return;
+        if (!SourceRepository.SourceReads(key, mod)) return;
         if (held(key) is not { } plugin)
         {
             logger.LogWarning(
