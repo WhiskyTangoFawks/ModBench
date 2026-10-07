@@ -341,7 +341,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     }
 
     [Fact]
-    public void SettingPersistent_WhenADocumentInThePluginsTreeIsNoJson_IsRefusedNamingIt_AndWritesNothing()
+    public void SettingPersistent_WhenADocumentInThePluginsTreeIsNoJson_IsRefusedAsRecordParseFailed_NamingIt_AndAnswersNoChanges()
     {
         Load(masterTracked: true);
         _plugins.Respell(Override, _keys["Bystander"], "stat", "{", "[");

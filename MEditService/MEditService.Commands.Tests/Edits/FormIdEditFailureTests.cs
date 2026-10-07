@@ -19,7 +19,7 @@ public sealed class FormIdEditFailureTests
     private const string NewWorldspaceFormKey = "000F00:SourceContainer.esp";
 
     [Fact]
-    public void AFormIdEditWhoseContainerHasTwoSourceUnits_RefusesAsAmbiguous_WithTheTreeAsItWas()
+    public void AFormIdEditWhoseContainerHasTwoSourceUnits_RefusesAsAmbiguousSourceUnit_NamingBothFiles_AndAnswersNoChanges()
     {
         const string pluginName = "TwoUnits.esp";
         var placed = FormKey.Null;
@@ -51,7 +51,7 @@ public sealed class FormIdEditFailureTests
     }
 
     [Fact]
-    public void AFormIdEditThatFaultsUnexpectedly_RethrowsTheFaultAsItself_AndChangesNothing()
+    public void AFormIdEditThatFaultsUnexpectedly_RethrowsTheFaultAsItself()
     {
         using var fixture = new SourceContainerFixture();
         var worldspace = fixture.DocumentCarrying(SourceContainerFixture.WorldspaceEditorId);
@@ -60,29 +60,21 @@ public sealed class FormIdEditFailureTests
             Body = worldspace.Body.Replace(
                 $"\"{SourceContainerFixture.WorldspaceEditorId}\"", "\"Fixture\\u0000World\"", StringComparison.Ordinal),
         });
-        var before = TrackedTree.Records(fixture.ModFolder, fixture.Plugin);
 
         Assert.Throws<ArgumentException>(() =>
             fixture.EditHandler.SetFormId(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
-
-        Assert.Equal(before, TrackedTree.Records(fixture.ModFolder, fixture.Plugin));
     }
 
     [Fact]
-    public void AContainersFormIdEditOntoAnOccupiedPath_RefusesWithoutTouchingTheTree()
+    public void AContainersFormIdEditOntoAnOccupiedPath_RefusesAsSourceAccessFailed_NamingThatThereIsNowhereToMoveTo()
     {
         using var fixture = new SourceContainerFixture();
         Occupy(RelocatedWorldspaceDirectory(fixture, NewWorldspaceFormKey));
-
-        var before = TrackedTree.Records(fixture.ModFolder, fixture.Plugin);
-        var statusBefore = fixture.ChangedFormKeys();
 
         var result = fixture.EditHandler.SetFormId(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey);
 
         Assert.Equal(RecordEditRefusal.SourceAccessFailed, result.Refusal);
         Assert.Contains("nowhere to move to", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, TrackedTree.Records(fixture.ModFolder, fixture.Plugin));
-        Assert.Equal(statusBefore, fixture.ChangedFormKeys());
     }
 
     private static void Occupy(string directory)

@@ -328,7 +328,7 @@ public sealed class DocumentEditTests : IDisposable
     }
 
     [Fact]
-    public void UnknownTopLevelPath_IsRefusedByName_AndNothingLandsSilently()
+    public void UnknownTopLevelPath_IsRefusedAsFieldNotFound_NamingThePath_AndAnswersNoChanges()
     {
         var formKey = SeedNpc();
         var before = _fixture.Document(formKey);

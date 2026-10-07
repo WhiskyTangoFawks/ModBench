@@ -198,7 +198,7 @@ public sealed class PersistentFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void ClearingPersistent_IntoTheCellAtItsPosition_WhoseDocumentIsNoJson_IsRefusedAsUnreadable_AndWritesNothing()
+    public void ClearingPersistent_IntoTheCellAtItsPosition_WhoseDocumentIsNoJson_IsRefusedAsRecordParseFailed_AndAnswersNoChanges()
     {
         File.WriteAllText(
             TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, new RecordIdentity(_keys["Outside"].ToString(), "cell", "Outside")),

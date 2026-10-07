@@ -64,7 +64,7 @@ public sealed class VmadEditTests : IDisposable
     }
 
     [Fact]
-    public void MovingAProperty_IsRefusedNamingItsKeyedArray_AndWritesNothing()
+    public void MovingAProperty_IsRefusedAsInvalidEnvelope_NamingItsKeyedArray_AndAnswersNoChanges()
     {
         var before = _fixture.Body(_fixture.Npc);
 
