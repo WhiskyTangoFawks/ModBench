@@ -40,7 +40,8 @@ export async function installDownloadedFile(
   const { name } = row;
   let downloadRefusal: string | undefined;
   try {
-    const target = await chooseInstallTarget(instance.value, row, (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)));
+    const target = await chooseInstallTarget(
+      instance.value, row, (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)));
     if (!target) return false;
     await runDownloadsWriting(instance, async () => {
       const outcome = await installFromArchive(access, target, row.path, {
