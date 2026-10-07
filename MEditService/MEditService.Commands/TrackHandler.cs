@@ -8,8 +8,8 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands;
 
+/// <summary>The Track gesture's handler (ADR-0007, ADR-0014). The mod is the item of the selection:
 /// it lands whole with one commit, `Track &lt;mod&gt;`, or refuses whole.</summary>
-/// it lands with one commit, `Track &lt;mod&gt;`, holding the source of every plugin of the mod, or no commit when any plugin is refused.</summary>
 public sealed class TrackHandler
 {
     private readonly LoadOrderHolder _loadOrder;
