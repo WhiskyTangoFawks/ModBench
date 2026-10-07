@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,8 +16,8 @@ public class ContainerSingleDocumentTests
 
     [Theory]
     [MemberData(nameof(PopulatedContainers))]
-    public void PopulatedContainer_SerializesToOneDocumentWithItsChildrenInline_AndRoundTripsAsItsOwnConcreteTypeFromTheStatedRecordType_PopulatedBecauseAChildlessContainerIsOneDocumentNoMatterWhat(
-        IMajorRecord record, Type concreteType, string recordType)
+    public void PopulatedContainer_SerializesToOneDocumentWithItsChildrenInline_AndRoundTripsToTheSameDocumentFromTheStatedRecordType_PopulatedBecauseAChildlessContainerIsOneDocumentNoMatterWhat(
+        IMajorRecord record, string recordType)
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var bytes = codec.SerializeToBytes((IMajorRecordGetter)record, GameRelease.Fallout4);
@@ -24,8 +25,8 @@ public class ContainerSingleDocumentTests
         using var document = JsonDocument.Parse(bytes);
         Assert.Equal(JsonValueKind.Object, document.RootElement.ValueKind);
 
-        var roundTripped = codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, recordType);
-        Assert.IsType(concreteType, roundTripped);
+        var text = Encoding.UTF8.GetString(bytes);
+        Assert.Equal(text, codec.RoundTrip(text, GameRelease.Fallout4, recordType));
     }
 
     public static IEnumerable<object[]> PopulatedContainers()
@@ -35,12 +36,12 @@ public class ContainerSingleDocumentTests
         cellWithEverySlotSpriggitEmbedsSoItIsTheEmbedMechanismsLayoutHalf.Temporary.Add(new PlacedObject(Mod) { EditorID = "TemporaryRef" });
         cellWithEverySlotSpriggitEmbedsSoItIsTheEmbedMechanismsLayoutHalf.NavigationMeshes.Add(new NavigationMesh(Mod));
         cellWithEverySlotSpriggitEmbedsSoItIsTheEmbedMechanismsLayoutHalf.Landscape = new Landscape(Mod);
-        yield return [cellWithEverySlotSpriggitEmbedsSoItIsTheEmbedMechanismsLayoutHalf, typeof(Cell), "Cell"];
+        yield return [cellWithEverySlotSpriggitEmbedsSoItIsTheEmbedMechanismsLayoutHalf, "Cell"];
 
         var worldspaceWhoseSubCellsLookFineForTheWrongReasonSinceWorldspaceSerializationDropsThemUnderFilePerRecordByDesign = new Worldspace(Mod) { EditorID = "TestWorld" };
         worldspaceWhoseSubCellsLookFineForTheWrongReasonSinceWorldspaceSerializationDropsThemUnderFilePerRecordByDesign.TopCell = new Cell(Mod) { EditorID = "TopCell" };
         worldspaceWhoseSubCellsLookFineForTheWrongReasonSinceWorldspaceSerializationDropsThemUnderFilePerRecordByDesign.SubCells.Add(new WorldspaceBlock());
-        yield return [worldspaceWhoseSubCellsLookFineForTheWrongReasonSinceWorldspaceSerializationDropsThemUnderFilePerRecordByDesign, typeof(Worldspace), "wrld"];
+        yield return [worldspaceWhoseSubCellsLookFineForTheWrongReasonSinceWorldspaceSerializationDropsThemUnderFilePerRecordByDesign, "wrld"];
 
         var questWithEveryChildSlotEmbeddedTransitivelySinceTheTopicCarriesAResponse = new Quest(Mod) { EditorID = "TestQuest" };
         questWithEveryChildSlotEmbeddedTransitivelySinceTheTopicCarriesAResponse.DialogBranches.Add(new DialogBranch(Mod));
@@ -48,10 +49,10 @@ public class ContainerSingleDocumentTests
         questTopic.Responses.Add(new DialogResponses(Mod));
         questWithEveryChildSlotEmbeddedTransitivelySinceTheTopicCarriesAResponse.DialogTopics.Add(questTopic);
         questWithEveryChildSlotEmbeddedTransitivelySinceTheTopicCarriesAResponse.Scenes.Add(new Scene(Mod));
-        yield return [questWithEveryChildSlotEmbeddedTransitivelySinceTheTopicCarriesAResponse, typeof(Quest), "qust"];
+        yield return [questWithEveryChildSlotEmbeddedTransitivelySinceTheTopicCarriesAResponse, "qust"];
 
         var dialogTopicWhoseResponsesAreEmbeddedByTheSameMechanismAsTheCellsSlots = new DialogTopic(Mod) { EditorID = "TestDialogTopic" };
         dialogTopicWhoseResponsesAreEmbeddedByTheSameMechanismAsTheCellsSlots.Responses.Add(new DialogResponses(Mod));
-        yield return [dialogTopicWhoseResponsesAreEmbeddedByTheSameMechanismAsTheCellsSlots, typeof(DialogTopic), "dial"];
+        yield return [dialogTopicWhoseResponsesAreEmbeddedByTheSameMechanismAsTheCellsSlots, "dial"];
     }
 }

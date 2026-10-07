@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -32,14 +31,13 @@ public class RecordTypeDispatchTests
         };
 
     [Fact]
-    public void SerializeToBytes_ThenDeserializeFromBytes_DispatchesNpcByRuntimeType_OneOfTwoDifferentlyShapedGeneratedClassesSoResolvesForTheOneTypeTriedIsToldApartFromResolvesByAHoldingNamingConvention()
+    public void RoundTrip_DispatchesNpcByRuntimeType_OneOfTwoDifferentlyShapedGeneratedClassesSoResolvesForTheOneTypeTriedIsToldApartFromResolvesByAHoldingNamingConvention()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var original = MakeNpc();
 
         IMajorRecordGetter callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne = original;
-        var bytes = codec.SerializeToBytes(callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne, GameRelease.Fallout4);
-        var roundTripped = (Npc)codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, "npc_");
+        var roundTripped = ReadBack.Of<Npc>(codec, callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne, GameRelease.Fallout4, "npc_");
 
         var mask = original.GetEqualsMask(roundTripped);
         var leaves = MaskInspector.CountLeaves(mask).ToList();
@@ -50,13 +48,12 @@ public class RecordTypeDispatchTests
     }
 
     [Fact]
-    public void SerializeToBytes_ThenDeserializeFromBytes_DispatchesCellByRuntimeType()
+    public void RoundTrip_DispatchesCellByRuntimeType()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var original = MakeCell();
 
-        var bytes = codec.SerializeToBytes(original, GameRelease.Fallout4);
-        var roundTripped = (Cell)codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, "Cell");
+        var roundTripped = ReadBack.Of<Cell>(codec, original, GameRelease.Fallout4, "Cell");
 
         var mask = original.GetEqualsMask(roundTripped);
         var leaves = MaskInspector.CountLeaves(mask).ToList();
@@ -67,18 +64,18 @@ public class RecordTypeDispatchTests
     }
 
     [Fact]
-    public void DeserializeFromBytes_ForTextNamingAnUnknownType_ThrowsNamedException_NotABareNullReferenceExceptionBecauseARecordTypeTheSchemaDoesNotKnowMeansExpectTheDocumentToNameItself()
+    public void RoundTrip_ForTextNamingAnUnknownType_ThrowsNamedException_NotABareNullReferenceExceptionBecauseARecordTypeTheSchemaDoesNotKnowMeansExpectTheDocumentToNameItself()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var globalFloatNotAnNpcBecauseOnlyPathAmbiguousTypesSelfDescribeSoAnNpcDocumentHasNoDiscriminatorToCorrupt = MakeGlobalFloat();
-        var text = Encoding.UTF8.GetString(codec.SerializeToBytes(globalFloatNotAnNpcBecauseOnlyPathAmbiguousTypesSelfDescribeSoAnNpcDocumentHasNoDiscriminatorToCorrupt, GameRelease.Fallout4));
+        var text = codec.SerializeToText(globalFloatNotAnNpcBecauseOnlyPathAmbiguousTypesSelfDescribeSoAnNpcDocumentHasNoDiscriminatorToCorrupt, GameRelease.Fallout4);
 
         Assert.Contains("\"MutagenObjectType\": \"GlobalFloat\"", text, StringComparison.Ordinal);
-        var corrupted = Encoding.UTF8.GetBytes(
-            text.Replace("\"MutagenObjectType\": \"GlobalFloat\"", "\"MutagenObjectType\": \"NotARecordType\"", StringComparison.Ordinal));
+        var corrupted =
+            text.Replace("\"MutagenObjectType\": \"GlobalFloat\"", "\"MutagenObjectType\": \"NotARecordType\"", StringComparison.Ordinal);
 
         var ex = Assert.Throws<RecordTypeSerializationUnsupportedException>(
-            () => codec.DeserializeFromBytes(corrupted, GameRelease.Fallout4, "glob"));
+            () => codec.RoundTrip(corrupted, GameRelease.Fallout4, "glob"));
 
         const string TheMemberNameNotTheOffendingValueBecauseTheKernelDiscardsItOnThisRouteSoRequiringItWouldPinAnUpstreamDetail = "MutagenObjectType";
         Assert.Contains(TheMemberNameNotTheOffendingValueBecauseTheKernelDiscardsItOnThisRouteSoRequiringItWouldPinAnUpstreamDetail, ex.Message, StringComparison.Ordinal);

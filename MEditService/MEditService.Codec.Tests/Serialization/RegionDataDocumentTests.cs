@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Serialization;
+using MEditService.Codec.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -44,9 +45,7 @@ public sealed class RegionDataDocumentTests
     [Fact]
     public void ARegionsDataEntries_ReadBackWithTheirLodAndOcclusionValues()
     {
-        var text = Codec.SerializeToText(RegionWithEveryDataEntry(), GameRelease.Fallout4);
-
-        var read = (IRegionGetter)Codec.DeserializeFromBytes(System.Text.Encoding.UTF8.GetBytes(text), GameRelease.Fallout4, "regn");
+        var read = ReadBack.Of<Region>(Codec, RegionWithEveryDataEntry(), GameRelease.Fallout4, "regn");
 
         Assert.Equal(
             [(1f, 11f), (2f, 12f), (3f, 13f), (4f, 14f), (5f, 15f), (6f, 16f)],

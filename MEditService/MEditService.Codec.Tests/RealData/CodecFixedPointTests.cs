@@ -64,9 +64,7 @@ public sealed class CodecFixedPointTests(ITestOutputHelper output)
 
     private static string RoundTripRecord(RecordTextCodec codec, string recordType, string stored)
     {
-        var record = codec.DeserializeFromBytes(
-            Encoding.UTF8.GetBytes(stored), GameRelease.Fallout4, recordType);
-        return Encoding.UTF8.GetString(codec.SerializeToBytes(record, GameRelease.Fallout4));
+        return codec.RoundTrip(stored, GameRelease.Fallout4, recordType);
     }
 
     private static string RoundTripHeader(string stored) =>
