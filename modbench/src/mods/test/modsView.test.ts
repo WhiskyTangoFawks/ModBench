@@ -71,16 +71,16 @@ import type { ModlistEntry } from '../../instanceLoader/instance';
 import { mod } from './indexedValue';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
+import { createModSync } from '../modSync';
 import { present } from '../../ports/present';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const currentBox = currentBoxOf(h.state);
 
-const NO_SYNC = {
-  syncMods: () => Promise.resolve({ applied: true as const, added: [], dropped: [] }),
-  channel: { error: () => undefined, info: () => undefined },
-};
+const silentChannel = { error: () => undefined, info: () => undefined };
+const modSyncAnswering = (sync: Parameters<typeof createModSync>[0]) => ({ modSync: createModSync(sync, silentChannel, 'modlist.txt') });
+const noSync = () => modSyncAnswering(() => Promise.resolve({ applied: true as const, added: [], dropped: [] }));
 
 const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });
 
@@ -111,7 +111,7 @@ describe('the Mods filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
     const { provider, view: modListView, nameFilter: modListFilter } =
-      createModsView({ instance, log: () => undefined, ...NO_SYNC });
+      createModsView({ instance, log: () => undefined, ...noSync() });
     await provider.getChildren();
 
     modListFilter.open();
@@ -132,7 +132,7 @@ describe('the Mods filter follows a row change with no keystroke', () => {
 describe('the Mods view\'s description counts the mods', () => {
   it('reads the enabled mods over the listed mods, then the term, counting the whole list', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
+    const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, ...noSync() });
     expect(modListView.description).toBe('7 / 8');
 
     modListFilter.open();
@@ -142,7 +142,7 @@ describe('the Mods view\'s description counts the mods', () => {
 
   it('follows a new instance value, with nothing pushed', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
+    const { view: modListView } = createModsView({ instance, log: () => undefined, ...noSync() });
 
     instance.publish(listing([...LISTED_MODS, mod('Parked Mod', false)]));
 
@@ -153,7 +153,7 @@ describe('the Mods view\'s description counts the mods', () => {
 describe('the Mods title-bar sort icons', () => {
   it('set the tree\'s own direction, and the key the icon reads', async () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { provider } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
+    const { provider } = createModsView({ instance, log: () => undefined, ...noSync() });
 
     expect(h.state.contextKeys.get('modbench.mod.winningAtTop')).toBe(false);
     await h.state.commands.get('modbench.mod.sortWinningAtTop')?.();
@@ -171,7 +171,7 @@ describe('the Mods view tells its keys, which are handed no row, what the select
 
   it('sets the Space direction and the Delete and F2 kind off the selection', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
+    const { view: modListView } = createModsView({ instance, log: () => undefined, ...noSync() });
 
     const SELECTION_KEYS = ['selectionToggle', 'selectionKind', 'singleRow', 'holdsEnabledMod', 'holdsDisabledMod']
       .map((name) => `modbench.mod.${name}`);
@@ -194,7 +194,7 @@ describe('the Mods view tells its keys, which are handed no row, what the select
 
   it('follows a mod enabled in a new instance value while the selection still holds the row built before', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
+    const { view: modListView } = createModsView({ instance, log: () => undefined, ...noSync() });
     select(modListView, [new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false })]);
 
     instance.publish(listing(LISTED_MODS.map((m) => (m.name === 'Harder VATS' ? mod('Harder VATS') : m))));
@@ -205,7 +205,7 @@ describe('the Mods view tells its keys, which are handed no row, what the select
 
 describe('the Mods view expands by reveal a separator a filter shows for its matching mods', () => {
   const mountFiltered = async (term: string, log: (line: string) => void = () => undefined) => {
-    createModsView({ instance: new FakeInstance(listing(LISTED_MODS)), log, ...NO_SYNC }).nameFilter.open();
+    createModsView({ instance: new FakeInstance(listing(LISTED_MODS)), log, ...noSync() }).nameFilter.open();
     currentBox().type(term);
     await new Promise((resolve) => setTimeout(resolve, 20));
   };
@@ -251,7 +251,7 @@ describe('the Mods view says when the list is empty', () => {
 
   it('says nothing before the first read, says so once an empty list lands, and gives way to the no-match message', async () => {
     const instance = new FakeInstance(listing([]), SEQUENCE_NOT_READ_YET);
-    const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, ...NO_SYNC });
+    const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, ...noSync() });
     expect(modListView.message).toBeUndefined();
     expect(modListView.description).toBeUndefined();
 
@@ -273,9 +273,8 @@ describe('the Mods view says when the list is empty', () => {
       { applied: true as const, added: [], dropped: [] },
     ];
     let run = 0;
-    const { view: modListView, modSync } = createModsView({
-      instance, log: () => undefined, channel: NO_SYNC.channel, syncMods: () => Promise.resolve(present(outcomes[run++], 'an outcome for this run')),
-    });
+    const { modSync } = modSyncAnswering(() => Promise.resolve(present(outcomes[run++], 'an outcome for this run')));
+    const { view: modListView } = createModsView({ instance, log: () => undefined, modSync });
     instance.publish(listing([]));
     await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
 
@@ -305,7 +304,7 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
       overwriteFolders: overwrite ? [folder('F4SE')] : [],
     });
     const { view: modListView, nameFilter: modListFilter } =
-      createModsView({ instance: new FakeInstance(value), log: () => undefined, ...NO_SYNC });
+      createModsView({ instance: new FakeInstance(value), log: () => undefined, ...noSync() });
     modListFilter.open();
     currentBox().type(term);
     return modListView;
