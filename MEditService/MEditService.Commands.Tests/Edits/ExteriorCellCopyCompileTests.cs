@@ -29,8 +29,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
             _fixture.SourcePlugin, _fixture.ExteriorPersistentRef.ToString(), _fixture.DestinationPlugin);
         Assert.True(copyResult.Applied, copyResult.Message);
 
-        var compileResult = await CompileService().CompileOneAsync(_fixture.DestinationPlugin);
-        Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
+        await CompileService().CompileLandedAsync(_fixture.DestinationPlugin);
 
         var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
         using var overlay = ModFactory.ImportGetter(
@@ -157,8 +156,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
     private async Task<IFallout4ModGetter> ImportCompiled()
     {
-        var compileResult = await CompileService().CompileOneAsync(_fixture.DestinationPlugin);
-        Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
+        await CompileService().CompileLandedAsync(_fixture.DestinationPlugin);
 
         var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
         var overlay = ModFactory.ImportGetter(
@@ -176,8 +174,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
             _fixture.SourcePlugin, _fixture.ExteriorTemporaryRef.ToString(), _fixture.DestinationPlugin);
         Assert.True(copyResult.Applied, copyResult.Message);
 
-        var compileResult = await CompileService().CompileOneAsync(_fixture.DestinationPlugin);
-        Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
+        await CompileService().CompileLandedAsync(_fixture.DestinationPlugin);
 
         var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
         using var overlay = ModFactory.ImportGetter(

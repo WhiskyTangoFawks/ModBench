@@ -6,7 +6,7 @@ public sealed record CompileDiagnostic(string FormKey, string SourceRelativePath
 
 /// <summary>A refusal is typed, never an exception: a state structurally impossible to emit (a
 /// FormKey collision). Everything else compiles with <see cref="Diagnostics"/>.</summary>
-public sealed record CompileResult(
+internal sealed record CompileResult(
     bool Succeeded,
     CompileRefusal Refusal,
     string? RefusalReason,

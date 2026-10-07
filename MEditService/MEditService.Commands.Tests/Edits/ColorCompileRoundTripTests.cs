@@ -24,9 +24,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
 
     private async Task<IFallout4ModGetter> CompileAndReparse()
     {
-        var result = await CompileServices.Over(_fixture.LoadOrder)
-            .CompileOneAsync(_fixture.Plugin);
-        Assert.True(result.Succeeded, result.RefusalReason);
+        await CompileServices.Over(_fixture.LoadOrder).CompileLandedAsync(_fixture.Plugin);
 
         var pluginPath = Path.Combine(_fixture.ModFolder, ColorCompileFixture.PluginName);
         return (IFallout4ModGetter)ModFactory.ImportGetter(

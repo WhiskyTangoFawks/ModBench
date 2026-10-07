@@ -33,9 +33,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
     private async Task<IFallout4ModGetter> ImportCompiled()
     {
-        var compileResult = await CompileServices.Over(_fixture.LoadOrder)
-            .CompileOneAsync(_fixture.DestinationPlugin);
-        Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
+        await CompileServices.Over(_fixture.LoadOrder).CompileLandedAsync(_fixture.DestinationPlugin);
 
         var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
         var overlay = ModFactory.ImportGetter(

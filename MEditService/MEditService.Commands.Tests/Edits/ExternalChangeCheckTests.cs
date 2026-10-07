@@ -72,8 +72,7 @@ public sealed class ExternalChangeCheckTests : IDisposable
     {
         using var mod = SourceEditFixture.Tracked();
         mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
-        var result = await CompileServices.Over(mod.LoadOrder).CompileOneAsync(mod.Plugin);
-        Assert.True(result.Succeeded, result.RefusalReason);
+        await CompileServices.Over(mod.LoadOrder).CompileLandedAsync(mod.Plugin);
 
         Put(mod.LoadOrder);
 
@@ -295,8 +294,7 @@ public sealed class ExternalChangeCheckTests : IDisposable
         var pluginPath = mod.LoadOrder.Plugin(mod.Plugin)?.Path ?? throw new InvalidOperationException("Expected the fixture's plugin in its load order.");
         var before = File.ReadAllBytes(pluginPath);
         mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
-        var result = await CompileServices.Over(mod.LoadOrder).CompileOneAsync(mod.Plugin);
-        Assert.True(result.Succeeded, result.RefusalReason);
+        await CompileServices.Over(mod.LoadOrder).CompileLandedAsync(mod.Plugin);
         File.WriteAllBytes(pluginPath, before);
 
         Put(mod.LoadOrder);
