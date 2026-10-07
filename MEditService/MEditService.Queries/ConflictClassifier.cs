@@ -2,14 +2,13 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
 
-internal sealed class ConflictClassifier(ILogger? logger = null)
+internal sealed class ConflictClassifier(ILogger logger)
 {
-    private readonly ILogger _logger = logger ?? NullLogger.Instance;
+    private readonly ILogger _logger = logger;
 
     // resolveFormKey (ADR-0005), batched once per Classify so every formKey leaf's
     // Resolutions fills in this pass. loadOrderFormIds orders a keyed array's FormKeys.

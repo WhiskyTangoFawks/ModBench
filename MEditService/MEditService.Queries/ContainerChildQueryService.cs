@@ -2,7 +2,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Queries;
 
@@ -10,12 +9,12 @@ namespace MEditService.Queries;
 /// hydrated through the ordinary Search path so IsWinner/WorkingTreeState/LoadOrderIndex derive
 /// exactly as every other listing does — no second derivation to keep in step.</summary>
 public sealed class ContainerChildQueryService(
-    IQueryIndex index, LoadOrderHolder loadOrder, ILogger<ContainerChildQueryService>? logger = null)
+    IQueryIndex index, LoadOrderHolder loadOrder, ILogger<ContainerChildQueryService> logger)
 {
     private const int UnlimitedRecords = int.MaxValue;
 
     private readonly IQueryIndex _index = index;
-    private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
+    private readonly ILogger _logger = logger;
 
     // The children xEdit nests under a quest (wbVWDAsQuestChildren: DIAL, DLBR, SCEN) and a topic
     // (INFO). A Cell/Worldspace slot isn't here, so a call against one answers empty rather than

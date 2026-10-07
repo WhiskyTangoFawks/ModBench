@@ -64,14 +64,14 @@ public sealed class VersionStampConflictTests
         cell.Version2 = 3;
     }
 
-    private static IReadOnlyList<FieldDiff> Diffs(RecordQueryService service, string key)
+    private static IReadOnlyList<FieldDiff> Diffs(IRecordQueryService service, string key)
     {
         var compare = service.GetCompare(key);
         Assert.NotNull(compare);
         return compare.Diffs;
     }
 
-    private static (RecordQueryService Service, string Key) Compare(Action<Cell> overrideEdit)
+    private static (IRecordQueryService Service, string Key) Compare(Action<Cell> overrideEdit)
     {
         var baseMod = new Fallout4Mod(ModKey.FromFileName("Base.esm"), Fallout4Release.Fallout4);
         var baseCell = new Cell(baseMod) { EditorID = "TestCell", WaterHeight = 100f, VersionControl = 1, FormVersion = 120, Version2 = 1 };
@@ -93,8 +93,8 @@ public sealed class VersionStampConflictTests
             new LoadOrderEntry("Base.esm", "Base.esm", "Data", 0, Enabled: true, Winning: true),
             new LoadOrderEntry("Over.esp", "Over.esp", "Data", 1, Enabled: true, Winning: true),
         };
-        var service = new RecordQueryService(
-            new FakeIndex(new FakeReads(opened, rows)), FakeLoadOrder.Of(Release, plugins), SharedSchemaReflector.Instance);
+        var service = QueryHost.Records(
+            new FakeIndex(new FakeReads(opened, rows)), FakeLoadOrder.Of(Release, plugins));
         return (service, baseCell.FormKey.ToString());
     }
 }

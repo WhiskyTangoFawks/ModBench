@@ -18,8 +18,8 @@ public sealed class DeclaredDefaultConflictTests
     public void Classify_AbsentObjectFormat_IsTheDeclaredTwo(string overrideJson, ConflictThis expected)
     {
         var meta = Vmad;
-        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null, [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>("{}"))], "Data");
-        var spelled = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null, [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(overrideJson))], "Data");
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null, [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>("{}"))], "Data", RecordType: "Npc");
+        var spelled = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null, [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(overrideJson))], "Data", RecordType: "Npc");
 
         var result = CompareQuery.Classify([master, spelled]);
         var objectFormat = (Assert.Single(result.Diffs).Children

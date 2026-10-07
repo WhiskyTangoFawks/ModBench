@@ -59,8 +59,8 @@ public class WorldspaceQueryServiceTests
         public IReadOnlySet<PluginAddress> PluginsHoldingChildRecords(PluginAddress plugin, string formKey) => new HashSet<PluginAddress>();
     }
 
-    private static WorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) =>
-        new(new StubIndex(new StubReader(cells)));
+    private static IWorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) =>
+        QueryHost.Worldspaces(new StubIndex(new StubReader(cells)));
 
     [Fact]
     public void GetCellChildRecords_AnswersEveryChildFact_InQueriesOwnTypes()
@@ -71,7 +71,7 @@ public class WorldspaceQueryServiceTests
         var temporary = new Index.ChildRecordSummary(
             "t1:M.esp", "TemporaryEditor", "base2:M.esp", "ACHR", HasParseFailure: false,
             FullName: "TemporaryFull", BaseEditorId: "TemporaryBase", ParseDiagnosis: "temporary diagnosis");
-        var svc = new WorldspaceQueryService(new StubIndex(new StubReader([], cellRefs: new Index.CellChildRecords([persistent], [temporary]))));
+        var svc = QueryHost.Worldspaces(new StubIndex(new StubReader([], cellRefs: new Index.CellChildRecords([persistent], [temporary]))));
 
         var result = svc.GetCellChildRecords(new PluginAddress("M.esp", "Data"), "cell:M.esp");
 
@@ -129,7 +129,7 @@ public class WorldspaceQueryServiceTests
     [Fact]
     public void GetInteriorCells_NoReads_ThrowsNoLoadOrderException_ForOriginTravelsInFromTheCallerSoTheReadsAreTheOneGuard()
     {
-        var svc = new WorldspaceQueryService(new StubIndex(reads: null));
+        var svc = QueryHost.Worldspaces(new StubIndex(reads: null));
         Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells(new PluginAddress("M.esp", "Data")));
     }
 
@@ -140,7 +140,7 @@ public class WorldspaceQueryServiceTests
             new Index.RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data"),
             new Index.RecordSummary("0002:M.esp", "M.esp", 0, true, null, "Data"),
         ]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader));
+        var svc = QueryHost.Worldspaces(new StubIndex(reader));
 
         var result = svc.GetWorldspaces(new PluginAddress("M.esp", "Data"));
 
@@ -154,7 +154,7 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaces_PassesGivenOriginToSearch_UntouchedOneHopFurtherThanTheOtherWorldspaceTreeReads()
     {
         var reader = new StubReader([]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader));
+        var svc = QueryHost.Worldspaces(new StubIndex(reader));
 
         svc.GetWorldspaces(new PluginAddress("M.esp", "ModB"));
 
@@ -165,7 +165,7 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaceBlocks_PassesGivenOriginToReads()
     {
         var reader = new StubReader([]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader));
+        var svc = QueryHost.Worldspaces(new StubIndex(reader));
 
         svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "ModB"), "wrld:M.esp");
 
@@ -176,7 +176,7 @@ public class WorldspaceQueryServiceTests
     public void GetInteriorCells_PassesGivenOriginToReads()
     {
         var reader = new StubReader([]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader));
+        var svc = QueryHost.Worldspaces(new StubIndex(reader));
 
         svc.GetInteriorCells(new PluginAddress("M.esp", "ModB"));
 
@@ -268,7 +268,7 @@ public class WorldspaceQueryServiceTests
             new Index.RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data", HasParseFailure: true),
             new Index.RecordSummary("0002:M.esp", "M.esp", 0, true, "WorldB", "Data"),
         ]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader));
+        var svc = QueryHost.Worldspaces(new StubIndex(reader));
 
         var result = svc.GetWorldspaces(new PluginAddress("M.esp", "Data"));
 

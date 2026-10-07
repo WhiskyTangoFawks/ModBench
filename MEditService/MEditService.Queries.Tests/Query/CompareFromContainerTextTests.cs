@@ -24,7 +24,7 @@ public sealed class CompareFromContainerTextTests : IDisposable
     private readonly PlacedObject _placed;
     private readonly Worldspace _world;
     private readonly PlacedObject _topCellRef;
-    private readonly RecordQueryService _service;
+    private readonly IRecordQueryService _service;
 
     public CompareFromContainerTextTests()
     {
@@ -48,11 +48,10 @@ public sealed class CompareFromContainerTextTests : IDisposable
         {
             Row(_room, "cell"), Row(_placed, "refr"), Row(_world, "wrld"), Row(topCell, "cell"), Row(_topCellRef, "refr"),
         };
-        _service = new RecordQueryService(
+        _service = QueryHost.Records(
             new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), rows) { TextFieldNames = Fields }),
             FakeLoadOrder.Of(Release,
-                new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, 0, Enabled: true, Winning: true)),
-            SharedSchemaReflector.Instance);
+                new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, 0, Enabled: true, Winning: true)));
     }
 
     public void Dispose() => _modFolder.Dispose();

@@ -10,11 +10,11 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
 
-public sealed class RecordQueryService(
+internal sealed class RecordQueryService(
     IQueryIndex index,
     LoadOrderHolder loadOrder,
     SchemaReflector schemaReflector,
-    ILogger<RecordQueryService>? logger = null) : IRecordQueryService
+    ILogger<RecordQueryService> logger) : IRecordQueryService
 {
     private readonly IQueryIndex _index = index;
     private readonly LoadOrderHolder _loadOrder = loadOrder;
