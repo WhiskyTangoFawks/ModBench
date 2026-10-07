@@ -6,7 +6,6 @@ using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
 
 namespace MEditService.Commands;
 
@@ -56,8 +55,6 @@ public sealed class EditRecordChangesHandler
             return RecordEditResult.RefusedAt(
                 RecordEditRefusal.FieldNotFound, spelled, $"'{identity.RecordType}' is not an editable record type.");
         }
-        if (RefuseIfContainmentField(identity.RecordType, envelope.Path, schemas, release) is { } containmentRefusal)
-            return containmentRefusal;
 
         // The parent is what the file holds and what the codec reads, so every untouched byte of it
         // comes back intact.
@@ -149,53 +146,5 @@ public sealed class EditRecordChangesHandler
         {
             return ex.Message;
         }
-    }
-
-    // Reflection makes child slots, Cell.Grid and placed Position ordinary writable columns; writing
-    // one would desynchronize the side tables, which nothing here re-derives. No SetPlacement-style
-    // write-back exists: containment is the path (ADR-0006).
-    private static RecordEditResult? RefuseIfContainmentField(
-        string recordType, IReadOnlyList<PathHop> path, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
-    {
-        var fieldPath = path.Count > 0 ? path[0].Name : null;
-        if (!schemas.TryGetValue(recordType, out var schema)) return null;
-        if (schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath) is not { } column) return null;
-        if (RecordTypeDispatch.For(release).ConcreteFor(recordType) is not { } concrete) return null;
-
-        // The schema column's own property name, so this guard and the reflector cannot disagree.
-        if (ContainerChildFields.EnumerateChildFieldsFor(concrete) is { } childSlots
-            && childSlots.Contains(column.PropertyName, StringComparer.Ordinal))
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.FieldReadOnly,
-                $"'{fieldPath}' holds {recordType}'s child records, and containment is expressed by the " +
-                "source tree's own structure rather than by a field (ADR-0006). Adding, removing or " +
-                "reordering a container's children is a structural gesture, not a field edit.");
-        }
-
-        if (column.PropertyName.Equals("Grid", StringComparison.Ordinal)
-            && ContainerChildFields.NormalizedTypeName(concrete).Equals("Cell", StringComparison.Ordinal))
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.FieldReadOnly,
-                "'grid' is an exterior cell's own place in the world — its source directory is named " +
-                "after these coordinates, so moving it restructures the tree rather than rewriting one " +
-                "file. That is a structural gesture, not a field edit.");
-        }
-
-        // Resolved through the game's own IPlacedGetter marker, not a hardcoded type list, so this
-        // holds for whichever types a game module gives Position to.
-        if (column.PropertyName.Equals("Position", StringComparison.Ordinal)
-            && concrete.Assembly.GetType($"{concrete.Namespace}.IPlacedGetter") is { } placedGetterType
-            && placedGetterType.IsAssignableFrom(concrete))
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.FieldReadOnly,
-                "'position' is copied into the placement index (which cell a reference is in, and " +
-                "where) — nothing on this path re-derives that side table, so a placed reference's " +
-                "position is not writable through a field edit.");
-        }
-
-        return null;
     }
 }

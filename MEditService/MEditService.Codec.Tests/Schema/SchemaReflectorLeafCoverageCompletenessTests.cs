@@ -163,8 +163,8 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     private static void DescendEveryMemberBelowOneColumnStoppingOnReenteringATypeWhichIsThisTestsOwnCycleRule(
         List<string> gaps, string path, Type propertyType, SubFieldSpec field, ImmutableHashSet<Type> visited)
     {
-        var aMemberAKnownDefectGovernsIsNamedAndDeliberatelyNotExpanded = field.ReadOnlyReason != null;
-        if (aMemberAKnownDefectGovernsIsNamedAndDeliberatelyNotExpanded) return;
+        var aMemberAKnownDefectLeftOpaqueIsNamedAndDeliberatelyNotExpanded = field is { ReadOnlyReason: not null, SubFields: [] };
+        if (aMemberAKnownDefectLeftOpaqueIsNamedAndDeliberatelyNotExpanded) return;
         if (NestedGetterType(propertyType) is not { } nestedType) return;
         var aVectorIsOneTextLeafTheCodecSpellsItselfSoHasNoMembersToReach = IsVectorStructType(nestedType);
         if (aVectorIsOneTextLeafTheCodecSpellsItselfSoHasNoMembersToReach || visited.Contains(nestedType)) return;

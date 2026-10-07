@@ -17,7 +17,7 @@ public static class PlacedCell
     private const string InteriorFlag = "IsInteriorCell";
     /// <summary>The cell grid's member holding its point.</summary>
     public const string GridPointMember = "Point";
-    private const string PositionMember = "Position";
+    internal const string PositionMember = "Position";
 
     /// <summary>Whether the cell's document says where it sits: interior, or at a grid. A Partial Form
     /// copy says neither.</summary>
