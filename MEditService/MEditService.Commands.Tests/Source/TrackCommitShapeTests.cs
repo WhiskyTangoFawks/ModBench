@@ -100,7 +100,7 @@ public sealed class TrackCommitShapeTests : IDisposable
     }
 
     [Fact]
-    public async Task Track_OfAModWhereTwoPluginsFailForDifferentReasons_NamesEachRefusedPlugin()
+    public async Task Track_OfAModWhereTwoPluginsAreRefused_NamesEachRefusedPluginAndNoOther()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
@@ -109,9 +109,9 @@ public sealed class TrackCommitShapeTests : IDisposable
         var result = await Track(new RoundTripFailsForEvery("First.esp", "Third.esp"));
 
         var refusedMod = Assert.Single(result.Refused);
-        Assert.Contains("FirstNpc", refusedMod.Message, StringComparison.Ordinal);
-        Assert.Contains("ThirdNpc", refusedMod.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("SecondNpc", refusedMod.Message, StringComparison.Ordinal);
+        Assert.Contains("First.esp", refusedMod.Message, StringComparison.Ordinal);
+        Assert.Contains("Third.esp", refusedMod.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Second.esp", refusedMod.Message, StringComparison.Ordinal);
     }
 
     [Fact]

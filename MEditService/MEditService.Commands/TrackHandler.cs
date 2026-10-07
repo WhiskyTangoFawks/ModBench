@@ -115,7 +115,7 @@ public sealed class TrackHandler
         return ItemAnswer<TrackRefusal, TrackedMod>.Refused(cause, string.Join('\n', refused.Select(r => r.Message)));
     }
 
-    // One commit holding every plugin; the adapter writes nothing when any plugin's files fail (plugins.md, Track, story 5).
+    // The adapter writes nothing when any plugin's files fail (plugins.md, Track, story 5).
     private List<ItemRefused<PluginAddress, TrackRefusal>> Commit(
         string modFolder, List<(RegisteredPlugin Plugin, IReadOnlyList<TreeFile> Files)> verified)
     {

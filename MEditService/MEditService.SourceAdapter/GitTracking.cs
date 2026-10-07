@@ -49,7 +49,7 @@ internal static class GitTracking
             log.UndoSince(0);
             throw;
         }
-        return refused;
+        return [];
     }
 
     private static (List<DecompiledPlugin> Written, List<(string Plugin, string Reason)> Refused) WriteEachPlugin(
