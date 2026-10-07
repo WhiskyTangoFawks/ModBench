@@ -23,7 +23,7 @@ export interface RouteRecordPanelMessageDeps {
   reporter: Pick<Reporter, 'shownOnSurface'>;
   // `reply` must post back to the one panel that asked, never a broadcast, so this bundle is
   // reconstructed per message at the call site rather than shared like `channel`.
-  formKeyPicker: FormKeyPickerDeps | undefined;
+  formKeyPicker: FormKeyPickerDeps;
   // The panel's own focused cell, which a field gesture from the palette acts on.
   focusCell: (context: FocusedCellContext | undefined, userFocus: boolean) => void;
   // Posts straight back to the panel that asked — REQUEST_RECORD_LOAD's own reply, built fresh
@@ -139,10 +139,9 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
 }
 
 async function replyFormKeyPicked(
-  deps: FormKeyPickerDeps | undefined,
+  deps: FormKeyPickerDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER }>,
 ): Promise<void> {
-  if (!deps) return;
   const formKey = await pickRecord(deps, m.seed, m.validTypes);
   deps.reply({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: m.requestId, formKey });
 }

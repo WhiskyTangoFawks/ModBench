@@ -310,7 +310,7 @@ export class PluginsTreeProvider
     if (element === undefined) return this.rows();
     const children = isRow(element)
       ? await this.expandPluginRow(element)
-      : await (this.records.getChildren(element));
+      : await this.records.getChildren(element);
     return this.adopted(children, element);
   }
 
