@@ -277,10 +277,12 @@ public sealed class CreatePluginHandlerTests : IDisposable
     public async Task CreatePlugin_AFullPluginInAReleaseWithoutLightPlugins_IsWritten(string name)
     {
         var folder = ModFolder("FullMod");
+        var adapter = new WritesAsFallout4Adapter();
 
-        var result = await HandlerIn(GameRelease.Oblivion, new WritesAsFallout4Adapter()).CreatePlugin(new PluginAddress(name, "FullMod"), folder);
+        var result = await HandlerIn(GameRelease.Oblivion, adapter).CreatePlugin(new PluginAddress(name, "FullMod"), folder);
 
         Assert.Null(result.Refusal);
+        Assert.Equal([GameRelease.Oblivion], adapter.Asked);
         Assert.True(File.Exists(Path.Combine(folder, name)));
     }
 
@@ -311,7 +313,12 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
     private sealed class WritesAsFallout4Adapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override Task<EmptyPluginCreated> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease) =>
-            base.CreateAndWriteAsync(modKey, folder, GameRelease.Fallout4);
+        public List<GameRelease> Asked { get; } = [];
+
+        public override Task<EmptyPluginCreated> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease)
+        {
+            Asked.Add(gameRelease);
+            return base.CreateAndWriteAsync(modKey, folder, GameRelease.Fallout4);
+        }
     }
 }
