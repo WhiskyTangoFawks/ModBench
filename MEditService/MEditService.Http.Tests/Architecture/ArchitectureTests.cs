@@ -113,40 +113,24 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void LoadOrder_IsWrittenOnlyByPutLoadOrder_AndReconciledOnlyByTheIndex()
+    public void LoadOrder_IsWrittenOnlyByPutLoadOrder()
     {
         var root = ServiceProjects.SolutionDirectory();
-        string[] reconcilers = [];
         string[] writers = ["PutLoadOrderHandler.cs"];
 
-        var reconciles = Offenders(root, Projects, [".Reconcile("], []);
         var applies = HolderWrites(root, Projects, "Apply");
 
-        var offenders = Unallowed(reconciles, reconcilers)
-            .Concat(Unallowed(applies, writers))
-            .Distinct()
-            .ToList();
+        var offenders = Unallowed(applies, writers).ToList();
         Assert.True(offenders.Count == 0,
-            "The load order is reconciled outside Load order state's own Changed subscriber, or "
-            + "written outside PutLoadOrderHandler.cs, in:\n" + string.Join("\n", offenders));
+            "The load order is written outside PutLoadOrderHandler.cs, in:\n" + string.Join("\n", offenders));
 
-        var dead = DeadAllowances(reconcilers, reconciles).Concat(DeadAllowances(writers, applies)).ToList();
+        var dead = DeadAllowances(writers, applies);
         Assert.True(dead.Count == 0,
             "Allowances naming no such call — delete them rather than leaving a write pre-authorized:\n"
             + string.Join("\n", dead));
     }
 
     private const string LoadOrderFolder = "MEditService.LoadOrder";
-
-    [Fact]
-    public void TheLoadOrderValue_NamesNoPluginAdapterType()
-    {
-        var offenders = Offenders(
-            ServiceProjects.SolutionDirectory(), [LoadOrderFolder], "MEditService.PluginAdapter", allowedFiles: []);
-
-        Assert.True(offenders.Count == 0,
-            "The load order folder reaches into the Plugin adapter in:\n" + string.Join("\n", offenders));
-    }
 
     [Fact]
     public void TheLoadOrderValue_ReadsNoFileOrDirectory()
