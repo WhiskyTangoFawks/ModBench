@@ -60,7 +60,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
 
         var result = RenameSource(Old, newName);
 
-        Assert.True(result.Applied, result.Message);
+        Assert.Null(result.Refusal);
         Assert.False(SourceRepository.SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod))));
         TheInstanceAdapterRenamesTheFile(newName);
         Assert.Equal(compiledBefore, await CompiledBytes(Old with { Name = newName }));

@@ -30,13 +30,13 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Handler.CreatePlugin(new PluginAddress(name, origin), folder);
 
     [Fact]
-    public async Task CreatePlugin_WritesTheFileInTheFolder_AndAnswersApplied()
+    public async Task CreatePlugin_WritesTheFileInTheFolder_AndAnswersNoRefusal()
     {
         var folder = ModFolder("StateMod");
 
         var result = await Create("NewPlugin.esp", folder, "StateMod");
 
-        Assert.True(result.Applied);
+        Assert.Null(result.Refusal);
         Assert.True(File.Exists(Path.Combine(folder, "NewPlugin.esp")));
     }
 
@@ -87,7 +87,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         var result = await Create("Second.esp", folder, "TrackedMod");
 
-        Assert.True(result.Applied);
+        Assert.Null(result.Refusal);
         Assert.Equal(firstBefore, TrackedTree.Records(folder, first));
         Assert.True(SourceRepository.SourceReads(Registered("Second.esp", "TrackedMod", folder)));
         Assert.Equal(headBefore, Head(folder));
@@ -117,7 +117,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         var result = await Create("Second.esp", folder, PluginOrigin.Overwrite);
 
-        Assert.True(result.Applied);
+        Assert.Null(result.Refusal);
         Assert.True(File.Exists(Path.Combine(folder, "Second.esp")));
         Assert.False(SourceRepository.SourceReads(Registered("Second.esp", "HostMod", folder)));
     }
@@ -280,7 +280,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         var result = await HandlerIn(GameRelease.Oblivion, adapter).CreatePlugin(new PluginAddress(name, "FullMod"), ModFolder("FullMod"));
 
-        Assert.True(result.Applied);
+        Assert.Null(result.Refusal);
         Assert.Equal([(name, GameRelease.Oblivion)], adapter.Asked);
     }
 
