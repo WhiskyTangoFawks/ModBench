@@ -44,8 +44,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         var entry = _fixture.Reads.StackEntry(newRef.ToString(), _fixture.Plugin);
         Assert.NotNull(entry);
         Assert.True(entry.HasWorkingTreeChange);
-        var placement = Assert.NotNull(_fixture.Reads.GetPlacement(newRef.ToString(), _fixture.Plugin));
-        Assert.Equal(_fixture.EmbedCell, placement.ParentCell);
+        Assert.Equal("temporary", _fixture.Reads.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell, newRef.ToString()));
     }
 
     [Fact]
@@ -61,11 +60,10 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         Project(_fixture.EmbedCell, body);
 
         Assert.Null(_fixture.Reads.GetDocument(removed, _fixture.Plugin));
-        Assert.Null(_fixture.Reads.GetPlacement(removed, _fixture.Plugin));
+        Assert.Null(_fixture.Reads.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell, removed));
         var siblingInTheOtherSlot = _fixture.PersistentRef;
         Assert.NotNull(_fixture.Reads.GetDocument(siblingInTheOtherSlot, _fixture.Plugin));
-        var siblingPlacement = Assert.NotNull(_fixture.Reads.GetPlacement(siblingInTheOtherSlot, _fixture.Plugin));
-        Assert.Equal(_fixture.EmbedCell, siblingPlacement.ParentCell);
+        Assert.Equal("persistent", _fixture.Reads.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell, siblingInTheOtherSlot));
     }
 
     [Fact]
@@ -75,7 +73,6 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 
         foreach (var formKey in new[] { _fixture.Worldspace, _fixture.TopCell, _fixture.TopCellRef })
             Assert.Null(_fixture.Reads.GetDocument(formKey, _fixture.Plugin));
-        Assert.Null(_fixture.Reads.GetPlacement(_fixture.TopCellRef, _fixture.Plugin));
         var refInAnotherContainer = _fixture.TemporaryRef;
         Assert.NotNull(_fixture.Reads.GetDocument(refInAnotherContainer, _fixture.Plugin));
     }

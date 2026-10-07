@@ -37,9 +37,6 @@ internal sealed class FakeReads(
         return RealDocuments.FromText(text, formKey, plugin, loadOrderIndex, entry.RecordType, TextFieldNames);
     }
 
-    public IReadOnlyList<RecordDocument> GetDocuments(PluginAddress plugin) =>
-        [.. rows.Where(r => r.Plugin.Equals(plugin)).Select(r => r.Document)];
-
     public RecordOverrides? GetOverrideStack(string formKey)
     {
         var entries = rows.Where(r => r.Document.FormKey == formKey)
@@ -80,8 +77,6 @@ internal sealed class FakeReads(
 
     public IReadOnlyList<MissingReferenceOnFile> MissingReferences { get; set; } = [];
 
-    public IReadOnlyList<MissingReference> GetReferencesToMissingRecords() => [.. MissingReferences.Select(m => m.Reference)];
-
     public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(Func<PluginAddress, PluginProvider.FromMod?> modOf) =>
         MissingReferences;
 
@@ -104,12 +99,10 @@ internal sealed class FakeReads(
     public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin) => [];
     public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin) => new HashSet<string>();
     public Index.CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey) => new([], []);
-    public PlacementRow? GetPlacement(string formKey, PluginAddress plugin) => null;
     public IReadOnlyDictionary<RecordAt, CellLocationRow> CellLocations { get; set; } = new Dictionary<RecordAt, CellLocationRow>();
     public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) =>
         CellLocations.TryGetValue(new RecordAt(plugin, cellFormKey), out var location) ? location : null;
     public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey) => [];
-    public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
     public IReadOnlySet<RecordAt> RecordsWithChildren { get; set; } = new HashSet<RecordAt>();
     public IReadOnlySet<PluginAddress> ChildHolders { get; set; } = new HashSet<PluginAddress>(PluginAddress.Comparer);
     public bool HasChildRecords(PluginAddress plugin, string formKey) => RecordsWithChildren.Contains(new RecordAt(plugin, formKey));

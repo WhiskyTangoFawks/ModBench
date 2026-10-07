@@ -97,8 +97,6 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
                         Temporary = refs.Temporary.OrderBy(r => r.FormKey, StringComparer.Ordinal).ToList(),
                     };
                 }),
-            Placements = LowestFormKeysOf("refr").ToDictionary(
-                fk => fk, fk => _repo.GetPlacement(fk, new PluginAddress(TestPluginName, Origin))),
         };
 
         Golden.Verify("realdata-spatial", captured);

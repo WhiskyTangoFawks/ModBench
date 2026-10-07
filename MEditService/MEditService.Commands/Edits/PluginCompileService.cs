@@ -29,6 +29,13 @@ internal sealed class PluginCompileService(
         if (registered.Provider is not PluginProvider.FromMod mod || !SourceRepository.IsTracked(registered))
             return CompileResult.Refused(CompileRefusal.PluginNotTracked, $"{plugin.Name} is not tracked, so there is no source to compile.");
 
+        if (!SourceRepository.SourceReads(registered))
+        {
+            return CompileResult.Refused(
+                CompileRefusal.PluginSourceUnreadable,
+                $"{plugin.Name}'s plugin source is unreadable, so it cannot be compiled. {RegenerateTheSource}");
+        }
+
         // One repository for the whole pass, so the tree it answers from is read once.
         var repository = SourceRepository.Over(mod, loadOrder.GameRelease);
         var sourceFiles = repository.FilesOf(plugin);
@@ -39,7 +46,7 @@ internal sealed class PluginCompileService(
         if (sourceFiles.Unreadable is { } unreadable)
         {
             return CompileResult.Refused(
-                CompileRefusal.SourceUnreadable,
+                CompileRefusal.SourceFileHeld,
                 $"{plugin.Name} could not be read from its source: {unreadable} could not be opened. " +
                 "Another program may be holding it; close it and compile again.");
         }
@@ -49,7 +56,7 @@ internal sealed class PluginCompileService(
         {
             return CompileResult.Refused(
                 CompileRefusal.NoSource,
-                $"{plugin.Name} has no source tree in the working tree, so there is nothing to compile.");
+                $"{plugin.Name}'s source folder holds no files, so there is nothing to compile. {RegenerateTheSource}");
         }
 
         var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin.Name, loadOrder.GameRelease);

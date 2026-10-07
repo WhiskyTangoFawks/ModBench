@@ -121,7 +121,7 @@ public class RegistrationScopingTests
         Assert.NotNull(initialSharedStack);
         Assert.Equal(2, initialSharedStack.Entries.Count);
         Assert.NotEmpty(reads.GetReferencedBy(fx.BetaRaceFk));
-        Assert.NotNull(reads.GetPlacement(fx.BetaPlacedFk, BetaKey));
+        Assert.NotNull(reads.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
         Assert.NotEmpty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
 
         fx.Reconcile(fx.WithoutBeta);
@@ -150,10 +150,9 @@ public class RegistrationScopingTests
         var cellRefs = reads.GetCellChildRecords(BetaKey, fx.BetaCellFk);
         Assert.Empty(cellRefs.Persistent);
         Assert.Empty(cellRefs.Temporary);
-        Assert.Null(reads.GetPlacement(fx.BetaPlacedFk, BetaKey));
+        Assert.Null(reads.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
         Assert.Null(reads.GetCellLocation(BetaKey, fx.BetaCellFk));
         Assert.Empty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
-        Assert.Null(reads.GetContainerParent(BetaKey, fx.BetaTopicFk));
 
         var filterNamingBetaWhereTheSharedNpcFormKeySitsInBothPluginsSoALeakedRowWouldSurfaceAlphasCopy =
             $"SELECT form_key FROM npc_ WHERE plugin = '{BetaKey.Name}' AND origin = '{BetaKey.Origin}'";
@@ -189,7 +188,7 @@ public class RegistrationScopingTests
         Assert.Null(reads.Resolve(fx.BetaNpcFk));
         Assert.Empty(reads.GetReferencedBy(fx.BetaRaceFk));
         Assert.Empty(reads.GetInteriorCells(BetaKey));
-        Assert.Null(reads.GetPlacement(fx.BetaPlacedFk, BetaKey));
+        Assert.Null(reads.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
         Assert.Empty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
     }
 
@@ -238,7 +237,7 @@ public class RegistrationScopingTests
         Assert.NotNull(sharedAfterReregister);
         Assert.Equal(BetaKey.Name, sharedAfterReregister.Plugin.Name);
         Assert.NotNull(reads.Resolve(fx.BetaNpcFk));
-        Assert.NotNull(reads.GetPlacement(fx.BetaPlacedFk, BetaKey));
+        Assert.NotNull(reads.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
         Assert.NotEmpty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
     }
 

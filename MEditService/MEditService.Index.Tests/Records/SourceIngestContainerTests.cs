@@ -117,7 +117,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         var child = _fixture.TemporaryRef.ToString();
         Assert.NotNull(reads.GetDocument(child, _fixture.Plugin));
         Assert.NotNull(reads.StackEntry(child, _fixture.Plugin));
-        Assert.NotNull(reads.GetPlacement(child, _fixture.Plugin));
+        Assert.NotNull(reads.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell.ToString(), child));
         Assert.Equal(DerivedFrom.BinaryForUnreadableSource, reads.DerivationOf(_fixture.Plugin));
         Assert.Empty(reloaded.Status.Failures);
         var failure = Assert.Single(reloaded.SourceFileFailures);
