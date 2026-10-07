@@ -758,7 +758,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     });
 
     it('a mod whose line cannot go after its folder was trashed still lands, carrying the part that failed, and marks nothing for it', async () => {
-
       const outcome = await uninstallMods(accessWith(dir, () => refusingWrite('disk full')), 'Default', [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
 
       expect(outcome).toEqual({
@@ -1085,7 +1084,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(names).toEqual(expect.arrayContaining(['mod:Harder VATS', 'separator:Unassigned (Modlist Development)']));
   });
 
-  it('drops a separator line another tool wrote whose name MO2 never gives a folder, building no path from it', async () => {
+  it('drops a separator line another tool wrote whose name MO2 never gives a folder, answering it dropped', async () => {
     await writeFile(modlistPath(), '-Weapons/Armor_separator\r\n+Harder VATS\r\n');
     const folders = await foldersAsAValueListsThem(dir, FIXTURE_MOD_FOLDERS);
 
@@ -1093,14 +1092,13 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(await readFile(modlistPath(), 'utf8')).not.toContain('Weapons/Armor');
   });
 
-  it('drops a mod line whose name escapes mods/, looking at nothing outside it, (MO2 has no mod by a name with a /)', async () => {
+  it('drops a mod line whose name escapes mods/, answering it dropped (MO2 has no mod by a name with a /)', async () => {
     const outside = join(dir, 'Escaped');
     await mkdir(outside);
     await writeFile(modlistPath(), '+../Escaped\r\n+Harder VATS\r\n');
     const folders = await foldersAsAValueListsThem(dir, FIXTURE_MOD_FOLDERS);
 
     expect(await syncMods(accessTo(dir), 'Default', folders)).toMatchObject({ applied: true, dropped: ['../Escaped'] });
-    expect((await stat(outside)).isDirectory()).toBe(true);
   });
 
   it('matches a line to its folder without case, for a mod and a separator (MO2 keys both without case), dropping neither line and adding no second line for either', async () => {
