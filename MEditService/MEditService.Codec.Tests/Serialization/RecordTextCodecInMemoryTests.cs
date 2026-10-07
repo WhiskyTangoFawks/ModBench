@@ -1,3 +1,4 @@
+using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -32,19 +33,9 @@ public class RecordTextCodecInMemoryTests
     private static RecordTextCodec Codec() => new(NullLogger<RecordTextCodec>.Instance);
 
     [Fact]
-    public void SerializeToBytes_WithACancelledToken_Throws()
+    public async Task SerializeToText_ForAFixedWeapon_ProducesThePinnedGoldenBytes()
     {
-        using var cancelled = new CancellationTokenSource();
-        cancelled.Cancel();
-
-        Assert.ThrowsAny<OperationCanceledException>(
-            () => Codec().SerializeToBytes(MakeWeapon(), GameRelease.Fallout4, cancelled.Token));
-    }
-
-    [Fact]
-    public async Task SerializeToBytes_ForAFixedWeapon_ProducesThePinnedGoldenBytes()
-    {
-        var actual = Codec().SerializeToBytes(MakeWeapon(), GameRelease.Fallout4);
+        var actual = Encoding.UTF8.GetBytes(Codec().SerializeToText(MakeWeapon(), GameRelease.Fallout4));
 
         var golden = await File.ReadAllBytesAsync(
             Path.Combine(AppContext.BaseDirectory, "TestData", "weapon-dispatch-golden.json"));
@@ -68,7 +59,7 @@ public class RecordTextCodecInMemoryTests
     }
 
     [Fact]
-    public void SerializeToBytes_ForAPopulatedContainer_TouchesNoFilesystem_ThroughTheWorkingDirectoryWhereChildPathsLandBecauseTheyAreRelativeToAnEmptyStreamPackageFolder()
+    public void SerializeToText_ForAPopulatedContainer_TouchesNoFilesystem_ThroughTheWorkingDirectoryWhereChildPathsLandBecauseTheyAreRelativeToAnEmptyStreamPackageFolder()
     {
         using var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
@@ -78,9 +69,9 @@ public class RecordTextCodecInMemoryTests
         var workingDirectory = Directory.GetCurrentDirectory();
         var before = Directory.GetDirectories(workingDirectory).ToHashSet(StringComparer.Ordinal);
 
-        var bytes = Codec().SerializeToBytes(quest, GameRelease.Fallout4);
+        var text = Codec().SerializeToText(quest, GameRelease.Fallout4);
 
-        Assert.NotEmpty(bytes);
+        Assert.NotEmpty(text);
         Assert.Equal(before, Directory.GetDirectories(workingDirectory).ToHashSet(StringComparer.Ordinal));
     }
 }

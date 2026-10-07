@@ -23,13 +23,13 @@ public sealed class DiscriminatorPolicyTests
         new(Mod) { EditorID = "PolicyGlobal", Data = 2.5f };
 
     [Fact]
-    public void SerializeToBytes_ForAWeapon_WritesNoTopLevelDiscriminator()
+    public void SerializeToText_ForAWeapon_WritesNoTopLevelDiscriminator()
     {
-        var bytes = Codec().SerializeToBytes(MakeWeapon(), GameRelease.Fallout4);
+        var text = Codec().SerializeToText(MakeWeapon(), GameRelease.Fallout4);
 
-        using var doc = JsonDocument.Parse(bytes);
+        using var doc = JsonDocument.Parse(text);
         Assert.False(doc.RootElement.TryGetProperty(Discriminator, out _),
-            $"A concrete-element type must not self-describe:\n{System.Text.Encoding.UTF8.GetString(bytes)}");
+            $"A concrete-element type must not self-describe:\n{text}");
     }
 
     [Fact]
@@ -42,11 +42,11 @@ public sealed class DiscriminatorPolicyTests
     }
 
     [Fact]
-    public void SerializeToBytes_ForAGlobalFloat_KeepsTheDiscriminator_BecauseADiscriminatorIsWrittenOnlyWhenTheGroupElementTypeIsAbstract()
+    public void SerializeToText_ForAGlobalFloat_KeepsTheDiscriminator_BecauseADiscriminatorIsWrittenOnlyWhenTheGroupElementTypeIsAbstract()
     {
-        var bytes = Codec().SerializeToBytes(MakeGlobalFloat(), GameRelease.Fallout4);
+        var text = Codec().SerializeToText(MakeGlobalFloat(), GameRelease.Fallout4);
 
-        using var doc = JsonDocument.Parse(bytes);
+        using var doc = JsonDocument.Parse(text);
         Assert.Equal("GlobalFloat", doc.RootElement.GetProperty(Discriminator).GetString());
     }
 
@@ -66,14 +66,14 @@ public sealed class DiscriminatorPolicyTests
     }
 
     [Fact]
-    public void SerializeToBytes_ForACellWithChildren_KeepsTheChildrensDiscriminators()
+    public void SerializeToText_ForACellWithChildren_KeepsTheChildrensDiscriminators()
     {
         var cell = new Cell(Mod) { EditorID = "DiscriminatorCell" };
         cell.Persistent.Add(new PlacedObject(Mod) { EditorID = "PersistentRef" });
 
-        var bytes = Codec().SerializeToBytes(cell, GameRelease.Fallout4);
+        var text = Codec().SerializeToText(cell, GameRelease.Fallout4);
 
-        using var doc = JsonDocument.Parse(bytes);
+        using var doc = JsonDocument.Parse(text);
         Assert.False(doc.RootElement.TryGetProperty(Discriminator, out _), "CELL's group element is concrete.");
         var child = doc.RootElement.GetProperty("Persistent").EnumerateArray().Single();
         Assert.Equal("PlacedObject", child.GetProperty(Discriminator).GetString());

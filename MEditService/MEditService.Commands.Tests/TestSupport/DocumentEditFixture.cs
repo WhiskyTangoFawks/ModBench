@@ -29,8 +29,8 @@ internal sealed class DocumentEditFixture : TestInstance
     /// its FormKey.</summary>
     internal string Seed(IMajorRecordGetter record, string recordType)
     {
-        var body = Codec.SerializeToBytes(record, GameRelease.Fallout4);
-        SeedRaw(record.FormKey.ToString(), recordType, record.EditorID, System.Text.Encoding.UTF8.GetString(body));
+        var text = Codec.SerializeToText(record, GameRelease.Fallout4);
+        SeedRaw(record.FormKey.ToString(), recordType, record.EditorID, text);
         return record.FormKey.ToString();
     }
 

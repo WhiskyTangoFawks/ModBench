@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -27,7 +26,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     {
         var cell = (IMajorRecord)RecordTextCodec.DeserializeText(typeof(Cell), CellBody(), GameRelease.Fallout4);
         change(cell);
-        return Encoding.UTF8.GetString(Codec.SerializeToBytes(cell, GameRelease.Fallout4));
+        return Codec.SerializeToText(cell, GameRelease.Fallout4);
     }
 
     [Fact]

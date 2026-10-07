@@ -46,7 +46,7 @@ public sealed class SourceTransactionOverATrackedTreeTests : IDisposable
 
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         byte[] Serialize(IMajorRecordGetter record) =>
-            codec.SerializeToBytes(record, Release);
+            Encoding.UTF8.GetBytes(codec.SerializeToText(record, Release));
 
         string Leaf(IMajorRecordGetter record) =>
             $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";

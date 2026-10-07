@@ -1,3 +1,4 @@
+using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -44,7 +45,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         var room = new Cell(FormKey.Factory(Room.FormKey), Fallout4Release.Fallout4) { EditorID = Room.EditorId };
         room.Temporary.Add(new PlacedObject(FormKey.Factory(Placed.FormKey), Fallout4Release.Fallout4) { EditorID = Placed.EditorId });
-        return new RecordTextCodec(NullLogger<RecordTextCodec>.Instance).SerializeToBytes(room, Release);
+        return Encoding.UTF8.GetBytes(new RecordTextCodec(NullLogger<RecordTextCodec>.Instance).SerializeToText(room, Release));
     }
 
     private string NpcFile => Path.Combine(_modFolder, NpcDocument);

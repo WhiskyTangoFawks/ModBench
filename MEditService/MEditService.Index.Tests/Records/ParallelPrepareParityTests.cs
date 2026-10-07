@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
@@ -41,7 +40,7 @@ public class ParallelPrepareParityTests
             d => d.Body ?? throw new InvalidOperationException($"Expected document '{d.FormKey}' to carry a body."));
         var expected = mod.EnumerateMajorRecords().ToDictionary(
             record => record.FormKey.ToString(),
-            record => Encoding.UTF8.GetString(codec.SerializeToBytes(record, GameRelease.Fallout4)));
+            record => codec.SerializeToText(record, GameRelease.Fallout4));
 
         Assert.Equal(expected.Keys.Order(StringComparer.Ordinal), stored.Keys.Order(StringComparer.Ordinal));
         var recordsWhoseStoredBodyDiffers = expected.Where(record => stored[record.Key] != record.Value).Select(record => record.Key).ToList();

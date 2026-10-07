@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -24,7 +23,7 @@ public sealed class UnionVariantEditTests : IDisposable
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     private static string Serialize(IMajorRecordGetter record) =>
-        Encoding.UTF8.GetString(Codec.SerializeToBytes(record, GameRelease.Fallout4));
+        Codec.SerializeToText(record, GameRelease.Fallout4);
 
     [Fact]
     public void GameSettingFloat_Data_IsWrittenAsTheFloatItsLeafDeclares()
