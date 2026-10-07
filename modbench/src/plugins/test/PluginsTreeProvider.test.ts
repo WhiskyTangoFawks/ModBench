@@ -784,7 +784,7 @@ describe('PluginsTreeProvider — a drop the command refuses, end to end', () =>
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'plugin-drop-'));
     await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), ORDER.map((n) => `*${n}\r\n`).join(''));
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), ORDER.join('\r\n'));
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 

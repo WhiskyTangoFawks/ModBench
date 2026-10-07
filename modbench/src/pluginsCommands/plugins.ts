@@ -4,7 +4,7 @@ import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { dropIndexIn, type Drop } from './dropIndex';
 import { refuse } from '../ports/refuse';
 import type { MEditClient, PluginMetadata } from '../client';
-import { moveOrderRefusal, type PluginOrderFacts, type PluginOrderFactsOf } from './pluginOrder';
+import { moveOrderRefusal, type PluginOrderFactsOf } from './pluginOrder';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type {
   DataFolderPlugins, DecidePluginOrder, InstanceAdapter, PluginEntry, PluginOrderChange,
@@ -80,10 +80,8 @@ export type { Drop as PluginsDrop } from './dropIndex';
 /** What the plugin-order rules ask mEdit: the masters query. */
 export type PluginMasters = Pick<MEditClient, 'getPlugins'>;
 
-// plugins.txt names a file and the game loads one copy of it: the one in the load order (ADR-0012).
-// A name held once is that copy. A name held by several, none of them in the load order, names no
-// one copy, so it is not judged. Nothing is judged while mEdit cannot answer (plugins.md, Drag and
-// drop, story 3).
+// The game loads one copy of a name: the one in the load order (ADR-0012). Several copies with
+// none in it name no one copy, so none is judged; nor is anything while mEdit cannot answer.
 async function orderFactsFrom(masters: PluginMasters): Promise<PluginOrderFactsOf> {
   const held = await masters.getPlugins().catch(() => [] as PluginMetadata[]);
   return (name) => {
