@@ -18,11 +18,11 @@ function trackedFoldersOf(
 }
 
 async function registerTrackedRepositories<T>(
-  openRepository: (modFolder: string) => Promise<T | null | undefined>,
+  openRepository: (modFolder: string) => Promise<T | null>,
   modFolders: readonly string[],
-): Promise<Map<string, T | null | undefined>> {
+): Promise<Map<string, T | null>> {
   const distinct = [...new Set(modFolders)];
-  const repositories = new Map<string, T | null | undefined>();
+  const repositories = new Map<string, T | null>();
   for (const folder of distinct) {
     repositories.set(folder, await openRepository(folder));
   }
@@ -30,10 +30,10 @@ async function registerTrackedRepositories<T>(
 }
 
 function pluginRepositoriesOf<T>(
-  folders: ReadonlyMap<string, string>, folderRepositories: ReadonlyMap<string, T | null | undefined>,
-): Map<string, T | null | undefined> {
-  const byPlugin = new Map<string, T | null | undefined>();
-  for (const [plugin, folder] of folders) byPlugin.set(plugin, folderRepositories.get(folder));
+  folders: ReadonlyMap<string, string>, folderRepositories: ReadonlyMap<string, T | null>,
+): Map<string, T | null> {
+  const byPlugin = new Map<string, T | null>();
+  for (const [plugin, folder] of folders) byPlugin.set(plugin, folderRepositories.get(folder) ?? null);
   return byPlugin;
 }
 
@@ -72,7 +72,7 @@ export interface TrackedRepositories {
 
 /** The session's tracked repositories by plugin, held here and refilled by each registration. */
 export function trackedRepositoriesOver(deps: TrackedRepositoriesDeps): TrackedRepositories {
-  let byPlugin = new Map<string, MinimalRepository | null | undefined>();
+  let byPlugin = new Map<string, MinimalRepository | null>();
 
   // One `openRepository` per distinct tracked folder (ADR-0007). A logged no-op when `vscode.git` is
   // unavailable: this only narrows the native UI, never blocks reading or editing.

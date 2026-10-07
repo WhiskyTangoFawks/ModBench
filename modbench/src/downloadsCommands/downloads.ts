@@ -45,8 +45,6 @@ async function mark(access: DownloadsAccess, name: string, excluded: 'Excluded' 
   }
 }
 
-// Excluded is a separate axis from the status, so this says nothing about whether the download
-// was ever installed.
 function excludeDownload(access: DownloadsAccess, name: string): Promise<DownloadsCommandResult> {
   return mark(access, name, 'Excluded');
 }

@@ -58,10 +58,10 @@ function followed() {
 const flushed = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('the Plugins view following the index status and mEdit\'s own', () => {
-  it('says Ready on the status bar once the stream\'s Ready is handed to the tree', async () => {
+  it('says Ready on the status bar counting the active plugins, not every plugin indexed, once the stream\'s Ready is handed to the tree', async () => {
     const { client, deps } = followed();
 
-    client.emit(statusEvent({ activePlugins: 2 }));
+    client.emit(statusEvent({ totalPlugins: 5, activePlugins: 2 }));
     await flushed();
 
     expect(deps.tree.applyReconciled).toHaveBeenCalledOnce();
