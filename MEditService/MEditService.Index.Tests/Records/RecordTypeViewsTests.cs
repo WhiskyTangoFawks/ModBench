@@ -25,7 +25,7 @@ public sealed class RecordTypeViewsTests
             ?? throw new InvalidOperationException($"Expected a document for '{npc}'.")).EditorId);
         Assert.Equal("LazyNpc", (reads.GetDocument(npc, Plugin)
             ?? throw new InvalidOperationException($"Expected a document for '{npc}' in '{Plugin}'.")).EditorId);
-        Assert.Contains(reads.GetDocuments(Plugin), d => d.FormKey == npc);
+        Assert.Contains(reads.DocumentsOf(Plugin), d => d.FormKey == npc);
         Assert.Contains(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: Plugin.Name, Origin: Plugin.Origin, Limit: 10)).Items, i => i.FormKey == npc);
         Assert.Equal("npc_", reads.Resolve(npc)?.RecordType);
         Assert.Contains(reads.GetRecordTypeCounts(Plugin), c => c.Type == "npc_" && c.Count == 1);

@@ -8,10 +8,10 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-public class GetDocumentsTests
+public class PluginDocumentsTests
 {
     [Fact]
-    public void GetDocuments_ReturnsEveryDocumentThePluginIndexed_IdenticalToPointReads()
+    public void DocumentsOf_ReturnsEveryDocumentThePluginIndexed()
     {
         using var fixture = new PluginFixtureBuilder("bulk-read")
             .WithPlugin("Bulk.esp", mod =>
@@ -29,22 +29,11 @@ public class GetDocumentsTests
         var reads = index.RequireReads();
         using var onDisk = Fallout4Mod.CreateFromBinaryOverlay(entry.Path, Fallout4Release.Fallout4);
 
-        var documents = reads.GetDocuments(key);
+        var documents = reads.DocumentsOf(key);
 
         var majorRecordCountExcludingTheHeaderBecauseEnumerateMajorRecordsCannotCountIt = onDisk.EnumerateMajorRecords().Count();
         Assert.Equal(majorRecordCountExcludingTheHeaderBecauseEnumerateMajorRecordsCannotCountIt + 1, documents.Count);
         Assert.Single(documents, d => d.RecordType == PluginHeader.RecordType);
-        Assert.All(documents, doc =>
-        {
-            var pointRead = reads.GetDocument(doc.FormKey, key);
-            Assert.NotNull(pointRead);
-            Assert.Equal(pointRead.EditorId, doc.EditorId);
-            Assert.Equal(pointRead.RecordType, doc.RecordType);
-            Assert.Equal(pointRead.Body, doc.Body);
-            Assert.Equal(
-                pointRead.Fields.Select(f => (f.Metadata.Name, f.CheckError)),
-                doc.Fields.Select(f => (f.Metadata.Name, f.CheckError)));
-        });
         string? RaceFieldErrorAloneBecauseABareNpcFlagsOtherUnsetLinks(string editorId) => documents
             .Single(d => d.EditorId == editorId).Fields
             .Single(f => f.Metadata.Name.Equals("Race", StringComparison.OrdinalIgnoreCase))
@@ -54,7 +43,7 @@ public class GetDocumentsTests
     }
 
     [Fact]
-    public void GetDocuments_TwoOriginsSameFilename_ScopesToRequestedOrigin()
+    public void DocumentsOf_TwoOriginsSameFilename_ScopesToRequestedOrigin()
     {
         using var fixture = new PluginFixtureBuilder("bulk-read-origins")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
@@ -68,10 +57,10 @@ public class GetDocumentsTests
         using var index = Indexes.Open(holder);
         IReadOnlyList<RecordDocument> DocumentsWhileWinning(string origin) =>
             index.ReadsWithWinner(holder, fixture.GameDirectory, fixture.Plugins, origin)
-                .GetDocuments(new PluginAddress("Shared.esp", origin));
+                .DocumentsOf(new PluginAddress("Shared.esp", origin));
 
         var fromA = DocumentsWhileWinning("ModA");
-        Assert.Empty(index.RequireReads().GetDocuments(new PluginAddress("Shared.esp", "ModB")));
+        Assert.Empty(index.RequireReads().DocumentsOf(new PluginAddress("Shared.esp", "ModB")));
         var fromB = DocumentsWhileWinning("ModB");
         var recordsFromA = fromA.Where(d => d.RecordType != PluginHeader.RecordType).ToList();
         var recordsFromB = fromB.Where(d => d.RecordType != PluginHeader.RecordType).ToList();

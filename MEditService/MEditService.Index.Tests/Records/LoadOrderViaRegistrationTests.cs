@@ -30,8 +30,8 @@ public class LoadOrderViaRegistrationTests
         index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
         var reads = index.RequireReads();
 
-        var beforeA = reads.GetDocuments(aKey);
-        var beforeB = reads.GetDocuments(bKey);
+        var beforeA = reads.DocumentsOf(aKey);
+        var beforeB = reads.DocumentsOf(bKey);
         var openedBefore = opens.OpenedTotal;
         var stackBeforeReorder = reads.GetOverrideStack(npcKey.ToString())
             ?? throw new InvalidOperationException($"Expected an override stack for '{npcKey}'.");
@@ -47,10 +47,10 @@ public class LoadOrderViaRegistrationTests
         Assert.False(stack.Single(e => e.Plugin.Name == bKey.Name).IsWinner);
 
         Assert.Equal(openedBefore, opens.OpenedTotal);
-        Assert.Equal(ByFormKeyBecauseGetDocumentsHasNoOrderOfItsOwn(beforeA), ByFormKeyBecauseGetDocumentsHasNoOrderOfItsOwn(reads.GetDocuments(aKey)));
-        Assert.Equal(ByFormKeyBecauseGetDocumentsHasNoOrderOfItsOwn(beforeB), ByFormKeyBecauseGetDocumentsHasNoOrderOfItsOwn(reads.GetDocuments(bKey)));
+        Assert.Equal(Bodies(beforeA), Bodies(reads.DocumentsOf(aKey)));
+        Assert.Equal(Bodies(beforeB), Bodies(reads.DocumentsOf(bKey)));
     }
 
-    private static IReadOnlyList<(string FormKey, string? Body)> ByFormKeyBecauseGetDocumentsHasNoOrderOfItsOwn(IReadOnlyList<RecordDocument> documents) =>
-        [.. documents.Select(d => (d.FormKey, d.Body)).OrderBy(d => d.FormKey, StringComparer.Ordinal)];
+    private static IReadOnlyList<(string FormKey, string? Body)> Bodies(IReadOnlyList<RecordDocument> documents) =>
+        [.. documents.Select(d => (d.FormKey, d.Body))];
 }

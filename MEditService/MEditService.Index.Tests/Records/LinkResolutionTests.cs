@@ -64,7 +64,7 @@ public sealed class LinkResolutionTests
         var stack = reads.GetOverrideStack(npc.ToString());
         Assert.NotNull(stack);
         Assert.Equal(ExpectedKeywordErrors, KeywordErrors(Assert.Single(stack.Entries).Effective));
-        Assert.Equal(ExpectedKeywordErrors, KeywordErrors(reads.GetDocuments(OverKey).Single(d => d.FormKey == npc.ToString())));
+        Assert.Equal(ExpectedKeywordErrors, KeywordErrors(reads.DocumentsOf(OverKey).Single(d => d.FormKey == npc.ToString())));
 
         var resolve = reads.LinkResolver(npc.ToString());
         Assert.Equal(new RecordLookupEntry("kywd", "WinningKeyword"), resolve(linkedKeyword));
@@ -90,7 +90,7 @@ public sealed class LinkResolutionTests
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
         var plugin = fixture.Plugins.Single();
-        var asker = index.RequireReads().GetDocuments(plugin.KeyOf()).Single(d => d.RecordType == "npc_").FormKey;
+        var asker = index.RequireReads().DocumentsOf(plugin.KeyOf()).Single(d => d.RecordType == "npc_").FormKey;
         var resolve = index.RequireReads().LinkResolver(asker);
         var first = resolve(late.ToString())?.EditorId;
         Assert.Equal(found ? "Before" : null, first);

@@ -33,7 +33,7 @@ public class ParallelPrepareParityTests
         using var mod = Fallout4Mod.CreateFromBinaryOverlay(entry.Path, Fallout4Release.Fallout4);
 
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var all = index.RequireReads().GetDocuments(key);
+        var all = index.RequireReads().DocumentsOf(key);
         var headerTheCodecCannotProduceBecauseAModHeaderIsNotAMajorRecord = Assert.Single(all, d => d.RecordType == PluginHeader.RecordType);
         Assert.NotNull(headerTheCodecCannotProduceBecauseAModHeaderIsNotAMajorRecord.Body);
         var stored = all.Where(d => d != headerTheCodecCannotProduceBecauseAModHeaderIsNotAMajorRecord).ToDictionary(

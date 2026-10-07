@@ -23,7 +23,7 @@ export function noticeExternalChanges(
     if (fresh.length > 0) reporter.report('warning', `${fresh.join(', ')} in ${origin} changed outside Modbench`);
   });
 
-  const offUntracked = notifications.onNotification('untracked-plugins', ({ plugins }) => {
+  const offUntracked = notifications.onNotification('plugin-source-unreadable', ({ plugins }) => {
     for (const plugin of plugins) {
       const key = pluginAddressKey(plugin);
       if (toldUntracked.has(key)) continue;

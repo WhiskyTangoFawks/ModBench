@@ -15,7 +15,7 @@ function settled(origin: string, ...changed: [name: string, bytesSha256: string 
 }
 
 function untracked(origin: string, ...plugins: string[]): NotificationEvent {
-  return { kind: 'untracked-plugins', plugin: '', origin, keys: plugins, sequence: 0 };
+  return { kind: 'plugin-source-unreadable', plugin: '', origin, keys: plugins, sequence: 0 };
 }
 
 function noticing() {
