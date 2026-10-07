@@ -2,7 +2,6 @@ import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { Subscription } from '../instanceAdapter/instanceAdapter';
 
-/** VS Code's `ConfigurationChangeEvent`, as much of it as the launch reads. */
 interface ConfigChangeEvent {
   affectsConfiguration(section: string): boolean;
 }
