@@ -407,7 +407,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     ).getAttribute('data-vscode-context') ?? '';
     expect(JSON.parse(headerContext)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      compilable: false, editable: false, preventDefaultContextMenuItems: true,
+      compilable: false, editable: false, inMod: 'none', preventDefaultContextMenuItems: true,
     });
   });
 
@@ -417,13 +417,12 @@ describe('RecordPanel — column header native right-click menu', () => {
     ['a tracked, plugin-source-unreadable', { isTracked: true, pluginSourceUnreadable: true }, true, false],
     ['a read-only', { isTracked: true, isImmutable: true }, false, false],
     ['an untracked read-only', { isTracked: false, isImmutable: true }, false, false],
-  ])('the header of %s plugin says whether compile and delete apply to it: compile on a tracked column, delete only where the plugin source reads too', async (_what, facts, compilable, editable) => {
+  ])('the header of %s plugin says whether compile and delete apply to it, compile on a tracked column, delete only where the plugin source reads too', async (_what, facts, compilable, editable) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    const originTrackAndDecompileReadAgainstTheModsRepositoriesInTheManifest = 'ModA';
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',
       overrides: [compareOverride({
-        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: originTrackAndDecompileReadAgainstTheModsRepositoriesInTheManifest,
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
         isWinner: true, editorId: 'TestNPC',
         fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
       })],
@@ -432,13 +431,67 @@ describe('RecordPanel — column header native right-click menu', () => {
         winnerColumn: 'MyMod.esp', cellStates: {},
       })],
     });
-    const { container } = renderPanel(compare, { plugins: [{ name: 'MyMod.esp', origin: originTrackAndDecompileReadAgainstTheModsRepositoriesInTheManifest, ...facts }] });
+    const { container } = renderPanel(compare, { plugins: [{ name: 'MyMod.esp', origin: 'ModA', ...facts }] });
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
     await waitFor(() => {
       const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
       expect(parseJsonRecord(headerContext)).toMatchObject({ compilable, editable });
     });
+  });
+
+  it.each([
+    ['an active plugin in a tracked mod', { isTracked: true }, { ModA: 'tracked' }, 'tracked'],
+    ['a disabled plugin in a tracked mod', { isTracked: true, isImmutable: true }, { ModA: 'tracked' }, 'tracked'],
+    ['an active plugin in an untracked mod', { isTracked: false }, { ModA: 'untracked' }, 'untracked'],
+    ['a disabled plugin in an untracked mod', { isTracked: false, isImmutable: true }, { ModA: 'untracked' }, 'untracked'],
+    ['a plugin the game provides', { isTracked: false, isImmutable: true }, {}, 'none'],
+    ['a plugin in Overwrite', { isTracked: false }, {}, 'none'],
+  ] as const)('the header of %s names the repository state of its origin\'s mod, which track and decompile are offered on', async (_what, facts, modsByOrigin, inMod) => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    const compare = compareResultFixture({
+      conflictAll: 'OnlyOne',
+      overrides: [compareOverride({
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+        isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
+      })],
+      diffs: [diffNode({
+        fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
+        winnerColumn: 'MyMod.esp', cellStates: {},
+      })],
+    });
+    const { container } = renderPanel(compare, { plugins: [{ name: 'MyMod.esp', origin: 'ModA', ...facts }], modsByOrigin });
+    await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
+
+    await waitFor(() => {
+      const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
+      expect(parseJsonRecord(headerContext)).toMatchObject({ inMod });
+    });
+  });
+
+  it('changes the repository state its header names when the host says the mod changed, without reading the record again', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    const compare = compareResultFixture({
+      conflictAll: 'OnlyOne',
+      overrides: [compareOverride({
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+        isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
+      })],
+      diffs: [diffNode({
+        fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
+        winnerColumn: 'MyMod.esp', cellStates: {},
+      })],
+    });
+    const { container, client } = renderPanel(compare, { plugins: [{ name: 'MyMod.esp', origin: 'ModA' }], modsByOrigin: { ModA: 'untracked' } });
+    const inMod = () => parseJsonRecord(container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}').inMod;
+    await waitFor(() => expect(inMod()).toBe('untracked'));
+
+    sendMessage({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: { ModA: 'tracked' } });
+
+    await waitFor(() => expect(inMod()).toBe('tracked'));
+    expect(client.load).toHaveBeenCalledTimes(1);
   });
 
   it('offers no compile on a column whose tracked state is unknown, as when /plugins fails a column is neither tracked nor untracked', async () => {
@@ -456,13 +509,13 @@ describe('RecordPanel — column header native right-click menu', () => {
       })],
     });
     const load = vi.fn().mockResolvedValue({
-      ok: true, result: compare, immutableSet: null, trackedSet: null, sourceUnreadableSet: null, conflictsComputed: true, loadFailures: [],
+      ok: true, result: compare, immutableSet: null, trackedSet: null, sourceUnreadableSet: null, modsByOrigin: {}, conflictsComputed: true, loadFailures: [],
     });
     const { container } = renderPanel(compare, { load });
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
     const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
-    expect(parseJsonRecord(headerContext)).toMatchObject({ compilable: false, editable: false });
+    expect(parseJsonRecord(headerContext)).toMatchObject({ compilable: false, editable: false, inMod: 'none' });
   });
 });
 
@@ -1002,6 +1055,7 @@ describe('RecordPanel — a plugin mEdit cannot read', () => {
     const answered = (loadFailures: PluginLoadFailure[]) => ({
       ok: true as const, result: compareResult, immutableSet: new Set<string>(), trackedSet: new Set<string>(),
       sourceUnreadableSet: new Set<string>(),
+      modsByOrigin: {},
       conflictsComputed: true, loadFailures,
     });
     const load = vi.fn()
@@ -1039,11 +1093,11 @@ describe('RecordPanel — incomplete-comparison banner', () => {
     const load = vi.fn()
       .mockResolvedValueOnce({
         ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
-        immutableSet: new Set(), conflictsComputed: false, loadFailures: [],
+        modsByOrigin: {}, immutableSet: new Set(), conflictsComputed: false, loadFailures: [],
       })
       .mockResolvedValue({
         ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
-        immutableSet: new Set(), conflictsComputed: true, loadFailures: [],
+        modsByOrigin: {}, immutableSet: new Set(), conflictsComputed: true, loadFailures: [],
       });
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText(incompleteMessage));
@@ -1081,7 +1135,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
       .mockResolvedValueOnce({ ok: false, error: 'HTTP 500' })
       .mockResolvedValue({
         ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
-        immutableSet: new Set(['Fallout4.esm']), conflictsComputed: true, loadFailures: [],
+        modsByOrigin: {}, immutableSet: new Set(['Fallout4.esm']), conflictsComputed: true, loadFailures: [],
       });
     renderPanel(compareResult, { load });
     await waitFor(() => expect(screen.getByText('Failed to load: HTTP 500')).toBeInTheDocument());
@@ -1107,7 +1161,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
 });
 
 const loaded = (result: CompareResult | null, conflictsComputed = true) => ({
-  ok: true as const, result, immutableSet: new Set<string>(), trackedSet: new Set<string>(), sourceUnreadableSet: new Set<string>(), conflictsComputed, loadFailures: [],
+  ok: true as const, result, immutableSet: new Set<string>(), trackedSet: new Set<string>(), sourceUnreadableSet: new Set<string>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
 });
 
 function deferred<T>() {

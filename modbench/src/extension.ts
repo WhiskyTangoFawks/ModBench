@@ -38,7 +38,6 @@ import type { RecordWrite } from './drivingLib/writingGesture';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import type { ModlistNode } from './mods/ModListProvider';
 import { registerModDecorations } from './mods/modDecorations';
-import { showModRepositories } from './mods/modRepositories';
 import { createModsView } from './mods/modsView';
 import { registerModInstallCommands } from './mods/installCommands';
 import { registerCompareFileCommand } from './mods/compareFile';
@@ -53,7 +52,8 @@ import { downloadsCopyValueText } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
-import { openedFolder, whenOpened, markFirstReadLanded } from './toolbox/instanceCheck';
+import { openedFolder, whenOpened } from './drivingLib/instanceCheck';
+import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { launchBackend } from './toolbox/autoLaunch';
 import { pluginSyncOver } from './pluginsCommands/plugins';
 import { modSyncOver } from './modlist/modlist';
@@ -106,6 +106,7 @@ interface PluginsHandle {
 interface InstanceFacts {
   trackedMods: () => ReadonlySet<string>;
   modDirs: () => ReadonlyMap<string, string>;
+  onChange: (listener: () => void) => vscode.Disposable;
   refresh: () => Promise<void>;
 }
 
@@ -133,7 +134,7 @@ const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
 function buildBareSide(own: Own): InstanceSide {
   return {
     toolboxProvider: own(new ToolboxProvider({ instance: undefined })),
-    facts: { trackedMods: () => new Set(), modDirs: () => new Map(), refresh: () => Promise.resolve() },
+    facts: { trackedMods: () => new Set(), modDirs: () => new Map(), onChange: () => ({ dispose: () => undefined }), refresh: () => Promise.resolve() },
     plugins: {
       selection: () => [], progress: { while: (work) => work(), say: () => undefined },
       recordRow: () => Promise.resolve(undefined), reveal: () => Promise.resolve(), refreshFacts: () => Promise.resolve(),
@@ -178,7 +179,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   const { provider: modListProvider, view: modListView, nameFilter: modListFilter } = own(createModsView({
     instance, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync,
   }));
-  own(showModRepositories(instance));
   const fomodWarning = warnIfFomod(reporterFor('install'));
   const view = editingView({
     narrator: plugins.narrator, progress: plugins.progress, log: outputChannel, revealLog: () => outputChannel.show(true), loadOrderPut: plugins.loadOrderPut,
@@ -246,7 +246,8 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   return {
     instance, toolboxProvider,
     enterEditing: () => editing.enter(instance.landed()),
-    facts: { trackedMods: () => instance.value.trackedMods, modDirs: () => instance.value.paths.modDirs, refresh: () => instance.refresh() },
+    facts: { trackedMods: () => instance.value.trackedMods, modDirs: () => instance.value.paths.modDirs,
+      onChange: (listener) => instance.subscribe(() => { listener(); }), refresh: () => instance.refresh() },
     plugins: {
       selection: pluginsSelection, progress: plugins.progress,
       recordRow: (place, formKey) => pluginsTree.recordRow(place, formKey),
@@ -320,12 +321,10 @@ export function activate(context: vscode.ExtensionContext): void {
   const treeProvider = new PluginTreeProvider(meditClient, log);
   const focusedView = createFocusedView();
 
-  const trackedRepositories = trackedRepositoriesOver({
-    client: meditClient,
-    outputChannel,
-    trackedMods: () => views.facts.trackedMods(),
-    modDirs: () => views.facts.modDirs(),
-  });
+  const modFacts = {
+    trackedMods: () => views.facts.trackedMods(), modDirs: () => views.facts.modDirs(), onChange: (listener: () => void) => views.facts.onChange(listener),
+  };
+  const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...modFacts });
   const instance = { refresh: () => views.facts.refresh() };
   const recordWrite = recordWriteOver(instance, { latest: () => views.latestSent() });
   const editor = createEditor({
@@ -336,6 +335,7 @@ export function activate(context: vscode.ExtensionContext): void {
     viewSelections: new Map([['modbench.pluginListTree', () => views.plugins.selection()]]),
     recordWrite,
     refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
+    modFacts,
   });
   const conflictsComputed = trackedRepositories.conflictsComputedOver(() => { editor.announceConflictsComputed(); });
   const notifyConflictsComputed = () => { void conflictsComputed(); };

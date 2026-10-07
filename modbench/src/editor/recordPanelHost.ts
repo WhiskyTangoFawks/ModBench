@@ -33,6 +33,7 @@ import {
   CHILD_RECORD_SCHEME, RENDERED_DOCUMENT_SCHEME, copyDocument, copyOf, recordDocument, type RecordCopy, type RecordDocument,
 } from '../drivingLib/recordDocument';
 import { errorMessage } from '../ports/errorMessage';
+import type { ModFacts } from './modsByOrigin';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension, type ExtensionToWebview, type ViewState } from '../wire/messages';
 
 export interface EditorCommandDeps {
@@ -61,6 +62,8 @@ export interface EditorCommandDeps {
   // The plugin's Source Control status, which a committed field edit redrives, lives on the session
   // object, narrowed to a callback like focusedViewSelection.
   refreshSourceControlFor: (plugin: PluginAddress) => void;
+  // The instance's mods, which a column header reads for its mod's repository state.
+  modFacts: ModFacts;
   outputChannel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
   // Kernel ports the composition root implements (target-architecture.d2, Ports).
   reporterFor: (tag: string) => Reporter;
@@ -358,6 +361,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   const routerDeps: SharedRecordPanelDeps = {
     meditClient, channel: outputChannel, reporter: deps.reporterFor('recordPanel'),
     conflictsComputed: () => loadOrderStatusTracker.current(), loadFailures: () => loadOrderStatusTracker.failures(),
+    modFacts: deps.modFacts,
   };
   const providerDeps = { context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps };
   const recordEditorProvider = new RecordEditorProvider({ ...providerDeps, client: meditClient, channel: outputChannel });

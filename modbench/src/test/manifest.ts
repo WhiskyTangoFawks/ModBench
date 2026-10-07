@@ -1,4 +1,4 @@
-import { FOLDER_KEY } from '../toolbox/folderContext';
+import { FOLDER_KEY } from '../drivingLib/folderContext';
 
 export const IN_AN_INSTANCE = `${FOLDER_KEY} == instance`;
 
@@ -92,14 +92,9 @@ export function requires(when: string | undefined, term: string): boolean {
 }
 
 /** Whether `when` holds in `context`: a term is `key == value`, `key != value`, `key =~ /re/`,
- *  `key in listKey`, or a key, true when set and not `false`. */
-export function holds(when: string, context: Readonly<Record<string, string | boolean | readonly string[] | undefined>>): boolean {
+ *  or a key, true when set and not `false`. */
+export function holds(when: string, context: Readonly<Record<string, string | boolean | undefined>>): boolean {
   const termHolds = (text: string): boolean => {
-    const membership = /^([\w.]+)\s+in\s+([\w.]+)$/.exec(text);
-    if (membership) {
-      const list = context[membership[2] ?? ''];
-      return Array.isArray(list) && list.includes(String(context[membership[1] ?? '']));
-    }
     const match = /^([\w.]+)\s*(==|!=|=~)\s*(.+)$/.exec(text);
     if (!match) return Boolean(context[text]);
     const [, key = '', op, operand = ''] = match;

@@ -145,7 +145,7 @@ describe('PluginHeader', () => {
   });
 
   it('carries on the whole header cell the data-vscode-context payload its native right-click menu gates the copy commands on', () => {
-    const vscodeContext = JSON.stringify(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'ModA', false, false));
+    const vscodeContext = JSON.stringify(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'ModA', { compilable: false, editable: false, inMod: 'none' }));
     const { header } = renderHeader({}, { vscodeContext });
     expect(header).toHaveAttribute('data-vscode-context', vscodeContext);
   });
