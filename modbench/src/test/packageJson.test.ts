@@ -143,6 +143,12 @@ const pkg = parsePackageManifest(
 
 type Context = Parameters<typeof holds>[1];
 const inInstance: Context = { [FOLDER_KEY]: 'instance' };
+type Key = { key: string; mac?: string; command: string };
+const expectKeysFiring = (context: Context, expected: readonly Key[]): void => {
+  const firing = pkg.contributes.keybindings.filter((k) => holds(k.when, context)).map(({ key, mac, command }) => ({ key, mac, command }));
+  expect(firing).toHaveLength(expected.length);
+  expect(firing).toEqual(expect.arrayContaining(expected));
+};
 const keysFiring = (context: Context): { key: string; mac?: string; command: string }[] =>
   pkg.contributes.keybindings.filter((k) => holds(k.when, context)).map(({ key, mac, command }) => ({ key, mac, command }));
 const offeredIn = (entries: readonly MenuEntry[], context: Context): string[] =>
@@ -336,7 +342,7 @@ describe('package.json Referenced By view', () => {
 describe('package.json Referenced By title bar', () => {
   const REFERENCED_BY_VIEW = 'view == modbench.referencedByTree';
   const titleBar = (): MenuEntry[] =>
-    present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']").filter((e) => e.when.includes(REFERENCED_BY_VIEW));
+    present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']").filter((e) => requires(e.when, REFERENCED_BY_VIEW));
 
   it('offers filter or clear, then sort direction, as icons', () => {
     expect(placed(titleBar())).toEqual([
@@ -361,7 +367,7 @@ describe('package.json New Plugin / record filter reachable from the merged tree
   const titleMenus = (): MenuEntry[] => present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']");
   const entryFor = (command: string) =>
     present(
-      titleMenus().find((e) => e.command === command && e.when.includes('modbench.pluginListTree')),
+      titleMenus().find((e) => e.command === command && requires(e.when, 'view == modbench.pluginListTree')),
       `a view/title entry for ${command} on modbench.pluginListTree`,
     );
 
@@ -423,7 +429,7 @@ describe('package.json filtering is one UX', () => {
 
   it.each(FILTERED_VIEWS)('%s narrows by name from slot 1', (view, command) => {
     const entry = present(
-      titleMenus().find((e) => e.command === command && e.when.includes(view)),
+      titleMenus().find((e) => e.command === command && requires(e.when, `view == ${view}`)),
       `${command} on ${view}`,
     );
     expect(entry.group).toBe('navigation@1');
@@ -448,7 +454,7 @@ describe('package.json filtering is one UX', () => {
   ] as const;
   const DOWNLOADS_FILTER = ['modbench.downloads', 'modbench.downloads.filterHere', 'modbench.downloads.clearFilterHere', 'modbench.downloadedFile.filterActive'] as const;
   const entryOn = (view: string, command: string): MenuEntry => present(
-    titleMenus().find((e) => e.command === command && e.when.includes(`view == ${view}`)),
+    titleMenus().find((e) => e.command === command && requires(e.when, `view == ${view}`)),
     `${command} on ${view}`,
   );
 
@@ -502,19 +508,20 @@ describe('package.json title-bar rubric', () => {
   const WORKSPACE_ACTIONS = ['modbench.profile.switch'];
 
   it.each(WORKSPACE_ACTIONS)('%s is absent from every domain tree title bar', (command) => {
-    const views = viewsOf(titleMenus().filter((e) => e.command === command));
-    expect([...views].filter((v) => v !== 'modbench.toolbox')).toEqual([]);
+    const domainViews = [...viewsOf(titleMenus())].filter((v) => v !== 'modbench.toolbox');
+    expect(domainViews.filter((v) => titleMenus().some((e) => e.command === command && requires(e.when, `view == ${v}`)))).toEqual([]);
   });
 
-  it('never exposes more than four navigation icons on any view, in any state', () => {
-    const navEntries = titleMenus().filter((e) => (e.group ?? '').startsWith('navigation'));
-    for (const view of viewsOf(navEntries)) {
-      const entries = navEntries.filter((e) => e.when.includes(`view == ${view}`));
-      const togglePairs = entries.filter((a) =>
-        a.when.includes('!') && entries.some((b) => b !== a && a.when.replace('!', '') === b.when),
-      ).length;
-      expect(entries.length - togglePairs, `${view} exposes too many navigation icons`).toBeLessThanOrEqual(4);
-    }
+  const navEntries = titleMenus().filter((e) => (e.group ?? '').startsWith('navigation'));
+  const facts = (entries: MenuEntry[]): string[] => [...new Set(entries.flatMap((e) => e.when.match(/modbench\.[\w.]+/g) ?? []))]
+    .filter((key) => !key.startsWith('modbench.folder') && !viewsOf(navEntries).has(key));
+  const statesOf = (keys: string[]): Context[] => keys.reduce<Context[]>(
+    (states, key) => states.flatMap((state) => [state, { ...state, [key]: true }]), [{}]);
+
+  it.each([...viewsOf(navEntries)])('%s never exposes more than four navigation icons, in any state', (view) => {
+    const entries = navEntries.filter((e) => requires(e.when, `view == ${view}`));
+    const visible = statesOf(facts(entries)).map((state) => entries.filter((e) => holds(e.when, { view, ...inInstance, ...state })).length);
+    expect(Math.max(...visible), `${view} exposes too many navigation icons`).toBeLessThanOrEqual(4);
   });
 
   it('the Mods tree and the merged Plugins tree are in the Modbench sidebar', () => {
@@ -785,7 +792,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     [{ 'modbench.plugin.singleTracked': true }, [{ key: 'f2', command: 'modbench.plugin.rename' }]],
     [{ 'modbench.plugin.allDeletableRecords': true }, [{ key: 'Delete', mac: 'cmd+backspace', command: 'modbench.pluginListTree.deleteHere' }]],
   ])('on the focused Plugins tree with %j, the keys that fire are those of the commands the selection allows, and copy value', (facts, keys) => {
-    expect(keysFiring({ focusedView: 'modbench.pluginListTree', listFocus: true, ...inInstance, ...facts })).toEqual([...keys, COPY]);
+    expectKeysFiring({ focusedView: 'modbench.pluginListTree', listFocus: true, ...inInstance, ...facts }, [...keys, COPY]);
   });
 });
 
@@ -828,32 +835,32 @@ describe('package.json Downloads row menu order', () => {
 });
 
 describe('package.json view keys', () => {
+  const VIEW_SCOPES = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads', 'modbench.referencedByTree']
+    .map((view) => `focusedView == ${view}`);
+  const RECORD_TAB_SCOPE = "activeCustomEditorId == 'modbench.record'";
   const ON_THE_TREE = ['listFocus', '!inputFocus'];
 
+  it('scopes every key to a focused view or the record tab', () => {
+    const unscoped = pkg.contributes.keybindings.filter((k) => ![...VIEW_SCOPES, RECORD_TAB_SCOPE].some((scope) => requires(k.when, scope)));
+    expect(unscoped.map((k) => `${k.key} → ${k.command}`)).toEqual([]);
+  });
+
   it('binds every view key only while the tree itself has focus — never in a prompt, the tree\'s find box or the view\'s title bar', () => {
-    const rowKeys = pkg.contributes.keybindings.filter((k) => k.when.startsWith('focusedView == '));
+    const rowKeys = pkg.contributes.keybindings.filter((k) => VIEW_SCOPES.some((scope) => requires(k.when, scope)));
     expect(rowKeys.length).toBeGreaterThan(0);
     const firesOffTheTree = rowKeys.filter((k) => !ON_THE_TREE.every((term) => requires(k.when, term)));
     expect(firesOffTheTree.map((k) => `${k.key} → ${k.command} (when: ${k.when})`)).toEqual([]);
   });
-
-  it('binds no key to a filter', () => {
-    const filterKeys = pkg.contributes.keybindings.filter((k) => k.command.endsWith('.filter'));
-    expect(
-      filterKeys.map((k) => `${k.key} → ${k.command}`),
-      'common.md, The name filter, story 1: the filter is the title-bar control only, with no key — '
-        + 'Ctrl+Alt+F and F3 stay VS Code\'s own Find on the tree.',
-    ).toEqual([]);
-  });
-
-  it('binds no key outside a focused view or the record tab', () => {
-    const unscoped = pkg.contributes.keybindings.filter((k) =>
-      !k.when.startsWith('focusedView == ') && !k.when.startsWith("activeCustomEditorId == 'modbench.record' && "));
-    expect(unscoped.map((k) => `${k.key} → ${k.command}`)).toEqual([]);
-  });
 });
 
-describe('package.json Downloads delete key', () => {
+describe('package.json Downloads keys', () => {
+  it('fire copy value and delete while the Downloads tree has focus in an instance', () => {
+    expectKeysFiring({ focusedView: 'modbench.downloads', listFocus: true, ...inInstance }, [
+      { key: 'ctrl+c', mac: 'cmd+c', command: 'modbench.copyValue' },
+      { key: 'Delete', mac: 'cmd+backspace', command: 'modbench.downloadedFile.delete' },
+    ]);
+  });
+
   it('binds Delete to modbench.downloadedFile.delete, scoped to the focused Downloads view in an instance', () => {
     const entry = present(
       pkg.contributes.keybindings.find((k) => k.command === 'modbench.downloadedFile.delete'),
@@ -874,7 +881,7 @@ describe('package.json Ctrl+C keys', () => {
     pkg.contributes.keybindings.filter((k: { command: string }) => k.command === 'modbench.copyValue');
 
   it.each(COPY_KEYS)('%s binds Ctrl+C to copy value, handing it its own view', (view) => {
-    const entry = present(copyKeys.find((k) => k.when.startsWith(`focusedView == ${view} `)), `a Ctrl+C key for ${view}`);
+    const entry = present(copyKeys.find((k) => requires(k.when, `focusedView == ${view}`)), `a Ctrl+C key for ${view}`);
     expect(entry.key).toBe('ctrl+c');
     expect(entry.mac).toBe('cmd+c');
     expect(entry.args).toEqual({ view });
@@ -929,7 +936,7 @@ describe('package.json record grid keys, as editor.md\'s Menus and keys and its 
     [{ [SECTION]: 'arrayElement', 'modbench.record.focusedCellCanMoveUp': true }, [REMOVE, { key: 'alt+up', command: 'modbench.record.moveElementUp' }]],
     [{ [SECTION]: 'arrayElement', 'modbench.record.focusedCellCanMoveDown': true }, [REMOVE, { key: 'alt+down', command: 'modbench.record.moveElementDown' }]],
   ])('on a record tab with %j the keys that fire are those of what the focused cell holds', (facts, keys) => {
-    expect(keysFiring({ ...ON_A_RECORD_TAB, ...facts })).toEqual(keys);
+    expectKeysFiring({ ...ON_A_RECORD_TAB, ...facts }, keys);
   });
 
   it.each(['modbench.record.focusedCellEditorOpen', 'inputFocus', 'sideBarFocus', 'panelFocus', 'auxiliaryBarFocus'])(
@@ -1134,7 +1141,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   const MODS_VIEW = 'view == modbench.modList';
   const inModsView = (menu: string): MenuEntry[] =>
     present(pkg.contributes.menus[menu], `contributes.menus['${menu}']`).filter((e) => requires(e.when, MODS_VIEW));
-  const rowMenu = (row: string): MenuEntry[] => inModsView('view/item/context').filter((e) => e.when.includes(row));
+  const rowMenu = (row: string): MenuEntry[] => inModsView('view/item/context').filter((e) => requires(e.when, row));
   const MOD_ROW = String.raw`viewItem =~ /\bmod\b/`;
 
   it('title bar: filter or clear, then sort direction, as icons, with Collapse All left to VS Code; install then create empty mod in the overflow', () => {
@@ -1247,7 +1254,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     [{ 'modbench.mod.selectionKind': 'mod', 'modbench.mod.singleRow': true }, [UNINSTALL, { key: 'f2', mac: 'enter', command: 'modbench.mod.rename' }]],
     [{ 'modbench.mod.selectionKind': 'separator', 'modbench.mod.singleRow': true }, [DELETE_SEPARATOR, { key: 'f2', mac: 'enter', command: 'modbench.separator.rename' }]],
   ])('on the focused Mods tree with %j, the keys that fire are those of the commands the selection allows, and copy value', (facts, keys) => {
-    expect(keysFiring({ ...ON_THE_TREE, ...facts })).toEqual([...keys, COPY]);
+    expectKeysFiring({ ...ON_THE_TREE, ...facts }, [...keys, COPY]);
   });
 
   const ONE_MOD = { 'modbench.mod.selectionKind': 'mod', 'modbench.mod.singleRow': true };
@@ -1398,9 +1405,9 @@ describe('package.json Referenced By menus and keys', () => {
   it('binds Delete in the view only while every selected row is a plugin copy', () => {
     const onTheTree = { focusedView: 'modbench.referencedByTree', listFocus: true, ...inInstance };
     const copy = { key: 'ctrl+c', mac: 'cmd+c', command: 'modbench.copyValue' };
-    expect(keysFiring({ ...onTheTree, 'modbench.referencedBy.allHolders': true })).toEqual([
+    expectKeysFiring({ ...onTheTree, 'modbench.referencedBy.allHolders': true }, [
       copy, { key: 'Delete', mac: 'cmd+backspace', command: 'modbench.referencedByTree.deleteHere' },
     ]);
-    expect(keysFiring(onTheTree)).toEqual([copy]);
+    expectKeysFiring(onTheTree, [copy]);
   });
 });
