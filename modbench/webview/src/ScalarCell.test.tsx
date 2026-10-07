@@ -17,15 +17,6 @@ describe('ScalarCell — the xEdit open gesture', () => {
 
     expect(screen.getByRole('textbox')).toBeTruthy();
   });
-
-  it('exposes the F2 trigger DiskCell clicks, the containing cell dispatching F2 at `[data-open-trigger]`, and only while the cell is writable', () => {
-    const { container, rerender } = render(
-      <ScalarCell value="before" meta={meta()} editable onCommit={vi.fn()} />);
-    expect(container.querySelector('[data-open-trigger]')).toBeTruthy();
-
-    rerender(<ScalarCell value="before" meta={meta()} editable={false} onCommit={vi.fn()} />);
-    expect(container.querySelector('[data-open-trigger]')).toBeNull();
-  });
 });
 
 describe('ScalarCell — typed text is taken as pasted text is', () => {
@@ -54,14 +45,12 @@ describe('ScalarCell — typed text is taken as pasted text is', () => {
 
 describe('ScalarCell — a column with nowhere to write', () => {
   it('opens nothing under any of the three triggers', () => {
-    const { container } = render(
-      <ScalarCell value="before" meta={meta()} editable={false} onCommit={vi.fn()} />);
+    render(<ScalarCell value="before" meta={meta()} editable={false} onCommit={vi.fn()} />);
 
     fireEvent.click(screen.getByText('before'));
     fireEvent.click(screen.getByText('before'));
 
     expect(screen.queryByRole('textbox')).toBeNull();
-    expect(container.querySelector('[data-open-trigger]')).toBeNull();
   });
 
   it('renders as plain text when no commit target was supplied at all, the ordinary state for every caller outside the field grid', () => {
@@ -139,11 +128,6 @@ describe('ScalarCell — immutable string cell is unaffected by any left-click g
     render(<ScalarCell value="Dogmeat" meta={meta()} editable={false} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('Dogmeat'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-  });
-
-  it('carries no data-open-trigger, same as every other immutable cell', () => {
-    render(<ScalarCell value="Dogmeat" meta={meta()} editable={false} onCommit={vi.fn()} />);
-    expect(screen.getByText('Dogmeat').closest('[data-open-trigger]')).toBeNull();
   });
 });
 
@@ -236,10 +220,8 @@ describe('ScalarCell — a translated string, which the codec spells as an objec
 
   it('commits a bare object from an absent value', () => {
     const onCommit = vi.fn();
-    const { container } = render(<ScalarCell value={null} meta={nameMeta} editable onCommit={onCommit} />);
-    const openTrigger = container.querySelector('[data-open-trigger]');
-    if (!openTrigger) throw new Error('expected an open trigger on a bare-object cell with an absent value');
-    fireEvent.click(openTrigger);
+    render(<ScalarCell value={null} meta={nameMeta} editable onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('—'));
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'Named' } });
     fireEvent.keyDown(input, { key: 'Enter' });

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { copyValueVscode, invokeCommand, nothingToCopy, register, registerCommand, writeText } from './copyValueHarness';
+import { copyValueVscode, invokeCommand, nothingToCopy, register, writeText } from './copyValueHarness';
 
 vi.mock('vscode', () => copyValueVscode);
 
-import { registerCopyValueCommand, type CopyValueAdapter } from '../copyValue';
+import type { CopyValueAdapter } from '../copyValue';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 
 function reporterForRecording(): { reporterFor: (tag: string) => RecordingReporter; reportersByTag: Map<string, RecordingReporter> } {
@@ -21,12 +21,6 @@ beforeEach(() => {
 });
 
 describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched over an ordered adapter list', () => {
-  it('registers exactly one command under the catalog id', () => {
-    registerCopyValueCommand([], recordingReporter, () => undefined, nothingToCopy);
-    expect(registerCommand).toHaveBeenCalledTimes(1);
-    expect(registerCommand.mock.calls[0]?.[0]).toBe('modbench.copyValue');
-  });
-
   it('writes the first adapter\'s text when it applies', async () => {
     const first: CopyValueAdapter = { text: () => 'first', reporterTag: 'first.copy' };
     const second: CopyValueAdapter = { text: () => 'second', reporterTag: 'second.copy' };

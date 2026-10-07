@@ -110,4 +110,17 @@ describe('DiskCell — one gesture opens one editor', () => {
     act(() => openEditor(cellOf(container)));
     expect(screen.getByRole('textbox')).toBeTruthy();
   });
+
+  it('F2\'s open opens the reference picker', () => {
+    const { container } = renderCell({}, reference);
+    act(() => openEditor(cellOf(container)));
+    expect(pickFormKey).toHaveBeenCalledTimes(1);
+  });
+
+  it('F2\'s open on a cell with nowhere to write opens nothing', () => {
+    const readOnly = <ScalarCell value="before" meta={fieldMeta({ name: 'value', type: 'string' })} editable={false} onCommit={vi.fn()} />;
+    const { container } = renderCell({}, readOnly);
+    act(() => openEditor(cellOf(container)));
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
 });
