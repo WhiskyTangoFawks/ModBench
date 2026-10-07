@@ -46,6 +46,9 @@ import { expectInstancesOf } from '../../test/expectInstanceOf';
 beforeEach(() => {
   handlers.clear();
   vi.clearAllMocks();
+  executeCommand.mockReset();
+  showInputBox.mockReset();
+  showQuickPick.mockReset();
 });
 
 const plugin = (name: string, origin: string, path: string): LoadOrderPlugin =>

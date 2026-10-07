@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 import React from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 
 import { PluginHeader } from './PluginHeader';
 import { headerCellContext } from './recordUtils';
@@ -39,6 +39,8 @@ function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typ
 }
 
 describe('PluginHeader', () => {
+  afterEach(() => new Promise(resolve => setTimeout(resolve, 0)));
+
   it('labels the column `[XX] File name`, and says nothing of the winner', () => {
     const { header } = renderHeader();
     expect(screen.getByText('MyMod.esp').parentElement).toHaveTextContent(/^\[01\] MyMod\.esp$/);
