@@ -7,7 +7,7 @@ namespace MEditService.Index.Tests.RealData;
 public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture)
 {
     [Fact]
-    public void Index_RealScripts_ReadTheAdapterOffTheDocument()
+    public void RealScripts_ReadTheAdapterOffTheDocument()
     {
         var document = fixture.Reads.GetDocument("2499C4:Fallout4.esm", CutDownPluginFixture.Plugin);
 
@@ -22,7 +22,7 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture)
     }
 
     [Fact]
-    public void Index_RealRecords_PopulateFormReferencesAcrossMultipleTypes()
+    public void RealRecords_PopulateFormReferencesAcrossMultipleTypes()
     {
         var referencingTypes = IndexFiles.Rows(fixture.InstanceRoot, "SELECT DISTINCT record_type FROM form_references");
 

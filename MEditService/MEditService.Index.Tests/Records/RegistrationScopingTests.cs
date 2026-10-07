@@ -111,7 +111,7 @@ public class RegistrationScopingTests
     private static FixtureWithEveryKindOfExtractedRowAndBetaOverridingAlphasNpc Build(string prefix) => new(prefix);
 
     [Fact]
-    public void Unregister_LeavesRowsInPlace_AndNoReadAnswersForThePlugin()
+    public void APluginAbsentFromTheSnapshot_AnswersNoRead_WhileTheOtherProviderStillAnswers()
     {
         using var fx = Build("registration-unregister");
         var reads = fx.Reads;
@@ -216,7 +216,7 @@ public class RegistrationScopingTests
     }
 
     [Fact]
-    public void Register_AfterUnregister_AnswersAgainWithoutReindex()
+    public void APluginAbsentThenRestored_AnswersAgainWithoutReindex()
     {
         using var fx = Build("registration-reregister");
         var reads = fx.Reads;

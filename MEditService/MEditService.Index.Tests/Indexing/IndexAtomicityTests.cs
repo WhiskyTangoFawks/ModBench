@@ -8,7 +8,7 @@ namespace MEditService.Index.Tests.Indexing;
 public class IndexAtomicityTests
 {
     [Fact]
-    public void Index_ThrowingPartway_CommitsNoPartialRows()
+    public void IndexingThatThrowsPartway_CommitsNoPartialRows()
     {
         using var fixture = new PluginFixtureBuilder("index-atomicity")
             .WithPlugin("Atomic.esp", mod =>

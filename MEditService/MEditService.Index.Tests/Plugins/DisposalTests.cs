@@ -6,15 +6,15 @@ using Mutagen.Bethesda;
 namespace MEditService.Index.Tests.Plugins;
 
 [Collection(TestPluginFixtureCollection.Name)]
-public class ReconcileThreadSafetyTests(TestPluginFixture fixture)
+public class DisposalTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private static OpenedIndex MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static OpenedIndex OpenIndex(LoadOrderHolder holder) => Indexes.Open(holder);
 
-    private OpenedIndex MakeLoadedManager(LoadOrderHolder holder)
+    private OpenedIndex ReconciledIndex(LoadOrderHolder holder)
     {
-        var m = MakeIndexer(holder);
+        var m = OpenIndex(holder);
         m.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return m;
     }
@@ -23,10 +23,10 @@ public class ReconcileThreadSafetyTests(TestPluginFixture fixture)
     public void Dispose_CalledTwice_DoesNotThrow()
     {
         var holder = new LoadOrderHolder();
-        var manager = MakeLoadedManager(holder);
-        manager.Dispose();
+        var index = ReconciledIndex(holder);
+        index.Dispose();
 
-        var ex = Record.Exception(() => manager.Dispose());
+        var ex = Record.Exception(() => index.Dispose());
         Assert.Null(ex);
     }
 
@@ -34,9 +34,9 @@ public class ReconcileThreadSafetyTests(TestPluginFixture fixture)
     public void Dispose_ClearsLoadOrder()
     {
         var holder = new LoadOrderHolder();
-        var manager = MakeLoadedManager(holder);
-        manager.Dispose();
+        var index = ReconciledIndex(holder);
+        index.Dispose();
 
-        Assert.Throws<NoLoadOrderException>(() => manager.RequireReads());
+        Assert.Throws<NoLoadOrderException>(() => index.RequireReads());
     }
 }

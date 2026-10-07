@@ -15,7 +15,7 @@ public class FormReferencesTests
         Assert.Single(ReferencesTo(reads, target));
 
     [Fact]
-    public void Index_ScalarFormKeyField_IsIndexedInFormReferences()
+    public void ScalarFormKeyField_IsIndexedInFormReferences()
     {
         FormKey raceFormKey = default, npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-scalar")
@@ -36,7 +36,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_NoFormLinkFieldsSet_NothingReferencesItsNeighbour()
+    public void NoFormLinkFieldsSet_NothingReferencesItsNeighbour()
     {
         FormKey raceFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-empty")
@@ -52,7 +52,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public async Task Index_ReIndexSamePlugin_ReplacesRatherThanDuplicates()
+    public async Task ReindexingAPlugin_ReplacesItsReferencesRatherThanDuplicating()
     {
         FormKey raceFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-reindex")
@@ -73,7 +73,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_ArrayFormKeyField_IsIndexedInFormReferences()
+    public void ArrayFormKeyField_IsIndexedInFormReferences()
     {
         FormKey kwFormKey = default, npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-array-fk")
@@ -95,7 +95,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_ArrayOfStructWithFormKeySubField_IsIndexedInFormReferences()
+    public void ArrayOfStructWithFormKeySubField_IsIndexedInFormReferences()
     {
         FormKey factionFormKey = default, npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-array-struct")
@@ -116,7 +116,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_VmadStructWithObjectMember_IsIndexedInFormReferences()
+    public void VmadStructWithObjectMember_IsIndexedInFormReferences()
     {
         FormKey targetFormKey = default, npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-vmad-struct")
@@ -150,7 +150,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_VmadStructNestedInsideAStruct_IsNotWalked_TheDocumentedTruncation()
+    public void VmadStructNestedInsideAStruct_IsNotWalked_TheDocumentedTruncation()
     {
         FormKey targetFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-vmad-nested-struct")
@@ -185,7 +185,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_VmadStructWithObjectListMember_IsIndexedInFormReferences()
+    public void VmadStructWithObjectListMember_IsIndexedInFormReferences()
     {
         FormKey target0Fk = default, target1Fk = default;
         using var fixture = new PluginFixtureBuilder("form-refs-vmad-struct-objlist")
@@ -221,7 +221,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_VmadStructListProperty_IsIndexedInFormReferences()
+    public void VmadStructListProperty_IsIndexedInFormReferences()
     {
         FormKey target0Fk = default, target1Fk = default;
         using var fixture = new PluginFixtureBuilder("form-refs-vmad-struct-structlist")
@@ -271,7 +271,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_QuestAliasScriptObjectProperty_IsIndexedInFormReferences()
+    public void QuestAliasScriptObjectProperty_IsIndexedInFormReferences()
     {
         FormKey targetFormKey = default, questFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-quest-alias-script")
@@ -297,7 +297,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_QuestAliasOwnScriptObjectProperty_IsIndexedInFormReferences()
+    public void QuestAliasOwnScriptObjectProperty_IsIndexedInFormReferences()
     {
         FormKey targetFormKey = default, questFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-quest-alias-property")
@@ -324,7 +324,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_QuestFragmentScriptObjectProperty_IsIndexedInFormReferences()
+    public void QuestFragmentScriptObjectProperty_IsIndexedInFormReferences()
     {
         FormKey targetFormKey = default, questFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-quest-fragment-script")
@@ -349,7 +349,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_PackageFragmentScriptObjectProperty_IsIndexedInFormReferences()
+    public void PackageFragmentScriptObjectProperty_IsIndexedInFormReferences()
     {
         FormKey targetFormKey = default, packageFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-package-fragment-script")
@@ -377,7 +377,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_SceneFragmentScriptObjectProperty_IsIndexedInFormReferences()
+    public void SceneFragmentScriptObjectProperty_IsIndexedInFormReferences()
     {
         FormKey targetFormKey = default, sceneFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-scene-fragment-script")
@@ -405,7 +405,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_AQuest_DoesNotListItsInlineScenesScriptReference()
+    public void AQuest_DoesNotListItsInlineScenesScriptReference()
     {
         FormKey targetFormKey = default, questFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-quest-carries-scene")
@@ -431,7 +431,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_DialogInfoFragmentScriptObjectProperty_IsIndexedInFormReferences()
+    public void DialogInfoFragmentScriptObjectProperty_IsIndexedInFormReferences()
     {
         FormKey targetFormKey = default, responseFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-info-fragment-script")
@@ -461,7 +461,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_QuestAliasScriptNestedStructAndStructListMembers_AreWalkedToFullDepth()
+    public void QuestAliasScriptNestedStructAndStructListMembers_AreWalkedToFullDepth()
     {
         FormKey nestedTarget = default, listTarget = default, questFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-quest-alias-nested")

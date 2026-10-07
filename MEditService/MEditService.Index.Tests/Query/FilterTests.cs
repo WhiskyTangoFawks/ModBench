@@ -44,7 +44,7 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecords_WithActiveFilter_ReturnsOnlyMatchingRecords()
+    public void AnActiveFilter_NarrowsTheListingToItsMatches()
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
@@ -60,7 +60,7 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecords_AfterClearFilter_ReturnsAllRecords()
+    public void ClearingTheFilter_RestoresTheFullListing()
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
@@ -87,7 +87,7 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void CountRecordsForPlugin_WithActiveFilter_CountsOnlyMatching()
+    public void AnActiveFilter_NarrowsAPluginsCountToItsMatches()
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
@@ -100,7 +100,7 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetPluginsWithMatchingRecords_WithActiveFilter_ReturnsPluginWithMatches()
+    public void AnActiveFilter_ListsThePluginsWithMatches()
     {
         using var index = LoadedIndex();
         var reads = index.RequireReads();
@@ -114,7 +114,7 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetPluginsWithMatchingRecords_TwoPluginsOfOneName_AnswersThePluginThatMatches()
+    public void TwoPluginsOfOneName_OnlyThePluginThatMatchesIsListed()
     {
         using var plugins = new PluginFixtureBuilder("filter-two-plugins")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("InBoth"), origin: "ModA")
@@ -134,7 +134,7 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetPluginsWithMatchingRecords_NoMatchingRecords_ReturnsEmpty()
+    public void NoMatchingRecords_ListsNoPlugin()
     {
         using var index = LoadedIndex();
         index.SetFilter("SELECT 'NonExistentFormKey:000000' AS form_key", "filter.sql");
@@ -144,7 +144,7 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetPluginsWithMatchingRecords_EmptyTableList_ReturnsEmpty()
+    public void NoTables_ListsNoPlugin()
     {
         using var index = LoadedIndex();
         index.SetFilter($"SELECT form_key FROM \"NPC_\"", "filter.sql");
