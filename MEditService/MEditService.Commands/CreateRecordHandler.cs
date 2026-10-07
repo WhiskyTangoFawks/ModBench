@@ -157,7 +157,7 @@ public sealed class CreateRecordHandler
             case GridCells.Holder.Masters(var copy, var masterCell):
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ChildSlotHeldByAnotherRecord,
-                    $"{copy.Plugin.Name} holds the cell {masterCell} {at} of {worldspace}. \"{WriteTargets.CopyCommandTitle}\" as an override brings it into {plugin.Name}.");
+                    $"{copy.Plugin.Name} holds the cell {masterCell} {at} of {worldspace}. Copying the record as an override brings it into {plugin.Name}.");
             case GridCells.Holder.Nobody:
                 break;
             default:

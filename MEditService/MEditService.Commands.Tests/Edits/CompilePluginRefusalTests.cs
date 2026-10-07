@@ -60,7 +60,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
         var result = await CompileService().CompileOneAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
-        Assert.Contains("Run \"Modbench: Decompile Plugin\" to regenerate the source.", result.RefusalReason);
+        Assert.Contains("Decompile the plugin to regenerate the source.", result.RefusalReason);
         Assert.DoesNotContain("Track", result.RefusalReason);
         Assert.Empty(result.Diagnostics);
     }
@@ -75,7 +75,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
         var result = await CompileService().CompileOneAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
-        Assert.Contains("Run \"Modbench: Decompile Plugin\" to regenerate the source.", result.RefusalReason);
+        Assert.Contains("Decompile the plugin to regenerate the source.", result.RefusalReason);
         Assert.DoesNotContain("Track", result.RefusalReason);
         Assert.Contains(CompileFixture.NpcEditorId, result.RefusalReason);
         Assert.Empty(result.Diagnostics);
