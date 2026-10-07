@@ -35,7 +35,6 @@ const PATHLESS_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'dr
 
 export const DRIVING_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'sourceLanguage', 'drivingLib'];
 const PACKAGE_BOXES = ['client', 'sourceLanguage'];
-const CLIENT_BOXES = ['client', 'plugins', 'editor', 'sourceLanguage', 'instanceCommands', 'pluginsCommands'];
 export const BOXES = [
     ...DRIVING_BOXES,
     'modlist', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install',
@@ -89,12 +88,14 @@ const SYNTAX = {
     send: [{ selector: 'CallExpression[callee.property.name=\'send\']', message: 'Only instance commands\' loadOrder.ts sends a load order.' }],
     putMember: [{ selector: 'CallExpression[callee.property.name=\'putLoadOrder\']', message: 'Only the load-order sender hands the client a load order.' }],
     putBare: [{ selector: 'CallExpression[callee.name=\'putLoadOrder\']', message: 'Only instance commands hand the client a load order.' }],
+    dynamicImport: [{ selector: 'ImportExpression', message: 'A dynamic import() evades no-restricted-imports; import at the top of the file.' }],
     typeImport: [{ selector: 'TSImportType', message: 'A type is imported by an import declaration, which no-restricted-imports checks; `import(\'x\')` in a type position evades it.' }],
-    hostFs: [{ selector: 'MemberExpression[object.property.name=\'workspace\'][property.name=\'fs\']', message: 'A view reads no file: the host file system is the Instance adapter\'s.' }],
+    hostFs: ['MemberExpression[object.property.name=\'workspace\'][property.name=\'fs\']', 'MemberExpression[object.name=\'workspace\'][property.name=\'fs\']']
+        .map((selector) => ({ selector, message: 'A view reads no file: the host file system is the Instance adapter\'s.' })),
     activation: ACTIVATION_DECIDES_SELECTORS.map((selector) => ({ selector, message: ACTIVATION_DECIDES_MESSAGE })),
 };
 /** @type {(keyof typeof SYNTAX)[]} */
-const EVERYWHERE_IN_SRC = ['message', 'watcher', 'send', 'putMember', 'putBare', 'typeImport'];
+const EVERYWHERE_IN_SRC = ['message', 'watcher', 'send', 'putMember', 'putBare', 'typeImport', 'dynamicImport'];
 /** @param {(keyof typeof SYNTAX)[]} concerns */
 const restrictedSyntax = (concerns) => ['error', ...concerns.flatMap((concern) => SYNTAX[concern])];
 /** @param {(keyof typeof SYNTAX)[]} exempt */
@@ -174,7 +175,7 @@ export default defineConfig(
                 vscode: !DRIVING_BOXES.includes(box),
                 packages: !PACKAGE_BOXES.includes(box),
                 path: PATHLESS_BOXES.includes(box),
-                client: !CLIENT_BOXES.includes(box),
+                client: box === 'toolbox',
                 inAdapter: box === 'instanceAdapter',
             }),
         },
@@ -182,7 +183,7 @@ export default defineConfig(
     {
         files: ['src/instanceLoader/instance.ts'],
         rules: {
-            'no-restricted-imports': restrictedImports({ vscode: true, packages: true, path: true, client: true, extra: [REPORTER_IMPORT] }),
+            'no-restricted-imports': restrictedImports({ vscode: true, packages: true, path: true, extra: [REPORTER_IMPORT] }),
         },
     },
     {
@@ -214,7 +215,6 @@ export default defineConfig(
     },
 
     // The reporter and the dialog own a message API; tests swap it out to observe a toast.
-    // Each exemption below restates the whole list: a later block replaces an earlier one's.
     {
         files: ['webview/src/**/*.{ts,tsx}'],
         ignores: ['webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**'],
@@ -224,6 +224,11 @@ export default defineConfig(
         files: ['src/**/*.ts'],
         ignores: NOT_PRODUCTION,
         rules: { 'no-restricted-syntax': restrictedSyntax(EVERYWHERE_IN_SRC) },
+    },
+    {
+        files: ['src/*/test/**/*.ts'],
+        ignores: ['**/*.test.ts'],
+        rules: { 'no-restricted-syntax': restrictedSyntax(['message']) },
     },
     {
         files: ['src/reporter.ts', 'src/dialog.ts'],
