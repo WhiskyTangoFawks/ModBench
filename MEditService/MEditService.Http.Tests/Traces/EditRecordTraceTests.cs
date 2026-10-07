@@ -65,6 +65,20 @@ public sealed class EditRecordTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task AnEditedRecord_IsListedAsModified()
+    {
+        using var fx = await Loaded(Origin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
+        (await Edit(formKey, "HeightMax", 0.75)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
+
+        await Wire.Eventually(async () =>
+            (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
+                .GetProperty("items")[0].GetProperty("workingTreeState").GetString() == "Modified",
+            "the edited record listed as Modified");
+    }
+
+    [Fact]
     public async Task DeletingARecord_IsApplied_PushedAsRowsChangedNamingIt_AndGoneFromTheNextRead()
     {
         using var fx = await Loaded(Origin);
