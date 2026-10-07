@@ -19,7 +19,7 @@ import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { recordingReporter } from './surfacingDoubles';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 
-describe('modbench.mod.install given a Downloads row', () => {
+describe('the Downloads-Mods seam: modbench.mod.install given a Downloads row', () => {
   it('hands the row of the real DownloadNode to the downloaded-file flow', async () => {
     const installDownloaded = vi.fn().mockResolvedValue(true);
     registerModInstallCommands({

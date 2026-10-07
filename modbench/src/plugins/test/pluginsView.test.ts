@@ -89,7 +89,11 @@ vi.mock('vscode', () => {
 });
 
 import { createPluginsView, pluginsViewProgress } from '../pluginsView';
-import { PluginTreeProvider } from '../PluginTreeProvider';
+import { createPluginSync } from '../pluginSync';
+import { PluginTreeProvider, RecordNode, RecordTypeNode } from '../PluginTreeProvider';
+import type { RecordSummary } from '../../client';
+import { recordTypeCountFixture } from '../../client/test/fixtures';
+import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -102,13 +106,16 @@ const workspaceUri = (name: string) => ({ scheme: 'file', path: `/workspace/${na
 
 const rowsChanged: NotificationEvent = { kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', keys: [], sequence: 1 };
 
+const silentChannel = { error: vi.fn(), info: vi.fn() };
+
 function pluginsView(value = instanceValueFixture()) {
   const client = new InMemoryMEditClient();
   const recordBrowser = new PluginTreeProvider(client);
   const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
     instance: new FakeInstance(value), access: accessTo('/instance'), recordBrowser, client,
-    syncPlugins: () => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] }), channel: { error: vi.fn(), info: vi.fn() },
+    pluginSync: createPluginSync(() => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] }), silentChannel),
+    channel: silentChannel,
     dataFolderFile: () => undefined, log: () => undefined,
     reporterFor: (tag) => { const reporter = recordingReporter(); reporters.set(tag, reporter); return reporter; },
     statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, notifyConflictsComputed: vi.fn(),
@@ -249,6 +256,34 @@ describe('the Plugins view badges the records beneath a plugin', () => {
     const badges = h.decorations.map((provider) => provider.provideFileDecoration(uriFile('/a record row'))?.badge);
 
     expect(badges).toContain('M');
+  });
+});
+
+describe('a record row\'s badge, from mEdit\'s stream', () => {
+  const FORM_KEY = '000001:Test.esp';
+  const summary = (workingTreeState: RecordSummary['workingTreeState']): RecordSummary => ({
+    formKey: FORM_KEY, plugin: 'Test.esp', loadOrderIndex: 0, isWinner: true, editorId: 'TestNpc', origin: 'ModA',
+    workingTreeState, hasContainerChildren: false, hasParseFailure: false,
+  });
+  type BadgeSource = (typeof h.decorations)[number] & { onDidChangeFileDecorations: (listener: (changed: unknown) => void) => unknown };
+  const asVsCodeReReadsAnExpandedGroupOnTreeChange = (tree: PluginTreeProvider, group: RecordTypeNode) => tree.getChildren(group);
+
+  it('arrives as an M, and a change notice for the row, when mEdit reports the row changed', async () => {
+    const { client, recordBrowser } = pluginsView();
+    client.setQueryAnswer('getRecords', { items: [summary('None')], total: 1 });
+    const group = new RecordTypeNode('Test.esp', recordTypeCountFixture({ type: 'NPC_', displayName: 'Non-Player Character' }), 'ModA');
+    const uri = present(expectInstanceOf((await recordBrowser.getChildren(group))[0], RecordNode).resourceUri, "the row's resource URI");
+    const badges = present(h.decorations.find((provider): provider is BadgeSource => 'onDidChangeFileDecorations' in provider), 'the record badge provider');
+    const badgeChanges: unknown[] = [];
+    badges.onDidChangeFileDecorations((changed) => { badgeChanges.push(changed); });
+    expect(badges.provideFileDecoration(uri)).toBeUndefined();
+
+    client.setQueryAnswer('getRecords', { items: [summary('Modified')], total: 1 });
+    client.emit({ ...rowsChanged, keys: [FORM_KEY] });
+    await asVsCodeReReadsAnExpandedGroupOnTreeChange(recordBrowser, group);
+
+    expect(badgeChanges).toEqual([[uri]]);
+    expect(badges.provideFileDecoration(uri)?.badge).toBe('M');
   });
 });
 

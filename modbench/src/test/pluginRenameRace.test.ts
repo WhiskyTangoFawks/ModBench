@@ -2,16 +2,32 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from './mo2/fakeVscodeWatcher';
-import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter } from './vscodeMock';
 import { adapterOver, readPluginLines, STEADY_WINDOW } from './mo2/adapterOver';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
 
-vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
+const { handlers, showInputBox } = vi.hoisted(() => ({
+  handlers: new Map<string, (...args: unknown[]) => unknown>(),
+  showInputBox: vi.fn(),
+}));
+
+vi.mock('vscode', async () => {
+  const { recordedWithProgress } = await import('./recordedProgress');
+  return {
+    ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter,
+    commands: { registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => { handlers.set(id, handler); return { dispose: () => undefined }; } },
+    window: { showInputBox, withProgress: recordedWithProgress },
+  };
+});
 
 import { Instance } from '../instanceLoader/instance';
-import { wirePluginSync } from './syncWiring';
+import { instanceSyncs } from '../syncWiring';
 import { pluginSyncOver } from '../pluginsCommands/plugins';
-import { renamePlugin } from '../pluginsCommands/renamePlugin';
+import { modSyncOver } from '../modlist/modlist';
+import { registerRenamePluginCommand } from '../plugins/pluginRenameCommand';
+import { PluginNode } from '../plugins/PluginsTreeProvider';
+import { recordingReporter, scriptedDialog } from './surfacingDoubles';
+import { present } from '../ports/present';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 
 const PLUGIN = { name: 'Tracked Patch Mod.esp', origin: 'Tracked Patch Mod' };
@@ -54,7 +70,9 @@ describe('a rename while a recompute is reading', () => {
         },
       },
     });
-    const pluginSync = wirePluginSync(instance, pluginSyncOver({ adapter: writer }), { error: () => {}, info: () => {} });
+    const { pluginSync } = instanceSyncs({
+      instance, syncMods: modSyncOver({ adapter: writer }), syncPlugins: pluginSyncOver({ adapter: writer }), channel: { error: () => {}, info: () => {} },
+    });
     await instance.refresh();
     await pluginSync.settled();
     const before = (await readPluginLines(root)).map((line) => ({ ...line, name: line.name === PLUGIN.name ? RENAMED : line.name }));
@@ -64,10 +82,14 @@ describe('a rename while a recompute is reading', () => {
     await filesReadBeforeRename;
     const client = new InMemoryMEditClient();
     client.setCommandResult('renameSource', { renamed: true });
-    await instance.quiet(async () => {
-      await renamePlugin({ adapter: writer, client }, PLUGIN, RENAMED, 'Fallout4');
-      release();
-    });
+    client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esl', '.esp']);
+    client.setQueryAnswer('getPluginDependants', { dependants: [], unreadable: [] });
+    showInputBox.mockResolvedValue(RENAMED);
+    registerRenamePluginCommand({
+      client, adapter: { ...writer, renamePlugin: async (...args) => { await writer.renamePlugin(...args); release(); } },
+      ask: scriptedDialog('Rename'), instance, reporter: recordingReporter(),
+    }, () => []);
+    await present(handlers.get('modbench.plugin.rename'), 'the rename plugin command')(new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin));
     await overlapping;
     await pluginSync.settled();
 
