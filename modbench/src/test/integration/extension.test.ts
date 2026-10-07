@@ -1239,7 +1239,7 @@ describe('modbench.plugin.create', () => {
     original = fs.readFileSync(modlistPath, 'utf8');
     originalPlugins = fs.readFileSync(pluginsTxtPath, 'utf8');
     fs.mkdirSync(modDir, { recursive: true });
-    fs.writeFileSync(modlistPath, `+${modName}\r\n`);
+    fs.writeFileSync(modlistPath, '+Create Mod\r\n');
     await selectFirstRow('modbench.modList', modName);
   });
 
