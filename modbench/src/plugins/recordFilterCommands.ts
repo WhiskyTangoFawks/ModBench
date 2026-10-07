@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 import type { MEditClient, RecordFilter } from '../client';
+import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 
 export interface FilterCommandDeps {
-  client: Pick<MEditClient, 'setFilter' | 'clearFilter' | 'onNotification'>;
+  client: Pick<MEditClient, 'setFilter' | 'clearFilter' | 'getActiveFilter' | 'onNotification'>;
   treeProvider: Pick<PluginTreeProvider, 'refresh'>;
   /** Symmetric on purpose: a stale `false` surviving a clear would leave a plugin permanently
    *  hidden (plugins.md). */
@@ -19,10 +20,10 @@ export interface RecordFilterViews {
   pluginsTree: { setRecordFilterSource(source: string | undefined): void };
 }
 
-/** The record filter's single writer. Each surface names the filter by its source, never by its
- *  SQL (plugins.md, Order and view state, story 3). */
 export type ShowRecordFilter = ((filter: RecordFilter | null) => void) & { shownSource(): string | undefined };
 
+/** The record filter's single writer. Each surface names the filter by its source, never by its
+ *  SQL (plugins.md, Order and view state, story 3). */
 export function makeShowRecordFilter(
   lens: { setActiveSql(sql: string | null): void }, views: RecordFilterViews,
 ): ShowRecordFilter {
@@ -50,13 +51,35 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
     refreshMatchingPlugins();
   };
 
+  let applying: string | undefined;
+  let clearedWhileApplying = false;
+
   const apply = async (filter: RecordFilter): Promise<void> => {
+    applying = filter.source;
+    clearedWhileApplying = false;
     const error = await client.setFilter(filter);
+    const cleared = clearedWhileApplying;
+    applying = undefined;
     if (error !== null) {
       reporter.report('error', `Filter failed — ${error}`);
       return;
     }
-    show(filter);
+    if (!cleared) show(filter);
+  };
+
+  // The clearing can outrun the reply to the set that it clears, so what mEdit holds decides what shows.
+  const onCleared = async ({ source, reason }: { source: string; reason: string }): Promise<void> => {
+    const wasShown = showRecordFilter.shownSource() === source;
+    const wasApplying = applying === source;
+    if (wasApplying) clearedWhileApplying = true;
+    const message = `The record filter ${source} was cleared`;
+    if (wasShown || wasApplying) reporter.report('warning', message, reason);
+    else reporter.shownOnSurface('warning', message, reason);
+    try {
+      show(await client.getActiveFilter());
+    } catch (e) {
+      reporter.report('error', 'Could not read the record filter', errorMessage(e));
+    }
   };
 
   // catalog `filter`, Option "query source": a document the caller names, or the input box.
@@ -81,11 +104,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
   };
 
   return [
-    { dispose: client.onNotification('record-filter-cleared', ({ source, reason }) => {
-      if (showRecordFilter.shownSource() !== source) return;
-      show(null);
-      reporter.report('warning', `The record filter ${source} was cleared`, reason);
-    }) },
+    { dispose: client.onNotification('record-filter-cleared', (cleared) => { void onCleared(cleared); }) },
     vscode.commands.registerCommand('modbench.record.filter', (source?: vscode.Uri) =>
       source === undefined ? fromPick() : fromDocument(source)),
     vscode.commands.registerCommand('modbench.record.clearFilter', async () => {
