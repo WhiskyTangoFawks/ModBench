@@ -76,7 +76,6 @@ export type RowPlacement = Pick<FieldRow, 'path' | 'rootField' | 'key' | 'parent
 
 const arrayLength = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
-/** One field's row: what each column's cell holds, where an edit of it writes, and its context. */
 function fieldRow(
   diff: FieldDiff, meta: FieldMetadata, at: RowPlacement, columns: readonly Column[], recordLabel: RowsInput['recordLabel'],
 ): FieldRow {

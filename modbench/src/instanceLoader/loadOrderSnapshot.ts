@@ -117,9 +117,7 @@ export function pluginsLoadedWithNoLineOf(
   });
 }
 
-/** Keyed by lowercased name, since plugins.txt casing is not authoritative. Root-level index
- *  files only. A name with no mod winner and no game folder found has no entry — nothing to fall
- *  back to. */
+// Keyed by lowercased name, since plugins.txt casing is not authoritative.
 function resolvePluginPaths(
   names: readonly string[],
   index: FileConflictIndex,

@@ -19,9 +19,7 @@ function isFileNotGotten(value: FilesValue, origin: FileOrigin, enabled: boolean
   return isNotDeployed(enabled, file) || (winner !== undefined && !sameOrigin(winner, origin));
 }
 
-/** Each file and folder the game does not get: another copy wins its path, it is excluded, or its
- *  mod is disabled. A folder never loses: the game merges folders. By the URI of its row in the
- *  Mods tree and by its own, where the Explorer shows it. */
+// A folder never loses: the game merges folders.
 function inactiveFiles(value: FilesValue): ReadonlySet<string> {
   const inactive = new Set<string>();
   const add = (origin: FileOrigin, entry: OriginFolder, isInactive: boolean) => {
