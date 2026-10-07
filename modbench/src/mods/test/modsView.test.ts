@@ -28,6 +28,11 @@ vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
   Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
+  workspace: {
+    ...fakeVscodeModule().workspace,
+    getConfiguration: () => ({ get: () => undefined }),
+    onDidChangeConfiguration: () => ({ dispose: () => undefined }),
+  },
   Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
   window: {
     ...filterBoxWindowMock(h.state),
@@ -53,6 +58,7 @@ vi.mock('vscode', () => ({
       h.trees.set(id, view);
       return view;
     },
+    registerCustomEditorProvider: () => ({ dispose: () => undefined }),
     registerFileDecorationProvider: (provider: vscode.FileDecorationProvider) => {
       h.decorationProviders.push(provider);
       return { dispose: () => undefined };
@@ -73,10 +79,17 @@ import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
 import { createModSync } from '../modSync';
 import { present } from '../../ports/present';
+import { accessTo } from '../../test/mo2/adapterOver';
+import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const currentBox = currentBoxOf(h.state);
+
+const otherDeps = () => ({
+  access: accessTo('/instance'), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
+  extensionUri: uriFile('/extension'), warnIfFomod: vi.fn(), installDownloaded: () => Promise.resolve(false), nexusRow: () => undefined,
+});
 
 const silentChannel = { error: () => undefined, info: () => undefined };
 const modSyncAnswering = (sync: Parameters<typeof createModSync>[0]) => ({ modSync: createModSync(sync, silentChannel, 'modlist.txt') });
@@ -111,7 +124,7 @@ describe('the Mods filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
     const { provider, view: modListView, nameFilter: modListFilter } =
-      createModsView({ instance, log: () => undefined, ...noSync() });
+      createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
     await provider.getChildren();
 
     modListFilter.open();
@@ -132,7 +145,7 @@ describe('the Mods filter follows a row change with no keystroke', () => {
 describe('the Mods view\'s description counts the mods', () => {
   it('reads the enabled mods over the listed mods, then the term, counting the whole list', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, ...noSync() });
+    const { view: modListView, nameFilter: modListFilter } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
     expect(modListView.description).toBe('7 / 8');
 
     modListFilter.open();
@@ -142,7 +155,7 @@ describe('the Mods view\'s description counts the mods', () => {
 
   it('follows a new instance value, with nothing pushed', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView } = createModsView({ instance, log: () => undefined, ...noSync() });
+    const { view: modListView } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
 
     instance.publish(listing([...LISTED_MODS, mod('Parked Mod', false)]));
 
@@ -150,10 +163,28 @@ describe('the Mods view\'s description counts the mods', () => {
   });
 });
 
+describe('the Mods view registers its own gestures', () => {
+  it.each([
+    'modbench.mod.rename', 'modbench.mod.uninstall', 'modbench.mod.enable', 'modbench.mod.move', 'modbench.mod.createEmpty',
+    'modbench.mod.openFolder', 'modbench.mod.goToMod', 'modbench.mod.compareFile', 'modbench.mod.openConflicts', 'modbench.mod.sync',
+    'modbench.mod.install', 'modbench.mod.viewOnNexus',
+  ])('registers %s with the view', (command) => {
+    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...noSync() });
+    expect(h.state.commands.has(command)).toBe(true);
+  });
+
+  it('hears its copy value in the Mods view\'s key, and defers for any other', () => {
+    const { copyValue } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...noSync() });
+    expect(copyValue.reporterTag).toBe('mod.copyValue');
+    expect(copyValue.text({ view: 'modbench.pluginListTree' }, undefined)).toBeUndefined();
+    expect(copyValue.text({ view: 'modbench.modList' }, undefined)).toBe('');
+  });
+});
+
 describe('the Mods title-bar sort icons', () => {
   it('set the tree\'s own direction, and the key the icon reads', async () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { provider } = createModsView({ instance, log: () => undefined, ...noSync() });
+    const { provider } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
 
     expect(h.state.contextKeys.get('modbench.mod.winningAtTop')).toBe(false);
     await h.state.commands.get('modbench.mod.sortWinningAtTop')?.();
@@ -171,7 +202,7 @@ describe('the Mods view tells its keys, which are handed no row, what the select
 
   it('sets the Space direction and the Delete and F2 kind off the selection', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView } = createModsView({ instance, log: () => undefined, ...noSync() });
+    const { view: modListView } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
 
     const SELECTION_KEYS = ['selectionToggle', 'selectionKind', 'singleRow', 'holdsEnabledMod', 'holdsDisabledMod']
       .map((name) => `modbench.mod.${name}`);
@@ -194,7 +225,7 @@ describe('the Mods view tells its keys, which are handed no row, what the select
 
   it('follows a mod enabled in a new instance value while the selection still holds the row built before', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView } = createModsView({ instance, log: () => undefined, ...noSync() });
+    const { view: modListView } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
     select(modListView, [new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false })]);
 
     instance.publish(listing(LISTED_MODS.map((m) => (m.name === 'Harder VATS' ? mod('Harder VATS') : m))));
@@ -205,7 +236,7 @@ describe('the Mods view tells its keys, which are handed no row, what the select
 
 describe('the Mods view expands by reveal a separator a filter shows for its matching mods', () => {
   const mountFiltered = async (term: string, log: (line: string) => void = () => undefined) => {
-    createModsView({ instance: new FakeInstance(listing(LISTED_MODS)), log, ...noSync() }).nameFilter.open();
+    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log, ...noSync() }).nameFilter.open();
     currentBox().type(term);
     await new Promise((resolve) => setTimeout(resolve, 20));
   };
@@ -251,7 +282,7 @@ describe('the Mods view says when the list is empty', () => {
 
   it('says nothing before the first read, says so once an empty list lands, and gives way to the no-match message', async () => {
     const instance = new FakeInstance(listing([]), SEQUENCE_NOT_READ_YET);
-    const { view: modListView, nameFilter: modListFilter } = createModsView({ instance, log: () => undefined, ...noSync() });
+    const { view: modListView, nameFilter: modListFilter } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
     expect(modListView.message).toBeUndefined();
     expect(modListView.description).toBeUndefined();
 
@@ -274,7 +305,7 @@ describe('the Mods view says when the list is empty', () => {
     ];
     let run = 0;
     const { modSync } = modSyncAnswering(() => Promise.resolve(present(outcomes[run++], 'an outcome for this run')));
-    const { view: modListView } = createModsView({ instance, log: () => undefined, modSync });
+    const { view: modListView } = createModsView({ ...otherDeps(), instance, log: () => undefined, modSync });
     instance.publish(listing([]));
     await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
 
@@ -304,7 +335,7 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
       overwriteFolders: overwrite ? [folder('F4SE')] : [],
     });
     const { view: modListView, nameFilter: modListFilter } =
-      createModsView({ instance: new FakeInstance(value), log: () => undefined, ...noSync() });
+      createModsView({ ...otherDeps(), instance: new FakeInstance(value), log: () => undefined, ...noSync() });
     modListFilter.open();
     currentBox().type(term);
     return modListView;

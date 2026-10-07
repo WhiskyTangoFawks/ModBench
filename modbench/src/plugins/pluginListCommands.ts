@@ -84,15 +84,10 @@ function lostPlace(origin: string, lost: 'gone' | 'disabled' | 'unread'): string
 // watch sees the file, so nothing here writes that line or refreshes a view.
 export function registerCreatePluginCommand(
   client: Pick<MEditClient, 'createPlugin' | 'getCreatablePluginExtensions'>,
-  instance: Pick<Instance, 'value'> | undefined,
+  instance: Pick<Instance, 'value'>,
   reporter: Reporter,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.plugin.create', async () => {
-    if (!instance) {
-      reporter.report('error', 'Creating a plugin needs an open instance workspace.');
-      return;
-    }
-
     const name = await promptPluginName(client, reporter);
     if (!name) return;
 

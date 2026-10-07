@@ -78,10 +78,10 @@ function makeMo2() {
 const WROTE = { name: 'MyPatch.esp', origin: 'Winning Mod' };
 
 describe('registerCreatePluginCommand', () => {
-  function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2> | undefined, creatableExtensions = ['.esm', '.esl', '.esp']) {
+  function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2>, creatableExtensions = ['.esm', '.esl', '.esp']) {
     client.setQueryAnswer('getCreatablePluginExtensions', creatableExtensions);
     const reporter = recordingReporter();
-    registerCreatePluginCommand(client, mo2?.instance, reporter);
+    registerCreatePluginCommand(client, mo2.instance, reporter);
     return { run: present(handlers.get('modbench.plugin.create'), "the create plugin command's registered handler"), reporter };
   }
 
@@ -311,17 +311,6 @@ describe('registerCreatePluginCommand', () => {
 
     expect(changes).toBeGreaterThan(0);
     expect(expectInstancesOf(await tree.getChildren(), PluginNode).map((row) => row.plugin.name)).toEqual(['MyPatch.esp']);
-  });
-
-  it('reports the missing-workspace refusal at error and prompts for nothing', async () => {
-    const { run, reporter } = invoke(new InMemoryMEditClient(), undefined);
-
-    await run();
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Creating a plugin needs an open instance workspace.', detail: undefined },
-    ]);
-    expect(showInputBox).not.toHaveBeenCalled();
   });
 });
 
