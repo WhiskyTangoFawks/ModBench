@@ -7,7 +7,7 @@ namespace MEditService.SourceAdapter;
 public sealed record DecompiledPlugin(string Plugin, string? BinarySha256);
 
 /// <summary>Makes a mod's repository: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>. A track that
-/// lands no plugin restores what it found and never deletes a repository it did not make (ADR-0003).</summary>
+/// refuses any plugin writes nothing, and it never deletes a repository it did not make (ADR-0003).</summary>
 internal static class GitTracking
 {
     /// <summary>Answers each plugin whose files could not be written.</summary>
@@ -20,7 +20,11 @@ internal static class GitTracking
 
         WriteLog log = new();
         var (written, refused) = WriteEachPlugin(modFolder, plugins, log);
-        if (written.Count == 0) return refused;
+        if (refused.Count > 0)
+        {
+            log.UndoSince(0);
+            return refused;
+        }
 
         var git = new SourceRepositoryGit(modFolder);
         var gitignorePath = Path.Combine(modFolder, ".gitignore");
@@ -45,7 +49,7 @@ internal static class GitTracking
             log.UndoSince(0);
             throw;
         }
-        return refused;
+        return [];
     }
 
     private static (List<DecompiledPlugin> Written, List<(string Plugin, string Reason)> Refused) WriteEachPlugin(
