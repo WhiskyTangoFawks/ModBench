@@ -44,7 +44,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     [Fact]
     public void Track_WhenEveryPluginIsRefused_LeavesTheHalfMadeRepositoryAsItWas()
     {
-        LeaveAHalfMadeRepository();
+        CrashATrackAfterItMadeTheRepository();
         var before = GitDirContents();
 
         SourceRepository.Track(
@@ -56,7 +56,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     [Fact]
     public void Track_WhenTheCommitFails_LeavesTheHalfMadeRepositoryAsItWas()
     {
-        LeaveAHalfMadeRepository();
+        CrashATrackAfterItMadeTheRepository();
         var before = GitDirContents();
         var asset = UnreadableFileTheCommitCannotAdd();
         FileModes.Set(asset, "000");
@@ -142,7 +142,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
 
     private Exception TrackWhoseCommitHookRuns(string script)
     {
-        LeaveAHalfMadeRepository();
+        CrashATrackAfterItMadeTheRepository();
         GitHooks.Write(_modFolder, "pre-commit", $"{script}\nexit 1");
         return Assert.ThrowsAny<IOException>(() => SourceRepository.Track(_modFolder, [Baseline("A.esp")]));
     }
@@ -211,7 +211,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     [Fact]
     public void Track_IntoTheHalfMadeRepositoryOfACrashedTrack_Recovers()
     {
-        LeaveAHalfMadeRepository();
+        CrashATrackAfterItMadeTheRepository();
 
         Assert.False(SourceRepository.HoldsAnotherRepository(_modFolder));
         var refused = SourceRepository.Track(_modFolder, [Baseline("A.esp")]);
@@ -220,8 +220,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.Equal(["Track SomeMod"], SubjectsOnMain());
     }
 
-    // A Track whose commit fails and whose rollback cannot delete the repository it made: the state a crashed Track leaves.
-    private void LeaveAHalfMadeRepository()
+    private void CrashATrackAfterItMadeTheRepository()
     {
         using var template = new ScratchDirectory("medit-track-template-");
         GitHooks.Write(template, "pre-commit", "chmod 555 \"$(dirname \"$0\")/..\"\nexit 1");
