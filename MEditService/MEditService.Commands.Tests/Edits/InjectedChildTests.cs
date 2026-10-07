@@ -120,8 +120,7 @@ public sealed class InjectedChildTests : IDisposable
 
     private async Task<IModDisposeGetter> CompileAndReimport(PluginAddress plugin, string modFolder)
     {
-        var result = await CompileServices.Over(_loadOrder).CompileOneAsync(plugin);
-        Assert.True(result.Succeeded, result.RefusalReason);
+        await CompileServices.Over(_loadOrder).CompileLandedAsync(plugin);
 
         return ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(plugin.Name), Path.Combine(modFolder, plugin.Name)), GameRelease.Fallout4);

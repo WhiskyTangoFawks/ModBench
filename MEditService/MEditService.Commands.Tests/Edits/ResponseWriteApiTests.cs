@@ -30,9 +30,7 @@ public sealed class ResponseWriteApiTests : IDisposable
 
     private async Task<IReadOnlyList<string>> CompiledResponseEditorIds()
     {
-        var result = await CompileServices.Over(_fixture.LoadOrder)
-            .CompileOneAsync(_fixture.Plugin);
-        Assert.True(result.Succeeded, result.RefusalReason);
+        await CompileServices.Over(_fixture.LoadOrder).CompileLandedAsync(_fixture.Plugin);
 
         using var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(ContainerModFixture.PluginName), Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName)),
@@ -132,9 +130,7 @@ public sealed class ResponseWriteApiTests : IDisposable
 
         Assert.Equal(fixture.Quest.ToString(), fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.Response1EditorId).FormKey);
 
-        var compile = await CompileServices.Over(fixture.LoadOrder)
-            .CompileOneAsync(fixture.DestinationPlugin);
-        Assert.True(compile.Succeeded, compile.RefusalReason);
+        await CompileServices.Over(fixture.LoadOrder).CompileLandedAsync(fixture.DestinationPlugin);
         using var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(ContainerCopyFixture.DestinationPluginName), Path.Combine(fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName)),
             GameRelease.Fallout4);

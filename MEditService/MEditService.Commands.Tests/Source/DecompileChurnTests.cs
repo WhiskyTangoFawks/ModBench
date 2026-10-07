@@ -121,7 +121,7 @@ public sealed class DecompileChurnTests : IDisposable
             [.. lines.Where(line => line[0] == '+').Select(line => line[1..])]);
     }
 
-    private Task Compile() => CompileServices.Over(_holder.Current).CompileOneAsync(Plugin);
+    private Task Compile() => CompileServices.Over(_holder.Current).CompileLandedAsync(Plugin);
 
     private async Task Decompile()
     {

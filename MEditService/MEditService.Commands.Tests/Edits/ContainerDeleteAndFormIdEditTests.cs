@@ -226,8 +226,6 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
 
         Assert.DoesNotContain($"\"{nameof(Quest.DialogTopics)}\"", _fixture.Document(_fixture.Quest.ToString()).Require().Body, StringComparison.Ordinal);
 
-        var compileResult = await CompileServices.Over(_fixture.LoadOrder)
-            .CompileOneAsync(_fixture.Plugin);
-        Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
+        await CompileServices.Over(_fixture.LoadOrder).CompileLandedAsync(_fixture.Plugin);
     }
 }
