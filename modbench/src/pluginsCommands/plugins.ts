@@ -3,7 +3,8 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { dropIndexIn, type Drop } from './dropIndex';
 import { refuse } from '../ports/refuse';
-import { applyOrThrow } from '../ports/applyOrThrow';
+import type { MEditClient, PluginAddress, PluginMetadata } from '../client';
+import { moveOrderRefusal, type PluginOrderFactsOf } from './pluginOrder';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type {
   DataFolderPlugins, DecidePluginOrder, InstanceAdapter, PluginEntry, PluginOrderChange,
@@ -76,13 +77,36 @@ export function setPluginsEnabled(
 /** Where a drag landed in the Plugins tree. */
 export type { Drop as PluginsDrop } from './dropIndex';
 
-export function reorderPlugins(
-  access: PluginsAccess, profile: string, pluginNames: string[], drop: Drop,
+export type PluginMasters = Pick<MEditClient, 'getPlugins'>;
+
+// The game loads one copy of a name: the one in the load order (ADR-0012). Several copies with
+// none in it name no one copy, so none is judged; nor is anything while mEdit cannot answer.
+async function orderFactsFrom(masters: PluginMasters): Promise<PluginOrderFactsOf> {
+  const held = await masters.getPlugins().catch(() => [] as PluginMetadata[]);
+  return (name) => {
+    const copies = held.filter((plugin) => pluginKey(plugin.name) === pluginKey(name));
+    const loaded = copies.length === 1 ? copies : copies.filter((copy) => copy.inLoadOrder);
+    const [copy] = loaded;
+    return loaded.length === 1 && copy !== undefined ? { masters: copy.masters, blueprint: copy.isBlueprint } : undefined;
+  };
+}
+
+export async function reorderPlugins(
+  access: PluginsAccess, masters: PluginMasters, profile: string, plugins: readonly PluginAddress[], drop: Drop,
+  loadedWithNoLine: readonly string[],
 ): Promise<PluginsCommandResult> {
+  const pluginNames = plugins.map((plugin) => plugin.name);
+  const noLine = new Set(loadedWithNoLine.map(pluginKey));
+  const factsOf = await orderFactsFrom(masters);
   // Settled against the order the change lands on, so a tree a generation behind plugins.txt
   // cannot land the block at a stale index.
-  return changePluginOrder(access, profile, (order) =>
-    [{ kind: 'move', plugins: pluginNames, toIndex: dropIndexIn(order.map((p) => p.name), pluginNames, drop) }]);
+  return changePluginOrder(access, profile, (order) => {
+    const names = order.map((p) => p.name);
+    // A line for a plugin the game loads with no line does not place it.
+    const refusal = moveOrderRefusal(names.filter((name) => !noLine.has(pluginKey(name))), pluginNames, drop, factsOf);
+    if (refusal !== undefined) throw new Error(refusal);
+    return [{ kind: 'move', plugins: pluginNames, toIndex: dropIndexIn(names, pluginNames, drop) }];
+  });
 }
 
 interface PluginLinesDelta {
@@ -159,12 +183,4 @@ export type PluginSyncRun = (inputs: PluginSyncInputs) => Promise<PluginSyncResu
 /** `syncPlugins` bound to one instance. */
 export function pluginSyncOver(access: PluginsAccess): PluginSyncRun {
   return (inputs) => syncPlugins(access, inputs);
-}
-
-/** `reorderPlugins` bound to one instance and the profile it names now; a refusal rejects, the
- *  shape its caller's notify-and-log path is written against. */
-export function reorderOver(
-  access: PluginsAccess, profile: () => string,
-): (pluginNames: string[], drop: Drop) => Promise<void> {
-  return async (pluginNames, drop) => applyOrThrow(await reorderPlugins(access, profile(), pluginNames, drop));
 }
