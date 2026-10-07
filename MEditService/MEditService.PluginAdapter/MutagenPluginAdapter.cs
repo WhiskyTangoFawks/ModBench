@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -156,10 +157,25 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     internal static IMod CreateEmpty(ModKey modKey, GameRelease gameRelease)
         => ModFactory.Activator(modKey, gameRelease);
 
-    public async Task<EmptyPluginWrite> CreateAndWriteAsync(
+    private static string HashOf(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
+
+    public string PathOfEmpty(ModKey modKey, string folder) => Path.Combine(folder, modKey.FileName.String);
+
+    public EmptyPluginTakeBack TakeBackEmpty(ModKey modKey, string folder, string written)
+    {
+        var path = PathOfEmpty(modKey, folder);
+        if (!File.Exists(path)) return EmptyPluginTakeBack.Gone;
+        if (HashOf(File.ReadAllBytes(path)) != written)
+            return EmptyPluginTakeBack.Changed;
+
+        File.Delete(path);
+        return EmptyPluginTakeBack.TakenBack;
+    }
+
+    public async Task<EmptyPluginCreated> CreateAndWriteAsync(
         ModKey modKey, string folder, GameRelease gameRelease)
     {
-        var destinationPath = Path.Combine(folder, modKey.FileName.String);
+        var destinationPath = PathOfEmpty(modKey, folder);
         if (!Directory.Exists(folder)) return EmptyPluginWrite.FolderGone;
         if (File.Exists(destinationPath)) return EmptyPluginWrite.FileExists;
 
@@ -174,8 +190,9 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         try
         {
             await WriteAsync(plugin, tempPath, noModKeySync: true);
+            var written = HashOf(await File.ReadAllBytesAsync(tempPath));
             File.Move(tempPath, destinationPath, overwrite: false);
-            return EmptyPluginWrite.Written;
+            return new EmptyPluginCreated(EmptyPluginWrite.Written, written);
         }
         catch (IOException) when (File.Exists(destinationPath))
         {

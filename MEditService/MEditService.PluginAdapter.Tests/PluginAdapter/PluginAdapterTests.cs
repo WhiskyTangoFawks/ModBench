@@ -54,7 +54,7 @@ public sealed class PluginAdapterTests
 
         Assert.Equal(
             EmptyPluginWrite.Written,
-            await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4));
+            (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4)).Outcome);
 
         using var reread = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName(PluginName), path), Fallout4Release.Fallout4);
@@ -100,7 +100,7 @@ public sealed class PluginAdapterTests
 
         var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), gone, GameRelease.Fallout4);
 
-        Assert.Equal(EmptyPluginWrite.FolderGone, written);
+        Assert.Equal(EmptyPluginWrite.FolderGone, written.Outcome);
         Assert.False(Directory.Exists(gone));
     }
 
@@ -113,7 +113,7 @@ public sealed class PluginAdapterTests
 
         var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4);
 
-        Assert.Equal(EmptyPluginWrite.FileExists, written);
+        Assert.Equal(EmptyPluginWrite.FileExists, written.Outcome);
         Assert.Equal("another tool's file", File.ReadAllText(path));
         Assert.Single(Directory.EnumerateFileSystemEntries(scratch));
     }
