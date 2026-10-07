@@ -19,6 +19,14 @@ internal sealed class Projector(
     internal static PluginProvider.FromMod? TreeModOf(RegisteredPlugin plugin) =>
         SourceRepository.SourceReads(plugin) ? ModOf(plugin) : null;
 
+    /// <summary>The truth <paramref name="plugin"/> is derived from, as its folder answers now. A tree
+    /// that fails to read is derived from its binary as well.</summary>
+    internal static DerivedFrom TruthOf(RegisteredPlugin plugin)
+    {
+        if (SourceRepository.SourceReads(plugin)) return DerivedFrom.SourceTree;
+        return SourceRepository.IsTracked(plugin) ? DerivedFrom.BinaryForUnreadableSource : DerivedFrom.Binary;
+    }
+
     internal static PluginProvider.FromMod ModOf(RegisteredPlugin plugin) =>
         plugin.Provider as PluginProvider.FromMod
         ?? throw new InvalidOperationException($"'{plugin.Name}' from '{plugin.Origin}' reads a source tree, so a mod provides it.");
@@ -195,16 +203,19 @@ internal sealed class Projector(
         state switch
         {
             // The re-derivation is what diagnoses the tree on the plugin, as a first ingest would.
-            { Stamps.Claimed: { Count: > 0 } claimed } =>
-                new ValidationReport([], NeedsRebuild: true, [.. claimed.Select(claim => claim.Message)]),
-            { Stamps: { } stamps } when plugin.Provider is PluginProvider.FromMod => ValidateAgainstTree(plugin, stamps),
-            _ => ValidateAgainstBinary(plugin.Key),
+            { Stamps: { } stamps } when stamps.Claimed.Count > 0 || stamps.Unreadable.Count > 0 =>
+                new ValidationReport(
+                    [], NeedsRebuild: true,
+                    [.. stamps.Unreadable.Select(file => file.Message), .. stamps.Claimed.Select(claim => claim.Message)]),
+            { Stamps: { } stamps } => ValidateAgainstTree(plugin, stamps),
+            _ => ValidateAgainstBinary(plugin),
         };
 
     // ADR-0003, asked of one plugin. A binary has no smaller unit, so a mismatch is a
     // rebuild the caller owns.
-    private ValidationReport ValidateAgainstBinary(PluginAddress key)
+    private ValidationReport ValidateAgainstBinary(RegisteredPlugin plugin)
     {
+        var key = plugin.Key;
         // Nothing vouches for these rows (an in-memory mod, or a tracked plugin whose folder went
         // away), so there is nothing to compare them against.
         if (index.IndexedFile(key) is not { } claim) return ValidationReport.Clean;
@@ -221,9 +232,9 @@ internal sealed class Projector(
             return ValidationReport.Clean;
         }
 
-        // Reached only for a plugin no repository holds, so rows stamped from a source tree came from
-        // one destroyed outside Modbench (ADR-0007), which the caller re-derives.
-        if (index.DerivationOf(key) == DerivedFrom.SourceTree)
+        // Rows stamped from another truth came from a repository or tree that went away outside
+        // Modbench (ADR-0007), or arrived, which the caller re-derives.
+        if (index.DerivationOf(key) != TruthOf(plugin))
             return new ValidationReport([], NeedsRebuild: true, []);
 
         return index.FileContentHash(claim.FilePath) == claim.ContentHash
@@ -232,28 +243,22 @@ internal sealed class Projector(
     }
 
     // A plugin's rows against the source documents they came from, by content stamp (ADR-0003).
-    private ValidationReport ValidateAgainstTree(RegisteredPlugin plugin, RecordStamps stamps)
-    {
-        List<string> failures = [.. stamps.Unreadable.Select(file => file.Message)];
-        // A file that could not be read is no evidence that a record is gone.
-        var treeFullyRead = stamps.Unreadable.Count == 0;
-        return Reconcile(plugin, stamps.ByFormKey, index.HeldDocumentStamps(plugin.Key), treeFullyRead, failures);
-    }
+    private ValidationReport ValidateAgainstTree(RegisteredPlugin plugin, RecordStamps stamps) =>
+        Reconcile(plugin, stamps.ByFormKey, index.HeldDocumentStamps(plugin.Key));
 
     // An embedded child's system of record is its owner's document, so a matching document vouches
     // for every row derived from it.
     private ValidationReport Reconcile(
-        RegisteredPlugin plugin, IReadOnlyDictionary<string, string> onDisk,
-        Dictionary<string, string> heldStamps, bool treeFullyRead, List<string> failures)
+        RegisteredPlugin plugin, IReadOnlyDictionary<string, string> onDisk, Dictionary<string, string> heldStamps)
     {
         var key = plugin.Key;
         // A document the index never saw moves which records the plugin has, which only a rebuild
-        // expresses; the report names the records gained. Concluded from a whole tree only.
-        var gained = treeFullyRead ? onDisk.Keys.Except(heldStamps.Keys, StringComparer.Ordinal).ToList() : [];
-        if (gained.Count > 0) return new ValidationReport(gained, NeedsRebuild: true, failures);
+        // expresses; the report names the records gained.
+        var gained = onDisk.Keys.Except(heldStamps.Keys, StringComparer.Ordinal).ToList();
+        if (gained.Count > 0) return new ValidationReport(gained, NeedsRebuild: true, []);
 
         // The tree files the records the rows hold, so from here the plugin loads from it (ADR-0007).
-        if (treeFullyRead) index.RestampDerivation(key, DerivedFrom.SourceTree);
+        index.RestampDerivation(key, DerivedFrom.SourceTree);
 
         var drifted = onDisk
             .Where(d => heldStamps.TryGetValue(d.Key, out var stamp) && !string.Equals(d.Value, stamp, StringComparison.Ordinal))
@@ -268,7 +273,7 @@ internal sealed class Projector(
 
         // A held record with no document here is refreshed by key too, so the rows-changed it
         // publishes names it (ADR-0015). A refresh learns the working tree states itself.
-        var deleted = treeFullyRead ? heldStamps.Keys.Except(onDisk.Keys, StringComparer.Ordinal) : [];
+        var deleted = heldStamps.Keys.Except(onDisk.Keys, StringComparer.Ordinal);
         List<string> stale = [.. deleted, .. drifted];
         if (stale.Count > 0)
         {
@@ -279,6 +284,6 @@ internal sealed class Projector(
             PublishRowsChanged(key, moved);
         }
 
-        return new ValidationReport([], NeedsRebuild: false, failures);
+        return ValidationReport.Clean;
     }
 }

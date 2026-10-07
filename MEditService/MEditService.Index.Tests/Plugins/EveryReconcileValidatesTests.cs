@@ -168,16 +168,18 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     }
 
     [Fact]
-    public void AnEqualSnapshot_OfATreeThatFailedToRead_AndStandsUnchanged_KeepsItsFailure()
+    public void AnEqualSnapshot_OfATreeThatFailedToRead_AndStandsUnchanged_ReadsNothingOfIt()
     {
         var document = _tracked.SourceFileOf(_index.RequireReads().DocumentOf(_trackedNpc, _tracked.KeyOf()));
         File.Copy(document, Path.Combine(Path.GetDirectoryName(document).Require(), "Backup.json"));
-        ArrivalAnnouncing(FailureNamed(Tracked));
+        ArrivalAnnouncing(PluginChanged(_tracked));
+        Assert.Equal(DerivedFrom.BinaryForUnreadableSource, _index.RequireReads().DerivationOf(_tracked.KeyOf()));
 
         var announced = _index.AnnouncedByEqualArrivals(_notifications, () => Touched(_untracked));
 
         Assert.All(announced, n => Assert.IsType<PluginChangedNotification>(n));
-        Assert.Contains(_index.Status.Failures, f => f.Name == Tracked);
+        Assert.DoesNotContain(announced, PluginChanged(_tracked));
+        Assert.Equal(DerivedFrom.BinaryForUnreadableSource, _index.RequireReads().DerivationOf(_tracked.KeyOf()));
     }
 
     [Fact]
@@ -217,6 +219,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         TrackedMods.Track(_untracked, _fixture.GameDirectory);
 
         _index.NextSnapshotUntil(
-            () => _index.RequireReads().GetTrackedPlugins().Contains(_untracked.KeyOf()), "the arrival's re-derivation of the plugin from its tree");
+            () => _index.RequireReads().DerivationOf(_untracked.KeyOf()) == DerivedFrom.SourceTree, "the arrival's re-derivation of the plugin from its tree");
     }
 }

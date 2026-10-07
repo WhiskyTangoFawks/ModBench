@@ -95,10 +95,11 @@ internal sealed class FakeReads(
     // Index's own behaviour; a test states the rows it wants read back.
     public IReadOnlyList<PluginDiagnosisRow> Diagnoses { get; set; } = [];
 
-    public IReadOnlySet<PluginAddress> Tracked { get; set; } = new HashSet<PluginAddress>(PluginAddress.Comparer);
+    public IReadOnlyDictionary<PluginAddress, DerivedFrom> Derivations { get; set; } =
+        new Dictionary<PluginAddress, DerivedFrom>(PluginAddress.Comparer);
 
     public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => Diagnoses;
-    public IReadOnlySet<PluginAddress> GetTrackedPlugins() => Tracked;
+    public IReadOnlyDictionary<PluginAddress, DerivedFrom> GetDerivations() => Derivations;
     public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) => [];
     public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin) => [];
     public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin) => new HashSet<string>();

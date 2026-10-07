@@ -361,18 +361,17 @@ internal sealed class RelationReads(
         return rows;
     }
 
-    public IReadOnlySet<PluginAddress> GetTrackedPlugins()
+    public IReadOnlyDictionary<PluginAddress, DerivedFrom> GetDerivations()
     {
         using var connection = store.OpenReadConnection();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"SELECT plugin, origin FROM {TableDdlBuilder.PluginDerivationTable} WHERE derived_from = $1";
-        DuckDbSql.AddParams(cmd, [DerivedFrom.SourceTree.ToString()]);
+        cmd.CommandText = $"SELECT plugin, origin, derived_from FROM {TableDdlBuilder.PluginDerivationTable}";
         using var reader = cmd.ExecuteReader();
 
-        var tracked = new HashSet<PluginAddress>(PluginAddress.Comparer);
+        var derivations = new Dictionary<PluginAddress, DerivedFrom>(PluginAddress.Comparer);
         while (reader.Read())
-            tracked.Add(new PluginAddress(reader.GetString(0), reader.GetString(1)));
-        return tracked;
+            derivations[new PluginAddress(reader.GetString(0), reader.GetString(1))] = Enum.Parse<DerivedFrom>(reader.GetString(2));
+        return derivations;
     }
 
     /// <summary>Both halves of "could not be read": a record whose own document failed, and a

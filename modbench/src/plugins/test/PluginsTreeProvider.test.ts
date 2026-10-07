@@ -101,6 +101,7 @@ function held(name: string, overrides: Partial<PluginMetadata> = {}): PluginMeta
     hasMatchingRecords: true,
     isTracked: false,
     hasParseFailure: false,
+    pluginSourceUnreadable: false,
     ...overrides,
   };
 }

@@ -139,7 +139,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var npc = await Client.FirstFormKey(Plugin, Origin);
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
-        using var stream = await Client.NotificationStream();
         OtherTool.CopiesASourceDocument(original, "Backup/{0}");
 
         var response = await Client.Edit(npc, Plugin, Origin, "EditorID", "EditedDespiteTheBackup");
@@ -152,7 +151,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Contains(Path.GetRelativePath(modFolder, OtherTool.Beside(original, "Backup/{0}")), detail, StringComparison.Ordinal);
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
         await Client.NextSnapshot(fx);
-        await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
+        await ItsPluginSourceReadsAs(unreadable: true);
     }
 
     [Theory]
@@ -167,20 +166,19 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var npc = await Client.FirstFormKey(Plugin, Origin);
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
-        using var stream = await Client.NotificationStream();
 
         OtherTool.CopiesASourceDocument(original, copiedTo);
         await Client.NextSnapshot(fx);
 
-        var diagnosed = (await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null))[^1];
-        Assert.Contains(Path.GetRelativePath(modFolder, original), FailureOf(diagnosed), StringComparison.Ordinal);
+        var diagnosed = await TheFilesItsReadStoppedAt();
+        Assert.Contains(Path.GetRelativePath(modFolder, original), diagnosed);
         Assert.Contains(
-            Path.GetRelativePath(modFolder, OtherTool.Beside(original, copiedTo)), FailureOf(diagnosed), StringComparison.Ordinal);
+            Path.GetRelativePath(modFolder, OtherTool.Beside(original, copiedTo)), diagnosed);
 
         OtherTool.DeletesTheFile(original);
         await Client.NextSnapshot(fx);
 
-        await stream.EventsUntil("load-order-status", e => FailureOf(e) is null);
+        await ItsPluginSourceReadsAs(unreadable: false);
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
@@ -203,14 +201,13 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var cell = await Client.FirstFormKey(Plugin, Origin, "cell");
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"");
-        using var stream = await Client.NotificationStream();
 
         var copy = ACellCopiedUnderAKeyOfItsOwn(modFolder, cell);
         await Client.NextSnapshot(fx);
 
-        var diagnosed = (await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null))[^1];
-        Assert.Contains(Path.GetRelativePath(modFolder, original), FailureOf(diagnosed), StringComparison.Ordinal);
-        Assert.Contains(Path.GetRelativePath(modFolder, copy), FailureOf(diagnosed), StringComparison.Ordinal);
+        var diagnosed = await TheFilesItsReadStoppedAt();
+        Assert.Contains(Path.GetRelativePath(modFolder, original), diagnosed);
+        Assert.Contains(Path.GetRelativePath(modFolder, copy), diagnosed);
     }
 
     [Fact]
@@ -221,7 +218,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var cell = await Client.FirstFormKey(Plugin, Origin, "cell");
         var placedRef = await Client.FormKeyNamed(Plugin, Origin, "refr", PlacedRef);
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"");
-        using var stream = await Client.NotificationStream();
         var copy = ACellCopiedUnderAKeyOfItsOwn(modFolder, cell);
 
         var response = await Client.Edit(placedRef, Plugin, Origin, "Scale", 2.5);
@@ -233,7 +229,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Contains(Path.GetRelativePath(modFolder, original), detail, StringComparison.Ordinal);
         Assert.Contains(Path.GetRelativePath(modFolder, copy), detail, StringComparison.Ordinal);
         await Client.NextSnapshot(fx);
-        await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
+        await ItsPluginSourceReadsAs(unreadable: true);
     }
 
     [Theory]
@@ -254,11 +250,10 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         OtherTool.CopiesASourceDocument(original, $"Backup/{copiedTo}");
         await Client.NextSnapshot(fx);
 
-        var diagnosed = (await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null))[^1];
-        Assert.Contains(Path.GetRelativePath(modFolder, original), FailureOf(diagnosed), StringComparison.Ordinal);
+        var diagnosed = await TheFilesItsReadStoppedAt();
+        Assert.Contains(Path.GetRelativePath(modFolder, original), diagnosed);
         Assert.Contains(
-            Path.GetRelativePath(modFolder, OtherTool.Beside(original, $"Backup/{copiedTo}")), FailureOf(diagnosed),
-            StringComparison.Ordinal);
+            Path.GetRelativePath(modFolder, OtherTool.Beside(original, $"Backup/{copiedTo}")), diagnosed);
     }
 
     [Theory]
@@ -273,20 +268,38 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         using var stream = await Client.NotificationStream();
         OtherTool.CopiesASourceDocument(original, copiedTo);
         await Client.NextSnapshot(fx);
-        await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
+        await ItsPluginSourceReadsAs(unreadable: true);
 
         OtherTool.DeletesTheFile(OtherTool.Beside(original, copiedTo));
         await Client.NextSnapshot(fx);
 
-        await stream.EventsUntil("load-order-status", e => FailureOf(e) is null);
+        await ItsPluginSourceReadsAs(unreadable: false);
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
-    private static string? FailureOf(JsonElement loadOrderStatus) =>
-        loadOrderStatus.GetProperty("loadOrderStatus").GetProperty("failures").EnumerateArray()
-            .Where(f => f.GetProperty("name").GetString() == Plugin)
-            .Select(f => f.GetProperty("reason").GetString())
-            .FirstOrDefault();
+    private Task ItsPluginSourceReadsAs(bool unreadable) =>
+        Wire.Eventually(
+            async () => (await Client.Plugin(Plugin)).GetProperty("pluginSourceUnreadable").GetBoolean() == unreadable,
+            $"{Plugin} reported with its plugin source {(unreadable ? "unreadable" : "read")}");
+
+    private async Task<IReadOnlyList<string>> TheFilesItsReadStoppedAt()
+    {
+        await ItsPluginSourceReadsAs(unreadable: true);
+        IReadOnlyList<string> files = [];
+        await Wire.Eventually(async () =>
+        {
+            var answer = await Client.GetFromJsonAsync<JsonElement>("/plugins/problems");
+            files =
+            [
+                .. answer.EnumerateArray()
+                    .Where(p => p.GetProperty("plugin").GetProperty("name").GetString() == Plugin)
+                    .SelectMany(p => p.GetProperty("problems").EnumerateArray())
+                    .Select(problem => problem.GetProperty("sourceRelativePath").GetString().Require()),
+            ];
+            return files.Count > 0;
+        }, $"the files {Plugin}'s read stopped at");
+        return files;
+    }
 
     private async Task TheFrameAfterWhichItReadsGone(StreamReader stream, string formKey)
     {
@@ -331,15 +344,14 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var cell = await Client.FirstFormKey(Plugin, Origin, "cell");
         var placedRef = await Client.FormKeyNamed(Plugin, Origin, "refr", PlacedRef);
         var original = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, Cell)).Require();
-        using var stream = await Client.NotificationStream();
         OtherTool.CopiesASourceDirectory(original, "RenamedByHand");
         await Client.NextSnapshot(fx);
-        await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
+        await ItsPluginSourceReadsAs(unreadable: true);
 
         OtherTool.DeletesTheDirectory(original);
         await Client.NextSnapshot(fx);
 
-        await stream.EventsUntil("load-order-status", e => FailureOf(e) is null);
+        await ItsPluginSourceReadsAs(unreadable: false);
         Assert.Equal(Cell, (await Client.Record(cell)).GetProperty("editorId").GetString());
         Assert.Equal(PlacedRef, (await Client.Record(placedRef)).GetProperty("editorId").GetString());
     }

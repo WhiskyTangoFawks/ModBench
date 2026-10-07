@@ -87,15 +87,21 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     }
 
     [Fact]
-    public void Search_WhileAChangedFileCannotBeRead_StillReportsModified_AndTheFailureIsReported()
+    public void Search_WhileAChangedFileIsHeld_ListsTheBinarysRecords_AndOnceReleased_ReportsModifiedAgain()
     {
         using var index = Indexes.Reconciled(_fixture);
         var edited = _editedFormKey.ToString();
         var committed = index.RequireReads().DocumentOf(edited, _baseKey);
         index.Edit(_base, committed, committed.BodyOf().Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal));
-        using var held = new FileStream(_base.SourceFileOf(committed), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        using (new FileStream(_base.SourceFileOf(committed), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            index.NextSnapshotUntil(
+                () => index.RequireReads().DerivationOf(_baseKey) == DerivedFrom.BinaryForUnreadableSource, "the binary read in the tree's place");
 
-        index.NextSnapshotUntil(() => index.Status.Failures.Count > 0, "the failure reported");
+            Assert.Equal(WorkingTreeState.None, SummaryFor(Listing(index), edited).WorkingTreeState);
+        }
+
+        index.NextSnapshotUntil(() => index.RequireReads().DerivationOf(_baseKey) == DerivedFrom.SourceTree, "the tree read again");
 
         Assert.Equal(WorkingTreeState.Modified, SummaryFor(Listing(index), edited).WorkingTreeState);
     }

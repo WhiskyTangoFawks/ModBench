@@ -54,6 +54,26 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         Assert.Equal(held, again);
     }
 
+    [Fact]
+    public async Task APluginWhosePluginSourceIsGone_IsTracked_ItsPluginSourceUnreadable_AndItsPluginFileAnswers()
+    {
+        using var fx = OneMod();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
+        await Client.PluginReportsTracked(Plugin);
+
+        Directory.Delete(PluginSourceRoot.In(OtherTool.ModFolderOf(fx, Origin), Plugin), recursive: true);
+        await Client.NextSnapshot(fx);
+
+        await Wire.Eventually(
+            async () => (await Client.Plugin(Plugin)).GetProperty("pluginSourceUnreadable").GetBoolean(),
+            $"{Plugin} reported with its plugin source unreadable");
+        Assert.True((await Client.Plugin(Plugin)).GetProperty("isTracked").GetBoolean());
+        var records = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_");
+        Assert.Equal(1, records.GetProperty("total").GetInt32());
+    }
+
     private static async Task<long> VersionOf(HttpResponseMessage put) =>
         (await put.EnsureSuccessStatusCode().Content.ReadFromJsonAsync<JsonElement>()).GetProperty("version").GetInt64();
 

@@ -22,6 +22,11 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
         get { lock (_lock) return [.. _failed.Values.SelectMany(failure => failure.Files)]; }
     }
 
+    public bool Holds(PluginAddress key)
+    {
+        lock (_lock) return _failed.ContainsKey(key);
+    }
+
     /// <summary>While what it reads from is unchanged the error state stands, and the parse is not
     /// paid again.</summary>
     public bool StillFailing(RegisteredPlugin plugin)
@@ -45,14 +50,18 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
             state = ReadStateOf(plugin);
             var outcome = read(state);
             if (outcome.Served) Forget(plugin.Key);
-            else Remember(plugin.Key, state, stands: state.Vouches, outcome.StoppedBy);
+            else Remember(plugin.Key, state, StandsOn(state, outcome.StoppedBy), outcome.StoppedBy);
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
-            Remember(plugin.Key, state, stands: state is { Vouches: true } && ex is not (IOException or UnauthorizedAccessException), ex);
+            Remember(plugin.Key, state, StandsOn(state, ex), ex);
             throw;
         }
     }
+
+    // A file another process held is no evidence either way.
+    private static bool StandsOn(ReadState? state, Exception? stoppedBy) =>
+        state is { Vouches: true } && stoppedBy is not (IOException or UnauthorizedAccessException);
 
     public void Forget(PluginAddress key)
     {

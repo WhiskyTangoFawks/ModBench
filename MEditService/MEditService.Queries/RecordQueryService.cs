@@ -35,11 +35,16 @@ public sealed class RecordQueryService(
             ? MasterResolution.Classify(snapshot, opened)
             : null;
         var parseFailures = reads.GetPluginsWithParseFailures();
-        var tracked = reads.GetTrackedPlugins();
-        PluginRow ToRow(RegisteredPlugin plugin, bool hasMatchingRecords) =>
-            new(plugin, snapshot.LoadOrderIndex(plugin.Key), snapshot.IsImmutable(plugin.Key), opened[plugin.Key],
+        var derivations = reads.GetDerivations();
+        PluginRow ToRow(RegisteredPlugin plugin, bool hasMatchingRecords)
+        {
+            var derivedFrom = derivations.GetValueOrDefault(plugin.Key);
+            return new(plugin, snapshot.LoadOrderIndex(plugin.Key), snapshot.IsImmutable(plugin.Key), opened[plugin.Key],
                 masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
-                parseFailures.Contains(ColumnKey.Of(plugin.Name, plugin.Origin)), tracked.Contains(plugin.Key));
+                parseFailures.Contains(ColumnKey.Of(plugin.Name, plugin.Origin)),
+                IsTracked: derivedFrom is DerivedFrom.SourceTree or DerivedFrom.BinaryForUnreadableSource,
+                PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource);
+        }
 
         if (_index.ActiveFilter is null)
             return [.. rows.Select(c => ToRow(c, hasMatchingRecords: true))];

@@ -71,24 +71,27 @@ public sealed class FailedReadStateTests : IDisposable
 
     private int TreeReads()
     {
-        string[] treeReads = [$"Ingesting {PluginName} from its source tree", $"Re-ingesting {PluginName} from its source tree"];
-        lock (_log) return _log.Count(e => treeReads.Contains(e.Message));
+        lock (_log) return _log.Count(e => e.Message == $"Ingesting {PluginName} from its source tree");
     }
 
     private static bool Failed(OpenedIndex index) => index.Status.Failures.Any(f => f.Name == PluginName);
+
+    private DerivedFrom? DerivationOf(OpenedIndex index) => index.RequireReads().DerivationOf(Plugin.KeyOf());
+
+    private bool SourceUnreadable(OpenedIndex index) => DerivationOf(index) == DerivedFrom.BinaryForUnreadableSource;
 
     private static string Reason(OpenedIndex index) => index.Status.Failures.Single(f => f.Name == PluginName).Reason;
 
     private string Relative(string path) => Path.GetRelativePath(Plugin.ModFolderOf(), path);
 
     [Fact]
-    public void ATreeWithADocumentDeclaringNoFormKey_NamesThatFile_WhileItFails()
+    public void ATreeWithADocumentDeclaringNoFormKey_NamesThatFile_WhileItsBinaryStandsIn()
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         using var index = Reconciled();
         File.WriteAllText(StrayDocument, "{}");
 
-        index.NextSnapshotUntil(() => Failed(index), "the validation's failure");
+        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
 
         var failure = Assert.Single(index.SourceFileFailures);
         Assert.Equal((Plugin.KeyOf(), Relative(StrayDocument), (string?)null), (failure.Plugin, failure.SourceRelativePath, failure.FormKey));
@@ -104,7 +107,7 @@ public sealed class FailedReadStateTests : IDisposable
         var original = NpcDocument;
         ClaimedTwice();
 
-        index.NextSnapshotUntil(() => Failed(index), "the validation's failure");
+        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
 
         var copy = Path.Combine(Path.GetDirectoryName(original).Require(), "Backup", Path.GetFileName(original));
         Assert.Equivalent(
@@ -125,7 +128,7 @@ public sealed class FailedReadStateTests : IDisposable
         var copy = Path.Combine(Path.GetDirectoryName(original).Require(), "Backup", Path.GetFileName(original));
         Assert.Equivalent(new[] { Relative(original), Relative(copy) }, index.SourceFileFailures.Select(f => f.SourceRelativePath), strict: true);
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
-        Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
+        Assert.True(SourceUnreadable(index));
     }
 
     [Fact]
@@ -134,10 +137,10 @@ public sealed class FailedReadStateTests : IDisposable
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         using var index = Reconciled();
         ClaimedTwice();
-        index.NextSnapshotUntil(() => Failed(index), "the validation's failure");
+        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
         Mend();
 
-        index.NextSnapshotUntil(() => !Failed(index), "the mended tree read again");
+        index.NextSnapshotUntil(() => DerivationOf(index) == DerivedFrom.SourceTree, "the mended tree read again");
 
         Assert.Empty(index.SourceFileFailures);
     }
@@ -155,20 +158,20 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
-    public void ATreeThatFailsWhenItsModGainsARepository_LeavesTheBinaryServing_AndSaysSo()
+    public void ATreeThatFailsWhenItsModGainsARepository_LeavesTheBinaryServing_MarkedAsSuch()
     {
         using var index = Reconciled();
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         ClaimedTwice();
 
-        index.NextSnapshotUntil(() => Failed(index), "the tree's failure");
+        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
-        Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
+        Assert.False(Failed(index));
     }
 
     [Fact]
-    public void ATreeThatStillFailsAfterAChange_SaysItsBinaryStillStandsIn()
+    public void ATreeThatStillFailsAfterAChange_LeavesItsBinaryStandingIn()
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         ClaimedTwice();
@@ -180,7 +183,7 @@ public sealed class FailedReadStateTests : IDisposable
         index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the changed tree read again");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
-        Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
+        Assert.True(SourceUnreadable(index));
     }
 
     [Fact]
@@ -194,7 +197,7 @@ public sealed class FailedReadStateTests : IDisposable
         Mend();
         File.WriteAllText(StrayDocument, "{}");
 
-        index.NextSnapshotUntil(() => TreeReads() > readsBefore + 1, "the changed tree re-derived and read again");
+        index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the changed tree read again");
 
         Assert.Empty(index.RequireReads().GetDocuments(Plugin.KeyOf()));
         Assert.DoesNotContain("showing", Reason(index), StringComparison.OrdinalIgnoreCase);
@@ -211,22 +214,20 @@ public sealed class FailedReadStateTests : IDisposable
 
         Assert.Null(_armed);
         Assert.False(Failed(index));
-        Assert.Contains(Plugin.KeyOf(), index.RequireReads().GetTrackedPlugins());
+        Assert.Equal(DerivedFrom.SourceTree, DerivationOf(index));
     }
 
     [Fact]
-    public void ATreeMendedDuringTheValidationItFailed_IsReadAgainAtTheNextSnapshot()
+    public void ATreeMendedDuringTheReadItFailedOnceRead_IsReadAgainAtTheNextSnapshot()
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         using var index = Reconciled();
         ClaimedTwice();
-        ArmOn($"Reconciling {PluginName}:", Mend);
-        index.NextSnapshotUntil(() => Failed(index), "the validation's failure");
+        ArmOn($"Could not ingest {PluginName} from its source tree", Mend);
+        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
         Assert.Null(_armed);
 
-        index.NextSnapshotUntil(() => !Failed(index), "the mended tree read again");
-
-        Assert.Contains(Plugin.KeyOf(), index.RequireReads().GetTrackedPlugins());
+        index.NextSnapshotUntil(() => DerivationOf(index) == DerivedFrom.SourceTree, "the mended tree read again");
     }
 
     [Fact]
@@ -250,7 +251,7 @@ public sealed class FailedReadStateTests : IDisposable
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         using var index = Reconciled();
         File.WriteAllText(StrayDocument, "{}");
-        index.NextSnapshotUntil(() => Failed(index), "the validation's failure");
+        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
 
         for (var snapshot = 1; snapshot <= 3; snapshot++)
         {
@@ -260,14 +261,33 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
+    public void ATreeReadAgainAtEverySnapshot_ReadsTheBinaryInItsPlaceOncePerChangeOfItsBytes()
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        File.WriteAllText(StrayDocument, "{}");
+        using var adapter = new GatedPluginAdapter();
+        using var index = Reconciled(adapter);
+        Assert.True(SourceUnreadable(index));
+        var binaryReads = adapter.OpenedTotal;
+
+        for (var snapshot = 1; snapshot <= 2; snapshot++)
+        {
+            var readsBefore = TreeReads();
+            index.NextSnapshotUntil(() => TreeReads() > readsBefore, $"the tree read again at snapshot {snapshot}");
+        }
+
+        Assert.Equal(binaryReads, adapter.OpenedTotal);
+    }
+
+    [Fact]
     public void ATreeUnreadableWhenItsWholeReadBegan_IsReadAgainOnceReadable()
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         using var index = Reconciled();
         var untyped = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(NpcDocument)).Require(), "Untyped")).FullName;
-        ArmOn($"Re-ingesting {PluginName}", () => File.WriteAllText(StrayDocument, "{}"));
+        ArmOn($"Reconciling {PluginName}:", () => File.WriteAllText(StrayDocument, "{}"));
         File.WriteAllText(Path.Combine(untyped, "Gained.json"), $$"""{"FormKey":"000ABC:{{PluginName}}"}""");
-        index.NextSnapshotUntil(() => Failed(index), "the whole read's failure");
+        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
         Assert.Null(_armed);
         File.Delete(StrayDocument);
         var readsBefore = TreeReads();
@@ -314,7 +334,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         Assert.Null(_armed);
         Assert.False(Failed(index));
-        Assert.Contains(Plugin.KeyOf(), index.RequireReads().GetTrackedPlugins());
+        Assert.Equal(DerivedFrom.SourceTree, index.RequireReads().DerivationOf(Plugin.KeyOf()));
     }
 
     [Fact]
