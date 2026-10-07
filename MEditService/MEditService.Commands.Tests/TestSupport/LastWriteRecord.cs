@@ -32,8 +32,8 @@ internal static class LastWriteRecord
         GitHooks.Write(modFolder, "reference-transaction", $"[ \"$1\" = prepared ] || exit 0\n[ -e '{marker}' ] && exit 1\n: > '{marker}'");
     }
 
-    internal static string LockFileOfTheOnlyPlugin(string modFolder) =>
-        Path.Combine(GitDir(modFolder), RefOfTheOnlyPlugin(modFolder) + ".lock");
+    internal static void RefuseRefUpdates(string modFolder) =>
+        GitHooks.Write(modFolder, "reference-transaction", "[ \"$1\" = prepared ] && exit 1\nexit 0");
 
     private static PluginProvider.FromMod ModOf(string modFolder) => new(Path.GetFileName(modFolder), modFolder);
 

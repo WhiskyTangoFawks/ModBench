@@ -110,7 +110,7 @@ public sealed class CompilePluginTests : IDisposable
     [Fact]
     public async Task Compile_AfterChangingTheFormIdOfTheFirstOfTwo_Succeeds_WithBothRecordsPresent()
     {
-        var moved = _mod.ChangeFormId(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, MovedNpcId);
+        var moved = _mod.ChangeFormId(_mod.Npc, MovedNpcId);
         Assert.Equal(moved.ToString(), _mod.Document(moved.ToString()).Require().FormKey);
         Assert.NotNull(_mod.Document(_mod.OtherNpc.ToString()));
 
@@ -129,8 +129,7 @@ public sealed class CompilePluginTests : IDisposable
         var created1 = _mod.CreateNpc("Created1", CreatedNpcId);
         _mod.CreateNpc("Created2", CreatedNpcId + 1);
         _mod.Remove(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId);
-        var moved = _mod.ChangeFormId(
-            _mod.OtherNpc, CompileFixture.NpcRecordType, CompileFixture.OtherNpcEditorId, MovedNpcId);
+        var moved = _mod.ChangeFormId(_mod.OtherNpc, MovedNpcId);
         _mod.Remove(created1, CompileFixture.NpcRecordType, "Created1");
 
         var (mod, handle) = await CompileAndReimport();

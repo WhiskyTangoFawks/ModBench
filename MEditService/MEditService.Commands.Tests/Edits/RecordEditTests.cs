@@ -156,9 +156,11 @@ public sealed class RecordEditTests : IDisposable
         _mod.Overwrite(_mod.NpcIdentity, garbage);
         var unreadableBefore = Unreadable();
 
-        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        var (result, changes) = _mod.EditChangesHandler.Changes(
+            _mod.Plugin, _mod.Npc.ToString(), Envelopes.SetAt(Json("0.75"), Envelopes.Member("HeightMax")), garbage);
 
         Assert.False(result.Applied);
+        Assert.Empty(changes.Documents);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Contains($"'{garbage}' is an invalid JSON literal", result.Message, StringComparison.Ordinal);
         Assert.NotNull(unreadableBefore);

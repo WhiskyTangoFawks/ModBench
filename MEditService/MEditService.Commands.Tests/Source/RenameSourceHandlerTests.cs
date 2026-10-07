@@ -1,6 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -74,10 +73,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         RenameSource(Old, "New.esp");
 
         TheInstanceAdapterRenamesTheFile("New.esp");
-        Assert.Equal(
-            [PluginBinaryHash.TrailerFormOfFile(Path.Combine(_trackedMod, "New.esp"))],
-            Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }));
-        Assert.Empty(Repository.LastWrittenBinarySha256s(Old));
+        Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
     }
 
     [Fact]
