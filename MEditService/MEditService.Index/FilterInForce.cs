@@ -1,5 +1,6 @@
 using System.Data.Common;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
@@ -24,9 +25,9 @@ internal readonly record struct IndexScope(GameRelease GameRelease, string DataF
         string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
 }
 
-/// <summary>The record filter in force and the source its SQL came from. It clears only on purpose
-/// (plugins.md, Order and view state, story 5): a rebuild of its scope keeps it, another scope drops it.</summary>
-internal sealed class FilterInForce(ILogger logger)
+/// <summary>The record filter in force and the source its SQL came from. It clears on purpose or when it
+/// cannot apply again (plugins.md, States, story 7): a rebuild of its scope keeps it, another scope drops it.</summary>
+internal sealed class FilterInForce(ILogger logger, INotificationPublisher? notifications)
 {
     private readonly Lock _lock = new();
     private (string Sql, string Source, IndexScope Scope)? _current;
@@ -62,22 +63,30 @@ internal sealed class FilterInForce(ILogger logger)
         }
     }
 
-    /// <summary>Materializes the filter again after rows moved. A failure is logged and swallowed: the
-    /// write it follows is durable, and the filtered table is only a view of it.</summary>
+    /// <summary>Materializes the filter again after rows moved. One that cannot apply again is cleared and
+    /// published, never left answering from the old rows.</summary>
     public void Reapply(DuckDbRecordIndex index)
+    {
+        if (ReapplyOrClear(index) is { } cleared) notifications?.Publish(cleared);
+    }
+
+    private RecordFilterClearedNotification? ReapplyOrClear(DuckDbRecordIndex index)
     {
         lock (_lock)
         {
-            if (_current is not { } filter) return;
+            if (_current is not { } filter) return null;
             try
             {
                 index.SetFilter(filter.Sql);
+                return null;
             }
             catch (DbException ex)
             {
                 logger.LogWarning(ex,
-                    "Could not re-materialize the active filter ({Error}); filtered listings may be " +
-                    "stale until the filter is reapplied", ex.Message);
+                    "Could not re-materialize the active filter ({Error}); the filter is cleared", ex.Message);
+                index.SetFilter(null);
+                _current = null;
+                return new RecordFilterClearedNotification(filter.Source, ex.Message);
             }
         }
     }

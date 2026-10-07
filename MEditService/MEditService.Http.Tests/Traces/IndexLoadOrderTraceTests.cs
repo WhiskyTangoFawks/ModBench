@@ -74,6 +74,27 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         Assert.Equal(1, records.GetProperty("total").GetInt32());
     }
 
+    [Fact]
+    public async Task ARecordFilterThatCannotApplyAgainAfterASnapshot_IsPushedClearedWithItsSourceAndReason()
+    {
+        using var fx = new PluginFixtureBuilder("trace-filter-cleared")
+            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("7"), origin: Origin)
+            .BuildScattered();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.PostAsJsonAsync(
+            "/load-order/filter",
+            new { sql = "SELECT form_key FROM npc_ WHERE CAST(editor_id AS INTEGER) = 7", source = "sevens.sql" }))
+            .EnsureSuccessStatusCode();
+        using var stream = await Client.NotificationStream();
+
+        OtherTool.WritesThePlugin(fx.Plugins.Single(p => p.Origin == Origin).Path, mod => mod.Npcs.AddNew("NotANumber"));
+        await Client.NextSnapshot(fx);
+
+        var cleared = (await stream.EventsUntil("record-filter-cleared"))[^1].GetProperty("recordFilterCleared");
+        Assert.Equal("sevens.sql", cleared.GetProperty("source").GetString());
+        Assert.Contains("NotANumber", cleared.GetProperty("reason").GetString(), StringComparison.Ordinal);
+    }
+
     private static async Task<long> VersionOf(HttpResponseMessage put) =>
         (await put.EnsureSuccessStatusCode().Content.ReadFromJsonAsync<JsonElement>()).GetProperty("version").GetInt64();
 
