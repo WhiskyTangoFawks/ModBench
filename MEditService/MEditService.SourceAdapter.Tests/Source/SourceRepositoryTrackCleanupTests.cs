@@ -106,6 +106,38 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     }
 
     [Fact]
+    public void Track_WhenTheCommitFails_LeavesAFileAnotherProgramPutInADirectoryItMade_AndNamesTheDirectory()
+    {
+        var theirs = Path.Combine(_modFolder, "plugin-source", "A.esp", "theirs.txt");
+        var failure = TrackWhoseCommitHookRuns("echo theirs > plugin-source/A.esp/theirs.txt", [Baseline("A.esp")]);
+
+        Assert.Equal("theirs", File.ReadAllText(theirs).Trim());
+        Assert.Contains("plugin-source/A.esp holds something Modbench did not write", failure.Message.Replace('\\', '/'));
+        Assert.False(File.Exists(Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json")));
+    }
+
+    [Fact]
+    public void Track_WhenTheCommitFails_LeavesAFileAnotherProgramChanged_AndNamesIt()
+    {
+        var changed = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
+        var failure = TrackWhoseCommitHookRuns("echo theirs > plugin-source/A.esp/npc_/A.esp/000001.json", [Baseline("A.esp")]);
+
+        Assert.Equal("theirs", File.ReadAllText(changed).Trim());
+        Assert.Contains("000001.json was changed by another program", failure.Message);
+    }
+
+    private Exception TrackWhoseCommitHookRuns(
+        string script, IReadOnlyList<(IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin)> plugins)
+    {
+        var hooks = Directory.CreateDirectory(Path.Combine(_modFolder, ".git", "hooks")).FullName;
+        File.WriteAllText(Path.Combine(_modFolder, ".git", "config"), "[medit]\n\ttrack = true\n");
+        var hook = Path.Combine(hooks, "pre-commit");
+        File.WriteAllText(hook, $"#!/bin/sh\n{script}\nexit 1\n");
+        FileModes.Set(hook, "755");
+        return Assert.ThrowsAny<IOException>(() => SourceRepository.Track(_modFolder, plugins));
+    }
+
+    [Fact]
     public void Track_WhenTheCommitFails_TakesBackWhatItMade_AndTrackingAgainCreatesTheRepository()
     {
         var asset = UnreadableFileTheCommitCannotAdd();

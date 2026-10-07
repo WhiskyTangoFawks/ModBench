@@ -158,6 +158,7 @@ internal sealed class SourceRepositoryWrites(
 
         var root = SourceRepositoryLayout.RootIn(_modFolder, pluginFileName);
         var before = Directory.Exists(root) ? PreImageOf(root) : new PreImage([], []);
+        WriteLog log = new();
         try
         {
             var incoming = files.ToDictionary(file => Path.GetFullPath(Path.Combine(_modFolder, file.RelativePath)));
@@ -167,12 +168,13 @@ internal sealed class SourceRepositoryWrites(
             PristineFileWriter.WriteAll(
                 incoming.Where(file => !held.TryGetValue(file.Key, out var bytes) || !bytes.AsSpan().SequenceEqual(file.Value.Content))
                     .Select(file => file.Value),
-                _modFolder);
+                _modFolder,
+                log);
             git.ParkDecompiled(pluginFileName, binarySha256);
         }
         catch (Exception cause) when (IsAFailedWrite(cause))
         {
-            var unrestored = TakeAwayAndPutBack(root, before);
+            var unrestored = TakeAwayAndPutBack(log, before);
             if (unrestored.Count == 0) throw;
             throw NotAllPutBack(cause, unrestored);
         }
@@ -184,22 +186,23 @@ internal sealed class SourceRepositoryWrites(
 
     internal void RenameSource(string from, string to)
     {
-        var (fromRoot, toRoot) = (SourceRepositoryLayout.RootIn(_modFolder, from), SourceRepositoryLayout.RootIn(_modFolder, to));
+        var fromRoot = SourceRepositoryLayout.RootIn(_modFolder, from);
         var before = PreImageOf(fromRoot);
         var renamed = before.Files
             .Select(file => PluginSourceRename.Renamed(Path.GetRelativePath(_modFolder, file.Path), file.Bytes, from, to))
             .ToList();
 
         var putBackLastWritten = git.LastWrittenPutBack(from, to);
+        WriteLog log = new();
         try
         {
-            PristineFileWriter.WriteAll(renamed, _modFolder);
+            PristineFileWriter.WriteAll(renamed, _modFolder, log);
             git.MoveLastWritten(from, to);
             Directory.Delete(fromRoot, recursive: true);
         }
         catch (Exception cause) when (IsAFailedWrite(cause))
         {
-            var unrestored = TakeAwayAndPutBack(toRoot, before);
+            var unrestored = TakeAwayAndPutBack(log, before);
             TryPutBackLastWritten(putBackLastWritten, from, unrestored);
             if (unrestored.Count == 0) throw;
             throw NotAllPutBack(cause, unrestored);
@@ -213,10 +216,9 @@ internal sealed class SourceRepositoryWrites(
     private static bool IsAFailedWrite(Exception cause) =>
         cause is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception;
 
-    private List<string> TakeAwayAndPutBack(string written, PreImage before)
+    private List<string> TakeAwayAndPutBack(WriteLog written, PreImage before)
     {
-        var unrestored = new List<string>();
-        TryPutBack(written, () => { if (Directory.Exists(written)) Directory.Delete(written, recursive: true); }, unrestored);
+        var unrestored = written.UndoSince(0, _modFolder);
         unrestored.AddRange(PutBack(before));
         return unrestored;
     }
