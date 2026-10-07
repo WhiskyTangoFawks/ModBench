@@ -4,4 +4,4 @@ An error-only convention lets a partial result through: a load can succeed while
 
 ## Consequences
 
-- Not every failure is a popup. A toast the user learns to dismiss recreates silence. A failure that leaves the user's picture wrong, or an action the user asked for that failed, notifies. A background failure that recovers on its own shows inline and never toasts. Every failure reaches the Output.
+- Not every failure is a popup. A toast the user learns to dismiss recreates silence. A failure that leaves the user's picture wrong, or an action the user asked for that failed, notifies. A VS Code feature that Modbench answers, such as Go to Definition, fails as VS Code's own features do: its answer is empty or partial, and the Output says why. A background failure that recovers on its own shows inline and never toasts. Every failure reaches the Output.

@@ -28,6 +28,7 @@ As a user, I want:
 8. A record given without a plugin, from the palette, Referenced By or Go to record, to open the winning copy's file. Source: xEdit lands on the winning copy
 9. An untracked plugin's copy, or the copy of a plugin whose plugin source is unreadable, to open as a document mEdit renders from the plugin, read-only. It is not a file, so the file features above do not reach it. Source: ADR-0007; ADR-0001
 10. A child record, such as a placed reference, to open in a tab of its own, though it shares its cell's file. A change saved in either tab shows in both. Source: plugin-source.md, The tree, story 3
+11. A group's metadata file in plugin source to open in the text editor, as any JSON file does. Source: ADR-0001; Existing tools
 
 ## The header
 
@@ -151,5 +152,5 @@ By [common.md](common.md#reporting). As a user, I want:
 
 - The panel, given mEdit's answer for a record: the header, the columns, their statuses and order, the rows and their nesting, and the states, with no VS Code UI.
 - A gesture's entry: given the focused cell and a click, key, drop or menu item, the command and Argument it fires, or nothing.
-- The tab: its title, a file already open shown and not opened twice, a column's header opening its file in place, its place kept when hidden, and the read again on mEdit's report of a change.
+- The tab: its title, a file already open shown and not opened twice, a column's header opening its file in the preview tab, its place kept when hidden, and the read again on mEdit's report of a change.
 - Menus and keys: the placement above, checked against the extension manifest.
