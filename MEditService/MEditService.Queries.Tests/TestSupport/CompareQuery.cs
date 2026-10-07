@@ -16,13 +16,14 @@ internal static class CompareQuery
         IReadOnlyDictionary<string, RecordLookupEntry>? resolvable = null)
     {
         var addresses = records.Select(r => new PluginAddress(r.Plugin, r.Origin)).ToList();
-        var rows = records.Select((r, i) => new FakeRow(addresses[i], r.LoadOrderIndex, r.IsWinner,
-            new RecordDocument(r.FormKey, addresses[i], r.LoadOrderIndex, r.IsWinner, r.EditorId, r.RecordType, null,
-                [.. r.Fields.Select(f => new Index.FieldValue(f.Metadata, f.Value, f.CheckError))], r.IsPartialForm, r.ParseDiagnosis))).ToList();
+        var rows = records.Select((r, i) => new FakeRow(new RecordDocument(r.FormKey, addresses[i], r.LoadOrderIndex, IsWinner: false, r.EditorId, r.RecordType, null,
+                [.. r.Fields.Select(f => new Codec.Schema.FieldValue(f.Metadata, f.Value, f.CheckError))], r.IsPartialForm, r.ParseDiagnosis))).ToList();
         var opened = addresses.ToDictionary(a => a,
             _ => new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [], RecordCount: 1, IsMedium: false),
             PluginAddress.Comparer);
-        var entries = records.Select(r => new LoadOrderEntry(r.Plugin, r.Plugin, r.Origin, r.LoadOrderIndex, Enabled: true, Winning: r.IsWinner)).ToArray();
+        // The game loads one file per name: an earlier copy of a filename is another provider's, overridden.
+        var entries = records.Select((r, i) => new LoadOrderEntry(r.Plugin, r.Plugin, r.Origin, r.LoadOrderIndex, Enabled: true,
+            Winning: !records.Skip(i + 1).Any(later => string.Equals(later.Plugin, r.Plugin, StringComparison.OrdinalIgnoreCase)))).ToArray();
         var service = QueryHost.Records(
             new FakeIndex(new FakeReads(opened, rows) { Lookups = resolvable }), FakeLoadOrder.Of(GameRelease.Fallout4, entries));
 

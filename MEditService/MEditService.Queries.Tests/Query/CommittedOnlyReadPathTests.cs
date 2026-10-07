@@ -15,8 +15,7 @@ public sealed class CommittedOnlyReadPathTests
     private static readonly PluginAddress Plugin = new(PluginName, Origin);
 
     private static FakeRow Row(Fallout4Mod mod, string editorId) =>
-        new(Plugin, LoadOrderIndex: 0, IsWinner: true,
-            RealDocuments.Of(mod.Npcs.First(n => n.EditorID == editorId), Plugin, 0, isWinner: true, Release, "npc_", ["MajorRecordFlagsRaw"]));
+        new(RealDocuments.Of(mod.Npcs.First(n => n.EditorID == editorId), Plugin, 0, Release));
 
     private static IRecordQueryService Service(params FakeRow[] rows)
     {
