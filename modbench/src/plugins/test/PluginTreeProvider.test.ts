@@ -953,6 +953,22 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     expect(expectInstanceOf(children[0], RecordNode).command).toMatchObject({ command: 'modbench.record.open' });
   });
 
+  it('a container\'s listed child answers its working-tree state and is named as read', async () => {
+    const repo = makeClient();
+    repo.setQueryAnswer('getContainerChildren', [{ ...makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA'), workingTreeState: 'Added' }]);
+    const provider = new PluginTreeProvider(repo);
+    const read: (readonly unknown[])[] = [];
+    provider.onDidReadRecords((uris) => read.push(uris));
+    const questNode = new RecordNode({ ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, 'Data', undefined, true);
+
+    const [child] = await provider.getChildren(questNode);
+
+    const uri = recordResourceUri({ name: 'Plugin0.esp', origin: 'Data' }, 'dial1:Fallout4.esm');
+    expect(expectInstanceOf(child, RecordNode).resourceUri).toEqual(uri);
+    expect(read).toEqual([[uri]]);
+    expect(provider.workingTreeStateOf(uri)).toBe('Added');
+  });
+
   it('a returned "dial" child with its own children is itself Collapsed — expandable to its own Responses; one with none and a scene stay leaves', async () => {
     const repo = makeClient();
     repo.setQueryAnswer('getContainerChildren', [
