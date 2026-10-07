@@ -7,7 +7,7 @@ const { registerCommand } = vi.hoisted(() => ({
 
 vi.mock('vscode', () => ({ commands: { registerCommand }, TreeItem }));
 
-import { pluralArgument, registerGesture, selectionArgument, singularArgument, type GestureEntry } from '../gestureEntry';
+import { gestureEntry, isClickedRow, pluralArgument, registerGesture, selectionArgument, singularArgument, type GestureEntry } from '../gestureEntry';
 
 class Row extends TreeItem {
   constructor(readonly kind: 'a' | 'b', label: string) {
@@ -153,5 +153,35 @@ describe('a singular gesture\'s Argument', () => {
 
   it('is nothing when the right-clicked row is not of a kind the gesture takes', () => {
     expect(singularArgument({ clicked: other, selection: [alpha] }, 'a')).toBeUndefined();
+  });
+});
+
+describe('isClickedRow', () => {
+  const plugin = { name: 'A.esp', origin: 'Mod' };
+  const selected = { argument: { kind: 'mod', name: 'ModA' } };
+  const viewSelection = (): readonly unknown[] => [selected, selected];
+
+  it('takes a tree row that carries no Argument, for the gesture to refuse aloud', () => {
+    const bare = new TreeItem('Odd');
+    expect(gestureEntry(bare, undefined, viewSelection, isClickedRow).selection).toEqual([bare]);
+  });
+
+  it('takes a webview context that carries an Argument', () => {
+    expect(gestureEntry(selected, undefined, viewSelection, isClickedRow).selection).toEqual([selected]);
+  });
+
+  it.each([
+    { argument: { kind: 'plugin', plugin } },
+    { argument: { kind: 'record', formKey: '000800:A.esp' } },
+  ])('takes a webview context carrying %o', (context) => {
+    expect(gestureEntry(context, undefined, viewSelection, isClickedRow).selection).toEqual([context]);
+  });
+
+  it('leaves a clicked object whose Argument names no kind to the view\'s selection', () => {
+    expect(gestureEntry({ argument: { name: 'ModA' } }, undefined, viewSelection, isClickedRow).selection).toEqual(viewSelection());
+  });
+
+  it('leaves any other clicked object, such as a key\'s own args, to the view\'s selection', () => {
+    expect(gestureEntry(KEY_ARGS, undefined, viewSelection, isClickedRow).selection).toEqual(viewSelection());
   });
 });
