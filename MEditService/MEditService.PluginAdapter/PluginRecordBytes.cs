@@ -9,7 +9,7 @@ namespace MEditService.PluginAdapter;
 
 /// <summary>A plugin file's own bytes for a record: what subrecords it holds, which the overlay does not
 /// say. Located on first use, as only a record the overlay cannot serialize asks.</summary>
-public sealed class PluginRecordBytes(ModPath path, GameRelease release) : IRecordFieldProbe
+internal sealed class PluginRecordBytes(ModPath path, GameRelease release) : IRecordFieldProbe
 {
     private static readonly RecordType EditorId = new("EDID");
 

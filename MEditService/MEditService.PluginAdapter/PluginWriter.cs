@@ -5,11 +5,11 @@ namespace MEditService.PluginAdapter;
 
 /// <summary>Replaces a plugin binary: sibling temp file, commit by rename. It keeps no copy of the
 /// binary it replaces, since git keeps every state of the source (compile-plugin). Mechanism only.</summary>
-public static class PluginWriter
+internal static class PluginWriter
 {
     /// <summary>Writes an already-assembled mod: compile's mod comes from the source tree, never off
     /// the binary it replaces. <paramref name="pluginPath"/> still supplies the destination.</summary>
-    public static async Task<PreparedPluginSave> PrepareFromModAsync(
+    internal static async Task<PreparedPluginSave> PrepareFromModAsync(
         IMod mod,
         string pluginPath,
         IReadOnlyList<string>? loadOrder = null)

@@ -1,7 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -39,9 +38,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         Assert.Equal((storedNextObjectId, storedNumRecords), ReadHeaderStats(scratch.PluginPath));
         var oneAboveTheHighestNativeId = HighestNativeId(scratch.PluginPath) + 1;
 
-        var mod = Fallout4Mod.CreateFromBinary(
-            new ModPath(ModKey.FromFileName(fileName), scratch.PluginPath), Fallout4Release.Fallout4);
-        using (var prep = await PluginWriter.PrepareFromModAsync(mod, scratch.PluginPath))
+        using (var prep = await TreeSaves.PrepareAsync(scratch.PluginPath))
         {
             prep.Commit();
         }
