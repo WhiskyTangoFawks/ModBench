@@ -12,9 +12,7 @@ namespace MEditService.Codec.Serialization;
 /// produced and read back through that same door without touching the disk.</summary>
 public static class HeaderDocument
 {
-    // Same literal as SourceRepository.RecordDataFileName; kept separate because the two answer
-    // different questions and neither owns the other's.
-    private const string RootDocumentFileName = "RecordData.json";
+    public const string RootDocumentFileName = "RecordData.json";
 
     /// <summary>The root document's exact bytes, <c>\r</c>-stripped like every committed file.
     /// Serialized from a header-only clone: a full-mod walk costs ~1.5 s per plugin, the clone 1 ms,

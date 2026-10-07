@@ -69,18 +69,17 @@ public sealed class EditRecordChangesHandler
         {
             var relativePath = repository.RelativePathOf(plugin, identity)
                 ?? throw new InvalidOperationException($"Expected the document carrying {formKey} to have been located.");
-            var parentType = RecordTypeDispatch.For(release).ConcreteFor(target.RecordType);
             var root = JsonNode.Parse(text) as JsonObject
                 ?? throw new InvalidOperationException($"Expected '{relativePath}' to hold a JSON object.");
-            var found = parentType == null
-                ? null
-                : EmbeddedChildPath.Find(root, ContainerChildFields.NormalizedTypeName(parentType), formKey, release);
-            if (found == null)
+            var ownerBytes = Encoding.UTF8.GetBytes(text);
+            var found = EmbeddedChildLocator.Find(
+                ownerBytes, EmbeddedChildLocator.ContainerTypeName(target.RecordType, ownerBytes, release), formKey, release);
+            if (found is not { } span)
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound, SourceUnitNotFoundException.NotCarried(relativePath, formKey));
             }
-            prefix = found;
+            prefix = EmbeddedChildPath.HopsOf(span.Path);
             cellToLookUp = CellGroupMove.CellToLookUp(root, prefix, envelope);
         }
 
