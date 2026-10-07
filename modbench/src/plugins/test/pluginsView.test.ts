@@ -104,7 +104,7 @@ import type { InstanceValue } from '../../instanceLoader/instance';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
-import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
+import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 
 const FOUND = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
@@ -143,7 +143,8 @@ function pluginsView(
     channel: silentChannel,
     dataFolderFile: () => undefined, log: () => undefined,
     reporterFor: (tag) => { const reporter = recordingReporter(); reporters.set(tag, reporter); return reporter; },
-    statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, notifyConflictsComputed: vi.fn(),
+    statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, conflictsComputed: () => Promise.resolve(),
+    ask: scriptedDialog(), recordWrite: (command) => command(), trackSelection: () => [], modsView: 'modbench.modList',
   });
   return { client, recordBrowser, plugins, reporters, instance, view: () => present(h.views[0], 'the Plugins tree view') };
 }
@@ -163,10 +164,20 @@ beforeEach(() => {
   h.state.boxes.length = 0;
 });
 
-describe('modbench.plugin.move', () => {
-  it('is registered with the view', () => {
+describe('the Plugins view registers its own gestures', () => {
+  it.each([
+    'modbench.plugin.move', 'modbench.mod.track', 'modbench.plugin.decompile', 'modbench.plugin.compile', 'modbench.record.create',
+    'modbench.plugin.rename', 'modbench.plugin.create', 'modbench.plugin.sync',
+  ])('registers %s with the view', (command) => {
     pluginsView();
-    expect(h.commands.has('modbench.plugin.move')).toBe(true);
+    expect(h.commands.has(command)).toBe(true);
+  });
+
+  it('hears its copy value in the Plugins view\'s key, and defers for any other', () => {
+    const { plugins } = pluginsView();
+    expect(plugins.copyValue.reporterTag).toBe('pluginListTree.copyValue');
+    expect(plugins.copyValue.text({ view: 'modbench.modList' }, undefined)).toBeUndefined();
+    expect(plugins.copyValue.text({ view: 'modbench.pluginListTree' }, undefined)).toBe('');
   });
 });
 

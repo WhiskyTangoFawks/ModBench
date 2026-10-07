@@ -31,6 +31,9 @@ export class FakeInstance {
     this.publish(this.value);
     return Promise.resolve();
   }
+  quiet<T>(work: () => Promise<T>): Promise<T> {
+    return work();
+  }
   readonly askedForCopies: (readonly string[])[] = [];
   copies: (relativePaths: readonly string[]) => Promise<FileCopies[]> = () => Promise.resolve([]);
   sameCopies(relativePaths: readonly string[]): Promise<FileCopies[]> {

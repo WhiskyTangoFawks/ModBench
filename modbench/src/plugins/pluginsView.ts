@@ -3,6 +3,11 @@ import type { MEditClient, PluginAddress, RecordFilter } from '../client';
 import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
 import { type PluginsAccess } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
+import type { AskQuestion } from '../ports/dialog';
+import type { CopyValueAdapter } from '../drivingLib/copyValue';
+import type { RecordWrite } from '../drivingLib/writingGesture';
+import { originFiles } from '../instanceLoader/loadOrderSnapshot';
+import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import { reportSyncFailures, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
 import type { PluginSync } from './pluginSync';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginsInstance, type PluginsTreeNode } from './PluginsTreeProvider';
@@ -12,7 +17,16 @@ import { pluginsKeyContext } from './gestureEntry';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
-import { registerPluginSortCommands, registerRevealInExplorerCommand } from './pluginListCommands';
+import {
+  pluginsCopyValueText, registerCreatePluginCommand, registerPluginSortCommands, registerRevealInExplorerCommand,
+} from './pluginListCommands';
+import { registerRenamePluginCommand, type RenamePluginDeps } from './pluginRenameCommand';
+import { registerRecordCreateCommand } from './createRecordCommand';
+import { createdRecordSelection } from './createdRecordSelection';
+import {
+  CompileProblems, registerCompileCommand, registerDecompileCommand, registerTrackCommand, type CompileDeps, type DecompileDeps,
+  type TrackDeps,
+} from './pluginRowCommands';
 import { registerPluginMoveCommand } from './pluginMoveCommand';
 import { registerPluginEnableCommands } from './pluginParticipationCommands';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
@@ -21,21 +35,29 @@ import { survivingSelection } from './survivingSelection';
 import { subscribeTreeToNotifications } from './treeNotifications';
 import { followIndexStatus } from './indexStatus';
 import type { PluginsViewProgress } from './pluginRowCommands';
+import type { RecordCreateDeps } from './createRecordCommand';
 import type { ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
 
 export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, slot, enabled and winning for every plugin. */
-  instance: PluginsInstance;
+  instance: PluginsInstance & Pick<Instance, 'quiet'>;
   access: PluginsAccess;
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: PluginTreeProvider;
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the index
    *  status. */
-  client: PluginFactsClient & Pick<MEditClient, 'getActiveFilter' | 'onReconnected' | 'setFilter' | 'clearFilter'>;
+  client: PluginFactsClient & RenamePluginDeps['client'] & TrackDeps['client'] & DecompileDeps['client'] & CompileDeps['client']
+    & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onReconnected' | 'setFilter' | 'clearFilter' | 'createPlugin'>;
   statusBar: StatusBar;
-  /** A reconcile reached Ready: what the views outside this box refetch. */
-  notifyConflictsComputed: () => void;
+  /** A reconcile reached Ready, or a track landed: what the views outside this box refetch. */
+  conflictsComputed: () => Promise<void>;
+  ask: AskQuestion;
+  recordWrite: RecordWrite;
+  /** The rows of the focused Mods or Plugins view, which the palette's track acts on. */
+  trackSelection: () => readonly unknown[];
+  /** The Mods view's id, whose bar a track from a Mods row runs under. */
+  modsView: string;
   /** Plugin sync, whose failure the view's message line says. */
   pluginSync: PluginSync;
   channel: SyncChannel;
@@ -54,13 +76,15 @@ export interface PluginsView extends vscode.Disposable {
   /** The load order Editing could not put: its refusal is this view's message line too. */
   loadOrderPut: SyncFailureReport;
   showRecordFilter: (filter: RecordFilter | null) => void;
+  copyValue: CopyValueAdapter;
   progress: PluginsViewProgress;
   narrator: ReconcileNarrator;
 }
 
 // The one Plugins tree (ADR-0017; target-architecture.d2, Plugins).
 export function createPluginsView(deps: PluginsViewDeps): PluginsView {
-  const { instance, access, recordBrowser, client, pluginSync, channel, statusBar, notifyConflictsComputed, log, reporterFor } = deps;
+  const { instance, access, recordBrowser, client, pluginSync, channel, statusBar, conflictsComputed, log, reporterFor } = deps;
+  const notifyConflictsComputed = () => { void conflictsComputed(); };
   const loadOrderPut = reportSyncFailures('put load order', 'The load order is not sent', (line) => channel.error(`[loadOrder] ${line}`));
   const pluginFile = (plugin: PluginAddress) => tree.pluginFile(plugin);
   const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
@@ -99,6 +123,8 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     client, tree, recordBrowser, progress, statusBar, showRecordFilter, notifyConflictsComputed, log,
     reporter: reporterFor('loadOrder'),
   });
+  const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
+  const compileProblems = new CompileProblems(compileDiagnostics);
   const unsubscribe = subscribeTreeToNotifications(client, recordBrowser, () => { void tree.refreshFacts(); });
   // Disposed in order: what reads the tree and the view goes before them.
   const recordDecorations = new RecordDecorationProvider(recordBrowser);
@@ -110,6 +136,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, lens),
     ...registerPluginEnableCommands(
       access, instance, selected.rows, reporterFor('pluginListTree.enableDisable')),
+    ...registerPluginGestures(deps, { tree, view, progress, selection: selected.rows, compileProblems }),
     registerPluginMoveCommand(access, client, instance, selected.rows, reporterFor('pluginListTree.move')),
     ...registerFilterCommands({
       client, treeProvider: recordBrowser, refreshMatchingPlugins: () => { void tree.refreshFacts(); },
@@ -124,12 +151,41 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     vscode.window.registerFileDecorationProvider(new ImplicitMasterDecorationProvider(() => tree.lockedRowUris())),
     nameFilter,
     ...keyContextSubscriptions,
-    selected, view, tree, changedOutsideDiagnostics, loadDiagnostics,
+    selected, view, tree, changedOutsideDiagnostics, loadDiagnostics, compileDiagnostics,
   );
   return {
-    tree, view, selection: selected.rows, nameFilter, loadOrderPut, showRecordFilter, progress, narrator: indexStatus.narrator,
+    tree, view, selection: selected.rows, nameFilter, loadOrderPut,
+    copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
+    showRecordFilter, progress, narrator: indexStatus.narrator,
     dispose: () => { disposable.dispose(); },
   };
+}
+
+function registerPluginGestures(
+  { instance, access, client, ask, conflictsComputed, pluginSync, reporterFor, recordWrite, trackSelection, modsView }: PluginsViewDeps,
+  { tree, view, progress, selection, compileProblems }: {
+    tree: PluginsTreeProvider; view: vscode.TreeView<PluginsTreeNode>; progress: PluginsViewProgress;
+    selection: () => readonly PluginsTreeNode[]; compileProblems: CompileProblems;
+  },
+): vscode.Disposable[] {
+  return [
+    registerTrackCommand({
+      progress, instance, client, reporter: reporterFor('mod.track'), onTracked: conflictsComputed,
+      modDirs: () => instance.value.paths.modDirs, modsView,
+    }, trackSelection),
+    registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
+    registerCompileCommand({
+      client, instance, reporter: reporterFor('plugin.compile'), problems: compileProblems,
+      originFiles: (origin) => originFiles(instance.value, origin),
+    }, selection),
+    registerRecordCreateCommand({
+      client, reporter: reporterFor('record.create'), write: recordWrite,
+      createdRecords: createdRecordSelection({ client, rowOf: (place, formKey) => tree.recordRow(place, formKey), view }),
+    }, selection),
+    registerRenamePluginCommand({ client, adapter: access.adapter, ask, instance, reporter: reporterFor('plugin.rename') }, selection),
+    registerCreatePluginCommand(client, instance, reporterFor('newPlugin')),
+    vscode.commands.registerCommand('modbench.plugin.sync', (value: InstanceValue) => pluginSync.run(value.pluginSyncArguments)),
+  ];
 }
 
 function pluginsViewProgress(
