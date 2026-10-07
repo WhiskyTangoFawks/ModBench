@@ -34,6 +34,6 @@ public sealed class SecondWindowRefusedTests
 
         otherWindow.Dispose();
         index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
-        Assert.NotEmpty(index.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(index.RequireReads().DocumentsOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 }

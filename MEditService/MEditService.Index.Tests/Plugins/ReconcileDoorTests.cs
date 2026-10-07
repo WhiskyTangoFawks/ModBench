@@ -82,7 +82,7 @@ public sealed class ReconcileDoorTests
 
         File.Delete(blocker);
         index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
-        Assert.NotEmpty(index.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(index.RequireReads().DocumentsOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 
     [Fact]
@@ -206,6 +206,6 @@ public sealed class ReconcileDoorTests
         index.Receive(holder, LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.NotEmpty(index.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(index.RequireReads().DocumentsOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 }

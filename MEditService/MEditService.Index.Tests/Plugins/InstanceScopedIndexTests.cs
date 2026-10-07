@@ -38,7 +38,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
         [new(Plugin, Path.Combine(instanceRoot, "mods", Origin, Plugin), Origin, Slot: 0, Enabled: true, Winning: true)];
 
     private static IReadOnlyList<string?> EditorIdsIn(OpenedIndex manager) =>
-        [.. manager.RequireReads().GetDocuments(Key)
+        [.. manager.RequireReads().DocumentsOf(Key)
             .Where(d => d.RecordType != PluginHeader.RecordType)
             .Select(d => d.EditorId)];
 

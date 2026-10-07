@@ -54,7 +54,7 @@ public sealed class WarmReconcileTests
 
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
         Assert.True(warm.Status.ConflictsComputed);
-        Assert.NotEmpty(warm.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(warm.RequireReads().DocumentsOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public sealed class WarmReconcileTests
         Assert.Equal(1, Indexed(entries, "B.esp"));
         Assert.Equal(0, Registered(entries, "B.esp"));
 
-        var documents = warm.RequireReads().GetDocuments(new PluginAddress("B.esp", PluginOrigin.DataDirectory));
+        var documents = warm.RequireReads().DocumentsOf(new PluginAddress("B.esp", PluginOrigin.DataDirectory));
         Assert.Contains(documents, d => d.EditorId == "NpcBEdited");
         Assert.DoesNotContain(documents, d => d.EditorId == "NpcB");
     }
@@ -175,7 +175,7 @@ public sealed class WarmReconcileTests
         {
             second.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
             npcSourceFile = entry.SourceFileOf(
-                second.RequireReads().GetDocuments(entry.KeyOf()).Single(d => d.EditorId == "TrackedNpc"));
+                second.RequireReads().DocumentsOf(entry.KeyOf()).Single(d => d.EditorId == "TrackedNpc"));
         }
 
         var (loggerFactory, entries) = Capturing();
@@ -193,6 +193,6 @@ public sealed class WarmReconcileTests
         using var fourth = MakeIndexer(holder);
         fourth.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
         Assert.Contains(
-            fourth.RequireReads().GetDocuments(entry.KeyOf()), d => d.EditorId == "EditedBetweenLoads");
+            fourth.RequireReads().DocumentsOf(entry.KeyOf()), d => d.EditorId == "EditedBetweenLoads");
     }
 }
