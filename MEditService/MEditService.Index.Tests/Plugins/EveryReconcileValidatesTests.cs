@@ -131,7 +131,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     public void AnEqualSnapshot_OfABinaryWhoseStampHolds_ReadsNothing()
     {
         using var held = new FileStream(_untracked.Path, FileMode.Open, FileAccess.Read, FileShare.None);
-        Assert.Null(PluginBinaryHash.OfFile(_untracked.Path));
+        Assert.Null(PluginBinaryHash.ClaimOfFile(_untracked.Path));
 
         var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _tracked.RenamedByHand(_index.RequireReads()));
 

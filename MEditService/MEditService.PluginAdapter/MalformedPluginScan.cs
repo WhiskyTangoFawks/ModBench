@@ -7,7 +7,7 @@ namespace MEditService.PluginAdapter;
 /// <summary>Kind B detectors (ADR-0006, a plugin malformed by another tool): byte-level
 /// scans of the plugin's original bytes, with no Mutagen. Expected values come from vanilla
 /// binaries, not a reference's comments.</summary>
-public static class MalformedPluginScan
+internal static class MalformedPluginScan
 {
     // (record type, subrecord) → the payload size the CK always writes; a shorter one is zero-padded, losslessly.
     private static readonly Dictionary<(string RecordType, string Sig), int> FixedSizeTable = new()
@@ -62,7 +62,7 @@ public static class MalformedPluginScan
     /// <summary>Every Kind B diagnosis the plugin's own bytes prove, in record order. A record
     /// whose compressed payload cannot be inflated is skipped — an unreadable stream is a
     /// different failure than the classes this scan names.</summary>
-    public static List<PluginDiagnosis> Scan(byte[] pluginBytes)
+    internal static List<PluginDiagnosis> Scan(byte[] pluginBytes)
     {
         var diagnoses = new List<PluginDiagnosis>();
         foreach (var record in PluginBinaryWalk.WalkRecords(pluginBytes))

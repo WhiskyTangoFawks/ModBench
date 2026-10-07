@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using MEditService.Codec.Serialization;
+using MEditService.TestSupport;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -11,7 +12,7 @@ public sealed class MalformedPluginScanTests
     {
         var bytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "TestData", "LitR - TrueStorms.esp"));
 
-        var diagnoses = MalformedPluginScan.Scan(bytes);
+        var diagnoses = Scan(bytes);
 
         var d = Assert.Single(diagnoses, d => d.DefectClass == "fixed-size-subrecord-short");
         Assert.Equal("REGN 001D2AF4 (DowntownRegion)", d.Anchor);
@@ -22,7 +23,7 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void GaussRevolver_TemplateRotation_IsDiagnosedByExactClassAndText_TheCombinationsObtsPrecedingItsObtfAndFullLeavingThemUnclosed()
     {
-        var diagnoses = MalformedPluginScan.Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("WEAP", 0x03000860,
+        var diagnoses = Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("WEAP", 0x03000860,
             Sub("EDID", "GaussRevolver\0"u8.ToArray()),
             Sub("OBTE", Le(1)),
             Sub("OBTS", new byte[67]),
@@ -39,7 +40,7 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void Lunar_BothShortBipedNameLists_31And30NamesWhereTheCkAlwaysWrites32_AreDiagnosedByExactClassAndText()
     {
-        var diagnoses = MalformedPluginScan.Scan(Concat(
+        var diagnoses = Scan(Concat(
             RaceWithNames(0x03014174, "DLC03_FogCrawlerRace", 31),
             RaceWithNames(0x0603637A, "DLC04_GatorclawRace", 30)));
 
@@ -55,7 +56,7 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void SouthOfTheSea_CounterDisagreeingWithEntries_XwpgSaysOnePowerGridConnectionButTwoXwpnEntriesFollow_IsDiagnosedByExactClassAndText()
     {
-        var diagnoses = MalformedPluginScan.Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("REFR", 0x07431EDC,
+        var diagnoses = Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("REFR", 0x07431EDC,
             Sub("EDID", "00sots_Necropolis_WorkshopRef\0"u8.ToArray()),
             Sub("XWPG", Le(1)),
             Sub("XWPN", new byte[12]), Sub("XWPN", new byte[12])));
@@ -82,7 +83,7 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void FastTravelSigns_Function9MissingEpf3_AnAddActivateChoiceEntryCarryingEpft4EpfbAndEpf2_IsDiagnosedByExactClassAndText()
     {
-        var diagnoses = MalformedPluginScan.Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("PERK", 0x050008AB,
+        var diagnoses = Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("PERK", 0x050008AB,
             Sub("EDID", "FTS_CallMarkerPerk\0"u8.ToArray()),
             Sub("PRKE", [2, 0, 0]),
             Sub("DATA", [0, 9, 0]),
@@ -101,7 +102,7 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void Radfall_Function6WithParameters_AnAbsoluteValueEntryCarryingAnEpftEpfbEpfdBlockItNeverTakes_IsDiagnosedLossyByExactClassAndText()
     {
-        var diagnoses = MalformedPluginScan.Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("PERK", 0x0004C92C,
+        var diagnoses = Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("PERK", 0x0004C92C,
             Sub("EDID", "Sniper03\0"u8.ToArray()),
             Sub("PRKE", [2, 0, 0]),
             Sub("DATA", [0, 6, 0]),
@@ -129,7 +130,7 @@ public sealed class MalformedPluginScanTests
             Sub("EPFD", new byte[8]),
             Sub("PRKF", []));
 
-        Assert.Empty(MalformedPluginScan.Scan(record));
+        Assert.Empty(Scan(record));
     }
 
     [Fact]
@@ -142,18 +143,29 @@ public sealed class MalformedPluginScanTests
             Sub("EPFD", new byte[4]),
             Sub("PRKF", []));
 
-        Assert.Empty(MalformedPluginScan.Scan(record));
+        Assert.Empty(Scan(record));
+    }
+
+    private static List<PluginDiagnosis> Scan(byte[] bytes)
+    {
+        using var folder = new ScratchDirectory("malformed-scan");
+        var path = Path.Combine(folder.Path, "scanned.esp");
+        File.WriteAllBytes(path, bytes);
+        var claim = PluginBinaryHash.ClaimOfFile(path);
+        Assert.NotNull(claim);
+        Assert.NotNull(claim.Diagnoses);
+        return [.. claim.Diagnoses];
     }
 
     private static List<PluginDiagnosis> ScanFixture(string fileName) =>
-        MalformedPluginScan.Scan(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "TestData", fileName)));
+        Scan(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "TestData", fileName)));
 
     [Fact]
     public void FixedSize_AnExactLengthSubrecord_ReportsNothing()
     {
         var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("REGN", 0x00000001, Sub("EDID", "CleanRegion\0"u8.ToArray()), Sub("RDAT", new byte[8]));
 
-        Assert.Empty(MalformedPluginScan.Scan(record));
+        Assert.Empty(Scan(record));
     }
 
     [Fact]
@@ -162,7 +174,7 @@ public sealed class MalformedPluginScanTests
         var names = Enumerable.Range(0, 31).Select(_ => Sub("NAME", "Slot\0"u8.ToArray())).ToArray();
         var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("RACE", 0x00000002, [Sub("EDID", "ShortRace\0"u8.ToArray()), .. names]);
 
-        var d = Assert.Single(MalformedPluginScan.Scan(record));
+        var d = Assert.Single(Scan(record));
         Assert.Equal("fixed-count-list-wrong-count", d.DefectClass);
         Assert.Equal("RACE 00000002 (ShortRace)", d.Anchor);
         Assert.Equal("repairable (lossless)", d.Tail);
@@ -175,7 +187,7 @@ public sealed class MalformedPluginScanTests
         var names = Enumerable.Range(0, 32).Select(_ => Sub("NAME", "Slot\0"u8.ToArray())).ToArray();
         var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("RACE", 0x00000003, [Sub("EDID", "CleanRace\0"u8.ToArray()), .. names]);
 
-        Assert.Empty(MalformedPluginScan.Scan(record));
+        Assert.Empty(Scan(record));
     }
 
     [Fact]
@@ -187,7 +199,7 @@ public sealed class MalformedPluginScanTests
             Sub("XWPN", new byte[12]),
             Sub("XWPN", new byte[12]));
 
-        var d = Assert.Single(MalformedPluginScan.Scan(record));
+        var d = Assert.Single(Scan(record));
         Assert.Equal("counter-entries-mismatch", d.DefectClass);
         Assert.Equal("REFR 00000004 (BadWorkshop)", d.Anchor);
         Assert.Equal("repairable (lossless)", d.Tail);
@@ -200,7 +212,7 @@ public sealed class MalformedPluginScanTests
         var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("REFR", 0x00000005,
             Sub("XWPG", Le(2)), Sub("XWPN", new byte[12]), Sub("XWPN", new byte[12]));
 
-        Assert.Empty(MalformedPluginScan.Scan(record));
+        Assert.Empty(Scan(record));
     }
 
     [Fact]
@@ -213,7 +225,7 @@ public sealed class MalformedPluginScanTests
             Sub("OBTF", []), Sub("FULL", "N\0"u8.ToArray()),
             Sub("STOP", []));
 
-        var d = Assert.Single(MalformedPluginScan.Scan(record));
+        var d = Assert.Single(Scan(record));
         Assert.Equal("subrecord-out-of-ck-order", d.DefectClass);
         Assert.Equal("WEAP 00000006 (BadWeap)", d.Anchor);
         Assert.Equal("repairable (lossless)", d.Tail);
@@ -229,7 +241,7 @@ public sealed class MalformedPluginScanTests
             Sub("OBTF", []), Sub("FULL", "A\0"u8.ToArray()), Sub("OBTS", new byte[8]),
             Sub("STOP", []));
 
-        Assert.Empty(MalformedPluginScan.Scan(record));
+        Assert.Empty(Scan(record));
     }
 
     [Fact]
@@ -237,7 +249,7 @@ public sealed class MalformedPluginScanTests
     {
         var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("MISC", 0x00000008, Sub("EDID", "Junk\0"u8.ToArray()), Sub("DATA", new byte[8]));
 
-        Assert.Empty(MalformedPluginScan.Scan(record));
+        Assert.Empty(Scan(record));
     }
 
     private static byte[] Concat(params byte[][] records) => records.SelectMany(r => r).ToArray();
