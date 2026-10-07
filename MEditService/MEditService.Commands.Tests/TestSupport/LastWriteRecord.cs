@@ -9,10 +9,6 @@ namespace MEditService.Commands.Tests.TestSupport;
 /// record gone, a record locked, a write interrupted.</summary>
 internal static class LastWriteRecord
 {
-    internal static IReadOnlyList<string> Of(string modFolder, string pluginName) =>
-        SourceRepository.Over(ModOf(modFolder), GameRelease.Fallout4)
-            .LastWrittenBinarySha256s(new PluginAddress(pluginName, Path.GetFileName(modFolder)));
-
     internal static void Interrupt(string modFolder, string pluginName, string binarySha256, Action write) =>
         Assert.Throws<IOException>(() => SourceRepository.Over(ModOf(modFolder), GameRelease.Fallout4).WriteBinary(
             new PluginAddress(pluginName, Path.GetFileName(modFolder)), binarySha256, () =>
