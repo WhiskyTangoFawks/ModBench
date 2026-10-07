@@ -15,10 +15,9 @@ public class WorldspaceQueryServiceTests
 
     private static FakeReads Reads(params FakeRow[] rows) => new(new Dictionary<PluginAddress, PluginContent>(), rows);
 
-    private static IWorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) => Service(Holding((Plugin, cells)));
+    private static IWorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) => Service(WorldAndInteriorCells((Plugin, cells)));
 
-    // Each plugin holds its cells both in the worldspace and as interior cells.
-    private static FakeReads Holding(params (PluginAddress Plugin, IReadOnlyList<CellLocationSummary> Cells)[] holdings)
+    private static FakeReads WorldAndInteriorCells(params (PluginAddress Plugin, IReadOnlyList<CellLocationSummary> Cells)[] holdings)
     {
         var reads = Reads();
         reads.WorldspaceCells = holdings.ToDictionary(h => new RecordAt(h.Plugin, World), h => h.Cells);
@@ -135,7 +134,7 @@ public class WorldspaceQueryServiceTests
     [Fact]
     public void GetWorldspaceBlocks_ReadsTheCellsOfTheGivenOrigin()
     {
-        var svc = Service(Holding((Plugin, [Cell("InData")]), (OtherOrigin, [Cell("InModB")])));
+        var svc = Service(WorldAndInteriorCells((Plugin, [Cell("InData")]), (OtherOrigin, [Cell("InModB")])));
 
         var result = svc.GetWorldspaceBlocks(OtherOrigin, World);
 
@@ -145,7 +144,7 @@ public class WorldspaceQueryServiceTests
     [Fact]
     public void GetInteriorCells_ReadsTheCellsOfTheGivenOrigin()
     {
-        var svc = Service(Holding((Plugin, [Cell("InData")]), (OtherOrigin, [Cell("InModB")])));
+        var svc = Service(WorldAndInteriorCells((Plugin, [Cell("InData")]), (OtherOrigin, [Cell("InModB")])));
 
         var result = svc.GetInteriorCells(OtherOrigin);
 

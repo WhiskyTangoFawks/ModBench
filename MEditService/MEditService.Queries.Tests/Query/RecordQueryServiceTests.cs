@@ -298,14 +298,15 @@ public sealed class RecordQueryServiceTests
     private static FakeRow Copy(string formKey, PluginAddress plugin, int slot, string? editorId, string recordType = "npc_") =>
         new(new RecordDocument(formKey, plugin, slot, IsWinner: false, editorId, recordType, null, []));
 
-    // Each active plugin holds a record at 0x800 and at 0xFFF.
+    private static readonly string[] IdsEachActivePluginHolds = ["000800", "000FFF"];
+
     private static IRecordQueryService Roster(params (string Name, bool Light, bool Active)[] plugins)
     {
         var entries = plugins.Select((p, slot) => new LoadOrderEntry(p.Name, p.Name, "Data", slot, p.Active, Winning: true)).ToList();
         var opened = plugins.ToDictionary(
             p => new PluginAddress(p.Name, "Data"), p => new PluginContent(p.Light, false, false, [], 0, IsMedium: false));
         var rows = plugins.Select((p, slot) => (p, slot)).Where(t => t.p.Active)
-            .SelectMany(t => new[] { "000800", "000FFF" }.Select(id => Copy($"{id}:{t.p.Name}", new PluginAddress(t.p.Name, "Data"), t.slot, editorId: null)))
+            .SelectMany(t => IdsEachActivePluginHolds.Select(id => Copy($"{id}:{t.p.Name}", new PluginAddress(t.p.Name, "Data"), t.slot, editorId: null)))
             .ToList();
         return Build(new FakeFixtureData(Release, entries, opened, rows)).Service;
     }

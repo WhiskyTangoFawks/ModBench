@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Queries.Tests.TestSupport;
 
 /// <summary>A <see cref="RecordDocument"/> read from the real codec's own text under the schema's
-/// own projection, as the index reads one. Whether it wins is <see cref="FakeReads"/>' to say.</summary>
+/// own projection, as the index reads one. Whether it wins is the fake reads' to say.</summary>
 internal static class RealDocuments
 {
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
