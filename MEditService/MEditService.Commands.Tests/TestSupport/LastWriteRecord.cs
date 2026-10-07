@@ -29,12 +29,7 @@ internal static class LastWriteRecord
     internal static void RefuseRefUpdatesAfterTheFirst(string modFolder)
     {
         var marker = Path.Combine(modFolder, "first-ref-update");
-        var hooks = Path.Combine(GitDir(modFolder), "hooks");
-        var hook = Path.Combine(hooks, "reference-transaction");
-        Directory.CreateDirectory(hooks);
-        File.WriteAllText(hook, $"#!/bin/sh\n[ \"$1\" = prepared ] || exit 0\n[ -e '{marker}' ] && exit 1\n: > '{marker}'\n");
-        if (!OperatingSystem.IsWindows())
-            File.SetUnixFileMode(hook, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        GitHooks.Write(modFolder, "reference-transaction", $"[ \"$1\" = prepared ] || exit 0\n[ -e '{marker}' ] && exit 1\n: > '{marker}'");
     }
 
     internal static string LockFileOfTheOnlyPlugin(string modFolder) =>

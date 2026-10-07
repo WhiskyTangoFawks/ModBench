@@ -219,6 +219,19 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     }
 
     [Fact]
+    public void RenameSource_WhenAnotherProgramChangesAnOldFileAfterItWasRead_DoesNotRemoveIt_AndFails()
+    {
+        var changed = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "000000_Old.esp.json");
+        GitHooks.Write(_modFolder, "reference-transaction", $"[ \"$1\" = prepared ] || exit 0\necho theirs > '{changed}'");
+
+        var failure = Assert.ThrowsAny<IOException>(() => Repository.RenameSource(Old, "New.esp"));
+
+        Assert.Equal("theirs", File.ReadAllText(changed).Trim());
+        Assert.Contains("000000_Old.esp.json was changed by another program", failure.Message);
+        Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
+    }
+
+    [Fact]
     public void RenameSource_WhenGitRefusesToClearTheOldNamesRef_PutsBackBothRefs_TheNewNamesEarlierOneIncluded()
     {
         var newName = Old with { Name = "New.esp" };
