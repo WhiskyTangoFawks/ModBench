@@ -92,7 +92,7 @@ public sealed class RecordEditTests : IDisposable
     }
 
     [Fact]
-    public void EditField_WithAnUnknownFieldName_RefusesAndLeavesTheWorkingTreeClean()
+    public void EditField_WithAnUnknownFieldName_RefusesAsFieldNotFound_AndChangesNoRecord()
     {
         var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "NoSuchField", Json("1"));
 
@@ -102,7 +102,7 @@ public sealed class RecordEditTests : IDisposable
     }
 
     [Fact]
-    public void EditField_ForAFormKeyThePluginDoesNotHold_RefusesAndLeavesTheWorkingTreeClean()
+    public void EditField_ForAFormKeyThePluginDoesNotHold_RefusesAsRecordNotFound_AndChangesNoRecord()
     {
         var result = _mod.EditHandler.Set(_mod.Plugin, "ABCDEF:NotHere.esp", "HeightMax", Json("0.75"));
 
@@ -147,7 +147,7 @@ public sealed class RecordEditTests : IDisposable
     }
 
     [Fact]
-    public void EditField_OfADocumentThatIsNotJson_RefusesAsUnreadable_AndWritesNothing()
+    public void EditField_OfADocumentThatIsNotJson_RefusesAsParseFailed_NamingTheJsonError_AndLeavesTheUnreadableRecordAsItWas()
     {
         const string garbage = "this is not a document";
         _mod.Overwrite(_mod.NpcIdentity, garbage);
