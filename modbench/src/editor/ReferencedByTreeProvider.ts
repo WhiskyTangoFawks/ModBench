@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress, ReferenceResult } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { trackLoadOrderStatus } from './loadOrderStatusTracker';
+import { ErrorNode } from '../drivingLib/errorNode';
 import { recordTitle } from './recordTitle';
 
 /** One plugin's copy of a referrer, with the fields that hold the reference. */
@@ -55,14 +56,6 @@ export class ReferencedByReferrerNode extends vscode.TreeItem {
       title: 'Open Record',
       arguments: [{ formKey }],
     };
-  }
-}
-
-export class ErrorNode extends vscode.TreeItem {
-  constructor(reason: string) {
-    super(`Failed to load: ${reason}`, vscode.TreeItemCollapsibleState.None);
-    this.tooltip = reason;
-    this.iconPath = new vscode.ThemeIcon('error');
   }
 }
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { logDownloadsFolderUnresolved } from '../downloadsFolderUnresolvedLog';
+import { downloadsFolderUnresolvedLine } from '../downloadsFolderUnresolvedLog';
+import { logOncePerFailure } from '../../drivingLib/logOncePerFailure';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
@@ -13,7 +14,7 @@ const UNRESOLVED = instanceValueFixture({ downloads: { kind: 'unresolved', reaso
 
 function logged(instance: FakeInstance): string[] {
   const lines: string[] = [];
-  logDownloadsFolderUnresolved(instance, (line) => lines.push(line));
+  logOncePerFailure(instance, downloadsFolderUnresolvedLine, (line) => lines.push(line));
   return lines;
 }
 
