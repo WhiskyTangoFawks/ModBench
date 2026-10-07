@@ -42,9 +42,7 @@ export class FocusedCells<TPanel> {
   }
 }
 
-/** The keys the field gestures' palette entries and the grid's keys read, named under
- *  `modbench.record.`. */
-export function focusedCellKeys(cell: FocusedCellContext | undefined): Record<string, unknown> {
+function focusedCellKeys(cell: FocusedCellContext | undefined): Record<string, unknown> {
   const field = (name: string): unknown => (cell === undefined ? undefined : Reflect.get(cell, name));
   const section = field('webviewSection');
   const copyText = field('copyText');

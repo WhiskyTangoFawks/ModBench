@@ -58,7 +58,7 @@ const UNREACHABLE_REASON = {
   stopped: 'mEdit is stopped.',
 };
 
-export interface IndexStatusDeps {
+interface IndexStatusDeps {
   client: Pick<MEditClient, 'onNotification' | 'onStatusChanged' | 'onReconnected' | 'getActiveFilter'>;
   tree: Pick<PluginsTreeProvider,
     'applyIndexed' | 'applyRefused' | 'applyReconciled' | 'applyBackendUnreachable' | 'refreshFacts'>;

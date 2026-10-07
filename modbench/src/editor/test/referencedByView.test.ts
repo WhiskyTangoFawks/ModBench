@@ -27,7 +27,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { createReferencedByView, referencedByTitle, type ReferencedByFilter, type ReferencedByFilterDeps } from '../referencedByView';
+import { createReferencedByView } from '../referencedByView';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ReferenceResult } from '../../client';
 
@@ -39,30 +39,12 @@ const reference = (formKey: string): ReferenceResult => ({
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 function makeView(client = new InMemoryMEditClient()) {
-  const filter = { setBaseDescription: vi.fn(), refresh: vi.fn(), open: vi.fn(), clear: vi.fn(), dispose: vi.fn() } satisfies ReferencedByFilter;
-  let deps: ReferencedByFilterDeps | undefined;
+  type RegisterNameFilter = Parameters<typeof createReferencedByView>[2];
+  const filter = { setBaseDescription: vi.fn(), refresh: vi.fn(), open: vi.fn(), clear: vi.fn(), dispose: vi.fn() } satisfies ReturnType<RegisterNameFilter>;
+  let deps: Parameters<RegisterNameFilter>[0] | undefined;
   const made = createReferencedByView(client, vi.fn(), (given) => { deps = given; return filter; });
   return { ...made, filter, deps: () => deps };
 }
-
-describe('referencedByTitle', () => {
-  it('counts the records that reference it, and shows no count while it is not known', () => {
-    expect(referencedByTitle(12)).toBe('Referenced By (12)');
-    expect(referencedByTitle(0)).toBe('Referenced By (0)');
-    expect(referencedByTitle(undefined)).toBe('Referenced By');
-  });
-
-  it('counts in the user\'s locale, as the Plugins view counts', () => {
-    const german = new Intl.NumberFormat('de-DE');
-    const inGerman = vi.spyOn(Number.prototype, 'toLocaleString').mockImplementation(function (this: number) { return german.format(this); });
-
-    try {
-      expect(referencedByTitle(1234)).toBe('Referenced By (1.234)');
-    } finally {
-      inGerman.mockRestore();
-    }
-  });
-});
 
 describe('the Referenced By view', () => {
   it('collapses all from its title bar and selects several rows', () => {
@@ -91,6 +73,35 @@ describe('the Referenced By view', () => {
     await settle();
     expect(h.views.at(-1)?.title).toBe('Referenced By (2)');
     expect(filter.setBaseDescription).toHaveBeenLastCalledWith('000001:Fallout4.esm');
+  });
+
+  it('titles itself with a count of none for a record nothing references', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', []);
+    client.setQueryAnswer('getComparison', null);
+    const { provider } = makeView(client);
+    provider.showFor('000001:Fallout4.esm');
+    await provider.getChildren();
+    await settle();
+    expect(h.views.at(-1)?.title).toBe('Referenced By (0)');
+  });
+
+  it('counts in the user\'s locale, as the Plugins view counts', async () => {
+    const german = new Intl.NumberFormat('de-DE');
+    const inGerman = vi.spyOn(Number.prototype, 'toLocaleString').mockImplementation(function (this: number) { return german.format(this); });
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', Array.from({ length: 1234 }, (_, i) => reference(`${String(i).padStart(6, '0')}:Fallout4.esm`)));
+    client.setQueryAnswer('getComparison', null);
+    const { provider } = makeView(client);
+
+    try {
+      provider.showFor('000001:Fallout4.esm');
+      await provider.getChildren();
+      await settle();
+      expect(h.views.at(-1)?.title).toBe('Referenced By (1.234)');
+    } finally {
+      inGerman.mockRestore();
+    }
   });
 
   it('reverses the rows from the sort toggle and back', async () => {

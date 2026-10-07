@@ -1,6 +1,8 @@
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { PluginTreeProvider } from '../PluginTreeProvider';
-import { PluginsTreeProvider, type PluginsTreeProviderOptions } from '../PluginsTreeProvider';
+import { PluginsTreeProvider } from '../PluginsTreeProvider';
+
+type PluginsTreeProviderOptions = ConstructorParameters<typeof PluginsTreeProvider>[0];
 
 export function pluginsTreeOver(
   instance: PluginsTreeProviderOptions['instance'],

@@ -132,7 +132,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   };
 }
 
-export function pluginsViewProgress(
+function pluginsViewProgress(
   view: { message?: string | vscode.MarkdownString }, nameFilter: Pick<NameFilter, 'refresh'>,
 ): PluginsViewProgress {
   const say = (message: string | undefined) => {
@@ -150,7 +150,7 @@ export function pluginsViewProgress(
 
 // The axis that narrows *which plugin rows* appear, composing with (never replacing) the record
 // filter's axis over which records appear under an expanded row.
-export function registerPluginsNameFilter(
+function registerPluginsNameFilter(
   view: { description?: string; message?: string }, provider: PluginsTreeProvider,
   pluginSync: SyncMessage,
 ): NameFilter {

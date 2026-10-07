@@ -13,7 +13,6 @@ import {
   REFERENCED_BY_VIEW,
 } from '../ReferencedByTreeProvider';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { recordArgument } from '../recordLifecycleCommands';
 import { expectInstancesOf } from '../../test/expectInstanceOf';
 import type { ReferenceResult } from '../../client';
 import { present } from '../../ports/present';
@@ -278,7 +277,7 @@ describe('ReferencedByTreeProvider — a referrer\'s children (where it is held)
     expect(new Set(holders.map(h => h.id)).size).toBe(2);
   });
 
-  it('hands copy and delete the plugin copy it stands for, with its origin', async () => {
+  it('states the plugin copy it stands for, with its origin, the way copy and delete read it', async () => {
     const client = makeClient([
       reference({ formKey: '000002:Fallout4.esm', plugin: 'MyMod.esp', origin: 'MyMod', editorId: 'TestNPC' }),
     ]);
@@ -286,7 +285,7 @@ describe('ReferencedByTreeProvider — a referrer\'s children (where it is held)
     provider.showFor('000001:Fallout4.esm');
     const [referrer] = await provider.getChildren();
     const [holder] = expectInstancesOf(await provider.getChildren(present(referrer, 'the referrer')), ReferencedByHolderNode);
-    expect(recordArgument(holder)).toEqual({ formKey: '000002:Fallout4.esm', plugin: 'MyMod.esp', origin: 'MyMod', editorId: 'TestNPC' });
+    expect(holder).toMatchObject({ formKey: '000002:Fallout4.esm', plugin: 'MyMod.esp', origin: 'MyMod', editorId: 'TestNPC' });
   });
 });
 

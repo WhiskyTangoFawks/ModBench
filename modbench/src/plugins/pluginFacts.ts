@@ -178,7 +178,7 @@ export class PluginFacts {
     this.matches = undefined;
   }
 
-  isHeld(address: PluginAddress): boolean {
+  private isHeld(address: PluginAddress): boolean {
     return this.held.has(address);
   }
 
@@ -209,7 +209,7 @@ export class PluginFacts {
     return this.matches?.get(address) === false;
   }
 
-  recordFilterMatchesNothing(): boolean {
+  private recordFilterMatchesNothing(): boolean {
     return this.matches !== undefined && this.noMatchAnywhere;
   }
 
@@ -218,8 +218,7 @@ export class PluginFacts {
     return this.compilable;
   }
 
-  /** Every status the plugin carries, in the spec's order: the first sets the icon. */
-  statuses(address: PluginAddress): PluginStatus[] {
+  private statuses(address: PluginAddress): PluginStatus[] {
     const read = this.reads.get(address);
     return [
       failedToRead(this.loadFailures.get(address)),
