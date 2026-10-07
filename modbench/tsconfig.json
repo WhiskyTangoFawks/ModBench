@@ -6,6 +6,7 @@
     { "path": "./src/wire" },
     { "path": "./src/ports" },
     { "path": "./src/instanceAdapter" },
+    { "path": "./src/coreLib" },
     { "path": "./src/instanceLoader" },
     { "path": "./src/modlist" },
     { "path": "./src/pluginsCommands" },

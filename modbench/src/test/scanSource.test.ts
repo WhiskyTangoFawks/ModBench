@@ -135,7 +135,7 @@ describe('boxesIn and referencesOf, parameterised by root', () => {
 
   it('defaults to the real source tree', () => {
     expect(boxesIn().map((box) => box.name)).toContain('loadOrderFileCodec');
-    expect(referencesOf('modlist')).toEqual(['instanceAdapter', 'ports']);
+    expect(referencesOf('modlist')).toEqual(['coreLib', 'instanceAdapter', 'ports']);
   });
 });
 

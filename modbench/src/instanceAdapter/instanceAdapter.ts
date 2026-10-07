@@ -251,23 +251,8 @@ export type OriginFileMarked =
   | { readonly gone: false; readonly wrote: boolean; readonly relativePath: string }
   | { readonly gone: false; readonly refusal: string };
 
-/** The refusal of a new mod whose name a folder already holds: one wording for create and install. */
-export const modNameTakenRefusal = (name: string): string =>
-  `A mod named "${name}" already exists — install its next release from the Downloads view instead.`;
-
-/** Why a new mod may not take `name`, trimmed: a folder already holds a mod of that name, matched
- *  as the manager matches names. Undefined for a free name, or a blank one. */
-export async function newModNameRefusal(adapter: Pick<InstanceAdapter, 'entryFolder'>, name: string): Promise<string | undefined> {
-  const trimmed = name.trim();
-  if (!trimmed) return undefined;
-  return (await adapter.entryFolder({ kind: 'mod', name: trimmed })) === undefined ? undefined : modNameTakenRefusal(trimmed);
-}
-
 /** Whether the game gets a file of a mod or of Overwrite. */
 export type OriginFileMark = 'Excluded' | 'Included';
-
-/** The refusal of a mark on a file that is gone. */
-export const goneFromDisk = (name: string): string => `"${name}" is gone from disk.`;
 
 /** What a subscriber disposes of to hear no more. */
 export interface Subscription {

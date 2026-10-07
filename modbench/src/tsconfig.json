@@ -12,6 +12,7 @@
     { "path": "./wire" },
     { "path": "./ports" },
     { "path": "./instanceAdapter" },
+    { "path": "./coreLib" },
     { "path": "./instanceLoader" },
     { "path": "./modlist" },
     { "path": "./pluginsCommands" },

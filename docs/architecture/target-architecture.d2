@@ -46,6 +46,7 @@ modbench_core: "MODBENCH · Core — one command per gesture; each writes throug
   downloadscommands: "downloads commands\nowns: the gestures on a downloaded file\nhides: nothing" {class: core}
   install: "install\nowns: putting a mod's files into the instance: a new mod or an\nupgrade\nhides: extraction and what an upgrade keeps" {class: core}
   deploy: "deploy commands\nowns: deploy and purge\nhides: the rules that refuse a deploy" {class: core}
+  corelib: "core lib\nowns: the refusals the commands share\nhides: nothing; it holds no state and no port" {class: core}
 }
 
 medit_kernel: "MEDIT · Kernel — read by the core, the read model and the repositories; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
