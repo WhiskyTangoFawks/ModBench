@@ -201,17 +201,17 @@ internal sealed class WriteTargets(
     {
         repository = null;
 
-        if (loadOrder.Current.ProviderOf(plugin) is not { } provider)
+        if (loadOrder.Current.Plugin(plugin) is not { } registered)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.PluginNotInLoadOrder,
                 $"{plugin.Name} from '{plugin.Origin}' is not in the load order, so nothing can be written to it.");
         }
 
-        if (provider is not PluginProvider.FromMod mod) return RefuseUntracked(plugin, provider);
-        if (SourceRepository.Open(mod, loadOrder.Current.GameRelease) is not { } opened) return RefuseUntracked(plugin, provider);
+        if (registered.Provider is not PluginProvider.FromMod mod || !SourceRepository.IsTracked(registered))
+            return RefuseUntracked(plugin, registered.Provider);
 
-        repository = opened;
+        repository = SourceRepository.Over(mod, loadOrder.Current.GameRelease);
         return RefuseIfNotLoaded(plugin);
     }
 

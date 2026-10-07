@@ -27,7 +27,7 @@ internal sealed class PluginCompileService(
         var loadOrder = loadOrderHolder.Current;
         if (loadOrder.Plugin(plugin) is not { } registered)
             return CompileResult.Refused(CompileRefusal.PluginNotInLoadOrder, $"{plugin.Name} is not in the load order.");
-        if (SourceRepository.TrackedModOf(loadOrder, plugin) is not { } mod)
+        if (registered.Provider is not PluginProvider.FromMod mod || !SourceRepository.IsTracked(registered))
             return CompileResult.Refused(CompileRefusal.PluginNotTracked, $"{plugin.Name} is not tracked, so there is no source to compile.");
 
         // One repository for the whole pass, so the tree it answers from is read once.
