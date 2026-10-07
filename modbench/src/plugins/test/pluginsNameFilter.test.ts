@@ -27,6 +27,7 @@ vi.mock('vscode', () => ({
 
 import { pluginsViewProgress, registerPluginsNameFilter } from '../pluginsView';
 import { NO_PLUGINS_MESSAGE, PluginsTreeProvider, type PluginListSource } from '../PluginsTreeProvider';
+import type { PluginsCommandResult } from '../../pluginsCommands/plugins';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type PluginMetadata } from '../../client';
 import { syncMessageDouble } from '../../test/syncMessageDouble';
