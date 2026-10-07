@@ -69,7 +69,8 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const changedOutsideDiagnostics = vscode.languages.createDiagnosticCollection('modbench-changed-outside');
   const tree = new PluginsTreeProvider({
     instance, log, reporter: reporterFor('pluginList'),
-    source: { reorderPlugins: (names, drop) => reorderPlugins(access, client, instance.value.activeProfile, names, drop) },
+    source: { reorderPlugins: (names, drop) => reorderPlugins(
+      access, client, instance.value.activeProfile, names, drop, (instance.value.pluginsLoadedWithNoLine ?? []).map((plugin) => plugin.name)) },
     dataFolderFile: deps.dataFolderFile,
     records: recordBrowser,
     client,

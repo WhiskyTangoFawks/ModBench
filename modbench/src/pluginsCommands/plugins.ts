@@ -93,17 +93,21 @@ async function orderFactsFrom(masters: PluginMasters): Promise<PluginOrderFactsO
 }
 
 /** `modbench.plugin.move`: the block lands where the drop says, unless that breaks the plugin-order
- *  rules of the order it lands on. */
+ *  rules of the order it lands on. A line for a plugin the game loads with no line does not place
+ *  it, so the rules do not count it. */
 export async function reorderPlugins(
   access: PluginsAccess, masters: PluginMasters, profile: string, pluginNames: string[], drop: Drop,
+  loadedWithNoLine: readonly string[] = [],
 ): Promise<PluginsCommandResult> {
+  const noLine = new Set(loadedWithNoLine.map(pluginKey));
   const factsOf = await orderFactsFrom(masters);
   let refusal: string | undefined;
   // Settled against the order the change lands on, so a tree a generation behind plugins.txt
   // cannot land the block at a stale index.
   const result = await changePluginOrder(access, profile, (order) => {
     const names = order.map((p) => p.name);
-    refusal = moveOrderRefusal(names, pluginNames, drop, factsOf);
+    const placed = names.filter((name) => !noLine.has(pluginKey(name)));
+    refusal = moveOrderRefusal(placed, pluginNames, drop, factsOf);
     return refusal === undefined ? [{ kind: 'move', plugins: pluginNames, toIndex: dropIndexIn(names, pluginNames, drop) }] : [];
   });
   return refusal === undefined ? result : { applied: false, refusal };

@@ -137,6 +137,13 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
         .toEqual({ applied: true, wrote: false });
     });
 
+    it('lets a plugin go to the losing end past a master that has a line of its own', async () => {
+      await writeFile(pluginsPath(), '*DLCRobot.esm\r\n*A.esp\r\n*X.esp\r\n');
+      const masters = knowing({ name: 'DLCRobot.esm' }, { name: 'A.esp' }, { name: 'X.esp', masters: ['Fallout4.esm', 'DLCRobot.esm'] });
+      expect(await reorderPlugins(accessTo(dir), masters, PROFILE, ['X.esp'], { kind: 'losingEnd' }, ['DLCRobot.esm']))
+        .toEqual({ applied: true, wrote: true });
+    });
+
     it('judges a name two origins hold by the copy in the load order', async () => {
       const masters = knowing(
         { name: 'A.esp' }, { name: 'B.esp', origin: 'Other', inLoadOrder: false }, { name: 'B.esp', masters: ['A.esp'] }, { name: 'C.esp' });
