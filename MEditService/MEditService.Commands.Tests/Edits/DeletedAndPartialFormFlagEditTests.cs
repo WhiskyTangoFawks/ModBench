@@ -158,7 +158,7 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void SettingPersistent_OnADeletedCell_IsRefused_AndWritesNothing()
+    public void SettingPersistent_OnADeletedCell_IsRefusedAsPersistentOnDeletedRecord_AndAnswersNoChanges()
     {
         var cell = InteriorCellOfFallout4Esm();
         cell.MajorRecordFlagsRaw = Deleted;
@@ -327,7 +327,7 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void AViewOfRecordFlags_IsRefused_AndWritesNothing()
+    public void AViewOfRecordFlags_IsRefusedAsFieldNotFound_AndAnswersNoChanges()
     {
         var formKey = _fixture.Seed(InteriorCellOfFallout4Esm(), "cell");
         var before = _fixture.Document(formKey);
@@ -340,7 +340,7 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void SettingPartialForm_OnATemporaryExteriorCell_IsRefused_AndWritesNothing()
+    public void SettingPartialForm_OnATemporaryExteriorCell_IsRefusedAsCannotBePartialForm_AndAnswersNoChanges()
     {
         var formKey = _fixture.Seed(ExteriorCellOfFallout4Esm(0), "cell");
 
@@ -358,7 +358,7 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void SettingPartialForm_OnACellAPluginOtherThanFallout4EsmDefines_IsRefused_AndWritesNothing()
+    public void SettingPartialForm_OnACellAPluginOtherThanFallout4EsmDefines_IsRefusedAsCannotBePartialForm_AndAnswersNoChanges()
     {
         var formKey = _fixture.Seed(new Cell(_mod) { EditorID = "C", Flags = Cell.Flag.IsInteriorCell }, "cell");
 
@@ -366,7 +366,7 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void SettingPartialForm_OnACellThatSaysNotWhereItSits_WithNoCopyToItsLeft_IsRefused_AndWritesNothing()
+    public void SettingPartialForm_OnACellThatSaysNotWhereItSits_WithNoCopyToItsLeft_IsRefusedAsCannotBePartialForm_AndAnswersNoChanges()
     {
         var formKey = _fixture.Seed(new Cell(new FormKey(Fallout4Esm, 0x800), Fallout4Release.Fallout4) { EditorID = "C" }, "cell");
 

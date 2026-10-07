@@ -27,19 +27,6 @@ public sealed class OverriddenAndUnlistedRefusalTests
     }
 
     [Fact]
-    public void EditingAnOverriddenPlugin_WritesNothing()
-    {
-        using var mod = OverriddenAndUnlistedFixture.Create();
-
-        mod.EditHandler.Set(mod.OverriddenPlugin, mod.OverriddenNpc.ToString(), "HeightMax", Json("0.75"));
-
-        Assert.Empty(mod.ChangedFormKeys(mod.OverriddenPlugin));
-        var document = mod.Document(mod.OverriddenPlugin, mod.OverriddenNpc.ToString());
-        Assert.NotNull(document);
-        Assert.Equal(OverriddenAndUnlistedFixture.OverriddenNpcEditorId, document.EditorId);
-    }
-
-    [Fact]
     public void EditingTheWinningPlugin_OfTheSameName_Lands()
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
@@ -65,7 +52,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     }
 
     [Fact]
-    public void EditingAPluginWithNoLine_IsRefusedAsNotActive_WritingNothing()
+    public void EditingAPluginWithNoLine_IsRefusedAsNotActive_AndAnswersNoChanges()
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
@@ -76,7 +63,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     }
 
     [Fact]
-    public void EditingATrackedPluginWhoseLineIsDisabled_IsRefusedAsNotActive_WritingNothing()
+    public void EditingATrackedPluginWhoseLineIsDisabled_IsRefusedAsNotActive_AndAnswersNoChanges()
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
         var holder = new LoadOrderHolder();

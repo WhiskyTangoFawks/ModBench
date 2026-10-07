@@ -95,7 +95,7 @@ public sealed class ResponseWriteApiTests : IDisposable
     }
 
     [Fact]
-    public void ARefusedResponseEdit_LeavesTheTopicDocumentAndTheResponseItselfUntouched()
+    public void ARefusedResponseEdit_AnswersNoChanges()
     {
         var before = QuestText;
         var responseBefore = _fixture.Document(_fixture.Response.ToString()).Require().Body;

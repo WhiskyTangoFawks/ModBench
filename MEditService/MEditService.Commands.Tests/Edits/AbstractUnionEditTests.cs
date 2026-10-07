@@ -44,7 +44,7 @@ public sealed class AbstractUnionEditTests : IDisposable
     }
 
     [Fact]
-    public void Level_MissingDiscriminator_IsRefusedAndWritesNothing()
+    public void Level_MissingDiscriminator_IsRefused_AndAnswersNoChanges()
     {
         var before = _fixture.NpcBody();
 
@@ -100,7 +100,7 @@ public sealed class AbstractUnionEditTests : IDisposable
     }
 
     [Fact]
-    public void Aliases_ElementWithUnresolvableNestedConditionElement_IsRefusedAndWritesNothing()
+    public void Aliases_ElementWithUnresolvableNestedConditionElement_IsRefusedAsDiscriminatorInvalid_AndAnswersNoChanges()
     {
         var before = _fixture.QuestBody();
 

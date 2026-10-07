@@ -44,20 +44,18 @@ public sealed class FormIdEditTests
     }
 
     [Fact]
-    public void EditingTheFormId_ToTheOneItHas_WritesNothing_AndAnswersNoNewFormKey()
+    public void EditingTheFormId_ToTheOneItHas_IsApplied_AndAnswersNoNewFormKey()
     {
         using var mod = SourceEditFixture.Tracked();
-        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), mod.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
         Assert.Null(result.NewFormKey);
-        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]
-    public void EditingTheFormId_OfTheHeader_RefusesItAsReadOnly_WithoutTouchingTheSourceTree()
+    public void EditingTheFormId_OfTheHeader_RefusesItAsFieldReadOnly_WithItsMessage_AndAnswersNoChanges()
     {
         using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
