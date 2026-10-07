@@ -20,7 +20,7 @@ internal sealed class CopySource(
         schemaReflector.GetSchemas(loadOrder.GameRelease);
 
     private readonly SourceRepository? _tree = loadOrder.Plugin(plugin) is { Provider: PluginProvider.FromMod mod } registered
-        && SourceRepository.IsTracked(registered)
+        && SourceRepository.SourceReads(registered)
         ? SourceRepository.Over(mod, loadOrder.GameRelease)
         : null;
 

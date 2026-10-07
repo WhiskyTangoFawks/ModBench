@@ -83,7 +83,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ATrackedModsUntrackedPlugin_IsNamedAtLoad()
+    public async Task ATrackedModsPluginWithUnreadableSource_IsNamedAtLoad()
     {
         var fx = Owned(OneMod());
         var second = Path.Combine(OtherTool.ModFolderOf(fx, Origin), SecondPlugin);
@@ -99,7 +99,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
 
         (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
 
-        var untracked = Assert.Single(await stream.EventsUntil("untracked-plugins"));
+        var untracked = Assert.Single(await stream.EventsUntil("plugin-source-unreadable"));
         Assert.Equal(Origin, untracked.GetProperty("origin").GetString());
         Assert.Equal([SecondPlugin], untracked.GetProperty("keys").EnumerateArray().Select(k => k.GetString()));
     }

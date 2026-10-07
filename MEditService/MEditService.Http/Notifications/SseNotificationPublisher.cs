@@ -73,7 +73,7 @@ public sealed record NotificationEvent(
         LoadOrderStatusNotification n => new("load-order-status", "", "", [], 0, LoadOrderStatus: n.Status),
         TrackProgressNotification n => new("track-progress", "", n.Progress.Mod ?? "", [], 0, TrackProgress: n.Progress),
         ExternalChangeNotification n => new("external-change", "", n.Origin, [], 0, ChangedPlugins: n.Plugins),
-        UntrackedPluginsNotification n => new("untracked-plugins", "", n.Origin, n.Plugins, 0),
+        PluginSourceUnreadableNotification n => new("plugin-source-unreadable", "", n.Origin, n.Plugins, 0),
         _ => throw new ArgumentOutOfRangeException(nameof(notification), notification.GetType().Name, null),
     };
 }

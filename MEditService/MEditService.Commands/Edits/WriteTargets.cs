@@ -204,6 +204,14 @@ internal sealed class WriteTargets(
         if (registered.Provider is not PluginProvider.FromMod mod || !SourceRepository.IsTracked(registered))
             return RefuseUntracked(plugin, registered.Provider);
 
+        if (!SourceRepository.SourceReads(registered))
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.PluginSourceUnreadable,
+                $"{plugin.Name}'s plugin source is unreadable, so it is read-only. " +
+                "Decompile the plugin to regenerate the source.");
+        }
+
         repository = SourceRepository.Over(mod, loadOrder.Current.GameRelease);
         return RefuseIfNotLoaded(plugin);
     }

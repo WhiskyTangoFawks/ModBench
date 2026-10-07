@@ -6,7 +6,7 @@ using MEditService.SourceAdapter;
 namespace MEditService.Commands;
 
 /// <summary>Each tracked plugin changed outside Modbench (ADR-0003), and each tracked mod's
-/// untracked plugins.</summary>
+/// plugins whose plugin source is unreadable.</summary>
 internal sealed class ExternalChangeCheck(INotificationPublisher notifications, PluginFileHashes hashes)
 {
     private readonly Lock _checking = new();
@@ -47,7 +47,7 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
             .Select(plugin => new ChangedPlugin(plugin.Key.Name, plugin.Observed))]));
 
         if (tracked[false].Any())
-            notifications.Publish(new UntrackedPluginsNotification(origin, [.. tracked[false].Select(plugin => plugin.Name)]));
+            notifications.Publish(new PluginSourceUnreadableNotification(origin, [.. tracked[false].Select(plugin => plugin.Name)]));
     }
 
     // Bytes that cannot be read, or a last write that cannot, match nothing (ADR-0003).

@@ -7,7 +7,7 @@ import { errorMessage } from '../ports/errorMessage';
 export class NotificationListenerRegistry {
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
     'load-order-status': new Set(), 'track-progress': new Set(), 'external-change': new Set(),
-    'untracked-plugins': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
+    'plugin-source-unreadable': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
   };
 
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
@@ -39,8 +39,8 @@ export class NotificationListenerRegistry {
       case 'external-change':
         this.deliver('external-change', { origin, changedPlugins: event.changedPlugins ?? [] });
         break;
-      case 'untracked-plugins':
-        this.deliver('untracked-plugins', { plugins: keys.map((name) => ({ name, origin })) });
+      case 'plugin-source-unreadable':
+        this.deliver('plugin-source-unreadable', { plugins: keys.map((name) => ({ name, origin })) });
         break;
       case 'rows-changed':
         this.deliver('rows-changed', { plugin: { name: plugin, origin }, keys });

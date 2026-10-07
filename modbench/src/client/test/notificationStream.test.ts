@@ -250,7 +250,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     ['load-order-status', rowsChanged([], { kind: 'load-order-status', loadOrderStatus }), toLoadOrderStatus(loadOrderStatus)],
     ['track-progress', rowsChanged([], { kind: 'track-progress', trackProgress }), trackProgress],
     ['external-change', rowsChanged([], { kind: 'external-change', changedPlugins }), { origin: 'ModA', changedPlugins }],
-    ['untracked-plugins', rowsChanged(['A.esp', 'B.esp'], { kind: 'untracked-plugins' }), { plugins: [{ name: 'A.esp', origin: 'ModA' }, { name: 'B.esp', origin: 'ModA' }] }],
+    ['plugin-source-unreadable', rowsChanged(['A.esp', 'B.esp'], { kind: 'plugin-source-unreadable' }), { plugins: [{ name: 'A.esp', origin: 'ModA' }, { name: 'B.esp', origin: 'ModA' }] }],
     ['rows-changed', rowsChanged(['000001:Test.esp']), { plugin: { name: 'Test.esp', origin: 'ModA' }, keys: ['000001:Test.esp'] }],
     ['plugin-changed', rowsChanged([], { kind: 'plugin-changed' }), { plugin: { name: 'Test.esp', origin: 'ModA' } }],
   ];
