@@ -152,4 +152,16 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         Assert.Contains("load order", problem.GetProperty("detail").GetString(), StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task ANoLoadOrderAnswer_StillCarriesTheCorsHeaders()
+    {
+        await using var app = new MEditHost();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/plugins");
+        request.Headers.Add("Origin", "https://example.test");
+
+        var response = await app.CreateClient().SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.True(response.Headers.Contains("Access-Control-Allow-Origin"));
+    }
 }

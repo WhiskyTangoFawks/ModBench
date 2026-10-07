@@ -96,7 +96,7 @@ public sealed class WriteRouteSeamTests
             + "    internal static IResult Caller(int x)\n    {\n"
             + "        return DirectHit(x);\n    }\n\n"
             + "    internal static IResult DirectHit(int x)\n    {\n"
-            + "        return WriteEndpointMapping.WriteFailure(null!);\n    }\n}\n",
+            + "        return WriteEndpointMapping.Refusal(null!);\n    }\n}\n",
             file =>
             {
                 Assert.Null(BlockBodyOfStaticDeclarationIn(file, "NoSuchMethod"));
@@ -115,7 +115,7 @@ public sealed class WriteRouteSeamTests
             + "    internal static IResult ThroughASibling(int x)\n    {\n"
             + "        return Shared(x);\n    }\n\n"
             + "    private static IResult Shared(int x)\n    {\n"
-            + "        return WriteEndpointMapping.WriteFailure(null!);\n    }\n}\n",
+            + "        return WriteEndpointMapping.Refusal(null!);\n    }\n}\n",
             file => Assert.True(MapsThroughSeamIn([file], "ThroughASibling")));
     }
 
