@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -12,10 +14,9 @@ public sealed class CopyAsOverrideContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Quest.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
 
         var document = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
         Assert.NotNull(document);
@@ -34,10 +35,9 @@ public sealed class CopyAsOverrideContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.InteriorCell.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
 
         var document = fixture.Document(fixture.DestinationPlugin, fixture.InteriorCell.ToString());
         Assert.NotNull(document);
@@ -62,10 +62,9 @@ public sealed class CopyAsOverrideContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Worldspace.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
 
         var document = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString());
         Assert.NotNull(document);
@@ -83,13 +82,11 @@ public sealed class CopyAsOverrideContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
         var service = fixture.CopyHandler;
-        Assert.True(service.CopyAsOverride(
-            fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin).Applied);
+        service.CopySync([new RecordAt(fixture.SourcePlugin, fixture.InteriorCell.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false).OnlyLanded();
 
-        var result = service.CopyAsOverride(
-            fixture.SourcePlugin, fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
+        var result = service.CopySync([new RecordAt(fixture.SourcePlugin, fixture.PersistentRef.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         var child = fixture.Document(fixture.DestinationPlugin, fixture.PersistentRef.ToString());
         Assert.NotNull(child);
         Assert.Equal(ContainerCopyFixture.PersistentRefEditorId, child.EditorId);
@@ -106,10 +103,9 @@ public sealed class CopyAsOverrideContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.TopCellRef.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.TopCellRef.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
         Assert.False(worldspace.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
@@ -127,10 +123,9 @@ public sealed class CopyAsOverrideContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.TopCell.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.TopCell.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
         Assert.False(worldspace.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
@@ -147,10 +142,9 @@ public sealed class CopyAsOverrideContainerTests
     {
         using var fixture = ContainerCopyFixture.CreateWithTrackedSource();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.TopCellRef.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.TopCellRef.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
         Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
         var topCell = JsonNode.Parse(worldspace.Body).Require()["TopCell"].Require();
@@ -164,14 +158,12 @@ public sealed class CopyAsOverrideContainerTests
     public void CopyRecordAsOverride_OnATopCell_WhenDestinationAlreadyOverridesTheWorldspace_LandsItInThatWorldspaceUntouchedOtherwise()
     {
         using var fixture = ContainerCopyFixture.Create();
-        Assert.True(fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin).Applied);
+        fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Worldspace.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false).OnlyLanded();
         var before = JsonNode.Parse(fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require().Body).Require().AsObject();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.TopCell.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.TopCell.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         var after = JsonNode.Parse(fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require().Body).Require().AsObject();
         Assert.Equal(
             fixture.TopCell.ToString(), after["TopCell"].Require()["FormKey"].Require().GetValue<string>());
@@ -184,10 +176,9 @@ public sealed class CopyAsOverrideContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
 
         var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
         Assert.False(worldspace.IsPartialForm());
@@ -220,10 +211,9 @@ public sealed class CopyAsOverrideContainerTests
     {
         using var fixture = ContainerCopyFixture.CreateWithTrackedSource();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
 
         fixture.AssertDestinationCellSitsAt(
             fixture.ExteriorCell.ToString(), ContainerCopyFixture.ExteriorCellEditorId,
@@ -239,10 +229,9 @@ public sealed class CopyAsOverrideContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.ExteriorTemporaryRef.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         var cell = fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell.ToString());
         Assert.NotNull(cell);
         Assert.False(cell.IsPartialForm());
@@ -262,10 +251,9 @@ public sealed class CopyAsOverrideContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.ExteriorCell.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
 
         var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
         Assert.False(worldspace.IsPartialForm());
@@ -289,10 +277,9 @@ public sealed class CopyAsOverrideContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.PersistentRef.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
 
         var copiedCell = fixture.Document(fixture.DestinationPlugin, fixture.InteriorCell.ToString());
         Assert.NotNull(copiedCell);
@@ -313,18 +300,16 @@ public sealed class CopyAsOverrideContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
         var service = fixture.CopyHandler;
-        Assert.True(service.CopyAsOverride(
-            fixture.SourcePlugin, fixture.Response2.ToString(), fixture.DestinationPlugin).Applied);
+        service.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Response2.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false).OnlyLanded();
 
         var before = JsonNode.Parse(fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.Response2EditorId).Body).Require();
         var topicBefore = Assert.Single(before["DialogTopics"].Require().AsArray()).Require().AsObject();
         var existingResponse = topicBefore["Responses"].Require()[0].Require().ToJsonString();
         topicBefore.Remove("Responses");
 
-        var result = service.CopyAsOverride(
-            fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin);
+        var result = service.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Response1.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         var after = JsonNode.Parse(fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.Response2EditorId).Body).Require();
         var topicAfter = Assert.Single(after["DialogTopics"].Require().AsArray()).Require().AsObject();
         var responsesAfter = topicAfter["Responses"].Require().AsArray();
