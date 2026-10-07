@@ -119,6 +119,24 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
         .toEqual({ applied: true, wrote: true });
     });
 
+    it('judges a master named in another case than its plugins.txt line', async () => {
+      const masters = knowing({ name: 'A.esp' }, { name: 'B.esp', masters: ['a.ESP'] }, { name: 'C.esp' });
+      assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(
+        await reorderPlugins(accessTo(dir), masters, PROFILE, ['A.esp'], { kind: 'winningEnd' }), '"A.esp" is a master of "B.esp"');
+    });
+
+    it('refuses a master dropped directly after its dependant, as a view showing winning at the top drops it', async () => {
+      const masters = knowing({ name: 'A.esp' }, { name: 'B.esp', masters: ['A.esp'] }, { name: 'C.esp' });
+      assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(
+        await reorderPlugins(accessTo(dir), masters, PROFILE, ['A.esp'], { kind: 'after', name: 'B.esp' }), '"A.esp" is a master of "B.esp"');
+    });
+
+    it('lets a dependant dropped directly after its master land', async () => {
+      const masters = knowing({ name: 'A.esp' }, { name: 'B.esp', masters: ['A.esp'] }, { name: 'C.esp' });
+      expect(await reorderPlugins(accessTo(dir), masters, PROFILE, ['B.esp'], { kind: 'after', name: 'A.esp' }))
+        .toEqual({ applied: true, wrote: false });
+    });
+
     it('judges a name two origins hold by the copy in the load order', async () => {
       const masters = knowing(
         { name: 'A.esp' }, { name: 'B.esp', origin: 'Other', inLoadOrder: false }, { name: 'B.esp', masters: ['A.esp'] }, { name: 'C.esp' });
