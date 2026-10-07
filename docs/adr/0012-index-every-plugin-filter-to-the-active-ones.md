@@ -1,6 +1,6 @@
 # Index every plugin, filter to the active ones
 
-The record index holds every plugin file in the instance, active or not. Every record view filters to the active plugins, except a file the user opens. A load order change then changes a filter and reads no file, so the editor follows it as it happens ([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)).
+The record index holds every plugin file in the instance, active or not. The Plugins view and the record views show the active plugins. A plugin's source is files in the workspace (ADR-0001), so a file the user opens and VS Code's features over the workspace, such as Go to Symbol, reach it whatever its plugin's state. A load order change then changes a filter and reads no file, so the editor follows it as it happens ([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)).
 
 ## Consequences
 
