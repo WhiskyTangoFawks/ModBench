@@ -7,7 +7,7 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class ReconcileOriginTests
 {
-    private static OpenedIndex MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static OpenedIndex OpenIndex(LoadOrderHolder holder) => Indexes.Open(holder);
 
     [Fact]
     public void Reconcile_WithOrigin_PluginCarriesCallerSuppliedOrigin()
@@ -18,11 +18,10 @@ public sealed class ReconcileOriginTests
             .BuildScattered();
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
-        using var manager = MakeIndexer(holder);
-        OpenedIndex index = manager;
+        using var index = OpenIndex(holder);
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
-        var reads = manager.RequireReads();
+        var reads = index.RequireReads();
         var opened = reads.OpenedPlugins.Keys.Single(k => k.Name == "A.esp");
         Assert.Equal("SomeMod", opened.Origin);
     }
@@ -36,11 +35,10 @@ public sealed class ReconcileOriginTests
             .BuildScattered();
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
-        using var manager = MakeIndexer(holder);
-        OpenedIndex index = manager;
+        using var index = OpenIndex(holder);
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
-        var reads = manager.RequireReads();
+        var reads = index.RequireReads();
         var result = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: "A.esp", Limit: 10, Offset: 0));
 
         var row = Assert.Single(result.Items);
