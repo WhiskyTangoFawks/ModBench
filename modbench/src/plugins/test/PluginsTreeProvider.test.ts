@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { PluginsDrop } from '../../pluginsCommands/plugins';
+import type { PluginsCommandResult, PluginsDrop } from '../../pluginsCommands/plugins';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import type { InstanceValue } from '../../instanceLoader/instance';
@@ -76,10 +76,12 @@ const failIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): Promise<T> 
 class FakeSource implements PluginListSource {
   reorderPluginsCalls: { names: string[]; drop: PluginsDrop }[] = [];
   reorderPluginsError?: Error;
-  reorderPlugins(names: string[], drop: PluginsDrop): Promise<void> {
+  reorderPluginsRefusal?: string;
+  reorderPlugins(names: string[], drop: PluginsDrop): Promise<PluginsCommandResult> {
     if (this.reorderPluginsError) return Promise.reject(this.reorderPluginsError);
     this.reorderPluginsCalls.push({ names, drop });
-    return Promise.resolve();
+    return Promise.resolve(this.reorderPluginsRefusal === undefined
+      ? { applied: true, wrote: true } : { applied: false, refusal: this.reorderPluginsRefusal });
   }
 }
 
@@ -741,25 +743,6 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(filteredSource.reorderPluginsCalls).toEqual(baselineSource.reorderPluginsCalls);
   });
 
-  it('refuses a drop on a row the order has since lost, naming it, and moves nothing', async () => {
-    const source = new FakeSource();
-    const reporter = recordingReporter();
-    const instance = new FakeInstance(valueOf(fixturePlugins()));
-    const tree = new PluginsTreeProvider({ instance, source, reporter });
-    await tree.getChildren();
-    instance.publish(valueOf(fixturePlugins(ORDER.filter((name) => name !== 'D.esp'))));
-    await tree.getChildren();
-
-    const dt = new DataTransfer();
-    tree.handleDrag([node('A.esp')], dt, IGNORED_TOKEN);
-    await tree.handleDrop(node('D.esp'), dt, IGNORED_TOKEN);
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to move plugins.', detail: 'Plugin not found in plugins.txt: D.esp' },
-    ]);
-    expect(source.reorderPluginsCalls).toEqual([]);
-  });
-
   it('a drop still asks for the move with the client reporting disconnected', async () => {
     const source = new FakeSource();
     const tree = new PluginsTreeProvider({
@@ -774,170 +757,21 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
   });
 
+  it('reaches the view as a refusal, naming why, apart from a failed write', async () => {
+    const source = new FakeSource();
+    source.reorderPluginsRefusal = '"A.esp" is a master of "B.esp", so it must load before it.';
+    const { reports } = await drag(source, ['A.esp'], 'D.esp');
+    expect(reports).toEqual([{
+      severity: 'error', message: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.',
+    }]);
+  });
+
   it('surfaces a write failure via the reporter, naming why (ADR-0019)', async () => {
     const source = new FakeSource();
     source.reorderPluginsError = new Error('disk full');
     const { reports, fired } = await drag(source, ['A.esp'], 'D.esp');
     expect(reports).toEqual([{ severity: 'error', message: 'Failed to move plugins.', detail: 'disk full' }]);
     expect(fired).toBe(false);
-  });
-});
-
-describe('PluginsTreeProvider — a drop keeps master and blueprint order', () => {
-  const ORDER = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
-  const node = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
-
-  async function dropAfterReconcile(
-    moved: string[], target: PluginsTreeNode | undefined, facts: PluginMetadata[] | undefined,
-  ) {
-    const source = new FakeSource();
-    const reporter = recordingReporter();
-    const h = makeTree(ORDER.map((name, slot) => plugin({ name, slot })), { source, reporter });
-    if (facts !== undefined) await reconcile(h, facts);
-    await h.tree.getChildren();
-    const dt = new DataTransfer();
-    h.tree.handleDrag(moved.map(node), dt, IGNORED_TOKEN);
-    await h.tree.handleDrop(target, dt, IGNORED_TOKEN);
-    return { calls: source.reorderPluginsCalls, reports: reporter.reports };
-  }
-
-  const heldAll = (overrides: Record<string, Partial<PluginMetadata>>) =>
-    ORDER.map((name) => held(name, overrides[name] ?? {}));
-
-  it('refuses a drop that puts a master below a plugin that depends on it, naming both, and fires no move', async () => {
-    const { calls, reports } = await dropAfterReconcile(['A.esp'], node('D.esp'), heldAll({ 'B.esp': { masters: ['A.esp'] } }));
-    expect(calls).toEqual([]);
-    expect(reports).toEqual([{
-      severity: 'error', message: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.',
-    }]);
-  });
-
-  it('refuses a drop that puts a master below a disabled plugin that depends on it', async () => {
-    const { calls } = await dropAfterReconcile(
-      ['A.esp'], node('D.esp'), heldAll({ 'B.esp': { masters: ['A.esp'], inLoadOrder: false } }));
-    expect(calls).toEqual([]);
-  });
-
-  describe('with winning at the top', () => {
-    async function dropWinningAtTop(moved: string, target: string) {
-      const source = new FakeSource();
-      const reporter = recordingReporter();
-      const h = makeTree(ORDER.map((name, slot) => plugin({ name, slot })), { source, reporter });
-      await reconcile(h, heldAll({ 'B.esp': { masters: ['A.esp'] } }));
-      h.tree.setViewDirection('winningAtTop');
-      await h.tree.getChildren();
-      const dt = new DataTransfer();
-      h.tree.handleDrag([node(moved)], dt, IGNORED_TOKEN);
-      await h.tree.handleDrop(node(target), dt, IGNORED_TOKEN);
-      return { calls: source.reorderPluginsCalls, reports: reporter.reports };
-    }
-
-    it('refuses a master dropped above its dependant, which loads it after', async () => {
-      const { calls, reports } = await dropWinningAtTop('A.esp', 'B.esp');
-      expect(calls).toEqual([]);
-      expect(reports.map((r) => r.detail)).toEqual(['"A.esp" is a master of "B.esp", so it must load before it.']);
-    });
-
-    it('lets a dependant dropped above its master land, which loads it after', async () => {
-      const { calls, reports } = await dropWinningAtTop('B.esp', 'A.esp');
-      expect(reports).toEqual([]);
-      expect(calls).toEqual([{ names: ['B.esp'], drop: { kind: 'after', name: 'A.esp' } }]);
-    });
-  });
-
-  it('matches a master named in another case to its plugins.txt line', async () => {
-    const { calls, reports } = await dropAfterReconcile(['A.esp'], node('D.esp'), heldAll({ 'B.esp': { masters: ['a.ESP'] } }));
-    expect(calls).toEqual([]);
-    expect(reports.map((r) => r.detail)).toEqual(['"A.esp" is a master of "B.esp", so it must load before it.']);
-  });
-
-  it('refuses a drop that puts a plugin above its master', async () => {
-    const { calls, reports } = await dropAfterReconcile(['C.esp'], node('A.esp'), heldAll({ 'C.esp': { masters: ['B.esp'] } }));
-    expect(calls).toEqual([]);
-    expect(reports).toEqual([{
-      severity: 'error', message: 'Could not move plugins.', detail: '"B.esp" is a master of "C.esp", so it must load before it.',
-    }]);
-  });
-
-  it('refuses a drop that puts a blueprint plugin before one that is not, naming both', async () => {
-    const { calls, reports } = await dropAfterReconcile(['E.esp'], node('C.esp'), heldAll({ 'E.esp': { isBlueprint: true } }));
-    expect(calls).toEqual([]);
-    expect(reports).toEqual([{
-      severity: 'error', message: 'Could not move plugins.',
-      detail: '"E.esp" is a blueprint plugin, so it must load after "C.esp", which is not.',
-    }]);
-  });
-
-  it('refuses a drop that puts a plugin that is not a blueprint after one that is', async () => {
-    const { calls, reports } = await dropAfterReconcile(['C.esp'], undefined, heldAll({ 'E.esp': { isBlueprint: true } }));
-    expect(calls).toEqual([]);
-    expect(reports).toEqual([{
-      severity: 'error', message: 'Could not move plugins.',
-      detail: '"E.esp" is a blueprint plugin, so it must load after "C.esp", which is not.',
-    }]);
-  });
-
-  it('fires the move when it keeps every master above its dependants and every blueprint plugin last', async () => {
-    const { calls, reports } = await dropAfterReconcile(
-      ['C.esp'], node('B.esp'), heldAll({ 'D.esp': { masters: ['A.esp', 'C.esp'] }, 'E.esp': { isBlueprint: true } }));
-    expect(calls).toEqual([{ names: ['C.esp'], drop: { kind: 'before', name: 'B.esp' } }]);
-    expect(reports).toEqual([]);
-  });
-
-  it('fires the move while mEdit has not said which masters any plugin has', async () => {
-    const { calls } = await dropAfterReconcile(['A.esp'], node('D.esp'), undefined);
-    expect(calls).toEqual([{ names: ['A.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
-  });
-
-  it('fires the move when mEdit cannot say which masters the dependant has', async () => {
-    const { calls } = await dropAfterReconcile(['A.esp'], node('D.esp'), ORDER.filter((n) => n !== 'B.esp').map((n) => held(n)));
-    expect(calls).toEqual([{ names: ['A.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
-  });
-
-  it('does not blame a drop for an order it leaves as it found it', async () => {
-    const { calls } = await dropAfterReconcile(['D.esp'], node('C.esp'), heldAll({ 'A.esp': { masters: ['B.esp'] } }));
-    expect(calls).toEqual([{ names: ['D.esp'], drop: { kind: 'before', name: 'C.esp' } }]);
-  });
-
-  it('fires a drop that puts a plugin that is not a blueprint before its blueprint master, as MO2\'s setPluginPriority keeps master order only between two blueprints or two non-blueprints', async () => {
-    const { calls, reports } = await dropAfterReconcile(
-      ['D.esp'], node('B.esp'), heldAll({ 'B.esp': { isBlueprint: true }, 'D.esp': { masters: ['B.esp'] } }));
-    expect(calls).toEqual([{ names: ['D.esp'], drop: { kind: 'before', name: 'B.esp' } }]);
-    expect(reports).toEqual([]);
-  });
-
-  it('fires the move when mEdit holds the dependant\'s name only from another origin', async () => {
-    const { calls } = await dropAfterReconcile(
-      ['A.esp'], node('D.esp'), heldAll({ 'B.esp': { origin: 'OtherMod', masters: ['A.esp'] } }));
-    expect(calls).toEqual([{ names: ['A.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
-  });
-
-  it('fires a drop on a locked row for a plugin whose master is a locked plugin with a line of its own, that line not placing the master', async () => {
-    const source = new FakeSource();
-    const reporter = recordingReporter();
-    const h = makeTree([
-      plugin({ name: 'DLCRobot.esm', slot: 0, origin: 'Data' }),
-      plugin({ name: 'A.esp', slot: 1 }),
-      plugin({ name: 'X.esp', slot: 2 }),
-    ], { source, reporter, loadedWithNoLine: ['Fallout4.esm', 'DLCRobot.esm'] });
-    await reconcile(h, [
-      held('DLCRobot.esm', { origin: 'Data' }), held('A.esp'), held('X.esp', { masters: ['Fallout4.esm', 'DLCRobot.esm'] }),
-    ]);
-    await h.tree.getChildren();
-    const dt = new DataTransfer();
-    h.tree.handleDrag([node('X.esp')], dt, IGNORED_TOKEN);
-
-    await h.tree.handleDrop(new ImplicitMasterNode('Fallout4.esm', 'Data'), dt, IGNORED_TOKEN);
-
-    expect(source.reorderPluginsCalls).toEqual([{ names: ['X.esp'], drop: { kind: 'losingEnd' } }]);
-    expect(reporter.reports).toEqual([]);
-  });
-
-  it('refuses a drop that puts a blueprint master below a blueprint plugin that depends on it', async () => {
-    const { calls, reports } = await dropAfterReconcile(
-      ['D.esp'], undefined, heldAll({ 'D.esp': { isBlueprint: true }, 'E.esp': { isBlueprint: true, masters: ['D.esp'] } }));
-    expect(calls).toEqual([]);
-    expect(reports.map((r) => r.detail)).toEqual(['"D.esp" is a master of "E.esp", so it must load before it.']);
   });
 });
 
@@ -3025,7 +2859,7 @@ describe('PluginsTreeProvider — a move by drop ends when the read lands (commo
 
   it('shows the progress bar from the drop until the read after the write lands', async () => {
     const source: PluginListSource = {
-      reorderPlugins: () => { progressSteps.push('write plugins.txt'); return Promise.resolve(); },
+      reorderPlugins: () => { progressSteps.push('write plugins.txt'); return Promise.resolve({ applied: true, wrote: true }); },
     };
     const tree = treeOver(new ReadingInstance(valueOver(LINES)), source);
     await tree.getChildren();

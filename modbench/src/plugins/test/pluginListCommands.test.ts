@@ -291,7 +291,7 @@ describe('registerCreatePluginCommand', () => {
     showQuickPick.mockResolvedValue({ label: 'Overwrite', origin: 'overwrite' });
     const mo2 = makeMo2();
     const instance = new FakeInstance(mo2.instance.value);
-    const tree = new PluginsTreeProvider({ instance, source: { reorderPlugins: () => Promise.resolve() } });
+    const tree = new PluginsTreeProvider({ instance, source: { reorderPlugins: () => Promise.resolve({ applied: true, wrote: true }) } });
     expect(await tree.getChildren()).toEqual([]);
     let changes = 0;
     tree.onDidChangeTreeData(() => { changes++; });

@@ -14,11 +14,13 @@ const h = vi.hoisted(() => ({
   views: [] as { description?: string; message?: string }[],
   decorations: [] as { provideFileDecoration(uri: unknown): { badge?: string } | undefined }[],
   diagnostics: new Map<string, FakeDiagnosticCollection>(),
+  commands: new Map<string, (...args: unknown[]) => unknown>(),
 }));
 
 vi.mock('vscode', () => {
   const disposable = () => ({ dispose: () => undefined });
   const state = makeFilterBoxState();
+  h.commands = state.commands;
   return {
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic,
     DiagnosticSeverity, Uri: { file: uriFile, from: uriFrom },
@@ -85,6 +87,17 @@ beforeEach(() => {
   h.views.length = 0;
   h.decorations.length = 0;
   h.diagnostics.clear();
+});
+
+describe('modbench.plugin.move', () => {
+  it('moves the plugins to the drop through the tree, as a drop does', async () => {
+    const { plugins } = pluginsView();
+    const movePlugins = vi.spyOn(plugins.tree, 'movePlugins').mockResolvedValue();
+
+    await present(h.commands.get('modbench.plugin.move'), 'the move command')(['A.esp'], { kind: 'losingEnd' });
+
+    expect(movePlugins).toHaveBeenCalledWith(['A.esp'], { kind: 'losingEnd' });
+  });
 });
 
 describe('the Plugins view follows mEdit\'s pushes and shows the record filter', () => {

@@ -6,8 +6,7 @@ import { lastGoodReadMessage, type Instance, type InstanceValue, type InstanceVi
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
-import type { PluginsDrop } from '../pluginsCommands/plugins';
-import { moveOrderRefusal, type PluginOrderFactsOf } from '../pluginsCommands/pluginOrder';
+import type { PluginsCommandResult, PluginsDrop } from '../pluginsCommands/plugins';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
@@ -54,11 +53,10 @@ const noRecordBrowser = (): [ErrorNode] => [new ErrorNode(NO_RECORD_BROWSER)];
 // Hoisted out of the constructor so an omitted dependency is not a fresh closure per instance.
 const NO_DATA_FOLDER_FILE = (): string | undefined => undefined;
 
-/** `reorderPlugins`, bound to the instance and the active profile by the composition root;
- *  a refused command reaches this provider as a rejection. Enable/disable reaches its own core
- *  directly, never through the tree. */
+/** `reorderPlugins`, bound to the instance and the active profile by the composition root.
+ *  Enable/disable reaches its own core directly, never through the tree. */
 export interface PluginListSource {
-  reorderPlugins(pluginNames: string[], drop: PluginsDrop): Promise<void>;
+  reorderPlugins(pluginNames: string[], drop: PluginsDrop): Promise<PluginsCommandResult>;
 }
 
 /** The mEdit reads every plugin-keyed fact comes from — the port narrowed to what this tree
@@ -208,9 +206,6 @@ export class PluginsTreeProvider
   private instanceValue: InstanceValue;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
-  // The plugin rows' plugins.txt lines as last rendered, which a drop's order check reads: the
-  // order the user dragged against.
-  private lastOrder: { name: string; origin: string }[] = [];
   private filterText = '';
   private filterLower = '';
   private direction: SortDirection = 'losingAtTop';
@@ -465,7 +460,6 @@ export class PluginsTreeProvider
       shown.add(key);
       return true;
     });
-    this.lastOrder = dedupedOrder.map(({ name, origin }) => ({ name, origin }));
     const lockedRows = loadedWithNoLine.map(({ name, origin }) => new ImplicitMasterNode(name, origin, this.dataFolderFile(name)));
     this.lastLockedRowUris = new Set(lockedRows.flatMap((row) => (row.resourceUri ? [row.resourceUri.toString()] : [])));
     return [
@@ -646,8 +640,6 @@ export class PluginsTreeProvider
     dataTransfer.set(DND_MIME, new vscode.DataTransferItem({ plugins }));
   }
 
-  /** The order check reads the same drop the write applies to plugins.txt's order, whichever end
-   *  the view shows at the top. */
   async handleDrop(
     target: PluginsTreeNode | undefined,
     dataTransfer: vscode.DataTransfer,
@@ -655,30 +647,21 @@ export class PluginsTreeProvider
   ): Promise<void> {
     const payload = dataTransfer.get(DND_MIME);
     if (!payload || !isDropPayload(payload.value)) return;
-    const { plugins: moved } = payload.value;
-    const names = moved.map((p) => p.name);
+    const names = payload.value.plugins.map((p) => p.name);
     const drop = this.dropFor(target, names);
     if (drop === undefined) return;
+    await this.movePlugins(names, drop);
+  }
+
+  /** `modbench.plugin.move`, which a drop is one entry point into. */
+  async movePlugins(names: string[], drop: PluginsDrop): Promise<void> {
     try {
-      const refusal = moveOrderRefusal(this.lastOrder.map((line) => line.name), names, drop, this.orderFacts());
-      if (refusal !== undefined) {
-        this.reporter?.report('error', 'Could not move plugins.', refusal);
-        return;
-      }
-      await runWritingGesture(PLUGINS_KEY_ARGS.view, this.instance, () => this.source.reorderPlugins(names, drop));
+      const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, this.instance, () => this.source.reorderPlugins(names, drop));
+      if (!result.applied) this.reporter?.report('error', 'Could not move plugins.', result.refusal);
     } catch (e) {
       this.log('info', `[PluginsTreeProvider] reorderPlugins failed: ${errorMessage(e)}`);
       this.reporter?.report('error', 'Failed to move plugins.', errorMessage(e));
     }
-  }
-
-  // Only the line's own plugin, by its origin (ADR-0012).
-  private orderFacts(): PluginOrderFactsOf {
-    const originOf = new Map(this.lastOrder.map((line) => [line.name, line.origin] as const));
-    return (name) => {
-      const origin = originOf.get(name);
-      return origin === undefined ? undefined : this.facts.orderFacts({ name, origin });
-    };
   }
 
   // plugins.md, Drag and drop, story 2: a drop lands as shown in either direction, and the locked

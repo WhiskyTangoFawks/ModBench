@@ -32,7 +32,7 @@ import { type PluginMetadata } from '../../client';
 import { syncMessageDouble } from '../../test/syncMessageDouble';
 
 class FakeSource implements PluginListSource {
-  reorderPlugins(): Promise<void> { return Promise.resolve(); }
+  reorderPlugins(): Promise<PluginsCommandResult> { return Promise.resolve({ applied: true, wrote: true }); }
 }
 
 function plugin(name: string): LoadOrderPlugin | LoadOrderPluginLine {

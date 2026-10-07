@@ -3,7 +3,8 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { dropIndexIn, type Drop } from './dropIndex';
 import { refuse } from '../ports/refuse';
-import { applyOrThrow } from '../ports/applyOrThrow';
+import type { MEditClient, PluginMetadata } from '../client';
+import { moveOrderRefusal, type PluginOrderFacts, type PluginOrderFactsOf } from './pluginOrder';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type {
   DataFolderPlugins, DecidePluginOrder, InstanceAdapter, PluginEntry, PluginOrderChange,
@@ -76,13 +77,36 @@ export function setPluginsEnabled(
 /** Where a drag landed in the Plugins tree. */
 export type { Drop as PluginsDrop } from './dropIndex';
 
-export function reorderPlugins(
-  access: PluginsAccess, profile: string, pluginNames: string[], drop: Drop,
+/** What the plugin-order rules ask mEdit: the masters query. */
+export type PluginMasters = Pick<MEditClient, 'getPlugins'>;
+
+// plugins.txt has no origin, so a name two origins hold names no one plugin: it is not judged.
+// Nothing is judged while mEdit cannot answer (plugins.md, Drag and drop, story 3).
+async function orderFactsFrom(masters: PluginMasters): Promise<PluginOrderFactsOf> {
+  const held = await masters.getPlugins().catch(() => [] as PluginMetadata[]);
+  const byName = new Map<string, PluginOrderFacts | undefined>();
+  for (const { name, masters: own, isBlueprint } of held) {
+    const key = pluginKey(name);
+    byName.set(key, byName.has(key) ? undefined : { masters: own, blueprint: isBlueprint });
+  }
+  return (name) => byName.get(pluginKey(name));
+}
+
+/** `modbench.plugin.move`: the block lands where the drop says, unless that breaks the plugin-order
+ *  rules of the order it lands on. */
+export async function reorderPlugins(
+  access: PluginsAccess, masters: PluginMasters, profile: string, pluginNames: string[], drop: Drop,
 ): Promise<PluginsCommandResult> {
+  const factsOf = await orderFactsFrom(masters);
+  let refusal: string | undefined;
   // Settled against the order the change lands on, so a tree a generation behind plugins.txt
   // cannot land the block at a stale index.
-  return changePluginOrder(access, profile, (order) =>
-    [{ kind: 'move', plugins: pluginNames, toIndex: dropIndexIn(order.map((p) => p.name), pluginNames, drop) }]);
+  const result = await changePluginOrder(access, profile, (order) => {
+    const names = order.map((p) => p.name);
+    refusal = moveOrderRefusal(names, pluginNames, drop, factsOf);
+    return refusal === undefined ? [{ kind: 'move', plugins: pluginNames, toIndex: dropIndexIn(names, pluginNames, drop) }] : [];
+  });
+  return refusal === undefined ? result : { applied: false, refusal };
 }
 
 interface PluginLinesDelta {
@@ -159,12 +183,4 @@ export type PluginSyncRun = (inputs: PluginSyncInputs) => Promise<PluginSyncResu
 /** `syncPlugins` bound to one instance. */
 export function pluginSyncOver(access: PluginsAccess): PluginSyncRun {
   return (inputs) => syncPlugins(access, inputs);
-}
-
-/** `reorderPlugins` bound to one instance and the profile it names now; a refusal rejects, the
- *  shape its caller's notify-and-log path is written against. */
-export function reorderOver(
-  access: PluginsAccess, profile: () => string,
-): (pluginNames: string[], drop: Drop) => Promise<void> {
-  return async (pluginNames, drop) => applyOrThrow(await reorderPlugins(access, profile(), pluginNames, drop));
 }
