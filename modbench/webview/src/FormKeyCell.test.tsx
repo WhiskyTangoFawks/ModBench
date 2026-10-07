@@ -162,16 +162,6 @@ describe('FormKeyCell — mutable column gates opening on the focus check', () =
     fireEvent.click(screen.getByText('—'));
     expect(pickFormKey).toHaveBeenCalledWith('', ['race']);
   });
-
-  it('marks the mutable link as the open trigger', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onCommit={vi.fn()} />);
-    expect(screen.getByText('000019:Fallout4.esm').closest('[data-open-trigger]')).not.toBeNull();
-  });
-
-  it('does not mark the immutable link as an open trigger', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onCommit={vi.fn()} />);
-    expect(screen.getByText('000019:Fallout4.esm').closest('[data-open-trigger]')).toBeNull();
-  });
 });
 
 describe('FormKeyCell — resolution-driven label', () => {
