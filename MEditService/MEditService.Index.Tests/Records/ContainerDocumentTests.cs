@@ -25,7 +25,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
         GameRelease.Fallout4);
 
     [Fact]
-    public void Index_ForACellWithChildren_StoresThemEmbeddedInTheCellsOwnDocument()
+    public void ACellWithChildren_HoldsThemEmbeddedInItsOwnDocument()
     {
         using var overlay = OpenPlugin();
 
@@ -58,7 +58,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
     }
 
     [Fact]
-    public void Index_ForAContainer_StoresTheSameBytesTheSourcePathWould()
+    public void AContainersDocument_HoldsTheSameBytesTheSourcePathWould()
     {
         var setterMod = ModFactory.ImportSetter(
             new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
@@ -75,7 +75,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
     }
 
     [Fact]
-    public void Index_ForANonContainer_StoresTheCodecsBytesUnchanged()
+    public void ANonContainersDocument_HoldsTheCodecsBytesUnchanged()
     {
         using var overlay = OpenPlugin();
 

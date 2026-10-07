@@ -15,7 +15,7 @@ public sealed class HeldPluginsTests
     private static PluginAddress Key(string name, string origin = PluginOrigin.DataDirectory) => new(name, origin);
 
     [Fact]
-    public void Open_TheGamesMasterSentFirst_LoadsBeforeTheUserPlugin()
+    public void TheGamesMasterSentFirst_IsHeldBeforeTheUserPlugin()
     {
         using var data = new PluginFixtureBuilder("lo-open")
             .WithPlugin("Fallout4.esm")
@@ -30,7 +30,7 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void Open_MissingFile_IsAFailureOnTheRow_NotAnException()
+    public void AMissingFile_IsAFailureOnTheRow_NotAnException()
     {
         using var data = new PluginFixtureBuilder("lo-missing")
             .WithPlugin("Present.esp")
@@ -48,7 +48,7 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void Open_UnparseableFile_IsAFailureOnTheRow_RestStillOpen()
+    public void AnUnparseableFile_IsAFailureOnTheRow_RestStillOpen()
     {
         using var data = new PluginFixtureBuilder("lo-garbage")
             .WithPlugin("Good.esp")
@@ -68,7 +68,7 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void Open_OverriddenPluginUnparseable_TheFailureNamesTheOverriddenPluginsOrigin()
+    public void AnUnparseableOverriddenPlugin_TheFailureNamesTheOverriddenPluginsOrigin()
     {
         using var fx = new PluginFixtureBuilder("lo-losing-garbage")
             .WithPlugin("Shared.esp", origin: "ModB")
@@ -87,7 +87,7 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void Open_AfterAFailure_ClearsTheFailure()
+    public void AReconcileAfterAFailure_ClearsTheFailure()
     {
         using var data = new PluginFixtureBuilder("lo-recover")
             .WithPlugin("Fixed.esp")
@@ -109,7 +109,7 @@ public sealed class HeldPluginsTests
     [InlineData("TestMod.esl", true, false)]
     [InlineData("UserMaster.esm", false, true)]
     [InlineData("UserPatch.esp", false, false)]
-    public void Open_ExtensionFlags(string name, bool isLight, bool isMaster)
+    public void AnExtension_SetsTheLightAndMasterFlags(string name, bool isLight, bool isMaster)
     {
         using var data = new PluginFixtureBuilder("lo-ext").WithPlugin(name).Build();
         using var held = Open(data);
@@ -120,7 +120,7 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void Open_HeaderFlaggedEsp_FollowsTheHeaderFlag()
+    public void AHeaderFlaggedEsp_FollowsTheHeaderFlag()
     {
         using var data = new PluginFixtureBuilder("lo-flags")
             .WithPlugin("EslFlagged.esp", mod => mod.IsSmallMaster = true)
@@ -134,7 +134,7 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void Open_RecordCount_MatchesTheFile()
+    public void TheRecordCount_MatchesTheFile()
     {
         using var data = new PluginFixtureBuilder("lo-rcount")
             .WithPlugin("WithRecords.esp", mod =>
@@ -162,7 +162,7 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void Update_MovesTheRegistration_AndTheDerivedFactsFollow()
+    public void DisablingAPlugin_KeepsItHeld_AndItsWinsGo()
     {
         using var data = new PluginFixtureBuilder("lo-update").WithPlugin("A.esp", mod => mod.Npcs.AddNew("Npc")).Build();
         var holder = new LoadOrderHolder();
@@ -178,7 +178,7 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void Remove_DropsThePlugin_AndWhatItAnswered()
+    public void ARemovedPlugin_IsNoLongerHeld()
     {
         using var data = new PluginFixtureBuilder("lo-remove").WithPlugin("A.esp").WithPlugin("B.esp").Build();
         var holder = new LoadOrderHolder();

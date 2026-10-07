@@ -62,7 +62,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     }
 
     [Fact]
-    public void GetWorldspaceCells_ExteriorCellWithFullNameSet_CarriesItThrough()
+    public void AnExteriorCellWithAFullName_CarriesItThrough()
     {
         var cells = _index.RequireReads().GetWorldspaceCells(_plugin, _worldspaceFormKey);
 
@@ -71,7 +71,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     }
 
     [Fact]
-    public void GetWorldspaceCells_TopCellWithNoFullNameSet_FullNameIsNull()
+    public void ATopCellWithNoFullName_HasANullFullName()
     {
         var cells = _index.RequireReads().GetWorldspaceCells(_plugin, _worldspaceFormKey);
 

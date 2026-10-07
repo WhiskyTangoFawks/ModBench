@@ -17,7 +17,7 @@ public class MissingReferenceTests
         [.. index.RequireReads().GetReferencesToMissingRecordsOnFiles(_ => null).Select(placed => placed.Reference)];
 
     [Fact]
-    public void GetReferencesToMissingRecordsOnFiles_ALinkToARecordNoPluginHolds_NamesTheReferrerAndTheTarget()
+    public void ReportingMissingReferences_ALinkToARecordNoPluginHolds_NamesTheReferrerAndTheTarget()
     {
         FormKey npc = default;
         using var fixture = new PluginFixtureBuilder("missing-ref-absent")
@@ -38,7 +38,7 @@ public class MissingReferenceTests
     }
 
     [Fact]
-    public void GetReferencesToMissingRecordsOnFiles_ALinkToARecordAnActivePluginHolds_IsNotReported()
+    public void ReportingMissingReferences_ALinkToARecordAnActivePluginHolds_IsNotReported()
     {
         using var fixture = new PluginFixtureBuilder("missing-ref-held")
             .WithPlugin("Refers.esp", mod =>
@@ -53,7 +53,7 @@ public class MissingReferenceTests
     }
 
     [Fact]
-    public void GetReferencesToMissingRecordsOnFiles_AnEngineDefinedFormIdInABaseMaster_IsNotReported_ButTheFirstHeldRangeFormIdIs()
+    public void ReportingMissingReferences_AnEngineDefinedFormIdInABaseMaster_IsNotReported_ButTheFirstHeldRangeFormIdIs()
     {
         using var fixture = new PluginFixtureBuilder("missing-ref-engine")
             .WithPlugin("Refers.esp", mod =>
@@ -70,7 +70,7 @@ public class MissingReferenceTests
     }
 
     [Fact]
-    public void GetReferencesToMissingRecordsOnFiles_ALinkToARecordOnlyAnInactivePluginHolds_IsReported()
+    public void ReportingMissingReferences_ALinkToARecordOnlyAnInactivePluginHolds_IsReported()
     {
         FormKey inactiveRace = default;
         using var fixture = new PluginFixtureBuilder("missing-ref-inactive")

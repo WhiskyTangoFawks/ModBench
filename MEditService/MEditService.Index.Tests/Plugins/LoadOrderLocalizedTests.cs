@@ -10,7 +10,7 @@ namespace MEditService.Index.Tests.Plugins;
 public sealed class LoadOrderLocalizedTests
 {
     [Fact]
-    public void Load_ALocalizedDataDirectoryPlugin_IndexesItsRealStringInsteadOfThrowingOrReadingEmpty()
+    public void ALocalizedDataDirectoryPlugin_IndexesItsRealStringInsteadOfThrowingOrReadingEmpty()
     {
         var holder = new LoadOrderHolder();
         FormKey doorFormKey = default;
@@ -40,7 +40,7 @@ public sealed class LoadOrderLocalizedTests
     }
 
     [Fact]
-    public void Load_ALocalizedOverwritePlugin_ReadsItsOwnStrings_NotTheGamesDataFolder()
+    public void ALocalizedOverwritePlugin_ReadsItsOwnStrings_NotTheGamesDataFolder()
     {
         var holder = new LoadOrderHolder();
         FormKey doorFormKey = default;
