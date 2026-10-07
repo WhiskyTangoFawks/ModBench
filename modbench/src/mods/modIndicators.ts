@@ -5,7 +5,8 @@ import type { InstanceValue, InstanceView, OriginFile } from '../instanceLoader/
 import { modOrigin, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import type { WorkspaceSettings } from './workspaceSettings';
 
-/** Each indicator in the order mods.md's table lists them, with its name there. */
+/** Each indicator in the order mods.md's table lists them, with its name there.
+ *  @public Read by packageJson.test, which holds package.json to it. */
 export const MOD_INDICATORS = [
   { id: 'overwritesLooseFiles', name: 'Overwrites loose files', badge: '\u2295', colour: 'modbench.modOverwritesLooseFiles' },
   { id: 'overwrittenLooseFiles', name: 'Overwritten loose files', badge: '\u2296', colour: 'modbench.modOverwrittenLooseFiles' },
@@ -55,6 +56,7 @@ const MOD_ROW_SCHEME = 'modbench-mod';
 
 export const modRowUri = (name: string): vscode.Uri => vscode.Uri.from({ scheme: MOD_ROW_SCHEME, path: `/${name}` });
 
+/** @public Read by packageJson.test, which holds package.json to it. */
 export const indicatorSetting = (id: ModIndicator, part: 'badge' | 'colour'): string => `modbench.mods.indicators.${id}.${part}`;
 
 type Indicator = (typeof MOD_INDICATORS)[number];

@@ -9,9 +9,7 @@ import type { CompareOverride, FieldDiff, FieldMetadata, PathHop } from './types
 // A formatter is pure: it renders no markup, reads no panel state, and changes neither the value
 // the row commits nor the value it copies.
 
-/** One member of the element being summarized, addressed by its path from the element's own root.
- *  Value, schema and resolution are joined here, so a formatter names each member once. */
-export interface Member {
+interface Member {
   value: unknown;
   /** The member's schema, for a rule that reads metadata rather than a value. Where the member's
    *  type varies by the union's leaf, this is the variant the element's own leaf names. */

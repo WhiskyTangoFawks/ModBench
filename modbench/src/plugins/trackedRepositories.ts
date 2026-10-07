@@ -37,8 +37,7 @@ function pluginRepositoriesOf<T>(
   return byPlugin;
 }
 
-/** The one shape this extension needs from a `vscode.git` `Repository`: `status()`. */
-export interface MinimalRepository {
+interface MinimalRepository {
   status(): Thenable<unknown>;
 }
 // Deliberately not the full upstream `git.d.ts`, just the members called, so nothing here can

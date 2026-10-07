@@ -1,6 +1,6 @@
 import type { MEditClient, NotificationKind, NotificationPayloads, BackendStatus } from '../MEditClient';
 import type { NotificationEvent } from '../apiClient';
-import { NotificationListenerRegistry } from '../notificationStream';
+import { SseNotificationSubscriber } from '../notificationStream';
 
 // Every query and command a test can script; `putLoadOrder` counts as a command here — the
 // distinction is architectural, not behavioural.
@@ -60,7 +60,7 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly commandResults: { [K in CommandMethod]?: ScriptedResults[K] } = {};
   private readonly commandFailures = new Map<CommandMethod, Error>();
   private readonly commandHandlers: { [K in CommandMethod]?: Handlers[K] } = {};
-  private readonly notifications = new NotificationListenerRegistry();
+  private readonly notifications = new SseNotificationSubscriber({ openStream: () => Promise.reject(new Error('never started')) });
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private readonly reconnectListeners = new Set<() => void>();
   private _status: BackendStatus = 'starting';
