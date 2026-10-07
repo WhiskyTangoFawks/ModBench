@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
@@ -29,5 +28,5 @@ public static class SourceEdits
         SourceRepository repository, PluginAddress plugin, IMajorRecordGetter record, string recordType, GameRelease release) =>
         repository.Put(plugin, new SourceDocument(
             record.FormKey.ToString(), recordType, record.EditorID,
-            Encoding.UTF8.GetString(Codec.SerializeToBytes(record, release))));
+            Codec.SerializeToText(record, release)));
 }

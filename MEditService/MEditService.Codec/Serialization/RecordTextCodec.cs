@@ -55,9 +55,9 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
     /// <summary>The bytes of a source document, without the filesystem (ADR-0005): indexing
     /// produces millions, so a temp-file round trip is not an option.</summary>
-    public byte[] SerializeToBytes(IMajorRecordGetter record, GameRelease gameRelease, CancellationToken cancel = default)
+    internal byte[] SerializeToBytes(IMajorRecordGetter record, GameRelease gameRelease)
     {
-        var bytes = SerializeCore(record, gameRelease, cancel);
+        var bytes = SerializeCore(record, gameRelease, CancellationToken.None);
         if (logger.IsEnabled(LogLevel.Trace))
         {
             logger.LogTrace("Serialized record {FormKey} to {ByteCount} bytes", record.FormKey, bytes.Length);

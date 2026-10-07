@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
@@ -48,7 +49,7 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
             _modFolder,
             [
                 new TreeFile(PluginSourceRoot.HeaderDocument(PluginName), HeaderDocument.Write(_mod)),
-                new TreeFile(_questPath, _codec.SerializeToBytes(_quest, Release)),
+                new TreeFile(_questPath, Encoding.UTF8.GetBytes(_codec.SerializeToText(_quest, Release))),
             ]);
     }
 

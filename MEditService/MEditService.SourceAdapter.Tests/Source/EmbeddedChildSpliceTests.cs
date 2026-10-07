@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -71,7 +72,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
         $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
 
     private byte[] Serialize(IMajorRecordGetter record) =>
-        _codec.SerializeToBytes(record, Release);
+        Encoding.UTF8.GetBytes(_codec.SerializeToText(record, Release));
 
     private SourceRepository Repository =>
         SourceRepository.Open(TestMod.In(_modFolder), Release) ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");

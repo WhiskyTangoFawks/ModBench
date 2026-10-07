@@ -1,3 +1,4 @@
+using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -84,7 +85,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
             $"{worldspace.EditorID} - {worldspace.FormKey.ID:X6}_{worldspace.FormKey.ModKey.FileName}"));
 
         var repository = Tracked(
-            new TreeFile(worldspacePath, _codec.SerializeToBytes(worldspace, Release)));
+            new TreeFile(worldspacePath, Encoding.UTF8.GetBytes(_codec.SerializeToText(worldspace, Release))));
 
         var movedInTheWorkingTreeAlone = $"00080A:{PluginName}";
         var file = Path.Combine(_modFolder, worldspacePath);
