@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const {
-  executeCommand, registerCommand, showErrorMessage, showTextDocument, showQuickPick, createQuickPick, openExternal,
+  executeCommand, registerCommand, showErrorMessage, showTextDocument, showQuickPick, createQuickPick, openExternal, showInputBox,
 } = vi.hoisted(() => ({
   executeCommand: vi.fn(),
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
@@ -10,6 +10,7 @@ const {
   showQuickPick: vi.fn(),
   createQuickPick: vi.fn(),
   openExternal: vi.fn(),
+  showInputBox: vi.fn<(options: { value: string }) => Promise<string | undefined>>((options) => Promise.resolve(options.value)),
 }));
 
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, type FakeUri } from '../../test/vscodeMock';
@@ -19,7 +20,7 @@ import { progressSteps, recordedWithProgress } from '../../test/recordedProgress
 
 vi.mock('vscode', () => ({
   commands: { executeCommand, registerCommand },
-  window: { showErrorMessage, showTextDocument, showQuickPick, createQuickPick, withProgress: recordedWithProgress },
+  window: { showErrorMessage, showTextDocument, showQuickPick, showInputBox, createQuickPick, withProgress: recordedWithProgress },
   env: { openExternal },
   Uri: {
     file: (p: string) => ({ fsPath: p, toString: () => `file://${p}` }),
@@ -88,7 +89,6 @@ const fakeDownloadsProvider = (
 });
 
 const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDeps => ({
-  nameNewMod: (defaultName: string) => Promise.resolve(defaultName),
   warnIfFomod: vi.fn(),
   log: downloadsLog,
   ...over,
@@ -256,13 +256,12 @@ describe('registerDownloadsSingleRowCommands', () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z');
-    let asked = false;
-    const nameNewMod = () => { asked = true; return Promise.resolve(undefined); };
+    showInputBox.mockResolvedValueOnce(undefined);
 
-    registerModInstallForDownloadedFile(accessTo(root), fakeInstance(), recordingReporter(), installDeps({ nameNewMod }));
+    registerModInstallForDownloadedFile(accessTo(root), fakeInstance(), recordingReporter(), installDeps());
     invoke('modbench.mod.install', node(root, 'foo.7z'));
 
-    await vi.waitFor(() => expect(asked).toBe(true));
+    await vi.waitFor(() => expect(showInputBox).toHaveBeenCalled());
     expect(installFromArchive).not.toHaveBeenCalled();
     expect(await readFile(meta, 'utf8')).not.toContain('installed=true');
   });
@@ -461,9 +460,8 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const { qp, accept } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
-    const nameNewMod = vi.fn();
 
-    registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps({ nameNewMod }));
+    registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
     invoke('modbench.mod.install', node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     accept({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } });
@@ -474,7 +472,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
         { gameName: 'Fallout 4', modID: '111', fileID: '999', version: undefined },
       );
     });
-    expect(nameNewMod).not.toHaveBeenCalled();
+    expect(showInputBox).not.toHaveBeenCalled();
   });
 
   it('choosing "Install as a new mod…" calls install with the new-mod shape', async () => {
@@ -874,8 +872,9 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
   it('declining to name the mod opens no bar', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
+    showInputBox.mockResolvedValueOnce(undefined);
 
-    registerModInstallForDownloadedFile(accessTo(root), instanceThatReads, recordingReporter(), installDeps({ nameNewMod: () => Promise.resolve(undefined) }));
+    registerModInstallForDownloadedFile(accessTo(root), instanceThatReads, recordingReporter(), installDeps());
     await invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     expect(progressSteps).toEqual([]);

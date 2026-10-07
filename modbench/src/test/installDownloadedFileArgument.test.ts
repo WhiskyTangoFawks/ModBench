@@ -16,6 +16,7 @@ import { registerModInstallCommands } from '../mods/installCommands';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { accessTo } from './mo2/adapterOver';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
+import { recordingReporter } from './surfacingDoubles';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 
 describe('modbench.mod.install given a Downloads row', () => {
@@ -23,7 +24,7 @@ describe('modbench.mod.install given a Downloads row', () => {
     const installDownloaded = vi.fn().mockResolvedValue(true);
     registerModInstallCommands({
       access: accessTo('/instance'), instance: { value: instanceValueFixture(), refresh: () => Promise.resolve() },
-      runModAction: async (_label, _fail, action) => action(), promptModName: vi.fn(), warnIfFomod: vi.fn(),
+      reporterFor: () => recordingReporter(), warnIfFomod: vi.fn(),
       installDownloaded,
     });
     const row = downloadRowFixture('foo.7z');
