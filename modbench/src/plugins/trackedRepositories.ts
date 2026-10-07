@@ -5,7 +5,7 @@ import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 
 /** Each plugin's tracked folder, by `pluginAddressKey`; a plugin whose origin is not a tracked mod
  *  has no entry. A lookup over the Instance value's own two facts, never a fresh disk check. */
-export function trackedFoldersOf(
+function trackedFoldersOf(
   plugins: readonly Pick<PluginMetadata, 'name' | 'origin'>[],
   trackedMods: ReadonlySet<string>,
   modDirs: ReadonlyMap<string, string>,
@@ -22,7 +22,7 @@ export function trackedFoldersOf(
 /** Deduplicates its input as a contract of its own, not as a property of one caller. A folder
  *  whose `openRepository` resolves `null` is omitted, so a later `.status()` can never land on a
  *  null handle. */
-export async function registerTrackedRepositories<T>(
+async function registerTrackedRepositories<T>(
   openRepository: (modFolder: string) => Promise<T | null | undefined>,
   modFolders: readonly string[],
 ): Promise<Map<string, T>> {
@@ -36,7 +36,7 @@ export async function registerTrackedRepositories<T>(
 }
 
 /** Reindexed by plugin because a field edit knows the plugin it edited, never the folder. */
-export function pluginRepositoriesOf<T>(
+function pluginRepositoriesOf<T>(
   folders: ReadonlyMap<string, string>, folderRepositories: ReadonlyMap<string, T>,
 ): Map<string, T> {
   const byPlugin = new Map<string, T>();

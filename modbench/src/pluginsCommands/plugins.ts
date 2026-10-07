@@ -141,7 +141,7 @@ const changedSinceRead = (order: readonly PluginEntry[], read: readonly PluginEn
 
 /** `modbench.plugin.sync`: plugins.txt is the inventory the Plugins tree reads, so when disk
  *  disagrees the file is updated. Every input is the value's, handed in; this walks nothing. */
-export async function syncPlugins(
+async function syncPlugins(
   access: PluginsAccess, { profile, pluginOrder, provided, inData, loadedWithNoLine }: PluginSyncInputs,
 ): Promise<PluginSyncResult> {
   // Without the Data folder's listing, a line for a Data plugin would be dropped. A game folder

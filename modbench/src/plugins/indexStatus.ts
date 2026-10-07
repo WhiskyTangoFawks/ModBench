@@ -9,7 +9,7 @@ import { reportSkippedPlugins } from './pluginFailures';
 import { createReconcileNarrator, subscribeNarratorToLoadOrderStatus, type ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
 
-export interface ReconciledDeps {
+interface ReconciledDeps {
   log: (msg: string) => void;
   warn: (msg: string) => void;
   statusBar: Pick<StatusBar, 'ready'>;
@@ -24,7 +24,7 @@ export interface ReconciledDeps {
 /** A reconcile that reached Ready, whoever started it, reported and then handed to the views.
  *  Ready is only published once the snapshot is indexed (common.md, The status bar, story 1),
  *  so conflicts are computed. */
-export async function settleReconciled(status: LoadOrderProgress, deps: ReconciledDeps): Promise<void> {
+async function settleReconciled(status: LoadOrderProgress, deps: ReconciledDeps): Promise<void> {
   reportSkippedPlugins(status.failures, deps);
   deps.statusBar.ready(status.activePlugins);
   // A reconciled load order can move which records a row's page/interior/reference caches hold,
@@ -37,7 +37,7 @@ export async function settleReconciled(status: LoadOrderProgress, deps: Reconcil
 
 /** A read failure logs and warns, and never throws (ADR-0019). The filter clears only on purpose
  *  (plugins.md, Order and view state, story 3), so a failed read leaves the view as it was. */
-export async function syncActiveFilter(
+async function syncActiveFilter(
   getActiveFilter: () => Promise<RecordFilter | null>,
   deps: { log: (msg: string) => void; warn: (msg: string) => void; showRecordFilter: (filter: RecordFilter | null) => void },
 ): Promise<void> {

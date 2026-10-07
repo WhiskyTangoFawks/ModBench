@@ -327,7 +327,7 @@ const describeEntry = (entry: EntryRef): string => (entry.kind === 'mod' ? entry
 /** `modbench.mod.sync`, in one write checked against the folders as they stand when it lands: a
  *  disabled line for each of `modFolders` with none, and each line no folder holds dropped.
  *  `added` and `dropped` describe those entries. */
-export async function syncMods(access: ModlistAccess, profile: string, modFolders: readonly ModFolder[]): Promise<ModSyncResult> {
+async function syncMods(access: ModlistAccess, profile: string, modFolders: readonly ModFolder[]): Promise<ModSyncResult> {
   const toSync = new Set(modFolders.map((folder) => folder.path));
   let added: string[] = [];
   let dropped: string[] = [];

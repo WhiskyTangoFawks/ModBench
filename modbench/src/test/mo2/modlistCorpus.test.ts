@@ -14,7 +14,7 @@ import {
   moveSeparators,
   renameSeparator,
   setModsEnabled,
-  syncMods,
+  modSyncOver,
 } from '../../modlist/modlist';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, modFolderNames, snapshotTree,
@@ -172,7 +172,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('syncMods adds and drops lines against the folders it is handed, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await syncMods(accessTo(dir), PROFILE, (await adapterOver(dir).modFolders())?.all ?? []);
+    const outcome = await modSyncOver(accessTo(dir))({ profile: PROFILE, modFolders: (await adapterOver(dir).modFolders())?.all ?? [] });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 

@@ -47,11 +47,11 @@ async function mark(access: DownloadsAccess, name: string, excluded: 'Excluded' 
 
 /** Excluded is a separate axis from the status, so this says nothing about whether the download
  *  was ever installed. */
-export function excludeDownload(access: DownloadsAccess, name: string): Promise<DownloadsCommandResult> {
+function excludeDownload(access: DownloadsAccess, name: string): Promise<DownloadsCommandResult> {
   return mark(access, name, 'Excluded');
 }
 
-export function includeDownload(access: DownloadsAccess, name: string): Promise<DownloadsCommandResult> {
+function includeDownload(access: DownloadsAccess, name: string): Promise<DownloadsCommandResult> {
   return mark(access, name, 'Included');
 }
 
