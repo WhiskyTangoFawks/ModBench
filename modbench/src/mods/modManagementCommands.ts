@@ -5,9 +5,10 @@ import type { ModlistNode } from './ModListProvider';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
 import { promptRename } from '../drivingLib/promptRename';
-import { isModsKeyArgs, isRowOf, runModsWriting, openFolderArgument } from './gestureEntry';
+import { MODS_KEY_ARGS, runModsWriting, openFolderArgument } from './gestureEntry';
+import { viewCopyValueText } from '../drivingLib/copyValue';
 import {
-  gestureEntry, pluralArgument, registerGesture, selectionArgument, singularArgument, type GestureEntry, type RowOf,
+  pluralArgument, registerGesture, singularArgument, type GestureEntry, type RowOf,
 } from '../drivingLib/gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
@@ -363,8 +364,6 @@ export function registerViewOnNexusCommand(
 
 const COPY_KINDS = ['mod', 'separator', 'folder', 'file'] as const;
 
-const isCopyRow = isRowOf(COPY_KINDS);
-
 function copyValueOf(row: RowOf<ModlistNode, typeof COPY_KINDS[number]>): string {
   switch (row.kind) {
     case 'mod': return row.mod.name;
@@ -374,17 +373,7 @@ function copyValueOf(row: RowOf<ModlistNode, typeof COPY_KINDS[number]>): string
   }
 }
 
-const copyValueLines = (entry: GestureEntry<ModlistNode>): string => selectionArgument(entry, ...COPY_KINDS).map(copyValueOf).join('\n');
-
 /** Mods' own text for the catalog's one copy value id. `undefined` unless `clicked` is a row copy
  *  value takes or the Mods key's args, so the palette and another view's key defer. */
-export function modsCopyValueText(
-  viewSelection: () => readonly ModlistNode[],
-): (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined {
-  return (clicked, allSelected) => {
-    if (isModsKeyArgs(clicked)) return copyValueLines({ selection: viewSelection() });
-    if (!isCopyRow(clicked)) return undefined;
-    const selected = allSelected?.length ? allSelected.filter(isCopyRow) : undefined;
-    return copyValueLines(gestureEntry(clicked, selected, viewSelection));
-  };
-}
+export const modsCopyValueText = (viewSelection: () => readonly ModlistNode[]) =>
+  viewCopyValueText<ModlistNode, typeof COPY_KINDS[number]>(MODS_KEY_ARGS.view, COPY_KINDS, copyValueOf, viewSelection);

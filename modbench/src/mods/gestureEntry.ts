@@ -11,10 +11,6 @@ export const MODS_KEY_ARGS = { view: 'modbench.modList' } as const;
 export const runModsWriting = (instance: Pick<Instance, 'refresh'>, command: () => Promise<void>): Promise<void> =>
   runWritingGesture(MODS_KEY_ARGS.view, instance, command);
 
-export function isModsKeyArgs(value: unknown): boolean {
-  return typeof value === 'object' && value !== null && 'view' in value && value.view === MODS_KEY_ARGS.view;
-}
-
 export const isRowOf = kindGuard<ModlistNode>();
 
 const OPEN_FOLDER_KINDS = ['mod', OVERWRITE_ORIGIN, 'folder', 'file'] as const;
