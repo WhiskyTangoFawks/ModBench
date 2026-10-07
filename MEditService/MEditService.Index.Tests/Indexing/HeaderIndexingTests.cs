@@ -31,7 +31,7 @@ public class HeaderIndexingTests
         index.RequireReads().DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(name)), new PluginAddress(name, "Data"));
 
     [Fact]
-    public void Index_Fo4Plugin_WritesHeaderDocument_WithSyntheticFormKeyAndHeaderType()
+    public void AFo4Plugin_HasAHeaderDocument_WithSyntheticFormKeyAndHeaderType()
     {
         using var fixture = OnePlugin("header-row", "HeaderTest.esp");
         using var index = Indexes.Reconciled(fixture);
@@ -47,7 +47,7 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void Index_Header_BodyIsTheRootDocument()
+    public void TheHeaderDocumentsBody_IsTheRootDocument()
     {
         using var fixture = OnePlugin("header-body", "BodyTest.esp", mod => mod.ModHeader.Author = "Vault Dweller");
         using var index = Indexes.Reconciled(fixture);
@@ -66,7 +66,7 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void GetDocument_Header_AuthorField_MatchesModHeaderAuthor()
+    public void TheHeadersAuthorField_MatchesTheModHeaderAuthor()
     {
         using var fixture = OnePlugin("header-author", "AuthorTest.esp", mod => mod.ModHeader.Author = "Vault Dweller");
         using var index = Indexes.Reconciled(fixture);
@@ -76,7 +76,7 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void GetDocument_Header_FlagsField_ReflectsSmallMasterFlagForEsl()
+    public void TheHeadersFlagsField_ReflectsTheSmallMasterFlagForEsl()
     {
         using var fixture = OnePlugin("header-flags", "EslTest.esp", mod => mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small);
         using var index = Indexes.Reconciled(fixture);
@@ -88,7 +88,7 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void GetDocument_Header_MastersField_ListsTheMastersItsRecordsRequire_InLoadOrder()
+    public void TheHeadersMastersField_ListsTheMastersItsRecordsRequire_InLoadOrder()
     {
         using var fixture = new PluginFixtureBuilder("header-masters")
             .WithPlugin("Zeta.esm", mod => mod.Npcs.AddNew("ZetaNpc"))
@@ -105,7 +105,7 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void GetDocument_Header_MastersField_LeavesOutAMasterTheBinaryListsButNoRecordRequires()
+    public void TheHeadersMastersField_LeavesOutAMasterTheBinaryListsButNoRecordRequires()
     {
         using var fixture = new PluginFixtureBuilder("header-unrequired-master")
             .WithPlugin("Required.esm", mod => mod.Npcs.AddNew("RequiredNpc"))
@@ -126,7 +126,7 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void GetDocument_Header_MastersField_FollowsTheWorkingTree_OfATrackedPlugin()
+    public void TheHeadersMastersField_FollowsTheWorkingTree_OfATrackedPlugin()
     {
         using var fixture = new PluginFixtureBuilder("header-masters-tracked")
             .WithPlugin("Kept.esm", mod => mod.Npcs.AddNew("KeptNpc"), origin: "KeptMod")
@@ -174,7 +174,7 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public async Task Index_ReIndexSamePlugin_ReplacesHeaderDocumentRatherThanDuplicating()
+    public void ReindexingAPlugin_ReplacesItsHeaderDocumentRatherThanDuplicating()
     {
         using var fixture = OnePlugin("header-reindex", "ReindexHeader.esp");
         using var index = Indexes.Reconciled(fixture);
@@ -190,7 +190,7 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void Index_Header_Resolves_LikeEveryOtherRecord()
+    public void TheHeader_Resolves_LikeEveryOtherRecord()
     {
         using var fixture = OnePlugin("header-lookup", "LookupHeader.esp", mod => mod.Npcs.AddNew().EditorID = "SomeNpc");
         using var index = Indexes.Reconciled(fixture);
@@ -208,7 +208,7 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void Index_TwoPlugins_EachGetsOwnHeaderDocument_NeitherOverridesTheOther()
+    public void TwoPlugins_EachHaveTheirOwnHeaderDocument_NeitherOverridesTheOther()
     {
         using var fixture = new PluginFixtureBuilder("header-two-plugins")
             .WithPlugin("PluginA.esp")
@@ -229,7 +229,7 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void Index_TwoOrigins_SameFilename_EachGetsOwnHeaderDocument_NeitherOverridesTheOther()
+    public void TwoOriginsOfOneFilename_EachHaveTheirOwnHeaderDocument_NeitherOverridesTheOther()
     {
         using var fixture = new PluginFixtureBuilder("header-two-origins")
             .WithPlugin("Shared.esp", mod => mod.ModHeader.Author = "Author A", origin: "ModA")

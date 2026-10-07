@@ -9,7 +9,7 @@ namespace MEditService.Index.Tests.Records;
 public class HardcodedFormKeyResolutionTests
 {
     [Fact]
-    public void GetDocument_FieldReferencesEngineHardcodedPlayerFormKey_NoCheckError()
+    public void AFieldReferencingTheEngineHardcodedPlayerFormKey_HasNoCheckError()
     {
         FormKey npcKey = default;
         using var fixture = new PluginFixtureBuilder("hardcoded-formkey")

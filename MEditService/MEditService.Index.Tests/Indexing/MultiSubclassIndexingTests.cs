@@ -35,7 +35,7 @@ public class MultiSubclassIndexingTests
             kv => (JsonElement)(kv.Value ?? throw new InvalidOperationException($"Expected a value for '{kv.Key}'.")));
 
     [Fact]
-    public void Index_Gmst_AllSubclasses_DataColumnRoundTripsForEveryType()
+    public void EveryGmstSubclass_RoundTripsItsDataColumn()
     {
         using var fixture = new PluginFixtureBuilder("gmst-subclasses")
             .WithPlugin("Gmst263.esp", mod =>
@@ -57,7 +57,7 @@ public class MultiSubclassIndexingTests
     }
 
     [Fact]
-    public void Index_Glob_EverySubclassLands_AndOnlyGlobalBoolsDataIsLostInTheBinary()
+    public void EveryGlobSubclassLands_AndOnlyGlobalBoolsDataIsLostInTheBinary()
     {
         using var fixture = new PluginFixtureBuilder("glob-subclasses")
             .WithPlugin("Glob263.esp", mod =>
@@ -79,7 +79,7 @@ public class MultiSubclassIndexingTests
     }
 
     [Fact]
-    public void Index_Omod_AllSubclasses_PropertiesColumnRoundTripsForEveryType()
+    public void EveryOmodSubclass_RoundTripsItsPropertiesColumn()
     {
         using var fixture = new PluginFixtureBuilder("omod-subclasses")
             .WithPlugin("Omod339.esp", mod =>
@@ -117,7 +117,7 @@ public class MultiSubclassIndexingTests
     }
 
     [Fact]
-    public void Index_Dmgt_BothSubclasses_EachReadsItsOwnShapeThroughTheOneDamageTypesColumn()
+    public void EachDmgtSubclass_ReadsItsOwnShapeThroughTheOneDamageTypesColumn()
     {
         using var fixture = new PluginFixtureBuilder("dmgt-subclasses")
             .WithPlugin("DmgtSplit339.esp", mod =>

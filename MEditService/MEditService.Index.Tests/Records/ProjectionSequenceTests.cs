@@ -85,7 +85,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     }
 
     [Fact]
-    public void Validate_TwoChangedDocuments_AdvanceTheSequenceOnce()
+    public void ValidatingTwoChangedDocuments_AdvancesTheSequenceOnce()
     {
         Reconcile(_fixture.Plugins);
         var reads = _index.RequireReads();
@@ -108,7 +108,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     }
 
     [Fact]
-    public void Validate_WithUnchangedBytes_AnnouncesNothingOfThePlugin()
+    public void ValidatingUnchangedBytes_AnnouncesNothingOfThePlugin()
     {
         Reconcile(_fixture.Plugins);
 

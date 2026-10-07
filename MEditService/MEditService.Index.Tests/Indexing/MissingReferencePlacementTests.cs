@@ -38,7 +38,7 @@ public sealed class MissingReferencePlacementTests : IDisposable
             _ => providedByMod ? new PluginProvider.FromMod(_tracked.Origin, _tracked.ModFolderOf()) : null);
 
     [Fact]
-    public void GetReferencesToMissingRecordsOnFiles_ATrackedReferrer_NamesItsDocumentRelativeToTheModFolder()
+    public void ReportingMissingReferences_ATrackedReferrer_NamesItsDocumentRelativeToTheModFolder()
     {
         var placed = Assert.Single(Placed());
 
@@ -49,7 +49,7 @@ public sealed class MissingReferencePlacementTests : IDisposable
     }
 
     [Fact]
-    public void GetReferencesToMissingRecordsOnFiles_AReferrerWhoseDocumentWasDeletedOutsideModbench_IsAFailureNotAPath()
+    public void ReportingMissingReferences_AReferrerWhoseDocumentWasDeletedOutsideModbench_IsAFailureNotAPath()
     {
         File.Delete(Path.Combine(_tracked.ModFolderOf(), Assert.Single(Placed()).SourceRelativePath ?? ""));
 
@@ -60,7 +60,7 @@ public sealed class MissingReferencePlacementTests : IDisposable
     }
 
     [Fact]
-    public void GetReferencesToMissingRecordsOnFiles_APluginNoModFolderProvides_IsAFailure()
+    public void ReportingMissingReferences_APluginNoModFolderProvides_IsAFailure()
     {
         var placed = Assert.Single(Placed(providedByMod: false));
 

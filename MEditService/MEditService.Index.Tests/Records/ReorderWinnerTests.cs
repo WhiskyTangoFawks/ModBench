@@ -8,10 +8,10 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Records;
 
-public class LoadOrderViaRegistrationTests
+public class ReorderWinnerTests
 {
     [Fact]
-    public void Reorder_ViaRegisterOnly_FlipsTheWinner_WithNoRecordRowTouched()
+    public void AReorder_FlipsTheWinner_OpensNoPlugin_AndChangesNoDocument()
     {
         FormKey npcKey = default;
         using var fixture = new PluginFixtureBuilder("reorder-via-register")

@@ -22,7 +22,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
         IndexFiles.Rows(fixture.InstanceRoot, $"SELECT form_key FROM records WHERE {where}").Count;
 
     [Fact]
-    public void Index_WritesOneDocumentPerRecordOfEveryIndexedType()
+    public void EveryIndexedRecordHasOneDocument()
     {
         using var overlay = OpenPlugin();
         const int theHeaderDocumentAddedBackBecauseAModHeaderIsNotAMajorRecordGetter = 1;
@@ -38,7 +38,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
     }
 
     [Fact]
-    public void Index_WritesOneDocumentPerLandscapeAndNavmeshRecord()
+    public void EveryLandscapeAndNavmeshRecordHasOneDocument()
     {
         using var overlay = OpenPlugin();
         var landscapes = overlay.EnumerateMajorRecords<ILandscapeGetter>(throwIfUnknown: false).Count();
@@ -52,7 +52,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
     }
 
     [Fact]
-    public void Index_DocumentBody_IsTheCodecsSourceText()
+    public void ADocumentBody_IsTheCodecsSourceText()
     {
         using var overlay = OpenPlugin();
         var record = ((IFallout4ModGetter)overlay).Npcs.First();
@@ -66,7 +66,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
     }
 
     [Fact]
-    public void Index_Document_CarriesItsIdentityColumns()
+    public void ADocument_CarriesItsIdentityColumns()
     {
         using var overlay = OpenPlugin();
         var record = ((IFallout4ModGetter)overlay).Npcs.First(n => n.EditorID != null);
