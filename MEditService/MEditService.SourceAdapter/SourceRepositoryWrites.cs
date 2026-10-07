@@ -163,7 +163,7 @@ internal sealed class SourceRepositoryWrites(
         {
             var incoming = files.ToDictionary(file => Path.GetFullPath(Path.Combine(_modFolder, file.RelativePath)));
             var held = before.Files.ToDictionary(file => Path.GetFullPath(file.Path), file => file.Bytes);
-            foreach (var path in held.Keys.Where(path => !incoming.ContainsKey(path))) log.Delete(path);
+            foreach (var (path, bytes) in held.Where(file => !incoming.ContainsKey(file.Key))) log.DeleteIfHolds(path, bytes);
             log.DeleteEmptyDirectories(root);
             PristineFileWriter.WriteAll(
                 incoming.Where(file => !held.TryGetValue(file.Key, out var bytes) || !bytes.AsSpan().SequenceEqual(file.Value.Content))
@@ -174,7 +174,8 @@ internal sealed class SourceRepositoryWrites(
         }
         catch (Exception cause) when (WriteLog.IsAFailedWrite(cause))
         {
-            throw WriteLog.Rethrown(cause, log.UndoSince(0, _modFolder));
+            if (WriteLog.Wrapped(cause, log.UndoSince(0, _modFolder)) is { } wrapped) throw wrapped;
+            throw;
         }
         finally
         {
@@ -196,14 +197,15 @@ internal sealed class SourceRepositoryWrites(
         {
             PristineFileWriter.WriteAll(renamed, _modFolder, log);
             git.MoveLastWritten(from, to);
-            foreach (var file in before.Files) log.Delete(file.Path);
+            foreach (var file in before.Files) log.DeleteIfHolds(file.Path, file.Bytes);
             log.DeleteEmptyDirectories(fromRoot);
         }
         catch (Exception cause) when (WriteLog.IsAFailedWrite(cause))
         {
             var unrestored = log.UndoSince(0, _modFolder);
             TryPutBackLastWritten(putBackLastWritten, from, unrestored);
-            throw WriteLog.Rethrown(cause, unrestored);
+            if (WriteLog.Wrapped(cause, unrestored) is { } wrapped) throw wrapped;
+            throw;
         }
         finally
         {

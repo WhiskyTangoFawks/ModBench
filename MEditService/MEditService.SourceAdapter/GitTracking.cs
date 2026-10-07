@@ -43,7 +43,8 @@ internal static class GitTracking
         catch (Exception ex)
         {
             if (!repositoryExisted && git.Exists) git.Delete();
-            throw WriteLog.Rethrown(ex, log.UndoSince(0, modFolder));
+            if (WriteLog.Wrapped(ex, log.UndoSince(0, modFolder)) is { } wrapped) throw wrapped;
+            throw;
         }
         return [];
     }
@@ -67,7 +68,8 @@ internal static class GitTracking
             }
             catch (Exception ex)
             {
-                throw WriteLog.Rethrown(ex, log.UndoSince(0, workTree));
+                if (WriteLog.Wrapped(ex, log.UndoSince(0, workTree)) is { } wrapped) throw wrapped;
+                throw;
             }
         }
         return (written, refused);
@@ -141,9 +143,10 @@ internal sealed class WriteLog
         File.WriteAllBytes(path, content);
     }
 
-    internal void Delete(string path)
+    internal void DeleteIfHolds(string path, byte[] expected)
     {
-        _entries.Add(new DeletedFile(path, File.ReadAllBytes(path)));
+        if (!Holds(path, expected)) throw new IOException($"{path} was changed by another program, so it was not removed.");
+        _entries.Add(new DeletedFile(path, expected));
         File.Delete(path);
     }
 
@@ -175,9 +178,9 @@ internal sealed class WriteLog
         return left;
     }
 
-    /// <summary>The cause with what a rollback left standing named in it; a fault that is not a failed write passes through.</summary>
-    internal static Exception Rethrown(Exception cause, List<string> left) =>
-        left.Count == 0 || !IsAFailedWrite(cause) ? cause : new IOException(WithLeftovers(cause.Message, left), cause);
+    /// <summary>The cause with what a rollback left standing named in it; none when the cause stands as it is.</summary>
+    internal static Exception? Wrapped(Exception cause, List<string> left) =>
+        left.Count == 0 || !IsAFailedWrite(cause) ? null : new IOException(WithLeftovers(cause.Message, left), cause);
 
     internal static string WithLeftovers(string message, List<string> left) =>
         left.Count == 0 ? message : $"{message} Not taken back: {string.Join(" ", left)}";
