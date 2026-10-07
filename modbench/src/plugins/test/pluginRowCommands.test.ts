@@ -164,7 +164,7 @@ describe('modbench.mod.track', () => {
     const { handler } = invokeTrack(client);
     const header = {
       webviewSection: 'recordHeader', formKey: '000801:Other.esp', plugin: 'Second.esp', origin: 'ModA',
-      editable: false, preventDefaultContextMenuItems: true,
+      compilable: false, editable: false, preventDefaultContextMenuItems: true,
     };
 
     await handler(header);
@@ -490,7 +490,7 @@ describe('modbench.plugin.compile', () => {
 
     await handler({
       webviewSection: 'recordHeader', formKey: '000801:Other.esp', plugin: 'Other.esp', origin: 'ModB',
-      editable: true, preventDefaultContextMenuItems: true,
+      compilable: true, editable: true, preventDefaultContextMenuItems: true,
     });
 
     expect(compileCalls(client)).toEqual([[[OTHER]]]);
@@ -649,7 +649,7 @@ describe('modbench.plugin.decompile', () => {
 
     await handler({
       webviewSection: 'recordHeader', formKey: '000801:Second.esp', plugin: 'Second.esp', origin: 'ModA',
-      editable: false, preventDefaultContextMenuItems: true,
+      compilable: false, editable: false, preventDefaultContextMenuItems: true,
     });
 
     expect(decompileCalls(client)).toEqual([[[SECOND]]]);

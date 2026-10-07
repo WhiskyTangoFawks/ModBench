@@ -425,17 +425,17 @@ describe('RecordPanel — column header native right-click menu', () => {
     ).getAttribute('data-vscode-context') ?? '';
     expect(JSON.parse(headerContext)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      editable: false, preventDefaultContextMenuItems: true,
+      compilable: false, editable: false, preventDefaultContextMenuItems: true,
     });
   });
 
   it.each([
-    ['a tracked, editable', { isTracked: true, isImmutable: false }, true],
-    ['an untracked', { isTracked: false, isImmutable: false }, false],
-    ['a tracked, plugin-source-unreadable', { isTracked: true, pluginSourceUnreadable: true }, false],
-    ['a read-only', { isTracked: true, isImmutable: true }, false],
-    ['an untracked read-only', { isTracked: false, isImmutable: true }, false],
-  ])('the header of %s plugin says whether compile applies to it: on a tracked column, not on an untracked or a read-only one', async (_what, facts, editable) => {
+    ['a tracked, editable', { isTracked: true, isImmutable: false }, true, true],
+    ['an untracked', { isTracked: false, isImmutable: false }, false, false],
+    ['a tracked, plugin-source-unreadable', { isTracked: true, pluginSourceUnreadable: true }, true, false],
+    ['a read-only', { isTracked: true, isImmutable: true }, false, false],
+    ['an untracked read-only', { isTracked: false, isImmutable: true }, false, false],
+  ])('the header of %s plugin says whether compile and delete apply to it: compile on a tracked column, delete only where the plugin source reads too', async (_what, facts, compilable, editable) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const originTrackAndDecompileReadAgainstTheModsRepositoriesInTheManifest = 'ModA';
     const compare = compareResultFixture({
@@ -455,7 +455,7 @@ describe('RecordPanel — column header native right-click menu', () => {
 
     await waitFor(() => {
       const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
-      expect(parseJsonRecord(headerContext).editable).toBe(editable);
+      expect(parseJsonRecord(headerContext)).toMatchObject({ compilable, editable });
     });
   });
 
@@ -480,7 +480,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
     const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
-    expect(parseJsonRecord(headerContext).editable).toBe(false);
+    expect(parseJsonRecord(headerContext)).toMatchObject({ compilable: false, editable: false });
   });
 });
 

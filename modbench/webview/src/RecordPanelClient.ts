@@ -16,7 +16,6 @@ export type LoadResult =
       // Null exactly when immutableSet is, but degrading the opposite way: to "nothing is
       // editable" (commands.md, No dead entries). Read fail-closed.
       trackedSet: Set<ColumnKey> | null;
-      // Tracked plugins whose records are read from the plugin file; no edit lands in a copy of one.
       sourceUnreadableSet: Set<ColumnKey> | null;
       // Whether the winner sweep has run (editor.md, States, story 3). Fails *closed*: an absent
       // answer reads as "not computed", never as "settled", or a status-fetch blip would render a

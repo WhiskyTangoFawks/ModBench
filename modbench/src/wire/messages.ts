@@ -136,7 +136,10 @@ export interface ColumnHeaderContext {
   formKey: string;
   plugin: string;
   origin: string;
-  // commands.md, compile and delete: the column's plugin is tracked and editable.
+  // commands.md, compile: the column's plugin is tracked and not read-only. It stays offered when
+  // the plugin source is unreadable, and refuses.
+  compilable: boolean;
+  // commands.md, delete: compilable, and the plugin source reads.
   editable: boolean;
   preventDefaultContextMenuItems: true;
 }

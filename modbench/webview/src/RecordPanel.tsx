@@ -375,7 +375,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                     // Copy… is offered on every column: copying from a read-only plugin is the
                     // ordinary case.
                     vscodeContext={JSON.stringify(headerCellContext(
-                      col.override.formKey, col.override.plugin, col.override.origin, tracked && !sourceUnreadable && !isImmutable,
+                      col.override.formKey, col.override.plugin, col.override.origin, tracked && !isImmutable, tracked && !sourceUnreadable && !isImmutable,
                     ))}
                   />
                 );
