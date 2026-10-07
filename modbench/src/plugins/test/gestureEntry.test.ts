@@ -68,7 +68,7 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     immutable = await ownRecord('000801:Alpha.esp', 'Alpha.esp', 'ModA', { tracked: true, editable: false });
     untrackedRecord = await ownRecord('000802:Beta.esp', 'Beta.esp', 'ModB', { tracked: false, editable: true });
     cell = await cellRow({
-      formKey: '000803:Alpha.esp', editorId: 'Cell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false,
+      formKey: '000803:Alpha.esp', editorId: 'Cell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false, workingTreeState: 'None',
     }, ALPHA, EDITABLE);
     quest = await ownRecord('000804:Alpha.esp', 'Alpha.esp', 'ModA', EDITABLE, 'qust');
     readOnlyQuest = await ownRecord('000805:Alpha.esp', 'Alpha.esp', 'ModA', { tracked: true, editable: false }, 'qust');

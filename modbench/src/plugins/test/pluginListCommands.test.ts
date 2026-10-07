@@ -426,12 +426,12 @@ describe('pluginsCopyValueText', () => {
     mixed = [
       plugin, record, locked,
       await recordRow(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp', editorId: null }), 'ModA'),
-      await worldspaceRow({ formKey: '000802:Alpha.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }, ALPHA),
+      await worldspaceRow({ formKey: '000802:Alpha.esp', editorId: 'World', hasParseFailure: false, workingTreeState: 'None', hasChildren: true }, ALPHA),
       await cellRow({
-        formKey: '000803:Alpha.esp', editorId: 'Room', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, fullName: 'A Room', hasParseFailure: false,
+        formKey: '000803:Alpha.esp', editorId: 'Room', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, fullName: 'A Room', hasParseFailure: false, workingTreeState: 'None',
       }, ALPHA),
       await placedRow({
-        formKey: '000804:Alpha.esp', editorId: null, baseFormKey: '000800:Alpha.esp', recordType: 'refr', hasParseFailure: false,
+        formKey: '000804:Alpha.esp', editorId: null, baseFormKey: '000800:Alpha.esp', recordType: 'refr', hasParseFailure: false, workingTreeState: 'None',
       }, ALPHA),
       await recordGroupRow({ type: 'weap', count: 2, displayName: 'Weapon' }, ALPHA),
     ];

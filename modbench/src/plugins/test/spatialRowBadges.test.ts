@@ -56,7 +56,7 @@ describe('the working-tree badge of worldspace, cell and placed reference rows',
   it('shows M on a modified interior cell', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getInteriorCells', [{ number: 0, hasParseFailure: false, subBlocks: [{ number: 0, hasParseFailure: false, cells: [
-      { formKey: 'i:Plugin0.esp', hasChildren: false, hasParseFailure: false, workingTreeState: 'Modified' },
+      { formKey: 'i:Plugin0.esp', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false, workingTreeState: 'Modified' },
     ] }] }]);
     const { provider, group } = await groupOf(client, 'cell');
 

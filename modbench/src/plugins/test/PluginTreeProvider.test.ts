@@ -71,7 +71,7 @@ const FAILED_TO_LOAD = [['error', 'Failed to load: boom']];
 
 function interiorCell(formKey: string, editorId: string | null, overrides: Partial<CellSummary> = {}): CellSummary {
   return {
-    formKey, editorId, cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false,
+    formKey, editorId, cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false, workingTreeState: 'None',
     ...overrides,
   };
 }
@@ -384,13 +384,13 @@ describe('worldspace, cell and placed rows state their record', () => {
 
   async function spatialRowsOver(placedEditorId: string | null) {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [{ ...RECORD, hasParseFailure: false, hasChildren: true }]);
+    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', ...RECORD, hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
-      topCells: [{ ...RECORD, cellX: 1, cellY: 2, isPersistentWorldspaceCell: false, hasChildren: true, fullName: null, hasParseFailure: false }],
+      topCells: [{ workingTreeState: 'None', ...RECORD, cellX: 1, cellY: 2, isPersistentWorldspaceCell: false, hasChildren: true, fullName: null, hasParseFailure: false }],
       blocks: [],
     });
     repo.setQueryAnswer('getCellChildRecords', {
-      persistent: [{ formKey: RECORD.formKey, editorId: placedEditorId, baseFormKey: '000802:A.esp', recordType: 'refr', hasParseFailure: false }],
+      persistent: [{ workingTreeState: 'None', formKey: RECORD.formKey, editorId: placedEditorId, baseFormKey: '000802:A.esp', recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);
@@ -418,9 +418,9 @@ describe('worldspace, cell and placed rows state their record', () => {
 describe('a plugin\'s conditions reach every row beneath it', () => {
   const TRACKED: PluginConditions = { tracked: true, editable: true };
   const cell = {
-    formKey: '000002:Plugin0.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: true, fullName: null, hasParseFailure: false,
+    formKey: '000002:Plugin0.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: true, fullName: null, hasParseFailure: false, workingTreeState: 'None' as const,
   };
-  const placed = { formKey: '000003:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr', hasParseFailure: false };
+  const placed = { formKey: '000003:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr', hasParseFailure: false, workingTreeState: 'None' as const };
 
   function spatialClient(): InMemoryMEditClient {
     const repo = makeClient({
@@ -428,7 +428,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
       records: { items: [makeRecord(0, 'None', true)], total: 1 },
     });
     repo.setQueryAnswer('getContainerChildren', [{ ...makeRecord(1), recordType: 'dial', hasContainerChildren: false, isContainer: true }]);
-    repo.setQueryAnswer('getWorldspaces', [{ formKey: '000001:Plugin0.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
+    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: '000001:Plugin0.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [cell],
       blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [cell] }] }],
@@ -484,10 +484,10 @@ describe('PluginTreeProvider.refresh', () => {
 describe('PluginTreeProvider worldspace tree', () => {
   it('expands a worldspace into its persistent cell and blocks, labeled the way xEdit does', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
+    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
-      topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false }],
-      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }] }] }],
+      topCells: [{ workingTreeState: 'None', formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false }],
+      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }] }] }],
     });
     const provider = new PluginTreeProvider(repo);
     const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
@@ -508,11 +508,11 @@ describe('PluginTreeProvider worldspace tree', () => {
 
   it('surfaces every block-less cell row under a worldspace, not just the first', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
+    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [
-        { formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false },
-        { formKey: 'stray:M.esp', editorId: 'StrayCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false },
+        { workingTreeState: 'None', formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false },
+        { workingTreeState: 'None', formKey: 'stray:M.esp', editorId: 'StrayCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false },
       ],
       blocks: [],
     });
@@ -530,7 +530,7 @@ describe('PluginTreeProvider worldspace tree', () => {
   it('expands a cell into non-empty persistent/temporary groups and placed leaves', async () => {
     const repo = makeClient();
     repo.setQueryAnswer('getCellChildRecords', {
-      persistent: [{ formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
+      persistent: [{ workingTreeState: 'None', formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);
@@ -578,8 +578,8 @@ describe('PluginTreeProvider worldspace tree', () => {
   it('gives a worldspace an expander only when a cell is beneath it', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 2 }] });
     repo.setQueryAnswer('getWorldspaces', [
-      { formKey: 'w1:M.esp', editorId: 'Holding', hasParseFailure: false, hasChildren: true },
-      { formKey: 'w2:M.esp', editorId: 'Empty', hasParseFailure: false, hasChildren: false },
+      { workingTreeState: 'None', formKey: 'w1:M.esp', editorId: 'Holding', hasParseFailure: false, hasChildren: true },
+      { workingTreeState: 'None', formKey: 'w2:M.esp', editorId: 'Empty', hasParseFailure: false, hasChildren: false },
     ]);
     const provider = new PluginTreeProvider(repo);
 
@@ -677,7 +677,7 @@ describe('PluginTreeProvider fetch failures', () => {
 
   it('fetchWorldspaceChildren: renders an error node when getWorldspaceBlocks fails', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
+    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryFailure('getWorldspaceBlocks', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
     const node = await soleChild(provider, await soleGroup(provider, PLUGIN0), 'the worldspace group');
@@ -713,7 +713,7 @@ describe('PluginTreeProvider fetch failures', () => {
 describe('PluginTreeProvider spatial origin threading', () => {
   it('fetchWorldspaces: asks the repository for the node\'s own plugin, and the worldspace rows it builds carry that origin forward', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
+    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     const provider = new PluginTreeProvider(repo);
     const node = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModB' });
 
@@ -725,10 +725,10 @@ describe('PluginTreeProvider spatial origin threading', () => {
 
   it('fetchWorldspaceChildren: asks the repository for the node\'s own plugin, and its TopCell/Block children carry that origin forward', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
+    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
-      topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false }],
-      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: true, hasParseFailure: false }] }] }],
+      topCells: [{ workingTreeState: 'None', formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false }],
+      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: true, hasParseFailure: false }] }] }],
     });
     repo.setQueryAnswer('getCellChildRecords', { persistent: [], temporary: [] });
     const provider = new PluginTreeProvider(repo);
@@ -748,7 +748,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
   it('fetchCellGroups: asks the repository for the node\'s own plugin, and its PlacedGroup/Placed children carry that origin forward', async () => {
     const repo = makeClient();
     repo.setQueryAnswer('getCellChildRecords', {
-      persistent: [{ formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
+      persistent: [{ workingTreeState: 'None', formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);
@@ -802,13 +802,13 @@ describe('PluginTreeProvider spatial origin threading', () => {
 
   it('a cell row and a placed-reference row of a shared filename, expanded concurrently, read their own plugin\'s tracked/read-only facts, not the other plugin\'s', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }] });
-    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
+    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
-      topCells: [{ formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: true, fullName: null, hasParseFailure: false }],
+      topCells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: true, fullName: null, hasParseFailure: false }],
       blocks: [],
     });
     repo.setQueryAnswer('getCellChildRecords', {
-      persistent: [{ formKey: 'p:M.esp', editorId: 'DoorRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
+      persistent: [{ workingTreeState: 'None', formKey: 'p:M.esp', editorId: 'DoorRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);
@@ -1059,16 +1059,16 @@ describe('the failure prefix', () => {
   it('marks the whole worldspace chain a failure sits under, and nothing beside it', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1, hasParseFailure: true }] });
     repo.setQueryAnswer('getWorldspaces', [
-      { formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: true, hasChildren: true },
-      { formKey: 'other:M.esp', editorId: 'Other', hasParseFailure: false, hasChildren: false },
+      { workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: true, hasChildren: true },
+      { workingTreeState: 'None', formKey: 'other:M.esp', editorId: 'Other', hasParseFailure: false, hasChildren: false },
     ]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [],
       blocks: [{ x: 0, y: 0, hasParseFailure: true, subBlocks: [{ x: 0, y: 0, hasParseFailure: true,
-        cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 1, cellY: 1, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: true }] }] }],
+        cells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: null, cellX: 1, cellY: 1, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: true }] }] }],
     });
     repo.setQueryAnswer('getCellChildRecords', {
-      persistent: [{ formKey: 'p:M.esp', editorId: 'Ref', baseFormKey: null, recordType: 'refr', hasParseFailure: true }],
+      persistent: [{ workingTreeState: 'None', formKey: 'p:M.esp', editorId: 'Ref', baseFormKey: null, recordType: 'refr', hasParseFailure: true }],
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);

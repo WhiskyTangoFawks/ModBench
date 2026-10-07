@@ -1664,14 +1664,14 @@ describe('PluginsTreeProvider — a row expands into the record browser children
   it('renders the worldspace and cell hierarchy under a row', async () => {
     const client = makeClient({
       recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
-      worldspaces: [{ formKey: 'w:A.esp', editorId: 'Commonwealth', hasParseFailure: false, hasChildren: true }],
+      worldspaces: [{ workingTreeState: 'None', formKey: 'w:A.esp', editorId: 'Commonwealth', hasParseFailure: false, hasChildren: true }],
       worldspaceBlocks: {
         topCells: [],
         blocks: [{
           x: 0, y: 0, hasParseFailure: false,
           subBlocks: [{
             x: 1, y: 1, hasParseFailure: false,
-            cells: [{ formKey: 'c:A.esp', editorId: 'TheCell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }],
+            cells: [{ workingTreeState: 'None', formKey: 'c:A.esp', editorId: 'TheCell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }],
           }],
         }],
       },
@@ -1699,7 +1699,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
         number: 3, hasParseFailure: false,
         subBlocks: [{
           number: 7, hasParseFailure: false,
-          cells: [{ formKey: 'i:A.esp', editorId: 'Room', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }],
+          cells: [{ workingTreeState: 'None', formKey: 'i:A.esp', editorId: 'Room', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }],
         }],
       }],
     });
@@ -1772,18 +1772,18 @@ describe('PluginsTreeProvider — a record row is identified by its kind, its pl
       { type: 'cell', count: 1, displayName: 'Cell' },
     ],
     records: { items: [recordSummary({ formKey: SHARED })], total: 1 },
-    worldspaces: [{ formKey: SHARED, editorId: 'Commonwealth', hasParseFailure: false, hasChildren: true }],
+    worldspaces: [{ workingTreeState: 'None', formKey: SHARED, editorId: 'Commonwealth', hasParseFailure: false, hasChildren: true }],
     worldspaceBlocks: {
-      topCells: [{ formKey: '000802:Fallout4.esm', isPersistentWorldspaceCell: true, hasChildren: true, hasParseFailure: false }],
+      topCells: [{ workingTreeState: 'None', formKey: '000802:Fallout4.esm', isPersistentWorldspaceCell: true, hasChildren: true, hasParseFailure: false }],
       blocks: [],
     },
     cellChildRecords: {
-      persistent: [{ formKey: '000803:Fallout4.esm', editorId: 'DoorRef', recordType: 'refr', hasParseFailure: false }],
+      persistent: [{ workingTreeState: 'None', formKey: '000803:Fallout4.esm', editorId: 'DoorRef', recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     },
     interiorCells: [{
       number: 0, hasParseFailure: false,
-      subBlocks: [{ number: 0, hasParseFailure: false, cells: [{ formKey: '000804:Fallout4.esm', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }] }],
+      subBlocks: [{ number: 0, hasParseFailure: false, cells: [{ workingTreeState: 'None', formKey: '000804:Fallout4.esm', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }] }],
     }],
   });
 
@@ -1862,7 +1862,7 @@ describe('PluginsTreeProvider — groups and records are named and described as 
   }
 
   const cell = (overrides: Partial<CellSummary>): CellSummary => ({
-    formKey: 'c:A.esp', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false, ...overrides,
+    formKey: 'c:A.esp', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false, workingTreeState: 'None', ...overrides,
   });
 
   const inOneSubBlock = (cells: CellSummary[]): InteriorCellBlock[] =>
@@ -1928,10 +1928,10 @@ describe('PluginsTreeProvider — groups and records are named and described as 
     const unreadable = { hasParseFailure: true, parseDiagnosis: 'bad flag' };
     const { h, groups } = await expandedRow(makeClient({
       recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
-      worldspaces: [{ formKey: '000100:A.esp', editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland', hasChildren: true, ...unreadable }],
+      worldspaces: [{ workingTreeState: 'None', formKey: '000100:A.esp', editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland', hasChildren: true, ...unreadable }],
       worldspaceBlocks: { topCells: [cell({ formKey: '000101:A.esp', editorId: 'TopCell', ...unreadable })], blocks: [] },
       cellChildRecords: {
-        persistent: [{ formKey: '000301:A.esp', editorId: 'DoorRef', recordType: 'refr', ...unreadable }],
+        persistent: [{ workingTreeState: 'None', formKey: '000301:A.esp', editorId: 'DoorRef', recordType: 'refr', ...unreadable }],
         temporary: [],
       },
     }));
@@ -1951,8 +1951,8 @@ describe('PluginsTreeProvider — groups and records are named and described as 
     const { h, groups } = await expandedRow(makeClient({
       recordTypes: [{ type: 'wrld', count: 2, displayName: 'Worldspace' }],
       worldspaces: [
-        { formKey: '000100:A.esp', editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland', hasParseFailure: false, hasChildren: true },
-        { formKey: '000200:A.esp', editorId: null, fullName: null, hasParseFailure: false, hasChildren: false },
+        { workingTreeState: 'None', formKey: '000100:A.esp', editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland', hasParseFailure: false, hasChildren: true },
+        { workingTreeState: 'None', formKey: '000200:A.esp', editorId: null, fullName: null, hasParseFailure: false, hasChildren: false },
       ],
     }));
 
@@ -1967,7 +1967,7 @@ describe('PluginsTreeProvider — groups and records are named and described as 
   it('labels an exterior cell without an EditorID by its grid position, and any other cell as a record', async () => {
     const { h, groups } = await expandedRow(makeClient({
       recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
-      worldspaces: [{ formKey: '000100:A.esp', editorId: 'Commonwealth', hasParseFailure: false, hasChildren: true }],
+      worldspaces: [{ workingTreeState: 'None', formKey: '000100:A.esp', editorId: 'Commonwealth', hasParseFailure: false, hasChildren: true }],
       worldspaceBlocks: {
         topCells: [cell({ formKey: '000101:A.esp', isPersistentWorldspaceCell: true })],
         blocks: [{
@@ -2014,7 +2014,7 @@ describe('PluginsTreeProvider — groups and records are named and described as 
 
   it('labels a placed reference without an EditorID by its base record\'s EditorID', async () => {
     const placed = (overrides: Partial<ChildRecordSummary>): ChildRecordSummary => ({
-      formKey: 'p:A.esp', recordType: 'refr', hasParseFailure: false, ...overrides,
+      formKey: 'p:A.esp', recordType: 'refr', hasParseFailure: false, workingTreeState: 'None', ...overrides,
     });
     const { h, groups } = await expandedRow(makeClient({
       recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }],
@@ -2644,7 +2644,7 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
   it('finds a worldspace\'s row beneath the Worldspace group, and walks up through it to its plugin row', async () => {
     const { tree } = await heldWith(makeClient({
       recordTypes: [{ type: 'wrld', count: 2, displayName: 'Worldspace' }],
-      worldspaces: ['000800:A.esp', '000900:A.esp'].map((formKey) => ({ formKey, hasParseFailure: false, hasChildren: true })),
+      worldspaces: ['000800:A.esp', '000900:A.esp'].map((formKey) => ({ formKey, hasParseFailure: false, workingTreeState: 'None', hasChildren: true })),
     }));
 
     const row = present(await tree.recordRow({ ...NPCS, recordType: 'wrld' }, '000900:A.esp'), 'the worldspace row');
@@ -2655,7 +2655,7 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
   });
 
   it('finds an interior cell\'s row beneath the Cell group\'s block and sub-block, and walks up through each to its plugin row', async () => {
-    const cell = (formKey: string): CellSummary => ({ formKey, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false });
+    const cell = (formKey: string): CellSummary => ({ workingTreeState: 'None', formKey, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false });
     const { tree } = await heldWith(makeClient({
       recordTypes: [{ type: 'cell', count: 2, displayName: 'Cell' }],
       interiorCells: [
@@ -2674,8 +2674,8 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
   });
 
   describe('beneath the container it landed in', () => {
-    const cell = (formKey: string, hasChildren = false): CellSummary => ({ formKey, isPersistentWorldspaceCell: false, hasChildren, hasParseFailure: false });
-    const placed = (formKey: string): ChildRecordSummary => ({ formKey, recordType: 'refr', hasParseFailure: false });
+    const cell = (formKey: string, hasChildren = false): CellSummary => ({ workingTreeState: 'None', formKey, isPersistentWorldspaceCell: false, hasChildren, hasParseFailure: false });
+    const placed = (formKey: string): ChildRecordSummary => ({ workingTreeState: 'None', formKey, recordType: 'refr', hasParseFailure: false });
     const interiorCell = (formKey: string): InteriorCellBlock[] =>
       [{ number: 0, hasParseFailure: false, subBlocks: [{ number: 0, hasParseFailure: false, cells: [cell(formKey)] }] }];
 
@@ -2711,7 +2711,7 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
     it('finds a new exterior cell beneath its worldspace\'s block and sub-block', async () => {
       const h = await heldWith(makeClient({
         recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
-        worldspaces: [{ formKey: '000800:A.esp', hasParseFailure: false, hasChildren: false }],
+        worldspaces: [{ workingTreeState: 'None', formKey: '000800:A.esp', hasParseFailure: false, hasChildren: false }],
       }));
       const [pluginRow] = await h.tree.getChildren();
       const worldspace = await rowBeneath(h.tree, await rowBeneath(h.tree, present(pluginRow, 'the A.esp row'), 'recordType'), 'worldspace');
@@ -2744,7 +2744,7 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
     const h = await heldWith(makeClient({
       recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }],
       interiorCells: [{ number: 0, hasParseFailure: false, subBlocks: [{ number: 0, hasParseFailure: false, cells: [
-        { formKey: '000800:A.esp', isPersistentWorldspaceCell: false, hasChildren: true, hasParseFailure: false },
+        { workingTreeState: 'None', formKey: '000800:A.esp', isPersistentWorldspaceCell: false, hasChildren: true, hasParseFailure: false },
       ] }] }],
     }));
 
