@@ -33,6 +33,22 @@ public sealed class SourceRepositoryMintingTests : IDisposable
         Assert.True(Directory.Exists(Path.Combine(PluginSourceRoot.In(_modFolder, Plugin.Name), "Npcs")));
     }
 
+    [Theory]
+    [InlineData("qust", "Quests")]
+    [InlineData("wrld", "Worldspaces")]
+    [InlineData("cell", "Cells")]
+    public void APutOfATypeHoldingChildren_LandsUnderItsGroupFolder(string recordType, string groupFolder)
+    {
+        var repository = Tracked();
+
+        repository.Put(Plugin, new SourceDocument("000800:Minting.esp", recordType, "Holder", "{\"FormKey\": \"000800:Minting.esp\"}"));
+
+        var root = PluginSourceRoot.In(_modFolder, Plugin.Name);
+        var files = Directory.EnumerateFiles(root, "*.json", SearchOption.AllDirectories).ToList();
+        Assert.NotEmpty(files);
+        Assert.All(files, file => Assert.Equal(groupFolder, Path.GetRelativePath(root, file).Split(Path.DirectorySeparatorChar)[0]));
+    }
+
     [Fact]
     public void APutWhoseWriteFailsAfterTheDirectoriesAboveItWereMinted_LeavesNoneOfThem()
     {

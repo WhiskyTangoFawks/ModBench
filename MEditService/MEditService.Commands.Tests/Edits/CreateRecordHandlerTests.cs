@@ -51,7 +51,7 @@ public sealed class CreateRecordHandlerTests
     [Fact]
     public void CreateRecord_LandsEveryTypeTheCreatableListNames()
     {
-        using var mod = SourceEditFixture.Tracked();
+        using var mod = SourceModFixture.Tracked("Creatable.esp", "CreatableMod", _ => { });
         var creatable = CreatableRecordTypes.Of(SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), GameRelease.Fallout4);
 
         var refused = creatable
@@ -73,21 +73,6 @@ public sealed class CreateRecordHandlerTests
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType);
 
         Assert.Equal(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, result.Refusal);
-    }
-
-    [Theory]
-    [InlineData("qust", "Quests")]
-    [InlineData("wrld", "Worldspaces")]
-    [InlineData("cell", "Cells")]
-    public void CreateRecord_OfATypeHoldingChildren_LandsUnderItsGroupFolder(string recordType, string groupFolder)
-    {
-        using var mod = SourceEditFixture.Tracked();
-
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType);
-
-        Assert.True(result.Applied, result.Message);
-        var file = mod.DocumentFile(result.NewFormKey.Require()).Require();
-        Assert.Contains(Path.DirectorySeparatorChar + groupFolder + Path.DirectorySeparatorChar, file, StringComparison.Ordinal);
     }
 
     [Fact]

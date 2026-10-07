@@ -1,77 +1,45 @@
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
 public class UnionArrayAddInventoryTests
 {
+    private const string LandscapeTable = "land";
+
     private static readonly ModKey Key = ModKey.FromFileName("UnionArrayAdd710.esp");
 
-    [Fact]
-    public void EveryDiscriminatorBearingArrayShape_IsOneThisTestExercises()
+    public static TheoryData<string, string> UnionArrays()
     {
-        var found = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Values
-            .SelectMany(s => s.RecordColumns)
-            .Where(c => c.Field.ElementSpec?.SubFields?.Any(f => f.IsDiscriminator) == true)
-            .Select(c => string.Join("|", c.Field.ElementSpec.Require().SubFields.Require().Single(f => f.IsDiscriminator)
-                .EnumMembers.Select(m => m.Value)))
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(n => n, StringComparer.Ordinal);
-
-        Assert.Equal(ExercisedShapes, found);
+        var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+        var data = new TheoryData<string, string>();
+        var columns = schemas
+            .OrderBy(table => table.Key, StringComparer.Ordinal)
+            .SelectMany(table => table.Value.RecordColumns
+                .Where(column => column.Field.ElementSpec?.SubFields?.Any(field => field.IsDiscriminator) == true)
+                .Select(column => (Table: table.Key, Column: column.Name, Kinds: KindsOf(column))));
+        foreach (var shape in columns.GroupBy(column => column.Kinds, StringComparer.Ordinal))
+        {
+            var (table, column, _) = shape.OrderByDescending(c => CreatableRecordTypes.Includes(c.Table, GameRelease.Fallout4)).First();
+            data.Add(table, column);
+        }
+        return data;
     }
 
-    private static readonly string[] ExercisedShapes =
-    [
-        "AlphaLayer|BaseLayer",
-        "ConditionFloat|ConditionGlobal",
-        "ObjectModIntProperty<Armor+Property>|ObjectModFloatProperty<Armor+Property>|ObjectModBoolProperty<Armor+Property>|"
-        + "ObjectModStringProperty<Armor+Property>|ObjectModFormLinkIntProperty<Armor+Property>|"
-        + "ObjectModFormLinkFloatProperty<Armor+Property>|ObjectModEnumProperty<Armor+Property>",
-        "PerkEntryPointModifyActorValue|PerkEntryPointModifyValue|PerkQuestEffect|PerkAbilityEffect|" +
-        "PerkEntryPointAddRangeToValue|PerkEntryPointAbsoluteValue|PerkEntryPointAddLeveledItem|" +
-        "PerkEntryPointAddActivateChoice|PerkEntryPointSelectSpell|PerkEntryPointSelectText|" +
-        "PerkEntryPointSetText|PerkEntryPointModifyValues",
-        "QuestReferenceAlias|QuestLocationAlias|QuestCollectionAlias",
-        "StateVariableFilterAudioEffect|OverdriveAudioEffect|DelayAudioEffect",
-    ];
-
-    public static TheoryData<string, string> UnionArrays() => new()
-    {
-        { "cobj", "Conditions" },
-        { "qust", "Aliases" },
-        { "perk", "Effects" },
-        { "aech", "Effects" },
-        { "omod", "Properties" },
-    };
+    private static string KindsOf(ColumnSpec column) =>
+        string.Join("|", column.Field.ElementSpec.Require().SubFields.Require().Single(f => f.IsDiscriminator).EnumMembers.Select(m => m.Value));
 
     [Theory]
     [MemberData(nameof(UnionArrays))]
     public void ArrayAdd_BuildsAnElementTheCodecAccepts(string table, string column)
     {
         using var fixture = new DocumentEditFixture();
-        var formKey = fixture.Seed(NewRecord(new Fallout4Mod(Key, Fallout4Release.Fallout4), table), table);
-
-        AssertAddAppendsOneElementOfTheFirstKind(fixture, formKey, table, column);
-    }
-
-    [Fact]
-    public void ArrayAdd_OnTheLayersOfALandscapeInsideACell_BuildsAnElementTheCodecAccepts()
-    {
-        using var fixture = new DocumentEditFixture();
-        var formKey = fixture.SeedLandscape(new Fallout4Mod(Key, Fallout4Release.Fallout4));
-
-        AssertAddAppendsOneElementOfTheFirstKind(fixture, formKey, "land", "Layers");
-    }
-
-    private static void AssertAddAppendsOneElementOfTheFirstKind(
-        DocumentEditFixture fixture, string formKey, string table, string column)
-    {
+        var formKey = table == LandscapeTable ? fixture.SeedLandscape(new Fallout4Mod(Key, Fallout4Release.Fallout4)) : Created(fixture, table);
         var col = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(c => c.Name == column);
 
         var (result, after) = fixture.Apply(formKey, Envelopes.AddAt(Envelopes.Member(column)));
@@ -87,13 +55,10 @@ public class UnionArrayAddInventoryTests
             written[0].GetProperty(discriminator.Name).GetString());
     }
 
-    private static IMajorRecord NewRecord(Fallout4Mod mod, string table) => table switch
+    private static string Created(DocumentEditFixture fixture, string table)
     {
-        "cobj" => new ConstructibleObject(mod.GetNextFormKey(), Fallout4Release.Fallout4),
-        "qust" => new Quest(mod.GetNextFormKey(), Fallout4Release.Fallout4),
-        "perk" => new Perk(mod.GetNextFormKey(), Fallout4Release.Fallout4),
-        "aech" => new AudioEffectChain(mod.GetNextFormKey(), Fallout4Release.Fallout4),
-        "omod" => new ArmorModification(mod.GetNextFormKey(), Fallout4Release.Fallout4),
-        _ => throw new ArgumentOutOfRangeException(nameof(table), table, "no record for this table"),
-    };
+        var created = fixture.CreateHandler.CreateRecord(fixture.Plugin, table);
+        Assert.True(created.Applied, created.Message);
+        return created.NewFormKey.Require();
+    }
 }

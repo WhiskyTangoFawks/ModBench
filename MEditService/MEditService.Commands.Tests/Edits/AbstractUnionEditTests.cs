@@ -3,7 +3,6 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
@@ -173,24 +172,17 @@ public sealed class AbstractUnionEditTests : IDisposable
     private static List<JsonElement> Written(string body) =>
         [.. JsonDocument.Parse(body).RootElement.GetProperty("Aliases").EnumerateArray()];
 
-    private sealed class AbstractUnionFixture : IDisposable
+    private sealed class AbstractUnionFixture : TestInstance
     {
         private const string PluginName = "AbstractUnion548.esp";
         private const string Origin = "AbstractUnion548Mod";
 
-        private readonly ScratchDirectory _modFolder = new("medit-548-mod-");
-        private readonly ScratchDirectory _gameDirectory = new("medit-548-game-");
-
-        public PluginAddress Plugin { get; } = new(PluginName, Origin);
-        public LoadOrderSnapshot LoadOrder { get; }
-        public TestEditor EditHandler { get; }
+        public PluginAddress Plugin { get; }
         public FormKey Npc { get; }
         public FormKey Quest { get; }
 
         public AbstractUnionFixture()
         {
-            var holder = new LoadOrderHolder();
-            var pluginPath = Path.Combine(_modFolder, PluginName);
             var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
             var npc = new Npc(mod.GetNextFormKey("Npc548"), Fallout4Release.Fallout4)
@@ -209,25 +201,12 @@ public sealed class AbstractUnionEditTests : IDisposable
             mod.Quests.Add(quest);
             Quest = quest.FormKey;
 
-            TrackedTemplates.WriteTracked(_modFolder, mod);
-
-            LoadOrder = SnapshotPlugins.Snapshot(
-                _gameDirectory, _gameDirectory, GameRelease.Fallout4,
-                [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
-
-            holder.Apply(LoadOrder);
-            EditHandler = TestEditService.EditHandler(holder);
+            Plugin = Add(mod, Origin);
         }
 
         public TestEditor Service() => EditHandler;
 
-        public string NpcBody() => TrackedTree.Body(_modFolder, Plugin, Npc.ToString());
-        public string QuestBody() => TrackedTree.Body(_modFolder, Plugin, Quest.ToString());
-
-        public void Dispose()
-        {
-            _modFolder.Dispose();
-            _gameDirectory.Dispose();
-        }
+        public string NpcBody() => TrackedTree.Body(ModFolderOf(Plugin), Plugin, Npc.ToString());
+        public string QuestBody() => TrackedTree.Body(ModFolderOf(Plugin), Plugin, Quest.ToString());
     }
 }

@@ -3,7 +3,6 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
@@ -91,23 +90,16 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
             .GetProperty("Scripts")[0].GetProperty("Properties").EnumerateArray()
             .ToDictionary(p => p.GetProperty("Name").GetString().Require(), StringComparer.Ordinal);
 
-    private sealed class ScriptedNpcFixture : IDisposable
+    private sealed class ScriptedNpcFixture : TestInstance
     {
         private const string PluginName = "ScriptedNpc701.esp";
         private const string Origin = "ScriptedNpc701Mod";
 
-        private readonly ScratchDirectory _modFolder = new("medit-701-mod-");
-        private readonly ScratchDirectory _gameDirectory = new("medit-701-game-");
-
-        public PluginAddress Plugin { get; } = new(PluginName, Origin);
-        public LoadOrderSnapshot LoadOrder { get; }
-        public TestEditor EditHandler { get; }
+        public PluginAddress Plugin { get; }
         public FormKey Npc { get; }
 
         public ScriptedNpcFixture()
         {
-            var holder = new LoadOrderHolder();
-            var pluginPath = Path.Combine(_modFolder, PluginName);
             var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
             var npc = new Npc(mod.GetNextFormKey("Npc701"), Fallout4Release.Fallout4)
@@ -123,24 +115,11 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
             mod.Npcs.Add(npc);
             Npc = npc.FormKey;
 
-            TrackedTemplates.WriteTracked(_modFolder, mod);
-
-            LoadOrder = SnapshotPlugins.Snapshot(
-                _gameDirectory, _gameDirectory, GameRelease.Fallout4,
-                [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
-
-            holder.Apply(LoadOrder);
-            EditHandler = TestEditService.EditHandler(holder);
+            Plugin = Add(mod, Origin);
         }
 
         public TestEditor Service() => EditHandler;
 
-        public string NpcBody() => TrackedTree.Body(_modFolder, Plugin, Npc.ToString());
-
-        public void Dispose()
-        {
-            _modFolder.Dispose();
-            _gameDirectory.Dispose();
-        }
+        public string NpcBody() => TrackedTree.Body(ModFolderOf(Plugin), Plugin, Npc.ToString());
     }
 }

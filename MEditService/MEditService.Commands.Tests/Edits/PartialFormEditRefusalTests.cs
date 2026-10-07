@@ -9,26 +9,19 @@ using Noggog;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PartialFormEditRefusalTests : IDisposable
+public sealed class PartialFormEditRefusalTests : TestInstance
 {
     private const int PartialFormBit = 0x0000_4000;
     private const string PluginName = "PartialFormEdit.esp";
     private const string Origin = "PartialFormEditMod";
 
-    private readonly ScratchDirectory _modFolder = new("medit-partialform-mod-");
-    private readonly ScratchDirectory _gameDirectory = new("medit-partialform-game-");
-
-    public PluginAddress Plugin { get; } = new(PluginName, Origin);
-    public LoadOrderSnapshot LoadOrder { get; }
-    public TestEditor EditHandler { get; }
+    public PluginAddress Plugin { get; }
     public FormKey PartialCell { get; }
     public FormKey OrdinaryNpc { get; }
     public FormKey ChildRef { get; }
 
     public PartialFormEditRefusalTests()
     {
-        var holder = new LoadOrderHolder();
-        var pluginPath = Path.Combine(_modFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
         var cell = new Cell(mod) { EditorID = "PartialCell", WaterHeight = 100f, MajorRecordFlagsRaw = PartialFormBit };
@@ -42,23 +35,10 @@ public sealed class PartialFormEditRefusalTests : IDisposable
 
         var npc = mod.Npcs.AddNew("OrdinaryNpc");
 
-        TrackedTemplates.WriteTracked(_modFolder, mod);
+        Plugin = Add(mod, Origin);
         PartialCell = cell.FormKey;
         OrdinaryNpc = npc.FormKey;
         ChildRef = childRef.FormKey;
-
-        LoadOrder = SnapshotPlugins.Snapshot(
-            _gameDirectory, _gameDirectory, GameRelease.Fallout4,
-            [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
-
-        holder.Apply(LoadOrder);
-        EditHandler = TestEditService.EditHandler(holder);
-    }
-
-    public void Dispose()
-    {
-        _modFolder.Dispose();
-        _gameDirectory.Dispose();
     }
 
     private TestEditor Service() => EditHandler;
@@ -106,7 +86,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
         Assert.True(result.Applied);
     }
 
-    private string CellBody() => TrackedTree.Document(_modFolder, Plugin, PartialCell.ToString()).Require().Body;
+    private string CellBody() => TrackedTree.Document(ModFolderOf(Plugin), Plugin, PartialCell.ToString()).Require().Body;
 
     private static System.Text.Json.JsonElement Json(string json) =>
         System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
