@@ -51,7 +51,7 @@ Gestures Modbench does differently.
 | 26 | Deep copy as override into a plugin that holds some of the child records | One confirmation for the selection | Two items: one keeps each record the destination holds; one, with overwriting, asks for each | Principle, Minimal by default: one gesture asks once. |
 | 27 | Create a cell at a grid position the worldspace already has | Refused, naming the cell. The refusal for a master's cell points at copy as override. | Returns the plugin's cell, or makes an override of the master's | Ruling: create never turns into an override (commands.md, Principles). |
 | 28 | A plugin whose master is not active | Stays active and indexed, its row flagged with a master issue; its dependants are untouched | Deactivates it and every plugin that depends on it | Mutagen decides the data: xEdit cannot load a plugin without its master; Mutagen can. The picture then shows the load order the user has, as MO2's does. |
-| 29 | The order of a container's child records | Kept as the plugin holds it | Sorts a changed group by FormID when it saves it. For Oblivion to Skyrim it orders a topic's responses by their previous-response chain. | [ADR-0020](../adr/0020-a-child-record-lives-in-its-containers-document.md): the engine reads a topic's responses in order, and xEdit leaves that order unbuilt for Fallout 4. |
+| 29 | The order of a container's child records | Kept as the plugin holds it | Sorts a changed group by FormID when it saves it. For Oblivion to Skyrim it orders a topic's responses by their previous-response chain. | Ruling: [ADR-0020](../adr/0020-a-child-record-lives-in-its-containers-document.md). |
 
 ## Omissions by object
 
