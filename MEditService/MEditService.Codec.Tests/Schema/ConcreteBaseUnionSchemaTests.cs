@@ -105,7 +105,7 @@ public sealed class ConcreteBaseUnionSchemaTests
         };
 
         var body = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
-            .SerializeToBytes(cell, GameRelease.Fallout4);
+            .SerializeToText(cell, GameRelease.Fallout4);
         using var document = JsonDocument.Parse(body);
         var layers = document.RootElement.GetProperty("Landscape").GetProperty("Layers");
 

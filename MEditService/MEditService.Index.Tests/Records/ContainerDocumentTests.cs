@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
@@ -32,7 +31,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
         var withInlinedChildren = new List<(ICellGetter Cell, string[] Fields)>();
         foreach (var cell in overlay.EnumerateMajorRecords<ICellGetter>(throwIfUnknown: false))
         {
-            using var doc = JsonDocument.Parse(Codec.SerializeToBytes(cell, GameRelease.Fallout4));
+            using var doc = JsonDocument.Parse(Codec.SerializeToText(cell, GameRelease.Fallout4));
             var present = CellChildFields.Where(f => doc.RootElement.TryGetProperty(f, out _)).ToArray();
             if (present.Length > 0) withInlinedChildren.Add((cell, present));
         }
@@ -66,12 +65,12 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
 
         var questMeasuredToHoldTopicsSpriggitDoesNotEmbed = setterMod.EnumerateMajorRecords<IQuest>().First(q => q.DialogTopics.Count > 0);
 
-        var bytesATrackWritesToASourceFile = Codec.SerializeToBytes(questMeasuredToHoldTopicsSpriggitDoesNotEmbed, GameRelease.Fallout4);
+        var bytesATrackWritesToASourceFile = Codec.SerializeToText(questMeasuredToHoldTopicsSpriggitDoesNotEmbed, GameRelease.Fallout4);
 
         var body = StoredBody(questMeasuredToHoldTopicsSpriggitDoesNotEmbed.FormKey.ToString());
 
         Assert.NotNull(body);
-        Assert.Equal(Encoding.UTF8.GetString(bytesATrackWritesToASourceFile), body);
+        Assert.Equal(bytesATrackWritesToASourceFile, body);
     }
 
     [Fact]
@@ -80,8 +79,8 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
         using var overlay = OpenPlugin();
 
         var weapon = ((IFallout4ModGetter)overlay).Weapons.First();
-        var expected = Codec.SerializeToBytes(weapon, GameRelease.Fallout4);
+        var expected = Codec.SerializeToText(weapon, GameRelease.Fallout4);
 
-        Assert.Equal(Encoding.UTF8.GetString(expected), StoredBody(weapon.FormKey.ToString()));
+        Assert.Equal(expected, StoredBody(weapon.FormKey.ToString()));
     }
 }

@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -20,12 +19,11 @@ public class ContainerSingleDocumentTests
         IMajorRecord record, string recordType)
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var bytes = codec.SerializeToBytes((IMajorRecordGetter)record, GameRelease.Fallout4);
+        var text = codec.SerializeToText((IMajorRecordGetter)record, GameRelease.Fallout4);
 
-        using var document = JsonDocument.Parse(bytes);
+        using var document = JsonDocument.Parse(text);
         Assert.Equal(JsonValueKind.Object, document.RootElement.ValueKind);
 
-        var text = Encoding.UTF8.GetString(bytes);
         Assert.Equal(text, codec.RoundTrip(text, GameRelease.Fallout4, recordType));
     }
 

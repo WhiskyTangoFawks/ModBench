@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
@@ -57,12 +56,12 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
         using var overlay = OpenPlugin();
         var record = ((IFallout4ModGetter)overlay).Npcs.First();
         var expected = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
-            .SerializeToBytes(record, GameRelease.Fallout4);
+            .SerializeToText(record, GameRelease.Fallout4);
 
         var document = fixture.Reads.GetDocument(record.FormKey.ToString(), CutDownPluginFixture.Plugin);
 
         Assert.NotNull(document);
-        Assert.Equal(Encoding.UTF8.GetString(expected), document.Body);
+        Assert.Equal(expected, document.Body);
     }
 
     [Fact]

@@ -231,7 +231,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
             PluginSourceRoot.For(PluginName), "Worldspaces",
             $"{worldspace.EditorID} - {worldspace.FormKey.ID:X6}_{worldspace.FormKey.ModKey.FileName}"));
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var repository = Tracked(new TreeFile(worldspacePath, codec.SerializeToBytes(worldspace, Release)));
+        var repository = Tracked(new TreeFile(worldspacePath, Encoding.UTF8.GetBytes(codec.SerializeToText(worldspace, Release))));
 
         var file = Path.Combine(_modFolder, worldspacePath);
         File.WriteAllText(file, File.ReadAllText(file).Replace("EditedRef", "Renamed", StringComparison.Ordinal));
