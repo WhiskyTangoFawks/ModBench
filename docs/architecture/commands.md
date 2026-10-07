@@ -46,7 +46,6 @@ A toggle or an opposite pair (enable and disable, move up and move down) is one 
 - Doing nothing is not an error. A gesture whose result equals the current state writes nothing and says nothing.
 - No lifecycle gestures for mEdit. The backend starts with the extension. No gesture starts, stops or reloads it.
 - One filter. Every list has the same name filter (common.md, The name filter).
-- Stay in the panel. No click on the record panel moves the user out of it. A gesture that opens another tab is on the right-click menu.
 
 ## Chrome
 
