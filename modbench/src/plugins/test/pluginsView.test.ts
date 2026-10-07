@@ -94,8 +94,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
-import { recordingReporter } from '../../test/surfacingDoubles';
-import { registerFilterCommands } from '../recordFilterCommands';
+import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 
 const ARMOR_SQL = 'SELECT form_key FROM "armo"';
@@ -106,13 +105,15 @@ const rowsChanged: NotificationEvent = { kind: 'rows-changed', plugin: 'Test.esp
 function pluginsView(value = instanceValueFixture()) {
   const client = new InMemoryMEditClient();
   const recordBrowser = new PluginTreeProvider(client);
+  const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
     instance: new FakeInstance(value), access: accessTo('/instance'), recordBrowser, client,
     syncPlugins: () => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] }), channel: { error: vi.fn(), info: vi.fn() },
-    dataFolderFile: () => undefined, log: () => undefined, reporterFor: recordingReporter,
+    dataFolderFile: () => undefined, log: () => undefined,
+    reporterFor: (tag) => { const reporter = recordingReporter(); reporters.set(tag, reporter); return reporter; },
     statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, notifyConflictsComputed: vi.fn(),
   });
-  return { client, recordBrowser, plugins };
+  return { client, recordBrowser, plugins, reporters };
 }
 
 beforeEach(() => {
@@ -291,14 +292,10 @@ describe('the record filter, from the commands that set and clear it', () => {
   const pluginReads = (client: InMemoryMEditClient) => client.calls.filter((call) => call.method === 'getPlugins').length;
 
   function filtering() {
-    const { client, recordBrowser, plugins } = pluginsView();
+    const { client, recordBrowser, reporters } = pluginsView();
     client.setQueryAnswer('setFilter', null);
     client.setQueryAnswer('clearFilter', null);
-    const reporter = recordingReporter();
-    registerFilterCommands({
-      client, treeProvider: recordBrowser, refreshMatchingPlugins: () => { void plugins.tree.refreshFacts(); },
-      showRecordFilter: plugins.showRecordFilter, reporter,
-    });
+    const reporter = present(reporters.get('recordFilter'), 'the record filter reporter');
     const recordBrowserRefreshes: unknown[] = [];
     recordBrowser.onDidChangeTreeData((changed) => recordBrowserRefreshes.push(changed));
     const readsBefore = pluginReads(client);
