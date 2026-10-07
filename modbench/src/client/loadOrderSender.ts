@@ -6,8 +6,9 @@ import {
 /** What an adapter gives the sender: its process, its stream's reopen, and one PUT of a snapshot. */
 export interface LoadOrderWire {
   status(): BackendStatus;
-  /** From a crash until the process's own restart has run. */
-  restarting(): boolean;
+  /** The process's own start in flight, a restart after a crash included. It settles once mEdit
+   *  runs or the restarts end, and is the one start every launch waits on. */
+  starting(): Promise<void> | undefined;
   onStatusChanged(listener: (status: BackendStatus) => void): () => void;
   onReconnected(listener: () => void): () => void;
   start(): Promise<void>;
@@ -168,7 +169,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
   // While a launch or the process's own restart is under way, a snapshot only waits for it.
   const hand = (snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> => {
     if (launcher.stopped()) return Promise.resolve(ABANDONED);
-    const down = wire.status() !== 'running' && !launcher.launching() && !wire.restarting();
+    const down = wire.status() !== 'running' && !launcher.launching() && !wire.starting();
     if (down && JSON.stringify(snapshot) === downWith) return Promise.resolve(BACKEND_FAILED);
     newestHanded = snapshot;
     const sent = slot.hold(snapshot);
@@ -188,7 +189,10 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     if (isMEditGone(status)) {
       wentAway = true;
       slot.abortInFlight();
-      if (!launcher.launching() && !wire.restarting()) wentDown();
+      if (launcher.launching()) return;
+      const restart = wire.starting();
+      if (!restart) wentDown();
+      else void restart.then(() => { if (wire.status() !== 'running' && !launcher.launching()) wentDown(); });
       return;
     }
     if (status === 'running' && wentAway) {

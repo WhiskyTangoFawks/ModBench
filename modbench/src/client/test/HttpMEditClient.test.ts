@@ -968,6 +968,42 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     expect(launches).toEqual([]);
   });
 
+  it('launches again for a changed snapshot after a launch whose children all exited before they answered, and settles it', async () => {
+    const backend = { exitsAtOnce: true, healthy: false };
+    const children: EventEmitter[] = [];
+    let puts = 0;
+    const client = createMEditClient({
+      backend: {
+        freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
+        spawn: () => {
+          const child: EventEmitter & { kill: () => void } = Object.assign(new EventEmitter(), {
+            kill: () => { child.emit('exit', 0); },
+          });
+          children.push(child);
+          if (backend.exitsAtOnce) process.nextTick(() => child.emit('exit', 1));
+          return child;
+        },
+        pollIntervalMs: 3, pollTimeoutMs: 300, checkHealth: () => Promise.resolve(backend.healthy),
+      },
+      backendLog: fakeLogChannel(),
+      fetch: routedFetch([
+        ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+        ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
+          state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
+        }))],
+        ['/load-order', () => { puts += 1; return Promise.resolve(jsonResponse(200, appliedBody)); }],
+      ]),
+    });
+    await expect(client.sendLoadOrder(snapshot)).resolves.toEqual({ outcome: 'backendFailed' });
+
+    backend.exitsAtOnce = false;
+    backend.healthy = true;
+    const changed = { ...snapshot, gameDirectory: '/other/Data' };
+
+    await expect(client.sendLoadOrder(changed)).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
+    expect(puts).toBe(1);
+  });
+
   it('aborts the PUT in flight before it kills the mEdit it spawned, and answers it abandoned, not a failure', async () => {
     let putSignal: AbortSignal | undefined;
     let abortedAtKill: boolean | undefined;

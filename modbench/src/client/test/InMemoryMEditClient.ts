@@ -65,14 +65,14 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private readonly reconnectListeners = new Set<() => void>();
   private _status: BackendStatus = 'starting';
-  private restartingAfterCrash = false;
+  private restart?: { settled: Promise<void>; settle: () => void };
   private putAnswer: LoadOrderWire['put'] = () => Promise.reject(new Error('InMemoryMEditClient: no scripted answer for a put'));
   private startAnswer: () => Promise<void> = () => { this.setStatus('running'); return Promise.resolve(); };
   private stopAnswer: () => void = () => undefined;
   private readonly snapshotsPut: LoadOrderSnapshot[] = [];
   private readonly sender = createLoadOrderSender({
     status: () => this.status,
-    restarting: () => this.restartingAfterCrash,
+    starting: () => this.restart?.settled,
     onStatusChanged: (listener) => this.onStatusChanged(listener),
     onReconnected: (listener) => this.onReconnected(listener),
     start: () => { this.record('start', []); return this.startAnswer(); },
@@ -159,7 +159,7 @@ export class InMemoryMEditClient implements MEditClient {
   get status(): BackendStatus { return this._status; }
 
   setStatus(status: BackendStatus): void {
-    if (status === 'running') this.restartingAfterCrash = false;
+    if (status === 'running') this.endRestart();
     this._status = status;
     for (const listener of this.statusListeners) listener(status);
   }
@@ -173,9 +173,19 @@ export class InMemoryMEditClient implements MEditClient {
     this.setStatus('disconnected');
   }
 
+  private endRestart(): void {
+    this.restart?.settle();
+    this.restart = undefined;
+  }
+
   /** mEdit exits on its own, and is restarted unless the restarts are given up. */
   crashed({ restarting }: { restarting: boolean }): void {
-    this.restartingAfterCrash = restarting;
+    this.endRestart();
+    if (restarting) {
+      let settle!: () => void;
+      const settled = new Promise<void>((resolve) => { settle = resolve; });
+      this.restart = { settled, settle };
+    }
     this.disconnected();
   }
 
