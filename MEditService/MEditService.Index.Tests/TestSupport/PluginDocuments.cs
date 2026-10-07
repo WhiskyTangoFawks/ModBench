@@ -2,7 +2,6 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Index.Tests.TestSupport;
 
-/// <summary>Every document one plugin holds, read as a client does: a search lists its records and a point read opens each.</summary>
 internal static class PluginDocuments
 {
     internal static IReadOnlyList<RecordDocument> DocumentsOf(this IRecordReads reads, PluginAddress plugin) =>

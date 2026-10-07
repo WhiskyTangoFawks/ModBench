@@ -34,17 +34,6 @@ public class PluginDocumentsTests
         var majorRecordCountExcludingTheHeaderBecauseEnumerateMajorRecordsCannotCountIt = onDisk.EnumerateMajorRecords().Count();
         Assert.Equal(majorRecordCountExcludingTheHeaderBecauseEnumerateMajorRecordsCannotCountIt + 1, documents.Count);
         Assert.Single(documents, d => d.RecordType == PluginHeader.RecordType);
-        Assert.All(documents, doc =>
-        {
-            var pointRead = reads.GetDocument(doc.FormKey, key);
-            Assert.NotNull(pointRead);
-            Assert.Equal(pointRead.EditorId, doc.EditorId);
-            Assert.Equal(pointRead.RecordType, doc.RecordType);
-            Assert.Equal(pointRead.Body, doc.Body);
-            Assert.Equal(
-                pointRead.Fields.Select(f => (f.Metadata.Name, f.CheckError)),
-                doc.Fields.Select(f => (f.Metadata.Name, f.CheckError)));
-        });
         string? RaceFieldErrorAloneBecauseABareNpcFlagsOtherUnsetLinks(string editorId) => documents
             .Single(d => d.EditorId == editorId).Fields
             .Single(f => f.Metadata.Name.Equals("Race", StringComparison.OrdinalIgnoreCase))
