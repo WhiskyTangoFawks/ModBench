@@ -143,6 +143,7 @@ internal static class WriteEndpointMapping
         {
             // The request is sound; the plugin's present state refuses it until that state changes.
             RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder
+                or RecordEditRefusal.PluginSourceUnreadable
                 or RecordEditRefusal.PluginNotActive => 409,
             RecordEditRefusal.RecordNotFound or RecordEditRefusal.FieldNotFound or RecordEditRefusal.PluginNotInLoadOrder => 404,
             // The envelope itself could not be read as a write: the request is malformed.

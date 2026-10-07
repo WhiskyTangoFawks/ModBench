@@ -40,6 +40,6 @@ public sealed record ExternalChangeNotification(string Origin, IReadOnlyList<Cha
 /// read.</summary>
 public sealed record ChangedPlugin(string Name, string? BytesSha256);
 
-/// <summary>The plugins of a tracked mod that have no plugin source.</summary>
-public sealed record UntrackedPluginsNotification(string Origin, IReadOnlyList<string> Plugins)
+/// <summary>The plugins of a tracked mod whose plugin source is unreadable.</summary>
+public sealed record PluginSourceUnreadableNotification(string Origin, IReadOnlyList<string> Plugins)
     : INotification;

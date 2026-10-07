@@ -109,18 +109,18 @@ public sealed class ExternalChangeCheckTests : IDisposable
     }
 
     [Fact]
-    public void ASnapshot_NamesTheModsUntrackedPlugins_ApartFromItsChangedOnes()
+    public void ASnapshot_NamesThePluginsWhoseSourceIsUnreadable_ApartFromItsChangedOnes()
     {
         var tracked = "the tracked binary"u8.ToArray();
-        var loadOrder = WithPlugins((PluginName, tracked), ("Untracked.esp", "never tracked"u8.ToArray()));
+        var loadOrder = WithPlugins((PluginName, tracked), ("SourceUnreadable.esp", "never tracked"u8.ToArray()));
         Track((PluginName, tracked));
 
         Put(loadOrder);
 
         Assert.Empty(TheExternalChange().Plugins);
-        var untracked = Assert.Single(_notifications.Notifications.OfType<UntrackedPluginsNotification>());
-        Assert.Equal(Origin, untracked.Origin);
-        Assert.Equal(["Untracked.esp"], untracked.Plugins);
+        var unreadable = Assert.Single(_notifications.Notifications.OfType<PluginSourceUnreadableNotification>());
+        Assert.Equal(Origin, unreadable.Origin);
+        Assert.Equal(["SourceUnreadable.esp"], unreadable.Plugins);
     }
 
     [Fact]
