@@ -149,6 +149,21 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
+    public void ClearingDeleted_FillsFromThePluginFile_OfACopyToItsLeftWhosePluginSourceIsUnreadable()
+    {
+        var middle = Plugin("Middle.esp", NpcCopy(0, "Middle"));
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy")), false),
+            (middle, true),
+            (Plugin("Override.esp", Mastering("Middle.esp", NpcCopy(Deleted))), true));
+        Directory.Delete(PluginSourceRoot.In(_plugins.FolderOf(middle), "Middle.esp"), recursive: true);
+
+        var undeleted = Written(TheNpc, 0);
+
+        Assert.Equal("Middle", undeleted["EditorID"]?.GetValue<string>());
+    }
+
+    [Fact]
     public void ClearingDeleted_PassesOverADeletedCopyToItsLeft()
     {
         Load(

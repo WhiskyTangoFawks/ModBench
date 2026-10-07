@@ -1,13 +1,17 @@
 using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
 public sealed class UnreadablePluginSourceTests
 {
     private static void DeleteTheSourceOf(string modFolder, string pluginFileName) =>
-        Directory.Delete(Path.Combine(modFolder, "plugin-source", pluginFileName), recursive: true);
+        Directory.Delete(PluginSourceRoot.In(modFolder, pluginFileName), recursive: true);
+
+    private static bool HoldsASourceFor(string modFolder, string pluginFileName) =>
+        Directory.Exists(PluginSourceRoot.In(modFolder, pluginFileName));
 
     [Fact]
     public void EditingAPlugin_WhoseSourceIsUnreadable_IsRefusedBeforeAnyWrite_NamingDecompile()
@@ -19,6 +23,31 @@ public sealed class UnreadablePluginSourceTests
 
         Assert.Equal(RecordEditRefusal.PluginSourceUnreadable, result.Refusal);
         Assert.Contains("Decompile the plugin", result.Message, StringComparison.Ordinal);
+        Assert.False(HoldsASourceFor(mod.ModFolder, SourceEditFixture.PluginName));
+    }
+
+    [Fact]
+    public void CreatingARecordInAPlugin_WhoseSourceIsUnreadable_IsRefusedTheSameWay()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        DeleteTheSourceOf(mod.ModFolder, SourceEditFixture.PluginName);
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
+
+        Assert.Equal(RecordEditRefusal.PluginSourceUnreadable, result.Refusal);
+        Assert.False(HoldsASourceFor(mod.ModFolder, SourceEditFixture.PluginName));
+    }
+
+    [Fact]
+    public void CopyingOntoAPlugin_WhoseSourceIsUnreadable_IsRefusedTheSameWay()
+    {
+        using var mod = ContainerCopyFixture.CreateWithTrackedSource();
+        DeleteTheSourceOf(mod.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
+
+        var result = mod.CopyHandler.CopyAsOverride(mod.SourcePlugin, mod.FlatNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.Equal(RecordEditRefusal.PluginSourceUnreadable, result.Refusal);
+        Assert.False(HoldsASourceFor(mod.DestinationModFolder, ContainerCopyFixture.DestinationPluginName));
     }
 
     [Fact]

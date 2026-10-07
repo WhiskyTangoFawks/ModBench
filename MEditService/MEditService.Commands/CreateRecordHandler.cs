@@ -56,9 +56,9 @@ public sealed class CreateRecordHandler
     private RecordEditResult MintRecord(PluginAddress plugin, string recordType, string? container, GridPosition? position)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
-        if (_targets.RefuseUnlessTrackedAndLoaded(plugin, out var openedRepository) is { } blocked) return blocked;
+        if (_targets.RefuseUnlessEditable(plugin, out var openedRepository) is { } blocked) return blocked;
         var repository = openedRepository
-            ?? throw new InvalidOperationException("Expected RefuseUnlessTrackedAndLoaded to open a repository when it does not refuse.");
+            ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
 
         var release = _loadOrder.Current.GameRelease;
         var schemas = _schemaReflector.GetSchemas(release);

@@ -13,7 +13,7 @@ public enum RecordEditRefusal
     /// <summary>The way out is Track, once per mod (ADR-0007).</summary>
     PluginNotTracked,
 
-    /// <summary>The plugin's mod is tracked and its plugin source is unreadable; the way out is decompile.</summary>
+    /// <summary>The way out is decompile.</summary>
     PluginSourceUnreadable,
 
     /// <summary>A vanilla/DLC master straight from Data, where Track cannot apply; the way out is a patch plugin.</summary>

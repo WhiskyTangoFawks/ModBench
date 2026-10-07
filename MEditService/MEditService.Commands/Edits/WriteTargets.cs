@@ -32,10 +32,10 @@ internal sealed class WriteTargets(
     {
         (target, document) = (default, null);
 
-        refused = RefuseUnlessTrackedAndLoaded(plugin, out var openedRepository);
+        refused = RefuseUnlessEditable(plugin, out var openedRepository);
         if (refused is not null) return false;
         var repository = openedRepository
-            ?? throw new InvalidOperationException("Expected RefuseUnlessTrackedAndLoaded to open a repository when it does not refuse.");
+            ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
 
         var release = loadOrder.Current.GameRelease;
         try
@@ -56,10 +56,10 @@ internal sealed class WriteTargets(
         [NotNullWhen(true)] out SourceDocument? carrying, [NotNullWhen(false)] out RecordEditResult? refused)
     {
         (target, carrying) = (default, null);
-        refused = RefuseUnlessTrackedAndLoaded(plugin, out var openedRepository);
+        refused = RefuseUnlessEditable(plugin, out var openedRepository);
         if (refused is not null) return false;
         var repository = openedRepository
-            ?? throw new InvalidOperationException("Expected RefuseUnlessTrackedAndLoaded to open a repository when it does not refuse.");
+            ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
 
         var release = loadOrder.Current.GameRelease;
         try
@@ -122,10 +122,10 @@ internal sealed class WriteTargets(
     {
         target = default;
 
-        if (RefuseUnlessTrackedAndLoaded(destinationPlugin, out var openedDestinationRepository)
+        if (RefuseUnlessEditable(destinationPlugin, out var openedDestinationRepository)
             is { } blocked) return blocked;
         var destinationRepository = openedDestinationRepository
-            ?? throw new InvalidOperationException("Expected RefuseUnlessTrackedAndLoaded to open a repository when it does not refuse.");
+            ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
 
         var release = loadOrder.Current.GameRelease;
         var source = new CopySource(sourcePlugin, loadOrder.Current, adapter, codec, schemaReflector);
@@ -190,7 +190,7 @@ internal sealed class WriteTargets(
     }
 
     // The six record gestures enter here first.
-    internal RecordEditResult? RefuseUnlessTrackedAndLoaded(PluginAddress plugin, out SourceRepository? repository)
+    internal RecordEditResult? RefuseUnlessEditable(PluginAddress plugin, out SourceRepository? repository)
     {
         repository = null;
 
@@ -204,13 +204,7 @@ internal sealed class WriteTargets(
         if (registered.Provider is not PluginProvider.FromMod mod || !SourceRepository.IsTracked(registered))
             return RefuseUntracked(plugin, registered.Provider);
 
-        if (!SourceRepository.SourceReads(registered))
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.PluginSourceUnreadable,
-                $"{plugin.Name}'s plugin source is unreadable, so it is read-only. " +
-                "Decompile the plugin to regenerate the source.");
-        }
+        if (!SourceRepository.SourceReads(registered)) return RefuseSourceUnreadable(plugin);
 
         repository = SourceRepository.Over(mod, loadOrder.Current.GameRelease);
         return RefuseIfNotLoaded(plugin);
@@ -234,6 +228,12 @@ internal sealed class WriteTargets(
                 RecordEditRefusal.PluginNotTracked,
                 $"{plugin.Name} is not tracked, so it is read-only. " +
                 "Track its mod once to start editing.");
+
+    private static RecordEditResult RefuseSourceUnreadable(PluginAddress plugin) =>
+        RecordEditResult.Refused(
+            RecordEditRefusal.PluginSourceUnreadable,
+            $"{plugin.Name}'s plugin source is unreadable, so it is read-only. " +
+            "Decompile the plugin to regenerate the source.");
 
     // Neither origin's way out is the other's.
     private static string NoModFolderMessage(PluginAddress plugin, PluginProvider provider) =>

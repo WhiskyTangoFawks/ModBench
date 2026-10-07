@@ -40,14 +40,14 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
 
     private void Tell(string origin, SourceRepository repository, IReadOnlyList<RegisteredPlugin> plugins)
     {
-        var tracked = plugins.ToLookup(plugin => SourceRepository.SourceReads(plugin));
-        notifications.Publish(new ExternalChangeNotification(origin, [.. tracked[true]
+        var sourceReads = plugins.ToLookup(plugin => SourceRepository.SourceReads(plugin));
+        notifications.Publish(new ExternalChangeNotification(origin, [.. sourceReads[true]
             .Select(plugin => (plugin.Key, Observed: hashes.Of(plugin.Path)))
             .Where(plugin => !MatchesLastWrite(repository, plugin.Key, plugin.Observed))
             .Select(plugin => new ChangedPlugin(plugin.Key.Name, plugin.Observed))]));
 
-        if (tracked[false].Any())
-            notifications.Publish(new PluginSourceUnreadableNotification(origin, [.. tracked[false].Select(plugin => plugin.Name)]));
+        if (sourceReads[false].Any())
+            notifications.Publish(new PluginSourceUnreadableNotification(origin, [.. sourceReads[false].Select(plugin => plugin.Name)]));
     }
 
     // Bytes that cannot be read, or a last write that cannot, match nothing (ADR-0003).
