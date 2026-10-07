@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class ResponseWriteApiTests : IDisposable
+public sealed class ResponseEditTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
 

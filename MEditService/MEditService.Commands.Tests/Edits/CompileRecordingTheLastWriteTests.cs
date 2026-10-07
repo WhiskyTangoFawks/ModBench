@@ -3,7 +3,7 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class CompilePluginParkedRefTests : IDisposable
+public sealed class CompileRecordingTheLastWriteTests : IDisposable
 {
     private readonly CompileFixture _mod = new();
 

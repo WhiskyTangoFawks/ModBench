@@ -100,7 +100,7 @@ public class MasterResolutionTests
     }
 
     [Fact]
-    public void Classify_MasterNameMatchIsCaseInsensitive()
+    public void MasterNamesMatchIgnoringCase()
     {
         var result = Classify(Plugin("Base.ESM"), Plugin("Patch.esp", "base.esm"));
 
@@ -108,7 +108,7 @@ public class MasterResolutionTests
     }
 
     [Fact]
-    public void Classify_MastersMasterIsMissing_DoesNotCascadeToDependent()
+    public void AMissingMastersMasterIsNotReportedAgainstTheDependent()
     {
         var aWhoseOwnMasterCIsMissing = Plugin("A.esm", "C.esm");
         var bMasteringOnlyActiveA = Plugin("B.esp", "A.esm");
@@ -120,7 +120,7 @@ public class MasterResolutionTests
     }
 
     [Fact]
-    public void Classify_NoIssues_ReturnsEmptyDictionary()
+    public void PluginWithNoMastersHasNoMasterIssues()
     {
         var result = Classify(Plugin("Base.esm"));
 

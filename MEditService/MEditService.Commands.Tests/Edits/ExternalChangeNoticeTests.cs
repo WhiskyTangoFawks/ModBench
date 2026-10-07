@@ -10,7 +10,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class ExternalChangeCheckTests : IDisposable
+public sealed class ExternalChangeNoticeTests : IDisposable
 {
     private const string PluginName = "Test.esp";
     private const string Origin = "TestMod";
@@ -20,7 +20,7 @@ public sealed class ExternalChangeCheckTests : IDisposable
 
     private readonly Lazy<PutLoadOrderHandler> _handler;
 
-    public ExternalChangeCheckTests() =>
+    public ExternalChangeNoticeTests() =>
         _handler = new(() => TestEditService.PutLoadOrderHandler(new LoadOrderHolder(), notifications: _notifications));
 
     private void Put(LoadOrderSnapshot snapshot) =>

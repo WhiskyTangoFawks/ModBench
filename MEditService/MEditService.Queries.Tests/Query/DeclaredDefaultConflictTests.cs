@@ -15,7 +15,7 @@ public sealed class DeclaredDefaultConflictTests
     [Theory]
     [InlineData("""{"ObjectFormat":2}""", ConflictThis.IdenticalToMaster)]
     [InlineData("""{"ObjectFormat":0}""", ConflictThis.Override)]
-    public void Classify_AbsentObjectFormat_IsTheDeclaredTwo(string overrideJson, ConflictThis expected)
+    public void AbsentObjectFormatIsTheDeclaredTwo(string overrideJson, ConflictThis expected)
     {
         var meta = Vmad;
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null, [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>("{}"))], "Data", RecordType: "Npc");
