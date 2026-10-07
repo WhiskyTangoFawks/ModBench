@@ -1,7 +1,6 @@
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Plugins;
@@ -10,8 +9,8 @@ public sealed class HeldPluginsTests
 {
     private const string UserPlugin = "UserMod.esp";
 
-    private static OpenedIndex Open(PluginFixtureData data, IReadOnlyList<LoadOrderEntry>? entries = null, ILoggerFactory? loggerFactory = null) =>
-        Indexes.Reconciled(data.DataFolder, entries ?? data.Plugins, loggerFactory: loggerFactory);
+    private static OpenedIndex Open(PluginFixtureData data, IReadOnlyList<LoadOrderEntry>? entries = null) =>
+        Indexes.Reconciled(data.DataFolder, entries ?? data.Plugins);
 
     private static PluginAddress Key(string name, string origin = PluginOrigin.DataDirectory) => new(name, origin);
 
@@ -191,21 +190,5 @@ public sealed class HeldPluginsTests
 
         Assert.Equal(["B.esp"], held.Status.IndexedPlugins.Select(p => p.Name));
         Assert.DoesNotContain(removed, held.RequireReads().OpenedPlugins.Keys);
-    }
-
-    [Fact]
-    public void Open_WithLogger_LogsToProvidedLogger()
-    {
-        using var data = new PluginFixtureBuilder("lo-logger").WithPlugin("LogTest.esp").Build();
-        var entries = new List<LogEntry>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Debug);
-            b.AddProvider(new CollectingLoggerProvider(entries));
-        });
-
-        using var held = Open(data, loggerFactory: loggerFactory);
-
-        Assert.Contains(entries, e => e.Message.Contains("LogTest.esp", StringComparison.Ordinal));
     }
 }

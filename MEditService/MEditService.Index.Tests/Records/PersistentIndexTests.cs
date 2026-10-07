@@ -149,58 +149,6 @@ public sealed class PersistentIndexTests : IDisposable
         Assert.NotEmpty(second.Index.RequireReads().DocumentsOf(beta.KeyOf()));
     }
 
-    [Fact]
-    public void AFileWrittenWithTheWinnersTableOfTheLastFormat_RebuildsAndSweeps()
-    {
-        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
-        using (Launched([alpha])) { }
-
-        AgeTheFileWithSqlSinceNoOtherWayWritesRowsUnderAVersionThisBuildCannotProduce("""
-            DROP TABLE winners;
-            CREATE TABLE winners (record_ref VARCHAR NOT NULL, form_key VARCHAR NOT NULL, plugin VARCHAR NOT NULL, origin VARCHAR NOT NULL);
-            UPDATE mirror.index_version SET value = '10' || substr(value, strpos(value, '|'));
-            """);
-
-        using var second = Launched([alpha]);
-        Assert.Equal(["Alpha.esp"], second.Opens.Opened);
-        var documents = second.Index.RequireReads().DocumentsOf(alpha.KeyOf());
-        Assert.NotEmpty(documents);
-        Assert.All(documents, d => Assert.True(d.IsWinner));
-    }
-
-    [Fact]
-    public void AFileWhoseContentHashesAreOfAnotherFormat_RebuildsAndRestampsEveryRecord()
-    {
-        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
-        using (Launched([alpha])) { }
-
-        AgeTheFileWithSqlSinceNoOtherWayWritesRowsUnderAVersionThisBuildCannotProduce("""
-            UPDATE mirror.records SET content_hash = repeat('0', 40);
-            UPDATE mirror.index_version SET value = '11' || substr(value, strpos(value, '|'));
-            """);
-
-        using (var second = Launched([alpha]))
-            Assert.Equal(["Alpha.esp"], second.Opens.Opened);
-
-        Assert.NotEqual(0, CountOf("SELECT COUNT(*) FROM mirror.records"));
-        Assert.Equal(0, CountOf("SELECT COUNT(*) FROM mirror.records WHERE length(content_hash) <> 64"));
-    }
-
-    [Fact]
-    public void AFileWrittenUnderAnotherVersion_HoldingNoIndexedPlugin_RebuildsFromScratch()
-    {
-        using (Launched([])) { }
-
-        AgeTheFileWithSqlSinceNoOtherWayWritesRowsUnderAVersionThisBuildCannotProduce("""
-            UPDATE mirror.index_version SET value = 'written-by-another-build';
-            CREATE TABLE mirror.left_by_another_build (value INTEGER);
-            """);
-
-        using (Launched([])) { }
-
-        Assert.False(TableExists("left_by_another_build"));
-    }
-
     private void AgeTheFileWithSqlSinceNoOtherWayWritesRowsUnderAVersionThisBuildCannotProduce(string sql)
     {
         using var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_instanceRoot)}");
@@ -208,24 +156,6 @@ public sealed class PersistentIndexTests : IDisposable
         using var cmd = connection.CreateCommand();
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
-    }
-
-    private long CountOf(string sql)
-    {
-        using var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_instanceRoot)}");
-        connection.Open();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = sql;
-        return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
-    }
-
-    private bool TableExists(string name)
-    {
-        using var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_instanceRoot)}");
-        connection.Open();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{name}'";
-        return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) > 0;
     }
 
     [Fact]

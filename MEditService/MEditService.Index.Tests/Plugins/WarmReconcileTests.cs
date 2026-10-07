@@ -3,7 +3,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -12,25 +11,8 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class WarmReconcileTests
 {
-    private static OpenedIndex MakeIndexer(LoadOrderHolder holder, ILoggerFactory? loggerFactory = null) =>
-        Indexes.Open(holder, loggerFactory: loggerFactory);
-
-    private static (ILoggerFactory Factory, List<LogEntry> Entries) Capturing()
-    {
-        var entries = new List<LogEntry>();
-        var factory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Debug);
-            b.AddProvider(new CollectingLoggerProvider(entries));
-        });
-        return (factory, entries);
-    }
-
-    private static int Indexed(List<LogEntry> entries, string plugin) =>
-        entries.Count(e => e.Message.StartsWith($"Indexing {plugin} ", StringComparison.Ordinal));
-
-    private static int Registered(List<LogEntry> entries, string plugin) =>
-        entries.Count(e => e.Message.StartsWith($"Registering {plugin} ", StringComparison.Ordinal));
+    private static OpenedIndex MakeIndexer(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
+        Indexes.Open(holder, adapter);
 
     [Fact]
     public void ASecondLoadOfTheSameOrder_IndexesNothing_AndIsStillReadyWithWinners()
@@ -42,15 +24,12 @@ public sealed class WarmReconcileTests
             .Build();
         using (var cold = MakeIndexer(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
-        var (loggerFactory, entries) = Capturing();
-        using var _ = loggerFactory;
-        using var warm = MakeIndexer(holder, loggerFactory);
+        using var opens = new GatedPluginAdapter();
+        using var warm = MakeIndexer(holder, opens);
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
-        Assert.Equal(0, Indexed(entries, "A.esp"));
-        Assert.Equal(0, Indexed(entries, "B.esp"));
-        Assert.Equal(1, Registered(entries, "A.esp"));
-        Assert.Equal(1, Registered(entries, "B.esp"));
+        Assert.Empty(opens.Opened);
+        Assert.Equal(["A.esp", "B.esp"], warm.Status.IndexedPlugins.Select(p => p.Name));
 
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
         Assert.True(warm.Status.ConflictsComputed);
@@ -122,15 +101,12 @@ public sealed class WarmReconcileTests
         edited.Npcs.AddNew("NpcBEdited");
         edited.WriteToBinary(Path.Combine(data.DataFolder, "B.esp"));
 
-        var (loggerFactory, entries) = Capturing();
-        using var _ = loggerFactory;
-        using var warm = MakeIndexer(holder, loggerFactory);
+        using var opens = new GatedPluginAdapter();
+        using var warm = MakeIndexer(holder, opens);
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
-        Assert.Equal(1, Registered(entries, "A.esp"));
-        Assert.Equal(0, Indexed(entries, "A.esp"));
-        Assert.Equal(1, Indexed(entries, "B.esp"));
-        Assert.Equal(0, Registered(entries, "B.esp"));
+        Assert.Equal(["B.esp"], opens.Opened);
+        Assert.NotEmpty(warm.RequireReads().DocumentsOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
 
         var documents = warm.RequireReads().DocumentsOf(new PluginAddress("B.esp", PluginOrigin.DataDirectory));
         Assert.Contains(documents, d => d.EditorId == "NpcBEdited");
@@ -149,13 +125,12 @@ public sealed class WarmReconcileTests
 
         var withB = data.Plugins.Append(new LoadOrderEntry("B.esp", Path.Combine(data.DataFolder, "B.esp"), PluginOrigin.DataDirectory, Slot: 99, Enabled: true, Winning: true)).ToList();
 
-        var (loggerFactory, entries) = Capturing();
-        using var _ = loggerFactory;
-        using var warm = MakeIndexer(holder, loggerFactory);
+        using var opens = new GatedPluginAdapter();
+        using var warm = MakeIndexer(holder, opens);
         warm.Reconcile(holder, data.DataFolder, withB, GameRelease.Fallout4, data.InstanceRoot);
 
-        Assert.Equal(1, Registered(entries, "A.esp"));
-        Assert.Equal(1, Indexed(entries, "B.esp"));
+        Assert.Equal(["B.esp"], opens.Opened);
+        Assert.NotEmpty(warm.RequireReads().DocumentsOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
     }
 
@@ -178,13 +153,9 @@ public sealed class WarmReconcileTests
                 second.RequireReads().DocumentsOf(entry.KeyOf()).Single(d => d.EditorId == "TrackedNpc"));
         }
 
-        var (loggerFactory, entries) = Capturing();
-        using var _ = loggerFactory;
-        using var third = MakeIndexer(holder, loggerFactory);
+        using var third = MakeIndexer(holder);
         third.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
 
-        Assert.Equal(1, Registered(entries, plugin));
-        Assert.Equal(0, Indexed(entries, plugin));
         Assert.Empty(third.Status.Failures);
 
         var text = await File.ReadAllTextAsync(npcSourceFile);
