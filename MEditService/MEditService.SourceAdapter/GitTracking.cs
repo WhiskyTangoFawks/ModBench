@@ -116,9 +116,8 @@ internal static class GitTracking
         "meta.ini\n";
 }
 
-/// <summary>What a write made or replaced, in order, so a rollback takes back exactly that and nothing a
-/// third party wrote: a directory only once it is empty, a file only while it still holds the bytes this
-/// write gave it (ADR-0003). Whatever it leaves is named.</summary>
+/// <summary>What a write made or replaced, so a rollback takes back only that: a directory once empty, a
+/// file while it holds the bytes this write gave it (ADR-0003). What it leaves is named.</summary>
 internal sealed class WriteLog
 {
     private abstract record Entry(string Path);
