@@ -28,11 +28,11 @@ export interface EditingFlow {
   dispose(): void;
 }
 
-function pending(log: (line: string) => void) {
+function pending(logThrown: (reason: string) => void) {
   const held = new Set<Promise<void>>();
   return {
     track(work: Promise<void>): Promise<void> {
-      const told = work.catch((e: unknown) => { log(`[loadOrder] handing mEdit the load order threw: ${errorMessage(e)}`); });
+      const told = work.catch((e: unknown) => { logThrown(errorMessage(e)); });
       held.add(told);
       void told.then(() => held.delete(told));
       return told;
@@ -43,8 +43,8 @@ function pending(log: (line: string) => void) {
 
 export function editingFlow(deps: EditingDeps): EditingFlow {
   const { client, instanceRoot, around, tell, log } = deps;
-  const tells = pending(log);
-  const launches = pending(log);
+  const tells = pending((reason) => { log(`[loadOrder] handing mEdit the load order threw: ${reason}`); });
+  const launches = pending((reason) => { log(`[loadOrder] telling the launch of mEdit threw: ${reason}`); });
   let entering = false;
 
   // A launch that failed is told by the launch, not again by the snapshot it was for.

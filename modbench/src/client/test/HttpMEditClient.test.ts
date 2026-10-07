@@ -924,6 +924,50 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     expect(children).toHaveLength(2);
   });
 
+  it('holds a snapshot sent during the second restart of a crash loop, launching and killing nothing, through a restart that never answers', async () => {
+    const health = { up: true };
+    const kills: number[] = [];
+    const children: EventEmitter[] = [];
+    let puts = 0;
+    const client = createMEditClient({
+      backend: {
+        freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
+        spawn: () => {
+          const index = children.length;
+          const child: EventEmitter = Object.assign(new EventEmitter(), {
+            kill: () => { kills.push(index); child.emit('exit', 0); },
+          });
+          children.push(child);
+          return child;
+        },
+        pollIntervalMs: 3, pollTimeoutMs: 300, checkHealth: () => Promise.resolve(health.up),
+      },
+      backendLog: fakeLogChannel(),
+      fetch: routedFetch([
+        ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+        ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
+          state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
+        }))],
+        ['/load-order', () => { puts += 1; return Promise.resolve(jsonResponse(200, appliedBody)); }],
+      ]),
+    });
+    await client.start();
+    const launches: unknown[] = [];
+    client.onLaunch((launched) => launches.push(launched));
+
+    health.up = false;
+    children[0]?.emit('exit', 1);
+    await vi.waitFor(() => expect(children).toHaveLength(2), { interval: 2 });
+    children[1]?.emit('exit', 1);
+    await vi.waitFor(() => expect(children).toHaveLength(3), { interval: 2 });
+    const sent = client.sendLoadOrder(snapshot);
+
+    await expect(sent).resolves.toEqual({ outcome: 'backendFailed' });
+    expect(puts).toBe(0);
+    expect(kills).toEqual([]);
+    expect(launches).toEqual([]);
+  });
+
   it('aborts the PUT in flight before it kills the mEdit it spawned, and answers it abandoned, not a failure', async () => {
     let putSignal: AbortSignal | undefined;
     let abortedAtKill: boolean | undefined;

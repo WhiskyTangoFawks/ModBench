@@ -91,7 +91,7 @@ export class BackendLifecycle {
 
   get status(): BackendStatus { return this._status; }
 
-  /** From a crash until its restart has run; false once it gives up. */
+  /** From a crash until a child runs, or until the restarts end. */
   get restarting(): boolean { return this._restarting; }
 
   /** The port the API answers on: the attached one, else the spawned backend's once start() has
@@ -195,10 +195,8 @@ export class BackendLifecycle {
     this.restartAttempts++;
     this.log(`[backend] backend exited unexpectedly (code ${code}); restart ${this.restartAttempts}/${BackendLifecycle.MAX_RESTARTS}`);
     const gen = this.generation;
-    void (this.startPromise ?? Promise.resolve()).then(async () => {
-      if (gen === this.generation && this.expectedAlive) await this.start();
-    }).finally(() => {
-      if (gen === this.generation) this._restarting = false;
+    void (this.startPromise ?? Promise.resolve()).then(() => {
+      if (gen === this.generation && this.expectedAlive) void this.start();
     });
   }
 
@@ -214,6 +212,7 @@ export class BackendLifecycle {
         const healthy = await this.checkHealthFn();
         if (abandoned()) { resolve(); return; }
         if (healthy) {
+          this._restarting = false;
           this.setStatus('running');
           resolve();
           return;

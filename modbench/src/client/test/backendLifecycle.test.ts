@@ -370,6 +370,30 @@ describe('BackendLifecycle crash-restart / stop', () => {
     expect(lifecycle.restarting).toBe(false);
   });
 
+  it('stays restarting through a restarted child that crashes before it answers, until a child runs', async () => {
+    const state = { healthy: true };
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 3, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
+    await lifecycle.start();
+
+    state.healthy = false;
+    present(children[0], 'the first spawned child').emit('exit', 1);
+    await vi.waitFor(() => expect(children).toHaveLength(2));
+    present(children[1], 'the first restart\'s child').emit('exit', 1);
+    await vi.waitFor(() => expect(children).toHaveLength(3));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const duringSecondRestart = lifecycle.restarting;
+    const running = nextRunningStatus(lifecycle);
+    state.healthy = true;
+    await running;
+
+    expect(duringSecondRestart).toBe(true);
+    expect(lifecycle.restarting).toBe(false);
+  });
+
   it('reports a restart that never answered as disconnected, and not restarting', async () => {
     const state = { healthy: true };
     const children: ReturnType<typeof makeChild>[] = [];

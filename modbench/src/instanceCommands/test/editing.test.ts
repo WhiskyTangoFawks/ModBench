@@ -235,6 +235,19 @@ describe('a tell that threw', () => {
   });
 });
 
+describe('telling a launch that threw', () => {
+  it('reaches the Output once, naming the launch', async () => {
+    const { client, land, logged, failNextTell } = wired('stopped');
+    client.answerStart(() => Promise.reject(new Error('no port')));
+    failNextTell(new Error('boom'));
+
+    land(valueWith('A.esp'));
+    await until(() => logged.length > 0);
+
+    expect(logged).toEqual(['[loadOrder] telling the launch of mEdit threw: boom']);
+  });
+});
+
 describe('the same recompute after a failed launch', () => {
   it('neither launches mEdit again nor tells nor shows anything', async () => {
     const { client, told, land, around } = wired('stopped');
