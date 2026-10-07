@@ -4,7 +4,7 @@ import type { GameFolder, ModFolders, OriginFile, PluginEntry } from '../../inst
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { buildFileConflictIndex, FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
 import {
-  buildLoadOrderRows, loadOrderSnapshotOf, originFiles, providedPluginsOf, resolvePluginPaths, type LoadOrderPlugin,
+  buildLoadOrderRows, loadOrderSnapshotOf, originFiles, providedPluginsOf, type LoadOrderPlugin,
   type LoadOrderPluginLine,
 } from '../loadOrderSnapshot';
 import type { PluginAddress } from '../../wire/pluginAddress';
@@ -166,11 +166,11 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   });
 });
 
-describe('resolvePluginPaths', () => {
-  it('drops a name neither a mod winner nor a game folder found can resolve', () => {
-    const result = resolvePluginPaths(['Fallout4.esm'], index({}), GAME_FOLDER_NOT_FOUND);
+describe('buildLoadOrderRows, a name neither a mod winner nor a game folder found can resolve', () => {
+  it('has no path', () => {
+    const [row] = buildLoadOrderRows(lines(['Fallout4.esm']), index({}), [], GAME_FOLDER_NOT_FOUND);
 
-    expect(result.has('Fallout4.esm')).toBe(false);
+    expect(row?.path).toBeUndefined();
   });
 });
 

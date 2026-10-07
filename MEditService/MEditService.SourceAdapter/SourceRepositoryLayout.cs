@@ -29,10 +29,6 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     /// shares it still deploys.</summary>
     internal const string RootFolderName = "plugin-source";
 
-    /// <summary>The whole-mod door's own name for a container's document, and for the header's
-    /// document at the plugin tree's root.</summary>
-    internal const string RecordDataFileName = "RecordData.json";
-
     /// <summary>The whole-mod door's own name for a group or block level's metadata file, written for
     /// every minted level, empty unless the level has non-default metadata.</summary>
     internal const string GroupRecordDataFileName = "GroupRecordData.json";
@@ -58,7 +54,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     internal static IReadOnlyList<TreeFile> PristineFilesOf(
         string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
         [.. treeFiles.Select(file => new TreeFile(
-            file.RelativePath == RecordDataFileName
+            file.RelativePath == DocumentFileNames.Root
                 ? HeaderDocumentFor(pluginFileName)
                 : Path.Combine(RootFor(pluginFileName), SourceNameOf(file.RelativePath)),
             file.Content))];
@@ -87,14 +83,14 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         string DoorName(string source)
         {
             if (IsHeaderDocumentPath(source, pluginFileName)) return DoorHeaderDocumentFor(pluginFileName);
-            return documents.Contains(source) ? Path.Combine(PathShape.DirectoryOf(source), RecordDataFileName) : source;
+            return documents.Contains(source) ? Path.Combine(PathShape.DirectoryOf(source), DocumentFileNames.Root) : source;
         }
 
         return sources.Select(source => (source, DoorName(source)));
     }
 
     private static string SourceNameOf(string doorPath) =>
-        Path.GetFileName(doorPath).Equals(RecordDataFileName, StringComparison.Ordinal)
+        Path.GetFileName(doorPath).Equals(DocumentFileNames.Root, StringComparison.Ordinal)
             ? ContainerDocumentIn(PathShape.DirectoryOf(doorPath))
             : doorPath;
 
@@ -144,7 +140,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
             Directory.Exists(directory) ? Directory.EnumerateFiles(directory).Where(file => !CarriesNoRecord(file)) : []);
 
     private static string DoorHeaderDocumentFor(string pluginFileName) =>
-        Path.Combine(RootFor(pluginFileName), RecordDataFileName);
+        Path.Combine(RootFor(pluginFileName), DocumentFileNames.Root);
 
     /// <summary>The plugin header's own document, named for its FormKey: a header has no EditorID.</summary>
     internal static string HeaderDocumentIn(string modFolder, string pluginFileName) =>

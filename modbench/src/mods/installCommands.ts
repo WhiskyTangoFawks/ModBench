@@ -11,14 +11,12 @@ import { reportFailure } from '../drivingLib/reportFailure';
 import type { Reporter } from '../ports/reporter';
 import { runModsWriting } from './gestureEntry';
 
-/** What the gesture answers its invoker: whether a mod landed. A cancelled picker, a cancelled
- *  name prompt and a refused install are one answer, since each leaves nothing installed. */
-export interface InstallOutcome {
+interface InstallOutcome {
   installed: boolean;
 }
 const NOT_INSTALLED: InstallOutcome = { installed: false };
 
-export interface ModInstallDeps {
+interface ModInstallDeps {
   access: InstallAccess;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporterFor: (tag: string) => Reporter;

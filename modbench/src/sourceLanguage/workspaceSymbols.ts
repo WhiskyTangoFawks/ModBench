@@ -7,7 +7,7 @@ import type { RecordCopy } from '../drivingLib/recordDocument';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
 import { formKeyMember, recordLabel } from './recordText';
 
-export interface WorkspaceSymbolDeps<Document> extends RecordLocationDeps<Document> {
+interface WorkspaceSymbolDeps<Document> extends RecordLocationDeps<Document> {
   client: RecordLocationDeps<Document>['client'] & Pick<MEditClient, 'getPlugins' | 'searchRecords'>;
   reporter: Pick<Reporter, 'report'>;
 }

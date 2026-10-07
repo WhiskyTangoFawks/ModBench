@@ -5,7 +5,7 @@ import { formKeyAt } from './formKeyHover';
 import type { RecordLocation, RecordLocationDeps } from './recordLocation';
 import { formKeyMember } from './recordText';
 
-export interface DefinitionDeps<Document> extends RecordLocationDeps<Document> {
+interface DefinitionDeps<Document> extends RecordLocationDeps<Document> {
   reporter: Pick<Reporter, 'shownOnSurface'>;
 }
 

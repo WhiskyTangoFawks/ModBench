@@ -3,7 +3,7 @@
 import type { Copy } from '../instanceLoader/instance';
 import type { ConflictCellState, ConflictRowState } from '../wire/conflictTable';
 
-export interface FileStates {
+interface FileStates {
   readonly row: ConflictRowState | null;
   /** One for each copy, in the copies' order. */
   readonly cells: readonly (ConflictCellState | null)[];

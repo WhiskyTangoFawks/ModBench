@@ -20,9 +20,9 @@ interface Walk {
   readonly notes: string[];
 }
 
-export const relativeUnder = (root: string, path: string, separator: string = sep): string => {
+const relativeUnder = (root: string, path: string): string => {
   const below = path.slice(root.length + 1);
-  return separator === '/' ? below : below.split(separator).join('/');
+  return sep === '/' ? below : below.split(sep).join('/');
 };
 
 const childOf = (dir: string, name: string): string => dir + sep + name;

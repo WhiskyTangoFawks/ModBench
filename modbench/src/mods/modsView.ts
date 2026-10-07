@@ -8,14 +8,14 @@ import { modsKeyContext } from './gestureEntry';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
 
-export interface ModsViewDeps {
+interface ModsViewDeps {
   instance: InstanceView;
   log: (line: string) => void;
   /** Mod sync, whose failure the view's message line says. */
   modSync: ModSync;
 }
 
-export interface ModsView extends vscode.Disposable {
+interface ModsView extends vscode.Disposable {
   provider: ModListProvider;
   view: vscode.TreeView<ModlistNode>;
   nameFilter: NameFilter;

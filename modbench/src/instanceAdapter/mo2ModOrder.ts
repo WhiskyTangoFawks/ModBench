@@ -15,7 +15,7 @@ import {
   entryKey, folderHolding, listedAs, listModFolders, modFoldersOf, refuseFolderTaken, type Mo2Context,
 } from './mo2Context';
 
-export type Mo2ModOrder = Pick<InstanceAdapter, 'changeModOrder'>;
+type Mo2ModOrder = Pick<InstanceAdapter, 'changeModOrder'>;
 
 function listedName(order: readonly ModlistEntry[], entry: EntryRef): string {
   const listed = listedAs(order, entry);

@@ -7,9 +7,9 @@ import { archiveKey } from '../instanceLoader/downloadRows';
 import { defaultModName, type InstallTarget } from '../install/install';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 
-export type UpgradeTier = 'fileId' | 'installationFile';
+type UpgradeTier = 'fileId' | 'installationFile';
 
-export interface UpgradeCandidate {
+interface UpgradeCandidate {
   readonly modName: string;
   readonly version?: string;
   /** `fileId` beats `installationFile`; absent, the mod shares only the Nexus mod id. */
@@ -26,7 +26,7 @@ const TIER_RANK: Record<'fileId' | 'installationFile' | 'none', number> = { file
 
 // The pool is the mods sharing the mod id, so no mod id empties it. The tiers rank within the
 // pool; a file-id match drops the installation-file tier for every other mod.
-export function selectUpgradeCandidates(
+function selectUpgradeCandidates(
   value: { mods: InstanceValue['mods'] },
   download: Pick<DownloadRow, 'modID' | 'fileID' | 'name'>,
 ): UpgradeCandidate[] {

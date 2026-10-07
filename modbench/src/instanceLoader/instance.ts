@@ -18,28 +18,22 @@ import { modSyncArgumentsOf, pluginSyncArgumentsOf, type ModSyncArguments, type 
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
-export type { FileOrigin, InstalledFileId, Mod, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
+export type { FileOrigin, Mod, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow } from './downloadRows';
 export type { Copy, FileCopies } from './sameCopies';
 export type { ModSyncArguments, PluginSyncArguments } from './syncArguments';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
-export type { GameFolder, GameFolderLook } from '../instanceAdapter/instanceAdapter';
+export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on,
 // and the wait before an empty mod order is believed.
 const SETTLE_MS = 200;
 
-/** The rows the mod manager's downloads folder holds, or why Modbench could not resolve that
- *  folder at all — never rows from a folder the manager is not using (downloads.md, Which files
- *  are rows, story 1). */
-export type DownloadsResult =
+type DownloadsResult =
   | { readonly kind: 'listed'; readonly rows: readonly DownloadFile[] }
   | { readonly kind: 'unresolved'; readonly reason: string };
 
-/** The instance paths a view renders or opens: the Instance adapter owns every path function, and
- *  a view reads its answer here. Each is read with the rest of the value, so the empty value
- *  names none. */
-export interface InstancePaths {
+interface InstancePaths {
   /** `undefined` until read, and when the instance gives run-time output no folder. */
   readonly overwriteDir: string | undefined;
   /** `undefined` while unresolved (or not yet read): a consumer skips the action, no fallback. */
@@ -124,13 +118,12 @@ export function lastGoodReadMessage({ sequence, readFailure }: Pick<InstanceView
   return sequence > 0 && readFailure !== undefined ? `Showing the last good read: ${readFailure}` : undefined;
 }
 
-/** As much of VS Code's window as the recompute reads. */
-export interface FocusWindow {
+interface FocusWindow {
   readonly state: { readonly focused: boolean };
   onDidChangeWindowState(listener: (state: { readonly focused: boolean }) => void): Subscription;
 }
 
-export interface InstanceOptions {
+interface InstanceOptions {
   /** The one reader of the instance; each recompute reads its settings once. */
   adapter: InstanceAdapter;
   window: FocusWindow;

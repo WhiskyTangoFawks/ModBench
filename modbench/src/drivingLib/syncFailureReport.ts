@@ -7,14 +7,12 @@ type SyncOutcome =
   // Wrote nothing for a cause the instance's state tells once, so the command has none of its own.
   | { applied: false; toldAsInstanceState: true };
 
-/** A system command's runs, each begun by a landed value and ended once it has told what it did. */
-export interface SyncRuns {
+interface SyncRuns {
   /** Resolves once every run begun so far has written its Output and settled its message. */
   settled(): Promise<void>;
 }
 
-/** Tracks the runs a trigger begins, for its `settled`. */
-export function trackSyncRuns(): SyncRuns & { begin(run: Promise<void>): void } {
+function trackSyncRuns(): SyncRuns & { begin(run: Promise<void>): void } {
   const inFlight = new Set<Promise<void>>();
   return {
     begin: (run) => {
@@ -80,9 +78,7 @@ export interface SyncChannel {
   info(msg: string): void;
 }
 
-/** What one system command says of itself: `added` and `dropped` finish "added N …" and
- *  "dropped N …". */
-export interface SyncLabels {
+interface SyncLabels {
   command: string;
   prefix: string;
   unsynced: string;

@@ -17,7 +17,7 @@ import { mo2Reads } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
 import { modsDir, profilesDir, settingsFile } from './layout';
 
-export interface Mo2InstanceOptions {
+interface Mo2InstanceOptions {
   instanceRoot: string;
   gameDirectoryOverrides: () => GameDirectoryOverrides;
   /** Steam and Wine detection; the real ones when omitted. */

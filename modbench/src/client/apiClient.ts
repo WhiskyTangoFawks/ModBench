@@ -38,7 +38,6 @@ export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 
 /** Deliberately not a boolean pair (which carries an "Added implies dirty" invariant every
  *  consumer must remember), and leaves room for a future 'Deleted' without a wire reshape. */
-export type WorkingTreeState = Schemas['WorkingTreeState'];
 
 export type RecordSummary = Schemas['RecordSummary'];
 

@@ -27,7 +27,7 @@ const { switchProfile } = vi.hoisted(() => ({ switchProfile: vi.fn() }));
 
 vi.mock('../../instanceCommands/profile', () => ({ switchProfile }));
 
-import { registerRefreshCommand, registerToolboxCommands, type ToolboxCommandDeps } from '../toolboxCommands';
+import { registerRefreshCommand, registerToolboxCommands } from '../toolboxCommands';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
@@ -38,6 +38,8 @@ import type { RefreshResult } from '../../instanceCommands/loadOrder';
 const value = instanceValueFixture({ activeProfile: 'Default', profiles: ['Default', 'Modding', 'Survival'] });
 
 const access = accessTo('/instance');
+
+type ToolboxCommandDeps = Parameters<typeof registerToolboxCommands>[0];
 
 function register(over: Partial<ToolboxCommandDeps> = {}) {
   const reporter = recordingReporter();

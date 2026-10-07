@@ -5,7 +5,7 @@ import type { InstanceAdapter, OriginFileMark, OriginFileMarked } from './instan
 import { excludedName, fileInFolder, includedName, isExcludedName, originDir } from './layout';
 import type { Mo2Context } from './mo2Context';
 
-export type Mo2OriginFiles = Pick<InstanceAdapter, 'markOriginFile'>;
+type Mo2OriginFiles = Pick<InstanceAdapter, 'markOriginFile'>;
 
 function fileUnder(folder: string | undefined, relativePath: string): string | undefined {
   const reachesOut = relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));

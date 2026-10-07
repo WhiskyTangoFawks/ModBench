@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -17,7 +18,7 @@ internal static class ParseFailedDocument
         if (dispatch.IsPathAmbiguous(record.GetType())
             && dispatch.ConcreteFor(record.GetType().Name) is { } concrete)
         {
-            members.Add(Member("MutagenObjectType", concrete.Name));
+            members.Add(Member(LoquiUnions.UnionTypeDiscriminator, concrete.Name));
         }
         members.Add(Member("FormKey", record.FormKey.ToString()));
         if (editorId != null) members.Add(Member("EditorID", editorId));

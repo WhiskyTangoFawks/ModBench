@@ -36,11 +36,9 @@ export interface LoadOrderPlugin {
   winning: boolean;
 }
 
-/** What provides a plugin file (ADR-0012): a mod and the mod's own folder, the game, or no mod. */
-export type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string } | { kind: 'Game' } | { kind: 'None' };
+type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string } | { kind: 'Game' } | { kind: 'None' };
 
-/** ADR-0013. */
-export type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'> & { provider: SnapshotProvider };
+type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'> & { provider: SnapshotProvider };
 
 /** The snapshot was not built, and why: the user is told once (common.md, Reporting). */
 export interface LoadOrderSnapshotRefusal {
@@ -117,10 +115,8 @@ export function pluginsLoadedWithNoLineOf(
   });
 }
 
-/** Keyed by lowercased name, since plugins.txt casing is not authoritative. Root-level index
- *  files only. A name with no mod winner and no game folder found has no entry — nothing to fall
- *  back to. */
-export function resolvePluginPaths(
+// Keyed by lowercased name, since plugins.txt casing is not authoritative.
+function resolvePluginPaths(
   names: readonly string[],
   index: FileConflictIndex,
   gameFolder: GameFolder,

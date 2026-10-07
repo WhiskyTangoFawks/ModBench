@@ -159,7 +159,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         }
 
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
-            ?? _containers.RecordTypeNamed(DocumentText.RootStringIn(text, MutagenObjectTypeMember))
+            ?? _containers.RecordTypeNamed(DocumentText.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator))
             ?? throw Unreadable(file, "neither its path nor its text names a record type", declared);
         var formKey = declared ?? throw Unreadable(file, "it declares no FormKey");
 
@@ -182,8 +182,6 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         return [.. _containers.ChildrenOf(recordType, document.RootElement)
             .Select(c => new ChildRecord(c.FormKey, c.SlotName, c.SlotIndex))];
     }
-
-    private const string MutagenObjectTypeMember = "MutagenObjectType";
 
     /// <summary>The text of one document in hand and of every child it embeds, by FormKey. An untyped
     /// child is carried too: history may hold a state that does not build (ADR-0007).</summary>

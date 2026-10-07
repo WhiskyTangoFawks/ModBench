@@ -41,7 +41,7 @@ function indicatorsOf(value: IndicatorsValue, name: string, files: readonly Orig
   return MOD_INDICATORS.flatMap(({ id }) => (holds[id] ? [id] : []));
 }
 
-export function modIndicators(value: IndicatorsValue): ReadonlyMap<string, readonly ModIndicator[]> {
+function modIndicators(value: IndicatorsValue): ReadonlyMap<string, readonly ModIndicator[]> {
   const carriers = new Map<string, readonly ModIndicator[]>();
   for (const entry of value.mods) {
     if (entry.kind !== 'mod' || !entry.enabled) continue;
