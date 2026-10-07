@@ -1,5 +1,12 @@
 import * as vscode from 'vscode';
-import type { InstanceView } from '../instanceLoader/instance';
+import type { DownloadFile, Instance, InstanceValue, InstanceView } from '../instanceLoader/instance';
+import type { InstallAccess } from '../install/install';
+import type { ModlistAccess } from '../modlist/modlist';
+import type { Reporter } from '../ports/reporter';
+import type { AskQuestion } from '../ports/dialog';
+import type { MoveToTrash } from '../ports/trash';
+import type { CopyValueAdapter } from '../drivingLib/copyValue';
+import type { NexusModRow } from '../drivingLib/inFocusedView';
 import { errorMessage } from '../ports/errorMessage';
 import { messageLine, registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
@@ -7,10 +14,29 @@ import type { ModSync } from './modSync';
 import { modsKeyContext } from './gestureEntry';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
+import { registerModDecorations } from './modDecorations';
+import { registerModInstallCommands } from './installCommands';
+import { registerCompareFileCommand } from './compareFile';
+import { registerGoToModCommand } from './goToMod';
+import { registerConflictTable } from './conflictTableEditor';
+import {
+  modsCopyValueText, registerCreateEmptyModCommand, registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands,
+  registerModMoveCommand, registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand,
+} from './modManagementCommands';
 
 interface ModsViewDeps {
-  instance: InstanceView;
+  instance: InstanceView & Pick<Instance, 'refresh' | 'sameCopies'>;
+  access: ModlistAccess & InstallAccess;
   log: (line: string) => void;
+  reporterFor: (tag: string) => Reporter;
+  ask: AskQuestion;
+  trash: MoveToTrash;
+  extensionUri: vscode.Uri;
+  warnIfFomod: (name: string, isFomod: boolean) => void;
+  /** The Downloads view's flow for a downloaded file. */
+  installDownloaded: (file: DownloadFile) => Promise<boolean>;
+  /** The one selected mod row with a Nexus id in the focused Mods or Downloads view, for the palette. */
+  nexusRow: () => NexusModRow | undefined;
   /** Mod sync, whose failure the view's message line says. */
   modSync: ModSync;
 }
@@ -19,12 +45,14 @@ interface ModsView extends vscode.Disposable {
   provider: ModListProvider;
   view: vscode.TreeView<ModlistNode>;
   nameFilter: NameFilter;
+  copyValue: CopyValueAdapter;
 }
 
 /** Tree, filter and count readout together, because the view's description and message line
  *  each have exactly one owner. Split apart, a row change and a filter keystroke race for them and
  *  the loser silently vanishes. */
-export function createModsView({ instance, log, modSync }: ModsViewDeps): ModsView {
+export function createModsView(deps: ModsViewDeps): ModsView {
+  const { instance, access, log, modSync, reporterFor, ask, trash } = deps;
   const provider = new ModListProvider({ instance });
   const view = vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: provider,
@@ -63,12 +91,39 @@ export function createModsView({ instance, log, modSync }: ModsViewDeps): ModsVi
     provider.onDidChangeTreeData(expand),
     view.onDidChangeVisibility(expand),
     view.onDidChangeCheckboxState(onModCheckboxChanged),
+    ...registerModDecorations(instance, vscode.workspace),
+    ...registerModContextCommands({
+      access, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
+      log,
+    }),
+    ...registerModEnableCommands(access, instance, () => view.selection, reporterFor('mod.enableDisable')),
+    ...registerFileExclusionCommands(access, instance, () => view.selection, reporterFor('mod.excludeFile')),
+    registerModMoveCommand(
+      access, instance, { selection: () => view.selection, direction: () => provider.viewDirection() }, reporterFor('mod.move')),
+    ...registerSeparatorCommands(access, instance, reporterFor('separator'), ask, trash, () => view.selection),
+    registerCreateEmptyModCommand(access, instance, reporterFor('mod.createEmpty')),
+    registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => view.selection),
+    registerGoToModCommand(instance, reporterFor('mod.goToMod'), {
+      selection: () => view.selection,
+      rowFor: (origin) => provider.rowFor(origin),
+      reveal: (row) => view.reveal(row, { select: true, focus: true }),
+    }),
+    registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
+    ...registerConflictTable(instance, deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
+    vscode.commands.registerCommand('modbench.mod.sync', (value: InstanceValue) => modSync.run(value.modSyncArguments)),
+    ...registerModInstallCommands({
+      access, instance, reporterFor, warnIfFomod: deps.warnIfFomod, installDownloaded: deps.installDownloaded,
+    }),
+    registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), deps.nexusRow),
     ...registerSortDirectionToggle('mod', provider),
     nameFilter,
     view,
     provider,
   );
-  return { provider, view, nameFilter, dispose: () => { disposable.dispose(); } };
+  return {
+    provider, view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },
+    dispose: () => { disposable.dispose(); },
+  };
 }
 
 // VS Code keeps the expansion it remembers for a known row identity over the provider's state, so
