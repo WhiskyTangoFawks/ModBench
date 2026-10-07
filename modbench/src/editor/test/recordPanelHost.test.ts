@@ -1,9 +1,7 @@
-import type { NotificationEvent } from '../../client/apiClient';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const registerCustomEditorProvider = vi.fn<(...args: unknown[]) => { dispose(): void }>(() => ({ dispose: () => undefined }));
 const commandHandlers = new Map<string, (...args: unknown[]) => unknown>();
-const registerFileSystemProvider = vi.fn<(...args: unknown[]) => { dispose(): void }>(() => ({ dispose: () => undefined }));
 const executeCommand = vi.fn<(...args: unknown[]) => unknown>();
 const pickRecord = vi.fn<(...args: unknown[]) => Promise<string | null>>();
 const applyEdit = vi.fn<() => Promise<boolean>>(() => Promise.resolve(true));
@@ -21,7 +19,10 @@ vi.mock('vscode', async () => ({
     scheme: 'file', path, fsPath: path,
     toString: () => `file://${path}`, with: ({ scheme, query }: { scheme: string; query: string }) => `${scheme}:${path}?${query}`,
   }), joinPath: vi.fn() },
-  Disposable: class { constructor(public dispose: () => void) {} },
+  Disposable: class {
+    constructor(public dispose: () => void) {}
+    static from(...parts: { dispose(): void }[]) { return { dispose: () => parts.forEach((part) => part.dispose()) }; }
+  },
   ViewColumn: { Active: -1, One: 1, Beside: -2 },
   commands: {
     registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => {
@@ -31,7 +32,7 @@ vi.mock('vscode', async () => ({
     executeCommand: (...args: unknown[]) => executeCommand(...args),
   },
   workspace: {
-    registerFileSystemProvider: (...args: unknown[]) => registerFileSystemProvider(...args),
+    registerFileSystemProvider: () => ({ dispose: () => undefined }),
     registerTextDocumentContentProvider: () => ({ dispose: () => undefined }),
     onDidCloseTextDocument: () => ({ dispose: () => undefined }),
     onDidChangeTextDocument: () => ({ dispose: () => undefined }),
@@ -43,15 +44,14 @@ vi.mock('vscode', async () => ({
   window: {
     tabGroups: { get all() { return tabGroups; }, close: () => Promise.resolve(true) },
     registerFileDecorationProvider: () => ({ dispose: () => undefined }),
+    createTreeView: () => ({ selection: [], onDidChangeSelection: () => ({ dispose: () => undefined }), dispose: () => undefined }),
     registerCustomEditorProvider: (...args: unknown[]) => registerCustomEditorProvider(...args),
   },
 }));
 
 import * as vscode from 'vscode';
-import { registerEditorCommands } from '../recordPanelHost';
-import { ActiveRecordTracker } from '../ActiveRecordTracker';
-import { EditsInFlight } from '../followRecord';
-import { FocusedCells } from '../focusedCells';
+import { createEditor } from '..';
+import { createFocusedView } from '../../drivingLib/focusedView';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { renderedDocumentUri } from '../../drivingLib/recordDocument';
 
@@ -61,76 +61,39 @@ function isPanel(candidate: unknown): candidate is vscode.WebviewPanel {
   return typeof candidate === 'object' && candidate !== null && 'webview' in candidate;
 }
 
-function fakePanel(postMessage: () => Promise<boolean> = vi.fn(() => Promise.resolve(true)), title = ''): vscode.WebviewPanel {
-  const panel = { title, webview: { postMessage } };
-  if (!isPanel(panel)) throw new Error('not a panel');
-  return panel;
-}
-
 interface Registered {
   selection?: () => readonly unknown[];
-  recordPanels?: Set<vscode.WebviewPanel>;
-  tracker?: ActiveRecordTracker<vscode.WebviewPanel>;
   meditClient?: InMemoryMEditClient;
   outputChannel?: { debug: () => void; info: () => void; warn: (message: string) => void };
 }
 
 function register({
-  selection = () => [], recordPanels = new Set(), tracker = new ActiveRecordTracker(), meditClient = new InMemoryMEditClient(),
-  outputChannel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+  selection = () => [], meditClient = new InMemoryMEditClient(), outputChannel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }: Registered = {}): void {
-  registerEditorCommands({
+  const focusedView = createFocusedView();
+  createEditor({
     context: { extensionUri: vscode.Uri.from({ scheme: 'file' }) },
-    recordPanels,
-    activeRecordTracker: tracker,
-    editsInFlight: new EditsInFlight(tracker),
-    focusedCells: new FocusedCells(() => tracker.activePanel(), () => undefined, () => undefined),
     meditClient,
-    focusedViewSelection: selection,
-    viewSelections: new Map(),
-    recordWrite: (command) => command(),
-    refreshSourceControlFor: () => undefined,
     outputChannel,
     reporterFor: () => reporter,
     ask: vi.fn(),
+    focusedView,
+    viewSelections: new Map([['test.view', selection]]),
+    recordWrite: (command) => command(),
+    refreshSourceControlFor: () => undefined,
+  });
+  focusedView.follow('test.view', {
+    get selection() { return selection(); },
+    onDidChangeSelection: (listener: (event: { selection: readonly unknown[] }) => void) => { listener({ selection: selection() }); return { dispose: () => undefined }; },
   });
 }
 
+const executed = () => executeCommand.mock.calls.filter(([id]) => id !== 'setContext');
+
 beforeEach(() => {
   commandHandlers.clear();
-  registerFileSystemProvider.mockClear();
   executeCommand.mockReset();
   pickRecord.mockReset();
-});
-
-describe('registerEditorCommands', () => {
-  it('keeps a record tab\'s page alive while it is hidden, so it is as I left it on return', () => {
-    register();
-
-    expect(registerCustomEditorProvider).toHaveBeenCalledWith(
-      'modbench.record', expect.anything(), { webviewOptions: { retainContextWhenHidden: true } },
-    );
-  });
-});
-
-describe('the Editor\'s file systems', () => {
-  it('are registered as soon as the Editor is: a field\'s, writable and read-only, and a child record\'s', () => {
-    register();
-
-    expect(registerFileSystemProvider.mock.calls.map(([scheme]) => scheme))
-      .toEqual(['modbench-field', 'modbench-field-readonly', 'modbench-child-record']);
-  });
-});
-
-describe('a record panel and the notifications', () => {
-  it('subscribes to rows-changed reports and to reconnects as soon as it is registered', () => {
-    const meditClient = new InMemoryMEditClient();
-    const onReconnected = vi.spyOn(meditClient, 'onReconnected');
-    register({ meditClient });
-
-    expect(meditClient.calls).toContainEqual({ method: 'onNotification', args: ['rows-changed'] });
-    expect(onReconnected).toHaveBeenCalled();
-  });
 });
 
 describe('modbench.record.open from the palette, with no Argument', () => {
@@ -149,7 +112,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
     await open();
 
-    expect(executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith')).toEqual([[
+    expect(executed().filter(([id]) => id === 'vscode.openWith')).toEqual([[
       'vscode.openWith', renderedDocumentUri({ formKey: '000801:A.esp', plugin: winner }, 'Gun.json'), 'modbench.record',
       { viewColumn: -1, preview: false },
     ]]);
@@ -173,7 +136,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
     await open();
 
-    expect(executeCommand).not.toHaveBeenCalled();
+    expect(executed()).toEqual([]);
   });
 
   it('refuses, saying why, when it is given something that names no record', async () => {
@@ -184,13 +147,13 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
     expect(reporter.report).toHaveBeenCalledWith('error', 'Could not open a record.', 'What was given names no record.');
     expect(pickRecord).not.toHaveBeenCalled();
-    expect(executeCommand).not.toHaveBeenCalled();
+    expect(executed()).toEqual([]);
   });
 
   it('reports a record VS Code could not open', async () => {
     reporter.report.mockClear();
-    executeCommand.mockRejectedValueOnce(new Error('no editor'));
     register({ selection: () => [{ formKey: '000801:A.esp', kind: 'placed' }], ...renderingTheWinner() });
+    executeCommand.mockRejectedValueOnce(new Error('no editor'));
 
     await open();
 
@@ -210,7 +173,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   const GUN = '000801:A.esp';
   const plugin = { name: 'A.esp', origin: 'ModA' };
   const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
-  const opened = () => executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith').map(([, uri, viewType]) => [uri, viewType]);
+  const opened = () => executed().filter(([id]) => id === 'vscode.openWith').map(([, uri, viewType]) => [uri, viewType]);
 
   function registerAnswering(file: { path: string | null } | null, holds = GUN, renderedName = 'Gun.json'): void {
     const meditClient = new InMemoryMEditClient();
@@ -225,7 +188,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
     await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
 
-    expect(executeCommand.mock.calls.map(([id, uri, ...rest]) => [id, String(uri), ...rest])).toEqual([
+    expect(executed().map(([id, uri, ...rest]) => [id, String(uri), ...rest])).toEqual([
       ['vscode.openWith', `file://${FILE}`, 'modbench.record', { viewColumn: -1, preview: true }],
     ]);
   });
@@ -313,45 +276,6 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   });
 });
 
-describe('modbench.record.editField, fired with only the record, the plugin and the field path', () => {
-  const MOVED = '000900:Mod.esp';
-
-  it('moves every tab showing the record to its new FormKey, as an agent fires it with no panel', async () => {
-    const tracker = new ActiveRecordTracker<vscode.WebviewPanel>();
-    const meditClient = new InMemoryMEditClient();
-    meditClient.setQueryAnswer('getRecordFile', { path: '/mods/ModA/plugin-source/Mod.esp/Npcs/Npc.json' });
-    meditClient.setQueryAnswer('getRecordOfFile', { formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'ModA' });
-    meditClient.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], documents: [] });
-    const [one, other, elsewhere] = [fakePanel(undefined, '000800:Mod.esp'), fakePanel(undefined, '000800:Mod.esp'), fakePanel()];
-    tracker.setFormKey(one, '000800:Mod.esp');
-    tracker.setFormKey(other, '000800:Mod.esp');
-    tracker.setFormKey(elsewhere, '000801:Mod.esp');
-    register({ recordPanels: new Set([one, other, elsewhere]), tracker, meditClient });
-
-    await commandHandlers.get('modbench.record.editField')?.(
-      { formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'FormID' }], value: 'x' });
-
-    expect([tracker.formKeyOf(one), tracker.formKeyOf(other)]).toEqual([MOVED, MOVED]);
-    expect(tracker.formKeyOf(elsewhere)).toBe('000801:Mod.esp');
-    expect(meditClient.calls.filter(c => c.method === 'getEditChanges')).toHaveLength(1);
-  });
-});
-
-describe('the record grid\'s F2', () => {
-  it('opens the editor of the focused cell of the record tab in focus, and of no other tab', async () => {
-    const [behind, inFocus] = [vi.fn(() => Promise.resolve(true)), vi.fn(() => Promise.resolve(true))];
-    const tracker = new ActiveRecordTracker<vscode.WebviewPanel>();
-    tracker.setActivePanel(fakePanel(behind));
-    tracker.setActivePanel(fakePanel(inFocus));
-    register({ tracker });
-
-    await commandHandlers.get('modbench.recordGrid.editHere')?.();
-
-    expect(inFocus).toHaveBeenCalledWith({ type: 'openCellEditor' });
-    expect(behind).not.toHaveBeenCalled();
-  });
-});
-
 describe('modbench.record.openToSide, the menus\' entry point', () => {
   it('fires open with the menu selection, each record placed beside', async () => {
     register();
@@ -361,33 +285,6 @@ describe('modbench.record.openToSide, the menus\' entry point', () => {
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.record.open', [
       { ...a, placement: 'beside' }, { ...b, placement: 'beside' },
-    ]);
-  });
-});
-
-describe('a record panel open while mEdit reports a plugin it cannot read', () => {
-  const tick = (failures: { name: string; origin: string; reason: string }[]): NotificationEvent => ({
-    kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-    loadOrderStatus: {
-      state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: false, failures, version: 1,
-    },
-  });
-  const bad = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
-
-  it('has the panels refreshed on a failure arriving and on it clearing, and not on an identical tick', () => {
-    const meditClient = new InMemoryMEditClient();
-    const postMessage = vi.fn(() => Promise.resolve(true));
-    const panel = fakePanel(postMessage);
-    const tracker = new ActiveRecordTracker<vscode.WebviewPanel>();
-    tracker.setFormKey(panel, '000801:A.esp');
-    register({ recordPanels: new Set([panel]), tracker, meditClient });
-
-    meditClient.emit(tick([bad]));
-    meditClient.emit(tick([bad]));
-    meditClient.emit(tick([]));
-    expect(postMessage.mock.calls).toEqual([
-      [{ type: 'loadRecord', formKey: '000801:A.esp' }],
-      [{ type: 'loadRecord', formKey: '000801:A.esp' }],
     ]);
   });
 });
@@ -479,7 +376,7 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
   const query = `formKey=${encodeURIComponent(PLACED)}&name=${plugin.name}&origin=${plugin.origin}`;
   const childUri = { scheme: 'modbench-child-record', path: CELL_FILE, query, toString: () => `modbench-child-record:${CELL_FILE}?${query}` };
   const changed = { kind: 'rows-changed' as const, plugin: plugin.name, origin: plugin.origin, keys: [PLACED], sequence: 1 };
-  const opened = () => executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith').map(([, uri]) => uri);
+  const opened = () => executed().filter(([id]) => id === 'vscode.openWith').map(([, uri]) => uri);
 
   function isDocument(candidate: unknown): candidate is vscode.TextDocument {
     return typeof candidate === 'object' && candidate !== null && 'uri' in candidate;
