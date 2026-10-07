@@ -53,15 +53,15 @@ public class RecordTextCodecTests
     }
 
     [Fact]
-    public void SerializeToText_CalledTwiceOnTheSameRecordState_ProducesByteIdenticalOutput_WithNoGoldenInTheLoopBecauseAGoldenIsBlindToNonDeterminismThatReproducesTheSameWrongOutputEveryRun()
+    public void SerializeToText_CalledTwiceOnTheSameRecordState_ProducesIdenticalText_WithNoGoldenInTheLoopBecauseAGoldenIsBlindToNonDeterminismThatReproducesTheSameWrongOutputEveryRun()
     {
         var codec = Codec();
         var independentlyConstructedSecondWeaponSoAPerInstanceMemoizerCannotTriviallyAgreeWithItself = MakeWeapon();
 
-        var firstBytes = codec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
-        var secondBytes = codec.SerializeToText(independentlyConstructedSecondWeaponSoAPerInstanceMemoizerCannotTriviallyAgreeWithItself, GameRelease.Fallout4);
+        var firstText = codec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
+        var secondText = codec.SerializeToText(independentlyConstructedSecondWeaponSoAPerInstanceMemoizerCannotTriviallyAgreeWithItself, GameRelease.Fallout4);
 
-        Assert.Equal(firstBytes, secondBytes);
+        Assert.Equal(firstText, secondText);
     }
 
     [Fact]

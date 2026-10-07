@@ -1,4 +1,3 @@
-using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 
@@ -32,16 +31,6 @@ public sealed class CompilePluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal((stranger, CompileRefusal.PluginNotInLoadOrder), (refused.Item, refused.Refusal));
         Assert.Equal("Stranger.esp is not in the load order.", refused.Message);
-    }
-
-    [Fact]
-    public async Task ASourceThatDoesNotParse_IsRefusedByType()
-    {
-        _mod.Overwrite(_mod.NpcIdentity, "{ not valid json");
-
-        var result = await _mod.CompileHandler.CompileAsync([_mod.Plugin]);
-
-        Assert.Equal(CompileRefusal.SourceDoesNotParse, Assert.Single(result.Refused).Refusal);
     }
 
     [Fact]

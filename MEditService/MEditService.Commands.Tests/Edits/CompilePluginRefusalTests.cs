@@ -19,17 +19,6 @@ public sealed class CompilePluginRefusalTests : IDisposable
             () => CompileServices.Over(LoadOrderSnapshot.Empty).CompileAsync([_mod.Plugin]));
 
     [Fact]
-    public async Task Compile_OfAPluginTheArrivedLoadOrderDoesNotHold_RefusesNamingThePlugin()
-    {
-        var stranger = new PluginAddress("Stranger.esp", CompileFixture.Origin);
-
-        var answer = await _mod.CompileService().CompileAsync([stranger]);
-
-        var refused = Assert.Single(answer.Refused);
-        Assert.Equal("Stranger.esp is not in the load order.", refused.Message);
-    }
-
-    [Fact]
     public async Task Compile_WithTwoDocumentsClaimingTheSameFormKey_RefusesNamingTheFormKey()
     {
         TreeTampering.Duplicate(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
@@ -60,6 +49,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
         var answer = await CompileService().CompileAsync([_mod.Plugin]);
 
         var refused = Assert.Single(answer.Refused);
+        Assert.Equal(CompileRefusal.SourceDoesNotParse, refused.Refusal);
         Assert.Contains("Decompile the plugin to regenerate the source.", refused.Message);
         Assert.DoesNotContain("Track", refused.Message);
         Assert.Empty(answer.Landed);
