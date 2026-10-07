@@ -89,7 +89,24 @@ public interface IPluginAdapter
     /// <summary>A new plugin in <paramref name="folder"/>: a header whose flags the extension alone
     /// sets, no records and no masters. Written whole or not at all, into no folder it made and over
     /// no file.</summary>
-    Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease);
+    Task<EmptyPluginCreated> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease);
+
+    /// <summary>Where <see cref="CreateAndWriteAsync"/> puts the plugin.</summary>
+    string PathOfEmpty(ModKey modKey, string folder);
+
+    /// <summary>Deletes the plugin <see cref="CreateAndWriteAsync"/> wrote, only while it still holds the
+    /// bytes that call wrote, as <paramref name="written"/> hashes them (ADR-0003): a file another program changed is left as it is.</summary>
+    EmptyPluginTakeBack TakeBackEmpty(ModKey modKey, string folder, string written);
+}
+
+/// <summary>What <see cref="IPluginAdapter.TakeBackEmpty"/> did.</summary>
+public enum EmptyPluginTakeBack
+{
+    TakenBack,
+    Gone,
+
+    /// <summary>The file holds other bytes than the create wrote, or this adapter did not write it, so it stayed.</summary>
+    Changed,
 }
 
 /// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> found at the path before it wrote
@@ -105,3 +122,10 @@ public enum EmptyPluginWrite
 /// rewrite dropped subrecords and <c>LossCause</c> the original's diagnosis of it, if any.</summary>
 public sealed record PluginByteComparison(
     bool Identical, PluginBinaryWalk.SubrecordLoss? Loss = null, PluginDiagnosis? LossCause = null);
+
+/// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> did, and for a plugin it wrote, the
+/// hash of those bytes, which the take-back is later handed.</summary>
+public readonly record struct EmptyPluginCreated(EmptyPluginWrite Outcome, string Written = "")
+{
+    public static implicit operator EmptyPluginCreated(EmptyPluginWrite outcome) => new(outcome);
+}
