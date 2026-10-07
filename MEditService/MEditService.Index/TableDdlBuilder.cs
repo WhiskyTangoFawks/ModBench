@@ -291,10 +291,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 plugin          VARCHAR {FilenameIdentity} NOT NULL,
                 origin          VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 parent_cell     VARCHAR {FilenameIdentity} NOT NULL,
-                placement_group VARCHAR NOT NULL,
-                pos_x           FLOAT,
-                pos_y           FLOAT,
-                pos_z           FLOAT
+                placement_group VARCHAR NOT NULL
             )
             """);
         Execute(connection, $"""

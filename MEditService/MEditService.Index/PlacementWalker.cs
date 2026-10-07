@@ -6,7 +6,7 @@ using MEditService.Codec.Serialization;
 namespace MEditService.Index;
 
 internal readonly record struct PlacementRow(
-    string FormKey, string ParentCell, string PlacementGroup, float? PosX, float? PosY, float? PosZ);
+    string FormKey, string ParentCell, string PlacementGroup);
 
 public readonly record struct CellLocationRow(
     string CellFormKey, string? ParentWorldspace,
@@ -32,8 +32,6 @@ internal static class PlacementWalker
 
     private static readonly string GridPointPath = $"{RecordTypeDispatch.CellGridMember}.Point";
 
-    private const string PositionMember = "Position";
-
     /// <summary>A null document is a cell whose text the codec could not produce: its place in the
     /// world is still known, its grid is not.</summary>
     internal static CellLocationRow CellLocation(
@@ -45,19 +43,6 @@ internal static class PlacementWalker
             cellFormKey, structure.ParentWorldspace,
             structure.BlockX, structure.BlockY, structure.SubX, structure.SubY,
             gridX, gridY, structure.IsInterior);
-    }
-
-    /// <summary>The parentage is the caller's, the position the document's. A document that spells no
-    /// position states none, so the row's coordinates are null rather than the origin.</summary>
-    internal static PlacementRow Placement(
-        string placedFormKey, JsonElement? placedDocument, string parentCellFormKey, string placementGroup)
-    {
-        var position = placedDocument is { } document ? Components(document, PositionMember) : null;
-        return position is { Length: >= 3 }
-            ? new PlacementRow(
-                placedFormKey, parentCellFormKey, placementGroup,
-                Float(position[0]), Float(position[1]), Float(position[2]))
-            : new PlacementRow(placedFormKey, parentCellFormKey, placementGroup, null, null, null);
     }
 
     // A cell's grid is a member that may be unset, so its absence is an absence; the point inside a
@@ -79,11 +64,6 @@ internal static class PlacementWalker
 
     private static int? Int(string component) =>
         int.TryParse(component.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : null;
-
-    private static float? Float(string component) =>
-        float.TryParse(component.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
             ? value
             : null;
 }

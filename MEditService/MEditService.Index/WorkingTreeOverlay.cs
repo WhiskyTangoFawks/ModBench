@@ -323,8 +323,8 @@ internal sealed class WorkingTreeOverlay
                         new CellStructure(formKey, null, null, null, null, IsInterior: false));
                     break;
                 case ParentageTable.Placement:
-                    placementRows.Add(PlacementWalker.Placement(
-                        child.FormKey, child.Node, formKey, PlacementWalker.PlacementGroupOf(child.SlotName)));
+                    placementRows.Add(new PlacementRow(
+                        child.FormKey, formKey, PlacementWalker.PlacementGroupOf(child.SlotName)));
                     break;
             }
         }
