@@ -11,6 +11,8 @@ import {
 } from './corpusFixture';
 import { accessTo, providedPluginsIn, readPluginLines } from './adapterOver';
 
+const NOT_INDEXED = { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) };
+const moving = (...names: string[]) => names.map((name) => ({ name, origin: 'SomeMod' }));
 const PROFILE = 'Default';
 const GAME_DATA_FOLDER: DataFolderPlugins = { kind: 'listed', names: new Set(['ccsbjfo4003-grenade.esl']) };
 
@@ -79,7 +81,7 @@ describe('plugins.txt corpus', () => {
 
   it('reorderPlugins moves a plugin within load order, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    await reorderPlugins(accessTo(dir), PROFILE, ['NonAsciiRetexture.esp'], { kind: 'winningEnd' });
+    await reorderPlugins(accessTo(dir), NOT_INDEXED, PROFILE, moving('NonAsciiRetexture.esp'), { kind: 'winningEnd' }, []);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 

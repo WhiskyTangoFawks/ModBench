@@ -1,6 +1,5 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
-import type { PluginOrderFacts } from '../pluginsCommands/pluginOrder';
 import { modOfOrigin } from './modOfOrigin';
 import { ByPluginAddress } from './pluginAddress';
 
@@ -51,7 +50,6 @@ interface PluginRead {
   tracked: boolean;
   masterIssues?: string[];
   parseFailure: boolean;
-  order: PluginOrderFacts;
 }
 
 // plugins.md, A row, Plugin: each status's words and tooltip line.
@@ -151,7 +149,6 @@ export class PluginFacts {
       reads.set(p, {
         readOnly: p.isImmutable, tracked: p.isTracked, parseFailure: p.hasParseFailure,
         masterIssues: p.masterIssues ?? this.reads.get(p)?.masterIssues,
-        order: { masters: p.masters, blueprint: p.isBlueprint },
       });
       matches.set(p, p.hasMatchingRecords);
     }
@@ -267,10 +264,6 @@ export class PluginFacts {
   conditions(address: PluginAddress): PluginConditions {
     const read = this.reads.get(address);
     return { tracked: read?.tracked === true, editable: read?.readOnly === false };
-  }
-
-  orderFacts(address: PluginAddress): PluginOrderFacts | undefined {
-    return this.reads.get(address)?.order;
   }
 
   /** What the Problems panel shows, read from the same answers as the rows' statuses. */
