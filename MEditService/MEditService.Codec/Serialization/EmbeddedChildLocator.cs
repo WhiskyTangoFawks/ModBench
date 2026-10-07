@@ -27,8 +27,6 @@ public static class EmbeddedChildLocator
 {
     private const string FormKeyMember = RecordMembers.FormKey;
 
-    private const string DiscriminatorMember = LoquiUnions.UnionTypeDiscriminator;
-
     /// <summary>The class name the owner's slots are keyed by: from the record type its path decides,
     /// or from the document's own discriminator when the path names none that resolves.</summary>
     public static string? ContainerTypeName(string? ownerRecordType, byte[] ownerBytes, GameRelease release) =>
@@ -60,7 +58,7 @@ public static class EmbeddedChildLocator
         {
             using var document = JsonDocument.Parse(ownerBytes);
             return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty(DiscriminatorMember, out var value)
+                   && document.RootElement.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var value)
                    && value.ValueKind == JsonValueKind.String
                 ? value.GetString()
                 : null;
@@ -93,7 +91,7 @@ public static class EmbeddedChildLocator
                 ownFormKey = reader.GetString();
                 continue;
             }
-            if (reader.TokenType == JsonTokenType.String && member.Equals(DiscriminatorMember, StringComparison.Ordinal))
+            if (reader.TokenType == JsonTokenType.String && member.Equals(LoquiUnions.UnionTypeDiscriminator, StringComparison.Ordinal))
             {
                 discriminator = reader.GetString();
                 containerType ??= discriminator;

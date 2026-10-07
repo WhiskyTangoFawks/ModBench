@@ -12,7 +12,6 @@ namespace MEditService.Codec.Serialization;
 /// produced and read back through that same door without touching the disk.</summary>
 public static class HeaderDocument
 {
-    public const string RootDocumentFileName = "RecordData.json";
 
     /// <summary>The root document's exact bytes, <c>\r</c>-stripped like every committed file.
     /// Serialized from a header-only clone: a full-mod walk costs ~1.5 s per plugin, the clone 1 ms,
@@ -26,7 +25,7 @@ public static class HeaderDocument
         clone.ModHeader.DeepCopyIn(source.ModHeader);
 
         var folder = ScratchFolder();
-        using var capture = new CaptureRootDocument(Path.Combine(folder, RootDocumentFileName));
+        using var capture = new CaptureRootDocument(Path.Combine(folder, DocumentFileNames.Root));
 
         // Nothing is created and nothing is written: NoRecordFolders neutralizes the door's own
         // Directory.CreateDirectory, and every stream but the root document's goes to Stream.Null.
@@ -46,7 +45,7 @@ public static class HeaderDocument
     public static IModGetter Read(byte[] body)
     {
         var folder = ScratchFolder();
-        var rootPath = Path.Combine(folder, RootDocumentFileName);
+        var rootPath = Path.Combine(folder, DocumentFileNames.Root);
 
         return InlineSerialization.Finished(
             () => RecordTextCodecGeneratorSeed.DeserializeWholeMod(

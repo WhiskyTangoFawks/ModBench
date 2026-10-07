@@ -34,7 +34,7 @@ internal sealed class LayoutPath(string relativePath)
     internal bool IsFlatDocument =>
         _segments.Length >= FlatDocumentDepth && UnderTheSourceRoot && NamesAPlugin
         && Leaf.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.Ordinal)
-        && !Leaf.Equals(HeaderDocument.RootDocumentFileName, StringComparison.Ordinal)
+        && !Leaf.Equals(DocumentFileNames.Root, StringComparison.Ordinal)
         && !Leaf.Equals(SourceRepositoryLayout.GroupRecordDataFileName, StringComparison.Ordinal);
 
     // A container's own document, at its group's own level or deeper. Any name: a directory renamed by

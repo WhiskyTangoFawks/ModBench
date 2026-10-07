@@ -54,7 +54,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     internal static IReadOnlyList<TreeFile> PristineFilesOf(
         string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
         [.. treeFiles.Select(file => new TreeFile(
-            file.RelativePath == HeaderDocument.RootDocumentFileName
+            file.RelativePath == DocumentFileNames.Root
                 ? HeaderDocumentFor(pluginFileName)
                 : Path.Combine(RootFor(pluginFileName), SourceNameOf(file.RelativePath)),
             file.Content))];
@@ -83,14 +83,14 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         string DoorName(string source)
         {
             if (IsHeaderDocumentPath(source, pluginFileName)) return DoorHeaderDocumentFor(pluginFileName);
-            return documents.Contains(source) ? Path.Combine(PathShape.DirectoryOf(source), HeaderDocument.RootDocumentFileName) : source;
+            return documents.Contains(source) ? Path.Combine(PathShape.DirectoryOf(source), DocumentFileNames.Root) : source;
         }
 
         return sources.Select(source => (source, DoorName(source)));
     }
 
     private static string SourceNameOf(string doorPath) =>
-        Path.GetFileName(doorPath).Equals(HeaderDocument.RootDocumentFileName, StringComparison.Ordinal)
+        Path.GetFileName(doorPath).Equals(DocumentFileNames.Root, StringComparison.Ordinal)
             ? ContainerDocumentIn(PathShape.DirectoryOf(doorPath))
             : doorPath;
 
@@ -140,7 +140,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
             Directory.Exists(directory) ? Directory.EnumerateFiles(directory).Where(file => !CarriesNoRecord(file)) : []);
 
     private static string DoorHeaderDocumentFor(string pluginFileName) =>
-        Path.Combine(RootFor(pluginFileName), HeaderDocument.RootDocumentFileName);
+        Path.Combine(RootFor(pluginFileName), DocumentFileNames.Root);
 
     /// <summary>The plugin header's own document, named for its FormKey: a header has no EditorID.</summary>
     internal static string HeaderDocumentIn(string modFolder, string pluginFileName) =>

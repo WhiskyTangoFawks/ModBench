@@ -69,11 +69,11 @@ public sealed class EditRecordChangesHandler
         {
             var relativePath = repository.RelativePathOf(plugin, identity)
                 ?? throw new InvalidOperationException($"Expected the document carrying {formKey} to have been located.");
-            var root = JsonNode.Parse(text) as JsonObject
-                ?? throw new InvalidOperationException($"Expected '{relativePath}' to hold a JSON object.");
             var ownerBytes = Encoding.UTF8.GetBytes(text);
+            var root = JsonNode.Parse(ownerBytes) as JsonObject
+                ?? throw new InvalidOperationException($"Expected '{relativePath}' to hold a JSON object.");
             var found = EmbeddedChildLocator.Find(
-                ownerBytes, EmbeddedChildLocator.ContainerTypeName(target.RecordType, ownerBytes, release), formKey, release);
+                ownerBytes, RecordTypeDispatch.For(release).ConcreteFor(target.RecordType)?.Name, formKey, release);
             if (found is not { } span)
             {
                 return RecordEditResult.Refused(
