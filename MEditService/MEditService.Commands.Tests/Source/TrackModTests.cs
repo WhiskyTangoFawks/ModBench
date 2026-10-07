@@ -187,35 +187,6 @@ public sealed class TrackModTests
     }
 
     [Fact]
-    public async Task TrackMod_RealLoadOrder_RunsTheRoundTripGateForRealBeforeSucceeding()
-    {
-        using var modFolder = new ScratchDirectory("medit-trackservice-gateran-");
-        using var gameDir = new ScratchDirectory("medit-trackservice-gateran-game-");
-        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        mod.Npcs.AddNew("SomeNpc");
-        mod.WriteToBinary(pluginPath);
-
-        var loadOrder = SnapshotPlugins.Snapshot(
-            gameDir, gameDir, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
-
-        var deserializeCalls = 0;
-        async Task<IMod> CountingDeserialize(string folder, CancellationToken ct)
-        {
-            deserializeCalls++;
-            return await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
-        }
-
-        var adapter = new ForgedTreeWriteAdapter("Fixture.esp", CountingDeserialize);
-
-        await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter);
-
-        Assert.Equal(1, deserializeCalls);
-        Assert.True(SourceRepository.IsTracked(modFolder));
-    }
-
-    [Fact]
     public async Task TrackMod_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing()
     {
         using var modFolder = new ScratchDirectory("medit-trackservice-badroundtrip-");

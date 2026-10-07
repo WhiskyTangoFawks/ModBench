@@ -9,10 +9,6 @@ namespace MEditService.Commands.Tests.TestSupport;
 /// record gone, a record locked, a write interrupted.</summary>
 internal static class LastWriteRecord
 {
-    internal static IReadOnlyList<string> Of(string modFolder, string pluginName) =>
-        SourceRepository.Over(ModOf(modFolder), GameRelease.Fallout4)
-            .LastWrittenBinarySha256s(new PluginAddress(pluginName, Path.GetFileName(modFolder)));
-
     internal static void Interrupt(string modFolder, string pluginName, string binarySha256, Action write) =>
         Assert.Throws<IOException>(() => SourceRepository.Over(ModOf(modFolder), GameRelease.Fallout4).WriteBinary(
             new PluginAddress(pluginName, Path.GetFileName(modFolder)), binarySha256, () =>
@@ -32,8 +28,8 @@ internal static class LastWriteRecord
         GitHooks.Write(modFolder, "reference-transaction", $"[ \"$1\" = prepared ] || exit 0\n[ -e '{marker}' ] && exit 1\n: > '{marker}'");
     }
 
-    internal static string LockFileOfTheOnlyPlugin(string modFolder) =>
-        Path.Combine(GitDir(modFolder), RefOfTheOnlyPlugin(modFolder) + ".lock");
+    internal static void RefuseRefUpdates(string modFolder) =>
+        GitHooks.Write(modFolder, "reference-transaction", "[ \"$1\" = prepared ] && exit 1\nexit 0");
 
     private static PluginProvider.FromMod ModOf(string modFolder) => new(Path.GetFileName(modFolder), modFolder);
 
