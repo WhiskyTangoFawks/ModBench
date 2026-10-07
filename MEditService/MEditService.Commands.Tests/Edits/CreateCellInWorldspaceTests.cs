@@ -106,7 +106,6 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         Assert.Equal(RecordEditRefusal.ChildSlotHeldByAnotherRecord, result.Refusal);
         Assert.Contains(MasterCell.ToString(), result.Message, StringComparison.Ordinal);
         Assert.Contains("Copying the record as an override", result.Message, StringComparison.Ordinal);
-        Assert.Contains("override", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, Tree);
     }
 
