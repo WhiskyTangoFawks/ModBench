@@ -1,8 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Queries.Tests.TestSupport;
-using MEditService.TestSupport;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries.Tests.Query;
@@ -286,13 +284,8 @@ public class ArrayChildDiffTests
     }
 
     [Fact]
-    public void Array_ExceedingMaxArrayChildCount_ReturnsNullChildren_LogsWarning()
+    public void Array_ExceedingMaxArrayChildCount_ReturnsNullChildren()
     {
-        var logEntries = new List<LogEntry>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-            b.AddProvider(new CollectingLoggerProvider(logEntries)));
-        var logger = loggerFactory.CreateLogger<RecordQueryService>();
-
         var meta = UnsortedArrayMeta("Items");
         var oneOverMaxArrayChildCount = JsonSerializer.Deserialize<JsonElement>(
             "[" + string.Join(",", Enumerable.Range(0, 501).Select(i => $"\"{i}\"")) + "]");
@@ -300,11 +293,10 @@ public class ArrayChildDiffTests
         var master = MakeRecord("A.esp", 0, false, meta, oneOverMaxArrayChildCount);
         var override1 = MakeRecord("B.esp", 1, true, meta, oneOverMaxArrayChildCount);
 
-        var result = CompareQuery.Classify([master, override1], logger);
+        var result = CompareQuery.Classify([master, override1]);
 
         var kwdDiff = result.Diffs.First(d => d.FieldName == "Items");
         Assert.Null(kwdDiff.Children);
-        Assert.Contains(logEntries, e => e.Message.Contains("MaxArrayChildCount"));
     }
 
     [Fact]
@@ -401,23 +393,17 @@ public class ArrayChildDiffTests
     }
 
     [Fact]
-    public void LinkArray_ExceedingMaxArrayChildCount_ReturnsNullChildren_LogsWarning()
+    public void LinkArray_ExceedingMaxArrayChildCount_ReturnsNullChildren()
     {
-        var logEntries = new List<LogEntry>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-            b.AddProvider(new CollectingLoggerProvider(logEntries)));
-        var logger = loggerFactory.CreateLogger<RecordQueryService>();
-
         var meta = LinkArrayMeta("Keywords");
         var bigArray = JsonSerializer.Deserialize<JsonElement>(
             "[" + string.Join(",", Enumerable.Range(0, 501).Select(i => $"\"Kwd{i}\"")) + "]");
 
         var master = MakeRecord("A.esp", 0, true, meta, bigArray);
 
-        var result = CompareQuery.Classify([master], logger);
+        var result = CompareQuery.Classify([master]);
 
         Assert.Null(result.Diffs.First(d => d.FieldName == "Keywords").Children);
-        Assert.Contains(logEntries, e => e.Message.Contains("MaxArrayChildCount"));
     }
 
     [Fact]
