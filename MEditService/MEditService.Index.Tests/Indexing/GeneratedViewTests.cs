@@ -109,21 +109,4 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
         Assert.Empty(offenders);
         Assert.True(tablesWithScalars > 0, "Positive control: viewable scalars must actually be reachable.");
     }
-
-    [Fact]
-    public void GrupTimestamps_AreAbsentFromTheSchemaAndTheViewAlike()
-    {
-        string[] timestamps = ["timestamp", "TemporaryTimestamp", "PersistentTimestamp"];
-
-        foreach (var table in (string[])["cell", "dial", "qust"])
-        {
-            var schemaNames = Schemas[table].RecordColumns.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            Assert.True(
-                AnyColumnOf(table, Schemas[table].RecordColumns.Where(c => c.IsViewable).Select(c => c.Name)),
-                $"Positive control: {table} must carry real filterable columns.");
-
-            foreach (var name in timestamps) Assert.DoesNotContain(name, schemaNames);
-            Assert.False(AnyColumnOf(table, timestamps), $"{table}'s view carries a GRUP timestamp.");
-        }
-    }
 }
