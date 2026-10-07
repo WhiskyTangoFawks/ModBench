@@ -1261,7 +1261,7 @@ describe('Instance — the sidecar file id and meta.ini installedFiles', () => {
     expect(download?.fileID).toBe('2000');
 
     const mod = instance.value.mods.find((m) => m.name === 'Consumer');
-    expect(mod).toMatchObject({ installedFiles: [{ modid: '1000', fileid: '2000' }] });
+    expect(mod).toMatchObject({ installedFiles: [{ nexusId: '1000', fileId: '2000' }] });
   });
 
   it('carries no fileID on a download row whose sidecar has none, and no installedFiles on a mod with no meta.ini section', async () => {

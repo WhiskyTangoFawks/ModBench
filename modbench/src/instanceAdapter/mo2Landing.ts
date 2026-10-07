@@ -16,9 +16,9 @@ type Mo2Landing = Pick<InstanceAdapter, 'extractNewMod' | 'extractUpgrade' | 'ex
 function keysOver(keys: OwnedMetaKeys, carried: ModMeta): OwnedMetaKeys {
   return {
     gameName: keys.gameName,
-    modid: keys.modid ?? carried.nexusId,
+    nexusId: keys.nexusId ?? carried.nexusId,
     version: keys.version ?? carried.version,
-    installationFile: keys.installationFile ?? carried.archiveFilename,
+    archiveFilename: keys.archiveFilename ?? carried.archiveFilename,
     installedFiles: keys.installedFiles ?? carried.installedFiles,
   };
 }

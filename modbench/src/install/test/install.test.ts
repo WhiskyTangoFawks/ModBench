@@ -167,7 +167,7 @@ describe('install commands', () => {
     assertOnlyChanged(before, after, new Set(COMPLETE.map((p) => `mods/${MOD}/${p}`)));
   });
 
-  it('the meta.ini carries the gameName it is handed, and an archive install its installationFile, peeling the lone wrapper directory so the payload lands at the mod root', async () => {
+  it('the meta.ini carries the gameName it is handed, and an archive install its archiveFilename, peeling the lone wrapper directory so the payload lands at the mod root', async () => {
     const archive = join(root, 'downloads', 'Freshly-1-0.7z');
     const run: Runner = async (_bin, args) => {
       const dest = present(args.find((a) => a.startsWith('-o')), "the runner's -o argument").slice(2);

@@ -50,8 +50,8 @@ describe('parseMetaIni — installedFiles', () => {
       'size=2', '',
     ].join('\r\n');
     expect(parseMetaIni(text).installedFiles).toEqual([
-      { modid: '4598', fileid: '17423' },
-      { modid: '4598', fileid: '17500' },
+      { nexusId: '4598', fileId: '17423' },
+      { nexusId: '4598', fileId: '17500' },
     ]);
   });
 
@@ -79,15 +79,15 @@ describe('parseMetaIni — installedFiles', () => {
       '1\\fileid=111', '',
     ].join('\r\n');
     expect(parseMetaIni(text).installedFiles).toEqual([
-      { modid: '126608', fileid: '111' },
-      { modid: '126608', fileid: '222' },
+      { nexusId: '126608', fileId: '111' },
+      { nexusId: '126608', fileId: '222' },
     ]);
   });
 });
 
 describe('writeMetaIni', () => {
   it('emits a [General] section with only the present keys', () => {
-    expect(writeMetaIni({ gameName: 'Fallout4', installationFile: 'MyMod-1-2.7z' })).toBe(
+    expect(writeMetaIni({ gameName: 'Fallout4', archiveFilename: 'MyMod-1-2.7z' })).toBe(
       '[General]\ngameName=Fallout4\ninstallationFile=MyMod-1-2.7z\n',
     );
   });
@@ -99,9 +99,9 @@ describe('writeMetaIni', () => {
   it('round-trips modid/version/installationFile through parseMetaIni', () => {
     const text = writeMetaIni({
       gameName: 'Fallout4',
-      modid: '4598',
+      nexusId: '4598',
       version: '2.1.5.0',
-      installationFile: 'UFO4P-4598.7z',
+      archiveFilename: 'UFO4P-4598.7z',
     });
     expect(parseMetaIni(text)).toEqual({
       version: '2.1.5.0',
@@ -113,7 +113,7 @@ describe('writeMetaIni', () => {
 
 describe('writeMetaIni — installedFiles', () => {
   it('emits the array section whole, in MO2 form, after [General]', () => {
-    expect(writeMetaIni({ installedFiles: [{ modid: '123', fileid: '456' }] })).toBe(
+    expect(writeMetaIni({ installedFiles: [{ nexusId: '123', fileId: '456' }] })).toBe(
       '[General]\n[installedFiles]\n1\\modid=123\n1\\fileid=456\nsize=1\n',
     );
   });
@@ -122,8 +122,8 @@ describe('writeMetaIni — installedFiles', () => {
     expect(
       writeMetaIni({
         installedFiles: [
-          { modid: '4598', fileid: '17423' },
-          { modid: '4598', fileid: '17500' },
+          { nexusId: '4598', fileId: '17423' },
+          { nexusId: '4598', fileId: '17500' },
         ],
       }),
     ).toBe('[General]\n[installedFiles]\n1\\modid=4598\n1\\fileid=17423\n2\\modid=4598\n2\\fileid=17500\nsize=2\n');
@@ -137,14 +137,14 @@ describe('writeMetaIni — installedFiles', () => {
   it('round-trips two pairs through parseMetaIni byte-identical in the [installedFiles] section', () => {
     const written = writeMetaIni({
       gameName: 'Fallout4',
-      modid: '4598',
+      nexusId: '4598',
       installedFiles: [
-        { modid: '4598', fileid: '17423' },
-        { modid: '4598', fileid: '17500' },
+        { nexusId: '4598', fileId: '17423' },
+        { nexusId: '4598', fileId: '17500' },
       ],
     });
     const parsed = parseMetaIni(written);
-    const rewritten = writeMetaIni({ gameName: 'Fallout4', modid: '4598', installedFiles: parsed.installedFiles });
+    const rewritten = writeMetaIni({ gameName: 'Fallout4', nexusId: '4598', installedFiles: parsed.installedFiles });
     expect(rewritten.slice(rewritten.indexOf('[installedFiles]'))).toBe(
       written.slice(written.indexOf('[installedFiles]')),
     );
@@ -155,10 +155,10 @@ describe('setOwnedKeysInText', () => {
   it('over empty text produces exactly what the plain writer produces', () => {
     const keys = {
       gameName: 'Fallout4',
-      modid: '4598',
+      nexusId: '4598',
       version: '2.0',
-      installationFile: 'Mod-4598.7z',
-      installedFiles: [{ modid: '4598', fileid: '17423' }],
+      archiveFilename: 'Mod-4598.7z',
+      installedFiles: [{ nexusId: '4598', fileId: '17423' }],
     };
     expect(setOwnedKeysInText('', keys)).toBe(writeMetaIni(keys));
   });
@@ -182,10 +182,10 @@ describe('setOwnedKeysInText', () => {
 
     const result = setOwnedKeysInText(text, {
       gameName: 'Fallout4',
-      modid: '4598',
+      nexusId: '4598',
       version: '2.0.0',
-      installationFile: 'New-4598.7z',
-      installedFiles: [{ modid: '4598', fileid: '99999' }],
+      archiveFilename: 'New-4598.7z',
+      installedFiles: [{ nexusId: '4598', fileId: '99999' }],
     });
 
     expect(result).toBe(
@@ -209,7 +209,7 @@ describe('setOwnedKeysInText', () => {
 
   it('adds a missing owned key right after the header, leaving unrelated General keys and later sections untouched', () => {
     const text = '[General]\r\ncategory="-1,"\r\n[Plugins]\r\nFoo.esp\\enabled=true\r\n';
-    const result = setOwnedKeysInText(text, { modid: '4598' });
+    const result = setOwnedKeysInText(text, { nexusId: '4598' });
     expect(result).toBe('[General]\r\nmodid=4598\r\ncategory="-1,"\r\n[Plugins]\r\nFoo.esp\\enabled=true\r\n');
   });
 
@@ -217,7 +217,7 @@ describe('setOwnedKeysInText', () => {
     const text = '[General]\r\ngameName=Fallout4\r\n';
     const result = setOwnedKeysInText(text, {
       gameName: 'Fallout4',
-      installedFiles: [{ modid: '4598', fileid: '17423' }],
+      installedFiles: [{ nexusId: '4598', fileId: '17423' }],
     });
     expect(result).toBe('[General]\r\ngameName=Fallout4\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=17423\r\nsize=1\r\n');
   });

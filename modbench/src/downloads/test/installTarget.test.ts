@@ -58,7 +58,7 @@ describe('the mods offered as the upgrade of a download', () => {
 
   it('flags an installedFiles file-id match as tier fileId', async () => {
     const value = valueOf([
-      mod({ name: 'Harder VATS', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
+      mod({ name: 'Harder VATS', nexusId: '111', version: '2.0', installedFiles: [{ nexusId: '111', fileId: '999' }] }),
     ]);
     expect(await offered(value, download({ modID: '111', fileID: '999' }))).toEqual([
       ['Harder VATS (v2.0)', 'File ID match'],
@@ -75,7 +75,7 @@ describe('the mods offered as the upgrade of a download', () => {
   it('sorts a file-id match first, unmarked mods after', async () => {
     const value = valueOf([
       mod({ name: 'No Match', nexusId: '111', version: '1.0' }),
-      mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
+      mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFiles: [{ nexusId: '111', fileId: '999' }] }),
     ]);
     expect(await offered(value, download({ modID: '111', fileID: '999' }))).toEqual([
       ['The Match (v2.0)', 'File ID match'],
@@ -83,7 +83,7 @@ describe('the mods offered as the upgrade of a download', () => {
     ]);
   });
 
-  it('flags a meta.ini installationFile match naming this exact download as tier installationFile', async () => {
+  it('flags a meta.ini archiveFilename match naming this exact download as tier archiveFilename', async () => {
     const value = valueOf([
       mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'harder-vats-v1.7z' }),
     ]);
@@ -92,7 +92,7 @@ describe('the mods offered as the upgrade of a download', () => {
     ]);
   });
 
-  it('compares the installationFile match case-folded, as the status does', async () => {
+  it('compares the archiveFilename match case-folded, as the status does', async () => {
     const value = valueOf([
       mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'Harder-VATS-v1.7Z' }),
     ]);
@@ -109,10 +109,10 @@ describe('the mods offered as the upgrade of a download', () => {
     expect(await offered(value, download({ modID: '111', name: 'foo.7z' }))).toEqual([]);
   });
 
-  it('drops the installationFile tier, listing the mod unmarked, when a fileId match exists elsewhere in the pool', async () => {
+  it('drops the archiveFilename tier, listing the mod unmarked, when a fileId match exists elsewhere in the pool', async () => {
     const value = valueOf([
       mod({ name: 'By Name', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
-      mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
+      mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFiles: [{ nexusId: '111', fileId: '999' }] }),
     ]);
     expect(await offered(value, download({ modID: '111', fileID: '999', name: 'foo.7z' }))).toEqual([
       ['By File Id (v2.0)', 'File ID match'],
@@ -120,7 +120,7 @@ describe('the mods offered as the upgrade of a download', () => {
     ]);
   });
 
-  it('takes no fileId tier from an archiveFilename that matches the download name when its fileID is absent from installedFiles, and still flags installationFile', async () => {
+  it('takes no fileId tier from an archiveFilename that matches the download name when its fileID is absent from installedFiles, and still flags archiveFilename', async () => {
     const value = valueOf([
       mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'harder-vats-v1.7z' }),
     ]);
