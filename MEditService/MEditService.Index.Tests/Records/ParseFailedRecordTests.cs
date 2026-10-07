@@ -69,7 +69,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void GetRecordTypeCounts_MarksOnlyTheSubtreeHoldingTheUnreadableRecord()
+    public void TheRecordTypeCounts_MarkOnlyTheSubtreeHoldingTheUnreadableRecord()
     {
         using var scratch = new Scratch(Fixture);
 
@@ -80,7 +80,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void GetPluginsWithParseFailures_NamesOnlyThePluginHoldingTheUnreadableRecord()
+    public void OnlyThePluginHoldingTheUnreadableRecord_HasAParseFailure()
     {
         using var scratch = new Scratch(Fixture);
 
@@ -92,7 +92,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void GetPluginsWithParseFailures_NamesAPluginThatIsNotActive()
+    public void AParseFailure_IsNamedForAPluginThatIsNotActive()
     {
         using var scratch = new Scratch(Fixture, active: false);
 
@@ -100,7 +100,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void GetOverrideStack_ReadsTheUnreadableRecordBackFromItsStoredBody()
+    public void TheOverrideStack_ReadsTheUnreadableRecordBackFromItsStoredBody()
     {
         using var scratch = new Scratch(Fixture);
 
@@ -113,7 +113,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void GetOverrideStack_CarriesTheDiagnosisOnTheUnreadableRecordsDocument()
+    public void TheOverrideStack_CarriesTheDiagnosisOnTheUnreadableRecordsDocument()
     {
         using var scratch = new Scratch(Fixture);
 
@@ -124,7 +124,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void GetOverrideStack_LeavesAReadableRecordsDocumentWithoutADiagnosis()
+    public void TheOverrideStack_LeavesAReadableRecordsDocumentWithoutADiagnosis()
     {
         using var scratch = new Scratch(Fixture);
         var readable = Perks(scratch).First(r => r.FormKey != PerkWhoseEntryPointParameterFlagsMutagenRefuses);

@@ -59,10 +59,10 @@ public sealed class WinnerSelectionTests : IDisposable
         Assert.Single(stack.Entries, e => e.IsWinner);
 
         static string HeaderFormKeyOf(PluginAddress plugin) => PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
-        PluginAddress?[] headerWinnersAssertedBecauseNoWinnerReadsAsNoHeaderThroughOpenHeadersWinnerOnlyLookup =
+        PluginAddress?[] headerWinners =
             [WinnerOf(HeaderFormKeyOf(BaseKey)), WinnerOf(HeaderFormKeyOf(OverKey))];
         Assert.Equal<PluginAddress?>(
-            [BaseKey, OverKey], headerWinnersAssertedBecauseNoWinnerReadsAsNoHeaderThroughOpenHeadersWinnerOnlyLookup);
+            [BaseKey, OverKey], headerWinners);
 
         PluginBinaries.Touch(_fixture.Plugins.Single(p => p.Name == OverKey.Name).Path);
         _index.NextSnapshot();

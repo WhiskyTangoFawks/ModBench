@@ -10,7 +10,7 @@ namespace MEditService.Index.Tests.Indexing;
 public class FormLookupTests
 {
     [Fact]
-    public void Index_TwoRecords_ResolvesEachAndTheHeader()
+    public void TwoRecords_ResolveEachAndTheHeader()
     {
         FormKey npc = default, race = default;
         using var fixture = new PluginFixtureBuilder("form-lookup-population")
@@ -34,7 +34,7 @@ public class FormLookupTests
     }
 
     [Fact]
-    public async Task Index_ReIndexSamePlugin_ReplacesRatherThanDuplicates()
+    public async Task ReindexingAPlugin_ReplacesItsLookupRowsRatherThanDuplicating()
     {
         FormKey npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-lookup-reindex")

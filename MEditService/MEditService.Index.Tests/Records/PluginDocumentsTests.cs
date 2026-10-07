@@ -11,7 +11,7 @@ namespace MEditService.Index.Tests.Records;
 public class PluginDocumentsTests
 {
     [Fact]
-    public void DocumentsOf_ReturnsEveryDocumentThePluginIndexed()
+    public void APluginsDocuments_AreEveryDocumentItIndexed()
     {
         using var fixture = new PluginFixtureBuilder("bulk-read")
             .WithPlugin("Bulk.esp", mod =>
@@ -43,7 +43,7 @@ public class PluginDocumentsTests
     }
 
     [Fact]
-    public void DocumentsOf_TwoOriginsSameFilename_ScopesToRequestedOrigin()
+    public void APluginsDocuments_OfTwoOriginsOfOneFilename_AreScopedToTheOrigin()
     {
         using var fixture = new PluginFixtureBuilder("bulk-read-origins")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")

@@ -70,7 +70,7 @@ public sealed class ContainerChildIndexingTests : IDisposable
             .Select(r => (r.ChildFormKey, r.SlotName, r.SlotIndex))];
 
     [Fact]
-    public void Index_PopulatesQuestDialogTopics_InOriginalOrder()
+    public void AQuestsDialogTopics_AreItsChildren_InOriginalOrder()
     {
         using var index = Indexes.Reconciled(_fixture);
         var rows = Children(index.RequireReads(), _questFk).Where(r => r.SlotName == "DialogTopics").ToList();
@@ -79,7 +79,7 @@ public sealed class ContainerChildIndexingTests : IDisposable
     }
 
     [Fact]
-    public void Index_PopulatesDialogTopicResponses_InOriginalOrder()
+    public void ADialogTopicsResponses_AreItsChildren_InOriginalOrder()
     {
         using var index = Indexes.Reconciled(_fixture);
         var rows = Children(index.RequireReads(), _topic0Fk);
@@ -88,7 +88,7 @@ public sealed class ContainerChildIndexingTests : IDisposable
     }
 
     [Fact]
-    public void Index_PopulatesCellNavigationMeshesAndLandscape()
+    public void ACellsNavigationMeshesAndLandscape_AreItsChildren()
     {
         using var index = Indexes.Reconciled(_fixture);
         var rows = Children(index.RequireReads(), _cellFk);
@@ -98,7 +98,7 @@ public sealed class ContainerChildIndexingTests : IDisposable
     }
 
     [Fact]
-    public void Index_DoesNotDuplicate_RelationshipsAlreadyCoveredByPlacementReads()
+    public void ACellsPlacementGroups_AreNotAlsoItsContainerChildren()
     {
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();
@@ -108,7 +108,7 @@ public sealed class ContainerChildIndexingTests : IDisposable
     }
 
     [Fact]
-    public async Task ADeletedPlugin_LeavesNoContainerChildren()
+    public void ADeletedPlugin_LeavesNoContainerChildren()
     {
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();

@@ -116,7 +116,7 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public void Index_FromBinary_PopulatesPlacementAndCellLocation()
+    public void ABinaryPlugin_HasPlacementAndCellLocation()
     {
         using var fixture = OneWorldspaceCell("placement-overlay", "OverlayWorld.esp", out var cell, out var placed, out var wrld);
         using var index = Indexes.Reconciled(fixture);
@@ -131,7 +131,7 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public async Task Index_ReIndexSamePlugin_ReplacesPlacementAndCellLocationRatherThanDuplicating()
+    public void ReindexingAPlugin_ReplacesPlacementAndCellLocationRatherThanDuplicating()
     {
         using var fixture = OneWorldspaceCell("placement-reindex", "ReindexPlacement.esp", out var cell, out var placed, out var wrld);
         using var index = Indexes.Reconciled(fixture);
@@ -147,14 +147,14 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public void Index_TemporaryPlacedObject_WritesTemporaryPlacementRow()
+    public void ATemporaryPlacedObject_HasATemporaryPlacementRow()
     {
         using var b = new Built();
         Assert.Equal("temporary", b.Reads.PlacementGroupIn(Key, b.ExtCellFk, b.RaiderFk));
     }
 
     [Fact]
-    public void Index_ExteriorCell_WritesCellLocationWithWorldspaceBlockAndGrid()
+    public void AnExteriorCell_HasCellLocationWithWorldspaceBlockAndGrid()
     {
         using var b = new Built();
         var location = b.Reads.GetCellLocation(Key, b.ExtCellFk);
@@ -168,7 +168,7 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public void Index_WorldspaceTopCell_WritesCellLocationWithWorldspaceButNoBlock()
+    public void AWorldspaceTopCell_HasCellLocationWithWorldspaceButNoBlock()
     {
         using var b = new Built();
         var location = b.Reads.GetCellLocation(Key, b.TopCellFk);
@@ -182,7 +182,7 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public void Index_InteriorCell_WritesCellLocationWithNullWorldspaceAndInteriorFlag()
+    public void AnInteriorCell_HasCellLocationWithNullWorldspaceAndInteriorFlag()
     {
         using var b = new Built();
         var location = b.Reads.GetCellLocation(Key, b.IntCellFk);
@@ -192,7 +192,7 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public void Index_PlacedObjects_AreAlsoIndexedAsRefrRecords()
+    public void PlacedObjects_AreAlsoIndexedAsRefrRecords()
     {
         using var b = new Built();
         var result = b.Reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["refr"], Plugin: Key.Name, Limit: 100, Offset: 0));
@@ -200,7 +200,7 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public void GetCellChildRecords_SplitsPersistentAndTemporary()
+    public void ACellsChildren_SplitIntoPersistentAndTemporary()
     {
         using var b = new Built();
         var refs = b.Reads.GetCellChildRecords(Key, b.ExtCellFk);
@@ -220,7 +220,7 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public void GetWorldspaceCells_ReturnsCellsWithBlockGridAndNullVariants()
+    public void AWorldspacesCells_CarryBlockGridAndNullVariants()
     {
         using var b = new Built();
         var cells = b.Reads.GetWorldspaceCells(Key, b.WorldspaceFk);
@@ -354,7 +354,7 @@ public class PlacementIndexingTests
     private static readonly (PluginAddress Winner, PluginAddress Other)[] WinnerAndOther = [(SharedA, SharedB), (SharedB, SharedA)];
 
     [Fact]
-    public void GetWorldspaceCells_SameFilenameDifferentOrigin_ScopesToOrigin()
+    public void WorldspaceCells_OfOneFilenameInTwoOrigins_AreScopedToTheOrigin()
     {
         using var f = new TwoOriginWorldspace();
 
@@ -368,7 +368,7 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public void GetInteriorCells_SameFilenameDifferentOrigin_ScopesToOrigin()
+    public void InteriorCells_OfOneFilenameInTwoOrigins_AreScopedToTheOrigin()
     {
         using var f = new TwoOriginWorldspace();
 
@@ -382,7 +382,7 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public void GetCellChildRecords_SameFilenameDifferentOrigin_ScopesToOrigin()
+    public void CellChildren_OfOneFilenameInTwoOrigins_AreScopedToTheOrigin()
     {
         using var f = new TwoOriginWorldspace();
 
@@ -396,7 +396,7 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public void GetInteriorCells_ReturnsInteriorCellsWithNullVariants()
+    public void InteriorCells_CarryNullVariants()
     {
         using var b = new Built();
         var cells = b.Reads.GetInteriorCells(Key);

@@ -168,7 +168,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void Validate_AfterBinaryChangeMakesARecordNewlyMatchTheFilter_FilteredListingIncludesIt()
+    public void AfterABinaryChangeMakesARecordNewlyMatchTheFilter_TheFilteredListingIncludesIt()
     {
         var holder = new LoadOrderHolder();
         FormKey npcKey = default;
@@ -195,7 +195,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void Validate_AfterBinaryChangeMakesARecordStopMatchingTheFilter_FilteredListingExcludesIt()
+    public void AfterABinaryChangeMakesARecordStopMatchingTheFilter_TheFilteredListingExcludesIt()
     {
         var holder = new LoadOrderHolder();
         FormKey npcKey = default;
@@ -221,7 +221,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void Validate_WhenReapplyingTheFilterFaults_ClearsTheFilter_NamesItsSourceAndReason_AndShowsEveryRecord()
+    public void AFilterThatFaultsOnReapply_IsCleared_NamesItsSourceAndReason_AndShowsEveryRecord()
     {
         var holder = new LoadOrderHolder();
         FormKey npcKey = default;
