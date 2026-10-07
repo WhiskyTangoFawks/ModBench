@@ -177,8 +177,8 @@ describe('isClickedRow', () => {
     expect(gestureEntry(context, undefined, viewSelection, isClickedRow).selection).toEqual([context]);
   });
 
-  it('leaves a clicked object whose Argument the wire refuses to the view\'s selection', () => {
-    expect(gestureEntry({ argument: { kind: 'mod' } }, undefined, viewSelection, isClickedRow).selection).toEqual(viewSelection());
+  it('leaves a clicked object whose Argument names no kind to the view\'s selection', () => {
+    expect(gestureEntry({ argument: { name: 'ModA' } }, undefined, viewSelection, isClickedRow).selection).toEqual(viewSelection());
   });
 
   it('leaves any other clicked object, such as a key\'s own args, to the view\'s selection', () => {

@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
-import { modArgumentOf, pluginArgumentOf } from './argument';
-import { recordArgumentOf } from './recordArgument';
-import type { ArgumentOf } from '../wire/argument';
+import { carriedArgument } from './argument';
 
 export interface KindedRow extends vscode.TreeItem {
   readonly kind: string;
@@ -20,12 +18,11 @@ export const kindGuard = <Row extends KindedRow>() =>
   <K extends Row['kind']>(kinds: readonly K[]) =>
     (row: unknown): row is RowOf<Row, K> => row instanceof vscode.TreeItem && 'kind' in row && kinds.some((kind) => kind === row.kind);
 
-export interface ArgumentCarrier {
-  readonly argument: ArgumentOf<'record' | 'plugin' | 'mod'>;
+interface ArgumentCarrier {
+  readonly argument: { readonly kind: string };
 }
 
-const isArgumentCarrier = (value: unknown): value is ArgumentCarrier =>
-  [recordArgumentOf, pluginArgumentOf, modArgumentOf].some((argumentOf) => argumentOf(value) !== undefined);
+const isArgumentCarrier = (value: unknown): value is ArgumentCarrier => typeof Reflect.get(carriedArgument(value) ?? {}, 'kind') === 'string';
 
 /** What a gesture that refuses unreadable rows aloud takes as clicked: a tree row, which it refuses
  *  when it carries no Argument, or a webview context. Any other object, such as a key's own args,
