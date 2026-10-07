@@ -18,7 +18,7 @@ const fixture = adapterOver(fixtureRoot);
 const caseFixture = adapterOver(caseFixtureRoot);
 
 const answering = (answer: Omit<OriginFiles, 'origin'>): Pick<InstanceAdapter, 'originFiles'> => ({
-  originFiles: (origin) => Promise.resolve({ origin: origin.kind === 'mod' ? origin.name : 'overwrite', ...answer }),
+  originFiles: (origin) => Promise.resolve({ origin: origin.kind === 'mod' ? origin.name : 'overwrite/', ...answer }),
 });
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
@@ -139,7 +139,7 @@ describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine 
       [mod('ModA'), mod('ModB')],
       [variant('/overwrite', 'Textures/Foo.dds'), variant('/overwrite', 'textures/foo.dds')],
       { originFiles: (origin) => Promise.resolve({
-        origin: origin.kind === 'mod' ? origin.name : 'overwrite', folder: '/mods', folders: [], notes: [],
+        origin: origin.kind === 'mod' ? origin.name : 'overwrite/', folder: '/mods', folders: [], notes: [],
         files: origin.kind === 'mod' && origin.name === 'ModA'
           ? [variant('/mods/ModA', 'Textures/Foo.dds'), variant('/mods/ModA', 'textures/foo.dds')]
           : [variant('/mods/ModB', 'textures/foo.dds')],

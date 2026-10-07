@@ -307,7 +307,7 @@ describe('RecordPanel — array editing', () => {
     conflictAll: 'NoConflict',
     overrides: [
       compareOverride({
-        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data/',
         isWinner: true, editorId: 'TestNPC',
         fields: [{ metadata: intArrayMeta, value: [1, 2, 3] }], conflictThis: 'Master',
       }),
@@ -400,7 +400,7 @@ const editableIntArrayResult: CompareResult = compareResultFixture({
   conflictAll: 'NoConflict',
   overrides: [
     compareOverride({
-      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data/',
       isWinner: true, editorId: 'TestNPC',
       fields: [{ metadata: editableIntArrayMeta, value: [11, 22, 33] }], conflictThis: 'Master',
     }),
@@ -424,7 +424,7 @@ const scalarResult: CompareResult = compareResultFixture({
   conflictAll: 'NoConflict',
   overrides: [
     compareOverride({
-      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data/',
       isWinner: true, editorId: 'TestNPC',
       fields: [{ metadata: scalarMeta, value: 4 }], conflictThis: 'Master',
     }),
@@ -535,7 +535,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     const postedCall = required([...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD), "a posted EDIT_FIELD message");
     const posted = postedCall[0];
     expect(posted).toEqual({
-      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data/',
       envelope: { op: 'set', path: [member('Level')], value: 6 },
     });
   });
@@ -568,12 +568,12 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
       conflictAll: 'Override',
       overrides: [
         compareOverride({
-          formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data',
+          formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data/',
           isWinner: false, editorId: 'TestNPC',
           fields: [{ metadata: meta, value: master }], conflictThis: 'Master',
         }),
         compareOverride({
-          formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+          formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data/',
           isWinner: true, editorId: 'TestNPC',
           fields: [{ metadata: meta, value: override }], conflictThis: 'Override',
         }),

@@ -63,7 +63,7 @@ public class ConditionReferenceTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var document = index.RequireReads().DocumentOf(cobj.ToString(), new PluginAddress("CondCheck.esp", "Data"));
+        var document = index.RequireReads().DocumentOf(cobj.ToString(), new PluginAddress("CondCheck.esp", PluginOrigin.DataDirectory));
         var conditions = document.Fields.Single(f => f.Metadata.Name == "Conditions");
 
         Assert.Null(conditions.CheckError);

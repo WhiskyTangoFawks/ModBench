@@ -7,7 +7,7 @@
           "EditorId": "DialogueDiamondCity",
           "FieldPath": "VirtualMachineAdapter.Aliases[0].Property.Object",
           "FormKey": "003648:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "qust"
         },
@@ -15,7 +15,7 @@
           "EditorId": null,
           "FieldPath": "Quest",
           "FormKey": "0048EB:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
         },
@@ -23,7 +23,7 @@
           "EditorId": "ArturoGreetScene",
           "FieldPath": "Quest",
           "FormKey": "004E1E:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "scen"
         },
@@ -31,7 +31,7 @@
           "EditorId": null,
           "FieldPath": "Quest",
           "FormKey": "0057DD:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
         },
@@ -39,7 +39,7 @@
           "EditorId": null,
           "FieldPath": "Quest",
           "FormKey": "00581D:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
         }
@@ -52,7 +52,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "0180F8:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         },
@@ -60,7 +60,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "02B89C:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         },
@@ -68,7 +68,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "02B8A0:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         },
@@ -76,7 +76,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "02B8A1:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         },
@@ -84,7 +84,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "02B8A2:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         }
@@ -97,7 +97,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "005834:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         },
@@ -105,7 +105,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "017BB2:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         },
@@ -113,7 +113,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "01DA84:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         },
@@ -121,7 +121,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "01DAAA:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         },
@@ -129,7 +129,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "01F611:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         }
@@ -142,7 +142,7 @@
           "EditorId": null,
           "FieldPath": "Quest",
           "FormKey": "0179D9:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
         },
@@ -150,7 +150,7 @@
           "EditorId": null,
           "FieldPath": "Quest",
           "FormKey": "0179DA:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
         },
@@ -158,7 +158,7 @@
           "EditorId": null,
           "FieldPath": "Quest",
           "FormKey": "0179DB:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
         },
@@ -166,7 +166,7 @@
           "EditorId": null,
           "FieldPath": "Quest",
           "FormKey": "0179DC:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
         },
@@ -174,7 +174,7 @@
           "EditorId": "DialogueGenericPlayer",
           "FieldPath": "VirtualMachineAdapter.Aliases[0].Property.Object",
           "FormKey": "0179EF:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "qust"
         }
@@ -187,7 +187,7 @@
           "EditorId": null,
           "FieldPath": "Quest",
           "FormKey": "0179F1:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
         },
@@ -195,7 +195,7 @@
           "EditorId": "DialogueConcordArea",
           "FieldPath": "Stages[2].LogEntries[0].Conditions[0].Data.ParameterOneRecord",
           "FormKey": "0179F3:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "qust"
         },
@@ -203,7 +203,7 @@
           "EditorId": "DialogueConcordArea",
           "FieldPath": "VirtualMachineAdapter.Aliases[0].Property.Object",
           "FormKey": "0179F3:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "qust"
         },
@@ -211,7 +211,7 @@
           "EditorId": "DialogueConcordArea",
           "FieldPath": "VirtualMachineAdapter.Script.Properties[0].Object",
           "FormKey": "0179F3:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "qust"
         },
@@ -219,7 +219,7 @@
           "EditorId": "DialogueConcordArea",
           "FieldPath": "VirtualMachineAdapter.Script.Properties[10].Object",
           "FormKey": "0179F3:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "qust"
         }
@@ -232,7 +232,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "0057E4:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         },
@@ -240,7 +240,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "01F685:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         },
@@ -248,7 +248,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "030E13:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         },
@@ -256,7 +256,7 @@
           "EditorId": null,
           "FieldPath": "StartScene",
           "FormKey": "030E14:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "info"
         },
@@ -264,7 +264,7 @@
           "EditorId": "NatMQ103Scene",
           "FieldPath": "Template",
           "FormKey": "08BB68:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "scen"
         }
@@ -277,7 +277,7 @@
           "EditorId": "DialogueDiamondCitySharedQuestion",
           "FieldPath": "Branch",
           "FormKey": "01DAD7:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
         }
@@ -290,7 +290,7 @@
           "EditorId": null,
           "FieldPath": "Branch",
           "FormKey": "02650D:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
         }
@@ -303,7 +303,7 @@
           "EditorId": "MinutemenHoldingCell",
           "FieldPath": "CombinedMeshReferences[1].Reference",
           "FormKey": "0782A8:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "cell"
         }
@@ -316,7 +316,7 @@
           "EditorId": "MQPlayerQuestionSharedConcord",
           "FieldPath": "Branch",
           "FormKey": "0CA9C8:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
         },
@@ -324,7 +324,7 @@
           "EditorId": null,
           "FieldPath": "Branch",
           "FormKey": "247E8E:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "dial"
         }
@@ -337,7 +337,7 @@
           "EditorId": null,
           "FieldPath": "LinkedReferences[1].Reference",
           "FormKey": "1A6C7B:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "achr"
         },
@@ -345,7 +345,7 @@
           "EditorId": null,
           "FieldPath": "ActivateParents.Parents[0].Reference",
           "FormKey": "2169D2:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "refr"
         }
@@ -358,7 +358,7 @@
           "EditorId": null,
           "FieldPath": "LinkedReferences[1].Reference",
           "FormKey": "1A6C6F:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "achr"
         }
@@ -371,7 +371,7 @@
           "EditorId": null,
           "FieldPath": "LinkedReferences[2].Reference",
           "FormKey": "1A6C71:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "achr"
         }
@@ -384,7 +384,7 @@
           "EditorId": "shipment_Wood_250",
           "FieldPath": "VirtualMachineAdapter.Scripts[0].Properties[1].Object",
           "FormKey": "24A068:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "misc"
         }
@@ -397,7 +397,7 @@
           "EditorId": "shipment_Rubber_large",
           "FieldPath": "VirtualMachineAdapter.Scripts[0].Properties[1].Object",
           "FormKey": "24A069:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "misc"
         }
@@ -410,7 +410,7 @@
           "EditorId": "shipment_Ceramic_large",
           "FieldPath": "VirtualMachineAdapter.Scripts[0].Properties[1].Object",
           "FormKey": "24A06B:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "misc"
         }
@@ -423,7 +423,7 @@
           "EditorId": "VRWorkshopShared_AttackMarker_SentryBot",
           "FieldPath": "VirtualMachineAdapter.Scripts[1].Properties[0].Object",
           "FormKey": "24A313:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "acti"
         },
@@ -431,7 +431,7 @@
           "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
           "FieldPath": "VirtualMachineAdapter.Scripts[1].Properties[0].Object",
           "FormKey": "24A314:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "acti"
         },
@@ -439,7 +439,7 @@
           "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
           "FieldPath": "VirtualMachineAdapter.Scripts[1].Properties[0].Object",
           "FormKey": "24A315:Fallout4.esm",
-          "Origin": "Data",
+          "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "acti"
         }

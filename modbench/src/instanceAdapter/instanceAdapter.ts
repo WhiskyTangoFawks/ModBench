@@ -10,7 +10,7 @@ export { fileExtension, isPluginFile } from './pluginFile';
 export { fileInFolder, isPluginSourcePath } from './layout';
 
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
-export { OVERWRITE_DIR_NAME as OVERWRITE_ORIGIN } from './codecs/modlistText';
+export { OVERWRITE_ORIGIN } from './codecs/modlistText';
 
 /** The setting that names the game folder outright, and so the one that fixes a folder not found. */
 export const GAME_FOLDER_SETTING = 'modbench.mods.gameDirectory';

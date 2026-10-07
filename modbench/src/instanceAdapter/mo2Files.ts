@@ -5,7 +5,7 @@ import { sep } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
-import { OVERWRITE_DIR_NAME } from './codecs/modlistText';
+import { OVERWRITE_ORIGIN } from './codecs/modlistText';
 import { factsOf, listDir } from './files';
 import type { FileOrigin, OriginFile, OriginFiles, OriginFolder } from './instanceAdapter';
 import { isExcludedName, isPluginSourceFolder, isTempWrite, originDir, overwriteDir } from './layout';
@@ -141,7 +141,7 @@ async function listOverwrite(folder: string): Promise<Walk> {
 export async function originFilesIn(instanceRoot: string, origin: FileOrigin): Promise<OriginFiles> {
   if (origin.kind === 'runtimeOutput') {
     const { root, files, folders, notes } = await listOverwrite(overwriteDir(instanceRoot));
-    return { origin: OVERWRITE_DIR_NAME, folder: root, files, folders, notes };
+    return { origin: OVERWRITE_ORIGIN, folder: root, files, folders, notes };
   }
   const folder = originDir(instanceRoot, origin);
   if (folder === undefined) return { origin: origin.name, folder: undefined, files: [], folders: [], notes: [] };

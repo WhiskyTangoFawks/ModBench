@@ -11,7 +11,7 @@ public class ContainerChildQueryServiceTests
 {
     private static readonly LoadOrderHolder Fallout4 = FakeLoadOrder.Of(GameRelease.Fallout4);
 
-    private static readonly PluginAddress Plugin = new("M.esp", "Data");
+    private static readonly PluginAddress Plugin = new("M.esp", PluginOrigin.DataDirectory);
 
     private static ContainerChildQueryService Service(
         IReadOnlyList<ContainerChildRow> children, IReadOnlyList<FakeRow> records, ILoggerFactory? loggerFactory = null)
@@ -144,7 +144,7 @@ public class ContainerChildQueryServiceTests
         Assert.Equal(["dial1:M.esp"], result.Select(r => r.FormKey).ToArray());
         var warning = Assert.Single(entries, e => e.Level == LogLevel.Warning);
         Assert.Equal(
-            "Container child dial-missing:M.esp of qust1:M.esp in M.esp (Data) is indexed in " +
+            "Container child dial-missing:M.esp of qust1:M.esp in M.esp (Data/) is indexed in " +
             "container_child but Search(dial) did not return it; omitting.",
             warning.Message);
     }
@@ -163,6 +163,6 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_NoReads_ThrowsNoLoadOrderException()
     {
         var svc = QueryHost.Containers(new StubIndex(reads: null), Fallout4);
-        Assert.Throws<NoLoadOrderException>(() => svc.GetChildren(new PluginAddress("M.esp", "Data"), "qust1:M.esp"));
+        Assert.Throws<NoLoadOrderException>(() => svc.GetChildren(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "qust1:M.esp"));
     }
 }

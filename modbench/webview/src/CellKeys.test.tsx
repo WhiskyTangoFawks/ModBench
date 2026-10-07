@@ -24,12 +24,12 @@ const record = compareResultFixture({
   conflictAll: 'Override',
   overrides: [
     compareOverride({
-      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data', isWinner: false, editorId: 'TestNPC',
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data/', isWinner: false, editorId: 'TestNPC',
       fields: [{ metadata: levelMeta, value: 5 }, { metadata: femaleMeta, value: false }, { metadata: nameMeta, value: 'Master' }, { metadata: valuesMeta, value: [4, 5] }],
       conflictThis: 'Master',
     }),
     compareOverride({
-      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', isWinner: true, editorId: 'TestNPC',
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data/', isWinner: true, editorId: 'TestNPC',
       fields: [{ metadata: levelMeta, value: 7 }, { metadata: femaleMeta, value: false }, { metadata: valuesMeta, value: [4, 5] }],
       conflictThis: 'Override',
     }),
@@ -110,7 +110,7 @@ describe('RecordPanel — what the focused cell tells the host its keys act on',
   it('a cell in a column that can be edited names its plugin copy, its path, and that the plugin holds the field', async () => {
     await focusCell('Level', 2);
     await waitFor(() => expect(toldContext()).toMatchObject({
-      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', path: [member('Level')], holdsValue: true,
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data/', path: [member('Level')], holdsValue: true,
     }));
     expect(hasSection(toldContext(), 'editableCell')).toBe(true);
   });

@@ -49,7 +49,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
         Assert.Throws<NoLoadOrderException>(() => index.RequireReads());
         Assert.Throws<ObjectDisposedException>(() =>
-            oldReads.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
+            oldReads.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, PluginOrigin.DataDirectory)));
     }
 
     [Fact]
@@ -207,7 +207,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             index.NextSnapshot();
 
             Assert.Contains(
-                index.RequireReads().DocumentsOf(new PluginAddress("Plugin.esp", "Data")),
+                index.RequireReads().DocumentsOf(new PluginAddress("Plugin.esp", PluginOrigin.DataDirectory)),
                 d => d.EditorId == "NotANumber");
             Assert.Null(index.ActiveFilter);
             var cleared = Assert.Single(notifications.Notifications.OfType<RecordFilterClearedNotification>());
@@ -239,7 +239,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
 
         Assert.Throws<ObjectDisposedException>(() =>
-            oldReads.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
+            oldReads.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, PluginOrigin.DataDirectory)));
     }
 
     private OpenedIndex ReconciledIndex(LoadOrderHolder holder)

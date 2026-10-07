@@ -12,8 +12,8 @@ namespace MEditService.Queries.Tests.Query;
 public sealed class Fallout4KeyedArrayCompareTests
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
-    private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
-    private static readonly PluginAddress TopPlugin = new("Top.esp", "Data");
+    private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress TopPlugin = new("Top.esp", PluginOrigin.DataDirectory);
 
     private static readonly ModKey Base = ModKey.FromFileName(BasePlugin.Name);
     private static readonly FormKey NpcKey = new(Base, 0x800);
@@ -84,8 +84,8 @@ public sealed class Fallout4KeyedArrayCompareTests
         };
         var plugins = new[]
         {
-            new LoadOrderEntry(BasePlugin.Name, BasePlugin.Name, "Data", 0, Enabled: true, Winning: true),
-            new LoadOrderEntry(TopPlugin.Name, TopPlugin.Name, "Data", 1, Enabled: true, Winning: true),
+            new LoadOrderEntry(BasePlugin.Name, BasePlugin.Name, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry(TopPlugin.Name, TopPlugin.Name, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
         };
         _service = QueryHost.Records(
             new FakeIndex(new FakeReads(opened, rows)), FakeLoadOrder.Of(Release, plugins));

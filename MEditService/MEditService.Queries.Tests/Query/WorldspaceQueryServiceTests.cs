@@ -7,7 +7,7 @@ namespace MEditService.Queries.Tests.Query;
 
 public class WorldspaceQueryServiceTests
 {
-    private static readonly PluginAddress Plugin = new("M.esp", "Data");
+    private static readonly PluginAddress Plugin = new("M.esp", PluginOrigin.DataDirectory);
     private static readonly PluginAddress OtherOrigin = new("M.esp", "ModB");
     private const string World = "wrld:M.esp";
 
@@ -48,7 +48,7 @@ public class WorldspaceQueryServiceTests
         };
         var svc = Service(reads);
 
-        var result = svc.GetCellChildRecords(new PluginAddress("M.esp", "Data"), "cell:M.esp");
+        var result = svc.GetCellChildRecords(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "cell:M.esp");
 
         Assert.Equal(
             new ChildRecordSummary("p1:M.esp", "PersistentEditor", "base1:M.esp", "REFR", WorkingTreeState.Modified, true, "PersistentFull", "PersistentBase", "persistent diagnosis"),
@@ -67,7 +67,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("ccc:M.esp", "CellC", 1, 0, 0, 0, 40, 2, Index.WorkingTreeState.None),
         ]);
 
-        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "Data"), "wrld:M.esp");
+        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "wrld:M.esp");
 
         Assert.Empty(result.TopCells);
         Assert.Equal(2, result.Blocks.Count);
@@ -89,7 +89,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("a2:M.esp", "CellA2", 0, 0, 0, 0, 4, 4, Index.WorkingTreeState.None),
         ]);
 
-        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "Data"), "wrld:M.esp");
+        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "wrld:M.esp");
 
         Assert.Equal(
             [(0, 0), (0, 1), (1, 0)],
@@ -105,7 +105,7 @@ public class WorldspaceQueryServiceTests
     public void GetInteriorCells_NoReads_ThrowsNoLoadOrderException_ForOriginTravelsInFromTheCallerSoTheReadsAreTheOneGuard()
     {
         var svc = QueryHost.Worldspaces(new StubIndex(reads: null));
-        Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells(new PluginAddress("M.esp", "Data")));
+        Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells(new PluginAddress("M.esp", PluginOrigin.DataDirectory)));
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class WorldspaceQueryServiceTests
     {
         var svc = Service(Reads(Worldspace("000801:M.esp", "WorldA"), Worldspace("000802:M.esp", null)));
 
-        var result = svc.GetWorldspaces(new PluginAddress("M.esp", "Data"));
+        var result = svc.GetWorldspaces(new PluginAddress("M.esp", PluginOrigin.DataDirectory));
 
         Assert.Equal(2, result.Count);
         Assert.Equal("000801:M.esp", result[0].FormKey);
@@ -158,7 +158,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("int:M.esp", "IntCell", null, null, null, null, 0, 0, Index.WorkingTreeState.None),
         ]);
 
-        var result = svc.GetInteriorCells(new PluginAddress("M.esp", "Data"));
+        var result = svc.GetInteriorCells(new PluginAddress("M.esp", PluginOrigin.DataDirectory));
 
         Assert.Equal("IntCell", Assert.Single(Assert.Single(Assert.Single(result).SubBlocks).Cells).EditorId);
     }
@@ -171,7 +171,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("aaa:M.esp", "CellA", 0, 0, 0, 0, 1, 1, Index.WorkingTreeState.None),
         ]);
 
-        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "Data"), "wrld:M.esp");
+        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "wrld:M.esp");
 
         Assert.Single(result.TopCells);
         Assert.Equal("TopCell", result.TopCells[0].EditorId);
@@ -187,7 +187,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("second:M.esp", "SecondBlockless", null, null, null, null, 0, 0, Index.WorkingTreeState.None),
         ]);
 
-        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "Data"), "wrld:M.esp");
+        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "wrld:M.esp");
 
         Assert.Equal(2, result.TopCells.Count);
         Assert.Equal(new string?[] { "FirstBlockless", "SecondBlockless" }, result.TopCells.Select(c => c.EditorId).ToArray());
@@ -203,7 +203,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("aaa:M.esp", "CellA", 0, 0, 0, 0, 1, 1, Index.WorkingTreeState.None, "Concord"),
         ]);
 
-        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "Data"), "wrld:M.esp");
+        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "wrld:M.esp");
 
         Assert.Equal("Sanctuary Hills", result.TopCells[0].FullName);
         Assert.Equal("Concord", result.Blocks[0].SubBlocks[0].Cells[0].FullName);
@@ -217,7 +217,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("bbb:M.esp", "CellB", 1, 0, 0, 0, 2, 2, Index.WorkingTreeState.None),
         ]);
 
-        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", "Data"), "wrld:M.esp");
+        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "wrld:M.esp");
 
         var failing = result.Blocks.Single(b => b is { X: 0, Y: 0 });
         Assert.True(failing.HasParseFailure);
@@ -234,7 +234,7 @@ public class WorldspaceQueryServiceTests
     {
         var svc = Service(Reads(Worldspace("000801:M.esp", "WorldA", holdsAnUnreadableRecord: true), Worldspace("000802:M.esp", "WorldB")));
 
-        var result = svc.GetWorldspaces(new PluginAddress("M.esp", "Data"));
+        var result = svc.GetWorldspaces(new PluginAddress("M.esp", PluginOrigin.DataDirectory));
 
         Assert.True(result.Single(w => w.FormKey == "000801:M.esp").HasParseFailure);
         Assert.False(result.Single(w => w.FormKey == "000802:M.esp").HasParseFailure);

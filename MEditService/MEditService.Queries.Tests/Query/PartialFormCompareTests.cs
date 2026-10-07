@@ -14,8 +14,8 @@ public sealed class PartialFormCompareTests
     private const float MasterWaterHeight = 100f;
     private const float OverrideOwnWaterHeightDifferingSoTheExclusionIsPartialFormsNotAgreement = 999f;
     private static readonly GameRelease Release = GameRelease.Fallout4;
-    private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
-    private static readonly PluginAddress OverridePlugin = new("Partial.esp", "Data");
+    private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress OverridePlugin = new("Partial.esp", PluginOrigin.DataDirectory);
 
     private readonly FormKey _cellKey;
     private readonly FormKey _refKey;
@@ -48,8 +48,8 @@ public sealed class PartialFormCompareTests
         };
         var plugins = new[]
         {
-            new LoadOrderEntry("Base.esm", "Base.esm", "Data", 0, Enabled: true, Winning: true),
-            new LoadOrderEntry("Partial.esp", "Partial.esp", "Data", 1, Enabled: true, Winning: true),
+            new LoadOrderEntry("Base.esm", "Base.esm", PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry("Partial.esp", "Partial.esp", PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
         };
         var holder = FakeLoadOrder.Of(Release, plugins);
         _service = QueryHost.Records(new FakeIndex(new FakeReads(opened, rows)), holder);

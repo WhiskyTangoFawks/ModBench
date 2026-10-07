@@ -86,7 +86,7 @@ describe('a record panel cell after a refused edit (editor.md, Reporting, story 
 describe('a record panel reading the FormKey its record moved to (editor.md, States, story 5)', () => {
   const MOVED = '000002:Fallout4.esm';
   const answered = (result: CompareResult) => ({
-    ok: true as const, result, immutableSet: new Set([columnKey({ name: 'Fallout4.esm', origin: 'Data' })]),
+    ok: true as const, result, immutableSet: new Set([columnKey({ name: 'Fallout4.esm', origin: 'Data/' })]),
     trackedSet: new Set([columnKey({ name: 'MyMod.esp', origin: 'ModA' })]),
     sourceUnreadableSet: new Set(), modsByOrigin: {}, conflictsComputed: true, loadFailures: [],
     fileColumn: columnKey({ name: 'MyMod.esp', origin: 'ModA' }),

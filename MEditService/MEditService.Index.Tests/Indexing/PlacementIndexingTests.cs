@@ -10,7 +10,7 @@ namespace MEditService.Index.Tests.Indexing;
 
 public class PlacementIndexingTests
 {
-    private static readonly PluginAddress Key = new("TestWorld.esp", "Data");
+    private static readonly PluginAddress Key = new("TestWorld.esp", PluginOrigin.DataDirectory);
 
     private sealed class Built : IDisposable
     {
@@ -120,7 +120,7 @@ public class PlacementIndexingTests
     {
         using var fixture = OneWorldspaceCell("placement-overlay", "OverlayWorld.esp", out var cell, out var placed, out var wrld);
         using var index = Indexes.Reconciled(fixture);
-        var key = new PluginAddress("OverlayWorld.esp", "Data");
+        var key = new PluginAddress("OverlayWorld.esp", PluginOrigin.DataDirectory);
         var reads = index.RequireReads();
 
         Assert.Equal("persistent", reads.PlacementGroupIn(key, cell.ToString(), placed.ToString()));
@@ -135,7 +135,7 @@ public class PlacementIndexingTests
     {
         using var fixture = OneWorldspaceCell("placement-reindex", "ReindexPlacement.esp", out var cell, out var placed, out var wrld);
         using var index = Indexes.Reconciled(fixture);
-        var key = new PluginAddress("ReindexPlacement.esp", "Data");
+        var key = new PluginAddress("ReindexPlacement.esp", PluginOrigin.DataDirectory);
 
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
         index.NextSnapshot();

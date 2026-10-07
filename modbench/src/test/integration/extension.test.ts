@@ -81,10 +81,10 @@ function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' 
 const TRACKED_PLUGIN = 'Tracked.esp';
 const TRACKED_ORIGIN = 'TrackedMod';
 const MOCK_PLUGINS: MockPlugin[] = [
-  mockPlugin({ name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', inLoadOrder: true }),
-  mockPlugin({ name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data', inLoadOrder: true }),
-  mockPlugin({ name: 'Other.esp', path: '/data/Other.esp', origin: 'Data', inLoadOrder: false }),
-  mockPlugin({ name: 'Second.esp', path: '/data/Second.esp', origin: 'Data', inLoadOrder: true }),
+  mockPlugin({ name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data/', inLoadOrder: true }),
+  mockPlugin({ name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data/', inLoadOrder: true }),
+  mockPlugin({ name: 'Other.esp', path: '/data/Other.esp', origin: 'Data/', inLoadOrder: false }),
+  mockPlugin({ name: 'Second.esp', path: '/data/Second.esp', origin: 'Data/', inLoadOrder: true }),
   mockPlugin({ name: TRACKED_PLUGIN, path: `/mods/${TRACKED_ORIGIN}/${TRACKED_PLUGIN}`, origin: TRACKED_ORIGIN, inLoadOrder: true, isTracked: true }),
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
@@ -312,7 +312,7 @@ function createMockBackend(): http.Server {
     }
     if (wonFormKey !== undefined) {
       const winner = [TRACKED_FORM_KEY, CHILD_FORM_KEY].includes(decodeURIComponent(wonFormKey))
-        ? { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN } : { plugin: 'Fallout4.esm', origin: 'Data' };
+        ? { plugin: TRACKED_PLUGIN, origin: TRACKED_ORIGIN } : { plugin: 'Fallout4.esm', origin: 'Data/' };
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ formKey: decodeURIComponent(wonFormKey), ...winner }));
       return;
@@ -343,8 +343,8 @@ function createMockBackend(): http.Server {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(decodeURIComponent(referenced) === HELD_FORM_KEY ? [
         row(TRACKED_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN, 'Model'), row(TRACKED_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN, 'Template'),
-        row(CHILD_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN, 'Base'), row(RENDERED_REFERRER_FORM_KEY, 'Fallout4.esm', 'Data', 'Base'),
-        row(HELD_FORM_KEY, 'Fallout4.esm', 'Data', 'Template'),
+        row(CHILD_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN, 'Base'), row(RENDERED_REFERRER_FORM_KEY, 'Fallout4.esm', 'Data/', 'Base'),
+        row(HELD_FORM_KEY, 'Fallout4.esm', 'Data/', 'Template'),
       ] : []));
       return;
     }
@@ -357,7 +357,7 @@ function createMockBackend(): http.Server {
       return;
     }
     if (url.startsWith('/records?') && new URL(url, 'http://x').searchParams.has('search')) {
-      const items = [{ formKey: HELD_FORM_KEY, plugin: 'Patch.esp', loadOrderIndex: 1, isWinner: true, editorId: 'NewGun', origin: 'Data',
+      const items = [{ formKey: HELD_FORM_KEY, plugin: 'Patch.esp', loadOrderIndex: 1, isWinner: true, editorId: 'NewGun', origin: 'Data/',
         workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false }];
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ items, total: items.length }));
@@ -386,7 +386,7 @@ const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
 const copyQuery = (formKey: string, plugin: string, origin: string) => `formKey=${encodeURIComponent(formKey)}&name=${plugin}&origin=${origin}`;
 const trackedChildUri = `modbench-child-record:${vscode.Uri.file(TRACKED_FILE).path}?${copyQuery(CHILD_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN)}`;
 const renderedUri = (formKey: string) =>
-  `modbench-rendered:/Data/Fallout4.esm/${renderedName(formKey)}?${copyQuery(formKey, 'Fallout4.esm', 'Data')}`;
+  `modbench-rendered:/Data%2F/Fallout4.esm/${renderedName(formKey)}?${copyQuery(formKey, 'Fallout4.esm', 'Data/')}`;
 
 
 const UNTRACKED_FORM_KEY = '000801:Untracked.esp';
@@ -511,7 +511,7 @@ describe('modbench.record.open', () => {
 
   it('opens several records at once as one grid: the first record\'s document, which reads the others beside it in the order given', async () => {
     const tabsBefore = openTabs().length;
-    const winner = { name: 'Fallout4.esm', origin: 'Data' };
+    const winner = { name: 'Fallout4.esm', origin: 'Data/' };
     const copies = [{ formKey: 'Fallout4.esm:000011', plugin: winner }, { formKey: 'Fallout4.esm:000012', plugin: winner }];
     const askedSideBySide = () => comparedSideBySide.some((asked) => JSON.stringify(asked) === JSON.stringify(copies));
 
@@ -538,7 +538,7 @@ describe('modbench.record.open', () => {
   });
 
   it('reads the Argument of a Plugins-tree row from a menu to its own record', async () => {
-    const row = { argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data' }, formKey: 'Fallout4.esm:000030' } };
+    const row = { argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data/' }, formKey: 'Fallout4.esm:000030' } };
 
     await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
 
@@ -546,7 +546,7 @@ describe('modbench.record.open', () => {
   });
 
   it('reads the Argument of a placed row from a menu to its own record', async () => {
-    const row = { argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data' }, formKey: 'Fallout4.esm:000040' } };
+    const row = { argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data/' }, formKey: 'Fallout4.esm:000040' } };
 
     await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
 
@@ -661,7 +661,7 @@ describe('a tracked copy of a record', () => {
   it('shows the file already open in a tab, which reads beside its own the records opened with it, and none once its record is opened alone', async () => {
     await openRecord(trackedCopy);
     await waitFor('the file\'s tab', () => fileTabs().length > 0);
-    const copies = [trackedCopy, { formKey: 'Fallout4.esm:000070', plugin: { name: 'Fallout4.esm', origin: 'Data' } }];
+    const copies = [trackedCopy, { formKey: 'Fallout4.esm:000070', plugin: { name: 'Fallout4.esm', origin: 'Data/' } }];
 
     await openRecord([trackedCopy, { formKey: 'Fallout4.esm:000070' }]);
     await waitFor('the records read side by side', () => comparedSideBySide.some((asked) => JSON.stringify(asked) === JSON.stringify(copies)));
@@ -902,7 +902,7 @@ describe('an edit in a tracked copy\'s grid', () => {
   });
 
   it('moves the file with the tab, which keeps beside its record the records it showed beside it', async () => {
-    const column = { formKey: 'Fallout4.esm:000070', plugin: { name: 'Fallout4.esm', origin: 'Data' } };
+    const column = { formKey: 'Fallout4.esm:000070', plugin: { name: 'Fallout4.esm', origin: 'Data/' } };
     const openedAt = comparedSideBySide.length;
     await openRecord([{ formKey: TRACKED_FORM_KEY, plugin }, column]);
     await waitFor('the records read side by side', () => comparedSideBySide.slice(openedAt).some((asked) => JSON.stringify(asked).includes(column.formKey)));
@@ -931,7 +931,7 @@ describe('an edit in a tracked copy\'s grid', () => {
 });
 
 describe('a record opened from a column\'s header, in its tab\'s place', () => {
-  const copyOf = (formKey: string) => ({ formKey, plugin: { name: 'Fallout4.esm', origin: 'Data' } });
+  const copyOf = (formKey: string) => ({ formKey, plugin: { name: 'Fallout4.esm', origin: 'Data/' } });
   const shown = () => vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => `${t.label}${t.isPreview ? ' (preview)' : ''}`));
   const openTab = async (formKey: string) => {
     await openRecord(copyOf(formKey));
@@ -1660,7 +1660,7 @@ describe('The Problems panel on plugin source', () => {
   const MESSAGE = `Armor: [${NOT_HELD_FORM_KEY}] <Error: Could not be resolved>`;
   const SOURCE_FILE = path.join('plugin-source', 'Held.esp', 'Gun.json');
   const file = path.join(FIXTURE_GAME_DIRECTORY, 'Data', SOURCE_FILE);
-  const plugin = { name: 'Held.esp', origin: 'Data' };
+  const plugin = { name: 'Held.esp', origin: 'Data/' };
 
   before(() => {
     fs.mkdirSync(path.dirname(file), { recursive: true });

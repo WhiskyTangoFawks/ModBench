@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import type { FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
-import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { groupModlist, type ModlistGroup, type ModlistTree } from './modlistTree';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
@@ -98,7 +97,7 @@ export class ModNode extends vscode.TreeItem {
 /** Pinned row over the instance's `overwrite/` folder. Not a modlist.txt entry, so it has no
  *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
 export class OverwriteNode extends vscode.TreeItem {
-  readonly kind = OVERWRITE_ORIGIN;
+  readonly kind = 'runtimeOutput';
   readonly listed: { readonly files: readonly OriginFile[]; readonly folders: readonly OriginFolder[] };
   readonly shown: ChildrenShown;
   constructor(
@@ -111,7 +110,7 @@ export class OverwriteNode extends vscode.TreeItem {
     this.listed = listed;
     this.shown = shown;
     this.id = this.kind;
-    this.contextValue = OVERWRITE_ORIGIN;
+    this.contextValue = this.kind;
     const fileCount = files.length;
     if (fileCount > 0) this.description = fileCount.toLocaleString();
     this.iconPath = fileCount > 0

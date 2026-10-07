@@ -3,8 +3,8 @@ import { navigate, type NavRow } from './gridNavigation';
 import { columnKey } from '../../src/wire/columnKey';
 import type { ColumnKey } from './types';
 
-const A = columnKey({ name: 'A.esp', origin: 'Data' });
-const B = columnKey({ name: 'B.esp', origin: 'Data' });
+const A = columnKey({ name: 'A.esp', origin: 'Data/' });
+const B = columnKey({ name: 'B.esp', origin: 'Data/' });
 
 const rows: NavRow[] = [
   { key: 'Head', parent: null, expandable: true, expanded: true },

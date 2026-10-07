@@ -9,7 +9,7 @@ namespace MEditService.Index.Tests.Indexing;
 
 public sealed class CellLandscapeAndNavmeshChildrenTests : IDisposable
 {
-    private static readonly PluginAddress Key = new("Land.esp", "Data");
+    private static readonly PluginAddress Key = new("Land.esp", PluginOrigin.DataDirectory);
 
     private readonly PluginFixtureData _fixture;
     private readonly OpenedIndex _index;

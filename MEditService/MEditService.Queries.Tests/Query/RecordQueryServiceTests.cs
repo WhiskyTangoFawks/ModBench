@@ -267,10 +267,10 @@ public sealed class RecordQueryServiceTests
     public void GetRecords_FdIsTheMediumPluginsIndex_AndItsIdIsSixteenBits()
     {
         var names = new[] { "Base.esm", "Mid.esm", "Top.esp" };
-        var entries = names.Select((name, slot) => new LoadOrderEntry(name, name, "Data", slot, true, Winning: true)).ToList();
+        var entries = names.Select((name, slot) => new LoadOrderEntry(name, name, PluginOrigin.DataDirectory, slot, true, Winning: true)).ToList();
         var opened = names.ToDictionary(
-            name => new PluginAddress(name, "Data"), name => new PluginContent(false, false, false, [], 0, IsMedium: name == "Mid.esm"));
-        var mid = new PluginAddress("Mid.esm", "Data");
+            name => new PluginAddress(name, PluginOrigin.DataDirectory), name => new PluginContent(false, false, false, [], 0, IsMedium: name == "Mid.esm"));
+        var mid = new PluginAddress("Mid.esm", PluginOrigin.DataDirectory);
         var (_, svc) = Build(new FakeFixtureData(Release, entries, opened, [Copy("001234:Mid.esm", mid, 1, editorId: null)]));
 
         var page = svc.GetRecords(types: null, plugin: null, search: "FD001234", limit: 20, offset: 0);
@@ -302,11 +302,11 @@ public sealed class RecordQueryServiceTests
 
     private static IRecordQueryService Roster(params (string Name, bool Light, bool Active)[] plugins)
     {
-        var entries = plugins.Select((p, slot) => new LoadOrderEntry(p.Name, p.Name, "Data", slot, p.Active, Winning: true)).ToList();
+        var entries = plugins.Select((p, slot) => new LoadOrderEntry(p.Name, p.Name, PluginOrigin.DataDirectory, slot, p.Active, Winning: true)).ToList();
         var opened = plugins.ToDictionary(
-            p => new PluginAddress(p.Name, "Data"), p => new PluginContent(p.Light, false, false, [], 0, IsMedium: false));
+            p => new PluginAddress(p.Name, PluginOrigin.DataDirectory), p => new PluginContent(p.Light, false, false, [], 0, IsMedium: false));
         var rows = plugins.Select((p, slot) => (p, slot)).Where(t => t.p.Active)
-            .SelectMany(t => IdsEachActivePluginHolds.Select(id => Copy($"{id}:{t.p.Name}", new PluginAddress(t.p.Name, "Data"), t.slot, editorId: null)))
+            .SelectMany(t => IdsEachActivePluginHolds.Select(id => Copy($"{id}:{t.p.Name}", new PluginAddress(t.p.Name, PluginOrigin.DataDirectory), t.slot, editorId: null)))
             .ToList();
         return Build(new FakeFixtureData(Release, entries, opened, rows)).Service;
     }
@@ -331,11 +331,11 @@ public sealed class RecordQueryServiceTests
     }
 
     [Theory]
-    [InlineData("Data", new[] { "InData" })]
+    [InlineData(PluginOrigin.DataDirectory, new[] { "InData" })]
     [InlineData("OtherOrigin", new string[0])]
     public void GetRecords_OfAPlugin_ListsOnlyTheCopiesItsOriginProvides(string origin, string[] expected)
     {
-        var data = new PluginAddress(PluginName, "Data");
+        var data = new PluginAddress(PluginName, PluginOrigin.DataDirectory);
         var entries = new[]
         {
             new LoadOrderEntry(PluginName, PluginName, data.Origin, 0, Enabled: true, Winning: true),
@@ -352,7 +352,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetRecords_AnswersEveryRowFactTheIndexDerives_InQueriesOwnTypes()
     {
-        var plugin = new PluginAddress(PluginName, "Data");
+        var plugin = new PluginAddress(PluginName, PluginOrigin.DataDirectory);
         var reads = new FakeReads(
             new Dictionary<PluginAddress, PluginContent>(),
             [
@@ -371,7 +371,7 @@ public sealed class RecordQueryServiceTests
             },
         };
         var svc = QueryHost.Records(
-            new FakeIndex(reads), FakeLoadOrder.Of(Release, new LoadOrderEntry(PluginName, PluginName, "Data", 3, Enabled: true, Winning: true)));
+            new FakeIndex(reads), FakeLoadOrder.Of(Release, new LoadOrderEntry(PluginName, PluginName, PluginOrigin.DataDirectory, 3, Enabled: true, Winning: true)));
 
         var result = svc.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 2, offset: 0);
 
@@ -379,10 +379,10 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(
             [
                 new RecordSummary(
-                    "000800:Test.esp", PluginName, 3, true, "Holder", "Data", WorkingTreeState.Modified,
+                    "000800:Test.esp", PluginName, 3, true, "Holder", PluginOrigin.DataDirectory, WorkingTreeState.Modified,
                     HasContainerChildren: true, ParseDiagnosis: null, HasParseFailure: false, FullName: "Full"),
                 new RecordSummary(
-                    "000801:Test.esp", PluginName, 3, true, null, "Data", WorkingTreeState.Added,
+                    "000801:Test.esp", PluginName, 3, true, null, PluginOrigin.DataDirectory, WorkingTreeState.Added,
                     HasContainerChildren: false, ParseDiagnosis: "bad", HasParseFailure: true),
             ],
             result.Items);
@@ -506,7 +506,7 @@ public sealed class RecordQueryServiceTests
     {
         _reads.ReferencedBy = new Dictionary<string, IReadOnlyList<ReferenceRow>>
         {
-            ["000001:Target.esp"] = [new("000002:TestPlugin.esp", PluginName, "Keywords[0]", "npc_", "Referrer", "Data")],
+            ["000001:Target.esp"] = [new("000002:TestPlugin.esp", PluginName, "Keywords[0]", "npc_", "Referrer", PluginOrigin.DataDirectory)],
         };
 
         var reference = Assert.Single(_svc.GetReferences("000001:Target.esp"));
@@ -527,8 +527,8 @@ public sealed class RecordQueryServiceTests
         {
             ["000001:Target.esp"] =
             [
-                new("000002:Base.esp", "Patch.esp", "Keywords[0]", "npc_", null, "Data"),
-                new("000002:Base.esp", "Base.esp", "Keywords[0]", "npc_", null, "Data"),
+                new("000002:Base.esp", "Patch.esp", "Keywords[0]", "npc_", null, PluginOrigin.DataDirectory),
+                new("000002:Base.esp", "Base.esp", "Keywords[0]", "npc_", null, PluginOrigin.DataDirectory),
             ],
         };
 
@@ -547,9 +547,9 @@ public sealed class RecordQueryServiceTests
     }
 
     [Theory]
-    [InlineData("overwrite")]
-    [InlineData("Overwrite")]
-    [InlineData("OVERWRITE")]
+    [InlineData("overwrite/")]
+    [InlineData("Overwrite/")]
+    [InlineData("OVERWRITE/")]
     public void GetCompare_OverwriteOriginColumn_CarriesIsInOverwriteTrue_IgnoringCase_ForOverwriteIsAReservedOriginNotAMod(string origin)
     {
         FormKey npcKey = default;
@@ -869,7 +869,7 @@ public sealed class RecordQueryServiceTests
         Assert.Null(compare);
     }
 
-    private static readonly PluginAddress PluginKey = new(PluginName, "Data");
+    private static readonly PluginAddress PluginKey = new(PluginName, PluginOrigin.DataDirectory);
 
     [Fact]
     public void GetPluginRecordTypes_ReturnsCountsForPlugin()
@@ -879,7 +879,7 @@ public sealed class RecordQueryServiceTests
             [PluginKey] = [new RecordTypeCount("npc_", RecordCount, HasParseFailure: false)],
         };
 
-        var result = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, "Data"));
+        var result = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, PluginOrigin.DataDirectory));
 
         var npc = Assert.Single(result, r => r.Type == "npc_");
         Assert.Equal(RecordCount, npc.Count);
@@ -898,7 +898,7 @@ public sealed class RecordQueryServiceTests
             ],
         };
 
-        var result = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, "Data"));
+        var result = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, PluginOrigin.DataDirectory));
 
         Assert.True(Assert.Single(result, r => r.Type == "perk").HasParseFailure);
         Assert.False(Assert.Single(result, r => r.Type == "npc_").HasParseFailure);
@@ -912,7 +912,7 @@ public sealed class RecordQueryServiceTests
             [PluginKey] = [new RecordTypeCount("npc_", 1, HasParseFailure: false)],
         };
 
-        var result = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, "Data"));
+        var result = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, PluginOrigin.DataDirectory));
 
         var npc = Assert.Single(result, r => r.Type == "npc_");
         Assert.Equal("Non-Player Character", npc.DisplayName);
@@ -931,7 +931,7 @@ public sealed class RecordQueryServiceTests
         };
 
         var creatable = _svc.GetCreatableRecordTypes().Select(r => r.Type).ToHashSet(StringComparer.Ordinal);
-        var result = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, "Data"));
+        var result = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, PluginOrigin.DataDirectory));
 
         Assert.Contains("npc_", creatable);
         Assert.Contains("qust", creatable);
@@ -954,7 +954,7 @@ public sealed class RecordQueryServiceTests
             ],
         };
 
-        var containers = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, "Data")).Where(r => r.IsContainer).Select(r => r.Type);
+        var containers = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, PluginOrigin.DataDirectory)).Where(r => r.IsContainer).Select(r => r.Type);
 
         Assert.Equal(["cell", "dial", "qust", "wrld"], containers.Order(StringComparer.Ordinal));
     }
@@ -971,7 +971,7 @@ public sealed class RecordQueryServiceTests
             ],
         };
 
-        var result = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, "Data"));
+        var result = _svc.GetPluginRecordTypes(new PluginAddress(PluginName, PluginOrigin.DataDirectory));
 
         Assert.DoesNotContain(result, r => r.Type == "header");
     }
@@ -979,7 +979,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPluginRecordTypes_UnknownPlugin_ReturnsEmpty()
     {
-        var result = _svc.GetPluginRecordTypes(new PluginAddress("DoesNotExist.esp", "Data"));
+        var result = _svc.GetPluginRecordTypes(new PluginAddress("DoesNotExist.esp", PluginOrigin.DataDirectory));
 
         Assert.Empty(result);
     }
@@ -1179,12 +1179,12 @@ public sealed class RecordQueryServiceTests
     public void GetRecords_MapsEveryWorkingTreeStateTheIndexHas()
     {
         var states = Enum.GetValues<Index.WorkingTreeState>();
-        var plugin = new PluginAddress(PluginName, "Data");
+        var plugin = new PluginAddress(PluginName, PluginOrigin.DataDirectory);
         var reads = new FakeReads(
             new Dictionary<PluginAddress, PluginContent>(),
             [.. states.Select((state, i) => Copy($"00080{i}:Test.esp", plugin, 0, editorId: null) with { WorkingTreeState = state })]);
         var svc = QueryHost.Records(
-            new FakeIndex(reads), FakeLoadOrder.Of(Release, new LoadOrderEntry(PluginName, PluginName, "Data", 0, Enabled: true, Winning: true)));
+            new FakeIndex(reads), FakeLoadOrder.Of(Release, new LoadOrderEntry(PluginName, PluginName, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true)));
 
         var result = svc.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 10, offset: 0);
 

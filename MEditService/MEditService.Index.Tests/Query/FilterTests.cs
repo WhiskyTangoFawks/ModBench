@@ -96,7 +96,7 @@ public class FilterTests(TestPluginFixture fixture)
 
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
 
-        Assert.Equal(1, reads.CountOf(new PluginAddress(TestPluginFixture.PluginName, "Data"), "NPC_"));
+        Assert.Equal(1, reads.CountOf(new PluginAddress(TestPluginFixture.PluginName, PluginOrigin.DataDirectory), "NPC_"));
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public class FilterTests(TestPluginFixture fixture)
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
 
         var plugins = reads.GetPluginsWithMatchingRecords(["NPC_"]);
-        Assert.Contains(new PluginAddress(TestPluginFixture.PluginName, "Data"), plugins);
+        Assert.Contains(new PluginAddress(TestPluginFixture.PluginName, PluginOrigin.DataDirectory), plugins);
     }
 
     [Fact]

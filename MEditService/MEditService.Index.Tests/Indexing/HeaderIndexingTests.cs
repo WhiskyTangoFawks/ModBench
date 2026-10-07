@@ -28,7 +28,7 @@ public class HeaderIndexingTests
             .Select(e => e.GetProperty("Master").GetString() ?? "")];
 
     private static RecordDocument Header(OpenedIndex index, string name) =>
-        index.RequireReads().DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(name)), new PluginAddress(name, "Data"));
+        index.RequireReads().DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(name)), new PluginAddress(name, PluginOrigin.DataDirectory));
 
     [Fact]
     public void AFo4Plugin_HasAHeaderDocument_WithSyntheticFormKeyAndHeaderType()
@@ -178,7 +178,7 @@ public class HeaderIndexingTests
     {
         using var fixture = OnePlugin("header-reindex", "ReindexHeader.esp");
         using var index = Indexes.Reconciled(fixture);
-        var key = new PluginAddress("ReindexHeader.esp", "Data");
+        var key = new PluginAddress("ReindexHeader.esp", PluginOrigin.DataDirectory);
 
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
         index.NextSnapshot();
@@ -195,7 +195,7 @@ public class HeaderIndexingTests
         using var fixture = OnePlugin("header-lookup", "LookupHeader.esp", mod => mod.Npcs.AddNew().EditorID = "SomeNpc");
         using var index = Indexes.Reconciled(fixture);
         var reads = index.RequireReads();
-        var key = new PluginAddress("LookupHeader.esp", "Data");
+        var key = new PluginAddress("LookupHeader.esp", PluginOrigin.DataDirectory);
 
         var documents = reads.DocumentsOf(key);
         Assert.True(documents.Count > 1, $"expected the header and at least one record; got {documents.Count}");

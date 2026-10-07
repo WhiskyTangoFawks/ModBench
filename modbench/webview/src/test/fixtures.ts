@@ -31,7 +31,7 @@ export const diffNode = (
 export const compareOverride = (
   o: Partial<CompareOverride> & Pick<CompareOverride, 'formKey' | 'plugin' | 'fields'>,
 ): CompareOverride => ({
-  loadIndex: '00', isWinner: false, origin: 'Data', recordType: '',
+  loadIndex: '00', isWinner: false, origin: 'Data/', recordType: '',
   isPartialForm: false, conflictThis: 'OnlyOne', isInOverwrite: false, ...o,
 });
 
@@ -73,7 +73,7 @@ export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}):
   const plugins = opts.plugins ?? [];
   // ADR-0012: compound keying, so a fake keyed by bare filename cannot pass a same-filename case.
   const columnsWhere = (p: (plugin: FixturePlugin) => boolean) =>
-    new Set(plugins.filter(p).map(x => columnKey({ name: x.name, origin: x.origin ?? 'Data' })));
+    new Set(plugins.filter(p).map(x => columnKey({ name: x.name, origin: x.origin ?? 'Data/' })));
   return {
     showColumns: vi.fn(),
     load: opts.load ?? vi.fn().mockImplementation(() => Promise.resolve({

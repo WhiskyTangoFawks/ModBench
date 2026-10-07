@@ -13,8 +13,8 @@ public sealed class RecordHeaderCompareTests
 {
     private const int PartialFormBit = 0x0000_4000;
     private static readonly GameRelease Release = GameRelease.Fallout4;
-    private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
-    private static readonly PluginAddress OverridePlugin = new("Partial.esp", "Data");
+    private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress OverridePlugin = new("Partial.esp", PluginOrigin.DataDirectory);
 
     private static (FormKey Cell, IRecordQueryService Service) PartialFormOverride()
     {
@@ -35,8 +35,8 @@ public sealed class RecordHeaderCompareTests
             [OverridePlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: ["Base.esm"], RecordCount: 1, IsMedium: false),
         };
         var holder = FakeLoadOrder.Of(Release,
-            new LoadOrderEntry("Base.esm", "Base.esm", "Data", 0, Enabled: true, Winning: true),
-            new LoadOrderEntry("Partial.esp", "Partial.esp", "Data", 1, Enabled: true, Winning: true));
+            new LoadOrderEntry("Base.esm", "Base.esm", PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry("Partial.esp", "Partial.esp", PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true));
         return (baseCell.FormKey,
             QueryHost.Records(new FakeIndex(new FakeReads(opened, rows)), holder));
     }

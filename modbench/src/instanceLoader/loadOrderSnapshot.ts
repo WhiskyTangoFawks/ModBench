@@ -10,14 +10,12 @@ import {
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, dataFolderOf } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
-import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
+import { DATA_DIRECTORY_ORIGIN, pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 
 export { OVERWRITE_ORIGIN };
 export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
 
-// The reserved origin of the game's own Data folder (ADR-0012). Never a real mod folder name: mod
-// folders live under `mods/`.
-export const DATA_DIRECTORY_ORIGIN = 'Data';
+export { DATA_DIRECTORY_ORIGIN };
 
 /** One plugin file in the snapshot — the boundary object (CONTEXT.md): a plugin file
  *  at a physical path, the origin that provides it, and the three registration facts. */
@@ -81,7 +79,7 @@ function originFolder({ paths, gameFolder }: Pick<InstanceValue, 'paths' | 'game
   });
 }
 
-// `overwrite` and `Data` are reserved origins, never mods (ADR-0012).
+// Overwrite and the game folder are reserved origins, never mods (ADR-0012).
 function byOrigin<T>(origin: string, answers: { overwrite: T; data: T; mod: (name: string) => T }): T {
   if (origin === OVERWRITE_ORIGIN) return answers.overwrite;
   if (origin === DATA_DIRECTORY_ORIGIN) return answers.data;

@@ -25,7 +25,7 @@ const record = compareResultFixture({
   conflictAll: 'Override',
   overrides: [
     compareOverride({
-      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data', isWinner: false, editorId: 'TestNPC',
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data/', isWinner: false, editorId: 'TestNPC',
       fields: [
         { metadata: levelMeta, value: 5 }, { metadata: nameMeta, value: 'Master' },
         { metadata: valuesMeta, value: [4, 6] }, { metadata: otherValuesMeta, value: [1] },
@@ -33,7 +33,7 @@ const record = compareResultFixture({
       conflictThis: 'Master',
     }),
     compareOverride({
-      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', isWinner: true, editorId: 'TestNPC',
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data/', isWinner: true, editorId: 'TestNPC',
       fields: [
         { metadata: levelMeta, value: 7 }, { metadata: valuesMeta, value: [4] }, { metadata: otherValuesMeta, value: [1] },
       ],

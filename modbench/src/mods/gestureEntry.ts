@@ -1,4 +1,3 @@
-import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import type { ModlistNode, ModNode } from './ModListProvider';
 import type { Instance } from '../instanceLoader/instance';
 import { kindGuard, singularArgument, type GestureEntry } from '../drivingLib/gestureEntry';
@@ -13,7 +12,7 @@ export const runModsWriting = (instance: Pick<Instance, 'refresh'>, command: () 
 
 const isRowOf = kindGuard<ModlistNode>();
 
-const OPEN_FOLDER_KINDS = ['mod', OVERWRITE_ORIGIN, 'folder', 'file'] as const;
+const OPEN_FOLDER_KINDS = ['mod', 'runtimeOutput', 'folder', 'file'] as const;
 
 export const openFolderArgument = (entry: GestureEntry<ModlistNode>) => singularArgument(entry, ...OPEN_FOLDER_KINDS);
 

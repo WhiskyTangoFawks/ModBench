@@ -701,7 +701,7 @@ describe('CompileProblems', () => {
     const value = valueWithFolders({ overwriteDir: '/instance/overwrite' });
 
     new CompileProblems(diagnostics)
-      .publish({ name: 'Stray.esp', origin: 'overwrite' }, originFiles(value, 'overwrite'), diagnosticAt('Source/Stray.psc'));
+      .publish({ name: 'Stray.esp', origin: 'overwrite/' }, originFiles(value, 'overwrite/'), diagnosticAt('Source/Stray.psc'));
 
     expect(publishedPaths(diagnostics)).toEqual(['/instance/overwrite/Source/Stray.psc']);
   });
