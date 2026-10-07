@@ -1254,10 +1254,20 @@ describe('modbench.plugin.create', () => {
 
   it('puts the new plugin\'s line, disabled, at the end of plugins.txt', async function () {
     this.timeout(30_000);
+    let offered: readonly string[] = [];
+    let pick = (places: readonly { label: string }[]): Promise<{ label: string } | undefined> => {
+      offered = places.map((place) => place.label);
+      return Promise.resolve(undefined);
+    };
     Object.assign(vscode.window, {
       showInputBox: () => Promise.resolve('Created.esp'),
-      showQuickPick: (places: readonly { label: string }[]) => Promise.resolve(places.find((place) => place.label === modName)),
+      showQuickPick: (places: readonly { label: string }[]) => pick(places),
     });
+    await waitFor('the Instance to offer the mod as a place', async () => {
+      await vscode.commands.executeCommand('modbench.plugin.create');
+      return offered.includes(modName);
+    });
+    pick = (places) => Promise.resolve(places.find((place) => place.label === modName));
 
     await vscode.commands.executeCommand('modbench.plugin.create');
 
