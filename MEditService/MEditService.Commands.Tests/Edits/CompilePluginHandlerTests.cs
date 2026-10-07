@@ -61,4 +61,19 @@ public sealed class CompilePluginHandlerTests : IDisposable
             refused.Message);
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
     }
+
+    [Fact]
+    public async Task ASourceFolderThatHoldsNoFiles_IsRefusedBeforeAnyWrite_AsHoldingNoFiles()
+    {
+        var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
+        var before = File.ReadAllBytes(pluginPath);
+        var root = PluginSourceRoot.In(_mod.ModFolder, CompileFixture.PluginName);
+        Directory.Delete(root, recursive: true);
+        Directory.CreateDirectory(root);
+
+        var result = await _mod.CompileHandler.CompileAsync([_mod.Plugin]);
+
+        Assert.Equal(CompileRefusal.NoSource, Assert.Single(result.Refused).Refusal);
+        Assert.Equal(before, File.ReadAllBytes(pluginPath));
+    }
 }

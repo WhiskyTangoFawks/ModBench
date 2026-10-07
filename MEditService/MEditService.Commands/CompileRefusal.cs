@@ -14,12 +14,15 @@ public enum CompileRefusal
     /// <summary>The plugin is in no tracked mod, so it has no source; the way out is Track.</summary>
     PluginNotTracked,
 
-    /// <summary>The plugin's tracked mod holds no source for it; the way out is Decompile.</summary>
+    /// <summary>The way out is Decompile.</summary>
     PluginSourceUnreadable,
+
+    /// <summary>The plugin's source folder holds no files; the way out is Decompile.</summary>
+    NoSource,
 
     /// <summary>A source document could not be opened, as another program holds it; the way out is
     /// closing that program.</summary>
-    SourceUnreadable,
+    SourceFileHeld,
 
     /// <summary>The source does not parse; the way out is Decompile.</summary>
     SourceDoesNotParse,
