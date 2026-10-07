@@ -180,6 +180,28 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
   });
 });
 
+describe('modbench.mod.install: a failed install', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    ['archive', installFromArchive, { fsPath: '/somewhere/foo.zip' }, 'installFromArchive'],
+    ['folder', installFromFolder, { fsPath: '/somewhere/foo' }, 'installFromFolder'],
+  ] as const)('from a %s is reported under the gesture, naming the mod', async (sourceKind, install, picked, tag) => {
+    const reporter = recordingReporter();
+    const tags: string[] = [];
+    install.mockRejectedValueOnce(new Error('disk full'));
+    showQuickPick.mockResolvedValueOnce({ sourceKind });
+    showOpenDialog.mockResolvedValueOnce([picked]);
+    showInputBox.mockResolvedValueOnce('New Mod');
+
+    registerModInstallCommands(deps({ reporterFor: (t) => { tags.push(t); return reporter; } }));
+    await invoke('modbench.mod.install');
+
+    expect(tags).toEqual([tag]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to install "New Mod".', detail: 'disk full' }]);
+  });
+});
+
 describe('modbench.mod.install: a downloaded file is its source', () => {
   beforeEach(() => vi.clearAllMocks());
 
