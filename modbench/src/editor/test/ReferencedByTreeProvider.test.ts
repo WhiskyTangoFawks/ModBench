@@ -9,11 +9,11 @@ import {
   ReferencedByReferrerNode,
   ReferencedByHolderNode,
   allHolders,
-  ErrorNode,
   referencedByCopyText,
   referencedByCopyValueText,
   REFERENCED_BY_VIEW,
 } from '../ReferencedByTreeProvider';
+import { ErrorNode } from '../../drivingLib/errorNode';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordArgument } from '../recordLifecycleCommands';
 import { expectInstancesOf } from '../../test/expectInstanceOf';

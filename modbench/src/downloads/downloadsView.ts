@@ -12,7 +12,8 @@ import {
 } from './DownloadsPanel';
 import { DownloadsProvider, type DownloadsTreeNode } from './DownloadsProvider';
 import { ExcludedDownloadDecorationProvider } from './ExcludedDownloadDecorationProvider';
-import { logDownloadsFolderUnresolved } from './downloadsFolderUnresolvedLog';
+import { downloadsFolderUnresolvedLine } from './downloadsFolderUnresolvedLog';
+import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { downloadsKeyContext } from './keyContext';
 
 export interface DownloadsViewDeps {
@@ -66,7 +67,7 @@ export function createDownloadsView(
   showKeyContext();
   // Disposed in order: what reads the tree and the view goes before them.
   const disposable = vscode.Disposable.from(
-    logDownloadsFolderUnresolved(instance, logUnresolved),
+    logOncePerFailure(instance, downloadsFolderUnresolvedLine, logUnresolved),
     vscode.window.registerFileDecorationProvider(excludedDecorations),
     provider.onDidChangeTreeData(() => excludedDecorations.refresh()),
     provider.onDidChangeTreeData(updateAllExcludedContext),
