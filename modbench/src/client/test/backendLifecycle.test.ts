@@ -350,6 +350,160 @@ describe('BackendLifecycle crash-restart / stop', () => {
     expect(statuses).not.toContain('running');
   });
 
+  it('is starting from a crash, as it reports disconnected, until the restart has run', async () => {
+    const state = { healthy: true };
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
+    await lifecycle.start();
+    const startingAtDisconnect: (Promise<void> | undefined)[] = [];
+    lifecycle.onStatusChanged((s) => { if (s === 'disconnected') startingAtDisconnect.push(lifecycle.starting); });
+
+    present(children[0], 'the first spawned child').emit('exit', 1);
+    await present(startingAtDisconnect[0], 'the restart under way at the crash');
+
+    expect(lifecycle.status).toBe('running');
+    expect(lifecycle.starting).toBeUndefined();
+  });
+
+  it('settles a start only once a child runs, through children that exit before they answer', async () => {
+    const state = { healthy: false };
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 3, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
+    let settled = false;
+    const started = lifecycle.start().then(() => { settled = true; });
+
+    await vi.waitFor(() => expect(children).toHaveLength(1), { interval: 2 });
+    present(children[0], 'the first spawned child').emit('exit', 1);
+    await vi.waitFor(() => expect(children).toHaveLength(2), { interval: 2 });
+    present(children[1], 'the first restart\'s child').emit('exit', 1);
+    await vi.waitFor(() => expect(children).toHaveLength(3), { interval: 2 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const settledDuringSecondRestart = settled;
+    state.healthy = true;
+    await started;
+
+    expect(settledDuringSecondRestart).toBe(false);
+    expect(lifecycle.status).toBe('running');
+  });
+
+  it('is starting through a restarted child that crashes before it answers, until a child runs', async () => {
+    const state = { healthy: true };
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 3, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
+    await lifecycle.start();
+
+    state.healthy = false;
+    present(children[0], 'the first spawned child').emit('exit', 1);
+    await vi.waitFor(() => expect(children).toHaveLength(2), { interval: 2 });
+    present(children[1], 'the first restart\'s child').emit('exit', 1);
+    await vi.waitFor(() => expect(children).toHaveLength(3), { interval: 2 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const duringSecondRestart = lifecycle.starting;
+    const running = nextRunningStatus(lifecycle);
+    state.healthy = true;
+    await running;
+
+    expect(duringSecondRestart).toBeDefined();
+    await duringSecondRestart;
+    expect(lifecycle.starting).toBeUndefined();
+  });
+
+  it('ends a restart that never answered, reporting disconnected', async () => {
+    const state = { healthy: true };
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 3, pollTimeoutMs: 10, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
+    await lifecycle.start();
+
+    state.healthy = false;
+    present(children[0], 'the first spawned child').emit('exit', 1);
+    await present(lifecycle.starting, 'the restart under way');
+
+    expect(lifecycle.status).toBe('disconnected');
+    expect(lifecycle.starting).toBeUndefined();
+  });
+
+  it('ends the restarts when a restart throws, saying why in the Output once, and the start it was settles', async () => {
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
+    const ports = [Promise.resolve(5172), Promise.reject(new Error('no port'))];
+    const logged: string[] = [];
+    const lifecycle = new BackendLifecycle({
+      freePort: () => ports.shift() ?? Promise.reject(new Error('asked again')),
+      pollIntervalMs: 3, spawn, executablePath: '/x', checkHealth: () => Promise.resolve(true), log: (line) => logged.push(line),
+    });
+    await lifecycle.start();
+
+    present(children[0], 'the first spawned child').emit('exit', 1);
+    await present(lifecycle.starting, 'the restart under way');
+
+    expect(logged.filter((line) => line.includes('no port'))).toEqual(['[backend] restart failed: no port']);
+    expect(lifecycle.status).toBe('disconnected');
+    expect(lifecycle.starting).toBeUndefined();
+  });
+
+  it('is starting nothing once it has given up on restarts', async () => {
+    vi.useFakeTimers();
+    const state = { healthy: false };
+    const spawn = vi.fn(() => { const c = makeChild(); process.nextTick(() => c.emit('exit', 1)); return c; });
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 3, pollTimeoutMs: 10, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
+
+    const startP = lifecycle.start();
+    await vi.advanceTimersByTimeAsync(200);
+    await startP;
+    expect(lifecycle.starting).toBeUndefined();
+  });
+
+  it('spawns nothing after a stop that follows a child exiting during a start', async () => {
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 3, spawn, executablePath: '/x', checkHealth: () => Promise.resolve(false),
+    });
+    const started = lifecycle.start();
+    await vi.waitFor(() => expect(children).toHaveLength(1), { interval: 2 });
+
+    present(children[0], 'the first spawned child').emit('exit', 1);
+    await lifecycle.stop();
+    await started;
+
+    expect(children).toHaveLength(1);
+    expect(lifecycle.starting).toBeUndefined();
+  });
+
+  it('is starting nothing after a stop during a restart', async () => {
+    const state = { healthy: true };
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 3, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
+    await lifecycle.start();
+    state.healthy = false;
+    present(children[0], 'the first spawned child').emit('exit', 1);
+    await vi.waitFor(() => expect(children).toHaveLength(2), { interval: 2 });
+    present(children[1], 'the restart\'s child').kill.mockImplementation(() => { children[1]?.emit('exit', 0); });
+
+    await lifecycle.stop();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(lifecycle.starting).toBeUndefined();
+    expect(children).toHaveLength(2);
+  });
+
   it('caps crash-restarts instead of looping forever, then reports disconnected', async () => {
     vi.useFakeTimers();
     const state = { healthy: false };

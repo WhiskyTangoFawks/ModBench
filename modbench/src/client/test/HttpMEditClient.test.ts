@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMEditClient } from '../HttpMEditClient';
 import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
 import { Readable } from 'node:stream';
+import { EventEmitter } from 'node:events';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -743,11 +744,12 @@ describe('HttpMEditClient — searchRecords', () => {
   });
 });
 
-describe('HttpMEditClient — putLoadOrder', () => {
+describe('HttpMEditClient — sendLoadOrder', () => {
   const plugins = [{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', provider: { kind: 'Mod' as const, mod: 'A', folder: '/mods/A' } }];
   const active = [{ name: 'Foo.esp', origin: 'A' }];
   const loadedWithNoLine = [{ name: 'Foo.esp', origin: 'A' }];
   const appliedBody = { applied: true, version: 1 };
+  const snapshot = { plugins, active, loadedWithNoLine, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' };
 
   it('PUTs every plugin, the active plugins, the game directory and the instance root', async () => {
     let putBody: unknown;
@@ -759,7 +761,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     const client = makeClient(fetch);
     await client.start();
 
-    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
+    const load = client.sendLoadOrder(snapshot);
     await vi.waitFor(() => expect(putBody).toBeDefined());
     push(readyTickThatSettlesPutLoadOrder());
     await load;
@@ -779,7 +781,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     const client = makeClient(fetch);
     await client.start();
 
-    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
+    const load = client.sendLoadOrder(snapshot);
     expect(putFetch).not.toHaveBeenCalled();
 
     const { response, push } = pushableStreamResponse();
@@ -789,7 +791,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await load;
   });
 
-  it('answers a PUT to a process attached again from that process\'s own ticks, never the last one\'s', async () => {
+  it('answers a PUT to a process restarted after a crash from that process\'s own ticks, never the last one\'s', async () => {
     const streams: { push: (chunk: Uint8Array) => void }[] = [];
     const fetch = routedFetch([
       ['/notifications/stream', () => {
@@ -803,17 +805,24 @@ describe('HttpMEditClient — putLoadOrder', () => {
       ['/load-order', () => { puts += 1; return Promise.resolve(jsonResponse(200, appliedBody)); }],
     ]);
     let puts = 0;
-    const client = makeClient(fetch);
+    const children: EventEmitter[] = [];
+    const client = createMEditClient({
+      backend: {
+        freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
+        spawn: () => { const child = Object.assign(new EventEmitter(), { kill: () => undefined }); children.push(child); return child; },
+        pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(true),
+      },
+      backendLog: fakeLogChannel(), fetch,
+    });
     await client.start();
     await vi.waitFor(() => expect(streams).toHaveLength(1));
     streams[0]?.push(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 5 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    await client.stop();
-    await client.start();
+    children[0]?.emit('exit', 1);
     await vi.waitFor(() => expect(streams).toHaveLength(2));
 
     let settled = false;
-    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4').then((r) => { settled = true; return r; });
+    const load = client.sendLoadOrder(snapshot).then((r) => { settled = true; return r; });
     await vi.waitFor(() => expect(puts).toBe(1));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(settled).toBe(false);
@@ -833,7 +842,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     const client = makeClient(fetch);
     await client.start();
 
-    await expect(client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4'))
+    await expect(client.sendLoadOrder(snapshot))
       .resolves.toMatchObject({ outcome: 'applied', status: { version: 1, conflictsComputed: true } });
   });
 
@@ -854,7 +863,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await client.start();
     await vi.waitFor(() => expect(streams).toHaveLength(1));
 
-    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
+    const load = client.sendLoadOrder(snapshot);
     await new Promise((resolve) => setTimeout(resolve, 20));
     status = { ...status, state: 'Ready', conflictsComputed: true, version: 1 };
     streams[0]?.end();
@@ -875,7 +884,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     const client = makeClient(fetch);
     await client.start();
 
-    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
+    const load = client.sendLoadOrder(snapshot);
     await vi.waitFor(() => expect(answerPut).toBeDefined());
     push(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 0 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -884,23 +893,176 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
-  it('reports a deliberately aborted PUT as abandoned, not a failure', async () => {
-    const controller = new AbortController();
+  it('holds a snapshot sent while mEdit restarts after a crash, launching and killing nothing of its own, through a restart that never answers', async () => {
+    const health = { up: true };
+    const kills: number[] = [];
+    const children: EventEmitter[] = [];
+    const client = createMEditClient({
+      backend: {
+        freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
+        spawn: () => {
+          const index = children.length;
+          const child = Object.assign(new EventEmitter(), { kill: () => { kills.push(index); } });
+          children.push(child);
+          return child;
+        },
+        pollIntervalMs: 3, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(health.up),
+      },
+      backendLog: fakeLogChannel(), fetch: routedFetch([['/notifications/stream', () => Promise.resolve(openStreamResponse())]]),
+    });
+    await client.start();
+    const launches: unknown[] = [];
+    client.onLaunch((launched) => launches.push(launched));
+
+    health.up = false;
+    children[0]?.emit('exit', 1);
+    const sent = client.sendLoadOrder(snapshot);
+
+    await expect(sent).resolves.toEqual({ outcome: 'backendFailed' });
+    expect(launches).toEqual([]);
+    expect(kills).toEqual([]);
+    expect(children).toHaveLength(2);
+  });
+
+  it('holds a snapshot sent during the second restart of a crash loop, launching and killing nothing, through a restart that never answers', async () => {
+    const health = { up: true };
+    const kills: number[] = [];
+    const children: EventEmitter[] = [];
+    let puts = 0;
+    const client = createMEditClient({
+      backend: {
+        freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
+        spawn: () => {
+          const index = children.length;
+          const child: EventEmitter & { kill: () => void } = Object.assign(new EventEmitter(), {
+            kill: () => { kills.push(index); child.emit('exit', 0); },
+          });
+          children.push(child);
+          return child;
+        },
+        pollIntervalMs: 3, pollTimeoutMs: 300, checkHealth: () => Promise.resolve(health.up),
+      },
+      backendLog: fakeLogChannel(),
+      fetch: routedFetch([
+        ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+        ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
+          state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
+        }))],
+        ['/load-order', () => { puts += 1; return Promise.resolve(jsonResponse(200, appliedBody)); }],
+      ]),
+    });
+    await client.start();
+    const launches: unknown[] = [];
+    client.onLaunch((launched) => launches.push(launched));
+
+    health.up = false;
+    children[0]?.emit('exit', 1);
+    await vi.waitFor(() => expect(children).toHaveLength(2), { interval: 2 });
+    children[1]?.emit('exit', 1);
+    await vi.waitFor(() => expect(children).toHaveLength(3), { interval: 2 });
+    const sent = client.sendLoadOrder(snapshot);
+
+    await expect(sent).resolves.toEqual({ outcome: 'backendFailed' });
+    expect(puts).toBe(0);
+    expect(kills).toEqual([]);
+    expect(launches).toEqual([]);
+  });
+
+  it('answers a snapshot waiting on a crash restart that throws as backendFailed, launching nothing of its own', async () => {
+    const children: EventEmitter[] = [];
+    const ports = [Promise.resolve(5172), Promise.reject(new Error('no port'))];
+    const log = vi.fn();
+    const client = createMEditClient({
+      backend: {
+        freePort: () => ports.shift() ?? Promise.reject(new Error('asked again')), executablePath: '/x/backend',
+        spawn: () => {
+          const child: EventEmitter & { kill: () => void } = Object.assign(new EventEmitter(), {
+            kill: () => { child.emit('exit', 0); },
+          });
+          children.push(child);
+          return child;
+        },
+        pollIntervalMs: 3, checkHealth: () => Promise.resolve(true),
+      },
+      backendLog: fakeLogChannel(), log,
+      fetch: routedFetch([['/notifications/stream', () => Promise.resolve(openStreamResponse())]]),
+    });
+    await client.start();
+    const launches: unknown[] = [];
+    client.onLaunch((launched) => launches.push(launched));
+
+    children[0]?.emit('exit', 1);
+    const sent = client.sendLoadOrder(snapshot);
+
+    await expect(sent).resolves.toEqual({ outcome: 'backendFailed' });
+    expect(launches).toEqual([]);
+    expect(log.mock.calls.filter(([line]) => String(line).includes('no port'))).toHaveLength(1);
+  });
+
+  it('launches again for a changed snapshot after a launch whose children all exited before they answered, and settles it', async () => {
+    const backend = { exitsAtOnce: true, healthy: false };
+    const children: EventEmitter[] = [];
+    let puts = 0;
+    const client = createMEditClient({
+      backend: {
+        freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
+        spawn: () => {
+          const child: EventEmitter & { kill: () => void } = Object.assign(new EventEmitter(), {
+            kill: () => { child.emit('exit', 0); },
+          });
+          children.push(child);
+          if (backend.exitsAtOnce) process.nextTick(() => child.emit('exit', 1));
+          return child;
+        },
+        pollIntervalMs: 3, pollTimeoutMs: 300, checkHealth: () => Promise.resolve(backend.healthy),
+      },
+      backendLog: fakeLogChannel(),
+      fetch: routedFetch([
+        ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+        ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
+          state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
+        }))],
+        ['/load-order', () => { puts += 1; return Promise.resolve(jsonResponse(200, appliedBody)); }],
+      ]),
+    });
+    await expect(client.sendLoadOrder(snapshot)).resolves.toEqual({ outcome: 'backendFailed' });
+
+    backend.exitsAtOnce = false;
+    backend.healthy = true;
+    const changed = { ...snapshot, gameDirectory: '/other/Data' };
+
+    await expect(client.sendLoadOrder(changed)).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
+    expect(puts).toBe(1);
+  });
+
+  it('aborts the PUT in flight before it kills the mEdit it spawned, and answers it abandoned, not a failure', async () => {
+    let putSignal: AbortSignal | undefined;
+    let abortedAtKill: boolean | undefined;
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/load-order', () => {
-        controller.abort();
-        return Promise.reject(new DOMException('This operation was aborted', 'AbortError'));
-      }],
+      ['/load-order', (req) => new Promise<Response>((_resolve, reject) => {
+        putSignal = req.signal;
+        req.signal.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError')));
+      })],
     ]);
-    const client = makeClient(fetch);
+    const child = Object.assign(new EventEmitter(), {
+      kill: () => { abortedAtKill = putSignal?.aborted; child.emit('exit', 0); },
+    });
+    const client = createMEditClient({
+      backend: {
+        freePort: () => Promise.resolve(5172), spawn: () => child, executablePath: '/x/backend',
+        pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(true),
+      },
+      backendLog: fakeLogChannel(), fetch,
+    });
     await client.start();
+    const sent = client.sendLoadOrder(snapshot);
+    await vi.waitFor(() => expect(putSignal).toBeDefined());
 
-    const result = await client.putLoadOrder(
-      plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4', { signal: controller.signal },
-    );
+    await client.stop();
 
-    expect(result).toEqual({ outcome: 'abandoned' });
+    expect(abortedAtKill).toBe(true);
+    await expect(sent).resolves.toEqual({ outcome: 'abandoned' });
   });
 });
 

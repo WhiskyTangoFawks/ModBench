@@ -8,10 +8,11 @@ import { bundledBackendPath, spawnPiped } from './bundledBackend';
 import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } from './backendLog';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
+import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
 import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
-  type ContainerChildSummary, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
-  type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
+  type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
+  type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type RecordFile,
   type RebuildIndexOutcome, type CopyItem, type CopyMode, type RecordChildHolders,
   type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditChangesOutcome, type RecordPage,
@@ -79,6 +80,7 @@ class HttpMEditClient implements MEditClient {
   private readonly timeoutMs: number;
   private readonly lifecycle: BackendLifecycle;
   private readonly notifications: SseNotificationSubscriber;
+  private readonly loadOrder: LoadOrderSender;
   constructor(deps: HttpMEditClientDeps) {
     this.log = deps.log ?? (() => {});
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
@@ -94,6 +96,15 @@ class HttpMEditClient implements MEditClient {
     this.lifecycle.onStatusChanged((status) => {
       if (status === 'running') this.notifications.start();
       else this.notifications.stop();
+    });
+    this.loadOrder = createLoadOrderSender({
+      status: () => this.lifecycle.status,
+      starting: () => this.lifecycle.starting,
+      onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
+      onReconnected: (listener) => this.notifications.onReconnected(listener),
+      start: () => this.lifecycle.start(),
+      stop: () => this.lifecycle.stop(),
+      put: (snapshot, signal) => this.putLoadOrder(snapshot, signal),
     });
   }
 
@@ -114,8 +125,15 @@ class HttpMEditClient implements MEditClient {
   onReconnected(listener: () => void): () => void {
     return this.notifications.onReconnected(listener);
   }
-  start(): Promise<void> { return this.lifecycle.start(); }
-  stop(): Promise<void> { return this.lifecycle.stop(); }
+  async start(): Promise<void> { await this.loadOrder.launch(); }
+  onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void { return this.loadOrder.onLaunch(listener); }
+  stop(): Promise<void> { return this.loadOrder.stop(); }
+
+  sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.loadOrder.send(snapshot); }
+  latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.loadOrder.latest(); }
+  onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
+    return this.loadOrder.onResent(listener);
+  }
 
   // ── notifications ────────────────────────────────────────────────────────
 
@@ -188,16 +206,10 @@ class HttpMEditClient implements MEditClient {
     }
   }
 
-  /** `instanceRoot` scopes the backend's index (ADR-0010). */
-  async putLoadOrder(
-    plugins: LoadOrderPluginInput[],
-    active: PluginAddress[],
-    loadedWithNoLine: PluginAddress[],
-    gameDirectory: string,
-    instanceRoot: string,
-    gameRelease: string,
-    options: LoadOrderOptions = {},
-  ): Promise<LoadOrderOutcome> {
+  // `instanceRoot` scopes the backend's index (ADR-0010). The signal aborts the PUT itself rather
+  // than leaving it to notice a dead socket.
+  private async putLoadOrder(snapshot: LoadOrderSnapshot, signal: AbortSignal): Promise<LoadOrderOutcome> {
+    const { plugins, active, loadedWithNoLine, gameDirectory, instanceRoot, gameRelease } = snapshot;
     // The backend publishes its first tick as this PUT lands, so a PUT that outran the stream
     // loses every tick published before it connects — and with them the progressive chevrons.
     await this.notifications.whenConnected();
@@ -216,12 +228,11 @@ class HttpMEditClient implements MEditClient {
     try {
       result = await this.apiClient.PUT('/load-order', {
         body: { plugins, active, loadedWithNoLine, gameDirectory, instanceRoot, gameRelease },
-        // Aborts the request itself rather than leaving it to notice a dead socket.
-        ...(options.signal ? { signal: options.signal } : {}),
+        signal,
       });
     } catch (e) {
       unsubscribe();
-      if (this.wasDeliberatelyAborted(options.signal)) return { outcome: 'abandoned' };
+      if (this.wasDeliberatelyAborted(signal)) return { outcome: 'abandoned' };
       throw e;
     }
 
@@ -243,7 +254,7 @@ class HttpMEditClient implements MEditClient {
     }
 
     const unsubscribeReopen = this.rereadOnReopen(data.version, resolveTerminal);
-    const status = await this.awaitTerminalOrAbort(terminal, options.signal);
+    const status = await this.awaitTerminalOrAbort(terminal, signal);
     unsubscribe();
     unsubscribeReopen();
     return status === undefined ? { outcome: 'abandoned' } : { outcome: 'applied', status };
@@ -283,19 +294,19 @@ class HttpMEditClient implements MEditClient {
   // A close mid-reconcile abandons the wait, as an unsent snapshot is. The backend leaving
   // 'running' abandons it too — once the stream is gone, nothing is left to hear its tick.
   private awaitTerminalOrAbort(
-    terminal: Promise<LoadOrderProgress>, signal: AbortSignal | undefined,
+    terminal: Promise<LoadOrderProgress>, signal: AbortSignal,
   ): Promise<LoadOrderProgress | undefined> {
     return new Promise((resolve) => {
       let settled = false;
       const settle = (status: LoadOrderProgress | undefined): void => {
         if (settled) return;
         settled = true;
-        signal?.removeEventListener('abort', onAbort);
+        signal.removeEventListener('abort', onAbort);
         unlisten();
         resolve(status);
       };
       const onAbort = (): void => settle(undefined);
-      signal?.addEventListener('abort', onAbort, { once: true });
+      signal.addEventListener('abort', onAbort, { once: true });
       const unlisten = this.lifecycle.onStatusChanged((status) => {
         if (status !== 'running') settle(undefined);
       });
@@ -304,8 +315,8 @@ class HttpMEditClient implements MEditClient {
   }
 
   // An abort is the one rejection that is not a failure: the teardown is already underway.
-  private wasDeliberatelyAborted(signal: AbortSignal | undefined): boolean {
-    if (!signal?.aborted) return false;
+  private wasDeliberatelyAborted(signal: AbortSignal): boolean {
+    if (!signal.aborted) return false;
     this.log('[HttpMEditClient] putLoadOrder was aborted — mEdit was closed while it reconciled');
     return true;
   }

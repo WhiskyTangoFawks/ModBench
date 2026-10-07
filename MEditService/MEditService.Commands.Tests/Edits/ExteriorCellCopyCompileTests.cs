@@ -1,4 +1,6 @@
+using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -25,9 +27,8 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
     [Fact]
     public async Task CopyExteriorPlacedReference_CompilesToBinary_AndPlacesTheRefUnderTheSourcesOwnBlockAndSubBlock()
     {
-        var copyResult = CopyHandler().CopyAsOverride(
-            _fixture.SourcePlugin, _fixture.ExteriorPersistentRef.ToString(), _fixture.DestinationPlugin);
-        Assert.True(copyResult.Applied, copyResult.Message);
+        var copyResult = CopyHandler().CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorPersistentRef.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false);
+        copyResult.OnlyLanded();
 
         await CompileService().CompileLandedAsync(_fixture.DestinationPlugin);
 
@@ -57,13 +58,11 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
     public async Task CopyExteriorCell_WhenDestinationAlreadyOverridesTheWorldspaceOnly_LandsInsideTheExistingWorldspaceDirectory()
     {
         var service = CopyHandler();
-        Assert.True(service.CopyAsOverride(
-            _fixture.SourcePlugin, _fixture.ExteriorCell.ToString(), _fixture.DestinationPlugin).Applied);
+        service.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorCell.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false).OnlyLanded();
 
-        var result = service.CopyAsOverride(
-            _fixture.SourcePlugin, _fixture.OtherBlockCell.ToString(), _fixture.DestinationPlugin);
+        var result = service.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.OtherBlockCell.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
 
         _fixture.AssertDestinationCellSitsAt(
             _fixture.OtherBlockCell.ToString(), editorId: null,
@@ -87,13 +86,11 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
     public async Task CopyExteriorCell_WhenDestinationAlreadyOverridesTheBlock_CreatesTheSubBlockInsideIt()
     {
         var service = CopyHandler();
-        Assert.True(service.CopyAsOverride(
-            _fixture.SourcePlugin, _fixture.ExteriorCell.ToString(), _fixture.DestinationPlugin).Applied);
+        service.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorCell.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false).OnlyLanded();
 
-        var result = service.CopyAsOverride(
-            _fixture.SourcePlugin, _fixture.SameBlockCell.ToString(), _fixture.DestinationPlugin);
+        var result = service.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.SameBlockCell.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
 
         _fixture.AssertDestinationCellSitsAt(
             _fixture.SameBlockCell.ToString(), editorId: null,
@@ -113,15 +110,13 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
     public async Task CopyExteriorCell_WhenDestinationAlreadyOverridesTheSubBlock_AddsTheCellAndTouchesNothingElse()
     {
         var service = CopyHandler();
-        Assert.True(service.CopyAsOverride(
-            _fixture.SourcePlugin, _fixture.ExteriorCell.ToString(), _fixture.DestinationPlugin).Applied);
+        service.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorCell.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false).OnlyLanded();
 
         var before = TrackedTree.Records(_fixture.DestinationModFolder, _fixture.DestinationPlugin);
 
-        var result = service.CopyAsOverride(
-            _fixture.SourcePlugin, _fixture.SameSubBlockCell.ToString(), _fixture.DestinationPlugin);
+        var result = service.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.SameSubBlockCell.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
 
         var after = TrackedTree.Records(_fixture.DestinationModFolder, _fixture.DestinationPlugin);
         Assert.All(before, document => Assert.Contains(document, after));
@@ -141,13 +136,11 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
     public async Task CopyExteriorCell_WhenDestinationAlreadyHoldsTheCellItself_ReplacesItInPlace()
     {
         var service = CopyHandler();
-        Assert.True(service.CopyAsOverride(
-            _fixture.SourcePlugin, _fixture.ExteriorCell.ToString(), _fixture.DestinationPlugin).Applied);
+        service.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorCell.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false).OnlyLanded();
 
-        var result = service.CopyAsOverride(
-            _fixture.SourcePlugin, _fixture.ExteriorCell.ToString(), _fixture.DestinationPlugin, replace: true);
+        var result = service.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorCell.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: true);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         var compiledCells = (await ImportCompiled()).Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace)
             .SubCells.SelectMany(b => b.Items).SelectMany(sb => sb.Items)
             .Where(c => c.FormKey == _fixture.ExteriorCell);
@@ -170,9 +163,8 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
     [Fact]
     public async Task CopyExteriorTemporaryPlacedReference_CompilesToBinary_InTheTemporarySlot()
     {
-        var copyResult = CopyHandler().CopyAsOverride(
-            _fixture.SourcePlugin, _fixture.ExteriorTemporaryRef.ToString(), _fixture.DestinationPlugin);
-        Assert.True(copyResult.Applied, copyResult.Message);
+        var copyResult = CopyHandler().CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorTemporaryRef.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false);
+        copyResult.OnlyLanded();
 
         await CompileService().CompileLandedAsync(_fixture.DestinationPlugin);
 

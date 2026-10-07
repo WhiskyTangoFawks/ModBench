@@ -70,30 +70,37 @@ export function isNotificationKind(kind: string): kind is NotificationKind {
  *  type the caller happens to see. */
 export type LoadOrderProgress = LoadOrderStatus;
 
-/** Restated rather than imported from Mod Management's own snapshot type: this module belongs
- *  to Editing, which imports nothing from Mod Management. */
-export interface LoadOrderPluginInput {
+// Restated rather than imported from Mod Management's own snapshot type: this module belongs
+// to Editing, which imports nothing from Mod Management.
+interface LoadOrderPluginInput {
   name: string;
   path: string;
   origin: string;
   provider: components['schemas']['PluginProviderRequest'];
 }
 
-/** A tagged union, not a sentinel value. `abandoned`: a newer snapshot replaced this one before
- *  it was sent, or mEdit closed mid-flight. `applied` carries the terminal status the Index
- *  reached, never read off the PUT alone. */
+/** ADR-0013's snapshot, with the PUT's keys. */
+export interface LoadOrderSnapshot {
+  readonly plugins: LoadOrderPluginInput[];
+  readonly active: PluginAddress[];
+  readonly loadedWithNoLine: PluginAddress[];
+  readonly gameDirectory: string;
+  readonly instanceRoot: string;
+  readonly gameRelease: string;
+}
+
+/** `abandoned`: a newer snapshot replaced this one before it was sent, or mEdit went away
+ *  mid-flight. `backendFailed`: mEdit did not come up to take it. `applied` carries the terminal
+ *  status the Index reached, never read off the PUT alone. */
 export type LoadOrderOutcome =
   | { outcome: 'applied'; status: LoadOrderProgress }
   | { outcome: 'failed'; message: string }
-  | { outcome: 'abandoned' };
+  | { outcome: 'abandoned' }
+  | { outcome: 'backendFailed' };
 
-/** Deliberately plain stdlib — `AbortSignal`, not a bespoke token — so this interface carries no
- *  VS Code types and `openapi-fetch` can forward it straight to `fetch`. */
-export interface LoadOrderOptions {
-  /** Trips when the user deliberately abandons this reconcile (closing mEdit). Aborts the PUT
-   *  itself rather than waiting for a dead socket. */
-  signal?: AbortSignal;
-}
+/** What a launch of mEdit came to. `stopped`: a stop cut it short. `failed` carries the launch's
+ *  own error when it threw. */
+export type LaunchOutcome = { outcome: 'running' } | { outcome: 'stopped' } | { outcome: 'failed'; error?: string };
 
 /** An edit's changes to plugin source, each move and then each document's text at its absolute path,
  *  or its refusal: `refusal` is the backend's name, `'Unknown'` this side's. An edit of the FormID
@@ -251,11 +258,13 @@ export interface MEditClient {
    *  reaches no listener. */
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void;
 
-  // ADR-0013's snapshot.
-  putLoadOrder(
-    plugins: LoadOrderPluginInput[], active: PluginAddress[], loadedWithNoLine: PluginAddress[],
-    gameDirectory: string, instanceRoot: string, gameRelease: string, options?: LoadOrderOptions,
-  ): Promise<LoadOrderOutcome>;
+  /** Launches mEdit when it is not running. One snapshot is put at a time, and the newest lands. */
+  sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
+  /** The newest snapshot's outcome, following a superseding one. Undefined when none was sent. */
+  latestLoadOrder(): Promise<LoadOrderOutcome | undefined>;
+  /** Each put of the newest snapshot that no send asked for: after a reconnect, or once a
+   *  restarted mEdit runs, since either process may hold nothing sent before. */
+  onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
 
   // The backend process: today's four values, read as a current value and observed through a
   // status-changed event.
@@ -264,7 +273,13 @@ export interface MEditClient {
   /** The notification stream opened again while `running`. The process behind the stream may
    *  be a restarted one, holding nothing sent before. */
   onReconnected(listener: () => void): () => void;
+  /** commands.md, No lifecycle gestures for mEdit: it starts with the extension. Never rejects;
+   *  a launch that fails leaves mEdit stopped, and `onLaunch` hears why. */
   start(): Promise<void>;
+  /** Each launch as it begins, and each restart once it runs after a crash: plugins.md, States
+   *  story 2, shows progress while mEdit starts. */
+  onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void;
+  /** Abandons the snapshot in flight, then takes mEdit down. */
   stop(): Promise<void>;
 }
 

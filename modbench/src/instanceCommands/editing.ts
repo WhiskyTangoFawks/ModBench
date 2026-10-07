@@ -1,103 +1,95 @@
-// Entering editing and put load order (ADR-0013). Nothing is put while detached; a stream reopen
-// is a start, the process behind it perhaps another. What happened comes back through `tell`.
+// Put load order (ADR-0013) at every recompute. The client owns the process the snapshot goes to;
+// what came of each put, and of each launch, comes back through `tell`.
 
-import type { LoadOrderSender, MEditClient } from '../client';
-import { enterEditingAcrossRestarts } from '../client';
+import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { putLoadOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
 export type Told =
   | { kind: 'put'; put: PutLoadOrderResult }
-  | { kind: 'putThrew'; message: string }
-  | { kind: 'abandoned' }
+  | { kind: 'launchFailed'; reason: string }
   | { kind: 'backendFailed' };
 
 export interface EditingDeps {
-  client: Pick<MEditClient, 'status' | 'start' | 'onStatusChanged' | 'onReconnected'>;
-  sender: Pick<LoadOrderSender, 'arm' | 'send'>;
+  client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent' | 'onLaunch' | 'latestLoadOrder'>;
   instanceRoot: string;
-  exitEditing: () => void;
+  /** Shows a launch, from its start until the snapshot it was for is told (plugins.md, States 2). */
   around: (entry: () => Promise<void>) => Promise<void>;
   tell: (told: Told) => Promise<void>;
-  log: (message: string) => void;
+  /** The Output, for a tell that threw: no caller is left to hear it. */
+  log: (line: string) => void;
 }
 
 export interface EditingFlow {
-  /** The source arrives as a promise so the backend starts while the first read lands. */
-  enter(source: Promise<LoadOrderSource>): Promise<void>;
-  put(source: LoadOrderSource): Promise<void>;
+  /** The launch with the extension, shown until the first read settles and the value it landed,
+   *  if any, is told. */
+  enter(firstRead: Promise<unknown>): Promise<void>;
   onRecompute(source: LoadOrderSource): void;
   dispose(): void;
 }
 
+function pending(logThrown: (reason: string) => void) {
+  const held = new Set<Promise<void>>();
+  return {
+    track(work: Promise<void>): Promise<void> {
+      const told = work.catch((e: unknown) => { logThrown(errorMessage(e)); });
+      held.add(told);
+      void told.then(() => held.delete(told));
+      return told;
+    },
+    settled: async (): Promise<void> => { await Promise.all([...held]); },
+  };
+}
+
 export function editingFlow(deps: EditingDeps): EditingFlow {
-  const { client, sender, instanceRoot, exitEditing, around, tell, log } = deps;
-  let startPutRan = false;
-  let held: Promise<LoadOrderSource> | undefined;
+  const { client, instanceRoot, around, tell, log } = deps;
+  const tells = pending((reason) => { log(`[loadOrder] handing mEdit the load order threw: ${reason}`); });
+  const launches = pending((reason) => { log(`[loadOrder] telling the launch of mEdit threw: ${reason}`); });
+  let entering = false;
 
-  const put = async (source: LoadOrderSource): Promise<void> => {
-    await tell({ kind: 'put', put: await putLoadOrder(sender, instanceRoot, source) });
+  // A launch that failed is told by the launch, not again by the snapshot it was for.
+  const tellPut = (put: Promise<PutLoadOrderResult>): void => {
+    void tells.track(put.then((result) => {
+      if (result.sent && result.outcome.outcome === 'backendFailed') return;
+      return tell({ kind: 'put', put: result });
+    }));
   };
 
-  const putHeld = (): void => {
-    void held?.then(put).catch((e: unknown) => tell({ kind: 'putThrew', message: errorMessage(e) }));
-  };
-
-  const enterOnce = async (): Promise<void> => {
-    const { abandoned } = sender.arm();
-    const source = held;
-    await client.start();
-    // A close stops the backend, so an abandoned launch would fail the status gate below and
-    // report the stop it asked for as a startup failure.
-    if (abandoned()) return tell({ kind: 'abandoned' });
-    if (client.status !== 'running') {
-      exitEditing();
-      return tell({ kind: 'backendFailed' });
+  const tellLaunch = async (launched: Promise<LaunchOutcome>): Promise<void> => {
+    const outcome = await launched;
+    if (outcome.outcome === 'failed') {
+      await tell(outcome.error === undefined ? { kind: 'backendFailed' } : { kind: 'launchFailed', reason: outcome.error });
+      return;
     }
-    const value = await source;
-    startPutRan = true;
-    if (value) await put(value);
+    if (outcome.outcome === 'stopped') return;
+    await client.latestLoadOrder();
+    await tells.settled();
   };
 
-  const statusSubscription = client.onStatusChanged((status) => {
-    if (status !== 'running') startPutRan = false;
-  });
-  const reconnectSubscription = client.onReconnected(() => {
-    if (startPutRan) putHeld();
-  });
-  const entry = enterEditingAcrossRestarts(
-    client, () => around(enterOnce), (message) => log(`[instanceCommands] ${message}`));
+  const unsubscribes = [
+    client.onLoadOrderResent((snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => {
+      tellPut(Promise.resolve({ sent: true, snapshot, outcome }));
+    }),
+    client.onLaunch((launched) => {
+      const shown = launches.track(tellLaunch(launched));
+      if (!entering) void around(() => shown);
+    }),
+  ];
 
   return {
-    enter: (source) => {
-      held = source;
-      return entry.enter();
+    enter: async (firstRead) => {
+      entering = true;
+      try {
+        await around(async () => {
+          await firstRead;
+          await launches.settled();
+          await tells.settled();
+        });
+      } finally {
+        entering = false;
+      }
     },
-    put,
-    onRecompute: (source) => {
-      held = Promise.resolve(source);
-      if (startPutRan) putHeld();
-    },
-    dispose: () => {
-      statusSubscription();
-      reconnectSubscription();
-      entry.dispose();
-      startPutRan = false;
-    },
+    onRecompute: (source) => { tellPut(putLoadOrder(client, instanceRoot, source)); },
+    dispose: () => { for (const unsubscribe of unsubscribes) unsubscribe(); },
   };
-}
-
-/** The session as far as teardown reads it, so the composition root's own session satisfies it by shape. */
-export interface TeardownSession {
-  loadOrderSender?: { abandon(): void };
-}
-
-/** Abandons the reconcile in flight and takes the backend down (ADR-0002). */
-export function exitEditing(session: TeardownSession, client: { stop(): Promise<void> }): void {
-  // Abandon any reconcile still in flight *first*: it aborts the PUT, so the reconcile returns
-  // 'abandoned' rather than reporting a killed backend to the user as a network failure.
-  session.loadOrderSender?.abandon();
-  // stop()'s body runs to completion whether or not the returned promise is awaited, so
-  // fire-and-forget still defers the 'stopped' status correctly.
-  void client.stop();
 }

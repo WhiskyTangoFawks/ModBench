@@ -132,11 +132,10 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CopyHandler.CopyAsOverride(
-            mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.OverriddenPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.CopySourcePlugin, mod.CopySourceNpc.ToString())], CopyMode.Override, [mod.OverriddenPlugin], replace: false);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
+        var refused = result.OnlyRefused();
+        Assert.Equal(RecordEditRefusal.PluginNotActive, refused.Refusal);
     }
 
     [Fact]
@@ -144,11 +143,10 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CopyHandler.CopyAsNew(
-            mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.OverriddenPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.CopySourcePlugin, mod.CopySourceNpc.ToString())], CopyMode.New, [mod.OverriddenPlugin], replace: false);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
+        var refused = result.OnlyRefused();
+        Assert.Equal(RecordEditRefusal.PluginNotActive, refused.Refusal);
     }
 
     [Fact]
@@ -156,10 +154,9 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CopyHandler.CopyAsOverride(
-            mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.WinningPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.CopySourcePlugin, mod.CopySourceNpc.ToString())], CopyMode.Override, [mod.WinningPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         Assert.NotNull(mod.Document(mod.WinningPlugin, mod.CopySourceNpc.ToString()));
     }
 
@@ -168,10 +165,9 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CopyHandler.CopyAsOverride(
-            mod.OverriddenPlugin, mod.OverriddenNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.OverriddenPlugin, mod.OverriddenNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         Assert.NotNull(mod.Document(mod.DestinationPlugin, mod.OverriddenNpc.ToString()));
     }
 
@@ -232,11 +228,10 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CopyHandler.CopyAsOverride(
-            mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.UnlistedPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.CopySourcePlugin, mod.CopySourceNpc.ToString())], CopyMode.Override, [mod.UnlistedPlugin], replace: false);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
+        var refused = result.OnlyRefused();
+        Assert.Equal(RecordEditRefusal.PluginNotActive, refused.Refusal);
     }
 
     [Fact]
@@ -244,10 +239,9 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CopyHandler.CopyAsNew(
-            mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.UnlistedPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.CopySourcePlugin, mod.CopySourceNpc.ToString())], CopyMode.New, [mod.UnlistedPlugin], replace: false);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
+        var refused = result.OnlyRefused();
+        Assert.Equal(RecordEditRefusal.PluginNotActive, refused.Refusal);
     }
 }
