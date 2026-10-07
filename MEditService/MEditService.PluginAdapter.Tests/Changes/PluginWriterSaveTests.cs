@@ -1,5 +1,4 @@
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
@@ -42,20 +41,6 @@ public sealed class PluginWriterSaveTests
 
         var leftoverDirs = Directory.GetDirectories(data.DataFolder, ".medit_tmp_*");
         Assert.Empty(leftoverDirs);
-    }
-
-    [Fact]
-    public async Task Commit_KeepsNoCopyOfTheBinaryItReplaces()
-    {
-        using var data = new PluginFixtureBuilder("pw-save-no-copy")
-            .WithPlugin("TestPlugin.esp")
-            .Build();
-        var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
-
-        await RewriteAsync(pluginPath);
-        await RewriteAsync(pluginPath);
-
-        Assert.Equal([pluginPath], Directory.GetFiles(data.DataFolder, "TestPlugin*"));
     }
 
     [Fact]

@@ -37,7 +37,7 @@ public sealed class TrackHandlerTests : IDisposable
     public void Dispose() => _instanceRoot.Dispose();
 
     [Fact]
-    public async Task Track_WithNoLoadOrderHeld_ThrowsNoLoadOrder_RatherThanRefusingNoPluginWithOrigin()
+    public async Task Track_WithNoLoadOrderHeld_ThrowsNoLoadOrder()
     {
         var handler = TestEditService.TrackHandler(_holder);
 
