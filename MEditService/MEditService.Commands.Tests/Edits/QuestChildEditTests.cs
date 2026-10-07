@@ -12,7 +12,7 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class QuestChildWriteApiTests : IDisposable
+public sealed class QuestChildEditTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
 
@@ -193,7 +193,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     }
 
     [Fact]
-    public void ARefusedQuestChildEdit_LeavesTheQuestDocumentAndTheSceneItselfUntouched()
+    public void ARefusedQuestChildEdit_AnswersNoChanges()
     {
         var before = QuestText;
         var sceneBefore = _fixture.Document(_fixture.Scene.ToString()).Require().Body;

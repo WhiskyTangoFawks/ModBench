@@ -13,7 +13,7 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class DocumentEditTests : IDisposable
+public sealed class RecordDocumentEditTests : IDisposable
 {
     private readonly DocumentEditFixture _fixture = new();
 
@@ -32,7 +32,7 @@ public sealed class DocumentEditTests : IDisposable
     private readonly Quest _quest;
     private readonly GlobalInt _globalInt;
 
-    public DocumentEditTests()
+    public RecordDocumentEditTests()
     {
         _keyword = _mod.Keywords.AddNew("Kw");
         _otherKeyword = _mod.Keywords.AddNew("Kw2");
@@ -328,7 +328,7 @@ public sealed class DocumentEditTests : IDisposable
     }
 
     [Fact]
-    public void UnknownTopLevelPath_IsRefusedByName_AndNothingLandsSilently()
+    public void UnknownTopLevelPath_IsRefusedAsFieldNotFound_NamingThePath_AndAnswersNoChanges()
     {
         var formKey = SeedNpc();
         var before = _fixture.Document(formKey);

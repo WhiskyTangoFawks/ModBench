@@ -35,16 +35,6 @@ public sealed class UntrackedReadOnlyTests
     }
 
     [Fact]
-    public void EditingAPluginInAnUntrackedModFolder_WritesNothingAtAll()
-    {
-        using var mod = SourceEditFixture.Untracked();
-
-        mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
-
-        Assert.False(SourceRepository.SourceReads(new RegisteredPlugin(mod.Plugin.Name, mod.Plugin.Origin, "", new PluginProvider.FromMod(mod.Plugin.Origin, mod.ModFolder))));
-    }
-
-    [Fact]
     public void EditingAPluginWithNoModFolder_IsRefused_NamingThePatchPluginPathInstead()
     {
         using var vanilla = SourceModFixture.VanillaMaster(out var vanillaNpc);

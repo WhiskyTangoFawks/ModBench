@@ -15,19 +15,15 @@ public sealed class ContainerSlots
 
     private readonly GameCategory _category;
     private readonly ContainerMembers _members;
-    private readonly HashSet<string> _embeddedSlotNames;
-    private readonly Dictionary<string, string> _elementTypeBySlotName;
 
     private ContainerSlots(GameCategory category)
     {
         _category = category;
         _members = ContainerMembers.Derived;
-        var embeddedSlots = _members.EmbeddedSlots.Where(slot => slot.Game == category).ToList();
-        _embeddedSlotNames = embeddedSlots.Select(slot => slot.Slot).ToHashSet(StringComparer.Ordinal);
-        _elementTypeBySlotName = embeddedSlots
-            .GroupBy(slot => slot.Slot, slot => _members.ElementTypeBySlot[slot], StringComparer.Ordinal)
-            .Where(group => group.Distinct(StringComparer.Ordinal).Count() == 1)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        EmbeddedSlotNames = _members.EmbeddedSlots
+            .Where(slot => slot.Game == category)
+            .Select(slot => slot.Slot)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>Every member of <paramref name="containerTypeName"/> holding child records, empty for
@@ -35,18 +31,15 @@ public sealed class ContainerSlots
     internal IReadOnlyList<string> ChildSlotsOf(string containerTypeName) =>
         _members.ChildFieldsByType.TryGetValue((_category, containerTypeName), out var slots) ? slots : [];
 
-    /// <summary>The members of <paramref name="containerTypeName"/> serializing their children
-    /// inline. A null type answers with every container's, since nothing narrows it.</summary>
-    public IEnumerable<string> EmbeddedSlotsOf(string? containerTypeName) =>
-        containerTypeName is null
-            ? _embeddedSlotNames
-            : _members.EmbeddedSlots.Where(slot => slot.Game == _category && slot.ParentType == containerTypeName).Select(slot => slot.Slot);
+    /// <summary>The names of the members serializing their children inline, across every container
+    /// of the game.</summary>
+    public IReadOnlySet<string> EmbeddedSlotNames { get; }
 
     /// <summary>Whether a member serializes its children inline. A container whose text names no type
     /// of its own accepts any container's embedded slot name, since nothing narrows it.</summary>
     internal bool IsEmbeddedSlot(string? containerTypeName, string member) =>
         containerTypeName is null
-            ? _embeddedSlotNames.Contains(member)
+            ? EmbeddedSlotNames.Contains(member)
             : _members.EmbeddedSlots.Contains((_category, containerTypeName, member));
 
     /// <summary>Whether <paramref name="recordType"/> is a type the slot's own member declares it holds.</summary>
@@ -54,10 +47,7 @@ public sealed class ContainerSlots
         _members.HeldTypesBySlot.TryGetValue((_category, containerTypeName, slot), out var held)
         && held.Any(type => type.IsAssignableFrom(recordType));
 
-    /// <summary>What a slot holds, for a document that does not spell its child's type. Falls back to
-    /// the slot name alone when the owner's own type is not known.</summary>
-    internal string? ElementTypeOf(string? containerTypeName, string slot) =>
-        containerTypeName is { } owner && _members.ElementTypeBySlot.TryGetValue((_category, owner, slot), out var element)
-            ? element
-            : _elementTypeBySlotName.GetValueOrDefault(slot);
+    /// <summary>What a slot holds, for a document that does not spell its child's type.</summary>
+    internal string? ElementTypeOf(string containerTypeName, string slot) =>
+        _members.ElementTypeBySlot.GetValueOrDefault((_category, containerTypeName, slot));
 }

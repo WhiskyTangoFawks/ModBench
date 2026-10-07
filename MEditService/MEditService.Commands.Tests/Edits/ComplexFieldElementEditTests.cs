@@ -21,7 +21,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     private string NpcBody() => _mod.Document(_mod.Npc.ToString()).Require().Body;
 
     [Fact]
-    public void KeywordsArray_PerElementPayload_IsRefusedAndWritesNothing()
+    public void KeywordsArray_PerElementPayload_IsRefusedAsCodecRejected_NamingTheField_AndAnswersNoChanges()
     {
         var seed = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "Keywords", Json($"[\"{_mod.Keyword}\"]"));
         Assert.True(seed.Applied, seed.Message);
@@ -36,7 +36,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     }
 
     [Fact]
-    public void WeightStruct_PerMemberPayload_IsRefusedAndWritesNothing()
+    public void WeightStruct_PerMemberPayload_IsRefusedAsCodecRejected_NamingTheField_AndAnswersNoChanges()
     {
         var before = NpcBody();
 
@@ -49,7 +49,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     }
 
     [Fact]
-    public void OmodPropertiesArray_PerSubFieldPayload_IsRefusedAndWritesNothing()
+    public void OmodPropertiesArray_PerSubFieldPayload_IsRefusedAsCodecRejected_NamingTheField_AndAnswersNoChanges()
     {
         using var omod = OmodMod(out var armorMod);
         var before = omod.Body(armorMod);
@@ -103,7 +103,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     }
 
     [Fact]
-    public void OmodPropertiesArray_MissingDiscriminator_IsRefusedAndWritesNothing()
+    public void OmodPropertiesArray_MissingDiscriminator_IsRefusedAsDiscriminatorInvalid_NamingTheFieldAndTheDiscriminator_AndAnswersNoChanges()
     {
         using var omod = OmodMod(out var armorMod);
         var before = omod.Body(armorMod);

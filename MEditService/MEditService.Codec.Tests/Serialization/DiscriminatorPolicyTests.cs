@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Serialization;
+using MEditService.Codec.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -32,14 +33,10 @@ public sealed class DiscriminatorPolicyTests
     }
 
     [Fact]
-    public void DeserializeFromBytes_ForAWeaponDocument_ReconstitutesFromRecordType_BecauseAConcreteElementTypeWritesNoDiscriminatorAndItsIdentityIsTheIndexsRecordType()
+    public void RoundTrip_ForAWeaponDocument_ReconstitutesFromRecordType_BecauseAConcreteElementTypeWritesNoDiscriminatorAndItsIdentityIsTheIndexsRecordType()
     {
-        var codec = Codec();
-        var bytes = codec.SerializeToBytes(MakeWeapon(), GameRelease.Fallout4);
+        var weapon = ReadBack.Of<Weapon>(Codec(), MakeWeapon(), GameRelease.Fallout4, "weap");
 
-        var roundTripped = codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, "weap");
-
-        var weapon = Assert.IsType<Weapon>(roundTripped);
         Assert.Equal("PolicyWeapon", weapon.EditorID);
         Assert.Equal(7u, weapon.BaseDamage);
     }
@@ -57,15 +54,15 @@ public sealed class DiscriminatorPolicyTests
     [InlineData("glob")]
     [InlineData("globalfloat")]
     [InlineData(null)]
-    public void DeserializeFromBytes_ForAGlobalFloatDocument_ReturnsGlobalFloat_UnderTheGrupSignatureIngestStoresTheLowercasedClrNameTracksSourcePathFallsBackToAndNoRecordType(string? recordType)
+    public void RoundTrip_ForAGlobalFloatDocument_KeepsItGlobalFloat_UnderTheGrupSignatureIngestStoresTheLowercasedClrNameTracksSourcePathFallsBackToAndNoRecordType(string? recordType)
     {
         var codec = Codec();
-        var bytes = codec.SerializeToBytes(MakeGlobalFloat(), GameRelease.Fallout4);
+        var text = codec.SerializeToText(MakeGlobalFloat(), GameRelease.Fallout4);
 
-        var roundTripped = codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, recordType);
+        using var roundTripped = JsonDocument.Parse(codec.RoundTrip(text, GameRelease.Fallout4, recordType));
 
-        var global = Assert.IsType<GlobalFloat>(roundTripped);
-        Assert.Equal(2.5f, global.Data);
+        Assert.Equal("GlobalFloat", roundTripped.RootElement.GetProperty(Discriminator).GetString());
+        Assert.Equal(2.5f, roundTripped.RootElement.GetProperty("Data").GetSingle());
     }
 
     [Fact]

@@ -54,7 +54,7 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
     }
 
     [Fact]
-    public void VendorLocation_BadNestedMemberValue_RefusesWholeWriteAndLeavesWorkingTreeUntouched()
+    public void VendorLocation_BadNestedMemberValue_IsRefusedAsCodecRejected_AndAnswersNoChanges()
     {
         var before = _fixture.Body();
 

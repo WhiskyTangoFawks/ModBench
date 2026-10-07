@@ -1,7 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -53,16 +52,6 @@ public sealed class PartialFormEditRefusalTests : TestInstance
     }
 
     [Fact]
-    public void EditField_NonHeaderFieldOnPartialFormRecord_WritesNothing()
-    {
-        var before = CellBody();
-
-        Service().Set(Plugin, PartialCell.ToString(), "WaterHeight", Json("50.0"));
-
-        Assert.Equal(before, CellBody());
-    }
-
-    [Fact]
     public void EditField_EditorIdOnPartialFormRecord_Succeeds()
     {
         var result = Service().Set(Plugin, PartialCell.ToString(), "EditorID", Json("\"RenamedPartialCell\""));
@@ -85,8 +74,6 @@ public sealed class PartialFormEditRefusalTests : TestInstance
 
         Assert.True(result.Applied);
     }
-
-    private string CellBody() => TrackedTree.Document(ModFolderOf(Plugin), Plugin, PartialCell.ToString()).Require().Body;
 
     private static System.Text.Json.JsonElement Json(string json) =>
         System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);

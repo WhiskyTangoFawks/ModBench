@@ -14,14 +14,9 @@ namespace MEditService.Codec.Schema;
 public sealed class SchemaReflector
 {
     private readonly ILogger _logger;
-    private readonly Func<GameCategory, SchemaAnnotations> _annotationsFor;
 
-    public SchemaReflector(ILogger<SchemaReflector>? logger = null) : this(SchemaAnnotations.For, logger) { }
-
-    /// <summary>Test seam: the annotation tables to overlay, in place of the shipped ones.</summary>
-    internal SchemaReflector(Func<GameCategory, SchemaAnnotations> annotationsFor, ILogger<SchemaReflector>? logger = null)
+    public SchemaReflector(ILogger<SchemaReflector>? logger = null)
     {
-        _annotationsFor = annotationsFor;
         _logger = logger ?? NullLogger<SchemaReflector>.Instance;
     }
 
@@ -84,7 +79,7 @@ public sealed class SchemaReflector
     }
 
     private GameSchemaCache GetCache(GameCategory category, Assembly assembly) =>
-        _cache.GetOrAdd(category, c => BuildForCategory(c, assembly, _annotationsFor(c), _logger));
+        _cache.GetOrAdd(category, c => BuildForCategory(c, assembly, SchemaAnnotations.For(c), _logger));
 
     private static GameSchemaCache BuildForCategory(
         GameCategory category, Assembly assembly, SchemaAnnotations annotations, ILogger logger)
