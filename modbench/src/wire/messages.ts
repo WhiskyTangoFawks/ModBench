@@ -142,8 +142,8 @@ export interface ColumnHeaderContext {
   // commands.md, delete: compilable, and the plugin source reads.
   editable: boolean;
   // editor.md, Menus and keys: track is offered on a plugin in an untracked mod, decompile on one in
-  // a tracked mod. None is the game's plugin, Overwrite's, and one whose tracked state is unknown.
-  inMod: 'tracked' | 'untracked' | 'none';
+  // a tracked mod. None is a plugin in no mod: the game's and Overwrite's.
+  inMod: ModRepository | 'none';
   preventDefaultContextMenuItems: true;
 }
 
@@ -218,6 +218,8 @@ export interface StringValueContext {
   preventDefaultContextMenuItems: true;
 }
 
+export type ModRepository = 'tracked' | 'untracked';
+
 /** RecordPanelClient's own read, carried untransformed — the webview still derives its own column
  *  sets from `plugins` (ADR-0005). `plugins` is null exactly when that one read
  *  failed, degrading only that slice. */
@@ -231,6 +233,9 @@ export type RecordLoadAnswer =
       // The plugins mEdit cannot read, as the Plugins tree is told them.
       loadFailures: components['schemas']['PluginLoadFailure'][];
       documentPlugin: PluginAddress;
+      // The repository state of each origin in the comparison that names a mod, read from the
+      // instance. An origin in no mod is absent.
+      modsByOrigin: Record<string, ModRepository>;
     }
   | { ok: false; error: string };
 
@@ -241,6 +246,11 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR }
   | { type: typeof EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL; text: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.SHOW_COLUMNS; columns: ColumnCopy[] };
+
+function isModsByOrigin(value: unknown): value is Record<string, ModRepository> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    && Object.values(value).every((state) => state === 'tracked' || state === 'untracked');
+}
 
 function isString(value: unknown): value is string {
   return typeof value === 'string';
@@ -364,7 +374,7 @@ function parseFormKeyPicked(w: { requestId?: unknown; formKey?: unknown }): Exte
 
 function parseRecordLoadAnswer(w: {
   requestId?: unknown; ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
-  documentPlugin?: unknown;
+  documentPlugin?: unknown; modsByOrigin?: unknown;
 }): { requestId: string } & RecordLoadAnswer {
   if (!isString(w.requestId)) throw new Error('Expected "recordLoadAnswered" to carry a string requestId.');
   if (w.ok === false) {
@@ -377,6 +387,7 @@ function parseRecordLoadAnswer(w: {
 
 function parseAnswered(w: {
   compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; documentPlugin?: unknown;
+  modsByOrigin?: unknown;
 }): RecordLoadAnswer {
   if (w.compare !== null && !isCompareResultShape(w.compare)) {
     throw new Error('Expected an answered "recordLoadAnswered" to carry a compare object or null.');
@@ -391,9 +402,10 @@ function parseAnswered(w: {
     throw new Error('Expected "recordLoadAnswered" to carry a loadFailures array.');
   }
   if (!isPluginAddress(w.documentPlugin)) throw new Error('Expected "recordLoadAnswered" to carry the document\'s plugin.');
+  if (!isModsByOrigin(w.modsByOrigin)) throw new Error('Expected "recordLoadAnswered" to carry its mods by origin.');
   return {
     ok: true, compare: w.compare, plugins: w.plugins, conflictsComputed: w.conflictsComputed,
-    loadFailures: w.loadFailures, documentPlugin: w.documentPlugin,
+    loadFailures: w.loadFailures, documentPlugin: w.documentPlugin, modsByOrigin: w.modsByOrigin,
   };
 }
 

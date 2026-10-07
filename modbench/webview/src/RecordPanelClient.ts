@@ -4,7 +4,7 @@ import { pluginAddressOf, samePluginAddress } from '../../src/wire/pluginAddress
 import { parseCompareResult } from './parseCompareResult';
 import { requestRecordLoad } from './nativeBridge';
 import { tabState } from './vscode';
-import { isColumnCopies, type ColumnCopy } from '../../src/wire/messages';
+import { isColumnCopies, type ColumnCopy, type ModRepository } from '../../src/wire/messages';
 
 // `load` asks the host for compare, plugins and status in one round trip: a compare failure fails
 // the whole load, while a plugins/status failure comes back as `null` so the panel leaves that
@@ -17,6 +17,8 @@ type LoadResult =
       // editable" (commands.md, No dead entries). Read fail-closed.
       trackedSet: Set<ColumnKey> | null;
       sourceUnreadableSet: Set<ColumnKey> | null;
+      // The repository state of each origin that names a mod, which a column header offers track or decompile on.
+      modsByOrigin: Record<string, ModRepository>;
       // Whether the winner sweep has run (editor.md, States, story 3). Fails *closed*: an absent
       // answer reads as "not computed", never as "settled", or a status-fetch blip would render a
       // settled-looking grid over a comparison nothing checked.
@@ -69,6 +71,7 @@ export function createRecordPanelClient(): RecordPanelClient {
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p))) : null,
         trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p))) : null,
         sourceUnreadableSet: pluginList ? new Set(pluginList.filter(p => p.pluginSourceUnreadable).map(p => columnKey(p))) : null,
+        modsByOrigin: answer.modsByOrigin,
         conflictsComputed: answer.conflictsComputed,
         loadFailures: answer.loadFailures,
         fileColumn: fileCopy && copyColumnKey(fileCopy),

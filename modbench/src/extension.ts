@@ -319,12 +319,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const treeProvider = new PluginTreeProvider(meditClient, log);
   const focusedView = createFocusedView();
 
-  const trackedRepositories = trackedRepositoriesOver({
-    client: meditClient,
-    outputChannel,
-    trackedMods: () => views.facts.trackedMods(),
-    modDirs: () => views.facts.modDirs(),
-  });
+  const modFacts = { trackedMods: () => views.facts.trackedMods(), modDirs: () => views.facts.modDirs() };
+  const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...modFacts });
   const instance = { refresh: () => views.facts.refresh() };
   const recordWrite = recordWriteOver(instance, { latest: () => views.latestSent() });
   const editor = createEditor({
@@ -335,6 +331,7 @@ export function activate(context: vscode.ExtensionContext): void {
     viewSelections: new Map([['modbench.pluginListTree', () => views.plugins.selection()]]),
     recordWrite,
     refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
+    modFacts,
   });
   const conflictsComputed = trackedRepositories.conflictsComputedOver(() => { editor.announceConflictsComputed(); });
   const notifyConflictsComputed = () => { void conflictsComputed(); };

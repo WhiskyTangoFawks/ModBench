@@ -12,6 +12,7 @@ import type { FocusedCellContext, FocusedCells } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
 import type { TitledColumn } from './recordTitle';
 import type { TabPlace } from './recordOpenPlan';
+import { modsByOrigin, type ModFacts } from './modsByOrigin';
 
 type TitleFromRead = (formKey: string, columns: readonly TitledColumn[] | undefined) => void;
 
@@ -44,6 +45,7 @@ export interface RouteRecordPanelMessageDeps {
   // The latest load-order status, read rather than fetched.
   conflictsComputed: () => boolean;
   loadFailures: () => readonly PluginLoadFailure[];
+  modFacts: ModFacts;
 }
 
 /** What every panel's messages share: the rest is the panel's own. */
@@ -188,5 +190,6 @@ async function answerRecordLoad(
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     compare: compare.value, plugins: listed,
     conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
+    modsByOrigin: modsByOrigin((compare.value?.overrides ?? []).map((o) => o.origin), deps.modFacts),
   });
 }

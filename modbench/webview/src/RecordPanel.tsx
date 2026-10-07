@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { PluginHeader } from './PluginHeader';
 import { ColumnEdge } from './ColumnEdge';
 import { DiffRow } from './DiffRow';
-import { buildColumns, headerCellContext, modOfColumn, recordLabel } from './recordUtils';
+import { buildColumns, headerCellContext, recordLabel } from './recordUtils';
 import { mono, fg, headerCell, headerBackground, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
 import type {
   ColumnKey, CompareOverride, CompareResult, PathHop, PluginLoadFailure, RecordEditEnvelope,
@@ -14,7 +14,7 @@ import { addElement, editField, focusCell, keepViewState, openInPlace } from './
 import { openEditor } from './DiskCell';
 import { EditorMounted } from './cellEditor';
 import { pastedValue } from './modelValue';
-import { EXTENSION_TO_WEBVIEW, isViewState, parseExtensionToWebview, type ColumnCopy, type ViewState } from '../../src/wire/messages';
+import { EXTENSION_TO_WEBVIEW, isViewState, parseExtensionToWebview, type ColumnCopy, type ModRepository, type ViewState } from '../../src/wire/messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
@@ -58,6 +58,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // not heard from /plugins offers no editing, compile or track (commands.md, No dead entries).
   const [trackedSet, setTrackedSet] = useState<Set<ColumnKey> | null>(null);
   const [sourceUnreadableSet, setSourceUnreadableSet] = useState<Set<ColumnKey> | null>(null);
+  const [modsByOrigin, setModsByOrigin] = useState<Record<string, ModRepository>>({});
   // Whether the winner sweep has run. Initial `true` only matters until the first load
   // lands, so it can never read as a false "settled".
   const [conflictsComputed, setConflictsComputed] = useState(true);
@@ -145,6 +146,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       // unknown state reads as neither tracked nor untracked.
       setTrackedSet(loaded.trackedSet);
       setSourceUnreadableSet(loaded.sourceUnreadableSet);
+      setModsByOrigin(loaded.modsByOrigin);
       // No `?? true` fallback: `undefined` is falsy, so a fixture that omits `conflictsComputed`
       // still shows the banner rather than reading as settled.
       setConflictsComputed(loaded.conflictsComputed);
@@ -357,8 +359,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                 // Keyed by col.key (ADR-0012), so two columns that share a file name collapse and
                 // resize apart; a status is the plugin's, by its compound key.
                 const isImmutable = immutableSet.has(pluginKeyOf(col.override));
-                const trackedKnown = trackedSet?.has(pluginKeyOf(col.override));
-                const tracked = trackedKnown === true;
+                const tracked = trackedSet?.has(pluginKeyOf(col.override)) === true;
                 const sourceUnreadable = sourceUnreadableSet?.has(pluginKeyOf(col.override)) === true;
                 return (
                   <PluginHeader
@@ -380,7 +381,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                       {
                         compilable: tracked && !isImmutable,
                         editable: tracked && !sourceUnreadable && !isImmutable,
-                        inMod: modOfColumn({ isTracked: trackedKnown, isImmutable, isInOverwrite: col.override.isInOverwrite }),
+                        inMod: modsByOrigin[col.override.origin] ?? 'none',
                       },
                     ))}
                   />
