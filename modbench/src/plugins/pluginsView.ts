@@ -16,7 +16,7 @@ import { registerPluginSortCommands, registerRevealInExplorerCommand } from './p
 import { registerPluginMoveCommand } from './pluginMoveCommand';
 import { registerPluginEnableCommands } from './pluginParticipationCommands';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
-import { makeShowRecordFilter } from './recordFilterCommands';
+import { makeShowRecordFilter, registerFilterCommands } from './recordFilterCommands';
 import { survivingSelection } from './survivingSelection';
 import { subscribeTreeToNotifications } from './treeNotifications';
 import { followIndexStatus } from './indexStatus';
@@ -32,7 +32,7 @@ export interface PluginsViewDeps {
   recordBrowser: PluginTreeProvider;
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the index
    *  status. */
-  client: PluginFactsClient & Pick<MEditClient, 'getActiveFilter' | 'onReconnected'>;
+  client: PluginFactsClient & Pick<MEditClient, 'getActiveFilter' | 'onReconnected' | 'setFilter' | 'clearFilter'>;
   statusBar: StatusBar;
   /** A reconcile reached Ready: what the views outside this box refetch. */
   notifyConflictsComputed: () => void;
@@ -114,6 +114,10 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     ...registerPluginEnableCommands(
       access, instance, selected.rows, reporterFor('pluginListTree.enableDisable')),
     registerPluginMoveCommand(access, client, instance, selected.rows, reporterFor('pluginListTree.move')),
+    ...registerFilterCommands({
+      client, treeProvider: recordBrowser, refreshMatchingPlugins: () => { void tree.refreshFacts(); },
+      showRecordFilter, reporter: reporterFor('recordFilter'),
+    }),
     ...registerPluginSortCommands(tree),
     registerRevealInExplorerCommand(tree, reporterFor('pluginListTree.revealInExplorer'), selected.rows),
     view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
