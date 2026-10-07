@@ -37,7 +37,6 @@ import { installNameRefusal } from '../install/install';
 import { errorMessage } from '../ports/errorMessage';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { reportFailure } from '../drivingLib/reportFailure';
-import { applyOrThrow } from '../ports/applyOrThrow';
 
 // modbench.mod.enable / modbench.mod.disable: the whole selection through the entry (mods.md,
 // Menus and keys, story 3). Each mod lands on its own (commands.md, "A selection is one gesture").
@@ -239,7 +238,8 @@ export function registerSeparatorCommands(
         const newName = await promptRename('Rename separator', oldName, separatorNamePrompt(access, instance, oldName));
         if (newName === undefined) return;
         await runModsWriting(instance, () => reportFailure(reporter, 'Failed to rename separator.', async () => {
-          applyOrThrow(await renameSeparator(access, instance.value.activeProfile, oldName, newName));
+          const result = await renameSeparator(access, instance.value.activeProfile, oldName, newName);
+          if (!result.applied) reporter.report('error', 'Failed to rename separator.', result.refusal);
         }));
       }),
       registerGesture('modbench.separator.add', viewSelection, async (entry) => {
@@ -251,8 +251,9 @@ export function registerSeparatorCommands(
         if (!name) return;
         const anchor = node.kind === 'mod' ? node.mod : node.separator;
         await runModsWriting(instance, () => reportFailure(reporter, 'Failed to add separator.', async () => {
-          applyOrThrow(await insertSeparator(
-            access, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name }));
+          const result = await insertSeparator(
+            access, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name });
+          if (!result.applied) reporter.report('error', 'Failed to add separator.', result.refusal);
         }));
       }),
       registerGesture('modbench.separator.delete', viewSelection, async (entry) => {
@@ -290,7 +291,10 @@ export function registerCreateEmptyModCommand(
     await runModsWriting(instance, async () => {
       try {
         const outcome = await createEmptyMod(access, instance.value.activeProfile, name);
-        applyOrThrow(outcome);
+        if (!outcome.applied) {
+          reporter.report('error', `Failed to create "${name}".`, outcome.refusal);
+          return;
+        }
         if (outcome.lineRefusal !== undefined) {
           reporter.report(
             'warning', `"${name}" was created, but its ${instance.value.managerNames.modOrderFile} line could not be written.`, outcome.lineRefusal);
