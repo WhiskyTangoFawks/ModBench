@@ -17,7 +17,6 @@ public sealed class CompareFromContainerTextTests : IDisposable
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
     private static readonly PluginAddress Plugin = new("Tree.esp", "TreeMod");
-    private static readonly string[] Fields = ["Scale"];
 
     private readonly ScratchDirectory _modFolder = new("medit-compare-container-text-");
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName(Plugin.Name), Fallout4Release.Fallout4);
@@ -49,11 +48,11 @@ public sealed class CompareFromContainerTextTests : IDisposable
 
         var rows = new[]
         {
-            Row(_room, "cell"), Row(_placed, "refr"), Row(_world, "wrld"), Row(topCell, "cell"), Row(_topCellRef, "refr"),
+            Row(_room), Row(_placed), Row(_world), Row(topCell), Row(_topCellRef),
         };
         _loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(_log)));
         _service = QueryHost.Records(
-            new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), rows) { TextFieldNames = Fields }),
+            new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), rows)),
             FakeLoadOrder.Of(Release,
                 new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, 0, Enabled: true, Winning: true)),
             _loggerFactory);
@@ -70,8 +69,8 @@ public sealed class CompareFromContainerTextTests : IDisposable
 
     private static byte[] Bytes(IMajorRecordGetter record) => Encoding.UTF8.GetBytes(RealDocuments.BodyOf(record, Release));
 
-    private static FakeRow Row(IMajorRecordGetter record, string recordType) =>
-        new(Plugin, 0, true, RealDocuments.Of(record, Plugin, 0, true, Release, recordType, Fields));
+    private static FakeRow Row(IMajorRecordGetter record) =>
+        new(Plugin, 0, true, RealDocuments.Of(record, Plugin, 0, true, Release));
 
     private CompareOverride ColumnReadFrom(IMajorRecordGetter record, string text) =>
         (_service.GetCompare(record.FormKey.ToString(), new CopyText(Plugin, text))

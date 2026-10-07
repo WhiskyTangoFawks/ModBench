@@ -18,7 +18,7 @@ internal static class CompareQuery
         var addresses = records.Select(r => new PluginAddress(r.Plugin, r.Origin)).ToList();
         var rows = records.Select((r, i) => new FakeRow(addresses[i], r.LoadOrderIndex, r.IsWinner,
             new RecordDocument(r.FormKey, addresses[i], r.LoadOrderIndex, r.IsWinner, r.EditorId, r.RecordType, null,
-                [.. r.Fields.Select(f => new Index.FieldValue(f.Metadata, f.Value, f.CheckError))], r.IsPartialForm, r.ParseDiagnosis))).ToList();
+                [.. r.Fields.Select(f => new Codec.Schema.FieldValue(f.Metadata, f.Value, f.CheckError))], r.IsPartialForm, r.ParseDiagnosis))).ToList();
         var opened = addresses.ToDictionary(a => a,
             _ => new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [], RecordCount: 1, IsMedium: false),
             PluginAddress.Comparer);

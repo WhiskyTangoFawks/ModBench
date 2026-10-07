@@ -49,7 +49,7 @@ public sealed class LoadOrderFormIdKeyOrderTests
         CompareOf(placed).Diffs.Single(d => d.FieldName == "Items").Children ?? [];
 
     private static FakeRow Row(Container record, PluginAddress plugin, int loadOrderIndex, bool isWinner) =>
-        new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, GameRelease.Fallout4, "cont", ["Items"]));
+        new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, GameRelease.Fallout4));
 
     private static ContainerEntry Entry(FormKey item, FormKey? owner = null) => new()
     {

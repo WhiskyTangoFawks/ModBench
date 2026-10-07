@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 
 namespace MEditService.Index;

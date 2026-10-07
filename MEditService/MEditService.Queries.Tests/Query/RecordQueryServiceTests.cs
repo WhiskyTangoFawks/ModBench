@@ -33,7 +33,7 @@ public sealed class RecordQueryServiceTests
                 npc01Key = npc01.FormKey;
                 mod.Npcs.AddNew("TestNPC02");
             })
-            .Build("Aggression");
+            .Build();
         (_manager, var svc) = Build(fixture);
         _reads = (FakeReads)_manager.RequireReads();
         _svc = svc;
@@ -63,7 +63,7 @@ public sealed class RecordQueryServiceTests
         var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Unreadable"))
             .WithPlugin(otherPlugin, mod => mod.Npcs.AddNew("Readable"))
-            .Build("Aggression");
+            .Build();
         var (_, svc) = Build(fixture with
         {
             Rows = [.. fixture.Rows.Select(r => r.Plugin.Name == PluginName
@@ -86,7 +86,7 @@ public sealed class RecordQueryServiceTests
     {
         var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Npc"))
-            .Build("Aggression");
+            .Build();
         var (manager, svc) = Build(fixture);
         ((FakeReads)manager.RequireReads()).Derivations =
             fixture.Plugins.ToDictionary(c => c.Key, _ => derivedFrom, PluginAddress.Comparer);
@@ -148,7 +148,7 @@ public sealed class RecordQueryServiceTests
                 npcFormKey = npc.FormKey;
                 npc.Race.SetTo(new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800));
             })
-            .Build("Race");
+            .Build();
         var (_, svc) = Build(fixture);
 
         var detail = svc.GetRecord(npcFormKey.ToString());
@@ -385,7 +385,7 @@ public sealed class RecordQueryServiceTests
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin(PluginName, mod => npcKey = mod.Npcs.AddNew("Unreadable").FormKey)
-            .Build("Aggression");
+            .Build();
         var (_, svc) = Build(fixture with
         {
             Rows = [.. fixture.Rows.Select(r => r with { Document = r.Document with { ParseDiagnosis = diagnosis } })],
@@ -434,7 +434,7 @@ public sealed class RecordQueryServiceTests
         var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod => mod.Npcs.AddNew("A"))
             .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("B"))
-            .Build("Aggression");
+            .Build();
         var (manager, svc) = Build(fixture);
         ((FakeReads)manager.RequireReads()).ReferencedBy = new Dictionary<string, IReadOnlyList<ReferenceRow>>
         {
@@ -468,7 +468,7 @@ public sealed class RecordQueryServiceTests
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin(PluginName, mod => npcKey = mod.Npcs.AddNew("TestNPC").FormKey, origin: origin)
-            .Build("Aggression");
+            .Build();
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -496,7 +496,7 @@ public sealed class RecordQueryServiceTests
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(20))
             .WithPlugin("Top.esp", (mod, prev) =>
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(30))
-            .Build(VmadField);
+            .Build();
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -523,7 +523,7 @@ public sealed class RecordQueryServiceTests
             .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("PlainNpc").FormKey)
             .WithPlugin("Over.esp", (mod, prev) =>
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(5))
-            .Build(VmadField);
+            .Build();
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -544,7 +544,7 @@ public sealed class RecordQueryServiceTests
                 o.Aggression = Npc.AggressionType.Frenzied;
                 o.VirtualMachineAdapter = ScriptVmad(20);
             })
-            .Build("Aggression", VmadField);
+            .Build();
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -570,7 +570,7 @@ public sealed class RecordQueryServiceTests
                 o.Aggression = Npc.AggressionType.Frenzied;
                 o.VirtualMachineAdapter = ScriptVmad(30);
             })
-            .Build("Aggression", VmadField);
+            .Build();
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -601,7 +601,7 @@ public sealed class RecordQueryServiceTests
                 o.Aggression = Npc.AggressionType.Frenzied;
                 o.VirtualMachineAdapter = ScriptVmad(20);
             })
-            .Build("Aggression", VmadField);
+            .Build();
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -631,7 +631,7 @@ public sealed class RecordQueryServiceTests
                 var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
                 o.Aggression = Npc.AggressionType.Aggressive;
             })
-            .Build("Aggression", VmadField);
+            .Build();
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -663,7 +663,7 @@ public sealed class RecordQueryServiceTests
                 o.Aggression = Npc.AggressionType.Aggressive;
                 o.VirtualMachineAdapter = ScriptVmad(30);
             })
-            .Build("Aggression", VmadField);
+            .Build();
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -693,7 +693,7 @@ public sealed class RecordQueryServiceTests
                     Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
                 });
             })
-            .Build("Conditions");
+            .Build();
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(cobjKey.ToString());
@@ -727,7 +727,7 @@ public sealed class RecordQueryServiceTests
                     Data = conditionData,
                 });
             })
-            .Build("Conditions");
+            .Build();
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(cobjKey.ToString());

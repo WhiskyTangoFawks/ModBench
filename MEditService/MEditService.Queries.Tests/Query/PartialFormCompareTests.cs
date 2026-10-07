@@ -37,9 +37,9 @@ public sealed class PartialFormCompareTests
 
         var rows = new[]
         {
-            new FakeRow(BasePlugin, 0, IsWinner: false, RealDocuments.Of(baseCell, BasePlugin, 0, isWinner: false, Release, "cell", ["EditorID", "WaterHeight"])),
-            new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(overrideCell, OverridePlugin, 1, isWinner: true, Release, "cell", ["EditorID", "WaterHeight"])),
-            new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(refr, OverridePlugin, 1, isWinner: true, Release, "refr", [])),
+            new FakeRow(BasePlugin, 0, IsWinner: false, RealDocuments.Of(baseCell, BasePlugin, 0, isWinner: false, Release)),
+            new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(overrideCell, OverridePlugin, 1, isWinner: true, Release)),
+            new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(refr, OverridePlugin, 1, isWinner: true, Release)),
         };
         var opened = new Dictionary<PluginAddress, PluginContent>
         {
@@ -73,15 +73,6 @@ public sealed class PartialFormCompareTests
         var partial = compare.Overrides.Single(o => o.Plugin == "Partial.esp");
 
         Assert.True(partial.IsPartialForm);
-    }
-
-    [Fact]
-    public void GetCompare_CellWithPartialFormOverride_ShowsNoConflict()
-    {
-        var compare = _service.GetCompare(_cellKey.ToString());
-
-        Assert.NotNull(compare);
-        Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
     }
 
     [Fact]

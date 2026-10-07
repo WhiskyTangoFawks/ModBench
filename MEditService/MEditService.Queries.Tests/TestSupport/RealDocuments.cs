@@ -10,67 +10,45 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Queries.Tests.TestSupport;
 
-/// <summary>A <see cref="RecordDocument"/> hand-built from the real codec's own text and the named
-/// fields a test reads, never a loop over every column a record type happens to have.</summary>
+/// <summary>A <see cref="RecordDocument"/> read from the real codec's own text under the schema's
+/// own projection, as the index reads one.</summary>
 internal static class RealDocuments
 {
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
     internal static string BodyOf(IMajorRecordGetter record, GameRelease release) => Codec.SerializeToText(record, release);
 
-    // The one column a test asserts on, by name — the same public calls DocumentNodes,
-    // SyntheticBits and CheckErrorBuilder that the store itself calls, aimed at a single field
-    // rather than every field a schema declares.
-    internal static Index.FieldValue FieldOf(
-        RecordTableSchema schema, JsonElement root, string columnName, GameRelease release,
-        Func<string, RecordLookupEntry?>? resolveFormKey = null)
-    {
-        var col = schema.RecordColumns.Single(c => c.Name == columnName);
-        var value = col.Synthetic is { } bit
-            ? JsonSerializer.SerializeToElement(SyntheticBits.IsSet(root, bit))
-            : DocumentNodes.At(root, col.PropertyName);
-        var meta = col.ToFieldMetadata();
-
-        ResolvedFormKey? Resolve(string formKey) =>
-            (resolveFormKey ?? (_ => null))(formKey) is { } entry ? new ResolvedFormKey(entry.RecordType, entry.EditorId) : null;
-
-        return new Index.FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, root), value, Resolve, release));
-    }
-
-    // fieldNames names the columns the test reads; a schema lacking one of them is skipped for it.
     internal static RecordDocument Of(
         IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex, bool isWinner, GameRelease release,
-        string recordType, IReadOnlyList<string> fieldNames, Func<string, RecordLookupEntry?>? resolveFormKey = null)
+        Func<string, RecordLookupEntry?>? resolveFormKey = null)
     {
-        var schema = SharedSchemaReflector.Instance.GetSchemas(release)[recordType];
-        var body = BodyOf(record, release);
-        using var parsed = JsonDocument.Parse(body);
-        var root = parsed.RootElement;
-        var fields = fieldNames
-            .Where(n => schema.RecordColumns.Any(c => c.Name == n))
-            .Select(n => FieldOf(schema, root, n, release, resolveFormKey))
-            .ToList();
-
-        return new RecordDocument(
-            record.FormKey.ToString(), plugin, loadOrderIndex, isWinner, record.EditorID, recordType, body, fields,
-            IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(root, record.GetType()));
+        var schemas = SharedSchemaReflector.Instance.GetSchemas(release);
+        return FromBody(
+            record.FormKey.ToString(), plugin, loadOrderIndex, isWinner, record.EditorID, BodyOf(record, release),
+            schemas[RecordTableName.Of(record, schemas)], resolveFormKey ?? (_ => null), release, parseDiagnosis: null);
     }
 
     internal static RecordDocument FromText(
-        string body, string formKey, PluginAddress plugin, int loadOrderIndex, string recordType, IReadOnlyList<string> fieldNames)
+        string text, string formKey, PluginAddress plugin, int loadOrderIndex, string recordType,
+        Func<string, RecordLookupEntry?> resolveFormKey)
     {
         var release = GameRelease.Fallout4;
-        var schema = SharedSchemaReflector.Instance.GetSchemas(release)[recordType];
-        var (read, editorId, parseDiagnosis) = CallerText.Read(body);
-        if (parseDiagnosis is not null)
-            return new RecordDocument(formKey, plugin, loadOrderIndex, false, null, recordType, read, [], ParseDiagnosis: parseDiagnosis);
-        using var parsed = JsonDocument.Parse(read);
-        var fields = fieldNames
-            .Where(n => schema.RecordColumns.Any(c => c.Name == n))
-            .Select(n => FieldOf(schema, parsed.RootElement, n, release))
-            .ToList();
+        var (body, editorId, parseDiagnosis) = CallerText.Read(text);
+        return FromBody(
+            formKey, plugin, loadOrderIndex, isWinner: false, editorId, body,
+            SharedSchemaReflector.Instance.GetSchemas(release)[recordType], resolveFormKey, release, parseDiagnosis);
+    }
+
+    private static RecordDocument FromBody(
+        string formKey, PluginAddress plugin, int loadOrderIndex, bool isWinner, string? editorId, string body,
+        RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey, GameRelease release, string? parseDiagnosis)
+    {
+        using var parsed = JsonDocument.Parse(body);
+        var root = parsed.RootElement;
+        var fields = schema.FieldsOf(
+            root, link => resolveFormKey(link) is { } entry ? new ResolvedFormKey(entry.RecordType, entry.EditorId) : null, release);
         return new RecordDocument(
-            formKey, plugin, loadOrderIndex, false, editorId, recordType, body, fields,
-            IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(parsed.RootElement, schema.RecordType));
+            formKey, plugin, loadOrderIndex, isWinner, editorId, schema.TableName, body, fields,
+            schema.IsPartialForm(root), parseDiagnosis);
     }
 }

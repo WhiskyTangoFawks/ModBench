@@ -15,7 +15,6 @@ public sealed class RecordHeaderCompareTests
     private static readonly GameRelease Release = GameRelease.Fallout4;
     private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
     private static readonly PluginAddress OverridePlugin = new("Partial.esp", "Data");
-    private static readonly string[] Fields = ["MajorRecordFlagsRaw", "Version2", "WaterHeight"];
 
     private static (FormKey Cell, IRecordQueryService Service) PartialFormOverride()
     {
@@ -27,8 +26,8 @@ public sealed class RecordHeaderCompareTests
 
         var rows = new[]
         {
-            new FakeRow(BasePlugin, 0, IsWinner: false, RealDocuments.Of(baseCell, BasePlugin, 0, isWinner: false, Release, "cell", Fields)),
-            new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(overrideCell, OverridePlugin, 1, isWinner: true, Release, "cell", Fields)),
+            new FakeRow(BasePlugin, 0, IsWinner: false, RealDocuments.Of(baseCell, BasePlugin, 0, isWinner: false, Release)),
+            new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(overrideCell, OverridePlugin, 1, isWinner: true, Release)),
         };
         var opened = new Dictionary<PluginAddress, PluginContent>
         {

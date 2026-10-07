@@ -15,7 +15,6 @@ public sealed class CompareFromTextTests
     private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
     private static readonly PluginAddress ModPlugin = new("Mod.esp", "Data");
     private static readonly PluginAddress InactivePlugin = new("Off.esp", "Data");
-    private static readonly string[] Fields = ["Name", "Items"];
 
     private readonly Fallout4Mod _baseMod = new(ModKey.FromFileName("Base.esm"), Fallout4Release.Fallout4);
     private readonly Fallout4Mod _modMod = new(ModKey.FromFileName("Mod.esp"), Fallout4Release.Fallout4);
@@ -31,8 +30,8 @@ public sealed class CompareFromTextTests
         _otherChest = new Container(_modMod) { EditorID = "Other", Name = "Other", Items = [Entry(new FormKey(_baseMod.ModKey, 0x901))] };
         var rows = new[]
         {
-            Row(_chest, BasePlugin, 0, "cont"),
-            Row(_chestOverride, ModPlugin, 1, "cont"),
+            Row(_chest, BasePlugin, 0),
+            Row(_chestOverride, ModPlugin, 1),
         };
         var opened = new Dictionary<PluginAddress, PluginContent>
         {
@@ -40,7 +39,7 @@ public sealed class CompareFromTextTests
             [ModPlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: ["Base.esm"], RecordCount: 2, IsMedium: false),
         };
         _service = QueryHost.Records(
-            new FakeIndex(new FakeReads(opened, rows) { TextFieldNames = Fields }),
+            new FakeIndex(new FakeReads(opened, rows)),
             FakeLoadOrder.Of(Release,
                 new LoadOrderEntry("Base.esm", "Base.esm", "Data", 0, Enabled: true, Winning: true),
                 new LoadOrderEntry("Mod.esp", "Mod.esp", "Data", 1, Enabled: true, Winning: true)));
@@ -49,8 +48,8 @@ public sealed class CompareFromTextTests
     private static ContainerEntry Entry(FormKey item) =>
         new() { Item = new ContainerItem { Item = new FormLink<IItemGetter>(item), Count = 1 } };
 
-    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex, string recordType) =>
-        new(plugin, loadOrderIndex, true, RealDocuments.Of(record, plugin, loadOrderIndex, true, Release, recordType, Fields));
+    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex) =>
+        new(plugin, loadOrderIndex, true, RealDocuments.Of(record, plugin, loadOrderIndex, true, Release));
 
     private CompareResult Compare(PluginAddress plugin, string text) =>
         _service.GetCompare(_chest.FormKey.ToString(), new CopyText(plugin, text))

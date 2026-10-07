@@ -15,8 +15,8 @@ internal sealed record FakeFixtureData(
     GameRelease Release,
     IReadOnlyList<LoadOrderEntry> Plugins, IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins, IReadOnlyList<FakeRow> Rows);
 
-// Build takes the column names a test reads, never every column a schema has: a scratch round
-// trip runs Mutagen's own master computation, then the real codec serializes each record once.
+// A scratch round trip runs Mutagen's own master computation, then the real codec serializes each
+// record once.
 internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallout4)
 {
     private readonly List<(string Name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> Configure, string Origin)> _plugins = [];
@@ -34,7 +34,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
         return this;
     }
 
-    internal FakeFixtureData Build(params string[] fieldNames)
+    internal FakeFixtureData Build()
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(release);
         using var scratch = new ScratchDirectory("medit-fake-fixture-");
@@ -84,7 +84,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
                 foreach (var (record, recordType) in records)
                 {
                     var isWinner = winners.TryGetValue(record.FormKey.ToString(), out var winner) && winner.Slot == slot;
-                    rows.Add(new FakeRow(key, slot, isWinner, RealDocuments.Of(record, key, slot, isWinner, release, recordType, fieldNames, Resolve)));
+                    rows.Add(new FakeRow(key, slot, isWinner, RealDocuments.Of(record, key, slot, isWinner, release, Resolve)));
                 }
             }
 
