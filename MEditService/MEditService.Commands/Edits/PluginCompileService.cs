@@ -48,8 +48,8 @@ internal sealed class PluginCompileService(
         if (files.Count == 0)
         {
             return CompileResult.Refused(
-                CompileRefusal.NoSource,
-                $"{plugin.Name} has no source tree in the working tree, so there is nothing to compile.");
+                CompileRefusal.PluginSourceUnreadable,
+                $"{plugin.Name}'s plugin source is unreadable, so it cannot be compiled. {RegenerateTheSource}");
         }
 
         var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin.Name, loadOrder.GameRelease);

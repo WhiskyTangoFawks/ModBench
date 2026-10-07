@@ -749,7 +749,7 @@ export interface components {
             message: string;
         };
         /** @enum {string} */
-        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotTracked" | "NoSource" | "SourceUnreadable" | "SourceDoesNotParse" | "SourceDoesNotRoundTrip" | "FormKeyCollision" | "LightFormIdOutOfRange" | "FormIdUnmappable" | "WriteFailed" | "GitUnavailable";
+        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotTracked" | "PluginSourceUnreadable" | "SourceUnreadable" | "SourceDoesNotParse" | "SourceDoesNotRoundTrip" | "FormKeyCollision" | "LightFormIdOutOfRange" | "FormIdUnmappable" | "WriteFailed" | "GitUnavailable";
         CompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
         };
