@@ -142,16 +142,15 @@ internal sealed record SchemaAnnotations(
         new(modHeaderGetter, PluginHeader.MastersFieldName, ReadOnlyReason: "masters are wholly content-derived at compile time"),
     ];
 
-    private static readonly ContainmentMember CellGrid = new(
+    private static readonly ContainmentMember CellGridInEveryGame = new(
         "ICellGetter", RecordTypeDispatch.CellGridMember,
         "it is an exterior cell's own place in the world — it decides the block and sub-block directories that hold " +
         "the cell's source, so moving it restructures the tree rather than rewriting one file. That is a structural " +
         "gesture, not a field edit");
 
-    private static readonly ContainmentMember PlacedPosition = new(
-        "IPlacedGetter", PlacedCell.PositionMember,
+    private const string PlacedPositionReason =
         "it decides which cell holds a temporary reference in a worldspace, so moving it can move the reference " +
-        "into another cell's document. That is a structural gesture, not a field edit");
+        "into another cell's document. That is a structural gesture, not a field edit";
 
     private static readonly string[] EmptySubSchemaTypesInEveryGame =
     [
@@ -283,7 +282,7 @@ internal sealed record SchemaAnnotations(
             ExteriorCellWidth: 4096f,
             PartialFormCellsDefinedIn: "Fallout4.esm",
             PluginHeaderMembers: PluginHeaderMembersOf("IFallout4ModHeaderGetter"),
-            ContainmentMembers: [CellGrid, PlacedPosition]),
+            ContainmentMembers: [CellGridInEveryGame, new("IPlacedGetter", PlacedCell.PositionMember, PlacedPositionReason)]),
 
         [GameCategory.Skyrim] = new(
             ExcludedColumns: [.. GrupTimestampColumns],
@@ -321,7 +320,7 @@ internal sealed record SchemaAnnotations(
             PluginHeaderMembers: PluginHeaderMembersOf("ISkyrimModHeaderGetter"),
             // Skyrim's placed records hold their position inside Placement, a struct, which a row keyed
             // on a record's own member does not reach.
-            ContainmentMembers: [CellGrid]),
+            ContainmentMembers: [CellGridInEveryGame]),
 
         [GameCategory.Starfield] = new(
             ExcludedColumns: [.. GrupTimestampColumns, ("IQuestGetter", "Timestamp")],
@@ -370,7 +369,7 @@ internal sealed record SchemaAnnotations(
             ExteriorCellWidth: null,
             PartialFormCellsDefinedIn: null,
             PluginHeaderMembers: PluginHeaderMembersOf("IStarfieldModHeaderGetter"),
-            ContainmentMembers: [CellGrid, PlacedPosition]),
+            ContainmentMembers: [CellGridInEveryGame, new("IPlacedGetter", PlacedCell.PositionMember, PlacedPositionReason)]),
     };
 
     /// <summary>A game with no table is a game nobody has written the facts for — loud, not empty.</summary>

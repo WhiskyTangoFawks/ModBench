@@ -14,7 +14,7 @@ public sealed class ContainmentReadOnlySchemaTests
         Schemas[table].RecordColumns.Single(c => c.Name == column);
 
     [Fact]
-    public void EveryContainersChildSlotColumn_IsReadOnly_AsAStructuralGesture()
+    public void EveryContainersChildSlotColumn_IsReadOnly_SinceAChildHasGesturesOfItsOwn()
     {
         var slots = Schemas.Values
             .SelectMany(schema => schema.RecordColumns
@@ -25,7 +25,7 @@ public sealed class ContainmentReadOnlySchemaTests
         Assert.Contains(slots, s => s.Schema.TableName == "wrld" && s.Column.Name == "SubCells");
 
         var writable = slots
-            .Where(s => s.Column.ReadOnlyReason?.Contains("structural gesture", StringComparison.Ordinal) != true)
+            .Where(s => s.Column.ReadOnlyReason?.Contains("not by editing the slot", StringComparison.Ordinal) != true)
             .Select(s => $"{s.Schema.TableName}.{s.Column.Name}");
         Assert.Empty(writable);
     }

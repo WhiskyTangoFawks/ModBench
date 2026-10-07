@@ -2,8 +2,9 @@ using MEditService.Codec.Serialization;
 
 namespace MEditService.Codec.Schema;
 
-/// <summary>A record's members its containment owns: a write to one moves records in the source tree,
-/// which is a structural gesture, so the column is read-only, with why (ADR-0006).</summary>
+/// <summary>A record's members its containment owns: a container's child slots, and the members a
+/// <see cref="ContainmentMember"/> row names. A field edit cannot add, remove or move a record, so
+/// each is read-only, with why.</summary>
 internal static class ContainmentReadOnly
 {
     internal static ColumnSpec Marked(
@@ -19,7 +20,7 @@ internal static class ContainmentReadOnly
             : annotations.ContainmentReasonFor(recordGetters, member);
 
     private static string ChildSlotReason(string tableName) =>
-        $"it holds {tableName}'s child records, and containment is expressed by the source tree's own structure " +
-        "rather than by a field (ADR-0006). Adding, removing or reordering a container's children is a structural " +
-        "gesture, not a field edit";
+        $"it holds {tableName}'s child records, each a record of its own, kept in this document in Mutagen's list " +
+        "order (ADR-0020). A child record is added or removed by its own gestures (create, delete, copy), not by " +
+        "editing the slot";
 }
