@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -44,9 +45,10 @@ public sealed class UnreadablePluginSourceTests
         using var mod = ContainerCopyFixture.CreateWithTrackedSource();
         DeleteTheSourceOf(mod.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
 
-        var result = mod.CopyHandler.CopyAsOverride(mod.SourcePlugin, mod.FlatNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.FlatNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false);
 
-        Assert.Equal(RecordEditRefusal.PluginSourceUnreadable, result.Refusal);
+        var refused = result.OnlyRefused();
+        Assert.Equal(RecordEditRefusal.PluginSourceUnreadable, refused.Refusal);
         Assert.False(HoldsASourceFor(mod.DestinationModFolder, ContainerCopyFixture.DestinationPluginName));
     }
 
@@ -56,9 +58,9 @@ public sealed class UnreadablePluginSourceTests
         using var mod = ContainerCopyFixture.CreateWithTrackedSource();
         DeleteTheSourceOf(mod.SourceModFolder, ContainerCopyFixture.SourcePluginName);
 
-        var result = mod.CopyHandler.CopyAsOverride(mod.SourcePlugin, mod.FlatNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.FlatNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         Assert.Equal([mod.FlatNpc.ToString()], mod.ChangedFormKeys(mod.DestinationPlugin));
     }
 }

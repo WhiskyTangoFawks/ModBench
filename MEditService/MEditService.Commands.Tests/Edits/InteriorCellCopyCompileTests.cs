@@ -1,4 +1,6 @@
+using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -20,9 +22,8 @@ public sealed class InteriorCellCopyCompileTests : IDisposable
     [Fact]
     public async Task CopyInteriorCell_IntoAPluginHoldingNoCells_CompilesWithTheCellUnderTheMintedBlockPair()
     {
-        var copy = _fixture.CopyHandler.CopyAsOverride(
-            _fixture.SourcePlugin, _fixture.InteriorCell.ToString(), _fixture.DestinationPlugin);
-        Assert.True(copy.Applied, copy.Message);
+        var copy = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.InteriorCell.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false);
+        copy.OnlyLanded();
 
         var block = Assert.Single((await ImportCompiled()).Cells.Records);
         var subBlock = Assert.Single(block.SubBlocks);
@@ -35,9 +36,8 @@ public sealed class InteriorCellCopyCompileTests : IDisposable
     [Fact]
     public async Task CopyInteriorPlacedReference_IntoAPluginHoldingNoCells_CompilesWithTheRefInsideTheMintedCell()
     {
-        var copy = _fixture.CopyHandler.CopyAsOverride(
-            _fixture.SourcePlugin, _fixture.PersistentRef.ToString(), _fixture.DestinationPlugin);
-        Assert.True(copy.Applied, copy.Message);
+        var copy = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.PersistentRef.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false);
+        copy.OnlyLanded();
 
         var cell = Assert.Single(
             Assert.Single(Assert.Single((await ImportCompiled()).Cells.Records).SubBlocks).Cells,

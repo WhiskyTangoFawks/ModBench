@@ -147,11 +147,11 @@ public enum RecordEditRefusal
 public sealed record RecordEditResult(
     bool Applied, RecordEditRefusal Refusal, string Message, string? NewFormKey = null, string? Path = null)
 {
-    public static RecordEditResult Success() => new(true, RecordEditRefusal.None, "");
+    internal static RecordEditResult Success() => new(true, RecordEditRefusal.None, "");
 
-    public static RecordEditResult Success(string newFormKey) => new(true, RecordEditRefusal.None, "", newFormKey);
+    internal static RecordEditResult Success(string newFormKey) => new(true, RecordEditRefusal.None, "", newFormKey);
 
-    public static RecordEditResult Refused(RecordEditRefusal refusal, string message) =>
+    internal static RecordEditResult Refused(RecordEditRefusal refusal, string message) =>
         new(false, refusal, message);
 
     public static RecordEditResult RefusedAt(RecordEditRefusal refusal, string path, string message) =>

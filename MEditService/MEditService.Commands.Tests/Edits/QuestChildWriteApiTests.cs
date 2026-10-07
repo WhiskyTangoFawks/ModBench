@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -210,10 +211,9 @@ public sealed class QuestChildWriteApiTests : IDisposable
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.Scene.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Scene.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
         Assert.NotNull(quest);
         Assert.False(quest.Require().IsPartialForm());
@@ -235,10 +235,9 @@ public sealed class QuestChildWriteApiTests : IDisposable
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.DialogTopic.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.DialogTopic.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         var copiedQuest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require();
         Assert.False(copiedQuest.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.QuestEditorId, copiedQuest.EditorId);
@@ -258,10 +257,9 @@ public sealed class QuestChildWriteApiTests : IDisposable
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopyAsOverride(
-            fixture.SourcePlugin, fixture.Response2.ToString(), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Response2.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.True(result.Applied, result.Message);
+        result.OnlyLanded();
         var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
         Assert.NotNull(quest);
         Assert.False(quest.Require().IsPartialForm());
