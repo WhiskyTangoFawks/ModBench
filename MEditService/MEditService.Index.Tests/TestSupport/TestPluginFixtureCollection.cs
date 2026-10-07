@@ -2,8 +2,8 @@ using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests;
 
-// xUnit collections are scoped per assembly, so the shared name needs its own registration here too.
-[CollectionDefinition(TestPluginFixtureCollection.Name)]
-public sealed class LocalTestPluginFixtureCollection : ICollectionFixture<TestPluginFixture>
+[CollectionDefinition(Name)]
+public sealed class TestPluginFixtureCollection : ICollectionFixture<TestPluginFixture>
 {
+    public const string Name = "TestPluginFixture collection";
 }
