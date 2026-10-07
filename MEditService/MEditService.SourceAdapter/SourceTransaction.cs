@@ -111,7 +111,6 @@ public sealed class SourceTransaction
         if (minted.Count > 0) _log.Add(new MintedDirectories(modFolder, minted));
     }
 
-    // Most recent first, so a name this action took is vacated before an earlier act moves back into it.
     // A restore failure is collected, never thrown (ADR-0019).
     private List<UnrestoredPath> UndoLog()
     {
@@ -135,8 +134,6 @@ public sealed class SourceTransaction
         return unrestored;
     }
 
-    // Every mod folder this batch touched is stripped from the cause's message, so a report reads the same
-    // whichever tree the fault named.
     private (List<UnrestoredPath> Unrestored, string Report) Rollback(Exception cause)
     {
         var unrestored = UndoLog();
