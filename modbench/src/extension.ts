@@ -24,7 +24,6 @@ import {
   registerTrackCommand, registerDecompileCommand, registerCompileCommand, CompileProblems, type CompileDeps, type TrackDeps,
   type PluginsViewProgress,
 } from './plugins/pluginRowCommands';
-import { registerFilterCommands } from './plugins/recordFilterCommands';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
 import { trackedRepositoriesOver } from './plugins/trackedRepositories';
 import { registerRecordCreateCommand } from './plugins/createRecordCommand';
@@ -370,12 +369,6 @@ export function activate(context: vscode.ExtensionContext): void {
       client: meditClient, originFiles: (origin) => views.originFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     }),
     ...registerPluginRowCommands(pluginRowDeps),
-    ...registerFilterCommands({
-      client: meditClient, treeProvider,
-      refreshMatchingPlugins: () => { void views.plugins.refreshFacts(); },
-      showRecordFilter: views.plugins.showRecordFilter,
-      reporter: makeReporter(outputChannel, 'recordFilter'),
-    }),
     launchBackend({
       setting: GAME_FOLDER_SETTING, client: meditClient, enterEditing: views.enterEditing,
       exitEditing: () => exitEditing(session, meditClient), reporter: makeReporter(outputChannel, 'launch'),
