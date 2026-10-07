@@ -11,7 +11,7 @@ public static class PluginBinaryHash
     /// <summary>Streams the file: the game's own master runs to hundreds of megabytes. Null when the
     /// file cannot be read — no evidence either way, so each caller decides; deliberately not an
     /// exception and not "unchanged".</summary>
-    public static string? OfFile(string path)
+    internal static string? OfFile(string path)
     {
         try
         {
@@ -24,7 +24,7 @@ public static class PluginBinaryHash
 
     /// <summary>The same hash over bytes a caller already holds, spelled as <see cref="OfFile"/>
     /// spells it, so a file read once for two purposes hashes as one read would.</summary>
-    public static string OfBytes(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+    internal static string OfBytes(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
     /// <summary>The same hash upper-cased, which is how the commit messages spell it (ADR-0007;
     /// ADR-0003).

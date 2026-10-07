@@ -1,7 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
@@ -369,7 +368,7 @@ public sealed class TrackModTests
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Furniture.AddNew("TestFurn");
         mod.WriteToBinary(pluginPath);
-        await File.WriteAllBytesAsync(pluginPath, StripFnamAndMnamFromTheOnlyFurnRecord(await File.ReadAllBytesAsync(pluginPath)));
+        await File.WriteAllBytesAsync(pluginPath, PluginBinaryForge.WithoutSubrecords(await File.ReadAllBytesAsync(pluginPath), "FURN", "FNAM", "MNAM"));
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
@@ -385,43 +384,6 @@ public sealed class TrackModTests
         Assert.Contains("Furniture", result.Message);
         Assert.Contains("Flags", result.Message);
         Assert.False(SourceRepository.IsTracked(modFolder));
-    }
-
-    private static byte[] StripFnamAndMnamFromTheOnlyFurnRecord(byte[] original)
-    {
-        var records = PluginBinaryWalk.WalkRecords(original);
-        var furnIndex = records.FindIndex(r => r.Type == "FURN");
-        var furn = records[furnIndex];
-        var grup = records[furnIndex - 1];
-
-        var furnData = original.AsSpan(furn.DataStart, furn.DataLen).ToArray();
-        var toRemove = PluginBinaryWalk.WalkSubrecords(furnData)
-            .Where(s => s.Sig is "FNAM" or "MNAM")
-            .OrderByDescending(s => s.Start)
-            .ToList();
-        var newFurnData = furnData.ToList();
-        var removedBytes = 0;
-        foreach (var s in toRemove)
-        {
-            newFurnData.RemoveRange(s.Start, s.Len);
-            removedBytes += s.Len;
-        }
-
-        var result = original.ToList();
-        result.RemoveRange(furn.DataStart, furn.DataLen);
-        result.InsertRange(furn.DataStart, newFurnData);
-        WriteUInt32(result, furn.Start + 4, (uint)newFurnData.Count);
-
-        var oldGrupSize = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(grup.Start + 4, 4));
-        WriteUInt32(result, grup.Start + 4, oldGrupSize - (uint)removedBytes);
-
-        return [.. result];
-    }
-
-    private static void WriteUInt32(List<byte> bytes, int offset, uint value)
-    {
-        var span = BitConverter.GetBytes(value);
-        for (var i = 0; i < 4; i++) bytes[offset + i] = span[i];
     }
 
     [Fact]

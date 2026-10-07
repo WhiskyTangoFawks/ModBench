@@ -11,11 +11,11 @@ public static class PluginBinaryWalk
 {
     /// <summary>One top-level record or GRUP header. For a GRUP only <c>Start</c>/<c>DataStart</c> are
     /// meaningful (its header carries no FormID); for a record the data span bounds its subrecord stream.</summary>
-    public readonly record struct RecordSpan(string Type, uint FormId, uint Flags, int Start, int DataStart, int DataLen, bool IsGrup);
+    internal readonly record struct RecordSpan(string Type, uint FormId, uint Flags, int Start, int DataStart, int DataLen, bool IsGrup);
 
     /// <summary>One subrecord, relative to the record-data buffer. <c>Len</c> already accounts for an
     /// <c>XXXX</c> marker preceding it, which is not returned as its own entry.</summary>
-    public readonly record struct SubrecordSpan(string Sig, int Start, int Len);
+    internal readonly record struct SubrecordSpan(string Sig, int Start, int Len);
 
     /// <summary>A record whose rewrite has fewer occurrences of some subrecord signatures than the
     /// original. <c>FormId</c> is the raw stored FormID, unresolved — this walker has no link cache and
@@ -24,7 +24,7 @@ public static class PluginBinaryWalk
 
     /// <summary>Flat, document-order walk. A GRUP's children follow immediately after its 24-byte header —
     /// the format nests by adjacency, not by a length prefix — so the walk descends by construction.</summary>
-    public static List<RecordSpan> WalkRecords(byte[] data)
+    internal static List<RecordSpan> WalkRecords(byte[] data)
     {
         var list = new List<RecordSpan>();
         int pos = 0;
@@ -49,7 +49,7 @@ public static class PluginBinaryWalk
     /// <summary>A single record's subrecord stream, already decompressed by the caller. An <c>XXXX</c>
     /// marker's 4-byte payload replaces the following subrecord's 2-byte length — the escape for a
     /// length past <c>ushort</c>.</summary>
-    public static List<SubrecordSpan> WalkSubrecords(byte[] data)
+    internal static List<SubrecordSpan> WalkSubrecords(byte[] data)
     {
         var list = new List<SubrecordSpan>();
         int pos = 0;
@@ -73,7 +73,7 @@ public static class PluginBinaryWalk
 
     /// <summary>A compressed record's data is a little-endian uint32 decompressed length followed by a
     /// zlib stream — decompresses it to the subrecord bytes <see cref="WalkSubrecords"/> expects.</summary>
-    public static byte[] Inflate(ReadOnlySpan<byte> compressedRecordData)
+    internal static byte[] Inflate(ReadOnlySpan<byte> compressedRecordData)
     {
         using var input = new MemoryStream(compressedRecordData[4..].ToArray());
         using var z = new ZLibStream(input, CompressionMode.Decompress);
@@ -85,7 +85,7 @@ public static class PluginBinaryWalk
     /// <summary>Signatures the rewrite has fewer of than the original, in first-seen order. Order and
     /// content are model identity's concern; a signature the rewrite has more of (a canonical marker
     /// insertion) is not loss.</summary>
-    public static List<string> DroppedSignatures(byte[] originalData, byte[] rewrittenData)
+    internal static List<string> DroppedSignatures(byte[] originalData, byte[] rewrittenData)
     {
         var originalSubrecords = WalkSubrecords(originalData);
         var originalCounts = CountBySignature(originalSubrecords);
@@ -106,7 +106,7 @@ public static class PluginBinaryWalk
     /// <summary>The first record whose subrecord inventory shows a drop, or null. Paired by type and
     /// FormID, never by position: a rewrite carries no group order. TES4's MAST/DATA are exempt
     /// (ADR-0008).</summary>
-    public static SubrecordLoss? FindFirstSubrecordLoss(byte[] originalPluginBytes, byte[] rewrittenPluginBytes)
+    internal static SubrecordLoss? FindFirstSubrecordLoss(byte[] originalPluginBytes, byte[] rewrittenPluginBytes)
     {
         var rewrittenByIdentity = new Dictionary<(string Type, uint FormId), RecordSpan>();
         foreach (var record in WalkRecords(rewrittenPluginBytes).Where(r => !r.IsGrup))
