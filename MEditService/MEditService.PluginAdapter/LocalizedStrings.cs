@@ -11,10 +11,6 @@ namespace MEditService.PluginAdapter;
 /// holds it, and in the game Data folder when that folder is unknown.</summary>
 public readonly record struct PluginStrings(string? PluginFolder, string DataFolderPath)
 {
-    /// <summary>For callers that only ever run against a tracked plugin, which always has a mod
-    /// folder.</summary>
-    public static PluginStrings In(string modFolder) => new(modFolder, modFolder);
-
     /// <summary>The folder a refusal names, so a caller can say where it looked.</summary>
     public string Folder => Path.Combine(PluginFolder ?? DataFolderPath, "Strings");
 }

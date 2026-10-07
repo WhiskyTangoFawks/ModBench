@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -22,27 +23,23 @@ public sealed class PluginTreeReadTests
     [Fact]
     public async Task ReadTree_OfAFileItCannotWrite_Throws_AndLeavesNoScratchFolderBehind()
     {
-        using var scratchRoot = new ScratchDirectory("readtree-scratch-root-");
         var unwritable = new TreeFile(Path.Combine("Tree.esp", new string('n', 300) + ".json"), "{}"u8.ToArray());
 
-        await Assert.ThrowsAnyAsync<IOException>(
-            () => MutagenPluginAdapter.ReadTreeAsync([unwritable], Codec, GameRelease.Fallout4, scratchRoot));
+        var thrown = await Assert.ThrowsAnyAsync<IOException>(
+            () => Adapter.ReadTreeAsync([unwritable], Codec, GameRelease.Fallout4));
 
-        Assert.Empty(Directory.GetDirectories(scratchRoot));
+        AssertScratchFolderGone(thrown.Message);
     }
 
     [Fact]
-    public async Task ReadTree_OfASourceItCannotRead_AnswersTheDiagnosis_AndLeavesNoScratchFolderBehind()
+    public async Task ReadTree_OfASourceItCannotRead_AnswersTheDiagnosis()
     {
-        using var scratchRoot = new ScratchDirectory("readtree-scratch-root-");
         var unreadable = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), "{ not json"u8.ToArray());
 
-        var (tree, diagnosis, _) =
-            await MutagenPluginAdapter.ReadTreeAsync([unreadable], Codec, GameRelease.Fallout4, scratchRoot);
+        var (tree, diagnosis, _) = await Adapter.ReadTreeAsync([unreadable], Codec, GameRelease.Fallout4);
 
         Assert.Null(tree);
         Assert.NotNull(diagnosis);
-        Assert.Empty(Directory.GetDirectories(scratchRoot));
     }
 
     [Fact]
@@ -57,18 +54,28 @@ public sealed class PluginTreeReadTests
                 mod.Npcs.AddNew("TreeNpc").Race.SetTo(treeRace);
             })
             .Build();
-        var pluginPath = Path.Combine(data.DataFolder, "Tree.esp");
-        var files = await Adapter.ReadPristineFilesAsync(
-            new ModPath(pluginPath), GameRelease.Fallout4, PluginStrings.In(data.DataFolder));
+        var files = await ReadTreeFiles(data, "Tree.esp");
         var corrupt = files.Select(file => new TreeFile(file.RelativePath,
             Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(file.Content).Replace(race, "NOT-A-FORMKEY", StringComparison.Ordinal))));
 
         var (_, _, error) = await Adapter.ReadTreeAsync([.. corrupt], Codec, GameRelease.Fallout4);
 
-        var absolutePathTheErrorNamesItsFileBy = Assert.IsType<FilePathedException>(error).Path;
-        var scratch = Path.GetRelativePath(Path.GetTempPath(), absolutePathTheErrorNamesItsFileBy).Split(Path.DirectorySeparatorChar)[0];
-        Assert.StartsWith(TheAdaptersOwnScratchPrefix, scratch, StringComparison.Ordinal);
-        Assert.False(Directory.Exists(Path.GetFullPath(scratch, Path.GetTempPath())));
+        AssertScratchFolderGone(Assert.IsType<FilePathedException>(error).Path);
+    }
+
+    private static async Task<IReadOnlyList<TreeFile>> ReadTreeFiles(PluginFixtureData data, string pluginName)
+    {
+        var (files, _) = await Adapter.ReadSourceAsync(
+            new ModPath(Path.Combine(data.DataFolder, pluginName)), pluginName, GameRelease.Fallout4,
+            new PluginStrings(null, data.DataFolder));
+        return files;
+    }
+
+    private static void AssertScratchFolderGone(string textNamingAPathInIt)
+    {
+        var scratch = Regex.Match(textNamingAPathInIt, Regex.Escape(Path.GetTempPath()) + TheAdaptersOwnScratchPrefix + @"[^/\\]+").Value;
+        Assert.NotEmpty(scratch);
+        Assert.False(Directory.Exists(scratch));
     }
 
     [Fact]
@@ -83,9 +90,7 @@ public sealed class PluginTreeReadTests
                     mod.Npcs.GetOrAddAsOverride(npc);
             })
             .Build();
-        var patchPath = Path.Combine(data.DataFolder, "Patch.esp");
-        var files = await Adapter.ReadPristineFilesAsync(
-            new ModPath(patchPath), GameRelease.Fallout4, PluginStrings.In(data.DataFolder));
+        var files = await ReadTreeFiles(data, "Patch.esp");
         var reversed = new[] { "BetaBase.esm", "AlphaBase.esm" };
         var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Patch.esp");
 
@@ -110,9 +115,7 @@ public sealed class PluginTreeReadTests
                 },
                 writeParams: new BinaryWriteParameters { MastersListContent = MastersListContentOption.NoCheck })
             .Build();
-        var lowerPath = Path.Combine(data.DataFolder, "Lower.esp");
-        var files = await Adapter.ReadPristineFilesAsync(
-            new ModPath(lowerPath), GameRelease.Fallout4, PluginStrings.In(data.DataFolder));
+        var files = await ReadTreeFiles(data, "Lower.esp");
         var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Lower.esp");
 
         await Adapter.WriteFromTreeAsync(files, recompiledPath, ["AlphaBase.esm"]);

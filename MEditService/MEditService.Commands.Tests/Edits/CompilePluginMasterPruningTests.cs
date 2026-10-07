@@ -43,7 +43,7 @@ public sealed class CompilePluginMasterPruningTests : IDisposable
 
         var (treeFiles, _) = TestAdapters.Mutagen().ReadSourceAsync(
             new ModPath(ModKey.FromFileName(FixtureFileName), pluginPath), FixtureFileName, GameRelease.Fallout4,
-            PluginStrings.In(_modFolder)).GetAwaiter().GetResult();
+            new PluginStrings(null, _modFolder)).GetAwaiter().GetResult();
         var pristineFiles = SourceRepository.PristineFilesOf(FixtureFileName, treeFiles);
         SourceRepository.Track(
             _modFolder, [(pristineFiles, new DecompiledPlugin(FixtureFileName, null))]);
