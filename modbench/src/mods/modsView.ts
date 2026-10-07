@@ -42,7 +42,6 @@ interface ModsViewDeps {
 }
 
 interface ModsView extends vscode.Disposable {
-  provider: ModListProvider;
   view: vscode.TreeView<ModlistNode>;
   nameFilter: NameFilter;
   copyValue: CopyValueAdapter;
@@ -121,7 +120,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     provider,
   );
   return {
-    provider, view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },
+    view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },
     dispose: () => { disposable.dispose(); },
   };
 }

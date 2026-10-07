@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { MEditClient, PluginAddress, RecordFilter } from '../client';
+import type { MEditClient, PluginAddress } from '../client';
 import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
 import { type PluginsAccess } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
@@ -69,14 +69,12 @@ export interface PluginsViewDeps {
 }
 
 export interface PluginsView extends vscode.Disposable {
-  tree: PluginsTreeProvider;
   view: vscode.TreeView<PluginsTreeNode>;
   /** The view the focused view follows: its selection holds the rows a rebuilt tree still shows. */
   followed: Pick<vscode.TreeView<PluginsTreeNode>, 'selection' | 'onDidChangeSelection'>;
   nameFilter: NameFilter;
   /** The load order Editing could not put: its refusal is this view's message line too. */
   loadOrderPut: SyncFailureReport;
-  showRecordFilter: (filter: RecordFilter | null) => void;
   copyValue: CopyValueAdapter;
   progress: PluginsViewProgress;
   narrator: ReconcileNarrator;
@@ -155,10 +153,10 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     selected, view, tree, changedOutsideDiagnostics, loadDiagnostics, compileDiagnostics,
   );
   return {
-    tree, view, nameFilter,
+    view, nameFilter,
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
-    showRecordFilter, progress, narrator: indexStatus.narrator,
+    progress, narrator: indexStatus.narrator,
     dispose: () => { disposable.dispose(); },
   };
 }
