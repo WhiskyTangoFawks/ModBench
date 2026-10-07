@@ -94,9 +94,9 @@ internal sealed record SchemaAnnotations(
     // The plugin header's presented members, keyed by the game's ModHeader interface: its record
     // header under xEdit's labels, then the rest. No interface over every game's ModHeader names them.
     IReadOnlyList<PluginHeaderMember> PluginHeaderMembers,
-    // Members a field edit cannot move a record by, keyed by an interface the record's getter has
-    // rather than the member's declarer, so a row reaches every record of its kind. A container's
-    // child slots are not rows: reflection reads them.
+    // Members a field edit cannot move a record by, keyed by an interface the record's getter has,
+    // not the member's declarer, so a row reaches every record of its kind. Child slots are
+    // reflected, not rows.
     IReadOnlyList<ContainmentMember> ContainmentMembers)
 {
     // Rows every game shares are named once here; a row true of only some games is written inline
