@@ -1,5 +1,5 @@
 // MO2's watch: every file of the instance, the downloads folder, and the game folder's plugins and
-// Creation Club list, and the setting that points at the game folder, armed through VS Code's file watcher while anyone listens.
+// Creation Club list, armed through VS Code's file watcher while anyone listens, and a change to the game-folder setting.
 
 import * as vscode from 'vscode';
 import type { Subscription } from './instanceAdapter';
