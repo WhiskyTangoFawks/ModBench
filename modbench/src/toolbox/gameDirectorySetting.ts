@@ -3,7 +3,7 @@
 
 /** The Toolbox's own settle: a burst of edits (a pasted path, keystroke by keystroke) becomes
  *  one recompute, as a burst of file events does under the Instance's own settle. */
-export const SETTING_SETTLE_MS = 200;
+const SETTING_SETTLE_MS = 200;
 
 /** VS Code's `ConfigurationChangeEvent`, as much of it as the trigger reads. */
 export interface ConfigChangeEvent {

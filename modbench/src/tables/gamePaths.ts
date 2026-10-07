@@ -25,7 +25,7 @@ export interface GamePathInfo {
 }
 
 /** What the game names for a plugin, besides the plugin. */
-export interface PluginCompanions {
+interface PluginCompanions {
   /** With its period: Mutagen's `ArchiveExtensionProvider` for the release. */
   readonly archiveExtension: string;
   /** As Mutagen's `StringsLanguageFormat` for the release spells them in `<plugin>_<language>.STRINGS`;

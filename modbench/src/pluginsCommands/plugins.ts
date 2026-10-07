@@ -167,7 +167,7 @@ async function syncPlugins(
 }
 
 /** Plugin sync's inputs, which the instance value carries. */
-export interface PluginSyncInputs {
+interface PluginSyncInputs {
   readonly profile: string;
   readonly pluginOrder: readonly PluginEntry[];
   readonly provided: ReadonlyMap<string, string>;

@@ -5,7 +5,7 @@
 import { dropIndexIn, type Drop } from './dropIndex';
 
 /** What the order rules read of one plugin, as mEdit answers it. */
-export interface PluginOrderFacts {
+interface PluginOrderFacts {
   masters: readonly string[];
   blueprint: boolean;
 }

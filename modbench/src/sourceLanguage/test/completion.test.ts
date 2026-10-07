@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { completionsAt } from '../completion';
-import type { CompareResult, RecordPage, RecordSummary } from '../../client';
+import type { CompareResult, RecordSummary } from '../../client';
+type RecordPage = { items: RecordSummary[]; total: number };
 import { comparisonOf, fieldOf, type Field } from '../../test/comparison';
 
 const OWNER = '000801:Mod.esp';

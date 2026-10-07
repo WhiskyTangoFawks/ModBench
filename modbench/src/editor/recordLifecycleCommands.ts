@@ -10,7 +10,7 @@ import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from './ReferencedByTreePr
 
 /** Read off whatever object a gesture is invoked with — a tree row from the Plugins view or a
  *  plain identity literal. Editor names no Plugins-view node type. */
-export interface RecordArgument {
+interface RecordArgument {
   formKey: string;
   plugin: string;
   origin?: string;

@@ -80,7 +80,7 @@ export function routerDepsForPanel<Panel extends FollowedPanel & Pick<vscode.Web
   };
 }
 
-export interface FormKeyPickerDeps extends RecordPickerDeps {
+interface FormKeyPickerDeps extends RecordPickerDeps {
   reply: (msg: ExtensionToWebview) => void;
 }
 

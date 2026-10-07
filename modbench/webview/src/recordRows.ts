@@ -50,7 +50,7 @@ export interface FieldRow extends RowBase {
   cells: ReadonlyMap<ColumnKey, ValueCell>;
 }
 
-export interface FormIdRow extends RowBase {
+interface FormIdRow extends RowBase {
   kind: 'formId';
   meta: FieldMetadata;
 }
