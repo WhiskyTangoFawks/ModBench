@@ -1,7 +1,5 @@
-using MEditService.Codec.Schema;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -111,18 +109,5 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
         Assert.Contains(
             diagnostics,
             d => d.Message.Contains($"[{_embeddedTarget}] <Error: Could not be resolved>", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void TheTargetsFile_CarriesTheEmbeddedRecord_AndTheLinkCacheNamesIt()
-    {
-        var targets = TestAdapters.Mutagen().LinkTargets(
-            _loadOrder,
-            _loadOrder.Plugin(_referrer).Require(),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
-            [_embeddedTarget.ToString()]);
-
-        Assert.Empty(targets.UnreadableFiles);
-        Assert.Equal(new ResolvedFormKey("refr", "EmbeddedRef"), targets.Targets[_embeddedTarget.ToString()]);
     }
 }

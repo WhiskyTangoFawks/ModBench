@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -248,20 +247,14 @@ public sealed class PrimitiveListEditTests : IDisposable
             body);
     }
 
-    private sealed class Fixture : IDisposable
+    private sealed class Fixture : TestInstance
     {
         private const string PluginName = "Primitive699.esp";
         private const string Origin = "Primitive699Mod";
         private const string RaceEditorId = "Race699";
         private const string MaterialObjectEditorId = "Mato699";
 
-        private readonly ScratchDirectory _instanceRoot = new("medit-699-instance-");
-        private readonly ScratchDirectory _gameDirectory = new("medit-699-game-");
-        private readonly string _modFolder;
-
-        public PluginAddress Plugin { get; } = new(PluginName, Origin);
-        public LoadOrderSnapshot LoadOrder { get; }
-        public TestEditor EditHandler { get; }
+        public PluginAddress Plugin { get; }
         public FormKey Race { get; }
         public FormKey MaterialObject { get; }
         public FormKey MiscItem { get; }
@@ -269,9 +262,6 @@ public sealed class PrimitiveListEditTests : IDisposable
 
         public Fixture()
         {
-            var holder = new LoadOrderHolder();
-            _modFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
-            var pluginPath = Path.Combine(_modFolder, PluginName);
             var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
             var race = mod.Races.AddNew(RaceEditorId);
@@ -302,14 +292,7 @@ public sealed class PrimitiveListEditTests : IDisposable
             scco.XNAMs.Add(1L);
             SceneCollection = scco.FormKey;
 
-            TrackedTemplates.WriteTracked(_modFolder, mod);
-
-            LoadOrder = SnapshotPlugins.Snapshot(
-                _gameDirectory, _gameDirectory, GameRelease.Fallout4,
-                [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
-
-            holder.Apply(LoadOrder);
-            EditHandler = TestEditService.EditHandler(holder);
+            Plugin = Add(mod, Origin);
         }
 
         public TestEditor Service() => EditHandler;
@@ -326,13 +309,7 @@ public sealed class PrimitiveListEditTests : IDisposable
             Body(Race);
 
         private string Body(FormKey formKey) =>
-            (TrackedTree.Document(_modFolder, Plugin, formKey.ToString())
+            (TrackedTree.Document(ModFolderOf(Plugin), Plugin, formKey.ToString())
                 ?? throw new InvalidOperationException($"Expected a tracked source document for {formKey}.")).Body;
-
-        public void Dispose()
-        {
-            _instanceRoot.Dispose();
-            _gameDirectory.Dispose();
-        }
     }
 }

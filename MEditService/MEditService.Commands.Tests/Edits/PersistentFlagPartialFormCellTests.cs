@@ -13,29 +13,22 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class PersistentFlagPartialFormCellTests : IDisposable
+public sealed class PersistentFlagPartialFormCellTests : TestInstance
 {
     private const int Persistent = 0x0400, PartialForm = 0x4000;
     private const string OverrideOrigin = "OverrideMod";
 
-    private readonly ScratchDirectory _root = new("medit-persistent-partial-");
-    private readonly PluginAddress _override = new("Override.esp", OverrideOrigin);
+    private readonly PluginAddress _override;
     private readonly FormKey _cell, _temporary, _persistent;
-    private readonly TestEditor _handler;
 
     public PersistentFlagPartialFormCellTests()
     {
-        var masterFolder = Directory.CreateDirectory(Path.Combine(_root, "mods", "MasterMod")).FullName;
-        var overrideFolder = Directory.CreateDirectory(Path.Combine(_root, "mods", OverrideOrigin)).FullName;
-        var gameDirectory = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
-
         var master = new Fallout4Mod(ModKey.FromFileName("Master.esm"), Fallout4Release.Fallout4);
         var masterCell = new Cell(master) { EditorID = "Inside", Flags = Cell.Flag.IsInteriorCell };
         master.Cells.Records.Add(CellBlocks.Interior(masterCell));
-        var masterPath = Path.Combine(masterFolder, "Master.esm");
-        master.WriteToBinary(masterPath);
+        Add(master, "MasterMod", tracked: false);
 
-        var copy = new Fallout4Mod(ModKey.FromFileName(_override.Name), Fallout4Release.Fallout4);
+        var copy = new Fallout4Mod(ModKey.FromFileName("Override.esp"), Fallout4Release.Fallout4);
         copy.ModHeader.MasterReferences.Add(new MasterReference { Master = master.ModKey });
         var partialCell = new Cell(masterCell.FormKey, Fallout4Release.Fallout4) { EditorID = "Inside", MajorRecordFlagsRaw = PartialForm };
         var temporary = new PlacedObject(copy) { EditorID = "PartialTemp" };
@@ -43,33 +36,19 @@ public sealed class PersistentFlagPartialFormCellTests : IDisposable
         partialCell.Temporary.Add(temporary);
         partialCell.Persistent.Add(persistent);
         copy.Cells.Records.Add(CellBlocks.Interior(partialCell));
-        var overridePath = Path.Combine(overrideFolder, _override.Name);
-        copy.WriteToBinary(overridePath);
+        _override = Add(copy, OverrideOrigin);
         (_cell, _temporary, _persistent) = (masterCell.FormKey, temporary.FormKey, persistent.FormKey);
-
-        var loadOrder = SnapshotPlugins.Snapshot(
-            gameDirectory, _root, GameRelease.Fallout4,
-            [
-                new LoadOrderEntry("Master.esm", masterPath, "MasterMod", Slot: 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(_override.Name, overridePath, OverrideOrigin, Slot: 1, Enabled: true, Winning: true),
-            ]);
-        TrackEveryPluginOf.ModAsync(loadOrder, OverrideOrigin).GetAwaiter().GetResult();
-        var holder = new LoadOrderHolder();
-        holder.Apply(loadOrder);
-        _handler = TestEditService.EditHandler(holder);
     }
 
-    public void Dispose() => _root.Dispose();
-
     private RecordEditResult SetFlags(FormKey placed, int raw) =>
-        _handler.Edit(
+        EditHandler.Edit(
             _override, placed.ToString(),
             SetAt(JsonDocument.Parse(raw.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")));
 
     private List<string> Group(string group)
     {
         var cell = JsonNode.Parse(
-            TrackedTree.Document(Path.Combine(_root, "mods", OverrideOrigin), _override, _cell.ToString()).Require().Body).Require();
+            TrackedTree.Document(ModFolderOf(_override), _override, _cell.ToString()).Require().Body).Require();
         return [.. (cell[group] as JsonArray ?? []).Select(placed => placed.Require()["EditorID"].Require().GetValue<string>())];
     }
 
