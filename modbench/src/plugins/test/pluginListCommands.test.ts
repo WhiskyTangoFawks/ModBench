@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom,
 } from '../../test/vscodeMock';
@@ -30,8 +30,9 @@ import {
   pluginsCopyValueText, registerCreatePluginCommand, registerPluginSortCommands, registerRevealInExplorerCommand,
 } from '../pluginListCommands';
 import { PLUGINS_KEY_ARGS } from '../gestureEntry';
-import { CellNode, ChildRecordNode, RecordNode, RecordTypeNode, WorldspaceNode } from '../PluginTreeProvider';
-import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/fixtures';
+import type { PluginTreeNode } from '../PluginTreeProvider';
+import { recordSummaryFixture } from '../../client/test/fixtures';
+import { cellRow, placedRow, recordGroupRow, recordRow, worldspaceRow } from './browserRows';
 import { ImplicitMasterNode, PluginNode, pluginFileOf, type PluginsTreeNode } from '../PluginsTreeProvider';
 import { pluginsTreeOver } from './pluginsTreeOver';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -417,17 +418,24 @@ describe('registerRevealInExplorerCommand', () => {
 describe('pluginsCopyValueText', () => {
   const plugin = new PluginNode({ name: 'Alpha.esp', enabled: true }, 'ModA');
   const locked = new ImplicitMasterNode('Fallout4.esm', 'Data');
-  const record = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp', editorId: 'Gun' }), 'ModA');
-  const unnamed = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp', editorId: null }), 'ModA');
-  const worldspace = new WorldspaceNode('Alpha.esp', { formKey: '000802:Alpha.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }, 'ModA');
-  const cell = new CellNode('Alpha.esp', {
-    formKey: '000803:Alpha.esp', editorId: 'Room', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, fullName: 'A Room', hasParseFailure: false,
-  }, 'ModA');
-  const placedRef = new ChildRecordNode('Alpha.esp', {
-    formKey: '000804:Alpha.esp', editorId: null, baseFormKey: '000800:Alpha.esp', recordType: 'refr', hasParseFailure: false,
-  }, 'ModA');
-  const group = new RecordTypeNode('Alpha.esp', recordTypeCountFixture({ type: 'weap', count: 2, displayName: 'Weapon' }), 'ModA');
-  const mixed = [plugin, record, locked, unnamed, worldspace, cell, placedRef, group];
+  const ALPHA = { name: 'Alpha.esp', origin: 'ModA' };
+  let record: PluginTreeNode;
+  let mixed: (PluginTreeNode | PluginNode | ImplicitMasterNode)[];
+  beforeAll(async () => {
+    record = await recordRow(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp', editorId: 'Gun' }), 'ModA');
+    mixed = [
+      plugin, record, locked,
+      await recordRow(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp', editorId: null }), 'ModA'),
+      await worldspaceRow({ formKey: '000802:Alpha.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }, ALPHA),
+      await cellRow({
+        formKey: '000803:Alpha.esp', editorId: 'Room', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, fullName: 'A Room', hasParseFailure: false,
+      }, ALPHA),
+      await placedRow({
+        formKey: '000804:Alpha.esp', editorId: null, baseFormKey: '000800:Alpha.esp', recordType: 'refr', hasParseFailure: false,
+      }, ALPHA),
+      await recordGroupRow({ type: 'weap', count: 2, displayName: 'Weapon' }, ALPHA),
+    ];
+  });
   const LINES = [
     'Alpha.esp', 'Gun [000800:Alpha.esp]', 'Fallout4.esm', '000801:Alpha.esp',
     'World [000802:Alpha.esp]', 'Room [000803:Alpha.esp]', '000804:Alpha.esp',

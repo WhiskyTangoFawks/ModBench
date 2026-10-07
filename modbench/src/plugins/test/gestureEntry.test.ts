@@ -1,16 +1,17 @@
-import { describe, it, expect, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, uriFrom } from '../../test/vscodeMock';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { TreeItem, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, uriFrom } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
+  TreeItem, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
   Uri: { from: uriFrom },
 }));
 
 import { compilableSelected, pluginsKeyContext } from '../gestureEntry';
 import { pluralArgument, selectionArgument, singularArgument } from '../../drivingLib/gestureEntry';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
-import { CellNode, RecordNode, RecordTypeNode } from '../PluginTreeProvider';
-import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/fixtures';
+import type { PluginTreeNode } from '../PluginTreeProvider';
+import { recordSummaryFixture } from '../../client/test/fixtures';
+import { cellRow, recordGroupRow, recordRow } from './browserRows';
 
 const pluginRow = (name: string, origin = 'SomeMod') => new PluginNode({ name, enabled: true }, origin);
 const lockedRow = (name: string) => new ImplicitMasterNode(name, 'Data');
@@ -45,17 +46,33 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   const compilable = withFlags(pluginRow('Eps.esp', 'ModE'), 'plugin enabled inTrackedMod tracked editable');
   const trackedReadOnly = withFlags(pluginRow('Iota.esp', 'ModI'), 'plugin enabled inTrackedMod tracked');
   const untrackedInTrackedMod = withFlags(pluginRow('Kappa.esp', 'ModE'), 'plugin enabled inTrackedMod untracked editable');
-  const weapons = new RecordTypeNode('Alpha.esp', recordTypeCountFixture({ type: 'weap', count: 3, displayName: 'Weapon' }), 'ModA', { tracked: true, editable: true });
-  const untrackedWeapons = new RecordTypeNode('Beta.esp', recordTypeCountFixture({ type: 'weap', count: 3, displayName: 'Weapon' }), 'ModB');
-  const quests = new RecordTypeNode(
-    'Alpha.esp', recordTypeCountFixture({ type: 'qust', count: 1, displayName: 'Quest', isCreatable: false }), 'ModA', { tracked: true, editable: true },
-  );
-  const own = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: true });
-  const immutable = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: false });
-  const untrackedRecord = new RecordNode(recordSummaryFixture({ formKey: '000802:Beta.esp', plugin: 'Beta.esp' }), 'ModB', { tracked: false, editable: true });
-  const cell = new CellNode('Alpha.esp', {
-    formKey: '000803:Alpha.esp', editorId: 'Cell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false,
-  }, 'ModA', { tracked: true, editable: true });
+  const ALPHA = { name: 'Alpha.esp', origin: 'ModA' };
+  const EDITABLE = { tracked: true, editable: true };
+  const WEAPON = { type: 'weap', count: 3, displayName: 'Weapon' };
+  const ownRecord = (formKey: string, plugin: string, origin: string, conditions: { tracked: boolean; editable: boolean }, recordType?: string) =>
+    recordRow(recordSummaryFixture({ formKey, plugin }), origin, conditions, recordType);
+  let weapons: PluginTreeNode;
+  let untrackedWeapons: PluginTreeNode;
+  let quests: PluginTreeNode;
+  let own: PluginTreeNode;
+  let immutable: PluginTreeNode;
+  let untrackedRecord: PluginTreeNode;
+  let cell: PluginTreeNode;
+  let quest: PluginTreeNode;
+  let readOnlyQuest: PluginTreeNode;
+  beforeAll(async () => {
+    weapons = await recordGroupRow(WEAPON, ALPHA, EDITABLE);
+    untrackedWeapons = await recordGroupRow(WEAPON, { name: 'Beta.esp', origin: 'ModB' });
+    quests = await recordGroupRow({ type: 'qust', count: 1, displayName: 'Quest', isCreatable: false }, ALPHA, EDITABLE);
+    own = await ownRecord('000800:Alpha.esp', 'Alpha.esp', 'ModA', EDITABLE);
+    immutable = await ownRecord('000801:Alpha.esp', 'Alpha.esp', 'ModA', { tracked: true, editable: false });
+    untrackedRecord = await ownRecord('000802:Beta.esp', 'Beta.esp', 'ModB', { tracked: false, editable: true });
+    cell = await cellRow({
+      formKey: '000803:Alpha.esp', editorId: 'Cell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false,
+    }, ALPHA, EDITABLE);
+    quest = await ownRecord('000804:Alpha.esp', 'Alpha.esp', 'ModA', EDITABLE, 'qust');
+    readOnlyQuest = await ownRecord('000805:Alpha.esp', 'Alpha.esp', 'ModA', { tracked: true, editable: false }, 'qust');
+  });
   const enabledNow = (row: PluginNode) => row !== beta;
   const context = (selection: readonly PluginsTreeNode[]) => pluginsKeyContext(selection, enabledNow);
 
@@ -111,9 +128,6 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   });
 
   it('create sees exactly one selected container whose plugin is tracked and editable, a cell included', () => {
-    const quest = new RecordNode(recordSummaryFixture({ formKey: '000804:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: true }, true);
-    const readOnlyQuest = new RecordNode(recordSummaryFixture({ formKey: '000805:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: false }, true);
-
     expect(context([quest]).singleCreatable).toBe(true);
     expect(context([cell]).singleCreatable).toBe(true);
     expect(context([readOnlyQuest]).singleCreatable).toBe(false);

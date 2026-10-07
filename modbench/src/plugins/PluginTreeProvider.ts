@@ -61,7 +61,7 @@ function conditionedContextValue(kind: string, conditions: PluginConditions, isC
   return `${kind} ${conditions.tracked ? 'tracked' : 'untracked'}${conditions.editable ? ' editable' : ''}${isContainer ? ' container' : ''}`;
 }
 
-export class RecordTypeNode extends vscode.TreeItem {
+class RecordTypeNode extends vscode.TreeItem {
   readonly kind = 'recordType' as const;
   readonly recordType: string;
   readonly isContainer: boolean;
@@ -83,7 +83,7 @@ export class RecordTypeNode extends vscode.TreeItem {
   }
 }
 
-export class RecordNode extends vscode.TreeItem {
+class RecordNode extends vscode.TreeItem {
   readonly kind = 'record' as const;
   // A record-scoped command acts on the clicked row's own copy of the record, so the row carries
   // which copy it is: its plugin, via the record, and its origin (ADR-0012).
@@ -110,7 +110,7 @@ export class RecordNode extends vscode.TreeItem {
 
 // Every node in the spatial chain carries its plugin's `origin` (ADR-0012) and conditions down to
 // its leaves: each hop's repository call needs the one, each record row beneath the other.
-export class WorldspaceNode extends vscode.TreeItem {
+class WorldspaceNode extends vscode.TreeItem {
   readonly kind = 'worldspace' as const;
   readonly formKey: string;
   readonly editorId?: string;
@@ -178,7 +178,7 @@ function strRight3(n: number | null | undefined): string {
   return String(n).padStart(3, ' ');
 }
 
-export class CellNode extends vscode.TreeItem {
+class CellNode extends vscode.TreeItem {
   readonly kind = 'cell' as const;
   readonly formKey: string;
   readonly editorId?: string;
@@ -216,7 +216,7 @@ class ChildRecordGroupNode extends vscode.TreeItem {
   }
 }
 
-export class ChildRecordNode extends vscode.TreeItem {
+class ChildRecordNode extends vscode.TreeItem {
   readonly kind = 'placed' as const;
   readonly formKey: string;
   readonly editorId?: string;

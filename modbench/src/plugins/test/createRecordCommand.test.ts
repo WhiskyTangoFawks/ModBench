@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, uriFrom } from '../../test/vscodeMock';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+import { TreeItem, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, uriFrom } from '../../test/vscodeMock';
 
 interface PickItem { label: string; description?: string }
 type ShowQuickPick = (items: readonly PickItem[]) => Promise<unknown>;
@@ -20,32 +20,44 @@ vi.mock('vscode', () => ({
     },
   },
   window: { showQuickPick, showInputBox },
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
+  TreeItem, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
   Uri: { from: uriFrom },
 }));
 
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/fixtures';
+import { recordSummaryFixture } from '../../client/test/fixtures';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { registerRecordCreateCommand } from '../createRecordCommand';
 import type { RecordPlace } from '../createdRecordSelection';
 import { PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
-import { CellNode, RecordNode, RecordTypeNode, WorldspaceNode } from '../PluginTreeProvider';
+import type { PluginTreeNode } from '../PluginTreeProvider';
+import { cellRow, recordGroupRow, recordRow, worldspaceRow } from './browserRows';
 
 const PLUGIN_ROW = new PluginNode({ name: 'MyPatch.esp', enabled: true }, 'ModA');
 const EDITABLE = { tracked: true, editable: true };
-const NPC_GROUP = new RecordTypeNode('MyPatch.esp', recordTypeCountFixture({ type: 'npc_', count: 3, displayName: 'Non-Player Character' }), 'ModA', EDITABLE);
-const OTHER_GROUP = new RecordTypeNode('Other.esp', recordTypeCountFixture({ type: 'weap', displayName: 'Weapon' }), 'ModB', EDITABLE);
-const RECORD_ROW = new RecordNode(recordSummaryFixture({ formKey: '000800:MyPatch.esp', plugin: 'MyPatch.esp' }), 'ModA', EDITABLE);
-const QUEST_ROW = new RecordNode(recordSummaryFixture({ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', editorId: 'MQ101' }), 'ModA', EDITABLE, true);
-const CELL_ROW = new CellNode('MyPatch.esp', {
-  formKey: '000802:MyPatch.esp', editorId: 'MyCell', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false,
-}, 'ModA', EDITABLE);
-const WORLDSPACE_ROW = new WorldspaceNode('MyPatch.esp', { formKey: '000803:MyPatch.esp', hasChildren: false, hasParseFailure: false }, 'ModA', EDITABLE);
-QUEST_ROW.id = 'MQ101';
-CELL_ROW.id = 'MyCell';
-WORLDSPACE_ROW.id = '000803:MyPatch.esp';
+const MY_PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
+const NPC = { type: 'npc_', count: 3, displayName: 'Non-Player Character' };
+let NPC_GROUP: PluginTreeNode;
+let OTHER_GROUP: PluginTreeNode;
+let RECORD_ROW: PluginTreeNode;
+let QUEST_ROW: PluginTreeNode;
+let CELL_ROW: PluginTreeNode;
+let WORLDSPACE_ROW: PluginTreeNode;
+
+beforeAll(async () => {
+  NPC_GROUP = await recordGroupRow(NPC, MY_PATCH, EDITABLE);
+  OTHER_GROUP = await recordGroupRow({ type: 'weap', displayName: 'Weapon' }, { name: 'Other.esp', origin: 'ModB' }, EDITABLE);
+  RECORD_ROW = await recordRow(recordSummaryFixture({ formKey: '000800:MyPatch.esp', plugin: 'MyPatch.esp' }), 'ModA', EDITABLE);
+  QUEST_ROW = await recordRow(recordSummaryFixture({ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', editorId: 'MQ101' }), 'ModA', EDITABLE, 'qust');
+  CELL_ROW = await cellRow({
+    formKey: '000802:MyPatch.esp', editorId: 'MyCell', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false,
+  }, MY_PATCH, EDITABLE);
+  WORLDSPACE_ROW = await worldspaceRow({ formKey: '000803:MyPatch.esp', hasChildren: false, hasParseFailure: false }, MY_PATCH, EDITABLE);
+  QUEST_ROW.id = 'MQ101';
+  CELL_ROW.id = 'MyCell';
+  WORLDSPACE_ROW.id = '000803:MyPatch.esp';
+});
 const QUEST_HOLDS = [
   { type: 'dlbr', displayName: 'Dialog Branch' }, { type: 'dial', displayName: 'Dialog Topic' }, { type: 'scen', displayName: 'Scene' },
 ];
@@ -157,7 +169,7 @@ describe('modbench.record.create', () => {
 
   it('creates in the group\'s own plugin when another plugin shares its filename', async () => {
     const { steps, create } = harness();
-    const overriding = new RecordTypeNode('MyPatch.esp', recordTypeCountFixture({ type: 'npc_', count: 3, displayName: 'Non-Player Character' }), 'ModB', EDITABLE);
+    const overriding = await recordGroupRow(NPC, { name: 'MyPatch.esp', origin: 'ModB' }, EDITABLE);
 
     await create(overriding);
 
