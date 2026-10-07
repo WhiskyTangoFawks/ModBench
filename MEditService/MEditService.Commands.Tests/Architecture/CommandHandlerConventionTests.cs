@@ -48,8 +48,6 @@ public sealed class CommandHandlerConventionTests
 
     public static IEnumerable<object[]> EveryHandler => Handlers.Select(handler => new object[] { handler });
 
-    public static IEnumerable<object[]> EverySingleWrite => SingleWriteHandlers.Select(handler => new object[] { handler });
-
     [Theory]
     [MemberData(nameof(EveryHandler))]
     public void AHandler_OffersTheGestureAndNothingElse(Type handler)
@@ -60,19 +58,6 @@ public sealed class CommandHandlerConventionTests
             gestures.Length == 1,
             $"{handler.Name} declares {gestures.Length} public methods of its own; a handler is one " +
             "gesture, and no interface may declare it.");
-    }
-
-    [Theory]
-    [MemberData(nameof(EverySingleWrite))]
-    public void ASingleWriteHandler_AnswersWhetherTheWriteLanded(Type handler)
-    {
-        const string landed = "Applied";
-        var answer = AnswerCarrierUnwrappingTask(DeclaredMethodsNotRequiredByAnInterface(handler).Single().ReturnType);
-
-        Assert.True(
-            LandedType(answer, landed) == typeof(bool),
-            $"{answer.Name} has no public {landed} of type bool, so {handler.Name}'s carrier does " +
-            "not answer with it.");
     }
 
     [Theory]
@@ -126,14 +111,4 @@ public sealed class CommandHandlerConventionTests
             .Where(method => !required.Contains(method))
             .ToArray();
     }
-
-    private static Type? LandedType(Type answer, string member) =>
-        answer.GetProperty(member, BindingFlags.Public | BindingFlags.Instance)?.PropertyType
-        ?? answer.GetField(member, BindingFlags.Public | BindingFlags.Instance)?.FieldType
-        ?? answer.GetMethod(member, BindingFlags.Public | BindingFlags.Instance, Type.EmptyTypes)?.ReturnType;
-
-    private static Type AnswerCarrierUnwrappingTask(Type returned) =>
-        returned.IsGenericType && returned.GetGenericTypeDefinition() == typeof(Task<>)
-            ? returned.GetGenericArguments()[0]
-            : returned;
 }

@@ -1,10 +1,7 @@
 namespace MEditService.Commands;
 
 /// <summary>Whether rename source moved the plugin's source, or why it wrote nothing.</summary>
-public sealed record RenameSourceResult(RenameSourceRefusal? Refusal = null, string? Message = null)
-{
-    public bool Applied => Refusal is null;
-}
+public sealed record RenameSourceResult(RenameSourceRefusal? Refusal = null, string? Message = null);
 
 /// <summary>Why rename source wrote nothing (ADR-0019): each value is a different way out.</summary>
 public enum RenameSourceRefusal
