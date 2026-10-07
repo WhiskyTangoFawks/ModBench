@@ -4,4 +4,4 @@
 # HeaderDocument writes and reads the plugin header through the whole-mod door in a temp folder that
 # is never under source/. Its RecordData.json names that door's output, not a path in the tree, so
 # the two answer different questions and neither owns the other's name.
-MEditService.Codec/Serialization/HeaderDocument.cs: "RecordData.json": 1
+MEditService.Codec/Serialization/DocumentFileNames.cs: "RecordData.json": 1
