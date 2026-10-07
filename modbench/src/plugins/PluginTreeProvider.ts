@@ -6,6 +6,7 @@ import type {
   ContainerChildSummary, MEditClient, PluginRecordTypeCount, InteriorCellBlock, InteriorCellSubBlock,
 } from '../client';
 import { parseRecordResourceUri, recordResourceUri } from './recordResourceUri';
+import type { RecordArgument } from '../drivingLib/recordArgument';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { pluginAddressKey, pluginAddressOf, type PluginAddress } from '../wire/pluginAddress';
 import type { PluginConditions } from './pluginFacts';
@@ -52,7 +53,7 @@ const NOT_EDITABLE: PluginConditions = { tracked: false, editable: false };
 
 // A row opens its own plugin's copy (commands.md, Argument: "Singular means the clicked row").
 function openCopyCommand(formKey: string, plugin: PluginAddress): vscode.Command {
-  return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey, plugin }] };
+  return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey, plugin } }] };
 }
 
 // The contextValues state, on the row, refusals the backend would otherwise reach only after
@@ -83,10 +84,12 @@ class RecordTypeNode extends vscode.TreeItem {
   }
 }
 
+const recordArgument = (plugin: string, origin: string, formKey: string): RecordArgument =>
+  ({ kind: 'record', plugin: { name: plugin, origin }, formKey });
+
 class RecordNode extends vscode.TreeItem {
   readonly kind = 'record' as const;
-  // A record-scoped command acts on the clicked row's own copy of the record, so the row carries
-  // which copy it is: its plugin, via the record, and its origin (ADR-0012).
+  readonly argument: RecordArgument;
   constructor(
     public readonly record: RecordSummary,
     public readonly origin: string,
@@ -97,6 +100,7 @@ class RecordNode extends vscode.TreeItem {
   ) {
     const label = record.editorId ?? record.formKey;
     super(label, collapsibleWhen(isContainer && hasContainerChildren));
+    this.argument = recordArgument(record.plugin, origin, record.formKey);
     this.contextValue = conditionedContextValue('record', conditions, isContainer);
     this.command = openCopyCommand(record.formKey, { name: record.plugin, origin });
     // RecordDecorationProvider's keying identity — record.plugin (this row's own copy's owning
@@ -112,6 +116,7 @@ class RecordNode extends vscode.TreeItem {
 // its leaves: each hop's repository call needs the one, each record row beneath the other.
 class WorldspaceNode extends vscode.TreeItem {
   readonly kind = 'worldspace' as const;
+  readonly argument: RecordArgument;
   readonly formKey: string;
   readonly editorId?: string;
   constructor(
@@ -122,6 +127,7 @@ class WorldspaceNode extends vscode.TreeItem {
     super(label, collapsibleWhen(worldspace.hasChildren));
     this.formKey = worldspace.formKey;
     this.editorId = worldspace.editorId ?? undefined;
+    this.argument = recordArgument(plugin, origin, worldspace.formKey);
     this.contextValue = conditionedContextValue('worldspace', conditions, true);
     this.command = openCopyCommand(worldspace.formKey, { name: plugin, origin });
     this.resourceUri = recordResourceUri({ name: plugin, origin }, worldspace.formKey);
@@ -181,6 +187,7 @@ function strRight3(n: number | null | undefined): string {
 
 class CellNode extends vscode.TreeItem {
   readonly kind = 'cell' as const;
+  readonly argument: RecordArgument;
   readonly formKey: string;
   readonly editorId?: string;
   constructor(
@@ -192,6 +199,7 @@ class CellNode extends vscode.TreeItem {
     super(label, collapsibleWhen(cell.hasChildren));
     this.formKey = cell.formKey;
     this.editorId = cell.editorId ?? undefined;
+    this.argument = recordArgument(plugin, origin, cell.formKey);
     this.contextValue = conditionedContextValue('cell', conditions, true);
     this.command = openCopyCommand(cell.formKey, { name: plugin, origin });
     this.resourceUri = recordResourceUri({ name: plugin, origin }, cell.formKey);
@@ -220,6 +228,7 @@ class ChildRecordGroupNode extends vscode.TreeItem {
 
 class ChildRecordNode extends vscode.TreeItem {
   readonly kind = 'placed' as const;
+  readonly argument: RecordArgument;
   readonly formKey: string;
   readonly editorId?: string;
   constructor(
@@ -232,6 +241,7 @@ class ChildRecordNode extends vscode.TreeItem {
     super(label, vscode.TreeItemCollapsibleState.None);
     this.formKey = child.formKey;
     this.editorId = child.editorId ?? undefined;
+    this.argument = recordArgument(plugin, origin, child.formKey);
     this.contextValue = conditionedContextValue('placed', conditions);
     this.command = openCopyCommand(child.formKey, { name: plugin, origin });
     this.resourceUri = recordResourceUri({ name: plugin, origin }, child.formKey);

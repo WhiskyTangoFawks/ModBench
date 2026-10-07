@@ -11,7 +11,8 @@
     { "path": "../drivingLib" },
     { "path": "../instanceLoader" },
     { "path": "../instanceCommands" },
-    { "path": "../ports" }
+    { "path": "../ports" },
+    { "path": "../wire" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

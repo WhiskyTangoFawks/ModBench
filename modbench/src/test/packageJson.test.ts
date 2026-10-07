@@ -787,7 +787,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     [{ 'modbench.plugin.selectionToggle': 'enable' }, [{ key: 'space', command: 'modbench.plugin.enable' }]],
     [{ 'modbench.plugin.selectionToggle': 'disable' }, [{ key: 'space', command: 'modbench.plugin.disable' }]],
     [{ 'modbench.plugin.singleTracked': true }, [{ key: 'f2', command: 'modbench.plugin.rename' }]],
-    [{ 'modbench.plugin.allDeletableRecords': true }, [{ key: 'Delete', mac: 'cmd+backspace', command: 'modbench.pluginListTree.deleteHere' }]],
+    [{ 'modbench.plugin.allDeletableRecords': true }, [{ key: 'Delete', mac: 'cmd+backspace', command: 'modbench.record.delete' }]],
   ])('on the focused Plugins tree with %j, the keys that fire are those of the commands the selection allows, and copy value', (facts, keys) => {
     expectKeysFiring({ focusedView: 'modbench.pluginListTree', listFocus: true, ...inInstance, ...facts }, [...keys, COPY]);
   });
@@ -1333,9 +1333,8 @@ const OPEN_TO_THE_SIDE = 'modbench.record.openToSide';
 const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads', 'modbench.referencedByTree']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
-const DELETE_ENTRY_POINTS = ['modbench.pluginListTree', 'modbench.referencedByTree'].map((view) => `${view}.deleteHere`);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
-const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...DELETE_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_TO_THE_SIDE, OPEN_REFERENCE];
+const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_TO_THE_SIDE, OPEN_REFERENCE];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
@@ -1382,6 +1381,16 @@ describe('package.json palette titles are the verb and the object', () => {
   });
 });
 
+describe('package.json Delete keys', () => {
+  it('each passes its own view as args, since a key cannot name the rows it deletes', () => {
+    const deleteKeys = pkg.contributes.keybindings.filter((k) => k.command === 'modbench.record.delete');
+    expect(deleteKeys.map((k) => [k.key, k.args])).toEqual([
+      ['Delete', { view: 'modbench.referencedByTree' }],
+      ['Delete', { view: 'modbench.pluginListTree' }],
+    ]);
+  });
+});
+
 describe('package.json Referenced By menus and keys', () => {
   const menuOf = (viewItem: string) =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
@@ -1399,7 +1408,7 @@ describe('package.json Referenced By menus and keys', () => {
     const onTheTree = { focusedView: 'modbench.referencedByTree', listFocus: true, ...inInstance };
     const copy = { key: 'ctrl+c', mac: 'cmd+c', command: 'modbench.copyValue' };
     expectKeysFiring({ ...onTheTree, 'modbench.referencedBy.allHolders': true }, [
-      copy, { key: 'Delete', mac: 'cmd+backspace', command: 'modbench.referencedByTree.deleteHere' },
+      copy, { key: 'Delete', mac: 'cmd+backspace', command: 'modbench.record.delete' },
     ]);
     expectKeysFiring(onTheTree, [copy]);
   });

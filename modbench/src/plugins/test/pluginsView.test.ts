@@ -26,6 +26,7 @@ const h = vi.hoisted(() => ({
   picked: [] as string[][],
   opened: [] as unknown[],
   shown: [] as unknown[],
+  selectRows: (_rows: unknown[]): void => undefined,
 }));
 
 vi.mock('vscode', () => {
@@ -41,9 +42,12 @@ vi.mock('vscode', () => {
     window: {
       ...filterBoxWindowMock(state),
       createTreeView: () => {
+        const selectionListeners: ((event: { selection: unknown[] }) => unknown)[] = [];
         const view: { description?: string; message?: string } & Record<string, unknown> = {
-          selection: [], onDidChangeSelection: disposable, onDidChangeCheckboxState: disposable, dispose: () => undefined,
+          selection: [], onDidChangeCheckboxState: disposable, dispose: () => undefined,
+          onDidChangeSelection: (listener: (event: { selection: unknown[] }) => unknown) => { selectionListeners.push(listener); return disposable(); },
         };
+        h.selectRows = (rows) => { view.selection = rows; selectionListeners.forEach((listener) => listener({ selection: rows })); };
         h.views.push(view);
         return view;
       },
@@ -91,6 +95,7 @@ vi.mock('vscode', () => {
   };
 });
 
+import { createFocusedView } from '../../drivingLib/focusedView';
 import { createPluginsView } from '../pluginsView';
 import { createPluginSync, type PluginSync } from '../pluginSync';
 import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
@@ -178,6 +183,22 @@ describe('the Plugins view registers its own gestures', () => {
     expect(plugins.copyValue.reporterTag).toBe('pluginListTree.copyValue');
     expect(plugins.copyValue.text({ view: 'modbench.modList' }, undefined)).toBeUndefined();
     expect(plugins.copyValue.text({ view: 'modbench.pluginListTree' }, undefined)).toBe('');
+  });
+});
+
+describe('the Plugins view\'s selection for a key', () => {
+  it('still holds a selected row the rebuilt tree shows, though VS Code reports none until the tree hands its rows back', async () => {
+    const { plugins, view } = pluginsView(instanceValueFixture({
+      plugins: [{ name: 'A.esp', path: '/fixture/A.esp', origin: 'SomeMod', slot: 0, enabled: true, winning: true }], gameFolder: FOUND,
+    }));
+    const focused = createFocusedView();
+    focused.follow('modbench.pluginListTree', plugins.followed);
+    const [row] = await plugins.tree.getChildren();
+
+    h.selectRows([present(row, 'the plugin row')]);
+    Object.assign(view(), { selection: [] });
+
+    expect(focused.selectionOf('modbench.pluginListTree')).toEqual([row]);
   });
 });
 

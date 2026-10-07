@@ -77,7 +77,7 @@ function register({
     reporterFor: () => reporter,
     ask: vi.fn(),
     focusedView,
-    viewSelections: new Map([['test.view', selection]]),
+    recordViewIds: ['test.view'],
     modFacts: { trackedMods: () => new Set(), modDirs: () => new Map(), onChange: () => ({ dispose: () => undefined }) },
     recordWrite: (command) => command(),
     refreshSourceControlFor: () => undefined,
@@ -99,6 +99,7 @@ beforeEach(() => {
 describe('modbench.record.open from the palette, with no Argument', () => {
   const open = () => commandHandlers.get('modbench.record.open')?.();
   const winner = { name: 'A.esp', origin: 'ModA' };
+  const rowOf = (formKey: string) => ({ argument: { kind: 'record', plugin: winner, formKey } });
   const renderingTheWinner = (): { meditClient: InMemoryMEditClient } => {
     const meditClient = new InMemoryMEditClient();
     meditClient.setQueryAnswer('getRecordOwner', winner);
@@ -108,7 +109,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
   };
 
   it('opens the records selected in the focused view as one grid, pinned, on the first record\'s document', async () => {
-    register({ selection: () => [{ formKey: '000801:A.esp', kind: 'placed' }, { kind: 'record', record: { formKey: '000802:A.esp' } }], ...renderingTheWinner() });
+    register({ selection: () => [rowOf('000801:A.esp'), rowOf('000802:A.esp')], ...renderingTheWinner() });
 
     await open();
 
@@ -152,7 +153,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
   it('reports a record VS Code could not open', async () => {
     reporter.report.mockClear();
-    register({ selection: () => [{ formKey: '000801:A.esp', kind: 'placed' }], ...renderingTheWinner() });
+    register({ selection: () => [rowOf('000801:A.esp')], ...renderingTheWinner() });
     executeCommand.mockRejectedValueOnce(new Error('no editor'));
 
     await open();
@@ -161,7 +162,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
   });
 
   it('does not ask when the selection holds a record', async () => {
-    register({ selection: () => [{ formKey: '000801:A.esp', kind: 'placed' }] });
+    register({ selection: () => [rowOf('000801:A.esp')] });
 
     await open();
 
@@ -186,7 +187,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   it('opens a tracked copy\'s file in the record grid, as a preview', async () => {
     registerAnswering({ path: FILE });
 
-    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin } });
 
     expect(executed().map(([id, uri, ...rest]) => [id, String(uri), ...rest])).toEqual([
       ['vscode.openWith', `file://${FILE}`, 'modbench.record', { viewColumn: -1, preview: true }],
@@ -196,7 +197,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   it('opens an untracked copy, which has no file, as the document mEdit renders it as, in the record grid', async () => {
     registerAnswering({ path: null });
 
-    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin } });
 
     expect(opened()).toEqual([['/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
   });
@@ -204,7 +205,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   it('opens an untracked plugin\'s header as the document mEdit renders it as', async () => {
     registerAnswering({ path: null }, '000000:A.esp', 'A.esp.json');
 
-    await commandHandlers.get('modbench.record.open')?.({ header: plugin });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: '000000:A.esp', plugin } });
 
     expect(opened()).toEqual([['/ModA/A.esp/A.esp.json?formKey=000000%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
   });
@@ -213,7 +214,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     const PLACED = '000803:A.esp';
     registerAnswering({ path: null }, PLACED, 'SharedRef - 000803_A.esp.json');
 
-    await commandHandlers.get('modbench.record.open')?.({ kind: 'placed', formKey: PLACED, plugin: plugin.name, origin: plugin.origin });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', plugin, formKey: PLACED } });
 
     expect(opened()).toEqual([['/ModA/A.esp/SharedRef - 000803_A.esp.json?formKey=000803%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
   });
@@ -221,7 +222,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   it('opens a copy carried in another record\'s file, as a placed reference is in its cell\'s, in a tab of its own on that file', async () => {
     registerAnswering({ path: FILE }, '000700:A.esp');
 
-    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin } });
 
     expect(opened()).toEqual([[`modbench-child-record:${FILE}?formKey=000801%3AA.esp&name=A.esp&origin=ModA`, 'modbench.record']]);
   });
@@ -234,7 +235,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     meditClient.setQueryAnswer('getRenderedDocument', { fileName: 'Gun.json', text: '{}' });
     register({ meditClient });
 
-    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN } });
 
     expect(opened()).toEqual([['/ModB/B.esp/Gun.json?formKey=000801%3AA.esp&name=B.esp&origin=ModB', 'modbench.record']]);
   });
@@ -245,7 +246,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     meditClient.setQueryAnswer('getRecordOwner', undefined);
     register({ meditClient });
 
-    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN } });
 
     expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, `No active plugin holds ${GUN}.`]]);
     expect(opened()).toEqual([]);
@@ -259,7 +260,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     meditClient.setQueryAnswer('getRenderedDocument', { fileName: 'Gun.json', text: '{}' });
     register({ meditClient });
 
-    await commandHandlers.get('modbench.record.open')?.([{ formKey: GUN, plugin }, { formKey: '000802:A.esp' }]);
+    await commandHandlers.get('modbench.record.open')?.([{ argument: { kind: 'record', formKey: GUN, plugin } }, { argument: { kind: 'record', formKey: '000802:A.esp' } }]);
 
     expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, 'No active plugin holds 000802:A.esp.']]);
     expect(opened()).toEqual([]);
@@ -269,7 +270,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     reporter.report.mockClear();
     registerAnswering(null);
 
-    await commandHandlers.get('modbench.record.open')?.({ formKey: GUN, plugin });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin } });
 
     expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, `A.esp (ModA) holds no ${GUN}.`]]);
     expect(opened()).toEqual([]);
@@ -279,7 +280,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 describe('modbench.record.openToSide, the menus\' entry point', () => {
   it('fires open with the menu selection, each record placed beside', async () => {
     register();
-    const [a, b] = [{ formKey: '000801:A.esp' }, { formKey: '000802:A.esp' }];
+    const [a, b] = [{ argument: { kind: 'record', formKey: '000801:A.esp' } }, { argument: { kind: 'record', formKey: '000802:A.esp' } }];
 
     await commandHandlers.get('modbench.record.openToSide')?.(a, [a, b]);
 

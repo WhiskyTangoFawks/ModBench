@@ -1,5 +1,6 @@
 import { isFieldType, type ColumnKey, type CompareOverride, type FieldMetadata, type FieldValue, type PathHop, type PathSegment } from './types';
 import { copyColumnKey } from '../../src/wire/columnKey';
+import { pluginAddressOf } from '../../src/wire/pluginAddress';
 
 export function toStr(v: unknown): string {
   if (v == null) return '';
@@ -72,7 +73,10 @@ export function arrayParentContext(
 export function headerCellContext(
   formKey: string, plugin: string, origin: string, menu: Pick<ColumnHeaderContext, 'compilable' | 'editable' | 'inMod'>,
 ): ColumnHeaderContext {
-  return { webviewSection: 'recordHeader', formKey, plugin, origin, ...menu, preventDefaultContextMenuItems: true };
+  return {
+    webviewSection: 'recordHeader', argument: { kind: 'record', plugin: pluginAddressOf({ plugin, origin }), formKey },
+    ...menu, preventDefaultContextMenuItems: true,
+  };
 }
 
 /** A cell's `data-vscode-context`: what its right-click hands a command, and what the host's keys
