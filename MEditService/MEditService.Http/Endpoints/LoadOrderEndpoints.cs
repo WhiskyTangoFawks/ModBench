@@ -51,18 +51,10 @@ public static class LoadOrderEndpoints
         if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine)
             return Results.Problem("The snapshot must state its active plugins and those loaded with no line.", statusCode: 400);
 
-        try
-        {
-            var result = handler.Put(
-                req.GameDirectory, req.InstanceRoot, gameRelease,
-                registered, active, loadedWithNoLine);
-            return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : WriteEndpointMapping.Refusal(result);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            logger.LogError(ex, "Failed to apply the load order for {InstanceRoot}", req.InstanceRoot);
-            return WriteEndpointMapping.WriteFailure(ex.Message);
-        }
+        var result = handler.Put(
+            req.GameDirectory, req.InstanceRoot, gameRelease,
+            registered, active, loadedWithNoLine);
+        return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : WriteEndpointMapping.Refusal(result);
     }
 
     private static List<RegisteredPlugin>? RegisteredPluginsOf(IReadOnlyList<LoadOrderPlugin>? plugins)
