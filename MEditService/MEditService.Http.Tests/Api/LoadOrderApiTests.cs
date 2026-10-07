@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
@@ -37,19 +36,18 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Fact]
-    public async Task PutLoadOrder_ReadsWhatProvidesAPluginFromTheSnapshot_NotFromThePluginsDirectory()
+    public async Task PutLoadOrder_APluginTheSnapshotSaysTheGameProvides_IsImmutable_WhateverFolderHoldsIt()
     {
         using var fx = new PluginFixtureBuilder("api-provider")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"), origin: "ModA")
             .BuildScattered();
-        var named = new PluginProvider.FromMod("ModA", Path.Combine(fx.InstanceRoot, "mods", "ModA"));
-        var plugins = fx.Plugins.Select(p => p with { NamedProvider = named }).ToList();
+        var plugins = fx.Plugins.Select(p => p with { NamedProvider = PluginProvider.Game }).ToList();
 
         var response = await _client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, plugins));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var held = loaded.Services.GetRequiredService<LoadOrderHolder>().Current;
-        Assert.Equal(named, held.ProviderOf(new PluginAddress("A.esp", "ModA")));
+        var listed = await _client.GetFromJsonAsync<System.Text.Json.JsonElement>("/plugins");
+        Assert.True(listed.EnumerateArray().Single().GetProperty("isImmutable").GetBoolean());
     }
 
     [Theory]
