@@ -74,7 +74,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         manager.Dispose();
 
         Assert.Throws<NoLoadOrderException>(() => manager.RequireReads());
-        Assert.ThrowsAny<Exception>(() =>
+        Assert.Throws<ObjectDisposedException>(() =>
             oldRepo.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
     }
 
@@ -287,7 +287,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         var otherInstance = Directory.CreateDirectory(Path.Combine(_fixture.InstanceRoot, "other-instance")).FullName;
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
 
-        Assert.ThrowsAny<Exception>(() =>
+        Assert.Throws<ObjectDisposedException>(() =>
             oldRepo.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
     }
 
@@ -301,7 +301,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
         manager.Dispose();
 
-        Assert.ThrowsAny<Exception>(() =>
+        Assert.Throws<ObjectDisposedException>(() =>
             oldRepo.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
     }
 
