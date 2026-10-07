@@ -90,10 +90,9 @@ vi.mock('vscode', () => {
 
 import { createPluginsView, pluginsViewProgress } from '../pluginsView';
 import { createPluginSync } from '../pluginSync';
-import { PluginTreeProvider, RecordNode, RecordTypeNode } from '../PluginTreeProvider';
+import { PluginTreeProvider, type PluginTreeNode } from '../PluginTreeProvider';
 import type { RecordSummary } from '../../client';
 import { recordTypeCountFixture } from '../../client/test/fixtures';
-import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -266,13 +265,14 @@ describe('a record row\'s badge, from mEdit\'s stream', () => {
     workingTreeState, hasContainerChildren: false, hasParseFailure: false,
   });
   type BadgeSource = (typeof h.decorations)[number] & { onDidChangeFileDecorations: (listener: (changed: unknown) => void) => unknown };
-  const asVsCodeReReadsAnExpandedGroupOnTreeChange = (tree: PluginTreeProvider, group: RecordTypeNode) => tree.getChildren(group);
+  const asVsCodeReReadsAnExpandedGroupOnTreeChange = (tree: PluginTreeProvider, group: PluginTreeNode) => tree.getChildren(group);
 
   it('arrives as an M, and a change notice for the row, when mEdit reports the row changed', async () => {
     const { client, recordBrowser } = pluginsView();
     client.setQueryAnswer('getRecords', { items: [summary('None')], total: 1 });
-    const group = new RecordTypeNode('Test.esp', recordTypeCountFixture({ type: 'NPC_', displayName: 'Non-Player Character' }), 'ModA');
-    const uri = present(expectInstanceOf((await recordBrowser.getChildren(group))[0], RecordNode).resourceUri, "the row's resource URI");
+    client.setQueryAnswer('getRecordTypes', [recordTypeCountFixture({ type: 'NPC_', displayName: 'Non-Player Character' })]);
+    const group = present((await recordBrowser.getPluginChildren({ name: 'Test.esp', origin: 'ModA' }))[0], 'the group row');
+    const uri = present((await recordBrowser.getChildren(group))[0]?.resourceUri, "the row's resource URI");
     const badges = present(h.decorations.find((provider): provider is BadgeSource => 'onDidChangeFileDecorations' in provider), 'the record badge provider');
     const badgeChanges: unknown[] = [];
     badges.onDidChangeFileDecorations((changed) => { badgeChanges.push(changed); });
