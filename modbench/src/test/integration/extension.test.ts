@@ -1259,9 +1259,10 @@ describe('modbench.plugin.create', () => {
       showQuickPick: (places: readonly { label: string }[]) => Promise.resolve(places.find((place) => place.label === modName)),
     });
 
-    await vscode.commands.executeCommand('modbench.plugin.create');
-
-    assert.ok(fs.existsSync(path.join(modDir, 'Created.esp')), 'the mock backend writes the file into the chosen mod');
+    await waitFor('the mod to be offered as a place, and the mock backend to write the file into it', async () => {
+      await vscode.commands.executeCommand('modbench.plugin.create');
+      return fs.existsSync(path.join(modDir, 'Created.esp'));
+    });
     await waitFor('plugin sync to put the line in plugins.txt', () => /^Created\.esp\r?$/m.test(fs.readFileSync(pluginsTxtPath, 'utf8')));
     const lines = fs.readFileSync(pluginsTxtPath, 'utf8').split(/\r?\n/).filter((line) => line !== '');
     assert.strictEqual(lines.at(-1), 'Created.esp');
