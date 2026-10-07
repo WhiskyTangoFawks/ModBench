@@ -163,7 +163,7 @@ public sealed class SchemaReflector
             TableName = tableName,
             DisplayName = RecordDisplayNames.For(tableName),
             RecordType = getterType,
-            RecordColumns = columns,
+            RecordColumns = [.. columns.Select(column => ContainmentReadOnly.Marked(column, tableName, siblingGetterTypes, game.Annotations))],
         };
     }
 }

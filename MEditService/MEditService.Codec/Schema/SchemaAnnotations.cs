@@ -1,4 +1,5 @@
 using System.Reflection;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -21,6 +22,10 @@ public enum KnownDefectEffect
 internal sealed record PluginHeaderMember(
     string TypeName, string MemberName, string? HeaderLabel = null, string? ReadOnlyReason = null, bool IsRecordFormKey = false,
     bool IsVersionControlInfo1 = false);
+
+/// <summary>A member that says where a record sits in its container, on every record whose getter has
+/// the interface TypeName names, and why a write to it is refused.</summary>
+internal sealed record ContainmentMember(string TypeName, string MemberName, string Reason);
 
 /// <summary>One member of the record header: its xEdit label, and whether the game ignores it, so the
 /// compare shows it and takes it into no conflict (xEdit's cpIgnore).</summary>
@@ -88,7 +93,11 @@ internal sealed record SchemaAnnotations(
     string? PartialFormCellsDefinedIn,
     // The plugin header's presented members, keyed by the game's ModHeader interface: its record
     // header under xEdit's labels, then the rest. No interface over every game's ModHeader names them.
-    IReadOnlyList<PluginHeaderMember> PluginHeaderMembers)
+    IReadOnlyList<PluginHeaderMember> PluginHeaderMembers,
+    // Members a field edit cannot move a record by, keyed by an interface the record's getter has,
+    // not the member's declarer, so a row reaches every record of its kind. Child slots are
+    // reflected, not rows.
+    IReadOnlyList<ContainmentMember> ContainmentMembers)
 {
     // Rows every game shares are named once here; a row true of only some games is written inline
     // in each table that has it, so each table still states that game's complete facts.
@@ -132,6 +141,16 @@ internal sealed record SchemaAnnotations(
         // ADR-0008.
         new(modHeaderGetter, PluginHeader.MastersFieldName, ReadOnlyReason: "masters are wholly content-derived at compile time"),
     ];
+
+    private static readonly ContainmentMember CellGridInEveryGame = new(
+        "ICellGetter", RecordTypeDispatch.CellGridMember,
+        "it is an exterior cell's own place in the world — it decides the block and sub-block directories that hold " +
+        "the cell's source, so moving it restructures the tree rather than rewriting one file. That is a structural " +
+        "gesture, not a field edit");
+
+    private const string PlacedPositionReason =
+        "it decides which cell holds a temporary reference in a worldspace, so moving it can move the reference " +
+        "into another cell's document. That is a structural gesture, not a field edit";
 
     private static readonly string[] EmptySubSchemaTypesInEveryGame =
     [
@@ -262,7 +281,8 @@ internal sealed record SchemaAnnotations(
             // Mutagen's Fallout 4 worldspace bounds divide by it.
             ExteriorCellWidth: 4096f,
             PartialFormCellsDefinedIn: "Fallout4.esm",
-            PluginHeaderMembers: PluginHeaderMembersOf("IFallout4ModHeaderGetter")),
+            PluginHeaderMembers: PluginHeaderMembersOf("IFallout4ModHeaderGetter"),
+            ContainmentMembers: [CellGridInEveryGame, new("IPlacedGetter", PlacedCell.PositionMember, PlacedPositionReason)]),
 
         [GameCategory.Skyrim] = new(
             ExcludedColumns: [.. GrupTimestampColumns],
@@ -297,7 +317,10 @@ internal sealed record SchemaAnnotations(
             // Mutagen's Skyrim containing-cell lookup divides by it.
             ExteriorCellWidth: 4096f,
             PartialFormCellsDefinedIn: null,
-            PluginHeaderMembers: PluginHeaderMembersOf("ISkyrimModHeaderGetter")),
+            PluginHeaderMembers: PluginHeaderMembersOf("ISkyrimModHeaderGetter"),
+            // Skyrim's placed records hold their position inside Placement, a struct, which a row keyed
+            // on a record's own member does not reach.
+            ContainmentMembers: [CellGridInEveryGame]),
 
         [GameCategory.Starfield] = new(
             ExcludedColumns: [.. GrupTimestampColumns, ("IQuestGetter", "Timestamp")],
@@ -345,7 +368,8 @@ internal sealed record SchemaAnnotations(
             // wbCellSizeFactor, and no xEdit source in references/ shows how.
             ExteriorCellWidth: null,
             PartialFormCellsDefinedIn: null,
-            PluginHeaderMembers: PluginHeaderMembersOf("IStarfieldModHeaderGetter")),
+            PluginHeaderMembers: PluginHeaderMembersOf("IStarfieldModHeaderGetter"),
+            ContainmentMembers: [CellGridInEveryGame, new("IPlacedGetter", PlacedCell.PositionMember, PlacedPositionReason)]),
     };
 
     /// <summary>A game with no table is a game nobody has written the facts for — loud, not empty.</summary>
@@ -381,6 +405,11 @@ internal sealed record SchemaAnnotations(
     /// <summary>Why a defect keeps this member out of every write, or null.</summary>
     public string? ReadOnlyReasonFor(PropertyInfo prop) =>
         DefectFor(prop) is { Effect: KnownDefectEffect.MemberReadOnly } defect ? defect.Reason : null;
+
+    /// <summary>Why a write to <paramref name="member"/> of a record of these getters is refused, or null.</summary>
+    public string? ContainmentReasonFor(IEnumerable<Type> recordGetters, string member) =>
+        ContainmentMembers.FirstOrDefault(row => row.MemberName == member
+            && recordGetters.Any(getter => getter.GetInterfaces().Append(getter).Any(i => i.Name == row.TypeName)))?.Reason;
 
     public IEnumerable<(long Bit, string Name)> RecordFlagNamesFor(Type getterType) =>
         RecordFlagNames.Where(r => r.TypeName == getterType.Name).Select(r => (r.Bit, r.Name));
@@ -583,6 +612,23 @@ internal sealed record SchemaAnnotations(
         }
     }
 
+    // A row reaches every record of its kind, so it holds for each: a kind whose member lives elsewhere
+    // would read as covered and stay writable.
+    private IEnumerable<string> UnresolvedContainmentMembers(Assembly gameAssembly, ILookup<string, Type> typesByName)
+    {
+        foreach (var row in ContainmentMembers)
+        {
+            var label = $"{nameof(ContainmentMembers)}: {row.TypeName}.{row.MemberName}";
+            var kinds = typesByName[row.TypeName].Where(t => t.IsInterface).ToList();
+            var records = gameAssembly.GetTypes()
+                .Where(t => t is { IsClass: true, IsAbstract: false } && kinds.Any(kind => kind.IsAssignableFrom(t)))
+                .ToList();
+            if (records.Count == 0) yield return $"{label} names an interface no record of this game has";
+            foreach (var record in records.Where(r => r.GetProperties().All(p => p.Name != row.MemberName)))
+                yield return $"{label}: {record.Name} has no {row.MemberName}";
+        }
+    }
+
     private static PropertyInfo? Property(ILookup<string, Type> typesByName, (string TypeName, string MemberName) entry) =>
         typesByName[entry.TypeName]
             .SelectMany(ReflectedTypes.GetAllInterfaceProperties)
@@ -655,6 +701,7 @@ internal sealed record SchemaAnnotations(
                 .Where(p => !Implicits.Get(category.DefaultRelease()).BaseMasters.Contains(ModKey.FromFileName(p)))
                 .Select(p => $"{nameof(PartialFormCellsDefinedIn)}: {p} is no base master of {category}"),
             .. UnresolvedMembers(typesByName, nameof(PluginHeaderMembers), PluginHeaderMembers.Select(r => (r.TypeName, r.MemberName))),
+            .. UnresolvedContainmentMembers(gameAssembly, typesByName),
         ];
 
         if (missing.Length > 0)

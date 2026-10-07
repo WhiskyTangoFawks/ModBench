@@ -275,8 +275,8 @@ internal static class DocumentEdit
             };
         }
 
-        // Asked once, of whatever the path resolved to: a read-only member has no members of its
-        // own, so no path can pass through one to reach something writable below it.
+        // Asked once, of whatever the path resolved to: a read-only member's reason reaches every
+        // member below it (SubFieldSpec.ToFieldMetadata), so no path through one ends writable.
         return cursor.Field?.ReadOnlyReason is { } why
             ? ReadOnlyRefusal(spelled, cursor.MemberName ?? name, why)
             : null;
