@@ -531,16 +531,16 @@ describe('modbench.record.open', () => {
     assert.ok(hasRenderedTab('Fallout4.esm:000020'), 'the seed tab is untouched');
   });
 
-  it('reads a Plugins-tree RecordNode-shaped row from a menu to its own record', async () => {
-    const row = { kind: 'record', record: { formKey: 'Fallout4.esm:000030' }, origin: 'Data' };
+  it('reads a Plugins-tree row's Argument from a menu to its own record', async () => {
+    const row = { kind: 'record', argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data' }, formKey: 'Fallout4.esm:000030' } };
 
     await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
 
     await waitFor('the RecordNode\'s tab', () => hasRenderedTab('Fallout4.esm:000030') || undefined);
   });
 
-  it('reads a Plugins-tree ChildRecordNode-shaped row from a menu to its own record', async () => {
-    const row = { kind: 'placed', formKey: 'Fallout4.esm:000040', origin: 'Data' };
+  it('reads a placed row's Argument from a menu to its own record', async () => {
+    const row = { kind: 'placed', argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data' }, formKey: 'Fallout4.esm:000040' } };
 
     await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
 
