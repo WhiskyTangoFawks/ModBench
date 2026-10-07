@@ -20,7 +20,6 @@ vi.mock('vscode', () => ({
 }));
 
 import { RenderedDocuments } from '../renderedDocument';
-import { renderedDocumentUri } from '../../drivingLib/recordDocument';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 interface ContentProvider {
@@ -33,8 +32,9 @@ const isContentProvider = (value: unknown): value is ContentProvider =>
 
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
-const copy = { formKey: GUN, plugin: modA };
 const NAME = 'Gun - 000801_A.esp.json';
+const renderedUri = (path: string, query: string) => uriFrom({ scheme: 'modbench-rendered', path, query });
+const GUN_URI = renderedUri(`/ModA/A.esp/${NAME}`, 'formKey=000801%3AA.esp&name=A.esp&origin=ModA');
 
 function rendered(client = new InMemoryMEditClient()) {
   const documents = new RenderedDocuments(client);
@@ -56,7 +56,7 @@ describe('a rendered document\'s text', () => {
     client.setQueryAnswer('getRenderedDocument', { fileName: NAME, text: '{ "EditorID": "Gun" }' });
     const { provider } = rendered(client);
 
-    await expect(provider.provideTextDocumentContent(renderedDocumentUri(copy, NAME))).resolves.toBe('{ "EditorID": "Gun" }');
+    await expect(provider.provideTextDocumentContent(GUN_URI)).resolves.toBe('{ "EditorID": "Gun" }');
     expect(client.calls).toContainEqual({ method: 'getRenderedDocument', args: [modA, GUN] });
   });
 
@@ -65,7 +65,7 @@ describe('a rendered document\'s text', () => {
     client.setQueryAnswer('getRenderedDocument', null);
     const { provider } = rendered(client);
 
-    await expect(provider.provideTextDocumentContent(renderedDocumentUri(copy, NAME)))
+    await expect(provider.provideTextDocumentContent(GUN_URI))
       .rejects.toThrow(`A.esp (ModA) holds no ${GUN}.`);
   });
 });
@@ -77,8 +77,8 @@ describe('an open rendered document, when mEdit reports a change', () => {
   it('changes when its plugin\'s rows that changed hold its record', () => {
     const client = new InMemoryMEditClient();
     const { changed } = rendered(client);
-    const uri = renderedDocumentUri(copy, NAME);
-    h.textDocuments.push({ uri }, { uri: renderedDocumentUri({ formKey: '000802:A.esp', plugin: modA }, 'Other.json') });
+    const uri = GUN_URI;
+    h.textDocuments.push({ uri }, { uri: renderedUri('/ModA/A.esp/Other.json', 'formKey=000802%3AA.esp&name=A.esp&origin=ModA') });
 
     client.emit(rowsChanged(modA, [GUN]));
 
@@ -88,7 +88,7 @@ describe('an open rendered document, when mEdit reports a change', () => {
   it('stays as it is when another plugin\'s copy of its record changed', () => {
     const client = new InMemoryMEditClient();
     const { changed } = rendered(client);
-    h.textDocuments.push({ uri: renderedDocumentUri(copy, NAME) });
+    h.textDocuments.push({ uri: GUN_URI });
 
     client.emit(rowsChanged({ name: 'A.esp', origin: 'ModB' }, [GUN]));
 
@@ -98,7 +98,7 @@ describe('an open rendered document, when mEdit reports a change', () => {
   it('changes, every one, when the stream of mEdit\'s reports opens again', () => {
     const client = new InMemoryMEditClient();
     const { changed } = rendered(client);
-    const [gun, other] = [renderedDocumentUri(copy, NAME), renderedDocumentUri({ formKey: GUN, plugin: { name: 'B.esp', origin: 'ModB' } }, NAME)];
+    const [gun, other] = [GUN_URI, renderedUri(`/ModB/B.esp/${NAME}`, 'formKey=000801%3AA.esp&name=B.esp&origin=ModB')];
     h.textDocuments.push({ uri: gun }, { uri: other }, { uri: { scheme: 'file', path: gun.path, query: gun.query } });
 
     client.reconnected();
@@ -109,7 +109,7 @@ describe('an open rendered document, when mEdit reports a change', () => {
   it('changes when mEdit read its plugin again whole', () => {
     const client = new InMemoryMEditClient();
     const { changed } = rendered(client);
-    const uri = renderedDocumentUri(copy, NAME);
+    const uri = GUN_URI;
     h.textDocuments.push({ uri }, { uri: { scheme: 'file', path: uri.path, query: uri.query } });
 
     client.emit({ kind: 'plugin-changed', plugin: 'A.esp', origin: 'ModA', keys: [], sequence: 1 });

@@ -3,9 +3,7 @@ import { SCRIPT_EXTENDER_FOLDERS } from '../tables/gamePaths';
 import { present } from '../ports/present';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
-/** Top-level folder names that mean "this level is already the mod's data root"
- *  (a game data subfolder), so a lone one of them must NOT be peeled as a wrapper. */
-export const DATA_DIRS = new Set([
+const DATA_DIRS = new Set([
   'meshes', 'textures', 'materials', 'sound', 'music', 'scripts', 'source',
   'interface', 'strings', 'mcm', 'seq', 'video', 'vis',
   'lodsettings', 'shadersfx', 'grass', 'terrain', 'planetdata', 'programs',

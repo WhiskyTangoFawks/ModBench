@@ -14,7 +14,7 @@ vi.mock('vscode', () => ({
 }));
 
 import type * as vscode from 'vscode';
-import { referencesOf, type ReferencesDeps } from '../formKeyReferences';
+import { referencesOf } from '../formKeyReferences';
 import type { ReferenceResult } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
@@ -34,7 +34,7 @@ const key = (formKey: string, { name, origin }: { name: string; origin: string }
 
 interface Copy { file?: string; rendered?: string; text?: string }
 
-type ReferencesClient = ReferencesDeps<unknown>['client'];
+type ReferencesClient = Parameters<typeof referencesOf<{ getText(): string }>>[0]['client'];
 
 function references(rows: ReferenceResult[], copies: Record<string, Copy>, answering: Partial<ReferencesClient> = {}) {
   const firstOnFile = (path: string) => Object.entries(copies).find(([, copy]) => copy.file === path);

@@ -18,7 +18,7 @@ const DOWNLOADS = 'downloads';
 
 export const profilesDir = (instanceRoot: string): string => join(instanceRoot, PROFILES);
 
-export const profileDir = (instanceRoot: string, profile: string): string =>
+const profileDir = (instanceRoot: string, profile: string): string =>
   join(profilesDir(instanceRoot), profile);
 
 export const modsDir = (instanceRoot: string): string => join(instanceRoot, MODS);
@@ -121,7 +121,7 @@ export const downloadSidecarFile = (downloadsDir: string, name: string): string 
 export const fileInFolder = (folder: string, relativePath: string): string => join(folder, relativePath);
 
 const GIT_DIR = '.git';
-export const PLUGIN_SOURCE_FOLDER = 'plugin-source';
+const PLUGIN_SOURCE_FOLDER = 'plugin-source';
 
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
 export const modGitDir = (modFolder: string): string => join(modFolder, GIT_DIR);

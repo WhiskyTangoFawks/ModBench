@@ -2,15 +2,27 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn() }));
-vi.mock('vscode', () => ({ commands: { executeCommand }, workspace: {} }));
+const h = vi.hoisted(() => ({ executeCommand: vi.fn(), folders: undefined as { uri: { fsPath: string } }[] | undefined }));
+const { executeCommand } = h;
+vi.mock('vscode', () => ({
+  commands: { executeCommand: h.executeCommand },
+  workspace: { get workspaceFolders() { return h.folders; } },
+}));
 
-import { answerInstanceCheck, markFirstReadLanded } from '../instanceCheck';
+import { markFirstReadLanded, openedFolder } from '../instanceCheck';
 import { FOLDER_KEY, INSTANCE_READ_KEY } from '../folderContext';
 
 const writesOfTheKey = () => executeCommand.mock.calls.filter(([command, key]) => command === 'setContext' && key === FOLDER_KEY);
 
-beforeEach(() => executeCommand.mockClear());
+beforeEach(() => {
+  executeCommand.mockClear();
+  h.folders = undefined;
+});
+
+const answerInstanceCheck = (root: string | undefined, isInstance: (root: string) => boolean) => {
+  h.folders = root === undefined ? undefined : [{ uri: { fsPath: root } }];
+  return openedFolder(isInstance, () => undefined).folder;
+};
 
 describe('the instance check', () => {
   it('answers not an instance with no folder open, without asking the mod manager', () => {

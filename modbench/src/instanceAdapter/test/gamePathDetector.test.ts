@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 
 vi.mock('node:fs/promises');
 
-import { detectGamePaths, detectWindowsGamePaths, detectWinePrefix, parseRegQuerySteamPath, type GameAutodetect } from '../gamePathDetector';
+import { detectGamePaths, detectWinePrefix, type GameAutodetect } from '../gamePathDetector';
 
 const FO4_APP_ID = '377160';
 const FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK: GameAutodetect = { steamAppId: FO4_APP_ID, steamFolderName: 'Fallout 4' };
@@ -46,7 +46,7 @@ describe('detectGamePaths (Linux)', () => {
     vi.mocked(fs.readFile).mockResolvedValue(VDF_WITH_FO4);
     vi.mocked(fs.access).mockResolvedValue(undefined);
 
-    const result = await detectGamePaths('linux', FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK);
+    const result = await detectGamePaths('linux', FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK, () => Promise.reject(new Error('Linux has no registry')));
 
     expect(result).toEqual({ dataFolder: '/mnt/games/steam/steamapps/common/Fallout 4/Data' });
   });
@@ -54,7 +54,7 @@ describe('detectGamePaths (Linux)', () => {
   it('returns null when the VDF cannot be read', async () => {
     vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
 
-    const result = await detectGamePaths('linux', FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK);
+    const result = await detectGamePaths('linux', FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK, () => Promise.reject(new Error('Linux has no registry')));
     expect(result).toBeNull();
   });
 });
@@ -117,24 +117,7 @@ describe('detectWinePrefix, the Proton prefix root for gameDirectory.ts\'s Wine 
   });
 });
 
-describe('parseRegQuerySteamPath', () => {
-  it('extracts the SteamPath value from reg query output', () => {
-    const stdout =
-      'HKEY_CURRENT_USER\\Software\\Valve\\Steam\r\n' +
-      '    SteamPath    REG_SZ    C:/Program Files (x86)/Steam\r\n' +
-      '\r\n';
-
-    expect(parseRegQuerySteamPath(stdout)).toBe('C:/Program Files (x86)/Steam');
-  });
-
-  it('returns null when the output has no SteamPath value', () => {
-    const stdout = 'ERROR: The system was unable to find the specified registry key or value.\r\n';
-
-    expect(parseRegQuerySteamPath(stdout)).toBeNull();
-  });
-});
-
-describe('detectWindowsGamePaths', () => {
+describe('detectGamePaths (Windows)', () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
@@ -147,7 +130,7 @@ describe('detectWindowsGamePaths', () => {
           '    SteamPath    REG_SZ    C:/Program Files (x86)/Steam\r\n',
       );
 
-    const result = await detectWindowsGamePaths(runRegQuery, FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK);
+    const result = await detectGamePaths('win32', FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK, runRegQuery);
 
     expect(result).toEqual({ dataFolder: 'C:/Program Files (x86)/Steam/steamapps/common/Fallout 4/Data' });
   });
@@ -156,7 +139,7 @@ describe('detectWindowsGamePaths', () => {
     const runRegQuery = () =>
       Promise.resolve('ERROR: The system was unable to find the specified registry key or value.\r\n');
 
-    const result = await detectWindowsGamePaths(runRegQuery, FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK);
+    const result = await detectGamePaths('win32', FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK, runRegQuery);
 
     expect(result).toBeNull();
   });
@@ -164,13 +147,13 @@ describe('detectWindowsGamePaths', () => {
   it('returns null when the registry query itself fails (no reg.exe, no Steam)', async () => {
     const runRegQuery = () => Promise.reject(new Error('ENOENT: reg'));
 
-    const result = await detectWindowsGamePaths(runRegQuery, FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK);
+    const result = await detectGamePaths('win32', FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK, runRegQuery);
 
     expect(result).toBeNull();
   });
 });
 
-describe('detectWindowsGamePaths in a second Steam library', () => {
+describe('detectGamePaths (Windows) in a second Steam library', () => {
   const runRegQuery = () => Promise.resolve('    SteamPath    REG_SZ    C:/Steam\r\n');
   const vdfNaming = (library: string) => `"libraryfolders"
 {
@@ -205,7 +188,7 @@ describe('detectWindowsGamePaths in a second Steam library', () => {
         : Promise.reject(new Error('ENOENT')),
     );
 
-    const result = await detectWindowsGamePaths(runRegQuery, FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK);
+    const result = await detectGamePaths('win32', FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK, runRegQuery);
 
     expect(result).toEqual({ dataFolder: 'D:/Games/SteamLibrary/steamapps/common/Fallout 4/Data' });
   });
@@ -217,7 +200,7 @@ describe('detectWindowsGamePaths in a second Steam library', () => {
         : Promise.reject(new Error('ENOENT')),
     );
 
-    const result = await detectWindowsGamePaths(runRegQuery, FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK);
+    const result = await detectGamePaths('win32', FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK, runRegQuery);
 
     expect(result).toEqual({ dataFolder: 'D:/Games/SteamLibrary/steamapps/common/Fallout 4/Data' });
   });
@@ -229,7 +212,7 @@ describe('detectWindowsGamePaths in a second Steam library', () => {
         : Promise.reject(new Error('ENOENT')),
     );
 
-    const result = await detectWindowsGamePaths(runRegQuery, FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK);
+    const result = await detectGamePaths('win32', FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK, runRegQuery);
 
     expect(result).toEqual({ dataFolder: 'D:\\Games\\SteamLibrary/steamapps/common/Fallout 4/Data' });
   });

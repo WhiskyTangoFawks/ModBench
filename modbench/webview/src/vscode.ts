@@ -8,8 +8,7 @@ interface VsCodeApi<Message> {
   postMessage: (msg: Message) => void;
 }
 
-/** What the page keeps with its tab, which VS Code restores with the tab after a reload. */
-export interface TabState {
+interface TabState {
   getState: () => unknown;
   setState: (state: unknown) => void;
 }

@@ -5,10 +5,10 @@ import { idleMembers } from './siblingsInUse';
 import {
   arrayElementContext, arrayParentContext, cellContext, columnHasNode, declaresMember, defaultOf, editableCellContext,
   getAtPath, isArrayElementHop, offersArrayAdd, referenceContext, rootFieldOf, stringValueContext, variantFor, wirePath,
-  type CellContext, type Column, type PathSegment,
+  type CellContext, type Column,
 } from './recordUtils';
 import type { FocusedCell, NavRow } from './gridNavigation';
-import type { ColumnKey, CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop } from './types';
+import type { ColumnKey, CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PathSegment } from './types';
 import type { ArrayParentContext } from '../../src/wire/messages';
 
 export const RECORD_HEADER_ROW = 'Record Header';
@@ -66,7 +66,7 @@ interface RowsInput {
   recordLabel: (copy: CompareOverride) => string;
 }
 
-export type RowPlacement = Pick<FieldRow, 'path' | 'rootField' | 'key' | 'parent' | 'depth' | 'isLastElement' | 'keyMembers'> & {
+type RowPlacement = Pick<FieldRow, 'path' | 'rootField' | 'key' | 'parent' | 'depth' | 'isLastElement' | 'keyMembers'> & {
   // Whether a column holds the object this row is a member of.
   present: (column: ColumnKey) => boolean;
   editable: ReadonlySet<ColumnKey>;
@@ -76,8 +76,7 @@ export type RowPlacement = Pick<FieldRow, 'path' | 'rootField' | 'key' | 'parent
 
 const arrayLength = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
-/** One field's row: what each column's cell holds, where an edit of it writes, and its context. */
-export function fieldRow(
+function fieldRow(
   diff: FieldDiff, meta: FieldMetadata, at: RowPlacement, columns: readonly Column[], recordLabel: RowsInput['recordLabel'],
 ): FieldRow {
   const { present, editable, cellMetas, ...place } = at;

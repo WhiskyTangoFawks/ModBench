@@ -1,13 +1,13 @@
 import type { MEditClient } from '../client';
 import { fieldAtOffset, metadataAt, type FieldAtOffset } from './fieldAtOffset';
 
-export interface SourceCompletion {
+interface SourceCompletion {
   label: string;
   detail: string;
   insertText: string;
 }
 
-export interface SourceCompletions {
+interface SourceCompletions {
   kind: 'reference' | 'enumMember';
   isIncomplete: boolean;
   start: number;

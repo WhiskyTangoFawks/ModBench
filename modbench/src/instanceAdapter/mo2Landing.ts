@@ -10,7 +10,7 @@ import {
 import { errnoCode } from '../ports/errno';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 
-export type Mo2Landing = Pick<InstanceAdapter, 'extractNewMod' | 'extractUpgrade' | 'extractedEntries'>;
+type Mo2Landing = Pick<InstanceAdapter, 'extractNewMod' | 'extractUpgrade' | 'extractedEntries'>;
 
 // A key the upgrade does not supply keeps the carried meta's own value.
 function keysOver(keys: OwnedMetaKeys, carried: ModMeta): OwnedMetaKeys {

@@ -23,7 +23,6 @@ import {
   overwriteDir,
   fileInFolder,
   pluginsFile,
-  profileDir,
   profilesDir,
   settingsFile,
 } from '../layout';
@@ -56,7 +55,6 @@ describe('MO2 layout', () => {
   });
 
   it('names a profile directory and the two files a profile holds, each codec naming its own', () => {
-    expect(profileDir(ROOT, 'Default')).toBe(join(ROOT, 'profiles', 'Default'));
     expect(modlistFile(ROOT, 'Default')).toBe(join(ROOT, 'profiles', 'Default', MODLIST_FILE_NAME));
     expect(pluginsFile(ROOT, 'Default')).toBe(join(ROOT, 'profiles', 'Default', PLUGINS_FILE_NAME));
     expect([MODLIST_FILE_NAME, PLUGINS_FILE_NAME]).toEqual(['modlist.txt', 'plugins.txt']);

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { FOLDER_KEY, INSTANCE_READ_KEY, type FolderCheck } from './folderContext';
 import type { InstanceView } from '../instanceLoader/instance';
 
-export function answerInstanceCheck(root: string | undefined, isInstance: (root: string) => boolean): FolderCheck {
+function answerInstanceCheck(root: string | undefined, isInstance: (root: string) => boolean): FolderCheck {
   const answer: FolderCheck = root !== undefined && isInstance(root) ? 'instance' : 'notAnInstance';
   void vscode.commands.executeCommand('setContext', FOLDER_KEY, answer);
   return answer;

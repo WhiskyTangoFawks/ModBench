@@ -12,10 +12,8 @@ import {
   referenceContext,
   stringValueContext,
   metaAtPath,
-  type PathHop,
-  type PathSegment,
 } from './recordUtils';
-import type { CompareOverride } from './types';
+import type { CompareOverride, PathHop, PathSegment } from './types';
 import { fieldMeta } from './test/fixtures';
 import { columnKey } from '../../src/wire/columnKey';
 
