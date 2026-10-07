@@ -221,4 +221,16 @@ describe('detectWindowsGamePaths in a second Steam library', () => {
 
     expect(result).toEqual({ dataFolder: 'D:/Games/SteamLibrary/steamapps/common/Fallout 4/Data' });
   });
+
+  it('reads a library path in the real Windows form, backslashes escaped in the vdf', async () => {
+    vi.mocked(fs.readFile).mockImplementation((file) =>
+      typeof file === 'string' && file.endsWith('steamapps/libraryfolders.vdf')
+        ? Promise.resolve(vdfNaming('D:\\\\Games\\\\SteamLibrary'))
+        : Promise.reject(new Error('ENOENT')),
+    );
+
+    const result = await detectWindowsGamePaths(runRegQuery, FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK);
+
+    expect(result).toEqual({ dataFolder: 'D:\\Games\\SteamLibrary/steamapps/common/Fallout 4/Data' });
+  });
 });

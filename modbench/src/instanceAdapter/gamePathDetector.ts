@@ -24,7 +24,7 @@ function parseLibraryFoldersVdf(content: string, appId: string): string | null {
   for (const block of libraryBlocks) {
     if (!block.includes(`"${appId}"`)) continue;
     const path = block.match(/"path"\s+"([^"]+)"/)?.[1];
-    if (path !== undefined) return path;
+    if (path !== undefined) return path.replaceAll('\\\\', '\\');
   }
   return null;
 }
