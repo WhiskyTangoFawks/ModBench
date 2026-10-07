@@ -54,12 +54,12 @@ public sealed class CompilePluginMasterPruningTests : IDisposable
     {
         var compileService = CompileServices.Over(_loadOrder);
 
-        var result = await compileService.CompileOneAsync(_plugin);
+        var answer = await compileService.CompileAsync([_plugin]);
 
-        Assert.False(result.Succeeded);
-        Assert.Contains("DiaQ_LLInjector_SpadeyAMR", result.RefusalReason);
-        Assert.Contains("DLCNukaWorld.esm", result.RefusalReason);
-        Assert.Contains("Mutagen #688", result.RefusalReason);
+        var refused = Assert.Single(answer.Refused);
+        Assert.Contains("DiaQ_LLInjector_SpadeyAMR", refused.Message);
+        Assert.Contains("DLCNukaWorld.esm", refused.Message);
+        Assert.Contains("Mutagen #688", refused.Message);
         Assert.Empty(Directory.GetDirectories(_modFolder, ".medit_tmp_*"));
     }
 

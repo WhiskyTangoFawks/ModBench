@@ -83,11 +83,12 @@ public sealed class CompilePluginMastersTests : IDisposable
     [Fact]
     public async Task Compile_ForALinkIntoAPluginTheLoadOrderHolds_ReportsNoUnresolvedDiagnostic()
     {
-        var result = await CompileService().CompileOneAsync(_plugin);
+        var answer = await CompileService().CompileAsync([_plugin]);
 
-        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Empty(answer.Refused);
+        var diagnostics = Assert.Single(answer.Landed).Outcome;
         Assert.DoesNotContain(
-            result.Diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
+            diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -98,9 +99,10 @@ public sealed class CompilePluginMastersTests : IDisposable
             new Keyword(_deltaKeyword, Fallout4Release.Fallout4) { EditorID = "DeltaKeyword" },
             "kywd", GameRelease.Fallout4);
 
-        var result = await CompileService().CompileOneAsync(_plugin);
+        var answer = await CompileService().CompileAsync([_plugin]);
 
-        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Empty(answer.Refused);
+        Assert.Single(answer.Landed);
 
         using var overlayDisposable = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(PluginName), Path.Combine(_modFolder, PluginName)), GameRelease.Fallout4);
@@ -117,11 +119,12 @@ public sealed class CompilePluginMastersTests : IDisposable
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
             npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_bravoRace)));
 
-        var result = await CompileService().CompileOneAsync(_plugin);
+        var answer = await CompileService().CompileAsync([_plugin]);
 
-        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Empty(answer.Refused);
+        var diagnostics = Assert.Single(answer.Landed).Outcome;
         var diagnostic = Assert.Single(
-            result.Diagnostics, d => d.Message.Contains("RACE reference", StringComparison.Ordinal));
+            diagnostics, d => d.Message.Contains("RACE reference", StringComparison.Ordinal));
         Assert.Equal(_npc.ToString(), diagnostic.FormKey);
         Assert.Equal("Keywords: [2]: Found a RACE reference, expected: KYWD", diagnostic.Message);
     }
@@ -129,8 +132,9 @@ public sealed class CompilePluginMastersTests : IDisposable
     [Fact]
     public async Task Compile_WritesMasters_InCurrentLoadOrder_NotAlphabetical()
     {
-        var result = await CompileService().CompileOneAsync(_plugin);
-        Assert.True(result.Succeeded, result.RefusalReason);
+        var answer = await CompileService().CompileAsync([_plugin]);
+        Assert.Empty(answer.Refused);
+        Assert.Single(answer.Landed);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);
         using var overlayDisposable = ModFactory.ImportGetter(
@@ -149,8 +153,9 @@ public sealed class CompilePluginMastersTests : IDisposable
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
             npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_deltaKeyword)));
 
-        var result = await CompileService().CompileOneAsync(_plugin);
-        Assert.True(result.Succeeded, result.RefusalReason);
+        var answer = await CompileService().CompileAsync([_plugin]);
+        Assert.Empty(answer.Refused);
+        Assert.Single(answer.Landed);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);
         using var overlayDisposable = ModFactory.ImportGetter(

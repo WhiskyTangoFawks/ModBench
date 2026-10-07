@@ -90,11 +90,12 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     [Fact]
     public async Task Compile_ForALinkToARecordEmbeddedInAnotherTrackedPlugin_ReportsNothingAboutIt()
     {
-        var result = await CompileServices.Over(_loadOrder).CompileOneAsync(_referrer);
+        var answer = await CompileServices.Over(_loadOrder).CompileAsync([_referrer]);
 
-        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Empty(answer.Refused);
+        var diagnostics = Assert.Single(answer.Landed).Outcome;
         Assert.DoesNotContain(
-            result.Diagnostics, d => d.Message.Contains(_embeddedTarget.ToString(), StringComparison.Ordinal));
+            diagnostics, d => d.Message.Contains(_embeddedTarget.ToString(), StringComparison.Ordinal));
     }
 
     [Fact]
@@ -103,11 +104,12 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
         var notLoaded = SnapshotPlugins.Snapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4, [Target(enabled: false), Referrer]);
 
-        var result = await CompileServices.Over(notLoaded).CompileOneAsync(_referrer);
+        var answer = await CompileServices.Over(notLoaded).CompileAsync([_referrer]);
 
-        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Empty(answer.Refused);
+        var diagnostics = Assert.Single(answer.Landed).Outcome;
         Assert.Contains(
-            result.Diagnostics,
+            diagnostics,
             d => d.Message.Contains($"[{_embeddedTarget}] <Error: Could not be resolved>", StringComparison.Ordinal));
     }
 
