@@ -14,11 +14,13 @@ const h = vi.hoisted(() => ({
   views: [] as { description?: string; message?: string }[],
   decorations: [] as { provideFileDecoration(uri: unknown): { badge?: string } | undefined }[],
   diagnostics: new Map<string, FakeDiagnosticCollection>(),
+  commands: new Map<string, (...args: unknown[]) => unknown>(),
 }));
 
 vi.mock('vscode', () => {
   const disposable = () => ({ dispose: () => undefined });
   const state = makeFilterBoxState();
+  h.commands = state.commands;
   return {
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic,
     DiagnosticSeverity, Uri: { file: uriFile, from: uriFrom },
@@ -85,6 +87,13 @@ beforeEach(() => {
   h.views.length = 0;
   h.decorations.length = 0;
   h.diagnostics.clear();
+});
+
+describe('modbench.plugin.move', () => {
+  it('is registered with the view', () => {
+    pluginsView();
+    expect(h.commands.has('modbench.plugin.move')).toBe(true);
+  });
 });
 
 describe('the Plugins view follows mEdit\'s pushes and shows the record filter', () => {

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress, RecordFilter } from '../client';
 import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
-import { reorderOver, type PluginSyncRun, type PluginsAccess } from '../pluginsCommands/plugins';
+import { type PluginSyncRun, type PluginsAccess } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 import { reportSyncFailures, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
 import { createPluginSync, type PluginSync } from './pluginSync';
@@ -13,6 +13,7 @@ import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { registerPluginSortCommands, registerRevealInExplorerCommand } from './pluginListCommands';
+import { registerPluginMoveCommand } from './pluginMoveCommand';
 import { registerPluginEnableCommands } from './pluginParticipationCommands';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
 import { makeShowRecordFilter } from './recordFilterCommands';
@@ -68,8 +69,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
   const changedOutsideDiagnostics = vscode.languages.createDiagnosticCollection('modbench-changed-outside');
   const tree = new PluginsTreeProvider({
-    instance, log, reporter: reporterFor('pluginList'),
-    source: { reorderPlugins: reorderOver(access, () => instance.value.activeProfile) },
+    instance, log,
     dataFolderFile: deps.dataFolderFile,
     records: recordBrowser,
     client,
@@ -113,6 +113,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, lens),
     ...registerPluginEnableCommands(
       access, instance, selected.rows, reporterFor('pluginListTree.enableDisable')),
+    registerPluginMoveCommand(access, client, instance, selected.rows, reporterFor('pluginListTree.move')),
     ...registerPluginSortCommands(tree),
     registerRevealInExplorerCommand(tree, reporterFor('pluginListTree.revealInExplorer'), selected.rows),
     view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
