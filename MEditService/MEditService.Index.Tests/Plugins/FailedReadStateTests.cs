@@ -38,7 +38,7 @@ public sealed class FailedReadStateTests : IDisposable
         Indexes.Reconciled(_fixture, _fixture.InstanceRoot, adapter, _loggerFactory);
 
     private RecordDocument TheNpc(OpenedIndex index) =>
-        index.RequireReads().GetDocuments(Plugin.KeyOf()).Single(d => d.EditorId == NpcEditorId);
+        index.RequireReads().DocumentsOf(Plugin.KeyOf()).Single(d => d.EditorId == NpcEditorId);
 
     private string NpcDocument => Directory.EnumerateFiles(Plugin.ModFolderOf(), "*.json", SearchOption.AllDirectories)
         .Single(file => File.ReadAllText(file).Contains($"\"{NpcEditorId}\"", StringComparison.Ordinal));
@@ -154,7 +154,7 @@ public sealed class FailedReadStateTests : IDisposable
         using var index = Reconciled(adapter);
 
         Assert.False(Failed(index));
-        Assert.Contains(index.RequireReads().GetDocuments(Plugin.KeyOf()), d => d.EditorId == "WrittenAfterTheFailure");
+        Assert.Contains(index.RequireReads().DocumentsOf(Plugin.KeyOf()), d => d.EditorId == "WrittenAfterTheFailure");
     }
 
     [Fact]
@@ -199,7 +199,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the changed tree read again");
 
-        Assert.Empty(index.RequireReads().GetDocuments(Plugin.KeyOf()));
+        Assert.Empty(index.RequireReads().DocumentsOf(Plugin.KeyOf()));
         Assert.DoesNotContain("showing", Reason(index), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -266,7 +266,7 @@ public sealed class FailedReadStateTests : IDisposable
         File.Move(GitIndex + ".good", GitIndex, overwrite: true);
 
         index.NextSnapshotUntil(() => DerivationOf(index) == DerivedFrom.SourceTree, "the tree read again");
-        Assert.Contains(index.RequireReads().GetDocuments(Plugin.KeyOf()), d => d.EditorId == "RenamedNpc");
+        Assert.Contains(index.RequireReads().DocumentsOf(Plugin.KeyOf()), d => d.EditorId == "RenamedNpc");
     }
 
     [Fact]
@@ -328,7 +328,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         index.NextSnapshotUntil(() => !Failed(index), "the binary read again");
 
-        Assert.Contains(index.RequireReads().GetDocuments(Plugin.KeyOf()), d => d.EditorId == "WrittenBeforeTheHold");
+        Assert.Contains(index.RequireReads().DocumentsOf(Plugin.KeyOf()), d => d.EditorId == "WrittenBeforeTheHold");
     }
 
     [Fact]
@@ -419,7 +419,7 @@ public sealed class FailedReadStateTests : IDisposable
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, loggerFactory: _loggerFactory, notifications: new RowsChangedFaultsOnce());
 
         Assert.False(Failed(index));
-        Assert.Contains(index.RequireReads().GetDocuments(Plugin.KeyOf()), d => d.EditorId == "EditedNpc");
+        Assert.Contains(index.RequireReads().DocumentsOf(Plugin.KeyOf()), d => d.EditorId == "EditedNpc");
     }
 
     private sealed class RowsChangedFaultsOnce : INotificationPublisher

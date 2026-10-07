@@ -251,7 +251,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
                 && e.Message.Contains("re-materialize the active filter", StringComparison.Ordinal)
                 && e.Message.Contains("NotANumber", StringComparison.Ordinal));
             Assert.Contains(
-                manager.RequireReads().GetDocuments(new PluginAddress("Plugin.esp", "Data")),
+                manager.RequireReads().DocumentsOf(new PluginAddress("Plugin.esp", "Data")),
                 d => d.EditorId == "NotANumber");
         }
     }

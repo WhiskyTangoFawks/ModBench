@@ -35,12 +35,12 @@ public sealed class PluginAddressComparisonTests : IDisposable
         var reads = _index.RequireReads();
 
         Assert.Equal(
-            reads.GetDocuments(_fixture.Plugins.Single().KeyOf()).Select(d => d.FormKey).Order(),
-            reads.GetDocuments(OtherCase).Select(d => d.FormKey).Order());
+            reads.DocumentsOf(_fixture.Plugins.Single().KeyOf()).Select(d => d.FormKey).Order(),
+            reads.DocumentsOf(OtherCase).Select(d => d.FormKey).Order());
     }
 
     private string UnderAnotherCase(string editorId) =>
-        _index.RequireReads().GetDocuments(_fixture.Plugins.Single().KeyOf())
+        _index.RequireReads().DocumentsOf(_fixture.Plugins.Single().KeyOf())
             .Single(d => d.EditorId == editorId).FormKey.ToUpperInvariant();
 
     [Fact]

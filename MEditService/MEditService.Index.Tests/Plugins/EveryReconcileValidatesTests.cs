@@ -77,7 +77,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
 
         ArrivalAnnouncing(PluginChanged(_untracked));
 
-        Assert.Contains(_index.RequireReads().GetDocuments(_untracked.KeyOf()), d => d.EditorId == "WrittenByAnotherTool");
+        Assert.Contains(_index.RequireReads().DocumentsOf(_untracked.KeyOf()), d => d.EditorId == "WrittenByAnotherTool");
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
 
         ArrivalAnnouncing(PluginChanged(_untracked));
 
-        Assert.Empty(_index.RequireReads().GetDocuments(_untracked.KeyOf()));
+        Assert.Empty(_index.RequireReads().DocumentsOf(_untracked.KeyOf()));
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         File.Delete(_tracked.Path);
         ArrivalAnnouncing(PluginChanged(_tracked));
 
-        Assert.Empty(_index.RequireReads().GetDocuments(_tracked.KeyOf()));
+        Assert.Empty(_index.RequireReads().DocumentsOf(_tracked.KeyOf()));
     }
 
     [Fact]
@@ -119,12 +119,12 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         var bytes = File.ReadAllBytes(_untracked.Path);
         File.Delete(_untracked.Path);
         ArrivalAnnouncing(PluginChanged(_untracked));
-        Assert.Empty(_index.RequireReads().GetDocuments(_untracked.KeyOf()));
+        Assert.Empty(_index.RequireReads().DocumentsOf(_untracked.KeyOf()));
 
         File.WriteAllBytes(_untracked.Path, bytes);
         ArrivalAnnouncing(PluginChanged(_untracked));
 
-        Assert.Contains(_index.RequireReads().GetDocuments(_untracked.KeyOf()), d => d.EditorId == "UntrackedNpc");
+        Assert.Contains(_index.RequireReads().DocumentsOf(_untracked.KeyOf()), d => d.EditorId == "UntrackedNpc");
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         LoadOrderEntry[] plugins = [.. _fixture.Plugins, new("Loose.esp", loosePath, _tracked.Origin, 2, Enabled: true, Winning: true)];
         _index.Reconcile(_holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         Assert.Contains(
-            _index.RequireReads().GetDocuments(new PluginAddress("Loose.esp", _tracked.Origin)), d => d.EditorId == "LooseNpc");
+            _index.RequireReads().DocumentsOf(new PluginAddress("Loose.esp", _tracked.Origin)), d => d.EditorId == "LooseNpc");
 
         var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _tracked.RenamedByHand(_index.RequireReads()));
 
@@ -191,7 +191,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         RewriteUntracked("FixedByAnotherTool");
         ArrivalAnnouncing(PluginChanged(_untracked));
 
-        Assert.Contains(_index.RequireReads().GetDocuments(_untracked.KeyOf()), d => d.EditorId == "FixedByAnotherTool");
+        Assert.Contains(_index.RequireReads().DocumentsOf(_untracked.KeyOf()), d => d.EditorId == "FixedByAnotherTool");
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == Untracked);
     }
 
@@ -210,7 +210,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
 
         File.Delete(blocker);
         failing.NextSnapshotUntil(() => failing.Status.State == LoadOrderState.Ready, "the equal arrival's retry");
-        Assert.NotEmpty(failing.RequireReads().GetDocuments(_untracked.KeyOf()));
+        Assert.NotEmpty(failing.RequireReads().DocumentsOf(_untracked.KeyOf()));
     }
 
     [Fact]

@@ -106,7 +106,7 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, With(fx.Plugins, "B.esp", p => p with { Enabled = false }), GameRelease.Fallout4);
 
         Assert.Equal(opened, opens.OpenedTotal);
-        Assert.Empty(ReadsOf(index).GetDocuments(bKey));
+        Assert.Empty(ReadsOf(index).DocumentsOf(bKey));
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
@@ -162,7 +162,7 @@ public sealed class ReconcileDiffTests
 
         var readsAfterLeaving = ReadsOf(index);
         Assert.DoesNotContain(readsAfterLeaving.OpenedPlugins.Keys, k => k.Name == "B.esp");
-        Assert.Empty(readsAfterLeaving.GetDocuments(bKey));
+        Assert.Empty(readsAfterLeaving.DocumentsOf(bKey));
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "B.esp");
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
@@ -203,7 +203,7 @@ public sealed class ReconcileDiffTests
             third.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4, fx.InstanceRoot);
 
             Assert.Equal(0, thirdOpens.OpenedTotal);
-            Assert.Empty(ReadsOf(third).GetDocuments(new PluginAddress("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin)));
+            Assert.Empty(ReadsOf(third).DocumentsOf(new PluginAddress("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin)));
             Assert.Equal("A.esm", WinnerOf(third, SharedNpc(third)));
         }
     }
