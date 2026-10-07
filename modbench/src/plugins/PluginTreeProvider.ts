@@ -143,28 +143,28 @@ abstract class BlockLevelNode extends vscode.TreeItem {
   }
 }
 
-export class BlockNode extends BlockLevelNode {
+class BlockNode extends BlockLevelNode {
   readonly kind = 'block' as const;
   constructor(plugin: string, public readonly block: WorldspaceBlock, origin: string, conditions: PluginConditions = NOT_EDITABLE) {
     super('block', `${block.x}, ${block.y}`, block.hasParseFailure, plugin, origin, conditions);
   }
 }
 
-export class SubBlockNode extends BlockLevelNode {
+class SubBlockNode extends BlockLevelNode {
   readonly kind = 'subBlock' as const;
   constructor(plugin: string, public readonly subBlock: WorldspaceSubBlock, origin: string, conditions: PluginConditions = NOT_EDITABLE) {
     super('subBlock', `${subBlock.x}, ${subBlock.y}`, subBlock.hasParseFailure, plugin, origin, conditions);
   }
 }
 
-export class InteriorBlockNode extends BlockLevelNode {
+class InteriorBlockNode extends BlockLevelNode {
   readonly kind = 'interiorBlock' as const;
   constructor(plugin: string, public readonly block: InteriorCellBlock, origin: string, conditions: PluginConditions = NOT_EDITABLE) {
     super('block', String(block.number), block.hasParseFailure, plugin, origin, conditions);
   }
 }
 
-export class InteriorSubBlockNode extends BlockLevelNode {
+class InteriorSubBlockNode extends BlockLevelNode {
   readonly kind = 'interiorSubBlock' as const;
   constructor(plugin: string, public readonly subBlock: InteriorCellSubBlock, origin: string, conditions: PluginConditions = NOT_EDITABLE) {
     super('subBlock', String(subBlock.number), subBlock.hasParseFailure, plugin, origin, conditions);
@@ -197,7 +197,7 @@ export class CellNode extends vscode.TreeItem {
   }
 }
 
-export class ChildRecordGroupNode extends vscode.TreeItem {
+class ChildRecordGroupNode extends vscode.TreeItem {
   readonly kind = 'placedGroup' as const;
   constructor(
     public readonly plugin: string,

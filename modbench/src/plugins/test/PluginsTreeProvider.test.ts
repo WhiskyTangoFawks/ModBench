@@ -39,17 +39,14 @@ import {
   PluginsTreeProvider, PluginNode, ImplicitMasterNode, NO_PLUGINS_MESSAGE, pluginFileOf, isDropPayload,
   type PluginsTreeNode, type PluginsTreeProviderOptions,
 } from '../PluginsTreeProvider';
-import {
-  PluginTreeProvider, RecordTypeNode, RecordNode, WorldspaceNode, BlockNode,
-  SubBlockNode, CellNode, InteriorBlockNode, InteriorSubBlockNode, IndexingNode,
-} from '../PluginTreeProvider';
+import { PluginTreeProvider, IndexingNode } from '../PluginTreeProvider';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { pluginsTreeOver } from './pluginsTreeOver';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { present } from '../../ports/present';
-import { CONTAINER_TYPES, listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
+import { CONTAINER_TYPES, listsForThePluginAsked } from '../../client/test/fixtures';
 
 function plugin(
   overrides: Partial<Omit<LoadOrderPlugin, 'path'>> & { name: string; path?: string },
@@ -184,6 +181,12 @@ async function reconcile(
   h.client.setQueryAnswer('getPlugins', plugins);
   await h.tree.applyReconciled(failures);
   await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+const STILL_INDEXING = [['indexing', 'Still indexing…']];
+
+function rendered(rows: readonly { contextValue?: string; label?: unknown }[]): unknown[] {
+  return rows.map((row) => [row.contextValue, row.label]);
 }
 
 function callCount(client: InMemoryMEditClient, method: string): number {
@@ -660,24 +663,18 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(pluginFileOf(new ImplicitMasterNode('Fallout4.esm', 'Data'))).toBe('Fallout4.esm');
   });
 
-  it('drop onto a row this tree does not own is refused, not treated as the end of the list', async () => {
-    const { tree } = makeTree(fixturePlugins());
-    await tree.getChildren();
+  it.each([['a record row', 1], ['a record-type group row', 0]])('drop onto %s of this tree is refused, not treated as the end of the list', async (_name, depth) => {
+    const plugins = fixturePlugins();
+    const client = makeClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }], records: { items: [recordSummary()], total: 1 } });
+    const h = makeTree(plugins, { client });
+    await reconcile(h, plugins.map((p) => held(p.name, { origin: p.origin })));
+    const [pluginRow] = await h.tree.getChildren();
+    const [group] = await h.tree.getChildren(present(pluginRow, 'the first plugin row'));
+    const target = depth === 0 ? group : (await h.tree.getChildren(present(group, 'the Weapon group')))[0];
     const dt = new DataTransfer();
-    tree.handleDrag([node('A.esp')], dt, IGNORED_TOKEN);
+    h.tree.handleDrag([node('A.esp')], dt, IGNORED_TOKEN);
 
-    await tree.handleDrop(new RecordNode(recordSummary(), 'SomeMod'), dt, IGNORED_TOKEN);
-
-    expect(moves()).toEqual([]);
-  });
-
-  it('drop onto one of this tree own record rows is refused too', async () => {
-    const { tree } = makeTree(fixturePlugins());
-    await tree.getChildren();
-    const dt = new DataTransfer();
-    tree.handleDrag([node('A.esp')], dt, IGNORED_TOKEN);
-
-    await tree.handleDrop(new RecordTypeNode('A.esp', recordTypeCountFixture({ type: 'weap', count: 5, displayName: 'Weapon' }), 'SomeMod'), dt, IGNORED_TOKEN);
+    await h.tree.handleDrop(present(target, 'the browser row'), dt, IGNORED_TOKEN);
 
     expect(moves()).toEqual([]);
   });
@@ -1078,7 +1075,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
 
     const children = await tree.getChildren(row);
 
-    expect(children).toEqual([expect.any(IndexingNode)]);
+    expect(rendered(children)).toEqual(STILL_INDEXING);
     expect(callCount(client, 'getRecordTypes')).toBe(0);
   });
 
@@ -1098,7 +1095,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     const children = await h.tree.getChildren(row);
 
     expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: [{ name: 'A.esp', origin: 'SomeMod' }] });
-    expect(children[0]).toBeInstanceOf(RecordTypeNode);
+    expect(children.map(c => c.label)).toEqual(['Weapon']);
   });
 
   it('a plugin the load order does not hold yet expands to a "still indexing" node', async () => {
@@ -1106,7 +1103,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     await reconcile(h, [held('A.esp')]);
     const rows = await h.tree.getChildren();
 
-    expect(await h.tree.getChildren(rows[1])).toEqual([expect.any(IndexingNode)]);
+    expect(rendered(await h.tree.getChildren(rows[1]))).toEqual(STILL_INDEXING);
   });
 
   it('applyIndexed lets a landed plugin expand into records, and leaves an un-landed one still indexing, with no plugin facts read', async () => {
@@ -1116,8 +1113,8 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
 
     h.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
 
-    expect((await h.tree.getChildren(rows[0]))[0]).toBeInstanceOf(RecordTypeNode);
-    expect(await h.tree.getChildren(rows[1])).toEqual([expect.any(IndexingNode)]);
+    expect((await h.tree.getChildren(rows[0])).map(c => c.label)).toEqual(['Weapon']);
+    expect(rendered(await h.tree.getChildren(rows[1]))).toEqual(STILL_INDEXING);
     expect(callCount(h.client, 'getPlugins')).toBe(0);
   });
 
@@ -1129,8 +1126,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     disconnect(h.client);
 
     const children = await h.tree.getChildren(row);
-    expect(children).toHaveLength(1);
-    expect(children[0]).toBeInstanceOf(ErrorNode);
+    expect(children.map(c => c.contextValue)).toEqual(['error']);
   });
 
   it('a reconcile whose plugin read fails leaves the held row its chevron and its records, never a row still indexing', async () => {
@@ -1143,7 +1139,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     await h.tree.applyReconciled([]);
 
     expect(h.tree.getTreeItem(present(row, 'the A.esp row')).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
-    expect(await h.tree.getChildren(row)).toEqual([expect.any(RecordTypeNode)]);
+    expect((await h.tree.getChildren(row)).map(c => c.label)).toEqual(['Weapon']);
   });
 
   it('expanding while a fresh load holds nothing yet answers with one node, never an empty list', async () => {
@@ -1153,7 +1149,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
 
     h.tree.applyIndexed([], []);
 
-    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
+    expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
   });
 });
 
@@ -1204,8 +1200,8 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
     const [group] = await h.tree.getChildren(present(row, 'the Shared.esp row'));
     const [record] = await h.tree.getChildren(present(group, 'the Weapon group'));
 
-    expect(expectInstanceOf(record, RecordNode).contextValue).toBe('record untracked editable');
-    expect(expectInstanceOf(group, RecordTypeNode).contextValue).toBe('recordType untracked editable creatable');
+    expect(present(record, 'the record row').contextValue).toBe('record untracked editable');
+    expect(present(group, 'the Weapon group').contextValue).toBe('recordType untracked editable creatable');
   });
 });
 
@@ -1217,7 +1213,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
   async function firstRecordUnder(h: Harness, row: PluginsTreeNode) {
     const [group] = await h.tree.getChildren(row);
     const [record] = await h.tree.getChildren(present(group, 'the Weapon group'));
-    return { group: expectInstanceOf(group, RecordTypeNode), record: expectInstanceOf(record, RecordNode) };
+    return { group: present(group, 'the Weapon group'), record: present(record, 'the record row') };
   }
 
   it('states an override record under a tracked, editable plugin tracked and editable', async () => {
@@ -1272,7 +1268,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
 
     const locked = present((await h.tree.getChildren()).find((n) => n instanceof ImplicitMasterNode), 'the locked row');
 
-    expect(await h.tree.getChildren(locked)).toEqual([expect.any(IndexingNode)]);
+    expect(rendered(await h.tree.getChildren(locked))).toEqual(STILL_INDEXING);
   });
 
   it.each([['last', [MOD_COPY, DATA_COPY]], ['first', [DATA_COPY, MOD_COPY]]])(
@@ -1312,8 +1308,7 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
 
     const children = await h.tree.getChildren(row);
 
-    expect(children).toHaveLength(1);
-    expect(children[0]).toBeInstanceOf(ErrorNode);
+    expect(children.map(c => c.contextValue)).toEqual(['error']);
   });
 
   it('names the reason the read failed, not a generic "not connected" message', async () => {
@@ -1350,9 +1345,8 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
     const rows = await indexing.tree.getChildren();
     const [idxChild] = await indexing.tree.getChildren(rows[1]);
 
-    expect(discChild).toBeInstanceOf(ErrorNode);
-    expect(idxChild).toBeInstanceOf(IndexingNode);
-    expect(expectInstanceOf(discChild, ErrorNode).label).not.toBe(expectInstanceOf(idxChild, IndexingNode).label);
+    expect(present(discChild, 'the error row').contextValue).toBe('error');
+    expect(rendered([present(idxChild, 'the indexing row')])).toEqual(STILL_INDEXING);
   });
 });
 
@@ -1436,8 +1430,8 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
 
     h.tree.applyBackendUnreachable('mEdit is stopped.');
 
-    expect(await h.tree.getChildren(rows[0])).toEqual([expect.any(RecordTypeNode)]);
-    expect(expectInstanceOf((await h.tree.getChildren(rows[1]))[0], ErrorNode).tooltip).toBe('mEdit is stopped.');
+    expect((await h.tree.getChildren(rows[0])).map(c => c.label)).toEqual(['Weapon']);
+    expect(present((await h.tree.getChildren(rows[1]))[0], 'the error row').tooltip).toBe('mEdit is stopped.');
   });
 });
 
@@ -1630,7 +1624,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
 
     expect(await handOff).toBe(1);
     const [row] = await h.tree.getChildren();
-    expect(await h.tree.getChildren(row)).not.toContainEqual(expect.any(IndexingNode));
+    expect(rendered(await h.tree.getChildren(row))).not.toEqual(STILL_INDEXING);
   });
 });
 
@@ -1646,10 +1640,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const children = await h.tree.getChildren(row);
 
     expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: [{ name: 'A.esp', origin: 'SomeMod' }] });
-    expect(children).toHaveLength(1);
-    expect(children[0]).toBeInstanceOf(RecordTypeNode);
-    expect(expectInstanceOf(children[0], RecordTypeNode).label).toBe('Weapon');
-    expect(expectInstanceOf(children[0], RecordTypeNode).description).toBe('5');
+    expect(children.map(c => [c.label, c.description])).toEqual([['Weapon', '5']]);
   });
 
   it('reads the row\'s own plugin of a shared filename, and every row beneath it carries that plugin', async () => {
@@ -1664,12 +1655,12 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     await reconcile(h, [held('Shared.esp', { origin: 'ModA' }), held('Shared.esp', { origin: 'ModB' })]);
     const [row] = await h.tree.getChildren();
 
-    const group = expectInstanceOf((await h.tree.getChildren(row))[0], RecordTypeNode);
-    const record = expectInstanceOf((await h.tree.getChildren(group))[0], RecordNode);
+    const group = present((await h.tree.getChildren(row))[0], 'the Weapon group');
+    const record = present((await h.tree.getChildren(group))[0], 'the record row');
 
     expect(client.calls.filter((c) => c.method === 'getRecordTypes' || c.method === 'getRecords').map((c) => c.args))
       .toEqual([[{ name: 'Shared.esp', origin: 'ModB' }], [{ name: 'Shared.esp', origin: 'ModB' }, 'weap', 0, expect.any(Number)]]);
-    expect([group.plugin, group.origin, record.record.plugin, record.origin]).toEqual(['Shared.esp', 'ModB', 'Shared.esp', 'ModB']);
+    expect(record.command?.arguments?.[0]).toEqual({ formKey: '000001:Shared.esp', plugin: { name: 'Shared.esp', origin: 'ModB' } });
   });
 
   it('renders the records under a record type', async () => {
@@ -1685,8 +1676,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
 
     const records = await h.tree.getChildren(recordType);
 
-    expect(records[0]).toBeInstanceOf(RecordNode);
-    expect(expectInstanceOf(records[0], RecordNode).label).toBe('TheWeapon');
+    expect(records.map(r => r.label)).toEqual(['TheWeapon']);
   });
 
   it('renders the worldspace and cell hierarchy under a row', async () => {
@@ -1709,18 +1699,15 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const [row] = await h.tree.getChildren();
 
     const [worldspaces] = await h.tree.getChildren(row);
-    expect(expectInstanceOf(worldspaces, RecordTypeNode).recordType).toBe('wrld');
+    expect(present(worldspaces, 'the Worldspace group').label).toBe('Worldspace');
     const [worldspace] = await h.tree.getChildren(worldspaces);
-    expect(worldspace).toBeInstanceOf(WorldspaceNode);
+    expect(present(worldspace, 'the worldspace row').label).toBe('Commonwealth');
     const [block] = await h.tree.getChildren(worldspace);
-    expect(block).toBeInstanceOf(BlockNode);
-    expect(expectInstanceOf(block, BlockNode).label).toBe('Block 0, 0');
+    expect(present(block, 'the block row').label).toBe('Block 0, 0');
     const [subBlock] = await h.tree.getChildren(block);
-    expect(subBlock).toBeInstanceOf(SubBlockNode);
-    expect(expectInstanceOf(subBlock, SubBlockNode).label).toBe('Sub-Block 1, 1');
+    expect(present(subBlock, 'the sub-block row').label).toBe('Sub-Block 1, 1');
     const [cell] = await h.tree.getChildren(subBlock);
-    expect(cell).toBeInstanceOf(CellNode);
-    expect(expectInstanceOf(cell, CellNode).label).toBe('TheCell');
+    expect(present(cell, 'the cell row').label).toBe('TheCell');
   });
 
   it('nests the interior cells in xEdit\'s numbered blocks and sub-blocks', async () => {
@@ -1739,13 +1726,13 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const [row] = await h.tree.getChildren();
 
     const [interior] = await h.tree.getChildren(row);
-    expect(expectInstanceOf(interior, RecordTypeNode).recordType).toBe('cell');
+    expect(present(interior, 'the Cell group').label).toBe('Cell');
     const [block] = await h.tree.getChildren(interior);
-    expect(expectInstanceOf(block, InteriorBlockNode).label).toBe('Block 3');
+    expect(present(block, 'the block row').label).toBe('Block 3');
     const [subBlock] = await h.tree.getChildren(block);
-    expect(expectInstanceOf(subBlock, InteriorSubBlockNode).label).toBe('Sub-Block 7');
+    expect(present(subBlock, 'the sub-block row').label).toBe('Sub-Block 7');
     const [cell] = await h.tree.getChildren(subBlock);
-    expect(expectInstanceOf(cell, CellNode).label).toBe('Room');
+    expect(present(cell, 'the cell row').label).toBe('Room');
   });
 
   it('renders a child tree item through the record browser, not the row path', async () => {
@@ -2284,7 +2271,7 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
 
     expect((await rowItem(h)).description).toBe('failed to read');
     const [row] = await h.tree.getChildren();
-    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
+    expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
   });
 
   it('leaves an unaffected plugin row undecorated', async () => {
@@ -2494,7 +2481,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     h.tree.applyIndexed([{ name: 'Shared.esp', origin: 'ModB' }], []);
 
     const [row] = await h.tree.getChildren();
-    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
+    expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
   });
 
   it('expands the row as still indexing while mEdit holds only the other plugin', async () => {
@@ -2502,7 +2489,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     await reconcile(h, [held('Shared.esp', { origin: 'ModB' })]);
 
     const [row] = await h.tree.getChildren();
-    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
+    expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
   });
 
   it('expands the winning row as still indexing, never into the other plugin failure', async () => {
@@ -2510,7 +2497,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     h.tree.applyIndexed([], [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
 
     const [row] = await h.tree.getChildren();
-    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
+    expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
   });
 
   it('flags the row when its own plugin failed to read and the other plugin loaded', async () => {
@@ -2617,7 +2604,7 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
 
     expect(await landing).toBeUndefined();
     const [row] = await h.tree.getChildren();
-    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
+    expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
   });
 });
 
@@ -2638,19 +2625,19 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
   it('finds the record\'s row beneath its plugin and its group, once mEdit lists it', async () => {
     const { tree } = await heldWith(listing('000800:A.esp', '000900:A.esp'));
 
-    const row = expectInstanceOf(await tree.recordRow(NPCS, NEW_NPC), RecordNode);
+    const row = present(await tree.recordRow(NPCS, NEW_NPC), 'the new record\'s row');
 
-    expect(row.record.formKey).toBe('000900:A.esp');
+    expect(row.description).toBe('000900:A.esp');
   });
 
   it('walks from the record\'s row up through its group to its plugin row, and no further', async () => {
     const { tree } = await heldWith(listing('000900:A.esp'));
     const row = present(await tree.recordRow(NPCS, NEW_NPC), 'the new record\'s row');
 
-    const group = expectInstanceOf(tree.getParent(row), RecordTypeNode);
+    const group = present(tree.getParent(row), 'the group row');
     const pluginRow = expectInstanceOf(tree.getParent(group), PluginNode);
 
-    expect([group.recordType, pluginRow.plugin.name, tree.getParent(pluginRow)]).toEqual(['npc_', 'A.esp', undefined]);
+    expect([group.label, pluginRow.plugin.name, tree.getParent(pluginRow)]).toEqual(['Non-Player Character', 'A.esp', undefined]);
   });
 
   it('finds nothing while mEdit does not list the record yet', async () => {
@@ -2678,11 +2665,11 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
       worldspaces: ['000800:A.esp', '000900:A.esp'].map((formKey) => ({ formKey, hasParseFailure: false, hasChildren: true })),
     }));
 
-    const row = expectInstanceOf(await tree.recordRow({ ...NPCS, recordType: 'wrld' }, '000900:A.esp'), WorldspaceNode);
-    const group = expectInstanceOf(tree.getParent(row), RecordTypeNode);
+    const row = present(await tree.recordRow({ ...NPCS, recordType: 'wrld' }, '000900:A.esp'), 'the worldspace row');
+    const group = present(tree.getParent(row), 'the Worldspace group');
 
-    expect([row.formKey, group.recordType, expectInstanceOf(tree.getParent(group), PluginNode).plugin.name])
-      .toEqual(['000900:A.esp', 'wrld', 'A.esp']);
+    expect([row.description, group.label, expectInstanceOf(tree.getParent(group), PluginNode).plugin.name])
+      .toEqual(['000900:A.esp', 'Worldspace', 'A.esp']);
   });
 
   it('finds an interior cell\'s row beneath the Cell group\'s block and sub-block, and walks up through each to its plugin row', async () => {
@@ -2695,13 +2682,13 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
       ],
     }));
 
-    const row = expectInstanceOf(await tree.recordRow({ ...NPCS, recordType: 'cell' }, '000900:A.esp'), CellNode);
-    const subBlock = expectInstanceOf(tree.getParent(row), InteriorSubBlockNode);
-    const block = expectInstanceOf(tree.getParent(subBlock), InteriorBlockNode);
-    const group = expectInstanceOf(tree.getParent(block), RecordTypeNode);
+    const row = present(await tree.recordRow({ ...NPCS, recordType: 'cell' }, '000900:A.esp'), 'the interior cell row');
+    const subBlock = present(tree.getParent(row), 'the sub-block row');
+    const block = present(tree.getParent(subBlock), 'the block row');
+    const group = present(tree.getParent(block), 'the Cell group');
 
-    expect([row.formKey, subBlock.label, block.label, group.recordType, expectInstanceOf(tree.getParent(group), PluginNode).plugin.name])
-      .toEqual(['000900:A.esp', 'Sub-Block 9', 'Block 1', 'cell', 'A.esp']);
+    expect([row.description, subBlock.label, block.label, group.label, expectInstanceOf(tree.getParent(group), PluginNode).plugin.name])
+      .toEqual(['000900:A.esp', 'Sub-Block 9', 'Block 1', 'Cell', 'A.esp']);
   });
 
   describe('beneath the container it landed in', () => {
@@ -2751,7 +2738,7 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
       });
       h.records.refresh();
 
-      const row = expectInstanceOf(await h.tree.recordRow({ container: worldspace }, NEW_NPC), CellNode);
+      const row = present(await h.tree.recordRow({ container: worldspace }, NEW_NPC), 'the new cell row');
 
       expect((await ancestry(h.tree, row)).slice(0, 3).map((r) => r.label)).toEqual(['Sub-Block 1, -2', 'Block 0, -1', '000800:A.esp']);
     });
