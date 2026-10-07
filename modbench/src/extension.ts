@@ -68,7 +68,7 @@ import type { MoveToTrash } from './ports/trash';
 type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
-  'sendLoadOrder' | 'onLoadOrderResent' | 'start' | 'rebuildIndex' | 'createPlugin' | 'renameSource'
+  'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'start' | 'rebuildIndex' | 'createPlugin' | 'renameSource'
   | 'getPluginDependants' | 'getCreatablePluginExtensions'>;
 
 interface ViewsDeps {
@@ -172,6 +172,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     narrator: plugins.narrator, progress: plugins.progress, log: outputChannel, revealLog: () => outputChannel.show(true), loadOrderPut: plugins.loadOrderPut,
     reportPut: (message) => reporterFor('loadOrder').report('error', message),
     reportEntry: (message) => reporterFor('enterEditing').report('error', message),
+    reportLaunch: (message, reason) => reporterFor('launch').report('error', message, reason),
   });
   const editing = own(editingFlow({ client, instanceRoot, around: view.around, tell: view.tell }));
   void editing.enter(instance.landed());
@@ -310,7 +311,7 @@ export function activate(context: vscode.ExtensionContext): void {
   };
   const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...modFacts });
   const instance = { refresh: () => views.facts.refresh() };
-  const recordWrite = recordWriteOver(instance, { latest: () => meditClient.latestLoadOrder() });
+  const recordWrite = recordWriteOver(instance, meditClient);
   const editor = createEditor({
     context, meditClient, outputChannel,
     reporterFor: (tag) => makeReporter(outputChannel, tag),

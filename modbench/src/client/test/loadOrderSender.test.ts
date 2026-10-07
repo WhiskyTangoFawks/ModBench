@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
-import type { LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot } from '../MEditClient';
+import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot } from '../MEditClient';
 
 const READY_STATUS: LoadOrderProgress = {
   totalPlugins: 1, activePlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
@@ -95,14 +95,11 @@ describe('a snapshot while mEdit is not running', () => {
     expect(client.status).toBe('stopped');
   });
 
-  it('answers backendFailed when the launch throws, and says why in the Output', async () => {
-    const logged: string[] = [];
-    const client = new InMemoryMEditClient({ log: (line) => logged.push(line) });
+  it('answers backendFailed when the launch throws', async () => {
+    const client = new InMemoryMEditClient();
     client.answerStart(() => Promise.reject(new Error('no port')));
 
     await expect(client.sendLoadOrder(snapshot('A.esp'))).resolves.toEqual(BACKEND_FAILED);
-
-    expect(logged).toEqual([expect.stringContaining('no port')]);
   });
 
   it('launches again for the next snapshot after a launch that failed', async () => {
@@ -118,7 +115,7 @@ describe('a snapshot while mEdit is not running', () => {
   });
 
   it('never rejects the launch with the extension, and leaves mEdit stopped when it fails', async () => {
-    const client = new InMemoryMEditClient({ log: () => undefined });
+    const client = new InMemoryMEditClient();
     client.answerStart(() => Promise.reject(new Error('no port')));
 
     await expect(client.start()).resolves.toBeUndefined();
@@ -362,5 +359,109 @@ describe('a stop during a send', () => {
 
     expect(await sent).toEqual(ABANDONED);
     expect(methods(client)).toEqual(['stop']);
+  });
+});
+
+describe('each launch, announced as it begins', () => {
+  const launchesOf = (client: InMemoryMEditClient) => {
+    const launches: Promise<LaunchOutcome>[] = [];
+    client.onLaunch((launched) => { launches.push(launched); });
+    return launches;
+  };
+
+  it('announces the launch for a snapshot while mEdit is not running, before mEdit starts, and what it came to', async () => {
+    const client = new InMemoryMEditClient();
+    client.answerPuts(() => Promise.resolve(APPLIED));
+    client.setStatus('stopped');
+    const launches = launchesOf(client);
+
+    void client.sendLoadOrder(snapshot('A.esp'));
+
+    expect(launches).toHaveLength(1);
+    expect(methods(client)).toEqual([]);
+    await expect(launches[0]).resolves.toEqual({ outcome: 'running' });
+  });
+
+  it('announces the launch with the extension, and a send during it launches nothing more', async () => {
+    const client = new InMemoryMEditClient();
+    client.answerPuts(() => Promise.resolve(APPLIED));
+    const launches = launchesOf(client);
+
+    void client.start();
+    await client.sendLoadOrder(snapshot('A.esp'));
+
+    expect(launches).toHaveLength(1);
+  });
+
+  it('carries the launch\'s own error when it threw', async () => {
+    const client = new InMemoryMEditClient();
+    client.answerStart(() => Promise.reject(new Error('no port')));
+    const launches = launchesOf(client);
+
+    await client.start();
+
+    await expect(launches[0]).resolves.toEqual({ outcome: 'failed', error: 'no port' });
+  });
+
+  it('comes to failed with no error when mEdit did not come up', async () => {
+    const client = new InMemoryMEditClient();
+    client.answerStart(() => { client.setStatus('disconnected'); return Promise.resolve(); });
+    const launches = launchesOf(client);
+
+    await client.start();
+
+    await expect(launches[0]).resolves.toEqual({ outcome: 'failed' });
+  });
+
+  it('comes to stopped when a stop cut it short', async () => {
+    const client = new InMemoryMEditClient();
+    const launched = pending<undefined>();
+    client.answerStart(() => launched.promise);
+    const launches = launchesOf(client);
+    void client.start();
+    await until(() => methods(client).includes('start'));
+
+    await client.stop();
+    launched.resolve(undefined);
+
+    await expect(launches[0]).resolves.toEqual({ outcome: 'stopped' });
+  });
+
+  it('announces a restart once it runs after a crash, and the newest snapshot goes again', async () => {
+    const client = running();
+    await client.sendLoadOrder(snapshot('A.esp'));
+    const launches = launchesOf(client);
+
+    client.disconnected();
+    client.setStatus('starting');
+    expect(launches).toHaveLength(0);
+    client.setStatus('running');
+    await client.latestLoadOrder();
+
+    expect(launches).toHaveLength(1);
+    expect(sentNames(client)).toEqual(['A.esp', 'A.esp']);
+    await expect(launches[0]).resolves.toEqual({ outcome: 'running' });
+  });
+
+  it('announces a relaunch once, not again as the restart it runs as', async () => {
+    const client = running();
+    await client.sendLoadOrder(snapshot('A.esp'));
+    client.disconnected();
+    const launches = launchesOf(client);
+
+    await client.sendLoadOrder(snapshot('B.esp'));
+
+    expect(launches).toHaveLength(1);
+  });
+
+  it('announces no reconnect, the process having kept running', async () => {
+    const client = running();
+    await client.sendLoadOrder(snapshot('A.esp'));
+    const launches = launchesOf(client);
+
+    client.reconnected();
+    await client.latestLoadOrder();
+
+    expect(launches).toHaveLength(0);
   });
 });

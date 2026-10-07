@@ -1,56 +1,91 @@
 // Put load order (ADR-0013) at every recompute. The client owns the process the snapshot goes to;
-// what came of each put comes back through `tell`.
+// what came of each put, and of each launch, comes back through `tell`.
 
-import type { LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
-import { errorMessage } from '../ports/errorMessage';
+import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
 import { putLoadOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
 export type Told =
   | { kind: 'put'; put: PutLoadOrderResult }
-  | { kind: 'putThrew'; message: string }
-  | { kind: 'abandoned' }
+  | { kind: 'launchFailed'; reason: string }
   | { kind: 'backendFailed' };
 
 export interface EditingDeps {
-  client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent'>;
+  client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent' | 'onLaunch' | 'latestLoadOrder'>;
   instanceRoot: string;
+  /** Shows a launch, from its start until the snapshot it was for is told (plugins.md, States 2). */
   around: (entry: () => Promise<void>) => Promise<void>;
   tell: (told: Told) => Promise<void>;
 }
 
 export interface EditingFlow {
-  /** Shown until the first read settles and the value it landed, if any, is told. */
+  /** The launch with the extension, shown until the first read settles and the value it landed,
+   *  if any, is told. */
   enter(firstRead: Promise<unknown>): Promise<void>;
   onRecompute(source: LoadOrderSource): void;
   dispose(): void;
 }
 
-function toldOf(put: PutLoadOrderResult): Told {
-  return put.sent && put.outcome.outcome === 'backendFailed' ? { kind: 'backendFailed' } : { kind: 'put', put };
+function pending() {
+  const held = new Set<Promise<void>>();
+  return {
+    track(work: Promise<void>): Promise<void> {
+      held.add(work);
+      void work.then(() => held.delete(work));
+      return work;
+    },
+    settled: async (): Promise<void> => { await Promise.all([...held]); },
+  };
 }
 
 export function editingFlow(deps: EditingDeps): EditingFlow {
   const { client, instanceRoot, around, tell } = deps;
-  let lastTold = Promise.resolve();
+  const tells = pending();
+  const launches = pending();
+  let entering = false;
 
+  // A launch that failed is told by the launch, not again by the snapshot it was for.
   const tellPut = (put: Promise<PutLoadOrderResult>): void => {
-    lastTold = put
-      .then((result) => tell(toldOf(result)))
-      .catch((e: unknown) => tell({ kind: 'putThrew', message: errorMessage(e) }));
+    void tells.track(put.then((result) => {
+      if (result.sent && result.outcome.outcome === 'backendFailed') return;
+      return tell({ kind: 'put', put: result });
+    }));
   };
 
-  const resent = (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome): void => {
-    tellPut(Promise.resolve({ sent: true, snapshot, outcome }));
+  const tellLaunch = async (launched: Promise<LaunchOutcome>): Promise<void> => {
+    const outcome = await launched;
+    if (outcome.outcome === 'failed') {
+      await tell(outcome.error === undefined ? { kind: 'backendFailed' } : { kind: 'launchFailed', reason: outcome.error });
+      return;
+    }
+    if (outcome.outcome === 'stopped') return;
+    await client.latestLoadOrder();
+    await tells.settled();
   };
-  const unsubscribe = client.onLoadOrderResent(resent);
+
+  const unsubscribes = [
+    client.onLoadOrderResent((snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => {
+      tellPut(Promise.resolve({ sent: true, snapshot, outcome }));
+    }),
+    client.onLaunch((launched) => {
+      const shown = launches.track(tellLaunch(launched));
+      if (!entering) void around(() => shown);
+    }),
+  ];
 
   return {
-    // A landed read reached `onRecompute` before `firstRead` settles, so `lastTold` is its put.
-    enter: (firstRead) => around(async () => {
-      await firstRead;
-      await lastTold;
-    }),
+    enter: async (firstRead) => {
+      entering = true;
+      try {
+        await around(async () => {
+          await firstRead;
+          await launches.settled();
+          await tells.settled();
+        });
+      } finally {
+        entering = false;
+      }
+    },
     onRecompute: (source) => { tellPut(putLoadOrder(client, instanceRoot, source)); },
-    dispose: unsubscribe,
+    dispose: () => { for (const unsubscribe of unsubscribes) unsubscribe(); },
   };
 }

@@ -1,5 +1,5 @@
 import type {
-  MEditClient, NotificationKind, NotificationPayloads, BackendStatus, LoadOrderOutcome, LoadOrderSnapshot,
+  MEditClient, NotificationKind, NotificationPayloads, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot,
 } from '../MEditClient';
 import type { NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
@@ -85,14 +85,7 @@ export class InMemoryMEditClient implements MEditClient {
       this.snapshotsPut.push(snapshot);
       return this.putAnswer(snapshot, signal);
     },
-    log: (message) => { this.log(message); },
   });
-
-  constructor(private readonly options: { log?: (message: string) => void } = {}) {}
-
-  private log(message: string): void {
-    this.options.log?.(message);
-  }
 
   /** Answers each PUT of a snapshot, as the backend would, from the snapshot and its abort signal. */
   answerPuts(answer: LoadOrderWire['put']): void {
@@ -192,7 +185,8 @@ export class InMemoryMEditClient implements MEditClient {
     for (const listener of [...this.reconnectListeners]) listener();
   }
 
-  start(): Promise<void> { return this.sender.launch(); }
+  async start(): Promise<void> { await this.sender.launch(); }
+  onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void { return this.sender.onLaunch(listener); }
   stop(): Promise<void> { return this.sender.stop(); }
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.sender.send(snapshot); }

@@ -1,5 +1,7 @@
 import { errorMessage } from '../ports/errorMessage';
-import { isMEditGone, type BackendStatus, type LoadOrderOutcome, type LoadOrderSnapshot } from './MEditClient';
+import {
+  isMEditGone, type BackendStatus, type LaunchOutcome, type LoadOrderOutcome, type LoadOrderSnapshot,
+} from './MEditClient';
 
 /** What an adapter gives the sender: its process, its stream's reopen, and one PUT of a snapshot. */
 export interface LoadOrderWire {
@@ -9,7 +11,6 @@ export interface LoadOrderWire {
   start(): Promise<void>;
   stop(): Promise<void>;
   put(snapshot: LoadOrderSnapshot, signal: AbortSignal): Promise<LoadOrderOutcome>;
-  log(message: string): void;
 }
 
 /** The one sender of ADR-0013's snapshot, and the owner of the process it is sent to. */
@@ -17,7 +18,8 @@ export interface LoadOrderSender {
   send(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
   latest(): Promise<LoadOrderOutcome | undefined>;
   onResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
-  launch(): Promise<void>;
+  onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void;
+  launch(): Promise<LaunchOutcome>;
   stop(): Promise<void>;
 }
 
@@ -87,35 +89,60 @@ function createSendSlot(wire: LoadOrderWire) {
   };
 }
 
-export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
-  const slot = createSendSlot(wire);
-  let newestHanded: LoadOrderSnapshot | undefined;
-  let launching: Promise<void> | undefined;
-  let stops = 0;
-  let wentAway = false;
-  const resentListeners = new Set<(snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void>();
+const RUNNING: LaunchOutcome = { outcome: 'running' };
+const STOPPED: LaunchOutcome = { outcome: 'stopped' };
 
-  // A launch cut short by a stop answers nothing of its own: the stop already abandoned the snapshot.
-  const failedToCome = async (stopsAtLaunch: number): Promise<boolean> => {
-    if (stops !== stopsAtLaunch) return false;
+// One launch at a time; a launch asked for while one runs shares it. A stop cuts a launch short,
+// and the stop, not the launch, answers the snapshot it was for.
+function createLauncher(wire: LoadOrderWire, announce: (launched: Promise<LaunchOutcome>) => void) {
+  let launching: Promise<LaunchOutcome> | undefined;
+  let stops = 0;
+
+  const comeUp = async (stopsAtLaunch: number): Promise<LaunchOutcome> => {
+    if (stops !== stopsAtLaunch) return STOPPED;
+    let error: string | undefined;
     try {
       await wire.start();
     } catch (e) {
-      wire.log(`[mEdit client] launching mEdit failed: ${errorMessage(e)}`);
+      error = errorMessage(e);
     }
-    if (wire.status() === 'running' || stops !== stopsAtLaunch) return false;
+    if (stops !== stopsAtLaunch) return STOPPED;
+    if (wire.status() === 'running') return RUNNING;
     await wire.stop();
-    return true;
+    return error === undefined ? { outcome: 'failed' } : { outcome: 'failed', error };
   };
 
-  const launch = (): Promise<void> => {
-    const stopsAtLaunch = stops;
-    // Held before the start runs, so a status the start reports at once finds the launch under way.
-    launching ??= Promise.resolve().then(() => failedToCome(stopsAtLaunch)).then((failed) => {
-      launching = undefined;
-      if (failed) slot.drop(BACKEND_FAILED);
-    });
-    return launching;
+  return {
+    launch(): Promise<LaunchOutcome> {
+      if (launching) return launching;
+      const stopsAtLaunch = stops;
+      // Held before the start runs, so a status the start reports at once finds the launch under way.
+      const launched = Promise.resolve().then(() => comeUp(stopsAtLaunch));
+      launching = launched;
+      void launched.then(() => { launching = undefined; });
+      announce(launched);
+      return launched;
+    },
+    launching: () => launching !== undefined,
+    stopped: () => { stops++; },
+  };
+}
+
+export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
+  const slot = createSendSlot(wire);
+  let newestHanded: LoadOrderSnapshot | undefined;
+  let wentAway = false;
+  const resentListeners = new Set<(snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void>();
+  const launchListeners = new Set<(launched: Promise<LaunchOutcome>) => void>();
+  const announce = (launched: Promise<LaunchOutcome>): void => {
+    for (const listener of launchListeners) listener(launched);
+  };
+  const launcher = createLauncher(wire, announce);
+
+  const launch = (): Promise<LaunchOutcome> => {
+    const launched = launcher.launch();
+    void launched.then(({ outcome }) => { if (outcome === 'failed') slot.drop(BACKEND_FAILED); });
+    return launched;
   };
 
   const hand = (snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> => {
@@ -139,12 +166,13 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     if (isMEditGone(status)) {
       wentAway = true;
       slot.abortInFlight();
-      if (!launching) slot.drop(ABANDONED);
+      if (!launcher.launching()) slot.drop(ABANDONED);
       return;
     }
     if (status === 'running' && wentAway) {
       wentAway = false;
       resend();
+      if (!launcher.launching()) announce(Promise.resolve(RUNNING));
     }
     slot.pump();
   });
@@ -157,9 +185,13 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
       resentListeners.add(listener);
       return () => { resentListeners.delete(listener); };
     },
+    onLaunch(listener) {
+      launchListeners.add(listener);
+      return () => { launchListeners.delete(listener); };
+    },
     launch,
     async stop() {
-      stops++;
+      launcher.stopped();
       newestHanded = undefined;
       slot.abortInFlight();
       slot.drop(ABANDONED);

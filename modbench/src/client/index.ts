@@ -1,5 +1,5 @@
 export type {
-  MEditClient, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot,
+  MEditClient, LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot,
   NotificationPayloads, BackendStatus, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
   PluginRecordTypeCount, PluginProblems, PluginAddress, RecordAddress,
   CopyMode, CopyItem, RecordChildHolders, ReferenceResult, RecordFilter,
@@ -11,4 +11,3 @@ export type {
 export type { RecordEditEnvelope } from './MEditClient';
 export { isMEditGone, isRefused, UNLIMITED_RECORDS } from './MEditClient';
 export { createMEditClient } from './HttpMEditClient';
-export type { LoadOrderSender } from './loadOrderSender';

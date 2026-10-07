@@ -15,6 +15,7 @@ export interface EditingViewDeps {
   };
   reportPut: (message: string) => void;
   reportEntry: (message: string) => void;
+  reportLaunch: (message: string, reason: string) => void;
   log: { info(message: string): void; error(message: string): void };
   revealLog: () => void;
   /** The load order the loader refused to build, the Plugins view's message line and the Output. */
@@ -22,7 +23,7 @@ export interface EditingViewDeps {
 }
 
 export function editingView(deps: EditingViewDeps) {
-  const { narrator, progress, reportPut, reportEntry, log, revealLog, loadOrderPut } = deps;
+  const { narrator, progress, reportPut, reportEntry, reportLaunch, log, revealLog, loadOrderPut } = deps;
 
   const around = (entry: () => Promise<void>): Promise<void> => progress.while(async () => {
     revealLog();
@@ -33,14 +34,11 @@ export function editingView(deps: EditingViewDeps) {
 
   const tell = async (told: Told): Promise<void> => {
     switch (told.kind) {
-      case 'abandoned':
-        log.info('[toolbox] the reconcile was abandoned before it landed; leaving the closed view alone');
+      case 'launchFailed':
+        reportLaunch('Failed to launch mEdit.', told.reason);
         return;
       case 'backendFailed':
         reportEntry('Backend failed to start — see the Modbench output for details.');
-        return;
-      case 'putThrew':
-        log.error(`[loadOrder] handing mEdit the load order threw: ${told.message}`);
         return;
       case 'put':
         await tellPut(told.put);

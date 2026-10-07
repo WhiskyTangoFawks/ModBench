@@ -26,27 +26,23 @@ function wired(status: 'running' | 'stopped' = 'running') {
   client.setStatus(status);
   const told: Told[] = [];
   const tellListeners: (() => void)[] = [];
-  let tellFailure: Error | undefined;
   const tell = (what: Told): Promise<void> => {
     told.push(what);
     for (const listener of tellListeners.splice(0)) listener();
-    const failure = tellFailure;
-    tellFailure = undefined;
-    return failure ? Promise.reject(failure) : Promise.resolve();
+    return Promise.resolve();
   };
   const toldCount = (count: number): Promise<void> => new Promise((resolve) => {
     const check = (): void => { if (told.length >= count) resolve(); else tellListeners.push(check); };
     check();
   });
-  const around: { entered: number; settled: boolean } = { entered: 0, settled: false };
+  const around: { entered: number; settled: boolean; told: number[] } = { entered: 0, settled: false, told: [] };
   const flow = editingFlow({
     client, instanceRoot: '/instance', tell,
-    around: async (entry) => { around.entered++; await entry(); around.settled = true; },
+    around: async (entry) => { around.entered++; await entry(); around.settled = true; around.told.push(told.length); },
   });
   const putPluginNames = (): string[] => client.puts().map((put) => put.plugins.map((p) => p.name).join());
   const land = (value: LoadOrderSource): void => { flow.onRecompute(value); };
-  const failNextTell = (error: Error): void => { tellFailure = error; };
-  return { client, flow, told, toldCount, putPluginNames, land, around, failNextTell };
+  return { client, flow, told, toldCount, putPluginNames, land, around };
 }
 
 describe('the load order is put at every recompute', () => {
@@ -82,24 +78,26 @@ describe('the load order is put at every recompute', () => {
     expect(putPluginNames()).toEqual([]);
   });
 
-  it('tells mEdit not coming up to take the snapshot as the backend failing', async () => {
-    const { client, told, toldCount, land } = wired('stopped');
+  it('tells mEdit not coming up to take the snapshot as the backend failing, once', async () => {
+    const { client, told, land } = wired('stopped');
     client.answerStart(() => Promise.resolve());
 
     land(valueWith('A.esp'));
-    await toldCount(1);
+    await client.latestLoadOrder();
+    await settle();
 
     expect(told).toEqual([{ kind: 'backendFailed' }]);
   });
 
-  it('tells a put whose telling threw, since no caller is left to hear it', async () => {
-    const { told, toldCount, land, failNextTell } = wired();
-    failNextTell(new Error('boom'));
+  it('tells a launch that threw as a failed launch with its reason, once', async () => {
+    const { client, told, land } = wired('stopped');
+    client.answerStart(() => Promise.reject(new Error('no port')));
 
     land(valueWith('A.esp'));
-    await toldCount(2);
+    await client.latestLoadOrder();
+    await settle();
 
-    expect(told[1]).toEqual({ kind: 'putThrew', message: 'boom' });
+    expect(told).toEqual([{ kind: 'launchFailed', reason: 'no port' }]);
   });
 });
 
@@ -137,11 +135,21 @@ describe('entering editing', () => {
 
     const entering = flow.enter(Promise.resolve().then(() => { land(valueWith('A.esp')); }));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(around).toEqual({ entered: 1, settled: false });
+    expect(around).toMatchObject({ entered: 1, settled: false });
     launched.resolve();
     await entering;
 
-    expect(around).toEqual({ entered: 1, settled: true });
+    expect(around).toEqual({ entered: 1, settled: true, told: [1] });
+  });
+
+  it('shows the launch with the extension as the entry alone, not a second time', async () => {
+    const { client, flow, around, land } = wired('stopped');
+
+    const entering = flow.enter(Promise.resolve().then(() => { land(valueWith('A.esp')); }));
+    void client.start();
+    await entering;
+
+    expect(around).toEqual({ entered: 1, settled: true, told: [1] });
   });
 
   it('ends the entry when the first read lands no value', async () => {
@@ -149,7 +157,7 @@ describe('entering editing', () => {
 
     await flow.enter(Promise.resolve());
 
-    expect(around).toEqual({ entered: 1, settled: true });
+    expect(around).toEqual({ entered: 1, settled: true, told: [0] });
     expect(told).toEqual([]);
   });
 });
@@ -159,3 +167,49 @@ function pending() {
   const promise = new Promise<void>((r) => { resolve = r; });
   return { promise, resolve };
 }
+
+describe('a launch after the entry', () => {
+  it('is shown from the relaunch a snapshot asks for until that snapshot is told', async () => {
+    const { client, around, land } = wired('stopped');
+    const launched = pending();
+    client.answerStart(() => launched.promise.then(() => { client.setStatus('running'); }));
+
+    land(valueWith('A.esp'));
+    await settle();
+    expect(around).toMatchObject({ entered: 1, settled: false });
+    launched.resolve();
+    await until(() => around.settled);
+
+    expect(around.told).toEqual([1]);
+  });
+
+  it('is shown when a restarted mEdit runs, until the snapshot put again is told', async () => {
+    const { client, around, told, toldCount, land } = wired();
+    land(valueWith('A.esp'));
+    await toldCount(1);
+
+    client.disconnected();
+    client.setStatus('running');
+    await until(() => around.settled);
+
+    expect(around).toEqual({ entered: 1, settled: true, told: [2] });
+    expect(told[1]).toMatchObject({ kind: 'put', put: { sent: true, outcome: APPLIED } });
+  });
+
+  it('is not shown for a put again on a reconnect, mEdit having kept running', async () => {
+    const { client, around, toldCount, land } = wired();
+    land(valueWith('A.esp'));
+    await toldCount(1);
+
+    client.reconnected();
+    await toldCount(2);
+
+    expect(around.entered).toBe(0);
+  });
+});
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const until = async (check: () => boolean): Promise<void> => {
+  while (!check()) await settle();
+};

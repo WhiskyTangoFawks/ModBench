@@ -11,7 +11,7 @@ import { SseNotificationSubscriber } from './notificationStream';
 import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
 import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
-  type ContainerChildSummary, type InteriorCellBlock, type LoadOrderOutcome,
+  type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type RecordFile,
   type RebuildIndexOutcome, type CopyItem, type CopyMode, type RecordChildHolders,
@@ -104,7 +104,6 @@ class HttpMEditClient implements MEditClient {
       start: () => this.lifecycle.start(),
       stop: () => this.lifecycle.stop(),
       put: (snapshot, signal) => this.putLoadOrder(snapshot, signal),
-      log: this.log,
     });
   }
 
@@ -125,7 +124,8 @@ class HttpMEditClient implements MEditClient {
   onReconnected(listener: () => void): () => void {
     return this.notifications.onReconnected(listener);
   }
-  start(): Promise<void> { return this.loadOrder.launch(); }
+  async start(): Promise<void> { await this.loadOrder.launch(); }
+  onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void { return this.loadOrder.onLaunch(listener); }
   stop(): Promise<void> { return this.loadOrder.stop(); }
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.loadOrder.send(snapshot); }

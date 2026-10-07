@@ -98,6 +98,10 @@ export type LoadOrderOutcome =
   | { outcome: 'abandoned' }
   | { outcome: 'backendFailed' };
 
+/** What a launch of mEdit came to. `stopped`: a stop cut it short. `failed` carries the launch's
+ *  own error when it threw. */
+export type LaunchOutcome = { outcome: 'running' } | { outcome: 'stopped' } | { outcome: 'failed'; error?: string };
+
 /** An edit's changes to plugin source, each move and then each document's text at its absolute path,
  *  or its refusal: `refusal` is the backend's name, `'Unknown'` this side's. An edit of the FormID
  *  sets `newFormKey`. */
@@ -270,8 +274,11 @@ export interface MEditClient {
    *  be a restarted one, holding nothing sent before. */
   onReconnected(listener: () => void): () => void;
   /** commands.md, No lifecycle gestures for mEdit: it starts with the extension. Never rejects;
-   *  a launch that fails leaves mEdit stopped and its reason in the Output. */
+   *  a launch that fails leaves mEdit stopped, and `onLaunch` hears why. */
   start(): Promise<void>;
+  /** Each launch as it begins, and each restart once it runs after a crash: plugins.md, States
+   *  story 2, shows progress while mEdit starts. */
+  onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void;
   /** Abandons the snapshot in flight, then takes mEdit down. */
   stop(): Promise<void>;
 }
