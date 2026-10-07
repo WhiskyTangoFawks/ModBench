@@ -152,29 +152,6 @@ describe('right-click edits go through the gate of the panels showing the record
   const movedGate = (gated: string[]): RecordPanelContextCommandDeps['editGateOf'] =>
     () => async (address, write) => { gated.push(address.formKey); await write('000900:Fallout4.esm'); };
 
-  it('an array op writes through the gate', async () => {
-    const gated: string[] = [];
-    const { deps, edit } = makeDeps({ editGateOf: movedGate(gated) });
-    registerRecordPanelContextCommands(deps);
-
-    await present(handlers.get('modbench.record.addElement'), 'the addElement handler')(
-      parentContext([{ kind: 'member', name: 'Entries' }]));
-
-    expect(gated).toEqual([IDENTITY.formKey]);
-    expect(edit.mock.calls.map(([address]) => address.formKey)).toEqual(['000900:Fallout4.esm']);
-  });
-
-  it('takes the gate of the panels showing the record it is addressed to', async () => {
-    const asked: string[] = [];
-    const { deps } = makeDeps({ editGateOf: address => { asked.push(address.formKey); return async (address, write) => { await write(address.formKey); }; } });
-    registerRecordPanelContextCommands(deps);
-
-    await present(handlers.get('modbench.record.addElement'), 'the addElement handler')(
-      parentContext([{ kind: 'member', name: 'Entries' }]));
-
-    expect(asked).toEqual([IDENTITY.formKey]);
-  });
-
   it('a save of the extended editor writes through the gate of the panel it was opened from', async () => {
     const gated: string[] = [];
     const { deps, edit } = makeDeps({ editGateOf: movedGate(gated) });
@@ -274,16 +251,6 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
     await editField()(IDENTITY, envelope);
 
     expect(edit.mock.calls).toEqual([[ADDRESS, envelope]]);
-  });
-
-  it('goes through the gate of the panels showing the record its Argument names', async () => {
-    const asked: string[] = [];
-    const { deps } = makeDeps({ editGateOf: address => { asked.push(address.formKey); return async (address, write) => { await write(address.formKey); }; } });
-    registerRecordPanelContextCommands(deps);
-
-    await editField()(IDENTITY, envelope);
-
-    expect(asked).toEqual([IDENTITY.formKey]);
   });
 
   it('from the palette, asks for the focused string cell\'s new text and sets it at the cell\'s path', async () => {

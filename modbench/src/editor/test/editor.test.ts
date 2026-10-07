@@ -1,3 +1,4 @@
+import type { NotificationEvent } from '../../client/apiClient';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, uriFrom, fakeUri } from '../../test/vscodeMock';
 
@@ -12,6 +13,7 @@ const h = vi.hoisted(() => ({
   executed: [] as unknown[][],
   editorProviders: new Map<string, unknown>(),
   editorProviderDisposals: 0,
+  editorProviderOptions: new Map<string, unknown>(),
   treeViews: [] as FakeTreeView[],
   documentChanges: new Set<(event: { document: unknown; contentChanges: unknown[] }) => void>(),
   disk: new Map<string, string | Uint8Array>(),
@@ -62,8 +64,16 @@ vi.mock('vscode', () => ({
     },
   },
   window: {
-    registerCustomEditorProvider: (viewType: string, provider: unknown) => {
+    createQuickPick: () => {
+      const hidden: (() => void)[] = [];
+      return {
+        show: () => { hidden.forEach((listener) => { listener(); }); }, dispose: () => undefined,
+        onDidChangeValue: () => undefined, onDidAccept: () => undefined, onDidHide: (listener: () => void) => { hidden.push(listener); },
+      };
+    },
+    registerCustomEditorProvider: (viewType: string, provider: unknown, options: unknown) => {
       h.editorProviders.set(viewType, provider);
+      h.editorProviderOptions.set(viewType, options);
       return { dispose: () => { h.editorProviderDisposals++; } };
     },
     createTreeView: (_id: string, options: unknown) => {
@@ -102,7 +112,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 interface FakePanel {
   title: string;
   active: boolean;
-  viewColumn: number;
+  viewColumn: number | undefined;
   webview: { postMessage: ReturnType<typeof vi.fn>; options?: unknown; html?: string; cspSource: string; asWebviewUri: (uri: unknown) => unknown; onDidReceiveMessage: (listener: (message: unknown) => void) => { dispose(): void } };
   onDidDispose: (listener: () => void) => { dispose(): void };
   onDidChangeViewState: (listener: () => void) => { dispose(): void };
@@ -263,6 +273,66 @@ describe('Referenced By follows the record tab in focus', () => {
   });
 });
 
+describe('Referenced By, as record tabs retarget and close', () => {
+  const GUN = '000801:A.esp';
+  function followed() {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', []);
+    client.setQueryAnswer('getComparison', null);
+    const { open, referencedBy } = makeEditor(client);
+    const referencesAsked = () => client.calls.filter(({ method }) => method === 'getReferences').length;
+    return { client, open, referencedBy, referencesAsked, aboutNow: () => recordOf(referencedBy) };
+  }
+
+  it('asks nothing again when the tab already in focus is reported in focus again', async () => {
+    const { open, aboutNow, referencesAsked } = followed();
+    const tab = open(GUN);
+    await aboutNow();
+    const asked = referencesAsked();
+
+    tab.focus();
+    await aboutNow();
+
+    expect(referencesAsked()).toBe(asked);
+  });
+
+  it('keeps the record in focus when a tab out of focus closes', async () => {
+    const { open, aboutNow } = followed();
+    const first = open(GUN);
+    open('000802:A.esp');
+    await aboutNow();
+
+    first.close();
+
+    expect((await aboutNow()).description).toBe('000802:A.esp');
+  });
+
+  describe('as an edit of a FormID moves the record its tabs show', () => {
+    const [OLD, MOVED, OTHER] = ['000800:A.esp', '000900:A.esp', '000802:A.esp'];
+
+    it('names the new FormKey for the tab in focus, and keeps the record of the tab in focus when another tab moves', async () => {
+      const client = new InMemoryMEditClient();
+      client.setQueryAnswer('getReferences', []);
+      client.setQueryAnswer('getComparison', null);
+      client.setQueryAnswer('getPlugins', activeA);
+      client.setQueryAnswer('getRecordFile', { path: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
+      client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
+      client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], documents: [] });
+      const { open, referencedBy } = makeEditor(client);
+      const moving = open(OLD);
+      open(OTHER);
+      const edit = () => h.commands.get('modbench.record.editField')?.(
+        { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin }, { op: 'set', path: [{ kind: 'member', name: 'FormID' }], value: 'x' });
+
+      await edit();
+      expect((await recordOf(referencedBy)).description).toBe(OTHER);
+
+      moving.focus();
+      expect((await recordOf(referencedBy)).description).toBe(MOVED);
+    });
+  });
+});
+
 describe('the focused cell of the record tab in focus', () => {
   it('publishes its keys, enters the record grid as the focused view and is what copy value copies from it', () => {
     const { editor, open, focusedView } = makeEditor();
@@ -273,6 +343,56 @@ describe('the focused cell of the record tab in focus', () => {
     expect(h.contextKeys.get('modbench.record.focusedCellSection')).toBe('field');
     expect(focusedView.id()).toBe('modbench.recordGrid');
     expect(editor.copyValue.map(({ text }) => text({ view: 'modbench.recordGrid' }, undefined))).toEqual(['Iron', undefined]);
+  });
+
+  const cell = (webviewSection: string) => ({ webviewSection });
+  const focusedSection = () => h.contextKeys.get('modbench.record.focusedCellSection');
+
+  it('is the cell of the tab in focus, whichever tab reported one, and follows the focus', () => {
+    const { open } = makeEditor();
+    const [first, second] = [open('000801:A.esp'), open('000802:A.esp')];
+    first.receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: cell('first'), entered: false });
+    expect(focusedSection()).toBeUndefined();
+
+    second.receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: cell('second'), entered: false });
+    expect(focusedSection()).toBe('second');
+    first.focus();
+    expect(focusedSection()).toBe('first');
+  });
+
+  it('is gone with the tab that held it', () => {
+    const { open } = makeEditor();
+    const tab = open('000801:A.esp');
+    tab.receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: cell('field'), entered: false });
+
+    tab.close();
+
+    expect(focusedSection()).toBeUndefined();
+  });
+
+  it('enters the record grid as the focused view when a tab gains the focus, and not when a re-read refreshes its cell', () => {
+    const { open, focusedView } = makeEditor();
+    const tab = open('000801:A.esp');
+    expect(focusedView.id()).toBe('modbench.recordGrid');
+    focusedView.enter('modbench.modList');
+
+    tab.receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: cell('field'), entered: false });
+    expect(focusedView.id()).toBe('modbench.modList');
+    tab.focus();
+    expect(focusedView.id()).toBe('modbench.recordGrid');
+  });
+
+  it('answers the palette\'s copy value with the focused cell\'s text, empty or not, and defers for another view or a cell with none', () => {
+    const { editor, open } = makeEditor();
+    const tab = open('000801:A.esp');
+    const copy = () => editor.copyValue.map(({ text }) => text({ view: 'modbench.recordGrid' }, undefined))[0];
+
+    tab.receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: { webviewSection: 'field', copyText: '' }, entered: false });
+    expect(copy()).toBe('');
+    tab.receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: cell('field'), entered: false });
+    expect(copy()).toBeUndefined();
+    tab.receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: { webviewSection: 'field', copyText: 'Iron' }, entered: false });
+    expect(editor.copyValue.map(({ text }) => text({ view: 'modbench.modList' }, undefined))[0]).toBeUndefined();
   });
 });
 
@@ -336,6 +456,29 @@ describe('a record tab whose record an edit of its FormID moved', () => {
     await editField(OLD);
 
     expect(editedFormKeys(client)).toEqual([OLD, MOVED, OLD]);
+  });
+});
+
+describe('an edit of a FormID, fired with no panel', () => {
+  const [OLD, MOVED, ELSEWHERE] = ['000800:A.esp', '000900:A.esp', '000801:A.esp'];
+
+  it('moves every tab showing the record to its new FormKey, and no other, with one edit', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', []);
+    client.setQueryAnswer('getComparison', null);
+    client.setQueryAnswer('getRecordFile', { path: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
+    client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
+    client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], documents: [] });
+    const { open } = makeEditor(client);
+    const [one, other, elsewhere] = [open(OLD), open(OLD), open(ELSEWHERE)];
+
+    await h.commands.get('modbench.record.editField')?.(
+      { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin }, { op: 'set', path: [{ kind: 'member', name: 'FormID' }], value: 'x' });
+    client.emit({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: [OLD, MOVED], sequence: 2 });
+
+    expect([one, other, elsewhere].map((tab) => tab.webview.postMessage.mock.calls))
+      .toEqual([[[{ type: 'loadRecord', formKey: MOVED }]], [[{ type: 'loadRecord', formKey: MOVED }]], []]);
+    expect(client.calls.filter(({ method }) => method === 'getEditChanges')).toHaveLength(1);
   });
 });
 
@@ -550,6 +693,175 @@ describe('a record tab closed while its read is in flight', () => {
   });
 });
 
+describe('what a record tab\'s webview posts', () => {
+  const GUN = '000801:A.esp';
+  const compare = comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]);
+  const loadRequest = { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: GUN, columns: [] };
+  const answered = (tab: FakePanel) => tab.webview.postMessage.mock.calls.map(([message]) => message as { type: string });
+  const loadAnswered = (tab: FakePanel) => answered(tab).filter(({ type }) => type === 'recordLoadAnswered');
+
+  function client(): InMemoryMEditClient {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', []);
+    client.setQueryAnswer('getComparison', compare);
+    client.setQueryAnswer('getPlugins', activeA);
+    return client;
+  }
+
+  describe('an edit of a field', () => {
+    const [FORM_KEY, MODDED] = ['000800:A.esp', '000900:A.esp'];
+    const path = [{ kind: 'member', name: 'Keywords' }];
+    function editing(): InMemoryMEditClient {
+      const editing = client();
+      editing.setQueryAnswer('getRecordFile', { path: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
+      editing.setQueryAnswer('getRecordOfFile', { formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA' });
+      editing.setQueryAnswer('getEditChanges', { applied: true, moves: [], documents: [] });
+      return editing;
+    }
+    const edits = (client: InMemoryMEditClient) => client.calls.filter(({ method }) => method === 'getEditChanges').map(({ args }) => args.slice(0, 3));
+
+    it('is sent to mEdit for the column\'s (origin, filename), with the envelope the grid posted', async () => {
+      const mEdit = editing();
+      const { open } = makeEditor(mEdit);
+      const envelope = { op: 'set', path: [{ kind: 'member', name: 'Height' }], value: 0.75 };
+
+      open(FORM_KEY).receive({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA', envelope });
+      await settle();
+
+      expect(edits(mEdit)).toEqual([[FORM_KEY, { name: 'A.esp', origin: 'ModA' }, envelope]]);
+    });
+
+    it('is sent with the value a drop supplies, for an element added', async () => {
+      const mEdit = editing();
+      const { open } = makeEditor(mEdit);
+      const context = { webviewSection: 'arrayParent', formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA', path, preventDefaultContextMenuItems: true };
+
+      open(FORM_KEY).receive({ type: WEBVIEW_TO_EXTENSION.ADD_ELEMENT, context, value: { Keyword: GUN } });
+      await settle();
+
+      expect(edits(mEdit)).toEqual([[FORM_KEY, { name: 'A.esp', origin: 'ModA' }, { op: 'add', path, value: { Keyword: GUN } }]]);
+    });
+
+    it('from a right-click, on a record the tab\'s last edit moved, is sent to the FormKey the record is at now', async () => {
+      const mEdit = editing();
+      mEdit.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MODDED, moves: [], documents: [] });
+      const { open } = makeEditor(mEdit);
+      const tab = open(FORM_KEY);
+      const context = { webviewSection: 'arrayParent', formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA', path, preventDefaultContextMenuItems: true };
+      await h.commands.get('modbench.record.editField')?.(
+        { formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA' }, { op: 'set', path, value: 'x' });
+      mEdit.setQueryAnswer('getEditChanges', { applied: true, moves: [], documents: [] });
+
+      await h.commands.get('modbench.record.addElement')?.(context);
+
+      expect(edits(mEdit).map(([formKey]) => formKey)).toEqual([FORM_KEY, MODDED]);
+      expect(tab.webview.postMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('that names nothing the host knows', () => {
+    it.each([
+      ['a type this build does not know', { type: 'somethingElse' }],
+      ['a string', 'not an object'],
+      ['null', null],
+      ['a FormKey of the wrong type', { type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: 123, plugin: 'A.esp', origin: 'ModA', envelope: { op: 'set', path: [] } }],
+    ])('is ignored, as %s', async (_, message) => {
+      const mEdit = client();
+      const { open } = makeEditor(mEdit);
+      const tab = open(GUN);
+      const [executed, asked] = [h.executed.length, mEdit.calls.length];
+
+      tab.receive(message);
+      await settle();
+
+      expect([h.executed.length, mEdit.calls.length]).toEqual([executed, asked]);
+      expect(tab.webview.postMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  it('opens nothing for a click on a column\'s header in a tab VS Code has not shown', async () => {
+    const { open } = makeEditor(client());
+    const tab = open(GUN);
+    tab.viewColumn = undefined;
+
+    tab.receive({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: [{ formKey: '000803:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } }] });
+
+    expect(h.executed.filter(([id]) => id === 'modbench.record.open')).toEqual([]);
+  });
+
+  it('answers a request for a FormKey the picker was dismissed on with null, correlated by requestId', async () => {
+    const { open } = makeEditor(client());
+    const tab = open(GUN);
+
+    tab.receive({ type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: [] });
+    await settle();
+
+    expect(tab.webview.postMessage).toHaveBeenCalledWith({ type: 'formKeyPicked', requestId: 'r1', formKey: null });
+  });
+
+  describe('a request for the record', () => {
+    it('is answered with the comparison, the plugin list, whether conflicts are computed, the plugins mEdit cannot read and the plugin the tab\'s document holds', async () => {
+      const mEdit = client();
+      const { open } = makeEditor(mEdit);
+      const tab = open(GUN);
+      const failure = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
+      mEdit.emit({
+        kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
+        loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [failure], version: 1 },
+      });
+
+      tab.receive(loadRequest);
+      await settle();
+
+      expect(loadAnswered(tab)).toEqual([{
+        type: 'recordLoadAnswered', requestId: 'r1', ok: true, compare, plugins: activeA, conflictsComputed: true,
+        loadFailures: [failure], documentPlugin: COPY_PLUGIN,
+      }]);
+      expect(comparisonsAsked(mEdit)).toEqual([[GUN, undefined]]);
+    });
+
+    it('is answered with a null comparison, not a failure, for a record no active plugin holds', async () => {
+      const mEdit = client();
+      mEdit.setQueryAnswer('getComparison', null);
+      const { open } = makeEditor(mEdit);
+      const tab = open(GUN);
+
+      tab.receive(loadRequest);
+      await settle();
+
+      expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare: null, conflictsComputed: false, loadFailures: [] })]);
+    });
+
+    it('is answered with a null plugin list, rather than failed, when only the list fails', async () => {
+      const mEdit = client();
+      mEdit.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
+      const { openDocument } = makeEditor(mEdit);
+      const tab = await openDocument(renderedDocumentUri({ formKey: GUN, plugin: COPY_PLUGIN }, 'Gun.json'), { getText: () => '{}' });
+
+      tab.receive(loadRequest);
+      await settle();
+
+      expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare, plugins: null })]);
+    });
+
+    it('is failed, naming the record in the Output and leaving the tab\'s title, when the comparison fails', async () => {
+      const mEdit = client();
+      mEdit.setQueryFailure('getComparison', new Error('ECONNREFUSED'));
+      const { openDocument, outputChannel } = makeEditor(mEdit);
+      const tab = await openDocument({
+        scheme: 'modbench-child-record', path: '/mods/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000801%3AA.esp&name=A.esp&origin=ModA',
+      });
+
+      tab.receive(loadRequest);
+      await settle();
+
+      expect(loadAnswered(tab)).toEqual([{ type: 'recordLoadAnswered', requestId: 'r1', ok: false, error: 'ECONNREFUSED' }]);
+      expect(outputChannel.warn).toHaveBeenCalledWith(`Failed to read ${GUN}: ECONNREFUSED`);
+      expect(tab.title).toBe(GUN);
+    });
+  });
+});
+
 describe('a click on a column\'s header', () => {
   it('opens the records it names in the place of the tab it was clicked in, as that tab stood when the click arrived', async () => {
     const gun = { formKey: '000801:A.esp', plugin: COPY_PLUGIN };
@@ -751,6 +1063,82 @@ describe('several records opened at once', () => {
     expect(client.calls.filter(({ method }) => method === 'getRecordsComparison').map(({ args }) => args))
       .toEqual([[[{ formKey: GUN, plugin: COPY_PLUGIN }, { formKey: AMMO, plugin: winner }]]]);
     expect(comparisonsAsked(client)).toEqual([]);
+  });
+});
+
+describe('mEdit\'s reports to an open record tab', () => {
+  const GUN = '000801:A.esp';
+  const reported = (kind: 'rows-changed' | 'plugin-changed', keys: string[]) =>
+    ({ kind, plugin: 'A.esp', origin: 'ModA', keys, sequence: 1 }) as const;
+
+  it('has a tab read its record again when a report names it, and not when a report names another record or a plugin\'s change', () => {
+    const client = new InMemoryMEditClient();
+    const { open } = makeEditor(client);
+    const tab = open(GUN);
+
+    client.emit(reported('rows-changed', ['000802:A.esp']));
+    client.emit(reported('plugin-changed', [GUN]));
+    expect(tab.webview.postMessage).not.toHaveBeenCalled();
+
+    client.emit(reported('rows-changed', [GUN]));
+    expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
+  });
+
+  it('is no longer heard once the Editor is disposed', () => {
+    const client = new InMemoryMEditClient();
+    const { editor, open } = makeEditor(client);
+    const tab = open(GUN);
+
+    editor.dispose();
+    client.emit(reported('rows-changed', [GUN]));
+
+    expect(tab.webview.postMessage).not.toHaveBeenCalled();
+  });
+
+  describe('of a plugin it cannot read', () => {
+    const tick = (failures: { name: string; origin: string; reason: string }[]): NotificationEvent => ({
+      kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
+      loadOrderStatus: {
+        state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: false, failures, version: 1,
+      },
+    });
+    const bad = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
+
+    it('has the tabs read again on a failure arriving and on it clearing, and not on an identical tick', () => {
+      const client = new InMemoryMEditClient();
+      const { open } = makeEditor(client);
+      const tab = open(GUN);
+
+      client.emit(tick([bad]));
+      client.emit(tick([bad]));
+      client.emit(tick([]));
+
+      expect(tab.webview.postMessage.mock.calls).toEqual([
+        [{ type: 'loadRecord', formKey: GUN }],
+        [{ type: 'loadRecord', formKey: GUN }],
+      ]);
+    });
+  });
+});
+
+describe('a record tab', () => {
+  it('keeps its page alive while it is hidden', () => {
+    makeEditor();
+
+    expect(h.editorProviderOptions.get('modbench.record')).toEqual({ webviewOptions: { retainContextWhenHidden: true } });
+  });
+});
+
+describe('the grid\'s F2', () => {
+  it('opens the editor of the focused cell of the record tab in focus, and of no other tab', async () => {
+    const { open } = makeEditor();
+    const behind = open('000801:A.esp');
+    const inFocus = open('000802:A.esp');
+
+    await h.commands.get('modbench.recordGrid.editHere')?.();
+
+    expect(inFocus.webview.postMessage).toHaveBeenCalledWith({ type: 'openCellEditor' });
+    expect(behind.webview.postMessage).not.toHaveBeenCalled();
   });
 });
 
