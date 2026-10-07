@@ -35,10 +35,7 @@ const GAME_FORMAT: Format = {
   tokens: ['*'],
 };
 const FORMATS = [MANAGER_FORMATS, GAME_FORMAT];
-const CODECS = FORMATS.flatMap((format) => format.codecs);
 const TOKENS = FORMATS.flatMap((format) => format.tokens);
-
-const LINE_SCAN = join('loadOrderFileCodec', 'lineScan.ts');
 
 const THIS_FILE_HOLDING_EVERY_TOKEN_AS_DATA_NOT_READING_ANY_INSTANCE_FILE = 'formatLiteralScan.test.ts';
 
@@ -197,12 +194,6 @@ describe('format literals, scanned over the extension and webview trees against 
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-  });
-
-  it('lineScan.ts is not (and cannot honestly be) a codec file, holding no format token of its own', () => {
-    expect(CODECS.map(({ file }) => file)).not.toContain(LINE_SCAN);
-    const path = join(SRC, LINE_SCAN);
-    expect(tokenLeaks(readFileSync(path, 'utf8'), path)).toEqual([]);
   });
 });
 

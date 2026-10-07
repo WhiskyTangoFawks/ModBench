@@ -179,12 +179,12 @@ describe('FormKeyCell — checkError', () => {
     expect(screen.queryByText('⚠')).not.toBeInTheDocument();
   });
 
-  it('shows a warning icon with the checkError as its title in view mode', () => {
+  it('shows a warning icon with the checkError as its title on a read-only cell', () => {
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onCommit={vi.fn()} checkError="dangling reference" />);
     expect(screen.getByText('⚠')).toHaveAttribute('title', 'dangling reference');
   });
 
-  it('shows a warning icon in edit mode too', () => {
+  it('shows a warning icon on an editable cell too', () => {
     render(<FormKeyCell value={null} meta={fkMeta} editable={true} onCommit={vi.fn()} checkError="null not allowed" />);
     expect(screen.getByText('⚠')).toHaveAttribute('title', 'null not allowed');
   });
