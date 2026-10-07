@@ -420,32 +420,6 @@
       "SubY": null
     }
   ],
-  "Placements": {
-    "0782AA:Fallout4.esm": {
-      "FormKey": "0782AA:Fallout4.esm",
-      "ParentCell": "0782A8:Fallout4.esm",
-      "PlacementGroup": "temporary",
-      "PosX": 2304,
-      "PosY": 2336,
-      "PosZ": 256
-    },
-    "0782B7:Fallout4.esm": {
-      "FormKey": "0782B7:Fallout4.esm",
-      "ParentCell": "0782A8:Fallout4.esm",
-      "PlacementGroup": "temporary",
-      "PosX": -1431.6484,
-      "PosY": 1437.554,
-      "PosZ": 3200.438
-    },
-    "0782B8:Fallout4.esm": {
-      "FormKey": "0782B8:Fallout4.esm",
-      "ParentCell": "0782A8:Fallout4.esm",
-      "PlacementGroup": "persistent",
-      "PosX": 2173.0906,
-      "PosY": 2216.0007,
-      "PosZ": 256
-    }
-  },
   "WorldspaceCells": {
     "000800:mEditTestSubset.esm": [
       {

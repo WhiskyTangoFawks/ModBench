@@ -25,10 +25,6 @@ public interface IRecordReads
     /// a copy with a <c>ParseDiagnosis</c>.</summary>
     RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text);
 
-    /// <summary>Every document <paramref name="plugin"/> holds, in one bulk read, for consumers that
-    /// scan a whole plugin and would otherwise pay two point queries per record.</summary>
-    IReadOnlyList<RecordDocument> GetDocuments(PluginAddress plugin);
-
     /// <summary>Every plugin's copy of <paramref name="formKey"/>, in load order. Null if the
     /// FormKey isn't indexed anywhere.</summary>
     RecordOverrides? GetOverrideStack(string formKey);
@@ -49,12 +45,9 @@ public interface IRecordReads
 
     IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey);
 
-    /// <summary>Every link an active plugin's record carries to a FormKey no active plugin holds,
-    /// except the engine-defined FormIds the grid's dangling warning also exempts.</summary>
-    IReadOnlyList<MissingReference> GetReferencesToMissingRecords();
-
-    /// <summary><see cref="GetReferencesToMissingRecords"/>, each with its referring record's file in
-    /// the tree <paramref name="modOf"/> names for its plugin, null for a plugin no mod folder provides.</summary>
+    /// <summary>Every link an active plugin's record carries to a FormKey no active plugin holds
+    /// (engine-defined FormIds exempt), with its referrer's file in the mod folder
+    /// <paramref name="modOf"/> names.</summary>
     IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(
         Func<PluginAddress, PluginProvider.FromMod?> modOf);
 
@@ -82,12 +75,8 @@ public interface IRecordReads
     CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey);
     IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin);
 
-    /// <summary>A placed ref's structural parentage (cell, persistent/temporary, position). Null
-    /// when not placed.</summary>
-    PlacementRow? GetPlacement(string formKey, PluginAddress plugin);
-
     /// <summary>One cell's own structural parentage, or null when it isn't a cell this plugin
-    /// indexed. Ref-invariant like <see cref="GetPlacement"/>: no gesture moves a cell.</summary>
+    /// indexed. Ref-invariant: no gesture moves a cell.</summary>
     CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey);
 
     /// <summary><paramref name="parentFormKey"/>'s children among the relationships the placement
@@ -103,9 +92,4 @@ public interface IRecordReads
     /// <summary>Every plugin holding at least one record below <paramref name="formKey"/> as
     /// <paramref name="plugin"/> holds it, at any depth, whether or not it holds the record itself.</summary>
     IReadOnlySet<PluginAddress> PluginsHoldingChildRecords(PluginAddress plugin, string formKey);
-
-    /// <summary>The one parent slot <paramref name="childFormKey"/> sits in, or null. Needed because
-    /// an embedded child has no file of its own; a placed reference answers null here and through
-    /// <see cref="GetPlacement"/> instead.</summary>
-    ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey);
 }

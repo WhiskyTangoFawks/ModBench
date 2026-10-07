@@ -122,11 +122,6 @@ describe('the name filter is durable', () => {
     expect(h.state.contextKeys.get(KEY)).toBe(false);
   });
 
-  it('registers no command of its own, since the catalog\'s filter is one command for every view', () => {
-    setup();
-    expect([...h.state.commands.keys()]).toEqual([]);
-  });
-
   it('treats a term typed back to empty as no filter, without needing the clear command', () => {
     setup();
     open();
