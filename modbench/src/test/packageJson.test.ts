@@ -27,7 +27,6 @@ import { CONFLICT_CELL_VALUES } from '../wire/conflictTable';
 import { MODS_KEY_ARGS } from '../mods/gestureEntry';
 import { PLUGINS_KEY_ARGS } from '../plugins/gestureEntry';
 import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
-import { DECOMPILE_PLUGIN_TITLE } from '../plugins/externalChangeNotice';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 import { GREY_INACTIVE_FILES_SETTING } from '../mods/inactiveFiles';
@@ -609,11 +608,6 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(when('modbench.plugin.sortLosingAtTop')).toBe(`${PLUGINS_VIEW} && modbench.plugin.winningAtTop && ${IN_AN_INSTANCE}`);
   });
 
-  it('the untracked-plugin warning names decompile by its title', () => {
-    const decompile = present(pkg.contributes.commands.find((c) => c.command === 'modbench.plugin.decompile'), 'decompile');
-    expect(DECOMPILE_PLUGIN_TITLE).toBe(decompile.title);
-  });
-
   it('the empty list\'s message names the title bar\'s create plugin', () => {
     const create = present(pkg.contributes.commands.find((c) => c.command === 'modbench.plugin.create'), 'create plugin');
     expect(NO_PLUGINS_MESSAGE).toContain(create.title);
@@ -642,6 +636,17 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(menuOf('plugin disabled inTrackedMod tracked')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.enable', '2_change'],
+      ['modbench.plugin.rename', '2_change'],
+      ['modbench.plugin.decompile', '4_sourceControl'],
+      ['modbench.plugin.compile', '4_sourceControl'],
+      ['modbench.copyValue', '5_copy'],
+    ]);
+  });
+
+  it('plugin menu on a plugin whose plugin source is unreadable: rename, decompile and compile, and no record edit', () => {
+    expect(menuOf('plugin enabled inTrackedMod tracked')).toEqual([
+      ['modbench.plugin.reveal', '1_open'],
+      ['modbench.plugin.disable', '2_change'],
       ['modbench.plugin.rename', '2_change'],
       ['modbench.plugin.decompile', '4_sourceControl'],
       ['modbench.plugin.compile', '4_sourceControl'],
