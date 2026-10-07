@@ -1,5 +1,6 @@
 import type { components } from './generated/api';
 import type { PluginAddress } from './pluginAddress';
+import type { ArgumentOf } from './argument';
 import type { ColumnKey } from './columnKey';
 
 export const EXTENSION_TO_WEBVIEW = {
@@ -131,13 +132,11 @@ export interface ArrayParentContext {
 }
 
 // Resolving the commands this feeds never round-trips back through the webview: the mutation is
-// an ordinary host-side call, so this context only says which record, plugin and
-// origin was right-clicked.
+// an ordinary host-side call, so this context only says which record was right-clicked.
 export interface ColumnHeaderContext {
   webviewSection: 'recordHeader';
-  formKey: string;
-  plugin: string;
-  origin: string;
+  // commands.md, Argument: the column's record, as its plugin's address and its FormKey.
+  argument: ArgumentOf<'record'>;
   // commands.md, compile: the column's plugin is tracked and not read-only. It stays offered when
   // the plugin source is unreadable, and refuses.
   compilable: boolean;

@@ -406,7 +406,8 @@ describe('RecordPanel — column header native right-click menu', () => {
       container.querySelector('th[data-vscode-context]'), 'the header cell carrying the context',
     ).getAttribute('data-vscode-context') ?? '';
     expect(JSON.parse(headerContext)).toEqual({
-      webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+      webviewSection: 'recordHeader',
+      argument: { kind: 'record', plugin: { name: 'MyMod.esp', origin: 'ModA' }, formKey: '000001:Fallout4.esm' },
       compilable: false, editable: false, inMod: 'none', preventDefaultContextMenuItems: true,
     });
   });

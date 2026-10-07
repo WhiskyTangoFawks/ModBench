@@ -1,6 +1,6 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
-import { modOfOrigin } from './modOfOrigin';
+import { modOfOrigin } from '../drivingLib/modOfOrigin';
 import { ByPluginAddress } from './pluginAddress';
 
 /** A warning on one plugin's file, as the Problems panel shows it. */

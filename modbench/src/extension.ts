@@ -14,7 +14,6 @@ import { createSourceLanguage } from './sourceLanguage';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
 import type { RecordWrite } from './drivingLib/writingGesture';
-import type { PluginsTreeNode } from './plugins/PluginsTreeProvider';
 import { Instance } from './instanceLoader/instance';
 import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { dataFolderFile } from './tables/gamePaths';
@@ -83,7 +82,6 @@ interface InstanceSide {
   facts: InstanceFacts;
   originFiles: OriginFilesOf;
   copyValue: CopyValueAdapter[];
-  pluginsSelection: () => readonly PluginsTreeNode[];
   downloadsSelection: () => readonly DownloadsTreeNode[];
 }
 
@@ -98,7 +96,7 @@ function buildBareSide(own: Own): InstanceSide {
     toolboxProvider: own(new ToolboxProvider({ instance: undefined })),
     facts: { trackedMods: () => new Set(), modDirs: () => new Map(), onChange: () => ({ dispose: () => undefined }), refresh: () => Promise.resolve() },
     originFiles: () => undefined,
-    copyValue: [], pluginsSelection: () => [], downloadsSelection: () => [],
+    copyValue: [], downloadsSelection: () => [],
   };
 }
 
@@ -161,7 +159,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
   ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor }));
   own(deps.focusedView.follow('modbench.modList', mods.view));
-  own(deps.focusedView.follow('modbench.pluginListTree', plugins.view));
+  own(deps.focusedView.follow('modbench.pluginListTree', plugins.followed));
   own(deps.focusedView.follow('modbench.downloads', downloadsView));
   ownAll(own, registerNameFilterCommands(
     () => deps.focusedView.id(),
@@ -178,7 +176,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     facts: { trackedMods: () => instance.value.trackedMods, modDirs: () => instance.value.paths.modDirs,
       onChange: (listener) => instance.subscribe(() => { listener(); }), refresh: () => instance.refresh() },
     originFiles: (origin) => originFiles(instance.value, origin),
-    copyValue: [mods.copyValue, plugins.copyValue], pluginsSelection: plugins.selection,
+    copyValue: [mods.copyValue, plugins.copyValue],
     downloadsSelection: () => downloadsView.selection,
   };
 }
@@ -247,7 +245,7 @@ export function activate(context: vscode.ExtensionContext): void {
     reporterFor: (tag) => makeReporter(outputChannel, tag),
     ask: askQuestion,
     focusedView,
-    viewSelections: new Map([['modbench.pluginListTree', () => views.pluginsSelection()]]),
+    recordViewIds: ['modbench.pluginListTree'],
     recordWrite,
     refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
     modFacts,

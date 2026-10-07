@@ -579,16 +579,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.pluginListTree.deleteHere",
-        "title": "Delete Record",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.referencedByTree.deleteHere",
-        "title": "Delete Record",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.record.copy",
         "title": "Copy Record…",
         "category": "Modbench"
@@ -762,14 +752,6 @@
         },
         {
           "command": "modbench.modList.clearFilterHere",
-          "when": "false"
-        },
-        {
-          "command": "modbench.pluginListTree.deleteHere",
-          "when": "false"
-        },
-        {
-          "command": "modbench.referencedByTree.deleteHere",
           "when": "false"
         },
         {
@@ -1434,10 +1416,13 @@
         }
       },
       {
-        "command": "modbench.referencedByTree.deleteHere",
+        "command": "modbench.record.delete",
         "key": "Delete",
         "mac": "cmd+backspace",
-        "when": "focusedView == modbench.referencedByTree && listFocus && !inputFocus && modbench.folder == instance && modbench.referencedBy.allHolders"
+        "when": "focusedView == modbench.referencedByTree && listFocus && !inputFocus && modbench.folder == instance && modbench.referencedBy.allHolders",
+        "args": {
+          "view": "modbench.referencedByTree"
+        }
       },
       {
         "command": "modbench.plugin.enable",
@@ -1455,10 +1440,13 @@
         "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance && modbench.plugin.singleTracked"
       },
       {
-        "command": "modbench.pluginListTree.deleteHere",
+        "command": "modbench.record.delete",
         "key": "Delete",
         "mac": "cmd+backspace",
-        "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance && modbench.plugin.allDeletableRecords"
+        "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance && modbench.plugin.allDeletableRecords",
+        "args": {
+          "view": "modbench.pluginListTree"
+        }
       },
       {
         "command": "modbench.copyValue",

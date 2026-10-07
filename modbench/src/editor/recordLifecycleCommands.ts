@@ -6,38 +6,19 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 import type { RecordWrite } from '../drivingLib/writingGesture';
+import { keyArgsView } from '../drivingLib/copyValue';
+import { gestureEntry, isArgumentCarrier } from '../drivingLib/gestureEntry';
+import { rowLabelOf, rowNameOf } from '../drivingLib/argument';
+import { recordArgumentOf } from '../drivingLib/recordArgument';
 import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from './ReferencedByTreeProvider';
 
-// Read off whatever object a gesture is invoked with — a tree row from the Plugins view or a
-// plain identity literal. Editor names no Plugins-view node type.
-interface RecordArgument {
-  formKey: string;
-  plugin: string;
-  origin?: string;
-  editorId?: string;
-}
-
-function recordArgument(arg: unknown): RecordArgument | undefined {
-  if (!arg || typeof arg !== 'object') return undefined;
-  const n = arg as {
-    record?: { formKey?: string; plugin?: string; editorId?: string | null };
-    origin?: string; formKey?: string; plugin?: string; editorId?: string;
-  };
-  if (n.record) {
-    if (!n.record.formKey || !n.record.plugin) return undefined;
-    return { formKey: n.record.formKey, plugin: n.record.plugin, origin: n.origin, editorId: n.record.editorId ?? undefined };
-  }
-  if (!n.formKey || !n.plugin) return undefined;
-  return { formKey: n.formKey, plugin: n.plugin, origin: n.origin, editorId: n.editorId };
-}
-
-function recordName(formKey: string, editorId: string | undefined): string {
-  return editorId ? `${editorId} [${formKey}]` : formKey;
+function recordName(formKey: string, label: string | undefined): string {
+  return label && label !== formKey ? `${label} [${formKey}]` : formKey;
 }
 
 // The question names the origin too, so it says which plugin of the filename it means (ADR-0012).
-function recordLabel({ formKey, editorId, plugin, origin }: RecordArgument): string {
-  return `${recordName(formKey, editorId)} in ${origin === undefined ? plugin : `${plugin} (${origin})`}`;
+function recordLabel({ formKey, plugin, origin }: RecordAddress, label: string | undefined): string {
+  return `${recordName(formKey, label)} in ${plugin} (${origin})`;
 }
 
 function askToDelete(labels: readonly string[], ask: AskQuestion): PromiseLike<string | undefined> {
@@ -52,28 +33,47 @@ function askToDelete(labels: readonly string[], ask: AskQuestion): PromiseLike<s
   );
 }
 
-// An argument that states no origin is refused rather than resolved (ADR-0012).
-const NO_ORIGIN = 'it states no origin';
+const NO_RECORD_ARGUMENT = 'it carries no record Argument';
+// A record named without its plugin is refused rather than resolved (ADR-0012).
+const NO_PLUGIN = 'it names no plugin';
 
 interface Selection {
   records: RecordAddress[];
-  originless: ItemRefusal<RecordArgument>[];
-  editorIds: ReadonlyMap<string, string | undefined>;
+  unreadable: ItemRefusal<string>[];
+  labels: ReadonlyMap<string, string | undefined>;
   /** The bar a write runs under: Referenced By's when its rows were the gesture's, else the write's own default. */
   invokedFrom: string | undefined;
 }
 
-function selectedRecords(clicked: unknown, selected: readonly unknown[] | undefined): Selection {
-  const nodes: readonly unknown[] = selected?.length ? selected : [clicked];
-  const named = nodes.map(recordArgument).filter((a): a is RecordArgument => a !== undefined);
+/** The selections a gesture falls back on when it is handed no row. */
+export interface ViewSelections {
+  /** The palette's: the view last selected in. */
+  focused: () => readonly unknown[];
+  /** A key's: the view it is bound in, which `args.view` names. */
+  of: (view: string) => readonly unknown[];
+}
+
+function rowsOf(clicked: unknown, selected: readonly unknown[] | undefined, selections: ViewSelections): readonly unknown[] {
+  const keyView = keyArgsView(clicked);
+  const viewSelection = () => (keyView === undefined ? selections.focused() : selections.of(keyView));
+  return gestureEntry(keyView === undefined ? clicked : undefined, selected, viewSelection, isArgumentCarrier).selection;
+}
+
+function selectedRecords(nodes: readonly unknown[]): Selection {
   const records: RecordAddress[] = [];
-  const originless: ItemRefusal<RecordArgument>[] = [];
-  for (const { formKey, plugin, origin, editorId } of named) {
-    if (origin === undefined) originless.push({ item: { formKey, plugin, editorId }, reason: NO_ORIGIN });
-    else records.push({ formKey, plugin, origin });
+  const unreadable: ItemRefusal<string>[] = [];
+  const labels = new Map<string, string | undefined>();
+  for (const node of nodes) {
+    const argument = recordArgumentOf(node);
+    if (argument?.plugin === undefined) {
+      unreadable.push({ item: rowNameOf(node), reason: argument === undefined ? NO_RECORD_ARGUMENT : NO_PLUGIN });
+      continue;
+    }
+    records.push({ formKey: argument.formKey, plugin: argument.plugin.name, origin: argument.plugin.origin });
+    labels.set(argument.formKey, rowLabelOf(node));
   }
   return {
-    records, originless, editorIds: new Map(named.map((a) => [a.formKey, a.editorId])),
+    records, unreadable, labels,
     invokedFrom: nodes.some((node) => node instanceof ReferencedByHolderNode) ? REFERENCED_BY_VIEW : undefined,
   };
 }
@@ -82,41 +82,27 @@ type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords'>;
 
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, reporter: Reporter, ask: AskQuestion,
-  // The palette hands no row, so it takes the selection of the view last selected in.
-  viewSelection: () => readonly unknown[],
+  selections: ViewSelections,
   write: RecordWrite,
 ): vscode.Disposable[] {
   return [
     // Asked once for the whole selection and naming each record, so the user confirms the right thing.
-    vscode.commands.registerCommand('modbench.record.delete', async (clicked?: unknown, selected?: unknown[]) => {
-      const { records, originless, editorIds, invokedFrom } = clicked === undefined
-        ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);
-      const label = (record: RecordArgument) => addressLabel(record, editorIds);
+    vscode.commands.registerCommand('modbench.record.delete', async (clicked?: unknown, selected?: readonly unknown[]) => {
+      const { records, unreadable, labels, invokedFrom } = selectedRecords(rowsOf(clicked, selected, selections));
+      const label = (item: RecordAddress | string) => (typeof item === 'string' ? item : addressLabel(item, labels));
       if (records.length > 0 && await askToDelete(records.map(label), ask) !== 'Delete') return;
 
       const reportOutcome = async () => {
         const answer = records.length > 0 ? await client.deleteRecords(records) : { landed: [], refused: [] };
         if (isRefused(answer)) { reporter.report('error', answer.message); return; }
-        const refused = [...originless, ...answer.refused];
+        const refused = [...unreadable, ...answer.refused];
         reporter.selectionOutcome(
-          `Could not delete ${refused.length} of ${records.length + originless.length} records.`,
+          `Could not delete ${refused.length} of ${records.length + unreadable.length} records.`,
           { landed: answer.landed, refused }, label);
       };
       await (records.length > 0 ? write(reportOutcome, invokedFrom) : reportOutcome());
     }),
   ];
-}
-
-/** A key cannot name its view, so `<view id>.deleteHere` fires delete with that view's own
- *  selection, whichever view was selected in last. */
-export function registerDeleteHereCommands(
-  selections: ReadonlyMap<string, () => readonly unknown[]>,
-): vscode.Disposable[] {
-  return [...selections].map(([viewId, selection]) =>
-    vscode.commands.registerCommand(`${viewId}.deleteHere`, () => {
-      const rows = selection();
-      if (rows.length > 0) void vscode.commands.executeCommand('modbench.record.delete', rows[0], rows);
-    }));
 }
 
 type RecordCopyClient = Pick<MEditClient, 'copyRecords' | 'getPlugins' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations'>;
@@ -173,16 +159,16 @@ async function childrenADeepCopyReplaces(
   return withChildren.length === 0 ? [] : heldChildren(await client.getChildrenInDestinations(withChildren, destinations));
 }
 
-function addressLabel(record: RecordArgument, editorIds: ReadonlyMap<string, string | undefined>): string {
-  return recordLabel({ ...record, editorId: editorIds.get(record.formKey) });
+function addressLabel(record: RecordAddress, labels: ReadonlyMap<string, string | undefined>): string {
+  return recordLabel(record, labels.get(record.formKey));
 }
 
 function askToReplace(
   held: readonly CopyItem[], heldChildRecords: readonly CopyItem[],
-  editorIds: ReadonlyMap<string, string | undefined>, ask: AskQuestion,
+  labels: ReadonlyMap<string, string | undefined>, ask: AskQuestion,
 ): PromiseLike<string | undefined> {
   const named = ({ record, destination }: CopyItem) =>
-    `${recordName(record.formKey, editorIds.get(record.formKey))} in ${destination.name} (${destination.origin})`;
+    `${recordName(record.formKey, labels.get(record.formKey))} in ${destination.name} (${destination.origin})`;
   const question = heldChildRecords.length > 0
     ? 'Replace what the destinations already hold? Each destination keeps its own copy of a record that has child records.'
     : held.length === 1
@@ -209,7 +195,7 @@ interface CopySelection {
 
 async function confirmReplacement(
   client: RecordCopyClient, { mode, records, withChildren }: CopySelection, destinations: readonly PluginAddress[],
-  editorIds: ReadonlyMap<string, string | undefined>, ask: AskQuestion, reporter: Reporter,
+  labels: ReadonlyMap<string, string | undefined>, ask: AskQuestion, reporter: Reporter,
 ): Promise<Replacement | undefined> {
   const deep = mode === 'DeepOverride';
   let held: CopyItem[];
@@ -227,17 +213,17 @@ async function confirmReplacement(
     return undefined;
   }
   if (held.length + heldChildRecords.length === 0) return { destinations, replace: false };
-  if (await askToReplace(held, heldChildRecords, editorIds, ask) === 'Replace') return { destinations, replace: true };
+  if (await askToReplace(held, heldChildRecords, labels, ask) === 'Replace') return { destinations, replace: true };
   if (!deep) return undefined;
   const kept = withoutDestinations(destinations, [...held, ...heldChildRecords]);
   return kept.length > 0 ? { destinations: kept, replace: false } : undefined;
 }
 
-function landedMessage(landed: readonly CopyItem[], editorIds: ReadonlyMap<string, string | undefined>): string {
+function landedMessage(landed: readonly CopyItem[], labels: ReadonlyMap<string, string | undefined>): string {
   const [only] = landed;
   if (landed.length === 1 && only) {
     const { formKey } = only.record;
-    return `Copied ${recordName(formKey, editorIds.get(formKey))} into ${only.destination.name}.`;
+    return `Copied ${recordName(formKey, labels.get(formKey))} into ${only.destination.name}.`;
   }
   return `Made ${landed.length} copies.`;
 }
@@ -246,18 +232,16 @@ function landedMessage(landed: readonly CopyItem[], editorIds: ReadonlyMap<strin
  *  would replace what the destinations already hold (commands.md, Confirm what destroys). */
 export function registerRecordCopyCommands(
   client: RecordCopyClient, reporter: Reporter, ask: AskQuestion,
-  // The palette hands no row, so it takes the selection of the view last selected in.
-  viewSelection: () => readonly unknown[],
+  selections: ViewSelections,
   write: RecordWrite,
 ): vscode.Disposable[] {
   return [
-    vscode.commands.registerCommand('modbench.record.copy', async (clicked?: unknown, selected?: unknown[]) => {
-      const { records, originless, editorIds, invokedFrom } = clicked === undefined
-        ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);
-      const reportOriginless = () => reporter.selectionOutcome(
-        `Could not copy ${originless.length} of ${records.length + originless.length} records.`,
-        { landed: [], refused: originless }, (record) => addressLabel(record, editorIds));
-      if (records.length === 0) { reportOriginless(); return; }
+    vscode.commands.registerCommand('modbench.record.copy', async (clicked?: unknown, selected?: readonly unknown[]) => {
+      const { records, unreadable, labels, invokedFrom } = selectedRecords(rowsOf(clicked, selected, selections));
+      const reportUnreadable = () => reporter.selectionOutcome(
+        `Could not copy ${unreadable.length} of ${records.length + unreadable.length} records.`,
+        { landed: [], refused: unreadable }, (name) => name);
+      if (records.length === 0) { reportUnreadable(); return; }
 
       const withChildren = await recordsWithChildren(client, records, reporter);
       if (!withChildren) return;
@@ -267,7 +251,7 @@ export function registerRecordCopyCommands(
       if (!destinations) return;
 
       const confirmed = isOverride(mode)
-        ? await confirmReplacement(client, { mode, records, withChildren }, destinations, editorIds, ask, reporter)
+        ? await confirmReplacement(client, { mode, records, withChildren }, destinations, labels, ask, reporter)
         : { destinations, replace: false };
       if (!confirmed) return;
 
@@ -275,13 +259,13 @@ export function registerRecordCopyCommands(
         const answer = await client.copyRecords(records, mode, confirmed.destinations, confirmed.replace);
         if (isRefused(answer)) { reporter.report('error', answer.message); return; }
         const written = copiesWritten(answer.landed, mode);
-        if (written.length > 0) reporter.landed(landedMessage(written, editorIds));
+        if (written.length > 0) reporter.landed(landedMessage(written, labels));
         const into = (item: CopyItem) =>
-          `${addressLabel(item.record, editorIds)} into ${item.destination.name} (${item.destination.origin})`;
+          `${addressLabel(item.record, labels)} into ${item.destination.name} (${item.destination.origin})`;
         reporter.selectionOutcome(
           `Could not make ${answer.refused.length} of ${written.length + answer.refused.length} copies.`,
           answer, into);
-        reportOriginless();
+        reportUnreadable();
       }, runsUnderPluginsBar(mode) ? undefined : invokedFrom);
     }),
   ];

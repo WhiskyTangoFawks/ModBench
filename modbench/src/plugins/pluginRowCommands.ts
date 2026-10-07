@@ -5,14 +5,15 @@ import {
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import { modOfRow } from '../drivingLib/modRow';
-import { modOfOrigin } from './modOfOrigin';
+import { modArgumentOf, pluginArgumentOf, rowNameOf } from '../drivingLib/argument';
+import { recordArgumentOf } from '../drivingLib/recordArgument';
+import { modOfOrigin } from '../drivingLib/modOfOrigin';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { trackProgressMessage } from './trackProgress';
-import { PluginNode, type PluginsTreeNode } from './PluginsTreeProvider';
+import type { PluginsTreeNode } from './PluginsTreeProvider';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { compilableSelected, PLUGINS_KEY_ARGS } from './gestureEntry';
-import { gestureEntry, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';
+import { gestureEntry, isArgumentCarrier, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -46,11 +47,12 @@ export interface TrackDeps {
 
 interface TrackTargets {
   mods: readonly string[];
-  /** Plugins no mod provides, such as Overwrite's or the game's own. */
-  notInMod: readonly PluginAddress[];
+  /** Rows named with why they were not sent: a plugin no mod provides, such as Overwrite's or the game's own, or a row that carries no mod or plugin. */
+  refusedRows: readonly ItemRefusal<string>[];
 }
 
 const NOT_IN_A_MOD = 'it is not in a mod';
+const NO_MOD_OR_PLUGIN = 'it carries no mod or plugin';
 
 /** commands.md, `track`: the mods of Mods rows, plugin rows, a column header, or the palette's
  *  selection, in one call. A plugin no mod provides is refused here, since mEdit is sent mods. */
@@ -58,8 +60,8 @@ export function registerTrackCommand(deps: TrackDeps, paletteSelection: () => re
   return vscode.commands.registerCommand(
     'modbench.mod.track',
     async (clicked?: unknown, selected?: readonly unknown[]) => {
-      const rows = clicked === undefined ? paletteSelection() : selected ?? [clicked];
-      const invokedFrom = rows.some((row) => modOfRow(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
+      const rows = gestureEntry(clicked, selected, paletteSelection, isArgumentCarrier).selection;
+      const invokedFrom = rows.some((row) => modArgumentOf(row) !== undefined) ? deps.modsView : PLUGINS_KEY_ARGS.view;
       await trackMods(deps, targetsOf(rows, deps.modDirs()), invokedFrom);
     },
   );
@@ -67,31 +69,30 @@ export function registerTrackCommand(deps: TrackDeps, paletteSelection: () => re
 
 function targetsOf(rows: readonly unknown[], modDirs: ReadonlyMap<string, string>): TrackTargets {
   const mods = new Set<string>();
-  const notInMod: PluginAddress[] = [];
+  const refusedRows: ItemRefusal<string>[] = [];
   for (const row of rows) {
-    const mod = modOfRow(row);
-    if (mod !== undefined) { mods.add(mod); continue; }
+    const mod = modArgumentOf(row);
+    if (mod !== undefined) { mods.add(mod.name); continue; }
     const plugin = pluginAddressOf(row);
-    if (plugin === undefined) continue;
+    if (plugin === undefined) { refusedRows.push({ item: rowNameOf(row), reason: NO_MOD_OR_PLUGIN }); continue; }
     const owner = modOfOrigin(modDirs, plugin.origin);
-    if (owner === undefined) notInMod.push(plugin); else mods.add(owner);
+    if (owner === undefined) refusedRows.push({ item: rowName(plugin), reason: NOT_IN_A_MOD }); else mods.add(owner);
   }
-  return { mods: [...mods], notInMod };
+  return { mods: [...mods], refusedRows };
 }
 
 // A plugin row or a column header acts on its plugin's mod.
 function pluginAddressOf(row: unknown): PluginAddress | undefined {
-  return row instanceof PluginNode ? { name: row.plugin.name, origin: row.origin } : columnHeaderOf(row);
+  return pluginArgumentOf(row)?.plugin ?? columnHeaderOf(row);
 }
 
 // A mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost, so this runs
 // under the Plugins-view progress indicator.
-async function trackMods(deps: TrackDeps, { mods, notInMod }: TrackTargets, invokedFrom: string): Promise<void> {
+async function trackMods(deps: TrackDeps, { mods, refusedRows }: TrackTargets, invokedFrom: string): Promise<void> {
   const { progress, instance, client, reporter, onTracked } = deps;
-  const refusedHere = notInMod.map((item) => ({ item, reason: NOT_IN_A_MOD }));
   const [firstMod] = mods;
   if (firstMod === undefined) {
-    if (refusedHere.length > 0) reportRefused(reporter, 0, { refused: [], tracked: [], refusedPlugins: refusedHere });
+    if (refusedRows.length > 0) reportRefused(reporter, 0, { refused: [], tracked: [], refusedPlugins: refusedRows });
     return;
   }
   const what = mods.length === 1 ? `"${firstMod}"` : `${mods.length} mods`;
@@ -107,7 +108,7 @@ async function trackMods(deps: TrackDeps, { mods, notInMod }: TrackTargets, invo
       const outcome = {
         refused: result.refused,
         tracked: result.landed.flatMap((landed) => landed.tracked),
-        refusedPlugins: refusedHere,
+        refusedPlugins: refusedRows,
       };
       if (outcome.refused.length + outcome.refusedPlugins.length > 0) reportRefused(reporter, mods.length, outcome);
       else if (result.landed.length > 0) reporter.landed(`Tracked ${what}.`);
@@ -120,7 +121,7 @@ async function trackMods(deps: TrackDeps, { mods, notInMod }: TrackTargets, invo
 interface TrackReport {
   refused: TrackOutcome['refused'];
   tracked: readonly PluginAddress[];
-  refusedPlugins: readonly ItemRefusal<PluginAddress>[];
+  refusedPlugins: readonly ItemRefusal<string>[];
 }
 
 // commands.md, "each item lands on its own": one notification naming each refused mod and each
@@ -135,7 +136,7 @@ function reportRefused(reporter: Reporter, modCount: number, report: TrackReport
   reporter.selectionOutcome(`Could not track ${counts.join(' and ')}.`, {
     landed: report.tracked.map(rowName),
     refused: [
-      ...report.refusedPlugins.map(({ item, reason }) => ({ item: rowName(item), reason })),
+      ...report.refusedPlugins,
       ...report.refused,
     ],
   }, (name) => name);
@@ -161,8 +162,7 @@ export function registerDecompileCommand(
       const header = columnHeaderOf(clicked);
       const plugins = header
         ? [header]
-        : selectionArgument(gestureEntry(clicked, selected, viewSelection), 'plugin')
-          .map((node) => ({ name: node.plugin.name, origin: node.origin }));
+        : selectionArgument(gestureEntry(clicked, selected, viewSelection), 'plugin').map((node) => node.argument.plugin);
       if (plugins.length === 0 || !(await confirmDecompile(deps.ask, plugins))) return;
       await runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
         const outcome = await deps.client.decompile(plugins);
@@ -229,7 +229,7 @@ async function argumentOf(
   if (header) return [header];
   const entry = gestureEntry(clicked, selected, viewSelection);
   if (entry.clicked === undefined) return pickCompilable(deps, entry);
-  return selectionArgument(entry, 'plugin').map((node) => ({ name: node.plugin.name, origin: node.origin }));
+  return selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
 }
 
 // plugins.md, Compile, story 3: from the palette, a pick of the tracked, editable plugins. An
@@ -322,10 +322,8 @@ export class CompileProblems {
   }
 }
 
-// A record tab's column header names its plugin and origin (editor.md, Menus and keys).
-function columnHeaderOf(value: unknown): { name: string; origin: string } | undefined {
-  if (typeof value !== 'object' || value === null || Reflect.get(value, 'webviewSection') !== 'recordHeader') return undefined;
-  const name: unknown = Reflect.get(value, 'plugin');
-  const origin: unknown = Reflect.get(value, 'origin');
-  return typeof name === 'string' && typeof origin === 'string' ? { name, origin } : undefined;
+// A record tab's column header carries its record's Argument, whose plugin the gesture acts on (editor.md, Menus and keys).
+function columnHeaderOf(value: unknown): PluginAddress | undefined {
+  return typeof value === 'object' && value !== null && Reflect.get(value, 'webviewSection') === 'recordHeader'
+    ? recordArgumentOf(value)?.plugin : undefined;
 }

@@ -12,10 +12,12 @@ import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { FocusedView } from '../drivingLib/focusedView';
 
 type EditorDeps = Omit<EditorCommandDeps,
-  'recordPanels' | 'activeRecordTracker' | 'editsInFlight' | 'focusedCells' | 'focusedViewSelection' | 'meditClient'
+  'recordPanels' | 'activeRecordTracker' | 'editsInFlight' | 'focusedCells' | 'focusedViewSelection' | 'selectionOf' | 'meditClient'
 > & {
   meditClient: EditorCommandDeps['meditClient'] & Parameters<typeof createReferencedByView>[0];
   focusedView: FocusedView;
+  /** The other views whose selected rows carry a record Argument. */
+  recordViewIds: readonly string[];
 };
 
 export interface Editor extends vscode.Disposable {
@@ -52,10 +54,9 @@ export function createEditor(deps: EditorDeps): Editor {
   own(activeRecordTracker.onDidChangeActiveRecord((formKey) => referencedByTree.showFor(formKey)));
   referencedByTree.showFor(activeRecordTracker.current());
 
-  const viewSelections = new Map([[REFERENCED_BY_VIEW, () => referencedByView.selection], ...deps.viewSelections]);
   registerEditorCommands({
-    ...deps, recordPanels, activeRecordTracker, editsInFlight, focusedCells, viewSelections,
-    focusedViewSelection: selectionInFocusedView(own, focusedView, [...viewSelections.keys()], 'modbench.record.selectionIn'),
+    ...deps, recordPanels, activeRecordTracker, editsInFlight, focusedCells, selectionOf: (view) => focusedView.selectionOf(view),
+    focusedViewSelection: selectionInFocusedView(own, focusedView, [REFERENCED_BY_VIEW, ...deps.recordViewIds], 'modbench.record.selectionIn'),
   }).forEach(own);
 
   return {

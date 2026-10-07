@@ -155,7 +155,7 @@ const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =
 const NO_MODS: ModFacts = { trackedMods: () => new Set<string>(), modDirs: () => new Map<string, string>(), onChange: () => ({ dispose: () => undefined }) };
 
 function makeEditor(
-  client = new InMemoryMEditClient(), viewSelections = new Map<string, () => readonly unknown[]>(), modFacts = NO_MODS,
+  client = new InMemoryMEditClient(), recordViewIds = [] as readonly string[], modFacts = NO_MODS,
 ) {
   const focusedView = createFocusedView();
   const outputChannel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn() };
@@ -166,7 +166,7 @@ function makeEditor(
     reporterFor: () => ({ report: vi.fn(), landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() }),
     ask: vi.fn(),
     focusedView,
-    viewSelections,
+    recordViewIds,
     recordWrite: (command) => command(),
     refreshSourceControlFor: () => undefined,
     modFacts,
@@ -494,12 +494,12 @@ describe('an edit of a FormID, fired with no panel', () => {
 
 describe('a record gesture from the palette', () => {
   it('opens the records selected in a view the Editor is handed, while that view has the focus', async () => {
-    const plugins = { selection: [{ formKey: '000803:A.esp', kind: 'placed' }], onDidChangeSelection: (listener: (event: { selection: unknown[] }) => void) => { listener({ selection: [] }); return { dispose: () => undefined }; } };
+    const plugins = { selection: [{ argument: { kind: 'record', plugin: { name: 'A.esp', origin: 'ModA' }, formKey: '000803:A.esp' } }], onDidChangeSelection: (listener: (event: { selection: unknown[] }) => void) => { listener({ selection: [] }); return { dispose: () => undefined }; } };
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getRecordOwner', COPY_PLUGIN);
     client.setQueryAnswer('getRecordFile', { path: null });
     client.setQueryAnswer('getRenderedDocument', { fileName: 'Placed.json', text: '{}' });
-    const { focusedView } = makeEditor(client, new Map([['modbench.pluginListTree', () => plugins.selection]]));
+    const { focusedView } = makeEditor(client, ['modbench.pluginListTree']);
     focusedView.follow('modbench.pluginListTree', plugins);
 
     await h.commands.get('modbench.record.open')?.();
@@ -928,7 +928,7 @@ describe('a click on a column\'s header', () => {
     tab.viewColumn = 3;
 
     expect(h.executed.filter(([id]) => id === 'modbench.record.open'))
-      .toEqual([['modbench.record.open', [{ ...knife, placement: { document: String(uri), viewColumn: 2 } }]]]);
+      .toEqual([['modbench.record.open', [{ argument: { kind: 'record', ...knife }, placement: { document: String(uri), viewColumn: 2 } }]]]);
   });
 });
 
@@ -1043,7 +1043,8 @@ describe('several records opened at once', () => {
   const columnsPosted = (tab: FakePanel | undefined) => tab?.webview.postMessage.mock.calls.filter(([message]) => isShowColumns(message));
   const firstRead = { type: 'requestRecordLoad', requestId: 'r0', formKey: GUN, columns: [] };
   const openSeveral = (placement?: 'beside') => h.commands.get('modbench.record.open')?.(
-    [{ formKey: GUN, plugin: COPY_PLUGIN, placement }, { formKey: AMMO, placement }, { formKey: KNIFE, plugin: knifeIn, placement }]);
+    [{ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN }, placement }, { argument: { kind: 'record', formKey: AMMO }, placement },
+      { argument: { kind: 'record', formKey: KNIFE, plugin: knifeIn }, placement }]);
   function severalClient(): InMemoryMEditClient {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
@@ -1072,7 +1073,7 @@ describe('several records opened at once', () => {
   it('show the first record\'s tab already open, which takes the others as its columns, and leave its tab in another group alone', async () => {
     const { vsCodeOpensTabs, openDocument } = makeEditor(severalClient());
     const tabOn = vsCodeOpensTabs();
-    await h.commands.get('modbench.record.open')?.({ formKey: GUN, plugin: COPY_PLUGIN });
+    await h.commands.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } });
     tabOn(gunDocument)?.receive(firstRead);
     const elsewhere = await openDocument(gunDocument);
     elsewhere.active = false;
@@ -1088,7 +1089,7 @@ describe('several records opened at once', () => {
   it('hold the columns for a tab whose page has asked no read yet, which listens only once it has', async () => {
     const { vsCodeOpensTabs } = makeEditor(severalClient());
     const tabOn = vsCodeOpensTabs();
-    await h.commands.get('modbench.record.open')?.({ formKey: GUN, plugin: COPY_PLUGIN });
+    await h.commands.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } });
     const tab = tabOn(gunDocument);
 
     await openSeveral();
@@ -1106,7 +1107,7 @@ describe('several records opened at once', () => {
     await openSeveral();
     tabOn(gunDocument)?.receive(firstRead);
 
-    await h.commands.get('modbench.record.open')?.({ formKey: GUN, plugin: COPY_PLUGIN });
+    await h.commands.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } });
 
     expect(columnsPosted(tabOn(gunDocument))).toEqual([[{ type: 'showColumns', columns: [] }]]);
   });
