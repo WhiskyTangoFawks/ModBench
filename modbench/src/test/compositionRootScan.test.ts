@@ -35,7 +35,8 @@ async function flatConfigBlocks(path: string): Promise<unknown[]> {
 }
 
 let LINT_CONFIG_BLOCKS: unknown[] = [];
-beforeAll(async () => { LINT_CONFIG_BLOCKS = await flatConfigBlocks(ESLINT_CONFIG); });
+const LOADING_THE_WHOLE_LINT_TOOLCHAIN_MS = 60_000;
+beforeAll(async () => { LINT_CONFIG_BLOCKS = await flatConfigBlocks(ESLINT_CONFIG); }, LOADING_THE_WHOLE_LINT_TOOLCHAIN_MS);
 
 const namesFile = (block: unknown, file: string): boolean =>
   typeof block === 'object' && block !== null && 'files' in block && Array.isArray(block.files) && block.files.includes(file);
