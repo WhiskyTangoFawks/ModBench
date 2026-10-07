@@ -33,6 +33,72 @@ const MESSAGE_API_SITES = [
 
 const PATHLESS_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'drivingLib', 'instanceLoader'];
 
+const DRIVING_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'sourceLanguage', 'drivingLib'];
+const PACKAGE_BOXES = ['client', 'sourceLanguage'];
+const CLIENT_BOXES = ['client', 'plugins', 'editor', 'sourceLanguage', 'instanceCommands', 'pluginsCommands'];
+const BOXES = [
+    ...DRIVING_BOXES,
+    'modlist', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install',
+    'loadOrderFileCodec', 'wire', 'tables', 'ports',
+    'instanceLoader', 'instanceAdapter', 'client',
+];
+const NOT_PRODUCTION = ['**/*.test.ts', '**/test/**'];
+
+const FS_IMPORT = {
+    group: ['node:fs', 'node:fs/*', 'fs', 'fs/*'],
+    message: 'The Instance adapter is the one reader and writer of the instance; every other box reaches a file through it.',
+};
+const PATH_IMPORT = {
+    group: ['node:path', 'node:path/*', 'path', 'path/*'],
+    message: 'A view or the Instance loader never builds a path: the Instance adapter answers the instance\'s, and a view takes it from the instance value, or from the box that owns it, injected at the composition root when the view does not reference that box.',
+};
+const PACKAGE_IMPORT = {
+    regex: '^(?![.]|node:|vscode$)',
+    message: 'Only the mEdit client and the Source language import a package.',
+};
+/** @param {string[]} [allowed] */
+const ADAPTER_INTERNALS_IMPORT = (allowed = []) => ({
+    regex: `^(\\.{1,2}/)+instanceAdapter(/(?!(instanceAdapter${allowed.map((name) => `|${name}`).join('')})$).*)?$`,
+    message: 'The Instance adapter is reached through its interface alone.',
+});
+const CLIENT_IMPORT = {
+    regex: '^(\\.{1,2}/)+client(/.*)?$',
+    message: 'The mEdit client is Editing\'s seam: Mod Management never reaches mEdit.',
+};
+const VSCODE_IMPORT = { name: 'vscode', message: 'Only a view takes VS Code types, and the Instance adapter\'s watch.' };
+const REPORTER_IMPORT = {
+    group: ['**/reporter'],
+    message: 'The Instance leaves a read failure in its value for a subscriber to render; it raises no notification.',
+};
+
+/** @param {{ vscode: boolean, packages: boolean, path: boolean, client?: boolean, inAdapter?: boolean, adapterAllowed?: string[], extra?: object[] }} where */
+function restrictedImports({ vscode, packages, path, client = false, inAdapter = false, adapterAllowed, extra = [] }) {
+    return ['error', {
+        paths: vscode ? [VSCODE_IMPORT] : [],
+        patterns: [
+            ...(inAdapter ? [] : [FS_IMPORT, ADAPTER_INTERNALS_IMPORT(adapterAllowed)]),
+            ...(path ? [PATH_IMPORT] : []), ...(packages ? [PACKAGE_IMPORT] : []), ...(client ? [CLIENT_IMPORT] : []), ...extra,
+        ],
+    }];
+}
+
+const SYNTAX = {
+    message: MESSAGE_API_SITES.map((selector) => ({ selector, message: SURFACING_GOES_THROUGH_THE_REPORTER })),
+    watcher: ['CallExpression[callee.name=/^create\\w*Watcher$/]', 'CallExpression[callee.property.name=/^create\\w*Watcher$/]']
+        .map((selector) => ({ selector, message: 'Every watcher on the instance is created inside the Instance adapter\'s watch.' })),
+    send: [{ selector: 'CallExpression[callee.property.name=\'send\']', message: 'Only instance commands\' loadOrder.ts sends a load order.' }],
+    putMember: [{ selector: 'CallExpression[callee.property.name=\'putLoadOrder\']', message: 'Only the load-order sender hands the client a load order.' }],
+    putBare: [{ selector: 'CallExpression[callee.name=\'putLoadOrder\']', message: 'Only instance commands hand the client a load order.' }],
+    hostFs: [{ selector: 'MemberExpression[object.property.name=\'workspace\'][property.name=\'fs\']', message: 'A view reads no file: the host file system is the Instance adapter\'s.' }],
+    activation: ACTIVATION_DECIDES_SELECTORS.map((selector) => ({ selector, message: ACTIVATION_DECIDES_MESSAGE })),
+};
+/** @type {(keyof typeof SYNTAX)[]} */
+const EVERYWHERE_IN_SRC = ['message', 'watcher', 'send', 'putMember', 'putBare'];
+/** @param {(keyof typeof SYNTAX)[]} concerns */
+const restrictedSyntax = (concerns) => ['error', ...concerns.flatMap((concern) => SYNTAX[concern])];
+/** @param {(keyof typeof SYNTAX)[]} exempt */
+const everywhereBut = (...exempt) => EVERYWHERE_IN_SRC.filter((concern) => !exempt.includes(concern));
+
 export default defineConfig(
     { ignores: ['src/wire/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
 
@@ -97,17 +163,44 @@ export default defineConfig(
     },
 
 
-    // modbench/CLAUDE.md: a view takes every path from the instance value and never builds one.
-    // The driving band, and the Instance loader, since the Instance adapter hides layout
-    // (target-architecture.d2).
-    {
-        files: PATHLESS_BOXES.map((box) => `src/${box}/**/*.ts`),
-        ignores: PATHLESS_BOXES.map((box) => `src/${box}/test/**`),
+    // What a box may import beyond its reference list, which the build holds. A later block
+    // replaces an earlier one's options, so each file's whole list is built from the pieces above.
+    ...BOXES.map((box) => ({
+        files: [`src/${box}/**/*.ts`],
+        ignores: NOT_PRODUCTION,
         rules: {
-            'no-restricted-imports': ['error', { patterns: [{
-                group: ['node:path', 'node:path/*', 'path', 'path/*'],
-                message: 'A view or the Instance loader never builds a path: the Instance adapter answers the instance\'s, and a view takes it from the instance value, or from the box that owns it, injected at the composition root when the view does not reference that box.',
-            }] }],
+            'no-restricted-imports': restrictedImports({
+                vscode: !DRIVING_BOXES.includes(box),
+                packages: !PACKAGE_BOXES.includes(box),
+                path: PATHLESS_BOXES.includes(box),
+                client: !CLIENT_BOXES.includes(box),
+                inAdapter: box === 'instanceAdapter',
+            }),
+        },
+    })),
+    {
+        files: ['src/instanceLoader/instance.ts'],
+        rules: {
+            'no-restricted-imports': restrictedImports({ vscode: true, packages: true, path: true, client: true, extra: [REPORTER_IMPORT] }),
+        },
+    },
+    {
+        files: ['src/instanceAdapter/mo2Watch.ts'],
+        rules: {
+            'no-restricted-imports': restrictedImports({ vscode: false, packages: true, path: false, inAdapter: true }),
+        },
+    },
+    {
+        files: ['src/*.ts'],
+        ignores: NOT_PRODUCTION,
+        rules: {
+            'no-restricted-imports': restrictedImports({ vscode: false, packages: false, path: false }),
+        },
+    },
+    {
+        files: ['src/extension.ts'],
+        rules: {
+            'no-restricted-imports': restrictedImports({ vscode: false, packages: false, path: false, adapterAllowed: ['mo2Instance'] }),
         },
     },
 
@@ -121,31 +214,46 @@ export default defineConfig(
 
     // The reporter and the dialog are the two adapters that own a message API. Tests are out of
     // scope: the integration suite swaps the real API out to observe that a toast reached the
-    // user.
+    // user. Each exemption below restates the whole list, as a later block replaces an earlier one's.
     {
-        files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
-        ignores: [
-            'src/reporter.ts', 'src/dialog.ts',
-            'src/**/*.test.ts', 'src/test/**',
-            'webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**',
-        ],
-        rules: {
-            'no-restricted-syntax': ['error',
-                ...MESSAGE_API_SITES.map((selector) => ({ selector, message: SURFACING_GOES_THROUGH_THE_REPORTER })),
-            ],
-        },
+        files: ['webview/src/**/*.{ts,tsx}'],
+        ignores: ['webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**'],
+        rules: { 'no-restricted-syntax': restrictedSyntax(['message']) },
     },
-
-    // ADR-0014: the activation file and its wiring decide nothing. A later block replaces the
-    // earlier no-restricted-syntax options, so the message API sites come along.
+    {
+        files: ['src/**/*.ts'],
+        ignores: NOT_PRODUCTION,
+        rules: { 'no-restricted-syntax': restrictedSyntax(EVERYWHERE_IN_SRC) },
+    },
+    {
+        files: ['src/reporter.ts', 'src/dialog.ts'],
+        rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('message')) },
+    },
+    {
+        files: ['src/instanceAdapter/mo2Watch.ts'],
+        rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('watcher')) },
+    },
+    {
+        files: ['src/instanceCommands/loadOrder.ts'],
+        rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('send', 'putBare')) },
+    },
+    {
+        files: ['src/instanceCommands/editing.ts'],
+        rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('putBare')) },
+    },
+    {
+        files: ['src/client/loadOrderSender.ts'],
+        rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('putMember')) },
+    },
+    {
+        files: ['src/downloads/**/*.ts', 'src/drivingLib/**/*.ts'],
+        ignores: NOT_PRODUCTION,
+        rules: { 'no-restricted-syntax': restrictedSyntax([...EVERYWHERE_IN_SRC, 'hostFs']) },
+    },
+    // ADR-0014: the activation file and its wiring decide nothing.
     {
         files: ['src/extension.ts', 'src/syncWiring.ts'],
-        rules: {
-            'no-restricted-syntax': ['error',
-                ...MESSAGE_API_SITES.map((selector) => ({ selector, message: SURFACING_GOES_THROUGH_THE_REPORTER })),
-                ...ACTIVATION_DECIDES_SELECTORS.map((selector) => ({ selector, message: ACTIVATION_DECIDES_MESSAGE })),
-            ],
-        },
+        rules: { 'no-restricted-syntax': restrictedSyntax([...EVERYWHERE_IN_SRC, 'activation']) },
     },
 
     // commands.md, "An entry point fires a gesture. A gesture does not fire another.": the only
@@ -174,15 +282,6 @@ export default defineConfig(
         plugins: { local },
         rules: {
             'local/no-leading-medit': 'error',
-        },
-    },
-
-    // The mEdit client takes no VS Code types, so any caller (its own in-memory adapter today,
-    // a tool handler or a test tomorrow) can call it without pulling in the extension host.
-    {
-        files: ['src/client/**/*.ts'],
-        rules: {
-            'no-restricted-imports': ['error', { paths: [{ name: 'vscode', message: 'The mEdit client takes no VS Code types.' }] }],
         },
     },
 
