@@ -1,6 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -34,7 +33,7 @@ public sealed class RegisteredPluginSpellingTests
     public async Task Compile_OfAPluginWithAMixedCaseExtension_ReadsTheSourceRootAsRegistered()
     {
         using var scratch = new ModFolderUnderAnInstanceRootScratch();
-        scratch.TrackWithoutTheTrackDoor();
+        Assert.Empty((await TrackEveryPluginOf.ModAsync(scratch.LoadOrder, Origin)).RefusalMessages());
 
         await CompileServices.Over(scratch.LoadOrder).CompileLandedAsync(scratch.Plugin);
     }
@@ -61,17 +60,6 @@ public sealed class RegisteredPluginSpellingTests
         }
 
         private string PluginPath => Path.Combine(ModFolder, PluginName);
-
-        internal void TrackWithoutTheTrackDoor()
-        {
-            var (treeFiles, _) = TestAdapters.Mutagen().ReadSourceAsync(
-                new ModPath(ModKey.FromFileName(PluginName), PluginPath), PluginName, Release,
-                new PluginStrings(null, ModFolder)).GetAwaiter().GetResult();
-            var pristineFiles = SourceRepository.PristineFilesOf(PluginName, treeFiles);
-
-            SourceRepository.Track(
-                ModFolder, [(pristineFiles, new DecompiledPlugin(PluginName, null))]);
-        }
 
         public void Dispose()
         {
