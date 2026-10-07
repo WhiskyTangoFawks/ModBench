@@ -20,7 +20,7 @@ public class ConflictByCompareTests
     private static RecordDetail MakeOverride(string plugin, int loadOrder, bool isWinner,
         params (string name, object? value)[] fields) =>
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
-            [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], "Data");
+            [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], "Data", RecordType: "Npc");
 
     private static IReadOnlyList<FieldDiff> RequireChildren(FieldDiff diff) =>
         diff.Children ?? throw new InvalidOperationException($"Expected '{diff.FieldName}' to have children.");
@@ -34,12 +34,12 @@ public class ConflictByCompareTests
     private static RecordDetail MakeOverrideWithOrigin(string plugin, string origin, int loadOrder, bool isWinner,
         params (string name, object? value)[] fields) =>
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
-            [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], Origin: origin);
+            [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], Origin: origin, RecordType: "Npc");
 
     private static RecordDetail MakePartialFormOverrideWhoseOwnFieldsAreExcludedRegardlessOfContent(string plugin, int loadOrder, bool isWinner,
         params (string name, object? value)[] fields) =>
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
-            [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], "Data", IsPartialForm: true);
+            [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], "Data", RecordType: "Npc", IsPartialForm: true);
 
     [Theory]
     [InlineData("int", "0", true)]
@@ -55,9 +55,9 @@ public class ConflictByCompareTests
         string type, string json, bool equal)
     {
         var meta = new FieldMetadata("Member", type, false, [], []);
-        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null, [new FieldValue(meta, null)], "Data");
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null, [new FieldValue(meta, null)], "Data", RecordType: "Npc");
         var spelled = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(json))], "Data");
+            [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(json))], "Data", RecordType: "Npc");
 
         var diff = Assert.Single(CompareQuery.Classify([master, spelled]).Diffs);
 
@@ -71,9 +71,9 @@ public class ConflictByCompareTests
     public void Classify_AbsentAgainstAnExplicitValue_EqualsTheDeclaredDefault_NotZero_ForMutagenDeclaresVirtualMachineAdapterObjectFormatAsTwoAndTheCodecOmitsExactlyThat(string json, bool equal)
     {
         var meta = new FieldMetadata("ObjectFormat", "int", false, [], [], Default: 2);
-        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null, [new FieldValue(meta, null)], "Data");
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null, [new FieldValue(meta, null)], "Data", RecordType: "Npc");
         var spelled = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(json))], "Data");
+            [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(json))], "Data", RecordType: "Npc");
 
         var diff = Assert.Single(CompareQuery.Classify([master, spelled]).Diffs);
 
@@ -324,9 +324,9 @@ public class ConflictByCompareTests
     public void Classify_PluginMissingFieldEntirely_TreatedAsNull()
     {
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [new FieldValue(Meta("Name"), "Alice"), new FieldValue(Meta("Level"), 1)], Origin: "Data");
+            [new FieldValue(Meta("Name"), "Alice"), new FieldValue(Meta("Level"), 1)], Origin: "Data", RecordType: "Npc");
         var partial = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [new FieldValue(Meta("Level"), 5)], Origin: "Data");
+            [new FieldValue(Meta("Level"), 5)], Origin: "Data", RecordType: "Npc");
         var result = CompareQuery.Classify([master, partial]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
         Assert.Equal(ConflictThis.Override, result.PluginStates["B.esp"]);
@@ -338,9 +338,9 @@ public class ConflictByCompareTests
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\",\"c\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"c\",\"a\",\"b\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [LinkArrayField("Packages", (object?)arrayA)], Origin: "Data");
+            [LinkArrayField("Packages", (object?)arrayA)], Origin: "Data", RecordType: "Npc");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [LinkArrayField("Packages", (object?)arrayB)], Origin: "Data");
+            [LinkArrayField("Packages", (object?)arrayB)], Origin: "Data", RecordType: "Npc");
         var result = CompareQuery.Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
         Assert.Equal(ConflictThis.Override, result.Diffs.Single().CellStates["B.esp"]);
@@ -352,9 +352,9 @@ public class ConflictByCompareTests
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [LinkArrayField("scriptProperties", (object?)arrayA)], Origin: "Data");
+            [LinkArrayField("scriptProperties", (object?)arrayA)], Origin: "Data", RecordType: "Npc");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [LinkArrayField("scriptProperties", (object?)arrayB)], Origin: "Data");
+            [LinkArrayField("scriptProperties", (object?)arrayB)], Origin: "Data", RecordType: "Npc");
         var result = CompareQuery.Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
@@ -365,9 +365,9 @@ public class ConflictByCompareTests
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"c\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [LinkArrayField("scriptProperties", (object?)arrayA)], Origin: "Data");
+            [LinkArrayField("scriptProperties", (object?)arrayA)], Origin: "Data", RecordType: "Npc");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [LinkArrayField("scriptProperties", (object?)arrayB)], Origin: "Data");
+            [LinkArrayField("scriptProperties", (object?)arrayB)], Origin: "Data", RecordType: "Npc");
         var result = CompareQuery.Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
@@ -533,9 +533,9 @@ public class ConflictByCompareTests
         var overrideVal = JsonSerializer.Deserialize<JsonElement>("[{\"Pos\":{\"X\":2}}]");
 
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [new FieldValue(itemsMeta, masterVal)], Origin: "Data");
+            [new FieldValue(itemsMeta, masterVal)], Origin: "Data", RecordType: "Npc");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [new FieldValue(itemsMeta, overrideVal)], Origin: "Data");
+            [new FieldValue(itemsMeta, overrideVal)], Origin: "Data", RecordType: "Npc");
 
         var result = CompareQuery.Classify([master, override1]);
 
@@ -566,7 +566,7 @@ public class ConflictByCompareTests
         string plugin, int loadOrder, bool isWinner,
         FieldMetadata structMeta, object? structValue) =>
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
-            [new FieldValue(structMeta, structValue)], "Data");
+            [new FieldValue(structMeta, structValue)], "Data", RecordType: "Npc");
 
     [Fact]
     public void Classify_NonStructField_ChildrenIsNull()
@@ -662,7 +662,7 @@ public class ConflictByCompareTests
 
         var master = MakeStructOverride("A.esp", 0, false, structMeta, masterVal);
         var override1 = MakeStructOverride("B.esp", 1, false, structMeta, overrideVal);
-        var winnerWithoutField = new RecordDetail("000001:Test.esp", "C.esp", 2, true, null, [], Origin: "Data");
+        var winnerWithoutField = new RecordDetail("000001:Test.esp", "C.esp", 2, true, null, [], Origin: "Data", RecordType: "Npc");
 
         var result = CompareQuery.Classify([master, override1, winnerWithoutField]);
 
@@ -765,9 +765,9 @@ public class ConflictByCompareTests
     {
         var meta = new FieldMetadata("Race", "formKey", false, ["Race"], []);
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [new FieldValue(meta, "000AAA:Test.esp")], Origin: "Data");
+            [new FieldValue(meta, "000AAA:Test.esp")], Origin: "Data", RecordType: "Npc");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [new FieldValue(meta, "000BBB:Test.esp")], Origin: "Data");
+            [new FieldValue(meta, "000BBB:Test.esp")], Origin: "Data", RecordType: "Npc");
 
         var result = CompareQuery.Classify([master, override1], resolvable: Lookups(("000AAA:Test.esp", "race", "GoodRace")));
 
@@ -783,7 +783,7 @@ public class ConflictByCompareTests
     {
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"000AAA:Test.esp\",\"000BBB:Test.esp\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
-            [LinkArrayField("Keywords", (object?)arrayA)], Origin: "Data");
+            [LinkArrayField("Keywords", (object?)arrayA)], Origin: "Data", RecordType: "Npc");
 
         var result = CompareQuery.Classify([master], resolvable: Lookups(("000AAA:Test.esp", "kywd", "GoodKeyword")));
 
@@ -829,9 +829,9 @@ public class ConflictByCompareTests
         var meta = new FieldMetadata("Race", "formKey", false, ["race"], []);
         var link = JsonSerializer.Deserialize<JsonElement>("\"000AAA:Test.esp\"");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [new FieldValue(meta, link)], "Data");
+            [new FieldValue(meta, link)], "Data", RecordType: "Npc");
         var partial = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [new FieldValue(meta, link)], "Data", IsPartialForm: true);
+            [new FieldValue(meta, link)], "Data", RecordType: "Npc", IsPartialForm: true);
 
         var diff = Assert.Single(CompareQuery.Classify([master, partial], resolvable: Lookups(("000AAA:Test.esp", "race", "GoodRace"))).Diffs);
 

@@ -1,7 +1,6 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Queries;
 
@@ -15,13 +14,13 @@ public interface IWorldspaceQueryService
 
 /// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin
 /// winner.</summary>
-public sealed class WorldspaceQueryService(IQueryIndex index, ILogger<WorldspaceQueryService>? logger = null)
+internal sealed class WorldspaceQueryService(IQueryIndex index, ILogger<WorldspaceQueryService> logger)
     : IWorldspaceQueryService
 {
     private const int WorldspaceListLimit = 5000;
 
     private readonly IQueryIndex _index = index;
-    private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
+    private readonly ILogger _logger = logger;
 
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(PluginAddress plugin)
     {

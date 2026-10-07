@@ -22,7 +22,7 @@ public sealed class CompareFromTextTests
     private readonly Container _chest;
     private readonly Container _otherChest;
     private readonly Container _chestOverride;
-    private readonly RecordQueryService _service;
+    private readonly IRecordQueryService _service;
 
     public CompareFromTextTests()
     {
@@ -39,12 +39,11 @@ public sealed class CompareFromTextTests
             [BasePlugin] = new(IsLight: false, IsMaster: true, IsBlueprint: false, Masters: [], RecordCount: 1, IsMedium: false),
             [ModPlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: ["Base.esm"], RecordCount: 2, IsMedium: false),
         };
-        _service = new RecordQueryService(
+        _service = QueryHost.Records(
             new FakeIndex(new FakeReads(opened, rows) { TextFieldNames = Fields }),
             FakeLoadOrder.Of(Release,
                 new LoadOrderEntry("Base.esm", "Base.esm", "Data", 0, Enabled: true, Winning: true),
-                new LoadOrderEntry("Mod.esp", "Mod.esp", "Data", 1, Enabled: true, Winning: true)),
-            SharedSchemaReflector.Instance);
+                new LoadOrderEntry("Mod.esp", "Mod.esp", "Data", 1, Enabled: true, Winning: true)));
     }
 
     private static ContainerEntry Entry(FormKey item) =>

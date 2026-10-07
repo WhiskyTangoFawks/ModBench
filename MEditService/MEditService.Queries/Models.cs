@@ -51,9 +51,8 @@ public record RecordDetail(
     // Origin (ADR-0012), paired with Plugin, never encoded into it. Required so every construction
     // says which origin; it precedes the defaulted fields only because C# requires that.
     string Origin,
-    // The schema table name; "Copy as New Record" must supply it to CreateRecord up front. Defaults
-    // to "" for test fixtures — always populated for real reads.
-    string RecordType = "",
+    // The schema table name; "Copy as New Record" must supply it to CreateRecord up front.
+    string RecordType,
     // The record header's Partial Form flag, independent of any field value; always false for a
     // record that cannot carry one (the plugin header). Drives field exclusion and column dimming.
     bool IsPartialForm = false,
@@ -73,7 +72,7 @@ public record CompareOverride(
     string Origin,
     // xEdit's load index, as the column header's label shows it: `0A`, or `FE 001` for a light plugin.
     string LoadIndex,
-    string RecordType = "",
+    string RecordType,
     bool IsPartialForm = false,
     string? ParseDiagnosis = null,
     // Overwrite (ADR-0012), computed here from what provides the plugin so the webview

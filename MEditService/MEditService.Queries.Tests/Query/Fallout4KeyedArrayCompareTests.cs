@@ -68,7 +68,7 @@ public sealed class Fallout4KeyedArrayCompareTests
         (LandscapeKey, "land", ["Layers"], Landscape),
     ];
 
-    private readonly RecordQueryService _service;
+    private readonly IRecordQueryService _service;
 
     public Fallout4KeyedArrayCompareTests()
     {
@@ -87,8 +87,8 @@ public sealed class Fallout4KeyedArrayCompareTests
             new LoadOrderEntry(BasePlugin.Name, BasePlugin.Name, "Data", 0, Enabled: true, Winning: true),
             new LoadOrderEntry(TopPlugin.Name, TopPlugin.Name, "Data", 1, Enabled: true, Winning: true),
         };
-        _service = new RecordQueryService(
-            new FakeIndex(new FakeReads(opened, rows)), FakeLoadOrder.Of(Release, plugins), SharedSchemaReflector.Instance);
+        _service = QueryHost.Records(
+            new FakeIndex(new FakeReads(opened, rows)), FakeLoadOrder.Of(Release, plugins));
     }
 
     private static IEnumerable<T> InOrder<T>(bool reversed, params T[] items) => reversed ? items.Reverse() : items;

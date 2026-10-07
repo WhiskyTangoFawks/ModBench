@@ -1,7 +1,6 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries.Tests.TestSupport;
@@ -14,7 +13,6 @@ internal sealed record Classified(
 internal static class CompareQuery
 {
     internal static Classified Classify(IReadOnlyList<RecordDetail> records,
-        ILogger<RecordQueryService>? logger = null,
         IReadOnlyDictionary<string, RecordLookupEntry>? resolvable = null)
     {
         var addresses = records.Select(r => new PluginAddress(r.Plugin, r.Origin)).ToList();
@@ -25,8 +23,8 @@ internal static class CompareQuery
             _ => new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [], RecordCount: 1, IsMedium: false),
             PluginAddress.Comparer);
         var entries = records.Select(r => new LoadOrderEntry(r.Plugin, r.Plugin, r.Origin, r.LoadOrderIndex, Enabled: true, Winning: r.IsWinner)).ToArray();
-        var service = new RecordQueryService(
-            new FakeIndex(new FakeReads(opened, rows) { Lookups = resolvable }), FakeLoadOrder.Of(GameRelease.Fallout4, entries), SharedSchemaReflector.Instance, logger);
+        var service = QueryHost.Records(
+            new FakeIndex(new FakeReads(opened, rows) { Lookups = resolvable }), FakeLoadOrder.Of(GameRelease.Fallout4, entries));
 
         var compare = service.GetCompare(records[0].FormKey)
             ?? throw new InvalidOperationException($"Expected {records[0].FormKey} to resolve to a compare result.");
