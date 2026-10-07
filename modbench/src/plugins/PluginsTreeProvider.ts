@@ -30,8 +30,7 @@ function listedPlugins(value: InstanceValue): (InstanceValue['plugins'][number] 
     .sort((a, b) => a.slot - b.slot);
 }
 
-// `DataTransferItem.value` is `any` — handleDrag, above `handleDrop` below, is this provider's
-// only writer of it.
+// `DataTransferItem.value` is `any`, so a dropped payload is checked, not trusted.
 export function isAddress(value: unknown): value is PluginAddress {
   return typeof value === 'object' && value !== null && 'name' in value && typeof value.name === 'string'
     && 'origin' in value && typeof value.origin === 'string';
@@ -188,7 +187,7 @@ export class PluginsTreeProvider
   private recordFilterSource?: string;
   private recordFilterMatchesNothing = false;
   // Unfiltered rows, so a filter keystroke re-renders instead of re-walking the Instance value.
-  // `invalidate()` clears it; `render()` leaves it intact.
+  // A new Instance value clears it; `render()` leaves it intact.
   private cache?: { rows: PluginListNode[] };
   private lastBuildHadNoRows = false;
   private lastLockedRowUris: ReadonlySet<string> = new Set();
