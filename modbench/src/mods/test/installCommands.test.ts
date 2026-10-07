@@ -224,6 +224,7 @@ describe('an install ends on the Instance loader\'s read, with the Mods progress
     install.mockImplementationOnce(() => { progressSteps.push('install'); return Promise.resolve({ applied: true, wrote: true, isFomod: false }); });
     showQuickPick.mockResolvedValueOnce({ sourceKind });
     showOpenDialog.mockResolvedValueOnce([picked]);
+    showInputBox.mockResolvedValueOnce('New Mod');
 
     registerModInstallCommands(deps({ instance }));
     await invoke('modbench.mod.install');
