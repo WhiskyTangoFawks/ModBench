@@ -4,6 +4,7 @@ A record is one JSON document, reflected from Mutagen's own record types ([princ
 
 ## Consequences
 
+- On disk, a child record's document is nested inside its container's document ([ADR-0020](0020-a-child-record-lives-in-its-containers-document.md)). It is still one document: the container's file holds it, and nothing holds a second model of it.
 - Per-game knowledge is data, never code. What reflection cannot answer about a game is a row validated against Mutagen's assembly. A game is then added in one place, and a fact never drifts from the assembly.
 - The webview holds no model of its own. It renders the document and the field metadata mEdit sends, and it names no game.
 

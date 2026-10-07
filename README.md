@@ -8,7 +8,7 @@ Status: pre-alpha. Unreleased, no packaged builds, no users yet. Targets Fallout
 
 Every other plugin editor writes the binary in place and leaves you with `.bak` files. Modbench treats a plugin the way an IDE treats a program:
 
-- Track a mod, and every record in its plugins is serialized to a per-record JSON source tree inside the mod folder, committed to a git repo that lives right there. The serialization is lossless — compiling it back is byte-identical to the original, and that round trip is verified at Track time, so a plugin that can't be reproduced is refused rather than silently mangled.
+- Track a mod, and every record in its plugins is serialized to a JSON source tree inside the mod folder, one file for each record and its child records,, committed to a git repo that lives right there. The serialization is lossless — compiling it back gives a plugin that means the same, record for record, though its bytes may differ, and that round trip is verified at Track time, so a plugin that can't be reproduced is refused rather than silently mangled.
 - Edit in the compare grid (or from a script, or from an agent) and the change lands as an ordinary working-tree edit. VS Code's own Source Control panel is the review surface: diff it, discard it, commit it, branch it, rebase it.
 - Compile writes the binary from the source when you say so. The compiler refuses what it can't emit and reports the rest as Problems.
 - The plugin stays what every tool sees. The game, MO2 and xEdit load the plugin binary. Compile writes it from the source, which is the truth (ADR-0007). Modbench never assumes exclusive ownership of any file. When a tracked plugin changes outside Modbench, Modbench tells you, and you decide what to do next.
@@ -68,8 +68,8 @@ MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172)
   MEditService.LoadOrder/     the kernel: every plugin in the instance, and the active plugins
   MEditService.Codec/         the kernel: record text to document and back, and the schema
   MEditService.Ports/         the kernel: the notification port and its payloads
-  MEditService.Index/         DuckDB as an index over per-record JSON documents
-  MEditService.SourceAdapter/ the per-record source tree and its git layer
+  MEditService.Index/         DuckDB as an index over the record documents
+  MEditService.SourceAdapter/ the source tree and its git layer
   MEditService.PluginAdapter/ Mutagen for plugin I/O
 ```
 
