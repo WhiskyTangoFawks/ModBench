@@ -294,12 +294,16 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  private cachedRecord(plugin: PluginAddress, formKey: string): RecordSummary | undefined {
+  private cachedRecord(plugin: PluginAddress, formKey: string): Pick<RecordSummary, 'workingTreeState'> | undefined {
     const prefix = `${pluginAddressKey(plugin)}::`;
-    for (const [key, page] of this.pageCache) {
+    const listings = [
+      ...[...this.pageCache].map(([key, page]) => [key, page.items] as const),
+      ...this.containerChildCache,
+    ];
+    for (const [key, rows] of listings) {
       if (!key.startsWith(prefix)) continue;
-      const item = page.items.find(r => r.formKey === formKey);
-      if (item) return item;
+      const row = rows.find(r => r.formKey === formKey);
+      if (row) return row;
     }
     return undefined;
   }
@@ -427,9 +431,13 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private fetchContainerChildren(node: RecordNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchContainerChildren(${node.record.formKey})`, async () => {
       const cacheKey = `${pluginAddressKey({ name: node.record.plugin, origin: node.origin })}::${node.record.formKey}`;
+      const wasCached = this.containerChildCache.has(cacheKey);
       const children = await this.getOrLoad(this.containerChildCache, cacheKey,
         () => this.repository.getContainerChildren({ name: node.record.plugin, origin: node.origin }, node.record.formKey));
-      return children.map(c => new RecordNode(c, node.origin, node.conditions, c.isContainer, c.hasContainerChildren));
+      const read = !wasCached && this.containerChildCache.get(cacheKey) === children;
+      const rows = children.map(c => new RecordNode(c, node.origin, node.conditions, c.isContainer, c.hasContainerChildren));
+      if (read) this.fireRead(rows);
+      return rows;
     });
   }
 
@@ -453,8 +461,12 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
         () => this.repository.getRecords(pluginAddressOf(node), node.recordType, 0, UNLIMITED_RECORDS));
       const read = !wasCached && this.pageCache.get(key) === cached;
       const rows = cached.items.map(r => new RecordNode(r, node.origin, node.conditions, node.isContainer, r.hasContainerChildren));
-      if (read) this._onDidReadRecords.fire(rows.map((row) => recordResourceUri({ name: row.record.plugin, origin: node.origin }, row.record.formKey)));
+      if (read) this.fireRead(rows);
       return rows;
     });
+  }
+
+  private fireRead(rows: readonly RecordNode[]): void {
+    this._onDidReadRecords.fire(rows.map((row) => recordResourceUri({ name: row.record.plugin, origin: row.origin }, row.record.formKey)));
   }
 }
