@@ -1345,7 +1345,7 @@
         },
         {
           "command": "modbench.plugin.compile",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && editable",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && compilable",
           "group": "4_sourceControl@3"
         },
         {

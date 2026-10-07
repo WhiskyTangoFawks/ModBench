@@ -425,16 +425,17 @@ describe('RecordPanel — column header native right-click menu', () => {
     ).getAttribute('data-vscode-context') ?? '';
     expect(JSON.parse(headerContext)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      editable: false, preventDefaultContextMenuItems: true,
+      compilable: false, editable: false, preventDefaultContextMenuItems: true,
     });
   });
 
   it.each([
-    ['a tracked, editable', { isTracked: true, isImmutable: false }, true],
-    ['an untracked', { isTracked: false, isImmutable: false }, false],
-    ['a read-only', { isTracked: true, isImmutable: true }, false],
-    ['an untracked read-only', { isTracked: false, isImmutable: true }, false],
-  ])('the header of %s plugin says whether compile applies to it: on a tracked column, not on an untracked or a read-only one', async (_what, facts, editable) => {
+    ['a tracked, editable', { isTracked: true, isImmutable: false }, true, true],
+    ['an untracked', { isTracked: false, isImmutable: false }, false, false],
+    ['a tracked, plugin-source-unreadable', { isTracked: true, pluginSourceUnreadable: true }, true, false],
+    ['a read-only', { isTracked: true, isImmutable: true }, false, false],
+    ['an untracked read-only', { isTracked: false, isImmutable: true }, false, false],
+  ])('the header of %s plugin says whether compile and delete apply to it: compile on a tracked column, delete only where the plugin source reads too', async (_what, facts, compilable, editable) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const originTrackAndDecompileReadAgainstTheModsRepositoriesInTheManifest = 'ModA';
     const compare = compareResultFixture({
@@ -454,7 +455,7 @@ describe('RecordPanel — column header native right-click menu', () => {
 
     await waitFor(() => {
       const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
-      expect(parseJsonRecord(headerContext).editable).toBe(editable);
+      expect(parseJsonRecord(headerContext)).toMatchObject({ compilable, editable });
     });
   });
 
@@ -473,13 +474,13 @@ describe('RecordPanel — column header native right-click menu', () => {
       })],
     });
     const load = vi.fn().mockResolvedValue({
-      ok: true, result: compare, immutableSet: null, trackedSet: null, conflictsComputed: true, loadFailures: [],
+      ok: true, result: compare, immutableSet: null, trackedSet: null, sourceUnreadableSet: null, conflictsComputed: true, loadFailures: [],
     });
     const { container } = renderPanel(compare, { load });
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
     const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
-    expect(parseJsonRecord(headerContext).editable).toBe(false);
+    expect(parseJsonRecord(headerContext)).toMatchObject({ compilable: false, editable: false });
   });
 });
 
@@ -557,6 +558,16 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 
     fireEvent.doubleClick(screen.getByText('Override Name'));
     expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
+  it('opens no input on a cell of a tracked column whose plugin source is unreadable', async () => {
+    renderPanel(flagsCompareResult, {
+      plugins: trackedMyModPluginsForTheRealEditableColumnsGate.map(p => ({ ...p, pluginSourceUnreadable: true })),
+    });
+    await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
+
+    fireEvent.doubleClick(screen.getByText('Override Name'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('a flags row opens expanded with its checkboxes; collapsing shows the summary and expanding restores them', async () => {
@@ -1008,6 +1019,7 @@ describe('RecordPanel — a plugin mEdit cannot read', () => {
   it('goes once a read lands with the plugin readable again', async () => {
     const answered = (loadFailures: PluginLoadFailure[]) => ({
       ok: true as const, result: compareResult, immutableSet: new Set<string>(), trackedSet: new Set<string>(),
+      sourceUnreadableSet: new Set<string>(),
       conflictsComputed: true, loadFailures,
     });
     const load = vi.fn()
@@ -1113,7 +1125,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
 });
 
 const loaded = (result: CompareResult | null, conflictsComputed = true) => ({
-  ok: true as const, result, immutableSet: new Set<string>(), trackedSet: new Set<string>(), conflictsComputed, loadFailures: [],
+  ok: true as const, result, immutableSet: new Set<string>(), trackedSet: new Set<string>(), sourceUnreadableSet: new Set<string>(), conflictsComputed, loadFailures: [],
 });
 
 function deferred<T>() {
