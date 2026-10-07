@@ -24,19 +24,19 @@ create: "create: the type pick first" {
   client -> editor: the record types {class: query}
 }
 
-editor -> client: "the gesture: its Argument, its Options and any unsaved document text" {class: edit}
+editor -> client: "the gesture, its Options and any unsaved document text" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 source -> sourceadapter: documents {class: edit}
 sourceadapter -> commands: "the documents it reads" {class: edit}
-commands."writes nothing"
 commands -> http: "each document's new text, each create, delete and move, per item" {class: edit}
 http -> client: "the changes, per item" {class: edit}
 client -> editor: "the changes, per item" {class: edit}
-editor -> vscode: "the changes, as one workspace edit, then save" {class: outside}
+editor -> vscode: "the changes, as one workspace edit" {class: outside}
+vscode."apply; save"
 vscode -> source: "the saved files" {class: outside}
 
-refused: "refused, nothing changes for that record" {
+refused: "refused, nothing written for that record" {
   commands -> http: "the refusal" {class: edit}
   http -> client: the refusal {class: edit}
   client -> editor: the refusal {class: edit}
