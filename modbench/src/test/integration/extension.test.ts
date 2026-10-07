@@ -1254,15 +1254,24 @@ describe('modbench.plugin.create', () => {
 
   it('puts the new plugin\'s line, disabled, at the end of plugins.txt', async function () {
     this.timeout(30_000);
+    let offered: readonly string[] = [];
+    let pick = (places: readonly { label: string }[]): Promise<{ label: string } | undefined> => {
+      offered = places.map((place) => place.label);
+      return Promise.resolve(undefined);
+    };
     Object.assign(vscode.window, {
       showInputBox: () => Promise.resolve('Created.esp'),
-      showQuickPick: (places: readonly { label: string }[]) => Promise.resolve(places.find((place) => place.label === modName)),
+      showQuickPick: (places: readonly { label: string }[]) => pick(places),
     });
-
-    await waitFor('the mod to be offered as a place, and the mock backend to write the file into it', async () => {
+    await waitFor('the Instance to offer the mod as a place', async () => {
       await vscode.commands.executeCommand('modbench.plugin.create');
-      return fs.existsSync(path.join(modDir, 'Created.esp'));
+      return offered.includes(modName);
     });
+    pick = (places) => Promise.resolve(places.find((place) => place.label === modName));
+
+    await vscode.commands.executeCommand('modbench.plugin.create');
+
+    assert.ok(fs.existsSync(path.join(modDir, 'Created.esp')), 'the mock backend writes the file into the chosen mod');
     await waitFor('plugin sync to put the line in plugins.txt', () => /^Created\.esp\r?$/m.test(fs.readFileSync(pluginsTxtPath, 'utf8')));
     const lines = fs.readFileSync(pluginsTxtPath, 'utf8').split(/\r?\n/).filter((line) => line !== '');
     assert.strictEqual(lines.at(-1), 'Created.esp');
