@@ -16,7 +16,7 @@ export interface ReconcileNarratorDeps {
   log: (msg: string) => void;
 }
 
-/** A wait armed for a rebuild's refill. A rebuild refused starts none, so its wait is released. */
+// A wait armed for a rebuild's refill. A rebuild refused starts none, so its wait is released.
 interface RefillWait {
   ended: Promise<void>;
   release(): void;

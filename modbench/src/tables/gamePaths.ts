@@ -24,7 +24,7 @@ export interface GamePathInfo {
   readonly pluginCompanions: PluginCompanions;
 }
 
-/** What the game names for a plugin, besides the plugin. */
+// What the game names for a plugin, besides the plugin.
 interface PluginCompanions {
   /** With its period: Mutagen's `ArchiveExtensionProvider` for the release. */
   readonly archiveExtension: string;

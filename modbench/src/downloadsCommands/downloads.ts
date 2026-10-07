@@ -11,9 +11,9 @@ export interface DownloadsAccess {
   readonly adapter: InstanceAdapter;
 }
 
-/** `wrote` is false when the gesture already held (commands.md, Doing nothing is not an error),
- *  so no watcher fires.
- *  `metadataLeftBehind` is delete's own: the file trashed but its metadata didn't. */
+// `wrote` is false when the gesture already held (commands.md, Doing nothing is not an error),
+// so no watcher fires.
+// `metadataLeftBehind` is delete's own: the file trashed but its metadata didn't.
 type DownloadsCommandResult =
   | { applied: true; wrote: boolean; metadataLeftBehind?: string }
   | { applied: false; refusal: string };

@@ -8,8 +8,8 @@ import { errorMessage } from '../ports/errorMessage';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from './ReferencedByTreeProvider';
 
-/** Read off whatever object a gesture is invoked with — a tree row from the Plugins view or a
- *  plain identity literal. Editor names no Plugins-view node type. */
+// Read off whatever object a gesture is invoked with — a tree row from the Plugins view or a
+// plain identity literal. Editor names no Plugins-view node type.
 interface RecordArgument {
   formKey: string;
   plugin: string;

@@ -166,7 +166,7 @@ async function syncPlugins(
   return result.applied ? { ...result, ...delta } : result;
 }
 
-/** Plugin sync's inputs, which the instance value carries. */
+// Plugin sync's inputs, which the instance value carries.
 interface PluginSyncInputs {
   readonly profile: string;
   readonly pluginOrder: readonly PluginEntry[];
