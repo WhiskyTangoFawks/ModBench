@@ -20,7 +20,6 @@ import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
 import { chooseInstallTarget } from './installTarget';
 import { errorMessage } from '../ports/errorMessage';
-import { applyOrThrow } from '../ports/applyOrThrow';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 
 /** The composition root's answers, which is what lets this view call install itself: the FOMOD
@@ -43,14 +42,15 @@ export async function installDownloadedFile(
     const target = await chooseInstallTarget(
       instance.value, row, (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)));
     if (!target) return false;
-    await runDownloadsWriting(instance, async () => {
-      const outcome = await installFromArchive(access, target, row.path, {
-        gameName: instance.value.gameName, modID: row.modID, fileID: row.fileID, version: row.version,
-      });
-      applyOrThrow(outcome);
-      deps.warnIfFomod(target.name, outcome.isFomod);
-      downloadRefusal = outcome.downloadRefusal;
-    });
+    const outcome = await runDownloadsWriting(instance, () => installFromArchive(access, target, row.path, {
+      gameName: instance.value.gameName, modID: row.modID, fileID: row.fileID, version: row.version,
+    }));
+    if (!outcome.applied) {
+      reporter.report('error', `Failed to install "${name}".`, outcome.refusal);
+      return false;
+    }
+    deps.warnIfFomod(target.name, outcome.isFomod);
+    downloadRefusal = outcome.downloadRefusal;
   } catch (err) {
     // ADR-0019.
     reporter.report('error', `Failed to install "${name}".`, errorMessage(err));
