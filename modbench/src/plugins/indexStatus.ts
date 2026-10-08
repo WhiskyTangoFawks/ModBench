@@ -4,7 +4,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import type { PluginsViewProgress } from './pluginRowCommands';
 import type { PluginFactsFeed } from './pluginFactsFeed';
-import type { PluginTreeProvider } from './PluginTreeProvider';
+import type { RecordBrowser } from './RecordBrowser';
 import { reportSkippedPlugins } from './pluginFailures';
 import { createReconcileNarrator, subscribeNarratorToLoadOrderStatus, type ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
@@ -62,7 +62,7 @@ interface IndexStatusDeps {
   client: Pick<MEditClient, 'onNotification' | 'onStatusChanged' | 'onReconnected' | 'getActiveFilter'>;
   facts: Pick<PluginFactsFeed, 'indexed' | 'refused' | 'reconciled' | 'unreachable' | 'refresh'>;
   /** The record browser a reconciled load order refreshes. */
-  recordBrowser: Pick<PluginTreeProvider, 'refresh'>;
+  recordBrowser: Pick<RecordBrowser, 'refresh'>;
   progress: PluginsViewProgress;
   statusBar: Pick<StatusBar, 'ready' | 'showMEditState'>;
   showRecordFilter: (filter: RecordFilter | null) => void;

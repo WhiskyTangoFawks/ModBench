@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import { createMEditClient, type MEditClient } from './client';
-import { PluginTreeProvider } from './plugins/PluginTreeProvider';
+import { RecordBrowser } from './plugins/RecordBrowser';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
@@ -27,7 +27,7 @@ import { editingView } from './plugins/editingView';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
 import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
-import { downloadsCopyValueText } from './downloads/keyContext';
+import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
@@ -53,7 +53,7 @@ type ViewsClient = Pick<MEditClient,
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
   client: ViewsClient;
-  recordBrowser: PluginTreeProvider;
+  recordBrowser: RecordBrowser;
   pluginFacts: PluginsViewDeps['client'];
   statusBar: StatusBar;
   conflictsComputed: () => Promise<void>;
@@ -128,17 +128,18 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     log: (level, msg) => outputChannel[level](msg),
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
-  const { view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
+  const { view: downloadsView, nameFilter: downloadsFilter } = own(createDownloadsView({
     access, instance, reporter: reporterFor('downloadList'), ask, trash,
-    install: {
-      warnIfFomod: fomodWarning,
-      log: (line) => outputChannel.warn(`[downloads] ${line}`),
-    },
+    log: (line) => outputChannel.warn(`[downloads] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
   const mods = own(createModsView({
     instance, access, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
-    extensionUri: deps.extensionUri, warnIfFomod: fomodWarning, installDownloaded,
+    extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
+    downloadInstall: {
+      reporter: reporterFor('downloadList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),
+      progressViewId: DOWNLOADS_KEY_ARGS.view,
+    },
     nexusRow: nexusRowInFocusedView(own, deps.focusedView, ['modbench.modList', 'modbench.downloads'], 'modbench.mod.nexusRowIn'),
   }));
   const view = editingView({
@@ -230,7 +231,7 @@ export function activate(context: vscode.ExtensionContext): void {
   activeClient = meditClient; // deactivate()'s only way to reach it
   const statusBar = createStatusBar(meditClient);
   context.subscriptions.push(statusBar);
-  const treeProvider = new PluginTreeProvider(meditClient, log);
+  const treeProvider = new RecordBrowser(meditClient, log);
   const focusedView = createFocusedView();
 
   const modFacts = {

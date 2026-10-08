@@ -8,21 +8,21 @@ vi.mock('vscode', () => ({
 }));
 
 import { soleChild, soleGroup } from './browserRows';
-import { PluginTreeProvider, type PluginTreeNode } from '../PluginTreeProvider';
+import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import { RecordDecorationProvider } from '../RecordDecorationProvider';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import { present } from '../../ports/present';
 
 const PLUGIN: PluginAddress = { name: 'Plugin0.esp', origin: 'Data/' };
 
-function badgeOf(provider: PluginTreeProvider, row: PluginTreeNode): string | undefined {
+function badgeOf(provider: RecordBrowser, row: RecordBrowserNode): string | undefined {
   const badges = new RecordDecorationProvider(provider);
   return badges.provideFileDecoration(present(row.resourceUri, 'the row\'s resourceUri'))?.badge;
 }
 
 async function groupOf(client: InMemoryMEditClient, type: string) {
   client.setQueryAnswer('getRecordTypes', [recordTypeCountFixture({ type, count: 1 })]);
-  const provider = new PluginTreeProvider(client);
+  const provider = new RecordBrowser(client);
   return { provider, group: await soleGroup(provider, PLUGIN) };
 }
 
