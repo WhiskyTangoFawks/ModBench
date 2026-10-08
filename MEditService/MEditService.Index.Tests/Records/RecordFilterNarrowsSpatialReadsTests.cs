@@ -87,7 +87,7 @@ public sealed class RecordFilterNarrowsSpatialReadsTests
             mod.WriteToBinary(path);
             _index = Indexes.Reconciled(
                 _dataFolder,
-                [new LoadOrderEntry(PluginName, path, Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]);
+                [new LoadOrderEntry(PluginName, path, Plugin.Origin, Line: 0, Enabled: true, Winning: true)]);
         }
 
         private static CellBlock InteriorBlock(int number, Cell cell)

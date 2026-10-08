@@ -115,7 +115,7 @@ public sealed class CompilePluginContainerTests : IDisposable
 
         _loadOrder = SnapshotPlugins.Snapshot(
             _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry(PluginName, pluginPath, Origin, Line: 0, Enabled: true, Winning: true)]);
     }
 
     public void Dispose()

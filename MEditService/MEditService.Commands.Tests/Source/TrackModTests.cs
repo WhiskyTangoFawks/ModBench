@@ -85,7 +85,7 @@ public sealed class TrackModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
         await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
         Assert.True(SourceRepository.IsTracked(modFolder));
@@ -116,7 +116,7 @@ public sealed class TrackModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
 
         byte[] notAPluginSoAnyDeepParseFails = [0x00, 0x01, 0x02, 0x03];
         File.WriteAllBytes(pluginPath, notAPluginSoAnyDeepParseFails);
@@ -143,8 +143,8 @@ public sealed class TrackModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
         [
-            new LoadOrderEntry("Same.esp", pathA, "ModA", Slot: 0, Enabled: true, Winning: false),
-            new LoadOrderEntry("Same.esp", pathB, "ModB", Slot: 1, Enabled: true, Winning: true),
+            new LoadOrderEntry("Same.esp", pathA, "ModA", Line: 0, Enabled: true, Winning: false),
+            new LoadOrderEntry("Same.esp", pathB, "ModB", Line: 1, Enabled: true, Winning: true),
         ]);
 
         var result = await TrackEveryPluginOf.ModAsync(loadOrder, "ModA");
@@ -172,8 +172,8 @@ public sealed class TrackModTests
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
             [
-                new LoadOrderEntry("First.esp", firstPluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true),
-                new LoadOrderEntry("Second.esp", secondPluginPath, "FixtureMod", Slot: 1, Enabled: true, Winning: true),
+                new LoadOrderEntry("First.esp", firstPluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true),
+                new LoadOrderEntry("Second.esp", secondPluginPath, "FixtureMod", Line: 1, Enabled: true, Winning: true),
             ]);
 
         var notifications = new InMemoryNotificationPublisher();
@@ -197,7 +197,7 @@ public sealed class TrackModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
 
         static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken ct)
         {
@@ -232,7 +232,7 @@ public sealed class TrackModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
 
         static async Task<IMod> DeserializeThenMutateTheFloat(string folder, CancellationToken ct)
         {
@@ -274,7 +274,7 @@ public sealed class TrackModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
 
         await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
@@ -309,7 +309,7 @@ public sealed class TrackModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
 
         async Task<IMod> DeserializeThenCorrupt(string folder, CancellationToken ct)
         {
@@ -342,7 +342,7 @@ public sealed class TrackModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
         var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
@@ -369,7 +369,7 @@ public sealed class TrackModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
         await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
         Assert.True(SourceRepository.IsTracked(modFolder));
@@ -390,7 +390,7 @@ public sealed class TrackModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
         var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);

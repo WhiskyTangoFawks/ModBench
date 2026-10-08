@@ -59,7 +59,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private static LoadOrderEntry Entry(string modFolder, string origin) =>
-        new(PluginName, Path.Combine(modFolder, PluginName), origin, Slot: 0, Enabled: true, Winning: true);
+        new(PluginName, Path.Combine(modFolder, PluginName), origin, Line: 0, Enabled: true, Winning: true);
 
     private LoadOrderSnapshot LoadOrder(params LoadOrderEntry[] plugins) =>
         SnapshotPlugins.Snapshot(_modFolder, null, Release, plugins.Length == 0 ? [Entry(_modFolder, Origin)] : plugins);

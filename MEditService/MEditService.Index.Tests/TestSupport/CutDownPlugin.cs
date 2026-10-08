@@ -23,7 +23,7 @@ public sealed class CutDownPluginFixture : IDisposable
             gameDirectory,
             [new LoadOrderEntry(
                 RealDataPlugin.PluginFileName, RealDataPlugin.PluginPath, PluginOrigin.DataDirectory,
-                Slot: 0, Enabled: true, Winning: true)],
+                Line: 0, Enabled: true, Winning: true)],
             InstanceRoot);
         // The per-type views are made by the first filter, and a test reads them.
         Index.Accepts("SELECT form_key FROM records");

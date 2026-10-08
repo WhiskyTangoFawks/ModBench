@@ -21,7 +21,7 @@ public abstract class TestInstance : IDisposable
     private readonly Lazy<LoadOrderHolder> _holder;
     private readonly Lazy<IServiceProvider> _services;
     private LoadOrderSnapshot? _loadOrder;
-    private int _nextSlot;
+    private int _nextLine;
 
     protected TestInstance()
     {
@@ -77,13 +77,13 @@ public abstract class TestInstance : IDisposable
         var name = mod.ModKey.FileName.String;
         var folder = Directory.CreateDirectory(FolderOf(origin)).FullName;
         var path = Path.Combine(folder, name);
-        var slot = listing switch
+        var line = listing switch
         {
-            Listing.Winning => _nextSlot++,
-            Listing.Overridden => _nextSlot - 1,
+            Listing.Winning => _nextLine++,
+            Listing.Overridden => _nextLine - 1,
             _ => (int?)null,
         };
-        var entry = new LoadOrderEntry(name, path, origin, slot, Enabled: true, Winning: listing != Listing.Overridden);
+        var entry = new LoadOrderEntry(name, path, origin, line, Enabled: true, Winning: listing != Listing.Overridden);
         _entries.Add(entry);
 
         if (!tracked) mod.WriteToBinary(path);

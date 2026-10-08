@@ -21,7 +21,7 @@ public sealed class CutDownPluginApiFixture : IApiPluginFixture<CutDownPluginApi
         [
             new LoadOrderEntry(
                 RealDataPlugin.PluginFileName, RealDataPlugin.PluginPath, PluginOrigin.DataDirectory,
-                Slot: 0, Enabled: true, Winning: true),
+                Line: 0, Enabled: true, Winning: true),
         ];
     }
 
