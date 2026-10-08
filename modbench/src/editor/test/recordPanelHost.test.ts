@@ -11,6 +11,12 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 function isPanel(candidate: unknown): candidate is vscode.WebviewPanel {
   return typeof candidate === 'object' && candidate !== null && 'webview' in candidate;
 }
+function isDocument(candidate: unknown): candidate is vscode.TextDocument {
+  return typeof candidate === 'object' && candidate !== null && 'uri' in candidate;
+}
+function isProvider(candidate: unknown): candidate is vscode.CustomTextEditorProvider {
+  return typeof candidate === 'object' && candidate !== null && 'resolveCustomTextEditor' in candidate;
+}
 
 beforeEach(forgetRegistrations);
 
@@ -21,12 +27,6 @@ describe('a file\'s tab an edit moves the file of', () => {
   const MOVED = '/mods/ModA/plugin-source/A.esp/Npcs/Renamed.json';
   const place = { collapsedRows: ['Bounds'], collapsedColumns: ['A.esp|ModA'], focusedCell: { rowKey: 'Bounds', plugin: null }, scroll: { top: 40, left: 12 } };
 
-  function isDocument(candidate: unknown): candidate is vscode.TextDocument {
-    return typeof candidate === 'object' && candidate !== null && 'uri' in candidate;
-  }
-  function isProvider(candidate: unknown): candidate is vscode.CustomTextEditorProvider {
-    return typeof candidate === 'object' && candidate !== null && 'resolveCustomTextEditor' in candidate;
-  }
 
   function webviewPanel() {
     const listeners: ((message: unknown) => void)[] = [];
@@ -93,6 +93,51 @@ describe('a file\'s tab an edit moves the file of', () => {
 
 });
 
+describe('a file mEdit answers holds no record', () => {
+  const METADATA = '/mods/ModA/plugin-source/A.esp/Cells/GroupRecordData.json';
+  const uri = vscode.Uri.file(METADATA);
+  const reopened = () => executed().filter(([id]) => id === 'vscode.openWith');
+
+  async function opened(inAGroup: boolean) {
+    const meditClient = new InMemoryMEditClient();
+    meditClient.setQueryAnswer('getRecordOfFile', null);
+    const warn = vi.fn();
+    await register({ meditClient, outputChannel: { debug: vi.fn(), info: vi.fn(), warn } });
+    const provider = registerCustomEditorProvider.mock.calls.at(-1)?.[1];
+    const document = { uri, getText: () => '{}', isDirty: false };
+    const panel = {
+      title: '', active: true, viewColumn: 1,
+      webview: {
+        html: '', options: {}, cspSource: '', asWebviewUri: () => ({ toString: () => '' }), postMessage: () => Promise.resolve(true),
+        onDidReceiveMessage: () => ({ dispose: () => undefined }),
+      },
+      onDidDispose: () => ({ dispose: () => undefined }),
+      onDidChangeViewState: () => ({ dispose: () => undefined }),
+    };
+    const group = { viewColumn: 1, tabs: [] as unknown[] };
+    group.tabs.push({ group, input: new vscode.TabInputCustom(uri, 'modbench.record'), isActive: true, isPreview: true });
+    tabGroups.splice(0, tabGroups.length, ...(inAGroup ? [group] : []));
+    if (!isProvider(provider) || !isDocument(document) || !isPanel(panel)) throw new Error('no record grid registered');
+
+    await provider.resolveCustomTextEditor(document, panel, { isCancellationRequested: false, onCancellationRequested: vi.fn() });
+    return { panel, warn };
+  }
+
+  it('reopens in its tab\'s place in the text editor, drawing no grid', async () => {
+    const { panel } = await opened(true);
+
+    expect(reopened()).toEqual([['vscode.openWith', uri, 'default', { viewColumn: 1, preview: true }]]);
+    expect(panel.webview.html).toBe('');
+  });
+
+  it('stays, saying why in the Output, when VS Code shows its tab in no group', async () => {
+    const { warn } = await opened(false);
+
+    expect(warn).toHaveBeenCalledWith(`${METADATA} holds no record, but VS Code shows its tab in no group to reopen in the text editor.`);
+    expect(reopened()).toEqual([]);
+  });
+});
+
 describe('a child record\'s tab, on mEdit\'s report of its record', () => {
   const plugin = { name: 'A.esp', origin: 'ModA' };
   const PLACED = '000801:A.esp';
@@ -103,12 +148,6 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
   const changed = { kind: 'rows-changed' as const, plugin: plugin.name, origin: plugin.origin, keys: [PLACED], sequence: 1 };
   const opened = () => executed().filter(([id]) => id === 'vscode.openWith').map(([, uri]) => uri);
 
-  function isDocument(candidate: unknown): candidate is vscode.TextDocument {
-    return typeof candidate === 'object' && candidate !== null && 'uri' in candidate;
-  }
-  function isProvider(candidate: unknown): candidate is vscode.CustomTextEditorProvider {
-    return typeof candidate === 'object' && candidate !== null && 'resolveCustomTextEditor' in candidate;
-  }
   function isUri(candidate: unknown): candidate is vscode.Uri {
     return typeof candidate === 'object' && candidate !== null && 'scheme' in candidate;
   }

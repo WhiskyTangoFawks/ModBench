@@ -8,7 +8,7 @@ import type { RecordTabs } from './recordTabs';
 import type { SourceMove } from './applyRecordEdit';
 import type { TabPlace } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
-import { inTabsStead, type TabShowOptions } from './inTabsPlace';
+import { inTabsPlace, inTabsStead, type TabShowOptions } from './inTabsPlace';
 import type { CopyChanged } from './recordCopy';
 import { fileText } from './fileText';
 import {
@@ -176,8 +176,14 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     let shownReason: string | undefined;
     const read = async (): Promise<void> => {
       try {
-        const { formKey, ...copy } = await this.deps.client.getRecordOfFile(fsPath);
-        if (tab.awaitsRecord) this.showFile(panel, tab, document, { formKey, plugin: pluginAddressOf(copy) }, { columns, place }, () => undefined);
+        const record = await this.deps.client.getRecordOfFile(fsPath);
+        if (!tab.awaitsRecord) return;
+        if (record === null) {
+          await this.reopenAsText(panel, document.uri);
+          return;
+        }
+        const { formKey, ...copy } = record;
+        this.showFile(panel, tab, document, { formKey, plugin: pluginAddressOf(copy) }, { columns, place }, () => undefined);
       } catch (err) {
         const reason = errorMessage(err);
         if (reason === shownReason || !tab.awaitsRecord) return;
@@ -187,6 +193,16 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
       }
     };
     await tab.askWhichRecord(read);
+  }
+
+  // A file that holds no record opens as any JSON file does (editor.md, Opening, story 11).
+  private async reopenAsText(panel: vscode.WebviewPanel, uri: vscode.Uri): Promise<void> {
+    const shownIn = panel.viewColumn === undefined ? undefined : recordTabAt({ document: uri.toString(), viewColumn: panel.viewColumn });
+    if (!shownIn) {
+      this.deps.channel.warn(`${uri.fsPath} holds no record, but VS Code shows its tab in no group to reopen in the text editor.`);
+      return;
+    }
+    await inTabsPlace(shownIn, async (options) => { await vscode.commands.executeCommand('vscode.openWith', uri, 'default', options); });
   }
 
   readAgain(): void {
