@@ -454,5 +454,8 @@ internal sealed class DuckDbRecordIndex : IDisposable
         cmd.ExecuteNonQuery();
     }
 
+    /// <inheritdoc cref="Store.EndReads"/>
+    public bool EndReads() => _store.EndReads();
+
     public void Dispose() => _store.Dispose();
 }
