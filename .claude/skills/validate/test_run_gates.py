@@ -60,7 +60,7 @@ class InASlot(unittest.TestCase):
         (validate / "slot.sh").write_text('in_slot() { echo "node reuse off: $MSBUILDDISABLENODEREUSE"; }\n')
         git(repo, "init", "-q", "-b", "main")
         git(repo, "commit", "-q", "--allow-empty", "-m", "base")
-        env = {k: v for k, v in os.environ.items() if k != "MSBUILDDISABLENODEREUSE"}
+        env = {k: v for k, v in os.environ.items() if k not in ("MSBUILDDISABLENODEREUSE", "GATE_SLOT")}
         run = subprocess.run(["bash", str(validate / "run-gates.sh"), "--backend"],
                              capture_output=True, text=True, timeout=60, env=env)
         self.assertIn("node reuse off: 1", run.stdout)
