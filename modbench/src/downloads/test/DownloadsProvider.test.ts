@@ -47,18 +47,12 @@ const makeProviderOverRowsNeverOnDisk = (
 };
 
 describe('a row\'s Argument', () => {
-  it('carries the downloaded file and the installed mods it could upgrade, found from the Instance value', async () => {
-    const file = row({ name: 'foo.zip', modID: '111' });
-    const instance = new FakeInstance(instanceValueFixture({
-      downloads: { kind: 'listed', rows: [file] },
-      mods: [{ kind: 'mod', enabled: true, name: 'Harder VATS', nexusId: '111', version: '1.0' }],
-    }));
+  it('is the downloaded file alone, with the mods it could upgrade as the Instance value gave them', async () => {
+    const file = row({ name: 'foo.zip', modID: '111', upgrades: [{ modName: 'Harder VATS', version: '1.0' }] });
 
-    const [node] = await makeProviderOverRowsNeverOnDisk([file], { instance }).getChildren();
+    const [node] = await makeProviderOverRowsNeverOnDisk([file]).getChildren();
 
-    expect(expectInstanceOf(node, DownloadNode).argument).toEqual({
-      kind: 'download', row: file, upgrades: [{ modName: 'Harder VATS', version: '1.0', tier: undefined }],
-    });
+    expect(expectInstanceOf(node, DownloadNode).argument).toEqual({ kind: 'download', row: file });
   });
 });
 

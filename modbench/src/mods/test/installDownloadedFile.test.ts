@@ -30,19 +30,19 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { installDownloadedFile, type DownloadInstallDeps } from '../installDownloaded';
-import type { DownloadRow, Instance } from '../../instanceLoader/instance';
+import type { DownloadFile, DownloadRow, Instance } from '../../instanceLoader/instance';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
-import type { DownloadArgument, UpgradeCandidate } from '../../drivingLib/argument';
+import type { DownloadArgument } from '../../drivingLib/argument';
+import type { UpgradeCandidate } from '../../instanceLoader/instance';
 import { accessTo } from '../../test/mo2/adapterOver';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-const argumentOf = (
-  root: string, name: string, upgrades: readonly UpgradeCandidate[] = [], row: Partial<DownloadRow> = {},
-): DownloadArgument => ({ kind: 'download', row: downloadRowFixture(name, row, root), upgrades });
+const argumentOf = (root: string, name: string, row: Partial<DownloadRow> = {}): DownloadArgument =>
+  ({ kind: 'download', row: downloadRowFixture(name, row, root) });
 
-const fakeInstance = (): Pick<Instance, 'value' | 'refresh'> => ({
-  value: instanceValueFixture({ gameName: 'Fallout 4' }),
+const fakeInstance = (rows: readonly DownloadFile[] = []): Pick<Instance, 'value' | 'refresh'> => ({
+  value: instanceValueFixture({ gameName: 'Fallout 4', downloads: { kind: 'listed', rows } }),
   refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
 });
 
@@ -109,7 +109,7 @@ describe('installDownloadedFile', () => {
     const archive = await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z', [], { modID: '123', fileID: '456', version: '2.0' }), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
+    await installDownloadedFile(argumentOf(root, 'foo.7z', { modID: '123', fileID: '456', version: '2.0' }), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -209,7 +209,8 @@ describe('installDownloadedFile: the pick among the upgrades the Argument carrie
     const double = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(double.qp);
     const installing = installDownloadedFile(
-      argumentOf(root, 'foo.7z', upgrades, ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
+      argumentOf(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR), accessTo(root),
+      fakeInstance([downloadRowFixture('foo.7z', { ...ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR, upgrades })]), installDeps({ reporter: recordingReporter() }));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     act(double);
     await installing;
@@ -325,7 +326,8 @@ describe('installDownloadedFile: the progress bar and the read', () => {
     const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    const running = installDownloadedFile(argumentOf(root, 'foo.7z', [{ modName: 'Foo Mod', version: '1.0' }], ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
+    const running = installDownloadedFile(argumentOf(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR), accessTo(root),
+      fakeInstance([downloadRowFixture('foo.7z', { ...ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR, upgrades: [{ modName: 'Foo Mod', version: '1.0' }] })]), installDeps({ reporter: recordingReporter() }));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
     await running;

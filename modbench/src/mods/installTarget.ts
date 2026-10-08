@@ -1,7 +1,7 @@
 import type * as vscode from 'vscode';
 import { defaultModName, type InstallTarget } from '../install/install';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
-import type { DownloadArgument, UpgradeCandidate, UpgradeTier } from '../drivingLib/argument';
+import type { DownloadFile, UpgradeCandidate, UpgradeTier } from '../instanceLoader/instance';
 
 type InstallChoice =
   | { kind: 'new' }
@@ -39,11 +39,11 @@ async function pickInstallChoice(name: string, candidates: readonly UpgradeCandi
 /** `undefined` is Esc, or declining to name a new mod: install nothing. An upgrade arrives
  *  confirmed by the pick, so only a new mod reaches the name prompt. */
 export async function chooseInstallTarget(
-  { row: download, upgrades: candidates }: DownloadArgument,
+  download: Pick<DownloadFile, 'name' | 'path' | 'upgrades'>,
   nameNewMod: (defaultName: string) => Thenable<string | undefined>,
 ): Promise<InstallTarget | undefined> {
   const choice: InstallChoice | undefined =
-    candidates.length === 0 ? { kind: 'new' } : await pickInstallChoice(download.name, candidates);
+    download.upgrades.length === 0 ? { kind: 'new' } : await pickInstallChoice(download.name, download.upgrades);
   if (!choice) return undefined;
   if (choice.kind === 'upgrade') return choice;
   const name = await nameNewMod(defaultModName(download.path));

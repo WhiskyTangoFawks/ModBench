@@ -21,8 +21,10 @@ export async function installDownloadedFile(
   let installed = false;
   let downloadRefusal: string | undefined;
   await reportFailure(deps.reporter, `Failed to install "${row.name}".`, async () => {
+    const { downloads } = instance.value;
+    const upgrades = downloads.kind === 'listed' ? downloads.rows.find((listed) => listed.name === row.name)?.upgrades ?? [] : [];
     const target = await chooseInstallTarget(
-      argument, (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)));
+      { ...row, upgrades }, (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)));
     if (!target) return;
     const outcome = await runWritingGesture(deps.progressViewId, instance, () => installFromArchive(access, target, row.path, {
       gameName: instance.value.gameName, modID: row.modID, fileID: row.fileID, version: row.version,

@@ -16,7 +16,7 @@ function soleRow(rows: readonly DownloadFile[]): DownloadFile {
 }
 
 describe('buildDownloadRows', () => {
-  const rowsClaimedByNoMod = (files: DownloadedFile[]) => buildDownloadRows(files, new Map());
+  const rowsClaimedByNoMod = (files: DownloadedFile[]) => buildDownloadRows(files, new Map(), []);
 
   it('maps a file with no metadata to a Downloaded row carrying its two paths', () => {
     expect(rowsClaimedByNoMod([file('foo.zip', 100)])).toEqual([{
@@ -27,6 +27,7 @@ describe('buildDownloadRows', () => {
       mtimeMs: 100,
       hasMeta: false,
       excluded: false,
+      upgrades: [],
       path: '/downloads/foo.zip',
       sidecarPath: '/downloads/foo.zip.meta',
     }]);
@@ -57,6 +58,22 @@ describe('buildDownloadRows', () => {
   });
 });
 
+describe('buildDownloadRows — the mods a file can upgrade', () => {
+  it('carries the installed mods sharing the file\'s Nexus mod id, best match first', () => {
+    const mods = [
+      { kind: 'mod' as const, enabled: true, name: 'Other', nexusId: '1', version: '1.0' },
+      { kind: 'mod' as const, enabled: true, name: 'Match', nexusId: '1', version: '2.0', installedFiles: [{ nexusId: '1', fileId: '9' }] },
+    ];
+
+    const row = soleRow(buildDownloadRows([file('Pack.7z', 1, metaOf({ modID: '1', fileID: '9' }))], new Map(), mods));
+
+    expect(row.upgrades).toEqual([
+      { modName: 'Match', version: '2.0', tier: 'fileId' },
+      { modName: 'Other', version: '1.0', tier: undefined },
+    ]);
+  });
+});
+
 describe('modsByArchiveFilename — which mods each download was installed into', () => {
   it('keys a mod under the download its meta names, case-folded', () => {
     expect(modsByArchiveFilename([{ name: 'UFO4P', archiveFilename: 'UFO4P-4598.7z' }]))
@@ -77,19 +94,19 @@ describe('modsByArchiveFilename — which mods each download was installed into'
 
 describe('buildDownloadRows — Installed follows the mods, not the metadata', () => {
   it('reads as Installed when a mod names it, whatever the metadata says', () => {
-    const rows = buildDownloadRows([file('Pack.7z', 1, metaOf({ modID: '1' }))], new Map([['pack.7z', ['Textures']]]));
+    const rows = buildDownloadRows([file('Pack.7z', 1, metaOf({ modID: '1' }))], new Map([['pack.7z', ['Textures']]]), []);
 
     expect(soleRow(rows).status).toBe('Installed');
   });
 
   it('reads as Uninstalled, not Downloaded, when no mod names it though the metadata claims installed', () => {
-    const rows = buildDownloadRows([file('Pack.7z', 1, metaOf({ status: 'Installed' }))], new Map());
+    const rows = buildDownloadRows([file('Pack.7z', 1, metaOf({ status: 'Installed' }))], new Map(), []);
 
     expect(soleRow(rows).status).toBe('Uninstalled');
   });
 
   it('keeps the metadata’s Uninstalled when no mod names it, MO2\'s own Uninstalled being a user statement about the archive, not a claim about a mod', () => {
-    const rows = buildDownloadRows([file('Pack.7z', 1, metaOf({ status: 'Uninstalled' }))], new Map());
+    const rows = buildDownloadRows([file('Pack.7z', 1, metaOf({ status: 'Uninstalled' }))], new Map(), []);
 
     expect(soleRow(rows).status).toBe('Uninstalled');
   });
