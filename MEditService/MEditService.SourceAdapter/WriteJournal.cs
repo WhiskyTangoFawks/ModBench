@@ -326,7 +326,7 @@ internal sealed class WriteJournal(string modFolder)
     private static bool Exists(string path) => File.Exists(path) || Directory.Exists(path);
 
     private static string TempPathFor(string path) =>
-        Path.Combine(PathShape.DirectoryOf(path), ".medit_tmp_" + Path.GetFileName(path) + ".tmp");
+        Path.Combine(PathShape.DirectoryOf(path), ".medit_tmp_" + Path.GetRandomFileName() + ".tmp");
 
     private static void WriteAtomic(string path, byte[] content, string? tempPath = null)
     {

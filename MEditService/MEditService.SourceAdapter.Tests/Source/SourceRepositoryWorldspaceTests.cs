@@ -99,8 +99,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         InTheTree(Worldspace, "wrld");
         var cellDocument = PluginSourceRoot.ContainerDocument(Path.Combine(
             "plugin-source", PluginName, "Worldspaces", "000800_Vendor.esp", "0, -1", "1, -2", "000801_Vendor.esp"));
-        Directory.CreateDirectory(Path.Combine(
-            Path.GetDirectoryName(Path.Combine(_modFolder, cellDocument)).Require(), ".medit_tmp_" + Path.GetFileName(cellDocument) + ".tmp"));
+        Directory.CreateDirectory(Path.Combine(_modFolder, cellDocument));
         var before = TreeSnapshot.Of(_modFolder);
 
         var fault = Record.Exception(() => Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace));
