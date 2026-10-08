@@ -6,7 +6,7 @@ using MEditService.Codec.Schema;
 namespace MEditService.Index;
 
 /// <summary>A view column is a scalar leaf with one SQL type: no column over one with broken semantics.
-/// The SQL type and the default a view puts back are the Store's reading of the column's wire type.</summary>
+/// The Store reads the SQL type and default from the wire type.</summary>
 internal static class RecordViewBuilder
 {
     internal static void CreateViews(DuckDBConnection connection, IReadOnlyDictionary<string, RecordTableSchema> schemas)
