@@ -218,6 +218,38 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
+    public void ClearingDeleted_InADisabledPlugin_TakesTheNearestCopyToTheLeftOfItsLine()
+    {
+        var disabled = Plugin("Override.esp", Mastering("Middle.esp", NpcCopy(Deleted)));
+        _plugins.Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
+            (disabled, true),
+            (Plugin("Middle.esp", NpcCopy(0, "Guy", 0.9f)), false));
+        _plugins.Relist(Address(disabled), entry => entry with { Enabled = false });
+        _edited = disabled;
+
+        var undeleted = Written(TheNpc, 0);
+
+        Assert.Equal(0.7f, undeleted["HeightMax"]?.GetValue<float>());
+    }
+
+    [Fact]
+    public void ClearingDeleted_InAPluginWithNoLine_TakesTheNearestCopyAmongItsMasters()
+    {
+        var unlisted = Plugin("Override.esp", Mastering("Middle.esp", NpcCopy(Deleted)));
+        _plugins.Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
+            (Plugin("Middle.esp", NpcCopy(0, "Guy", 0.9f)), false),
+            (unlisted, true));
+        _plugins.Relist(Address(unlisted), entry => entry with { Slot = null });
+        _edited = unlisted;
+
+        var undeleted = Written(TheNpc, 0);
+
+        Assert.Equal(0.9f, undeleted["HeightMax"]?.GetValue<float>());
+    }
+
+    [Fact]
     public void ClearingDeleted_TakesTheMastersCopy_OverANearerCopyOfAPluginThatIsNoMaster()
     {
         Load(

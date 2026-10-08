@@ -23,7 +23,7 @@ public record LoadOrderEntry(
     private bool Is(string reserved) => string.Equals(Origin, reserved, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The plugin as the PUT /load-order body carries it.</summary>
-    public object Wire => new { Name, Path, Origin, Provider = ProviderWire.Of(Provider) };
+    public object Wire => new { Name, Path, Origin, Provider = ProviderWire.Of(Provider), Line = Slot };
 }
 
 /// <summary>A provider as the PUT /load-order body spells it.</summary>

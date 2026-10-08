@@ -31,7 +31,7 @@ internal sealed class LoadOrderResolution(
         new(this, snapshot, plugin, new Lazy<IReadOnlySet<string>>(() => RequiredMasters.InTheTree(repository, plugin, schemas)));
 
     /// <summary>The name of the plugin originating <paramref name="formKey"/> when <paramref name="destination"/>
-    /// loads before it, so a copy there would be an underride. Null when it loads after, or either is not placed.</summary>
+    /// loads before it, so a copy there would be an underride. Null when it loads after, or either is not judged.</summary>
     internal string? OriginLoadingAfter(string formKey, PluginAddress destination)
     {
         var current = loadOrder.Current;
@@ -40,9 +40,7 @@ internal sealed class LoadOrderResolution(
         // active one is the origin.
         var originName = FormKey.Factory(formKey).ModKey.FileName.String;
         var origin = current.Active.FirstOrDefault(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase));
-        var originIndex = origin is null ? null : current.LoadOrderIndex(origin.Key);
-        var destinationIndex = current.LoadOrderIndex(destination);
-        return originIndex is { } originAt && destinationIndex is { } destinationAt && destinationAt < originAt ? originName : null;
+        return origin is not null && current.LoadsBefore(destination, origin.Key) == true ? originName : null;
     }
 
     /// <summary>xEdit's HighestOverrideVisibleForFile: the source's copy stands unless it is Partial Form
@@ -54,16 +52,15 @@ internal sealed class LoadOrderResolution(
     {
         text = null;
         var snapshot = source.Snapshot;
-        int IndexOf(PluginAddress plugin) => snapshot.LoadOrderIndex(plugin) ?? snapshot.Active.Count;
         var sourcePartial = source.IsPartialForm(identity);
-        if (!sourcePartial && IndexOf(destinationPlugin) <= IndexOf(source.Plugin)) return null;
+        if (!sourcePartial && snapshot.LoadsBefore(source.Plugin, destinationPlugin) != true) return null;
 
         var masters = WalkIn(snapshot, destinationRepository, destinationPlugin, schemaReflector.GetSchemas(snapshot.GameRelease));
         switch (masters.NearestCopy(identity.FormKey, _ => true, PartialFormFlag.Bit))
         {
             case LeftCopy.Unreadable unreadable:
                 return unreadable.Refusal(identity.FormKey, "the copy of a container the destination can see is carried in");
-            case LeftCopy.Found found when sourcePartial || IndexOf(found.Plugin) > IndexOf(source.Plugin):
+            case LeftCopy.Found found when sourcePartial || snapshot.LoadsBefore(source.Plugin, found.Plugin) == true:
                 text = found.Text;
                 return null;
             default:
@@ -148,8 +145,9 @@ internal sealed class LoadOrderResolution(
             {
                 return new LeftCopy.UnreadableMastersTree(plugin, ex.Message);
             }
-            var index = snapshot.LoadOrderIndex(plugin) ?? snapshot.Active.Count;
-            var asked = snapshot.Active.Take(index).Reverse().Select(registered => registered.Key)
+            // With no line no judgement applies, so every active master is to its left (commands.md § Principles).
+            var asked = snapshot.Active.Where(active => snapshot.LoadsBefore(active.Key, plugin) != false)
+                .Reverse().Select(registered => registered.Key)
                 .Where(left => required.Contains(left.Name));
             foreach (var left in asked)
             {

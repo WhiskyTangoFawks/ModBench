@@ -937,6 +937,8 @@ export interface components {
             path: string;
             origin: string;
             provider: components["schemas"]["PluginProviderRequest"];
+            /** Format: int32 */
+            line?: number | null;
         };
         LoadOrderRequest: {
             plugins: components["schemas"]["LoadOrderPlugin"][];
@@ -1164,7 +1166,7 @@ export interface components {
             newFormKey?: string | null;
         };
         /** @enum {string} */
-        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginSourceUnreadable" | "PluginHasNoModFolder" | "PluginNotActive" | "PluginNotInLoadOrder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "ContainerCannotHoldType" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "HeldInAnotherRecordNotYetSupported" | "SourceUnitNotFound" | "SourceAccessFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "CannotBePartialForm" | "SyntheticMemberIndirectWrite" | "PersistentOnDeletedRecord" | "PersistentMoveDestinationUnknown" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "ChildSlotHeldByAnotherRecord" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "AlphaNotHeld" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
+        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginSourceUnreadable" | "PluginHasNoModFolder" | "PluginNotInLoadOrder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "ContainerCannotHoldType" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "HeldInAnotherRecordNotYetSupported" | "SourceUnitNotFound" | "SourceAccessFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "CannotBePartialForm" | "SyntheticMemberIndirectWrite" | "PersistentOnDeletedRecord" | "PersistentMoveDestinationUnknown" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "ChildSlotHeldByAnotherRecord" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "AlphaNotHeld" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
         RecordEditRequest: {
             plugin: string;
             origin: string;

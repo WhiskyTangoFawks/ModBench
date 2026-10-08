@@ -77,6 +77,7 @@ interface LoadOrderPluginInput {
   path: string;
   origin: string;
   provider: components['schemas']['PluginProviderRequest'];
+  line: number | null;
 }
 
 /** ADR-0013's snapshot, with the PUT's keys. */

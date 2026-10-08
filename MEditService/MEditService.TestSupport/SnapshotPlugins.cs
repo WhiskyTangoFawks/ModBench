@@ -8,7 +8,7 @@ namespace MEditService.TestSupport;
 public static class SnapshotPlugins
 {
     public static IReadOnlyList<RegisteredPlugin> Of(IEnumerable<LoadOrderEntry> entries) =>
-        [.. entries.Select(entry => new RegisteredPlugin(entry.Name, entry.Origin, entry.Path, entry.Provider))];
+        [.. entries.Select(entry => new RegisteredPlugin(entry.Name, entry.Origin, entry.Path, entry.Provider, entry.Slot))];
 
     public static IReadOnlyList<PluginAddress> Active(IEnumerable<LoadOrderEntry> entries) =>
         [.. entries.Where(entry => entry.Enabled && entry.Winning && entry.Slot is not null)

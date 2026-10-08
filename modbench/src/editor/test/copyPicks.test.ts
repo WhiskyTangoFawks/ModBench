@@ -3,7 +3,7 @@ import { copyModeItems, copiesWritten, copyDestinationItems, heldCopies } from '
 import type { PluginMetadata, RecordAddress } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 
-function plugin(name: string, origin: string, loadOrderIndex: number, facts: Partial<PluginMetadata> = {}): PluginMetadata {
+function plugin(name: string, origin: string, loadOrderIndex: number | null, facts: Partial<PluginMetadata> = {}): PluginMetadata {
   return pluginMetadataFixture({ name, origin, loadOrderIndex, isTracked: true, isImmutable: false, ...facts });
 }
 
@@ -33,6 +33,13 @@ describe('the destination pick', () => {
       { label: 'Patch.esp', description: '[5]' },
       { label: 'Other.esp', description: '[9]' },
     ]);
+  });
+
+  it('offers a plugin that is not active, described as `(not active)` in place of a load position', () => {
+    const disabled = plugin('Disabled.esp', 'DisabledMod', null, { inLoadOrder: false });
+
+    expect(copyDestinationItems([disabled], 'New', [npc]).map(({ label, description }) => ({ label, description })))
+      .toEqual([{ label: 'Disabled.esp', description: '(not active)' }]);
   });
 
   it('carries each plugin as (name, origin)', () => {

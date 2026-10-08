@@ -257,7 +257,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
   };
   const modFolders = modFoldersOf('ModA', 'ModS', 'ModF', 'ModD', 'ModO', 'ModU', 'ModM', 'ModOff');
   const provider = (origin: string) => origin === 'Data/' ? { kind: 'Game' } : { kind: 'Mod', mod: origin, folder: folderOf(origin) };
-  const sent = ({ name, path, origin }: LoadOrderPlugin) => ({ name, path, origin, provider: provider(origin) });
+  const sent = ({ name, path, origin, slot }: LoadOrderPlugin) => ({ name, path, origin, provider: provider(origin), line: slot });
   const address = ({ name, origin }: { name: string; origin: string }) => ({ name, origin });
   const outcomeOf = (plugins: LoadOrderPluginRow[], folders: ModFolders = modFolders) =>
     loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: folders });
@@ -294,6 +294,14 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(snapshotOf([second, disabled, overridden, unlisted, first])?.active).toEqual([address(first), address(second)]);
   });
 
+  it('sends each plugin\'s plugins.txt line, an overridden plugin at its name\'s line, and none for a plugin no line names', () => {
+    const disabled = row('disabled.esp', 'ModD', 2, { enabled: false });
+    const overridden = row('second.esp', 'ModO', 1, { winning: false });
+    const unlisted = row('unlisted.esp', 'ModU', null, { enabled: false });
+
+    expect(snapshotOf([disabled, overridden, unlisted])?.plugins.map((p) => p.line)).toEqual([2, 1, null]);
+  });
+
   it('sends a disabled mod\'s plugin in plugins, never in active, since it never wins', () => {
     const a = row('a.esp', 'ModA', 0);
     const disabledModPlugin = row('off.esp', 'ModOff', null, { enabled: false, winning: false });
@@ -312,7 +320,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(snapshot?.active).toEqual([
       { name: 'Master.esm', origin: 'Data/' }, { name: 'cc.esl', origin: 'Data/' }, address(a),
     ]);
-    expect(snapshot?.plugins).toContainEqual({ name: 'Master.esm', origin: 'Data/', path: join('/game/Data', 'Master.esm'), provider: { kind: 'Game' } });
+    expect(snapshot?.plugins).toContainEqual({ name: 'Master.esm', origin: 'Data/', path: join('/game/Data', 'Master.esm'), provider: { kind: 'Game' }, line: null });
     expect(snapshot?.loadedWithNoLine).toEqual([{ name: 'Master.esm', origin: 'Data/' }, { name: 'cc.esl', origin: 'Data/' }]);
   });
 

@@ -2,8 +2,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.LoadOrder;
 
-/// <summary>One plugin file in the instance (ADR-0013).</summary>
-public sealed record RegisteredPlugin(string Name, string Origin, string Path, PluginProvider Provider)
+/// <summary>One plugin file in the instance (ADR-0013). <paramref name="Line"/>: the place of the
+/// <c>plugins.txt</c> line naming its filename, null when no line names it.</summary>
+public sealed record RegisteredPlugin(string Name, string Origin, string Path, PluginProvider Provider, int? Line = null)
 {
     public PluginAddress Key => new(Name, Origin);
 }
@@ -16,6 +17,10 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     internal static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], [], []);
 
     private readonly Dictionary<PluginAddress, int> _loadOrderIndex;
+
+    // Odd for an active plugin, twice its load index plus one. Even for one judged at its line, just
+    // before the first active plugin whose line follows it. None for a plugin with neither.
+    private readonly Dictionary<PluginAddress, int> _rank;
 
     public string DataFolderPath { get; }
 
@@ -48,6 +53,20 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
             .ToDictionary(a => a.address, a => a.index, PluginAddress.Comparer);
         Active = [.. active.Select(PluginRefusalOfVouchesFor)];
         LoadedWithNoLine = [.. loadedWithNoLine.Select(PluginRefusalOfVouchesFor)];
+        _rank = RanksOf(Plugins, Active, LoadedWithNoLine);
+    }
+
+    private static Dictionary<PluginAddress, int> RanksOf(
+        IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<RegisteredPlugin> active, IReadOnlyList<RegisteredPlugin> loadedWithNoLine)
+    {
+        var ranks = active.Select((plugin, index) => (plugin.Key, Rank: 2 * index + 1))
+            .ToDictionary(a => a.Key, a => a.Rank, PluginAddress.Comparer);
+        var activeLines = active.Select(plugin => loadedWithNoLine.Contains(plugin) ? int.MinValue : plugin.Line ?? int.MaxValue).ToList();
+        foreach (var plugin in plugins)
+        {
+            if (plugin.Line is { } line) ranks.TryAdd(plugin.Key, 2 * activeLines.Count(activeLine => activeLine <= line));
+        }
+        return ranks;
     }
 
     private RegisteredPlugin PluginRefusalOfVouchesFor(PluginAddress address) => Plugin(address)
@@ -82,9 +101,15 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 
     public Registration RegistrationOf(PluginAddress address) => new(LoadOrderIndex(address));
 
-    /// <summary>Records that cannot be edited: a plugin the game does not load (ADR-0012)
-    /// and one the game provides (editor.md's read-only status).</summary>
-    public bool IsImmutable(PluginAddress address) => !IsActive(address) || ProviderOf(address) == PluginProvider.Game;
+    /// <summary>Records that cannot be edited: a plugin the game provides (editor.md's read-only
+    /// status). A tracked plugin is its files, active or not (commands.md § Principles).</summary>
+    public bool IsImmutable(PluginAddress address) => ProviderOf(address) == PluginProvider.Game;
+
+    /// <summary>Whether <paramref name="plugin"/> loads before <paramref name="other"/>. A plugin that is
+    /// not active is judged at its line in <c>plugins.txt</c>; with no line it is not judged, and the
+    /// answer is null (commands.md § Principles).</summary>
+    public bool? LoadsBefore(PluginAddress plugin, PluginAddress other) =>
+        _rank.TryGetValue(plugin, out var rank) && _rank.TryGetValue(other, out var otherRank) ? rank < otherRank : null;
 
     /// <summary>What provides the plugin, or null for a plugin none registered here names.</summary>
     public PluginProvider? ProviderOf(PluginAddress plugin) => Plugin(plugin)?.Provider;

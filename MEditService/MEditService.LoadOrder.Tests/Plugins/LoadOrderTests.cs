@@ -7,8 +7,8 @@ public sealed class LoadOrderTests
     private const string Data = @"C:\Games\Fallout4\Data";
     private const string Instance = @"C:\MO2\Fallout4";
 
-    private static RegisteredPlugin Registered(string name, string origin) =>
-        new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), new PluginProvider.FromMod(origin, Path.Combine(@"C:\MO2\mods", origin)));
+    private static RegisteredPlugin Registered(string name, string origin, int? line = null) =>
+        new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), new PluginProvider.FromMod(origin, Path.Combine(@"C:\MO2\mods", origin)), line);
 
     private static LoadOrderSnapshot Order(RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
         new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], []);
@@ -74,7 +74,7 @@ public sealed class LoadOrderTests
     }
 
     [Fact]
-    public void IsImmutable_OnAnInactivePluginOrOneTheGameProvides_AndOnlyThere()
+    public void IsImmutable_OnlyOnAPluginTheGameProvides_ActiveOrNot()
     {
         var master = new RegisteredPlugin("Fallout4.esm", PluginOrigin.DataDirectory, Path.Combine(Data, "Fallout4.esm"), PluginProvider.Game);
         var active = Registered("A.esp", "ModA");
@@ -84,7 +84,69 @@ public sealed class LoadOrderTests
 
         Assert.True(order.IsImmutable(master.Key));
         Assert.False(order.IsImmutable(active.Key));
-        Assert.True(order.IsImmutable(inactive.Key));
+        Assert.False(order.IsImmutable(inactive.Key));
+    }
+
+    [Fact]
+    public void OfTwoActivePlugins_TheOneWithTheLowerLoadIndex_LoadsBefore()
+    {
+        var a = Registered("A.esp", "ModA", line: 1);
+        var b = Registered("B.esp", "ModB", line: 0);
+
+        var order = Order([a, b], a, b);
+
+        Assert.True(order.LoadsBefore(a.Key, b.Key));
+        Assert.False(order.LoadsBefore(b.Key, a.Key));
+    }
+
+    [Fact]
+    public void APluginThatIsNotActive_LoadsWhereItsLineFalls_AfterThePluginsLoadedWithNoLine()
+    {
+        var master = Registered("Fallout4.esm", "Masters");
+        var early = Registered("Early.esp", "ModE", line: 0);
+        var first = Registered("A.esp", "ModA", line: 1);
+        var disabled = Registered("B.esp", "ModB", line: 2);
+        var last = Registered("C.esp", "ModC", line: 3);
+
+        var order = OrderLoadingWithNoLine([master, early, first, disabled, last], [master], master, first, last);
+
+        Assert.True(order.LoadsBefore(master.Key, early.Key));
+        Assert.True(order.LoadsBefore(early.Key, first.Key));
+        Assert.True(order.LoadsBefore(first.Key, disabled.Key));
+        Assert.True(order.LoadsBefore(disabled.Key, last.Key));
+        Assert.False(order.LoadsBefore(disabled.Key, first.Key));
+        Assert.True(order.LoadsBefore(early.Key, disabled.Key));
+    }
+
+    [Fact]
+    public void AnOverriddenPlugin_DoesNotLoadBeforeTheWinnerOfItsLine()
+    {
+        var winner = Registered("A.esp", "HighPriorityMod", line: 0);
+        var overridden = Registered("A.esp", "LowPriorityMod", line: 0);
+
+        var order = Order([overridden, winner], winner);
+
+        Assert.False(order.LoadsBefore(overridden.Key, winner.Key));
+    }
+
+    [Fact]
+    public void APluginThatIsNotActive_WithNoLine_IsNotJudged()
+    {
+        var active = Registered("A.esp", "ModA", line: 0);
+        var unlisted = Registered("B.esp", "ModB");
+
+        var order = Order([active, unlisted], active);
+
+        Assert.Null(order.LoadsBefore(unlisted.Key, active.Key));
+        Assert.Null(order.LoadsBefore(active.Key, unlisted.Key));
+    }
+
+    [Fact]
+    public void SamePlugins_ADisabledLineMoved_AreDifferentValues()
+    {
+        var a = Registered("A.esp", "ModA", line: 0);
+
+        Assert.NotEqual(Order([a, Registered("B.esp", "ModB", line: 1)], a), Order([a, Registered("B.esp", "ModB", line: 2)], a));
     }
 
     [Fact]
@@ -100,7 +162,7 @@ public sealed class LoadOrderTests
     [Fact]
     public void AUserPluginInTheGameFolder_ProvidedByTheGame_IsImmutable_ActiveFromItsLine()
     {
-        var placed = new RegisteredPlugin("UserPatch.esp", PluginOrigin.DataDirectory, Path.Combine(Data, "UserPatch.esp"), PluginProvider.Game);
+        var placed = new RegisteredPlugin("UserPatch.esp", PluginOrigin.DataDirectory, Path.Combine(Data, "UserPatch.esp"), PluginProvider.Game, 0);
 
         var order = Order([placed], placed);
 

@@ -36,7 +36,9 @@ export interface LoadOrderPlugin {
 
 type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string } | { kind: 'Game' } | { kind: 'None' };
 
-type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'> & { provider: SnapshotProvider };
+/** `line`: the plugin's slot, which a judgement against other plugins reads for a plugin that is not
+ *  active (commands.md, Principles). */
+type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'> & { provider: SnapshotProvider; line: number | null };
 
 /** The snapshot was not built, and why: the user is told once (common.md, Reporting). */
 export interface LoadOrderSnapshotRefusal {
@@ -218,7 +220,7 @@ export function loadOrderSnapshotOf(value: {
     },
   });
   const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p) =>
-    rowAt.get(pluginAddressKey(p)) ?? { ...p, path: fileInFolder(dataFolder, p.name) });
+    rowAt.get(pluginAddressKey(p)) ?? { ...p, path: fileInFolder(dataFolder, p.name), slot: null });
   const placed = new Set(loadedWithNoLine.map((p) => foldPath(p.name)));
   const fromLines = rows
     .filter((p): p is LoadOrderPlugin & { slot: number } => p.slot !== null && p.enabled && p.winning)
@@ -231,14 +233,14 @@ export function loadOrderSnapshotOf(value: {
     });
   const sent = new Map<string, SnapshotPlugin>();
   const unprovided = new Map<string, string[]>();
-  for (const { name, path, origin } of [...loadedWithNoLine, ...rows]) {
+  for (const { name, path, origin, slot } of [...loadedWithNoLine, ...rows]) {
     const provider = whatProvides(origin);
     if (provider === undefined) {
       unprovided.set(origin, [...unprovided.get(origin) ?? [], name]);
       continue;
     }
     const key = pluginAddressKey({ name, origin });
-    if (!sent.has(key)) sent.set(key, { name, path, origin, provider });
+    if (!sent.has(key)) sent.set(key, { name, path, origin, provider, line: slot });
   }
   if (unprovided.size > 0) return { refusal: refusalOf(unprovided) };
   return {
