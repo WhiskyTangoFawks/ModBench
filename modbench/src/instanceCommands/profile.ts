@@ -9,14 +9,13 @@ export interface ProfileAccess {
   readonly adapter: InstanceAdapter;
 }
 
-export type ProfileCommandResult = CommandResult;
 
 /** Refuses a name the value's `profiles` does not hold: selecting a profile whose directory is
  *  not there points the whole instance at files that do not exist, which no later read can tell
  *  from a corrupt ini. */
 export async function switchProfile(
   access: ProfileAccess, profile: string, profiles: readonly string[],
-): Promise<ProfileCommandResult> {
+): Promise<CommandResult> {
   if (!profiles.includes(profile)) {
     return { applied: false, refusal: `No such profile: ${profile}` };
   }

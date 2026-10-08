@@ -16,11 +16,9 @@ export interface PluginsAccess {
   readonly adapter: InstanceAdapter;
 }
 
-export type PluginsCommandResult = CommandResult;
-
 async function changePluginOrder(
   access: PluginsAccess, profile: string, decide: DecidePluginOrder,
-): Promise<PluginsCommandResult> {
+): Promise<CommandResult> {
   try {
     // A change already true of the order is not written: for `syncPlugins` that is the
     // difference between a loop that settles and one that does not.
@@ -30,8 +28,6 @@ async function changePluginOrder(
     return refuse(err);
   }
 }
-
-export type PluginsSelectionResult = SelectionResult<string>;
 
 /** One plugin's target state — the check box's own shape, where several rows toggled at once can
  *  each ask for a different state. */
@@ -45,7 +41,7 @@ export interface PluginParticipation {
  *  refused by name, whatever state each one asks for. */
 export async function setPluginsParticipation(
   access: PluginsAccess, profile: string, entries: readonly PluginParticipation[],
-): Promise<PluginsSelectionResult> {
+): Promise<SelectionResult<string>> {
   let landed: string[] = [];
   let refused: ItemRefusal<string>[] = [];
   const outcome = await changePluginOrder(access, profile, (order) => {
@@ -63,7 +59,7 @@ export async function setPluginsParticipation(
  *  shape, which never mixes directions in one gesture. */
 export function setPluginsEnabled(
   access: PluginsAccess, profile: string, pluginNames: readonly string[], enabled: boolean,
-): Promise<PluginsSelectionResult> {
+): Promise<SelectionResult<string>> {
   return setPluginsParticipation(access, profile, pluginNames.map((name) => ({ name, enabled })));
 }
 
@@ -87,7 +83,7 @@ async function orderFactsFrom(masters: PluginMasters): Promise<PluginOrderFactsO
 export async function reorderPlugins(
   access: PluginsAccess, masters: PluginMasters, profile: string, plugins: readonly PluginAddress[], drop: Drop,
   loadedWithNoLine: readonly string[],
-): Promise<PluginsCommandResult> {
+): Promise<CommandResult> {
   const pluginNames = plugins.map((plugin) => plugin.name);
   const noLine = new Set(loadedWithNoLine.map(pluginKey));
   const factsOf = await orderFactsFrom(masters);
