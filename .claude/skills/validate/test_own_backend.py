@@ -8,6 +8,8 @@ import textwrap
 import time
 import unittest
 
+from processes import alive, wait_gone
+
 HELPER = pathlib.Path(__file__).resolve().parent / "own-backend.sh"
 
 FAKE_BACKEND = textwrap.dedent("""
@@ -38,28 +40,12 @@ FAKE_BACKEND = textwrap.dedent("""
 """)
 
 
-def alive(pid):
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    with open(f"/proc/{pid}/stat") as stat:
-        return stat.read().split(") ")[1][0] != "Z"
-
-
 def started_by_fake_backend(pid, token):
     try:
         argv = pathlib.Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
     except FileNotFoundError:
         return False
     return token.encode() in argv or argv[:2] == [b"sleep", b"600"]
-
-
-def wait_gone(pid, seconds=5):
-    deadline = time.monotonic() + seconds
-    while alive(pid) and time.monotonic() < deadline:
-        time.sleep(0.05)
-    return not alive(pid)
 
 
 class OwnBackend(unittest.TestCase):
