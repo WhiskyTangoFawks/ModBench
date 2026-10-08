@@ -1,9 +1,10 @@
 import type {
   MEditClient, NotificationKind, NotificationPayloads, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot,
 } from '../MEditClient';
-import type { NotificationEvent } from '../apiClient';
+import type { LoadOrderStatus, NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
 import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
+import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
@@ -69,6 +70,11 @@ export class InMemoryMEditClient implements MEditClient {
   private putAnswer: LoadOrderWire['put'] = () => Promise.reject(new Error('InMemoryMEditClient: no scripted answer for a put'));
   private startAnswer: () => Promise<void> = () => { this.setStatus('running'); return Promise.resolve(); };
   private stopAnswer: () => void = () => undefined;
+  private readonly loadOrderStatusKept = keepLoadOrderStatus({
+    onNotification: (kind, listener) => this.notifications.onNotification(kind, listener),
+    onStatusChanged: (listener) => this.onStatusChanged(listener),
+    onReconnected: (listener) => this.onReconnected(listener),
+  });
   private readonly snapshotsPut: LoadOrderSnapshot[] = [];
   private readonly sender = createLoadOrderSender({
     status: () => this.status,
@@ -207,6 +213,14 @@ export class InMemoryMEditClient implements MEditClient {
   async start(): Promise<void> { await this.sender.launch(); }
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void { return this.sender.onLaunch(listener); }
   stop(): Promise<void> { return this.sender.stop(); }
+
+  get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
+  onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void {
+    return this.loadOrderStatusKept.onStatus(listener);
+  }
+  onLoadOrderSettled(listener: (status: LoadOrderStatus) => void): () => void {
+    return this.loadOrderStatusKept.onSettled(listener);
+  }
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.sender.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.sender.latest(); }

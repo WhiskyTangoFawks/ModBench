@@ -57,7 +57,7 @@ interface ViewsDeps {
   recordBrowser: RecordBrowser;
   pluginFacts: PluginsViewDeps['client'];
   statusBar: StatusBar;
-  conflictsComputed: () => Promise<void>;
+  registerRepositories: () => Promise<void>;
   recordWrite: RecordWrite;
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
@@ -96,7 +96,7 @@ function buildBareSide(own: Own): InstanceSide {
 function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): InstanceSide {
   const {
     outputChannel, client, recordBrowser, pluginFacts,
-    statusBar, conflictsComputed, recordWrite, reporterFor, ask, trash, extensionId,
+    statusBar, registerRepositories, recordWrite, reporterFor, ask, trash, extensionId,
   } = deps;
   const log = (msg: string) => outputChannel.info(msg);
   const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides, gameDirectoryChanged: onGameDirectoryChange });
@@ -112,7 +112,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   const trackSelection = selectionInFocusedView(
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
   const plugins = own(createPluginsView({
-    instance, access, recordBrowser, client: pluginFacts, pluginSync, channel: outputChannel, statusBar, conflictsComputed, reporterFor,
+    instance, access, recordBrowser, client: pluginFacts, pluginSync, channel: outputChannel, statusBar, registerRepositories, reporterFor,
     ask, recordWrite, trackSelection, modsView: MODS_KEY_ARGS.view,
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     log: (level, msg) => outputChannel[level](msg),
@@ -237,7 +237,6 @@ export function activate(context: vscode.ExtensionContext): void {
     refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
     modFacts,
   });
-  const conflictsComputed = trackedRepositories.conflictsComputedOver(() => { editor.announceConflictsComputed(); });
   const views = buildViews({
     outputChannel, client: meditClient,
     reporterFor: (tag) => makeReporter(outputChannel, tag),
@@ -246,7 +245,7 @@ export function activate(context: vscode.ExtensionContext): void {
     recordBrowser: treeProvider,
     pluginFacts: meditClient,
     statusBar,
-    conflictsComputed,
+    registerRepositories: trackedRepositories.registerRepositories,
     recordWrite,
     extensionId: context.extension.id,
     extensionUri: context.extensionUri,
