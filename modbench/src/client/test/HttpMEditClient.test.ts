@@ -463,9 +463,9 @@ describe('HttpMEditClient — getRecordsComparison', () => {
   });
 
   it('rejects with the backend\'s detail on a 404, a copy no plugin holds', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(404, { detail: 'No copy of 000801:A.esp in A.esp (AMod).' })));
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(404, { detail: 'Copies not found: 000801:A.esp in A.esp (AMod).' })));
 
-    await expect(makeClient(fetch).getRecordsComparison(copies)).rejects.toThrow(/failed \(404\): No copy of 000801:A.esp in A.esp \(AMod\)\./);
+    await expect(makeClient(fetch).getRecordsComparison(copies)).rejects.toThrow(/failed \(404\): Copies not found: 000801:A.esp in A.esp \(AMod\)\./);
   });
 
   it('rejects on any other non-OK answer', async () => {

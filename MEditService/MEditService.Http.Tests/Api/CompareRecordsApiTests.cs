@@ -47,7 +47,7 @@ public sealed class CompareRecordsApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ACopyNoPluginHolds_Is404_NamingTheRecordAndThePlugin()
+    public async Task ACopyNoPluginHolds_Is404_NamingEachRecordAndPlugin()
     {
         var (npc, weapon) = await Loaded();
 

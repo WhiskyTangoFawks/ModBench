@@ -1299,17 +1299,31 @@ describe('several records opened at once', () => {
     expect(tab.webview.postMessage.mock.calls).toEqual([[expect.objectContaining({ type: 'recordLoadAnswered' })], [{ type: 'loadRecord', formKey: GUN }]]);
   });
 
-  it('answer a load whose column has no copy with the reason mEdit gave, naming it', async () => {
-    const client = severalClient();
-    const reason = `getRecordsComparison failed (404): No copy of ${AMMO} in B.esp (ModB), and no document was given for it.`;
-    client.setQueryFailure('getRecordsComparison', new Error(reason));
-    const { openDocument } = makeEditor(client);
-    const tab = await openDocument(gunDocument);
+  describe('refused for a copy no plugin holds', () => {
+    const reason = `getRecordsComparison failed (404): Copies not found: ${AMMO} in B.esp (ModB).`;
+    const loadWithAColumn = async (client: InMemoryMEditClient) => {
+      client.setQueryFailure('getRecordsComparison', new Error(reason));
+      const { openDocument } = makeEditor(client);
+      const tab = await openDocument(gunDocument);
+      tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [{ formKey: AMMO, plugin: winner }] });
+      await settle();
+      return tab;
+    };
 
-    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [{ formKey: AMMO, plugin: winner }] });
-    await settle();
+    it('answer with the reason mEdit gave, naming each copy, when the tab\'s own record is held', async () => {
+      const client = severalClient();
+      client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true }]));
 
-    expect(tab.webview.postMessage).toHaveBeenCalledWith({ type: 'recordLoadAnswered', requestId: 'r1', ok: false, error: reason });
+      const tab = await loadWithAColumn(client);
+
+      expect(tab.webview.postMessage).toHaveBeenCalledWith({ type: 'recordLoadAnswered', requestId: 'r1', ok: false, error: reason });
+    });
+
+    it('answer that the record is gone when no plugin holds the tab\'s own record', async () => {
+      const tab = await loadWithAColumn(severalClient());
+
+      expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'recordLoadAnswered', ok: true, compare: null }));
+    });
   });
 
   it('read the first record\'s copy and the columns the tab shows side by side, in that order', async () => {
