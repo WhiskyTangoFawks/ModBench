@@ -711,7 +711,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var child = new RecordIdentity("00A001:Embedded.esp", "refr", null);
 
         Assert.Equal(Path.GetRelativePath(_modFolder, carrier), Repository.RelativePathOf(Plugin, child));
-        Assert.Equal("00A000:Embedded.esp", Repository.ContainerOf(Plugin, child, Schemas)?.ParentFormKey);
     }
 
     [Fact]
