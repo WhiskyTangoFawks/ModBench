@@ -10,6 +10,11 @@ function decisionsIn(code: string): Linter.LintMessage[] {
 describe('the deciding selectors', () => {
   it.each([
     ['a loop written as forEach', 'disposables.forEach((d) => d.dispose());'],
+    ['a loop written as map', 'stops.map((stop) => stop());'],
+    ['a loop written as some', 'items.some((item) => item.ready);'],
+    ['a loop written as filter', 'items.filter((item) => item.ready);'],
+    ['a loop written as reduce', 'items.reduce((a, b) => a + b, 0);'],
+    ['a loop written as every', 'items.every((item) => item.ready);'],
     ['a branch written as optional chaining', 'client?.stop();'],
     ['an optional call', 'stop?.();'],
     ['an if', 'if (a) b();'],

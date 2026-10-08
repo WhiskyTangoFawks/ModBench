@@ -1,9 +1,10 @@
+import type { Subscription } from '../instanceAdapter/instanceAdapter';
 import type { Instance } from './instance';
 
 export interface InstanceFacts {
   trackedMods: () => ReadonlySet<string>;
   modDirs: () => ReadonlyMap<string, string>;
-  onChange: (listener: () => void) => { dispose(): void };
+  onChange: (listener: () => void) => Subscription;
   refresh: () => Promise<void>;
 }
 

@@ -2,7 +2,7 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { createMEditClient, type MEditClient } from './client';
+import { createMEditClient, stopMEditClient, type MEditClient } from './client';
 import { RecordBrowser } from './plugins/RecordBrowser';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
@@ -216,7 +216,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ADR-0002.
   const meditClient = createMEditClient({ backend: { attachPort }, backendLog: outputChannel, log });
-  stops.push(() => meditClient.stop()); // deactivate()'s only way to reach it
   const statusBar = createStatusBar(meditClient);
   context.subscriptions.push(statusBar);
   const treeProvider = new RecordBrowser(meditClient, log);
@@ -264,13 +263,9 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
-// VS Code's own `deactivate()` takes no arguments, so it has no way to receive what `activate()`
-// built — this module-level reference exists solely to bridge that gap.
-const stops: (() => Promise<void>)[] = [];
-
 // Async so VS Code awaits confirmed-dead-child teardown before the extension host finishes
 // tearing down — otherwise a reload's replacement client is structurally unable to ever clean up
 // this instance's spawned child.
 export async function deactivate(): Promise<void> {
-  await Promise.all(stops.map((stop) => stop()));
+  await stopMEditClient();
 }
