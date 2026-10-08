@@ -29,14 +29,19 @@ const VI_MODULE_CALLS = new Set(['mock', 'doMock', 'unmock', 'doUnmock', 'import
 const { SyntaxKind } = ts;
 
 const ENDS_AN_OPERAND = new Set([
-  SyntaxKind.Identifier, SyntaxKind.PrivateIdentifier, SyntaxKind.NumericLiteral, SyntaxKind.BigIntLiteral,
+  SyntaxKind.PrivateIdentifier, SyntaxKind.NumericLiteral, SyntaxKind.BigIntLiteral,
   SyntaxKind.StringLiteral, SyntaxKind.NoSubstitutionTemplateLiteral, SyntaxKind.TemplateTail,
   SyntaxKind.RegularExpressionLiteral, SyntaxKind.CloseParenToken, SyntaxKind.CloseBracketToken,
   SyntaxKind.CloseBraceToken, SyntaxKind.PlusPlusToken, SyntaxKind.MinusMinusToken, SyntaxKind.ThisKeyword,
   SyntaxKind.SuperKeyword, SyntaxKind.TrueKeyword, SyntaxKind.FalseKeyword, SyntaxKind.NullKeyword,
 ]);
 
+const BEGINS_AN_OPERAND = new Set([SyntaxKind.AwaitKeyword, SyntaxKind.YieldKeyword, SyntaxKind.OfKeyword]);
+
 interface Token { kind: ts.SyntaxKind; text: string; endsAnOperand: boolean }
+
+const isMemberAccess = (kind: ts.SyntaxKind | undefined): boolean =>
+  kind === SyntaxKind.DotToken || kind === SyntaxKind.QuestionDotToken;
 
 function indexBeforeTypeArguments(tokens: readonly Token[], end: number): number {
   if (tokens[end]?.kind !== SyntaxKind.GreaterThanToken) return end;
@@ -49,50 +54,64 @@ function indexBeforeTypeArguments(tokens: readonly Token[], end: number): number
   return -1;
 }
 
+function isBareImport(tokens: readonly Token[], index: number): boolean {
+  return tokens[index]?.kind === SyntaxKind.ImportKeyword && !isMemberAccess(tokens[index - 1]?.kind);
+}
+
+function fromClosesADeclaration(tokens: readonly Token[], from: number): boolean {
+  for (let i = from - 1; i >= 0; i--) {
+    const kind = tokens[i]?.kind;
+    if (kind === SyntaxKind.ImportKeyword || kind === SyntaxKind.ExportKeyword) return true;
+    if (kind === SyntaxKind.SemicolonToken) return false;
+  }
+  return false;
+}
+
 function namesAModule(tokens: readonly Token[]): boolean {
   const last = tokens.length - 1;
   const lastKind = tokens[last]?.kind;
-  if (lastKind === SyntaxKind.FromKeyword || lastKind === SyntaxKind.ImportKeyword) return true;
+  if (lastKind === SyntaxKind.FromKeyword) return fromClosesADeclaration(tokens, last);
+  if (isBareImport(tokens, last)) return true;
   if (lastKind !== SyntaxKind.OpenParenToken) return false;
   const callee = indexBeforeTypeArguments(tokens, last - 1);
-  if (tokens[callee]?.kind === SyntaxKind.ImportKeyword) return true;
-  const dot = tokens[callee - 1]?.kind;
+  if (isBareImport(tokens, callee)) return true;
   return tokens[callee]?.kind === SyntaxKind.Identifier && VI_MODULE_CALLS.has(tokens[callee].text)
-    && (dot === SyntaxKind.DotToken || dot === SyntaxKind.QuestionDotToken)
+    && isMemberAccess(tokens[callee - 1]?.kind)
     && tokens[callee - 2]?.kind === SyntaxKind.Identifier && tokens[callee - 2]?.text === 'vi'
-    && tokens[callee - 3]?.kind !== SyntaxKind.DotToken;
+    && !isMemberAccess(tokens[callee - 3]?.kind);
 }
 
+/** Reads TypeScript, not JSX. Throws on a token it cannot read, so a misread file never drops its imports in silence. */
 export function importSpecifiers(sourceText: string, fileName: string): string[] {
+  if (fileName.endsWith('.tsx')) throw new Error(`${fileName}: the import reader does not read JSX`);
   const scanner = ts.createScanner(
-    ts.ScriptTarget.Latest, true, fileName.endsWith('.tsx') ? ts.LanguageVariant.JSX : ts.LanguageVariant.Standard, sourceText,
+    ts.ScriptTarget.Latest, true, ts.LanguageVariant.Standard, sourceText,
+    (message) => {
+      const line = sourceText.slice(0, scanner.getTokenEnd()).split('\n').length;
+      throw new Error(`${fileName}:${line}: the import reader cannot read this file: ${ts.flattenDiagnosticMessageText(message.message, ' ')}`);
+    },
   );
   const found: string[] = [];
   const before: Token[] = [];
-  const openBracesInTemplates: number[] = [];
-  const bumpInnermostTemplate = (by: number): void => {
-    openBracesInTemplates[openBracesInTemplates.length - 1] = (openBracesInTemplates[openBracesInTemplates.length - 1] ?? 0) + by;
-  };
+  const braceOpensTemplateSpan: boolean[] = [];
   for (let kind = scanner.scan(); kind !== SyntaxKind.EndOfFileToken; kind = scanner.scan()) {
-    const inTemplate = openBracesInTemplates.length > 0;
-    if ((kind === SyntaxKind.SlashToken || kind === SyntaxKind.SlashEqualsToken) && !before.at(-1)?.endsAnOperand) {
+    const previous = before.at(-1);
+    if ((kind === SyntaxKind.SlashToken || kind === SyntaxKind.SlashEqualsToken) && !previous?.endsAnOperand) {
       kind = scanner.reScanSlashToken();
     } else if (kind === SyntaxKind.TemplateHead) {
-      openBracesInTemplates.push(0);
-    } else if (kind === SyntaxKind.OpenBraceToken && inTemplate) {
-      bumpInnermostTemplate(1);
-    } else if (kind === SyntaxKind.CloseBraceToken && inTemplate) {
-      if ((openBracesInTemplates[openBracesInTemplates.length - 1] ?? 0) > 0) bumpInnermostTemplate(-1);
-      else {
-        kind = scanner.reScanTemplateToken(false);
-        if (kind === SyntaxKind.TemplateTail) openBracesInTemplates.pop();
-      }
+      braceOpensTemplateSpan.push(true);
+    } else if (kind === SyntaxKind.OpenBraceToken) {
+      braceOpensTemplateSpan.push(false);
+    } else if (kind === SyntaxKind.CloseBraceToken && braceOpensTemplateSpan.pop()) {
+      kind = scanner.reScanTemplateToken(false);
+      if (kind === SyntaxKind.TemplateMiddle) braceOpensTemplateSpan.push(true);
     }
     const text = scanner.getTokenValue();
     const isString = kind === SyntaxKind.StringLiteral;
-    const isCallArgument = kind === SyntaxKind.NoSubstitutionTemplateLiteral && before.at(-1)?.kind === SyntaxKind.OpenParenToken;
+    const isCallArgument = kind === SyntaxKind.NoSubstitutionTemplateLiteral && previous?.kind === SyntaxKind.OpenParenToken;
     if ((isString || isCallArgument) && namesAModule(before)) found.push(text);
-    before.push({ kind, text, endsAnOperand: ENDS_AN_OPERAND.has(kind) || scanner.isIdentifier() });
+    const endsAnOperand = ENDS_AN_OPERAND.has(kind) || (scanner.isIdentifier() && !BEGINS_AN_OPERAND.has(kind));
+    before.push({ kind, text, endsAnOperand });
   }
   return found;
 }

@@ -132,9 +132,36 @@ describe('importSpecifiers', () => {
     ].join('\n'))).toEqual(['./before', './after']);
   });
 
-  it('reads a tsx file', () => {
-    expect(importSpecifiers("import { A } from './a';\nexport const x = <A />;", 'view.tsx')).toEqual(['./a']);
+  it('refuses a tsx file, whose JSX text it cannot tokenise', () => {
+    expect(() => importSpecifiers("import { A } from './a';", 'view.tsx')).toThrow(/does not read JSX/);
   });
+
+  it('throws, naming the file, on text it misreads rather than dropping the imports below it', () => {
+    const misread = (text: string): string => `import before from './before';\n${text}\nimport after from './after';`;
+    expect(() => importSpecifiers(misread("if (x) {}\n/`/.test(s);"), 'file.ts')).toThrow(/file\.ts:\d+:/);
+    expect(() => importSpecifiers(misread('if (x) /`/.test(s);'), 'file.ts')).toThrow(/cannot read/);
+  });
+
+  it('reads a regular expression after await, yield, of and a division-assignment', () => {
+    const afterTheRegularExpression = (statement: string): string[] => specifiers(`${statement}\nimport after from './after';`);
+    expect(afterTheRegularExpression('await /`/.exec(s);')).toEqual(['./after']);
+    expect(afterTheRegularExpression('yield /`/.exec(s);')).toEqual(['./after']);
+    expect(afterTheRegularExpression('for (const m of /`/g) {}')).toEqual(['./after']);
+    expect(afterTheRegularExpression("const r = /=a'/;")).toEqual(['./after']);
+  });
+
+  it('reads doUnmock, an optional-chained vi call and a template-literal argument', () => {
+    expect(specifiers("vi.doUnmock('./du'); vi?.mock('./oc'); vi.mock(`./tl`);")).toEqual(['./du', './oc', './tl']);
+  });
+
+  it('reads no module from a method named import, a vi behind a member access, or prose saying from', () => {
+    expect(specifiers([
+      "import a from './a';",
+      "y.import('./no1'); x?.vi.mock('./no2'); x.vi.mock('./no3');",
+      "const s = <br>Copy from 'disk';",
+    ].join('\n'))).toEqual(['./a']);
+  });
+
 });
 
 describe('boxesIn and referencesOf, parameterised by root', () => {
