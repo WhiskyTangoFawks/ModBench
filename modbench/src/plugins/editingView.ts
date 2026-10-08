@@ -15,6 +15,7 @@ export interface EditingViewDeps {
   };
   reportPut: (message: string) => void;
   reportEntry: (message: string) => void;
+  reportExit: (message: string) => void;
   reportLaunch: (message: string, reason: string) => void;
   log: { info(message: string): void; error(message: string): void };
   revealLog: () => void;
@@ -22,8 +23,10 @@ export interface EditingViewDeps {
   loadOrderPut: Pick<SyncFailureReport, 'run' | 'clear'>;
 }
 
+const STOPPED = 'mEdit stopped. Reload the window to start it again.';
+
 export function editingView(deps: EditingViewDeps) {
-  const { narrator, progress, reportPut, reportEntry, reportLaunch, log, revealLog, loadOrderPut } = deps;
+  const { narrator, progress, reportPut, reportEntry, reportExit, reportLaunch, log, revealLog, loadOrderPut } = deps;
 
   const around = (entry: () => Promise<void>): Promise<void> => progress.while(async () => {
     revealLog();
@@ -35,10 +38,13 @@ export function editingView(deps: EditingViewDeps) {
   const tell = async (told: Told): Promise<void> => {
     switch (told.kind) {
       case 'launchFailed':
-        reportLaunch('Failed to launch mEdit.', told.reason);
+        reportLaunch(STOPPED, told.reason);
         return;
       case 'backendFailed':
-        reportEntry('Backend failed to start — see the Modbench output for details.');
+        reportEntry(STOPPED);
+        return;
+      case 'exited':
+        reportExit(STOPPED);
         return;
       case 'put':
         await tellPut(told.put);

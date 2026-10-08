@@ -57,7 +57,8 @@ As a user, I want:
 
 1. One item at the bottom left that says what mEdit is doing: `$(loading~spin) mEdit: Starting…`, `$(plug) mEdit: Running`, `$(error) mEdit: Disconnected`, `$(circle-slash) mEdit: Stopped`, or `$(check) mEdit: Ready (N plugins)` once the snapshot is indexed, N counting the active plugins. It names no game.
 2. A click on it to do nothing. mEdit starts with the extension, and no gesture starts or stops it. Source: commands.md, No lifecycle gestures for mEdit
-3. A disconnect reported, never adapted to: the views keep their rows. Source: ADR-0002
+3. When mEdit exits or fails to start, the item to show `$(circle-slash) mEdit: Stopped`, the Output to log why, and an error notification to say mEdit stopped and that reloading the window starts it again. Nothing starts it again on its own. Source: xEdit; Never silently wrong
+4. A disconnect reported, never adapted to: the views keep their rows. Source: ADR-0002
 
 ## Reporting
 

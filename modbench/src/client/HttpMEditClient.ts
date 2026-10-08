@@ -102,7 +102,6 @@ class HttpMEditClient implements MEditClient {
     this.loadOrderStatusKept = keepLoadOrderStatus(this);
     this.loadOrder = createLoadOrderSender({
       status: () => this.lifecycle.status,
-      starting: () => this.lifecycle.starting,
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
       onReconnected: (listener) => this.notifications.onReconnected(listener),
       start: () => this.lifecycle.start(),
@@ -130,6 +129,7 @@ class HttpMEditClient implements MEditClient {
   }
   async start(): Promise<void> { await this.loadOrder.launch(); }
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void { return this.loadOrder.onLaunch(listener); }
+  onExit(listener: () => void): () => void { return this.loadOrder.onExit(listener); }
   stop(): Promise<void> { return this.loadOrder.stop(); }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
