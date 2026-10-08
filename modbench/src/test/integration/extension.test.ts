@@ -765,16 +765,18 @@ describe('a child record of a tracked plugin', () => {
       await vscode.commands.executeCommand('workbench.action.keepEditor');
     }
     await openLoaded({ formKey: TRACKED_FORM_KEY, plugin, placement: 'beside' });
+    const shows = (tab: vscode.Tab | undefined) =>
+      tab?.input instanceof vscode.TabInputCustom ? [tab.input.uri.path, new URLSearchParams(tab.input.uri.query).get('formKey')] : [];
     await vscode.commands.executeCommand('workbench.action.focusSecondEditorGroup');
-    assert.strictEqual(vscode.window.tabGroups.activeTabGroup.viewColumn, vscode.ViewColumn.Two, 'the container\'s tab in focus beside them');
+    const focused = vscode.window.tabGroups.activeTabGroup;
+    assert.deepStrictEqual([focused.viewColumn, shows(focused.activeTab)[0]], [vscode.ViewColumn.Two, vscode.Uri.file(TRACKED_FILE).path],
+      'the container\'s tab in focus beside them');
     carriedIn.set(CHILD_FORM_KEY, OTHER_CELL);
     carriedIn.set(SECOND_CHILD_FORM_KEY, OTHER_CELL);
 
     reportChanged(CHILD_FORM_KEY);
 
     const childGroup = () => present(vscode.window.tabGroups.all.find((group) => group.viewColumn === vscode.ViewColumn.One), 'the children\'s group');
-    const shows = (tab: vscode.Tab | undefined) =>
-      tab?.input instanceof vscode.TabInputCustom ? [tab.input.uri.path, new URLSearchParams(tab.input.uri.query).get('formKey')] : [];
     await waitFor('both children\'s tabs on the file that carries them now, the focus back beside them', () =>
       childGroup().tabs.length === 2 && childGroup().tabs.every((tab) => shows(tab)[0] === vscode.Uri.file(OTHER_CELL).path)
       && vscode.window.tabGroups.activeTabGroup.viewColumn === vscode.ViewColumn.Two);
