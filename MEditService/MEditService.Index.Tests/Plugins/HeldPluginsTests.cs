@@ -14,6 +14,9 @@ public sealed class HeldPluginsTests
 
     private static PluginAddress Key(string name, string origin = PluginOrigin.DataDirectory) => new(name, origin);
 
+    private static Dictionary<PluginAddress, PluginContent> Opened(OpenedIndex held) =>
+        held.Records.GetPlugins().ToDictionary(row => row.Plugin.Key, row => row.Content, PluginAddress.Comparer);
+
     [Fact]
     public void TheGamesMasterSentFirst_IsHeldBeforeTheUserPlugin()
     {
@@ -25,8 +28,8 @@ public sealed class HeldPluginsTests
         using var held = Open(data);
 
         Assert.Equal(["Fallout4.esm", UserPlugin], held.Status.IndexedPlugins.Select(p => p.Name));
-        Assert.Contains(Key("Fallout4.esm"), held.RequireReads().OpenedPlugins.Keys);
-        Assert.Contains(Key(UserPlugin), held.RequireReads().OpenedPlugins.Keys);
+        Assert.Contains(Key("Fallout4.esm"), Opened(held).Keys);
+        Assert.Contains(Key(UserPlugin), Opened(held).Keys);
     }
 
     [Fact]
@@ -41,7 +44,7 @@ public sealed class HeldPluginsTests
 
         using var held = Open(data, entries);
 
-        var opened = held.RequireReads().OpenedPlugins.Keys;
+        var opened = Opened(held).Keys;
         Assert.Contains(Key("Present.esp"), opened);
         Assert.DoesNotContain(Key("NonExistent.esp"), opened);
         Assert.Contains(held.Status.Failures, f => f.Name == "NonExistent.esp");
@@ -60,7 +63,7 @@ public sealed class HeldPluginsTests
 
         using var held = Open(data, entries);
 
-        var opened = held.RequireReads().OpenedPlugins.Keys;
+        var opened = Opened(held).Keys;
         Assert.Contains(Key("Good.esp"), opened);
         Assert.DoesNotContain(Key("Bad.esp"), opened);
         var failure = Assert.Single(held.Status.Failures);
@@ -80,7 +83,7 @@ public sealed class HeldPluginsTests
 
         using var held = Indexes.Reconciled(fx.GameDirectory, [winner, overridden]);
 
-        Assert.Equal("ModA", Assert.Single(held.RequireReads().OpenedPlugins.Keys).Origin);
+        Assert.Equal("ModA", Assert.Single(Opened(held).Keys).Origin);
         var failure = Assert.Single(held.Status.Failures);
         Assert.Equal("Shared.esp", failure.Name);
         Assert.Equal("ModB", failure.Origin);
@@ -102,7 +105,7 @@ public sealed class HeldPluginsTests
 
         held.Reconcile(holder, data.DataFolder, [resolved], GameRelease.Fallout4);
         Assert.Empty(held.Status.Failures);
-        Assert.Contains(Key("Fixed.esp"), held.RequireReads().OpenedPlugins.Keys);
+        Assert.Contains(Key("Fixed.esp"), Opened(held).Keys);
     }
 
     [Theory]
@@ -114,7 +117,7 @@ public sealed class HeldPluginsTests
         using var data = new PluginFixtureBuilder("lo-ext").WithPlugin(name).Build();
         using var held = Open(data);
 
-        var content = held.RequireReads().OpenedPlugins[Key(name)];
+        var content = Opened(held)[Key(name)];
         Assert.Equal(isLight, content.IsLight);
         Assert.Equal(isMaster, content.IsMaster);
     }
@@ -128,7 +131,7 @@ public sealed class HeldPluginsTests
             .Build();
         using var held = Open(data);
 
-        var opened = held.RequireReads().OpenedPlugins;
+        var opened = Opened(held);
         Assert.True(opened[Key("EslFlagged.esp")].IsLight);
         Assert.True(opened[Key("EsmFlagged.esp")].IsMaster);
     }
@@ -146,19 +149,16 @@ public sealed class HeldPluginsTests
             .Build();
         using var held = Open(data);
 
-        Assert.Equal(3, held.RequireReads().OpenedPlugins[Key("WithRecords.esp")].RecordCount);
+        Assert.Equal(3, Opened(held)[Key("WithRecords.esp")].RecordCount);
     }
 
     [Fact]
-    public void OpenedPlugins_HoldTheHeldPlugin_AndNoUnknownPluginOrOrigin()
+    public void ThePluginRows_HoldTheHeldPlugin_AndNoUnknownPluginOrOrigin()
     {
         using var data = new PluginFixtureBuilder("lo-find").WithPlugin("CaseMod.esp").Build();
         using var held = Open(data);
 
-        var opened = held.RequireReads().OpenedPlugins;
-        Assert.True(opened.ContainsKey(Key("CaseMod.esp")));
-        Assert.False(opened.ContainsKey(Key("Unknown.esp")));
-        Assert.False(opened.ContainsKey(Key("CaseMod.esp", "SomeOtherOrigin")));
+        Assert.Equal([Key("CaseMod.esp")], held.Records.GetPlugins().Select(row => row.Plugin.Key));
     }
 
     [Fact]
@@ -173,6 +173,6 @@ public sealed class HeldPluginsTests
         held.Reconcile(holder, data.DataFolder, [.. data.Plugins.Where(p => p.Name == "B.esp")], GameRelease.Fallout4);
 
         Assert.Equal(["B.esp"], held.Status.IndexedPlugins.Select(p => p.Name));
-        Assert.DoesNotContain(removed, held.RequireReads().OpenedPlugins.Keys);
+        Assert.DoesNotContain(removed, Opened(held).Keys);
     }
 }

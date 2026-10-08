@@ -55,8 +55,8 @@ public sealed class PluginSourceUnreadableTests : IDisposable
 
         using var index = Reconciled();
 
-        Assert.Equal(NpcEditorId, index.RequireReads().DocumentOf(_npc, Plugin).EditorId);
-        Assert.Equal(DerivedFrom.BinaryForUnreadableSource, index.RequireReads().DerivationOf(Plugin));
+        Assert.Equal(NpcEditorId, index.DocumentOf(_npc, Plugin).EditorId);
+        Assert.True(index.ReadFromItsPluginFileForItsUnreadableSource(Plugin));
         Assert.Empty(index.Status.Failures);
     }
 
@@ -67,25 +67,25 @@ public sealed class PluginSourceUnreadableTests : IDisposable
 
         using var index = Reconciled();
 
-        Assert.Equal(NpcEditorId, index.RequireReads().DocumentOf(_npc, Plugin).EditorId);
-        Assert.Equal(DerivedFrom.BinaryForUnreadableSource, index.RequireReads().DerivationOf(Plugin));
+        Assert.Equal(NpcEditorId, index.DocumentOf(_npc, Plugin).EditorId);
+        Assert.True(index.ReadFromItsPluginFileForItsUnreadableSource(Plugin));
         Assert.Empty(index.Status.Failures);
-        Assert.Contains(index.SourceFileFailures, f => f.SourceRelativePath == Relative(backup));
+        Assert.Contains(index.SourceProblems(), problem => problem.SourceRelativePath == Relative(backup));
     }
 
     [Fact]
     public void APluginSourceThatFailsOnceRead_ReadsItsPluginFile_NotTheTreesLastRows_MarkedAsSuch()
     {
         using var index = Reconciled();
-        var npc = index.RequireReads().DocumentOf(_npc, Plugin);
-        index.Edit(_entry, npc, npc.BodyOf().Replace(NpcEditorId, "EditedInTheTree", StringComparison.Ordinal));
-        Assert.Equal("EditedInTheTree", index.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+        var npc = index.DocumentOf(_npc, Plugin);
+        index.Edit(_entry, npc, index.BodyOf(_npc, Plugin).Replace(NpcEditorId, "EditedInTheTree", StringComparison.Ordinal));
+        Assert.Equal("EditedInTheTree", index.DocumentOf(_npc, Plugin).EditorId);
 
         BackupOfTheNpcDocumentClaimingItsFormKeyAgain();
         index.NextSnapshotUntil(
-            () => index.RequireReads().DerivationOf(Plugin) == DerivedFrom.BinaryForUnreadableSource, "the plugin file read in its place");
+            () => index.ReadFromItsPluginFileForItsUnreadableSource(Plugin), "the plugin file read in its place");
 
-        Assert.Equal(NpcEditorId, index.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+        Assert.Equal(NpcEditorId, index.DocumentOf(_npc, Plugin).EditorId);
         Assert.Empty(index.Status.Failures);
     }
 
@@ -93,17 +93,17 @@ public sealed class PluginSourceUnreadableTests : IDisposable
     public void APluginSourceMended_IsReadFromItsTreeAgain_AtTheNextSnapshot()
     {
         using var index = Reconciled();
-        var npc = index.RequireReads().DocumentOf(_npc, Plugin);
-        index.Edit(_entry, npc, npc.BodyOf().Replace(NpcEditorId, "EditedInTheTree", StringComparison.Ordinal));
+        var npc = index.DocumentOf(_npc, Plugin);
+        index.Edit(_entry, npc, index.BodyOf(_npc, Plugin).Replace(NpcEditorId, "EditedInTheTree", StringComparison.Ordinal));
         var backup = BackupOfTheNpcDocumentClaimingItsFormKeyAgain();
         index.NextSnapshotUntil(
-            () => index.RequireReads().DerivationOf(Plugin) == DerivedFrom.BinaryForUnreadableSource, "the plugin file read in its place");
+            () => index.ReadFromItsPluginFileForItsUnreadableSource(Plugin), "the plugin file read in its place");
 
         File.Delete(backup);
-        index.NextSnapshotUntil(() => index.RequireReads().DerivationOf(Plugin) == DerivedFrom.SourceTree, "the tree read again");
+        index.NextSnapshotUntil(() => index.ReadFromItsPluginSource(Plugin), "the tree read again");
 
-        Assert.Equal("EditedInTheTree", index.RequireReads().DocumentOf(_npc, Plugin).EditorId);
-        Assert.Empty(index.SourceFileFailures);
+        Assert.Equal("EditedInTheTree", index.DocumentOf(_npc, Plugin).EditorId);
+        Assert.Empty(index.SourceProblems());
     }
 
     [Fact]
@@ -112,24 +112,24 @@ public sealed class PluginSourceUnreadableTests : IDisposable
         var aside = Path.Combine(_fixture.InstanceRoot, "aside");
         Directory.Move(SourceRoot, aside);
         using var index = Reconciled();
-        Assert.Equal(DerivedFrom.BinaryForUnreadableSource, index.RequireReads().DerivationOf(Plugin));
+        Assert.True(index.ReadFromItsPluginFileForItsUnreadableSource(Plugin));
 
         Directory.Move(aside, SourceRoot);
 
-        index.NextSnapshotUntil(() => index.RequireReads().DerivationOf(Plugin) == DerivedFrom.SourceTree, "the tree read");
+        index.NextSnapshotUntil(() => index.ReadFromItsPluginSource(Plugin), "the tree read");
     }
 
     [Fact]
     public void APluginSourceRenamedAwayFromItsPluginFile_ReadsThePluginFile_MarkedAsSuch()
     {
         using var index = Reconciled();
-        var npc = index.RequireReads().DocumentOf(_npc, Plugin);
-        index.Edit(_entry, npc, npc.BodyOf().Replace(NpcEditorId, "EditedInTheTree", StringComparison.Ordinal));
+        var npc = index.DocumentOf(_npc, Plugin);
+        index.Edit(_entry, npc, index.BodyOf(_npc, Plugin).Replace(NpcEditorId, "EditedInTheTree", StringComparison.Ordinal));
 
         Directory.Move(SourceRoot, PluginSourceRoot.In(_entry.ModFolderOf(), "Renamed.esp"));
 
         index.NextSnapshotUntil(
-            () => index.RequireReads().DerivationOf(Plugin) == DerivedFrom.BinaryForUnreadableSource, "the plugin file read in its place");
-        Assert.Equal(NpcEditorId, index.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+            () => index.ReadFromItsPluginFileForItsUnreadableSource(Plugin), "the plugin file read in its place");
+        Assert.Equal(NpcEditorId, index.DocumentOf(_npc, Plugin).EditorId);
     }
 }

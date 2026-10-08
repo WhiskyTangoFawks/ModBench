@@ -66,7 +66,7 @@ public sealed class ReconcileDoorTests
     [Fact]
     public void AFailedReconcile_IsTriedAgain_ByAnEqualSnapshot()
     {
-        using var data = new PluginFixtureBuilder("retry-door").WithPlugin("A.esp").Build();
+        using var data = new PluginFixtureBuilder("retry-door").WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA")).Build();
         var earlierHolder = new LoadOrderHolder();
         using (var earlier = Indexes.Open(earlierHolder))
             earlier.Reconcile(earlierHolder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
@@ -82,7 +82,7 @@ public sealed class ReconcileDoorTests
 
         File.Delete(blocker);
         index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
-        Assert.NotEmpty(index.RequireReads().DocumentsOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed class ReconcileDoorTests
         index.Receive(holder, snapshot);
         var before = StatusesPublished(notifications).Length;
 
-        index.NextSnapshotUntil(() => StatusesPublished(notifications).Length > before, "the retried reconcile's failed status");
+        index.NextSnapshotUnsettledUntil(() => StatusesPublished(notifications).Length > before, "the retried reconcile's failed status");
         index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.SkyrimSE, []));
 
         var retried = StatusesPublished(notifications)[before..];
@@ -206,6 +206,6 @@ public sealed class ReconcileDoorTests
         index.Receive(holder, LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.NotEmpty(index.RequireReads().DocumentsOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 }
