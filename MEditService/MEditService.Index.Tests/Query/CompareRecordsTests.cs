@@ -1,6 +1,9 @@
-using MEditService.LoadOrder;
+using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -8,54 +11,56 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Query;
 
-public sealed class CompareRecordsTests
+public sealed class CompareRecordsTests : IDisposable
 {
-    private static readonly GameRelease Release = GameRelease.Fallout4;
+    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
     private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
     private static readonly PluginAddress ModPlugin = new("Mod.esp", PluginOrigin.DataDirectory);
     private static readonly PluginAddress InactivePlugin = new("Off.esp", PluginOrigin.DataDirectory);
 
-    private readonly Fallout4Mod _baseMod = new(ModKey.FromFileName("Base.esm"), Fallout4Release.Fallout4);
-    private readonly Fallout4Mod _modMod = new(ModKey.FromFileName("Mod.esp"), Fallout4Release.Fallout4);
+    private readonly PluginFixtureData _fixture;
+    private readonly OpenedIndex _index;
     private readonly Container _chest;
     private readonly Container _otherChest;
     private readonly Weapon _sword;
-    private readonly IRecordQueryService _service;
 
     public CompareRecordsTests()
     {
-        _chest = new Container(_baseMod) { EditorID = "Chest", Name = "Chest", Items = [Entry(new FormKey(_baseMod.ModKey, 0x900))] };
-        _otherChest = new Container(_modMod) { EditorID = "Other", Name = "Other", Items = [Entry(new FormKey(_baseMod.ModKey, 0x901))] };
-        _sword = new Weapon(_modMod) { EditorID = "Sword", Name = "Sword" };
-        var rows = new[]
-        {
-            Row(_chest, BasePlugin, 0),
-            Row(_otherChest, ModPlugin, 1),
-            Row(_sword, ModPlugin, 1),
-        };
-        var opened = new Dictionary<PluginAddress, PluginContent>
-        {
-            [BasePlugin] = new(IsLight: false, IsMaster: true, IsBlueprint: false, Masters: [], RecordCount: 1, IsMedium: false),
-            [ModPlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: ["Base.esm"], RecordCount: 2, IsMedium: false),
-        };
-        _service = QueryHost.Records(
-            new FakeIndex(new FakeReads(opened, rows)),
-            FakeLoadOrder.Of(Release,
-                new LoadOrderEntry("Base.esm", "Base.esm", PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
-                new LoadOrderEntry("Mod.esp", "Mod.esp", PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true)));
+        Container? chest = null;
+        Container? otherChest = null;
+        Weapon? sword = null;
+        _fixture = new PluginFixtureBuilder("medit-compare-records")
+            .WithPlugin(BasePlugin.Name, mod =>
+            {
+                chest = new Container(mod) { EditorID = "Chest", Name = "Chest", Items = [Entry(new FormKey(mod.ModKey, 0x900))] };
+                mod.Containers.Add(chest);
+            })
+            .WithPlugin(ModPlugin.Name, mod =>
+            {
+                otherChest = new Container(mod) { EditorID = "Other", Name = "Other", Items = [Entry(new FormKey(ModKey.FromFileName(BasePlugin.Name), 0x901))] };
+                sword = new Weapon(mod) { EditorID = "Sword", Name = "Sword" };
+                mod.Containers.Add(otherChest);
+                mod.Weapons.Add(sword);
+            })
+            .Build();
+        _index = Indexes.Reconciled(_fixture);
+        (_chest, _otherChest, _sword) = (chest.Require(), otherChest.Require(), sword.Require());
+    }
+
+    public void Dispose()
+    {
+        _index.Dispose();
+        _fixture.Dispose();
     }
 
     private static ContainerEntry Entry(FormKey item) =>
         new() { Item = new ContainerItem { Item = new FormLink<IItemGetter>(item), Count = 1 } };
 
-    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex) =>
-        new(RealDocuments.Of(record, plugin, loadOrderIndex, Release));
-
     private static RecordCopy Copy(IMajorRecordGetter record, PluginAddress plugin, string? text = null) =>
         new(record.FormKey.ToString(), plugin, text);
 
     private CompareResult Compare(params RecordCopy[] copies) =>
-        _service.GetCompareRecords(copies) ?? throw new InvalidOperationException("Expected the copies to compare.");
+        _index.Records.GetCompareRecords(copies) ?? throw new InvalidOperationException("Expected the copies to compare.");
 
     private static string Column(CompareResult compare, int index) =>
         compare.Overrides[index].Column ?? throw new InvalidOperationException("Expected the column to be named.");
@@ -122,7 +127,7 @@ public sealed class CompareRecordsTests
     [Fact]
     public void ACopyWithText_IsAColumnReadFromIt_EvenWhenItsPluginIsNotActive()
     {
-        var edited = RealDocuments.BodyOf(_otherChest, Release);
+        var edited = Codec.SerializeToText(_otherChest, GameRelease.Fallout4);
 
         var compare = Compare(Copy(_chest, InactivePlugin, edited), Copy(_chest, BasePlugin));
 
@@ -134,7 +139,7 @@ public sealed class CompareRecordsTests
     [Fact]
     public void ACopyNoPluginHolds_AndNoTextGives_FailsTheWholeQuery()
     {
-        Assert.Null(_service.GetCompareRecords([Copy(_chest, BasePlugin), Copy(_sword, BasePlugin)]));
+        Assert.Null(_index.Records.GetCompareRecords([Copy(_chest, BasePlugin), Copy(_sword, BasePlugin)]));
     }
 
     [Fact]

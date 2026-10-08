@@ -1,63 +1,62 @@
-using MEditService.Index;
-using MEditService.LoadOrder;
+using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Query;
 
-public sealed class CompareFromTextTests
+public sealed class CompareFromTextTests : IDisposable
 {
-    private static readonly GameRelease Release = GameRelease.Fallout4;
+    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
     private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
     private static readonly PluginAddress ModPlugin = new("Mod.esp", PluginOrigin.DataDirectory);
     private static readonly PluginAddress InactivePlugin = new("Off.esp", PluginOrigin.DataDirectory);
+    private static readonly ModKey Base = ModKey.FromFileName(BasePlugin.Name);
+    private static readonly FormKey Chest = new(Base, 0x800);
 
-    private readonly Fallout4Mod _baseMod = new(ModKey.FromFileName("Base.esm"), Fallout4Release.Fallout4);
-    private readonly Fallout4Mod _modMod = new(ModKey.FromFileName("Mod.esp"), Fallout4Release.Fallout4);
-    private readonly Container _chest;
-    private readonly Container _otherChest;
-    private readonly Container _chestOverride;
-    private readonly IRecordQueryService _service;
+    private static readonly Container OtherChest = new(new FormKey(ModKey.FromFileName(ModPlugin.Name), 0x800), Fallout4Release.Fallout4)
+    {
+        EditorID = "Other",
+        Name = "Other",
+        Items = [Entry(new FormKey(Base, 0x901))],
+    };
+
+    private readonly PluginFixtureData _fixture;
+    private readonly OpenedIndex _index;
 
     public CompareFromTextTests()
     {
-        _chest = new Container(_baseMod) { EditorID = "Chest", Name = "Chest", Items = [Entry(new FormKey(_baseMod.ModKey, 0x900))] };
-        _chestOverride = _modMod.Containers.GetOrAddAsOverride(_chest);
-        _otherChest = new Container(_modMod) { EditorID = "Other", Name = "Other", Items = [Entry(new FormKey(_baseMod.ModKey, 0x901))] };
-        var rows = new[]
-        {
-            Row(_chest, BasePlugin, 0),
-            Row(_chestOverride, ModPlugin, 1),
-        };
-        var opened = new Dictionary<PluginAddress, PluginContent>
-        {
-            [BasePlugin] = new(IsLight: false, IsMaster: true, IsBlueprint: false, Masters: [], RecordCount: 1, IsMedium: false),
-            [ModPlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: ["Base.esm"], RecordCount: 2, IsMedium: false),
-        };
-        _service = QueryHost.Records(
-            new FakeIndex(new FakeReads(opened, rows)),
-            FakeLoadOrder.Of(Release,
-                new LoadOrderEntry("Base.esm", "Base.esm", PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
-                new LoadOrderEntry("Mod.esp", "Mod.esp", PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true)));
+        _fixture = new PluginFixtureBuilder("medit-compare-from-text")
+            .WithPlugin(BasePlugin.Name, mod => mod.Containers.Add(ChestCopy()))
+            .WithPlugin(ModPlugin.Name, mod => mod.Containers.Add(ChestCopy()))
+            .Build();
+        _index = Indexes.Reconciled(_fixture);
     }
+
+    public void Dispose()
+    {
+        _index.Dispose();
+        _fixture.Dispose();
+    }
+
+    private static Container ChestCopy() =>
+        new(Chest, Fallout4Release.Fallout4) { EditorID = "Chest", Name = "Chest", Items = [Entry(new FormKey(Base, 0x900))] };
 
     private static ContainerEntry Entry(FormKey item) =>
         new() { Item = new ContainerItem { Item = new FormLink<IItemGetter>(item), Count = 1 } };
 
-    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex) =>
-        new(RealDocuments.Of(record, plugin, loadOrderIndex, Release));
+    private static string OtherChestText => Codec.SerializeToText(OtherChest, GameRelease.Fallout4);
 
     private CompareResult Compare(PluginAddress plugin, string text) =>
-        _service.GetCompare(_chest.FormKey.ToString(), new CopyText(plugin, text))
+        _index.Records.GetCompare(Chest.ToString(), new CopyText(plugin, text))
         ?? throw new InvalidOperationException("Expected the record to compare.");
 
     private static PluginAddress AddressOf(CompareOverride column) => new(column.Plugin, column.Origin);
-
-    private static string KeyOf(PluginAddress plugin) => ColumnKey.Of(plugin.Name, plugin.Origin);
 
     private static IEnumerable<FieldDiff> Flatten(IEnumerable<FieldDiff> diffs) =>
         diffs.SelectMany(d => new[] { d }.Concat(Flatten(d.Children ?? [])));
@@ -68,27 +67,27 @@ public sealed class CompareFromTextTests
     [Fact]
     public void ThePluginsColumnReadsTheText_AndTheConflictStatesFollowIt()
     {
-        var compare = Compare(ModPlugin, RealDocuments.BodyOf(_otherChest, Release));
+        var compare = Compare(ModPlugin, OtherChestText);
 
         Assert.Equal([BasePlugin, ModPlugin], compare.Overrides.Select(AddressOf));
         Assert.NotEqual(ConflictAll.NoConflict, compare.ConflictAll);
         var items = compare.Diffs.Single(d => d.FieldName == "Items");
-        Assert.NotEqual(items.Values[KeyOf(BasePlugin)]?.ToString(), items.Values[KeyOf(ModPlugin)]?.ToString());
+        Assert.NotEqual(items.Values[BasePlugin.Name]?.ToString(), items.Values[ModPlugin.Name]?.ToString());
     }
 
     [Fact]
     public void ACopyWhosePluginIsNotActive_IsAColumnOutsideTheComparison_TheActiveCopiesClassifyAsWithoutIt()
     {
-        var without = _service.GetCompare(_chest.FormKey.ToString()) ?? throw new InvalidOperationException();
+        var without = _index.Records.GetCompare(Chest.ToString()) ?? throw new InvalidOperationException("Expected the record to compare.");
 
-        var compare = Compare(InactivePlugin, RealDocuments.BodyOf(_otherChest, Release));
+        var compare = Compare(InactivePlugin, OtherChestText);
 
         Assert.Equal([BasePlugin, ModPlugin, InactivePlugin], compare.Overrides.Select(AddressOf));
         var items = compare.Diffs.Single(d => d.FieldName == "Items");
-        var ownElement = Assert.Single(items.Children ?? [], r => r.Values[KeyOf(InactivePlugin)] is not null);
-        Assert.Null(ownElement.Values[KeyOf(BasePlugin)]);
-        Assert.Contains("000901", ownElement.Values[KeyOf(InactivePlugin)]?.ToString(), StringComparison.Ordinal);
-        Assert.All(Flatten(compare.Diffs), d => Assert.DoesNotContain(KeyOf(InactivePlugin), d.CellStates.Keys));
+        var ownElement = Assert.Single(items.Children ?? [], r => r.Values[InactivePlugin.Name] is not null);
+        Assert.Null(ownElement.Values[BasePlugin.Name]);
+        Assert.Contains("000901", ownElement.Values[InactivePlugin.Name]?.ToString(), StringComparison.Ordinal);
+        Assert.All(Flatten(compare.Diffs), d => Assert.DoesNotContain(InactivePlugin.Name, d.CellStates.Keys));
         Assert.Null(compare.Overrides[^1].ConflictThis);
         Assert.Equal(without.ConflictAll, compare.ConflictAll);
         Assert.Equal(
@@ -109,6 +108,6 @@ public sealed class CompareFromTextTests
     [Fact]
     public void ATextForAFormKeyNoPluginIndexes_HasNoComparison()
     {
-        Assert.Null(_service.GetCompare("00DEAD:Nowhere.esp", new CopyText(ModPlugin, "{}")));
+        Assert.Null(_index.Records.GetCompare("00DEAD:Nowhere.esp", new CopyText(ModPlugin, "{}")));
     }
 }
