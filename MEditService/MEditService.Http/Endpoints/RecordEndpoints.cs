@@ -296,8 +296,6 @@ internal static class RecordEndpoints
                 return Results.Problem("At least one destination is required.", statusCode: 400);
             if (destinations.Any(d => string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.Origin)))
                 return Results.Problem("Every destination needs a name and an origin.", statusCode: 400);
-            if (request.Replace && request.Mode == CopyMode.New)
-                return Results.Problem("The replace Option does not apply to a copy as new.", statusCode: 400);
             return null;
         }, answer: addressed =>
         {

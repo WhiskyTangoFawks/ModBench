@@ -302,8 +302,14 @@ internal sealed class RecordQueryService(
 
     public void ClearFilter() => _index.ClearFilter();
 
-    public string? RebuildStore(GameRelease gameRelease, string instanceRoot) =>
-        _index.RebuildStore(gameRelease, instanceRoot);
+    public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)
+    {
+        if (SourceRepository.InstanceRootNotFound(instanceRoot) is { } notFound)
+            return new(StoreRebuildRefusal.InstanceRootNotFound, notFound);
+        return _index.RebuildStore(gameRelease, instanceRoot) is { } heldElsewhere
+            ? new(StoreRebuildRefusal.HeldByAnotherWindow, heldElsewhere)
+            : null;
+    }
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,

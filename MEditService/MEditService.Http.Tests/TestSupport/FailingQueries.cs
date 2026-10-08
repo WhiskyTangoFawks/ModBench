@@ -49,7 +49,8 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IRecordQue
 
     public void ClearFilter() => throw Failed();
 
-    public string? RebuildStore(GameRelease gameRelease, string instanceRoot) => rebuildRefusal ?? throw Failed();
+    public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot) =>
+        rebuildRefusal is null ? throw Failed() : new(StoreRebuildRefusal.HeldByAnotherWindow, rebuildRefusal);
 
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(PluginAddress plugin) => throw Failed();
 

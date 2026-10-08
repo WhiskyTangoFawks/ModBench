@@ -99,6 +99,7 @@ public static class CommandHandlers
             sp.GetRequiredService<ILogger<CreatePluginHandler>>()));
 
         services.AddSingleton(sp => new PutLoadOrderHandler(
+            sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<SchemaReflector>(),
             new ExternalChangeCheck(

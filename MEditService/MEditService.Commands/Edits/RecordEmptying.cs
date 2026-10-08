@@ -128,6 +128,7 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
         return true;
     }
 
+    // A column's aliases sit beside the member they spell again, so they clear in that member's owner.
     internal static void ClearAliases(JsonObject record, ColumnSpec column)
     {
         JsonNode? owner = record;
