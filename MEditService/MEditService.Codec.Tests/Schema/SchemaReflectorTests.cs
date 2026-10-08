@@ -118,7 +118,6 @@ public class SchemaReflectorTests
             ?? throw new InvalidOperationException("Expected 'OutputChar' to carry a per-class variant.");
         Assert.Equal([nameof(GlobalFloat)], variants.Keys);
         Assert.Equal("bool", variants[nameof(GlobalFloat)].Type);
-        Assert.True(outputChar.IsViewable);
     }
 
     [Fact]
@@ -133,22 +132,20 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Npc_BoolColumn_MapsToBooleanDuckDbType()
+    public void GetSchemas_Npc_BoolColumn_MapsToBool()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "AggroRadiusBehaviorEnabled");
         Assert.NotNull(col);
-        Assert.Equal("BOOLEAN", col.DuckDbType);
         Assert.Equal("bool", col.ApiType);
     }
 
     [Fact]
-    public void GetSchemas_Npc_EnumColumn_MapsToVarcharWithEnumMembers()
+    public void GetSchemas_Npc_EnumColumn_MapsToEnumWithMembers()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Aggression");
         Assert.NotNull(col);
-        Assert.Equal("VARCHAR", col.DuckDbType);
         Assert.Equal("enum", col.ApiType);
         Assert.NotEmpty(col.Field.EnumMembers);
         Assert.Contains("Unaggressive", col.Field.EnumMembers.Select(m => m.Value));
@@ -160,7 +157,6 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Race");
         Assert.NotNull(col);
-        Assert.Equal("VARCHAR", col.DuckDbType);
         Assert.Equal("formKey", col.ApiType);
         Assert.Contains("race", col.Field.ValidFormKeyTypes);
     }
@@ -200,7 +196,6 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Name");
         Assert.NotNull(col);
-        Assert.Equal("VARCHAR", col.DuckDbType);
         Assert.Equal("translatedString", col.ApiType);
     }
 
@@ -232,12 +227,11 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Npc_FloatColumn_HasFloatDuckDbAndApiType()
+    public void GetSchemas_Npc_FloatColumn_HasFloatApiType()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "HeightMin");
         Assert.NotNull(col);
-        Assert.Equal("FLOAT", col.DuckDbType);
         Assert.Equal("float", col.ApiType);
     }
 
@@ -251,24 +245,22 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_ImageSpaceAdapter_UInt64Column_MapsToBigInt()
+    public void GetSchemas_ImageSpaceAdapter_UInt64Column_PresentsAsInt()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["imad"].RecordColumns.FirstOrDefault(c => c.Name == "Unknown");
         Assert.NotNull(col);
-        Assert.Equal("BIGINT", col.DuckDbType);
         Assert.Equal("int", col.ApiType);
     }
 
     [Theory]
-    [InlineData("HeightMin", "float", "FLOAT", "Weight", false, "Thin")]
-    [InlineData("XpValueOffset", "int", "INTEGER", "Factions", true, "Rank")]
-    [InlineData("Race", "formKey", "VARCHAR", "Factions", true, "Faction")]
-    [InlineData("Aggression", "enum", "VARCHAR", "FaceTintingLayers", true, "DataType")]
+    [InlineData("HeightMin", "float", "Weight", false, "Thin")]
+    [InlineData("XpValueOffset", "int", "Factions", true, "Rank")]
+    [InlineData("Race", "formKey", "Factions", true, "Faction")]
+    [InlineData("Aggression", "enum", "FaceTintingLayers", true, "DataType")]
     public void GetSchemas_PrimitiveType_ColumnAndSubFieldBothReflected_ASubFieldOfEachPrimitiveTypeMapsAsItsTopLevelColumnDoes(
         string topLevelColumnName,
         string expectedApiType,
-        string expectedDuckDbType,
         string structOrArrayColumn,
         bool isArray,
         string subFieldName)
@@ -279,7 +271,6 @@ public class SchemaReflectorTests
         var topCol = npc.RecordColumns.FirstOrDefault(c => c.Name == topLevelColumnName);
         Assert.NotNull(topCol);
         Assert.Equal(expectedApiType, topCol.ApiType);
-        Assert.Equal(expectedDuckDbType, topCol.DuckDbType);
 
         var structCol = npc.RecordColumns.FirstOrDefault(c => c.Name == structOrArrayColumn);
         Assert.NotNull(structCol);
@@ -301,7 +292,6 @@ public class SchemaReflectorTests
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Flags");
         Assert.NotNull(col);
         Assert.Equal("flags", col.ApiType);
-        Assert.Equal("VARCHAR", col.DuckDbType);
     }
 
     [Fact]
@@ -358,7 +348,6 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "Author");
         Assert.NotNull(col);
-        Assert.Equal("VARCHAR", col.DuckDbType);
         Assert.Equal("string", col.ApiType);
     }
 

@@ -32,21 +32,13 @@ internal static class ColumnReflection
         return columns;
     }
 
-    /// <summary>One member as a column: the spec every walk builds it as, plus its database facts.
-    /// An array or a struct is one JSON node no view has a scalar reading of.</summary>
+    /// <summary>One member as a column: the spec every walk builds it as, plus whether absent means null.</summary>
     internal static ColumnSpec? BuildColumn(
         PropertyInfo prop, string propertyName, GameReflection game, ILogger logger)
     {
-        var (core, nullable) = ReflectedTypes.CoreOf(prop);
         if (SubFieldReflection.GetSubFieldInfo(prop, game, SubFieldReflection.RootPath, logger) is not { } spec)
             return null;
 
-        if (LeafClassification.ClassifyLeaf(prop, core, game) is not { } leaf)
-            return new ColumnSpec(spec, propertyName, "VARCHAR");
-
-        // A nullable property genuinely can be absent-meaning-null, so it keeps NULL rather than
-        // being coalesced to a default it never had.
-        var viewDefault = nullable ? null : leaf.ViewDefaultLiteral;
-        return new ColumnSpec(spec, propertyName, leaf.DuckDbType, ViewDefaultLiteral: viewDefault);
+        return new ColumnSpec(spec, propertyName, AbsentIsNull: ReflectedTypes.CoreOf(prop).Nullable);
     }
 }

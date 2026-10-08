@@ -37,6 +37,31 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
             """);
     }
 
+    private static bool IsScalar(ColumnSpec column) =>
+        !column.Field.IsArray && column.Field.Fields == null && column.Synthetic == null
+        && (column.Field.Variants == null || column.Field.Variants.Values.Select(v => v.Type).Distinct(StringComparer.Ordinal).Count() == 1);
+
+    private string ViewColumnType(string table, string column) =>
+        IndexFiles.Rows(fixture.InstanceRoot,
+            $"SELECT data_type FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{column}'")
+            .Single()[0];
+
+    [Theory]
+    [InlineData("npc_", "AggroRadiusBehaviorEnabled", "BOOLEAN")]
+    [InlineData("npc_", "XpValueOffset", "BIGINT")]
+    [InlineData("imad", "Unknown", "BIGINT")]
+    [InlineData("npc_", "HeightMin", "FLOAT")]
+    [InlineData("npc_", "Aggression", "VARCHAR")]
+    [InlineData("npc_", "Flags", "VARCHAR")]
+    [InlineData("npc_", "Race", "VARCHAR")]
+    [InlineData("ligh", "Color", "VARCHAR")]
+    [InlineData("header", "Author", "VARCHAR")]
+    [InlineData("weap", "VersionControl", "BIGINT")]
+    public void AViewColumn_HasTheSqlTypeOfItsLeaf(string table, string column, string expected)
+    {
+        Assert.Equal(expected, ViewColumnType(table, column));
+    }
+
     [Fact]
     public void EveryRecordType_HasAView()
     {
@@ -66,6 +91,45 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
         Assert.True(absent > 0, "Positive control: some npc_ documents must omit CalcMinLevel for this to mean anything.");
         Assert.Equal(0, Matching("SELECT form_key FROM \"npc_\" WHERE \"CalcMinLevel\" IS NULL"));
         Assert.Equal(absent, Matching("SELECT form_key FROM \"npc_\" WHERE \"CalcMinLevel\" = 0"));
+    }
+
+    [Theory]
+    [InlineData("dial", "Priority", "50")]
+    [InlineData("npc_", "AggroRadiusBehaviorEnabled", "false")]
+    [InlineData("npc_", "Aggression", "'Unaggressive'")]
+    [InlineData("npc_", "Flags", "''")]
+    public void AnOmittedMember_ReadsAsItsDeclaredDefault_NotNull(string table, string column, string defaultLiteral)
+    {
+        var absent = IndexFiles.Rows(fixture.InstanceRoot, $"SELECT body FROM records WHERE record_type = '{table}'")
+            .Count(row => !JsonDocument.Parse(row[0]).RootElement.TryGetProperty(column, out _));
+
+        Assert.True(absent > 0, "Positive control: some document must omit the member for this to mean anything.");
+        Assert.Equal(0, Matching($"SELECT form_key FROM \"{table}\" WHERE \"{column}\" IS NULL"));
+        Assert.True(Matching($"SELECT form_key FROM \"{table}\" WHERE \"{column}\" IS NOT DISTINCT FROM {defaultLiteral}") >= absent);
+    }
+
+    [Fact]
+    public void AColumnAbsentMeansNull_ReadsNullWhereTheDocumentOmitsIt()
+    {
+        var checkedColumns = 0;
+        var offenders = new List<string>();
+        foreach (var (table, schema) in Schemas)
+        {
+            foreach (var column in schema.RecordColumns.Where(c => c.AbsentIsNull && IsScalar(c) && !c.Field.IsEditorId))
+            {
+                checkedColumns++;
+                var path = $"$.{column.PropertyName}";
+                var filled = Matching($"""
+                    SELECT v.form_key FROM "{table}" v
+                    JOIN records r ON r.form_key = v.form_key AND r.plugin = v.plugin AND r.origin = v.origin
+                    WHERE json_extract(r.body, '{path}') IS NULL AND v."{column.Name}" IS NOT NULL
+                    """);
+                if (filled > 0) offenders.Add($"{table}.{column.Name}");
+            }
+        }
+
+        Assert.True(checkedColumns > 0, "Positive control: some column must read null when absent.");
+        Assert.Empty(offenders);
     }
 
     [Fact]
@@ -100,9 +164,9 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
         var tablesWithScalars = 0;
         foreach (var (table, schema) in Schemas)
         {
-            if (AnyColumnOf(table, schema.RecordColumns.Where(c => !c.IsViewable).Select(c => c.Name)))
+            if (AnyColumnOf(table, schema.RecordColumns.Where(c => !IsScalar(c)).Select(c => c.Name)))
                 offenders.Add(table);
-            if (AnyColumnOf(table, schema.RecordColumns.Where(c => c.IsViewable).Select(c => c.Name)))
+            if (AnyColumnOf(table, schema.RecordColumns.Where(IsScalar).Select(c => c.Name)))
                 tablesWithScalars++;
         }
 
