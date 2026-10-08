@@ -1,6 +1,5 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -98,7 +97,8 @@ internal static class PluginTrees
         foreach (var file in files)
         {
             var fullPath = Path.Combine(baseDirectory, file.RelativePath);
-            Directory.CreateDirectory(PathShape.DirectoryOf(fullPath));
+            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)
+                ?? throw new InvalidOperationException($"Expected '{fullPath}' to have a parent directory."));
             await File.WriteAllBytesAsync(fullPath, file.Content, cancel);
         }
         return Path.Combine(baseDirectory, SharedDirectoryOf(files));
