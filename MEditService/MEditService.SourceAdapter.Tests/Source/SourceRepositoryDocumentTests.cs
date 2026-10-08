@@ -107,7 +107,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     [Fact]
     public void Get_OfAFlatRecordTheTreeHolds_IsItsOwnText()
     {
-        var document = Opened().Get(Plugin, Npc);
+        var document = Opened().RecordOf(Plugin, Npc);
 
         Assert.NotNull(document);
         Assert.Equal(NpcBody, document.Body);
@@ -118,7 +118,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     [Fact]
     public void Get_OfARecordNoFileHolds_IsNull()
     {
-        Assert.Null(Opened().Get(Plugin, new RecordIdentity("000801:Fixture.esp", "npc_", "Absent")));
+        Assert.Null(Opened().RecordOf(Plugin, new RecordIdentity("000801:Fixture.esp", "npc_", "Absent")));
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
         repository.Put(Plugin, weapon);
 
-        Assert.Equal(weapon.Body, repository.Get(Plugin, new RecordIdentity(weapon.FormKey, "weap", "FixtureWeapon"))?.Body);
+        Assert.Equal(weapon.Body, repository.RecordOf(Plugin, new RecordIdentity(weapon.FormKey, "weap", "FixtureWeapon"))?.Body);
     }
 
     [Fact]
@@ -139,7 +139,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
         repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, "{\"EditorID\": \"FixtureNpc\"}"));
 
-        Assert.Equal("{\"EditorID\": \"FixtureNpc\"}", repository.Get(Plugin, Npc)?.Body);
+        Assert.Equal("{\"EditorID\": \"FixtureNpc\"}", repository.RecordOf(Plugin, Npc)?.Body);
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
         repository.Remove(Plugin, Npc);
 
-        Assert.Null(repository.Get(Plugin, Npc));
+        Assert.Null(repository.RecordOf(Plugin, Npc));
         Assert.Empty(Directory.EnumerateFiles(NpcGroupFolder));
     }
 
@@ -172,7 +172,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
         repository.Remove(Plugin, new RecordIdentity("000900:Fixture.esp", "weap", "Absent"));
 
-        Assert.NotNull(repository.Get(Plugin, Npc));
+        Assert.NotNull(repository.RecordOf(Plugin, Npc));
     }
 
     private static string WithEditorId(string editorId) => NpcBody.Replace(NpcEditorId, editorId, StringComparison.Ordinal);
@@ -193,7 +193,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         Assert.Equal([$"RenamedNpc - 000800_{PluginName}.json"], NpcFileNames());
         Assert.Equal(
             WithEditorId("RenamedNpc"),
-            repository.Get(Plugin, new RecordIdentity(NpcFormKey, "npc_", "RenamedNpc"))?.Body);
+            repository.RecordOf(Plugin, new RecordIdentity(NpcFormKey, "npc_", "RenamedNpc"))?.Body);
     }
 
     [Fact]
@@ -205,7 +205,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", longId, WithEditorId(longId)));
 
         Assert.Equal([$"{new string('A', 64)} - 000800_{PluginName}.json"], NpcFileNames());
-        Assert.Equal(WithEditorId(longId), repository.Get(Plugin, new RecordIdentity(NpcFormKey, "npc_", longId))?.Body);
+        Assert.Equal(WithEditorId(longId), repository.RecordOf(Plugin, new RecordIdentity(NpcFormKey, "npc_", longId))?.Body);
     }
 
     [Fact]
@@ -229,7 +229,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
             Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json"),
             Path.Combine(NpcGroupFolder, $"RenamedOutside - 000800_{PluginName}.json"));
 
-        Assert.Equal(NpcBody, repository.Get(Plugin, Npc)?.Body);
+        Assert.Equal(NpcBody, repository.RecordOf(Plugin, Npc)?.Body);
     }
 
     [Fact]
@@ -327,7 +327,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         var repository = Opened();
         File.Move(Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json"), Path.Combine(NpcGroupFolder, "HandName.json"));
         var identity = new RecordIdentity(NpcFormKey, "npc_", NpcEditorId);
-        Assert.NotNull(repository.Get(Plugin, identity));
+        Assert.NotNull(repository.RecordOf(Plugin, identity));
 
         repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody));
 
@@ -399,7 +399,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         File.WriteAllText(Path.Combine(NpcGroupFolder, $"AnImpostor - 000800_{PluginName}.json"), NpcBody);
 
         var refusal = Assert.Throws<AmbiguousSourceUnitException>(
-            () => repository.Get(Plugin, new RecordIdentity(NpcFormKey, "npc_", "NeitherName")));
+            () => repository.RecordOf(Plugin, new RecordIdentity(NpcFormKey, "npc_", "NeitherName")));
 
         Assert.Contains(NpcFormKey, refusal.Message, StringComparison.Ordinal);
     }
@@ -415,6 +415,6 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
         var header = new RecordIdentity($"000000:{PluginName}", "header", null);
 
-        Assert.Equal("{\"MasterReferences\": []}", repository.Get(Plugin, header)?.Body);
+        Assert.Equal("{\"MasterReferences\": []}", repository.RecordOf(Plugin, header)?.Body);
     }
 }

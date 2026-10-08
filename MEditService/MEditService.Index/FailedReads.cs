@@ -5,7 +5,7 @@ namespace MEditService.Index;
 
 /// <summary>A plugin that failed to read stays in its error state (ADR-0013) until what it reads
 /// from changes, which the state taken before the read detects.</summary>
-internal sealed class FailedReads(DuckDbRecordIndex index)
+internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source)
 {
     private sealed record Failure(ReadState? ReadFrom, bool Stands, IReadOnlyList<SourceFileFailure> Files);
 
@@ -84,8 +84,6 @@ internal sealed class FailedReads(DuckDbRecordIndex index)
     private ReadState ReadStateOf(RegisteredPlugin plugin)
     {
         var binary = index.FileContentHash(plugin.Path);
-        return Projector.TreeModOf(plugin) is { } mod
-            ? new ReadState(binary, SourceRepository.Over(mod, index.Release).StampsOf(plugin.Key))
-            : new ReadState(binary, null);
+        return new ReadState(binary, source.TreeOf(plugin, index.Release)?.StampsOf(plugin.Key));
     }
 }

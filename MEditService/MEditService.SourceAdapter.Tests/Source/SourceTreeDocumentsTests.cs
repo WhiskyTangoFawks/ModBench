@@ -160,7 +160,7 @@ public sealed class SourceTreeDocumentsTests : IDisposable
     public void AChildInASingleValueSlot_IsTheSameBytesTheRepositorysGetAnswers()
     {
         var landscape = _landscape.FormKey.ToString();
-        var document = Repository.Get(Plugin, new RecordIdentity(landscape, "land", _landscape.EditorID))
+        var document = Repository.RecordOf(Plugin, new RecordIdentity(landscape, "land", _landscape.EditorID))
             ?? throw new InvalidOperationException("Expected the landscape to have a source document.");
 
         Assert.Equal(document.Body, Documents()[landscape].Text);

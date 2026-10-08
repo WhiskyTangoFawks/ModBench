@@ -42,7 +42,7 @@ internal sealed class CopySource(
     internal long RecordFlags(RecordIdentity identity)
     {
         if (_tree == null) return Loaded()?.RecordFlagsOf(identity.FormKey) ?? throw NoLongerHeld(identity.FormKey);
-        var body = _tree.Get(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey);
+        var body = _tree.RecordOf(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey);
         return JsonNode.Parse(body) is JsonObject document ? RecordFlagsWrite.HeldBy(document) : 0;
     }
 
@@ -56,7 +56,7 @@ internal sealed class CopySource(
     {
         if (_tree == null) return Loaded()?.TextOf(identity.FormKey) ?? throw NoLongerHeld(identity.FormKey);
 
-        var body = _tree.Get(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey);
+        var body = _tree.RecordOf(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey);
         // Read through the codec even though the verbatim bytes are what lands: a copy of text no
         // reader can make a record of would leave the destination uncompilable.
         codec.RoundTrip(body, _release, identity.RecordType);

@@ -98,12 +98,14 @@ public sealed class DecompilePluginTraceTests : HostedTests
         Assert.Equal([Plugin], body.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
         await Client.NextSnapshot(_instance);
-        var elapsed = System.Diagnostics.Stopwatch.StartNew();
-        while ((await Client.Record(formKey)).GetProperty("editorId").GetString() != "UpgradedNpc")
-        {
-            Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(20), "The decompiled source never reached the answers.");
-            await Task.Delay(50);
-        }
+        await Wire.Eventually(async () => await EditorIdUnlessTheIndexIsReconciling(formKey) == "UpgradedNpc", "the decompiled source reaching the answers");
+    }
+
+    private async Task<string?> EditorIdUnlessTheIndexIsReconciling(string formKey)
+    {
+        using var response = await Client.GetAsync($"/records/{Uri.EscapeDataString(formKey)}");
+        if (response.StatusCode == HttpStatusCode.ServiceUnavailable) return null;
+        return (await response.EnsureSuccessStatusCode().Body()).GetProperty("editorId").GetString();
     }
 
     [Fact]

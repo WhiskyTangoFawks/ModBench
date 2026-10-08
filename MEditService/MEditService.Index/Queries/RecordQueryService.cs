@@ -12,6 +12,7 @@ internal sealed class RecordQueryService(
     IQueryIndex index,
     LoadOrderHolder loadOrder,
     SchemaReflector schemaReflector,
+    ISourceAdapter source,
     ILogger<RecordQueryService> logger) : IRecordQueryService
 {
     private readonly ILogger _logger = logger;
@@ -164,13 +165,12 @@ internal sealed class RecordQueryService(
     private RecordDocument? CopyFromText(
         IRecordReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string text)
     {
-        var snapshot = _loadOrder.Require();
-        if (snapshot.Plugin(plugin) is not { Provider: PluginProvider.FromMod mod } registered || !SourceRepository.SourceReads(registered))
+        if (TreeOf(plugin) is not { } tree)
             return reads.DocumentFromText(formKey, plugin, loadOrderIndex, text);
 
         try
         {
-            return SourceRepository.Over(mod, snapshot.GameRelease).RecordFromText(plugin, formKey, text, RequireSchemas()) is { } record
+            return tree.RecordFromText(plugin, formKey, text, RequireSchemas()) is { } record
                 ? reads.DocumentFromText(formKey, plugin, loadOrderIndex, record.Body)
                 : Unread(reads, formKey, plugin, loadOrderIndex, $"No document in {plugin.Name}'s source tree carries {formKey}.");
         }
@@ -283,7 +283,7 @@ internal sealed class RecordQueryService(
     public CopyDocument? GetCopyDocument(PluginAddress plugin, string formKey)
     {
         if (RequireReads().GetCopyText(formKey, plugin) is not var (identity, _)) return null;
-        if (TreeOf(plugin, SourceRepository.SourceReads) is not { } tree)
+        if (TreeOf(plugin) is not { } tree)
             return new CopyDocument(CopyDocumentKind.Rendered, RenderedFileName(plugin, identity));
         if (tree.DocumentOf(plugin, identity) is not { } file) return null;
         var kind = file.IsContainersDocument ? CopyDocumentKind.ContainersFile : CopyDocumentKind.OwnFile;
@@ -291,19 +291,22 @@ internal sealed class RecordQueryService(
     }
 
     // A tracked copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
-    private string RenderedFileName(PluginAddress plugin, RecordIdentity identity) =>
-        TreeOf(plugin, registered => SourceRepository.IsTracked(registered))?.FileNameOf(plugin, identity)
-            ?? SourceRepository.FileNameOf(identity);
-
-    private SourceRepository? TreeOf(PluginAddress plugin, Func<RegisteredPlugin, bool> admits)
+    private string RenderedFileName(PluginAddress plugin, RecordIdentity identity)
     {
         var snapshot = _loadOrder.Require();
-        return snapshot.Plugin(plugin) is { Provider: PluginProvider.FromMod mod } registered && admits(registered)
-            ? SourceRepository.Over(mod, snapshot.GameRelease)
+        var tracked = snapshot.Plugin(plugin) is { } registered && source.IsTracked(registered)
+            ? source.Over(registered, snapshot.GameRelease)
             : null;
+        return tracked?.FileNameOf(plugin, identity) ?? source.FileNameOf(identity);
     }
 
-    public RecordOfFileAnswer GetRecordOfFile(string path) => SourceRepository.RecordOfFile(_loadOrder.Require(), path);
+    private ISourceRepositoryReads? TreeOf(PluginAddress plugin)
+    {
+        var snapshot = _loadOrder.Require();
+        return snapshot.Plugin(plugin) is { } registered ? source.TreeOf(registered, snapshot.GameRelease) : null;
+    }
+
+    public RecordOfFileAnswer GetRecordOfFile(string path) => source.RecordOfFile(_loadOrder.Require(), path);
 
     public LoadOrderStatus GetStatus() => _index.Status;
 
