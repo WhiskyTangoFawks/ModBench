@@ -22,14 +22,8 @@ describe('recordOpenPlan', () => {
       .toEqual({ addresses: [A, B], placement: 'beside', preview: false });
   });
 
-  it('records that each name a tab\'s place open in it', () => {
-    const place = { document: 'modbench-rendered:/Data/A.esp/Gun.json', viewColumn: 2 };
-    expect(recordOpenPlan([{ ...ofRecord(A), placement: place }, { ...ofRecord(B), placement: place }], []))
-      .toEqual({ addresses: [A, B], placement: place, preview: false });
-  });
-
-  it('several records without a placement each open pinned', () => {
-    expect(recordOpenPlan([ofRecord(A), ofRecord(B)], [])).toEqual({ addresses: [A, B], placement: 'active', preview: false });
+  it('several records without a placement open one grid as a preview', () => {
+    expect(recordOpenPlan([ofRecord(A), ofRecord(B)], [])).toEqual({ addresses: [A, B], placement: 'active', preview: true });
   });
 
   it('reads a row as its own copy: the plugin and origin its Argument names', () => {
@@ -45,9 +39,9 @@ describe('recordOpenPlan', () => {
     expect(recordOpenPlan({ argument: { kind: 'mod', name: 'ModA' } }, []).addresses).toEqual([]);
   });
 
-  it('with no Argument, opens the records selected in the focused view, each pinned in a tab of its own', () => {
+  it('with no Argument, opens the records selected in the focused view, as one grid, a preview', () => {
     expect(recordOpenPlan(undefined, [ofRecord(A, COPY), ofRecord(B)]))
-      .toEqual({ addresses: [{ ...A, plugin: COPY }, B], placement: 'active', preview: false });
+      .toEqual({ addresses: [{ ...A, plugin: COPY }, B], placement: 'active', preview: true });
   });
 
   it('with no Argument and no record selected, opens nothing', () => {

@@ -5,7 +5,7 @@ import { reportFailure } from '../drivingLib/reportFailure';
 import { pickRecord } from './recordPicker';
 import type { SharedRecordPanelDeps } from './recordPanelMessageRouter';
 import type { RecordTabs } from './recordTabs';
-import { RECORD_VIEW_TYPE, RecordEditorProvider, recordTabAt } from './recordPanelHost';
+import { RECORD_VIEW_TYPE, RecordEditorProvider } from './recordPanelHost';
 import { applyRecordEdit, oneAtATime, type RecordWriteDeps } from './applyRecordEdit';
 import { ExtendedFieldDocuments } from './extendedFieldEditor';
 import { commitField, registerRecordPanelContextCommands, type FieldCommitDeps } from './recordPanelContextCommands';
@@ -19,7 +19,6 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
-import { inTabsPlace } from './inTabsPlace';
 import { followReportedCopies } from './recordCopy';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from './childRecordDocument';
@@ -150,12 +149,7 @@ async function openRecords(
       columns.push(copy);
     }
     const show = (options: vscode.TextDocumentShowOptions) => grid.open(tab.uri, columns, options);
-    if (typeof placement !== 'object') {
-      await show({ viewColumn: placement === 'beside' ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, preview });
-      return;
-    }
-    const replaced = recordTabAt(placement);
-    await (replaced ? inTabsPlace(replaced, show) : show({ viewColumn: placement.viewColumn }));
+    await show({ viewColumn: placement === 'beside' ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, preview });
   });
 }
 
