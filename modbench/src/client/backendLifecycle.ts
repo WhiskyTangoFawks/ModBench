@@ -2,7 +2,6 @@ import * as http from 'node:http';
 import * as net from 'node:net';
 import * as readline from 'node:readline';
 import type { BackendStatus } from './MEditClient';
-import { errorMessage } from '../ports/errorMessage';
 
 /** Which of the spawned process's two streams a line arrived on. The forwarder that levels it
  *  takes this type, so the client names no VS Code type (ADR-0019). */
@@ -11,7 +10,7 @@ export type BackendStream = 'stdout' | 'stderr';
 interface BackendProcess {
   /** Optional signal so stop() can send SIGTERM then escalate to SIGKILL. */
   kill(signal?: NodeJS.Signals): void;
-  on(event: 'exit', cb: (code: number | null) => void): void;
+  on(event: 'exit', cb: (code: number | null, signal: NodeJS.Signals | null) => void): void;
   on(event: 'error', cb: (err: Error) => void): void;
   /** Present when spawned with piped stdio; absent on 'ignore'. */
   stdout?: NodeJS.ReadableStream | null;
@@ -36,14 +35,14 @@ export interface BackendLifecycleOptions {
   spawn?: SpawnFn;
   /** Path to the bundled backend executable. */
   executablePath?: string;
-  /** Read fresh at each spawn from the Output channel's current level, so a crash-restart picks
-   *  up a level change. The spawn path only — an attached backend never sees it. */
+  /** Read at the spawn from the Output channel's current level. The spawn path only — an attached
+   *  backend never sees it. */
   serilogLevelArgs?: () => string[];
   /** How long stop() waits after SIGTERM before escalating to SIGKILL. Defaults to 5s, matching
    *  .NET's Generic Host shutdown budget (HostOptions.ShutdownTimeout). */
   stopGracePeriodMs?: number;
   /** Polled at `pollIntervalMs` while attaching/starting; defaults to a real GET `/health`
-   *  against `port`. Injectable so a test drives attach/restart timing without a real socket. */
+   *  against `port`. Injectable so a test drives attach timing without a real socket. */
   checkHealth?: () => Promise<boolean>;
 }
 
@@ -65,18 +64,13 @@ export class BackendLifecycle {
   private _status: BackendStatus = 'starting';
   private readonly listeners = new Set<(status: BackendStatus) => void>();
   private child?: BackendProcess;
-  // True between start() and stop(); an exit while true is a crash → restart.
+  // True between start() and stop() or an exit; an exit while true is a crash.
   private expectedAlive = false;
-  // In-flight start(), its restarts included, so concurrent callers share it instead of
-  // double-spawning.
+  // In-flight start(), so concurrent callers share it instead of double-spawning.
   private startPromise?: Promise<void>;
-  // A child exited during the start in flight, which restarts it rather than settling.
-  private restartQueued = false;
   // Bumped by stop(); an in-flight start()/connect() from an older generation aborts instead of
   // resurrecting a load order the user already closed.
   private generation = 0;
-  private restartAttempts = 0;
-  private static readonly MAX_RESTARTS = 3;
 
   constructor(opts: BackendLifecycleOptions) {
     this.attachPort = opts.attachPort;
@@ -94,10 +88,6 @@ export class BackendLifecycle {
 
   get status(): BackendStatus { return this._status; }
 
-  /** The start in flight, which settles once a child runs or its restarts end, and never rejects:
-   *  whoever began the start hears why it threw. */
-  get starting(): Promise<void> | undefined { return this.startPromise?.then(() => undefined, () => undefined); }
-
   /** The port the API answers on: the attached one, else the spawned backend's once start() has
    *  claimed it. */
   get port(): number | undefined { return this.attachPort ?? this.spawnPort; }
@@ -110,22 +100,8 @@ export class BackendLifecycle {
   /** Spawns this window's own backend, or waits for the one on `attachPort`. Idempotent: concurrent calls share one in-flight start, so no double-spawn. */
   start(): Promise<void> {
     this.expectedAlive = true;
-    this.startPromise ??= this.startUntilSettled().finally(() => { this.startPromise = undefined; });
+    this.startPromise ??= this.doStart().finally(() => { this.startPromise = undefined; });
     return this.startPromise;
-  }
-
-  private async startUntilSettled(): Promise<void> {
-    const gen = this.generation;
-    do {
-      this.restartQueued = false;
-      await this.doStart();
-    } while (this.isRestartQueued() && gen === this.generation);
-  }
-
-  // A direct read narrows to the `false` assigned above, since TS cannot see handleExit set it
-  // across the `await`.
-  private isRestartQueued(): boolean {
-    return this.restartQueued;
   }
 
   private async doStart(): Promise<void> {
@@ -143,13 +119,12 @@ export class BackendLifecycle {
         ...(this.serilogLevelArgs?.() ?? []),
       ]);
       this.child = child;
-      child.on('error', (err) => this.log(`[backend] spawn error: ${err.message}`));
-      child.on('exit', (code) => this.handleExit(code));
+      child.on('error', (err) => this.handleEnd(`failed to start: ${err.message}`));
+      child.on('exit', (code, signal) => this.handleEnd(`exited unexpectedly (${signal ? `signal ${signal}` : `code ${code}`})`));
       this.forwardOutput(child);
     }
 
     await this.connect(gen, this.attachPort === undefined ? this.child : undefined);
-    if (this._status === 'running') this.restartAttempts = 0;
   }
 
   // Subscribed unconditionally: a piped stream nobody reads fills its OS buffer and then blocks
@@ -168,14 +143,12 @@ export class BackendLifecycle {
   async stop(): Promise<void> {
     this.expectedAlive = false;
     this.generation++; // cancels an in-flight doStart()/connect()
-    this.restartAttempts = 0;
-    const wasRunning = this.child !== undefined || this._status === 'running';
     const child = this.child;
     this.child = undefined;
     if (child) {
       await this.killAndConfirmExit(child);
     }
-    if (wasRunning) this.setStatus('stopped');
+    if (this._status !== 'stopped') this.setStatus('stopped');
   }
 
   // A backend mid a long synchronous request won't notice SIGTERM, so this escalates to SIGKILL
@@ -199,21 +172,12 @@ export class BackendLifecycle {
     });
   }
 
-  private handleExit(code: number | null): void {
+  private handleEnd(why: string): void {
     this.child = undefined;
     if (!this.expectedAlive) return; // stop() already handled it
-    if (this.restartAttempts >= BackendLifecycle.MAX_RESTARTS) {
-      this.setStatus('disconnected');
-      this.log(`[backend] backend crashed ${this.restartAttempts}× — giving up`);
-      return;
-    }
-    this.restartAttempts++;
-    // Begun before the status says disconnected, so whoever hears it finds the restart under way.
-    if (this.startPromise) this.restartQueued = true;
-    else void this.start().catch((e: unknown) => { this.log(`[backend] restart failed: ${errorMessage(e)}`); });
-    // The process is gone now; the restart is an attempt, not a guarantee.
-    this.setStatus('disconnected');
-    this.log(`[backend] backend exited unexpectedly (code ${code}); restart ${this.restartAttempts}/${BackendLifecycle.MAX_RESTARTS}`);
+    this.expectedAlive = false;
+    this.log(`[backend] mEdit ${why}`);
+    this.setStatus('stopped');
   }
 
   // A spawned child that is gone before `/health` answers is a failed start, whoever else answers

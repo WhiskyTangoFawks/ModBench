@@ -66,7 +66,6 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private readonly reconnectListeners = new Set<() => void>();
   private _status: BackendStatus = 'starting';
-  private restart?: { settled: Promise<void>; settle: () => void };
   private putAnswer: LoadOrderWire['put'] = () => Promise.reject(new Error('InMemoryMEditClient: no scripted answer for a put'));
   private startAnswer: () => Promise<void> = () => { this.setStatus('running'); return Promise.resolve(); };
   private stopAnswer: () => void = () => undefined;
@@ -78,7 +77,6 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly snapshotsPut: LoadOrderSnapshot[] = [];
   private readonly sender = createLoadOrderSender({
     status: () => this.status,
-    starting: () => this.restart?.settled,
     onStatusChanged: (listener) => this.onStatusChanged(listener),
     onReconnected: (listener) => this.onReconnected(listener),
     start: () => { this.record('start', []); return this.startAnswer(); },
@@ -165,34 +163,26 @@ export class InMemoryMEditClient implements MEditClient {
   get status(): BackendStatus { return this._status; }
 
   setStatus(status: BackendStatus): void {
-    if (status === 'running') this.endRestart();
     this._status = status;
     for (const listener of this.statusListeners) listener(status);
   }
 
-  // One call: the backend goes disconnected and every query starts rejecting, same as a real
-  // disconnected backend's read side.
-  disconnected(): void {
+  // Every query starts rejecting, same as a real gone backend's read side.
+  private reset(): void {
     this.queryAnswers = {};
     this.queryFailures.clear();
     this.queryQueues = {};
+  }
+
+  disconnected(): void {
+    this.reset();
     this.setStatus('disconnected');
   }
 
-  private endRestart(): void {
-    this.restart?.settle();
-    this.restart = undefined;
-  }
-
-  /** mEdit exits on its own, and is restarted unless the restarts are given up. */
-  crashed({ restarting }: { restarting: boolean }): void {
-    this.endRestart();
-    if (restarting) {
-      let settle!: () => void;
-      const settled = new Promise<void>((resolve) => { settle = resolve; });
-      this.restart = { settled, settle };
-    }
-    this.disconnected();
+  /** mEdit exits on its own, and nothing starts it again. */
+  crashed(): void {
+    this.reset();
+    this.setStatus('stopped');
   }
 
   onStatusChanged(listener: (status: BackendStatus) => void): () => void {
@@ -212,6 +202,7 @@ export class InMemoryMEditClient implements MEditClient {
 
   async start(): Promise<void> { await this.sender.launch(); }
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void { return this.sender.onLaunch(listener); }
+  onExit(listener: () => void): () => void { return this.sender.onExit(listener); }
   stop(): Promise<void> { return this.sender.stop(); }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }

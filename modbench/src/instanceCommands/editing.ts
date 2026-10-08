@@ -8,10 +8,11 @@ import { putLoadOrder, type LoadOrderSource, type PutLoadOrderResult } from './l
 export type Told =
   | { kind: 'put'; put: PutLoadOrderResult }
   | { kind: 'launchFailed'; reason: string }
-  | { kind: 'backendFailed' };
+  | { kind: 'backendFailed' }
+  | { kind: 'exited' };
 
 export interface EditingDeps {
-  client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent' | 'onLaunch' | 'latestLoadOrder'>;
+  client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent' | 'onLaunch' | 'onExit' | 'latestLoadOrder'>;
   instanceRoot: string;
   /** Shows a launch, from its start until the snapshot it was for is told (plugins.md, States 2). */
   around: (entry: () => Promise<void>) => Promise<void>;
@@ -70,6 +71,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     client.onLoadOrderResent((snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => {
       tellPut(Promise.resolve({ sent: true, snapshot, outcome }));
     }),
+    client.onExit(() => { void tells.track(tell({ kind: 'exited' })); }),
     client.onLaunch((launched) => {
       const shown = launches.track(tellLaunch(launched));
       if (!entering) void around(() => shown);
