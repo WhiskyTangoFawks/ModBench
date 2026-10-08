@@ -6,7 +6,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { rm } from 'node:fs/promises';
 import { confirmRename, renamePlugin } from '../renamePlugin';
 import { OVERWRITE_ORIGIN } from '../../instanceAdapter/instanceAdapter';
-import { accessTo, readPluginLines } from '../../test/mo2/adapterOver';
+import { adapterOver, readPluginLines } from '../../test/mo2/adapterOver';
 import { cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 import { scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -20,7 +20,7 @@ const OTHER = { name: 'Other.esp', origin: 'OtherMod' };
 describe('renamePlugin — the plugin source first, then the file and its lines', () => {
   let root: string;
   let client: InMemoryMEditClient;
-  const rename = (newName: string, plugin = PLUGIN) => renamePlugin({ ...accessTo(root), client }, plugin, newName, 'Fallout4');
+  const rename = (newName: string, plugin = PLUGIN) => renamePlugin({ adapter: adapterOver(root), client }, plugin, newName, 'Fallout4');
 
   beforeEach(() => {
     root = cloneCorpusFixture();
@@ -61,7 +61,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
   });
 
   it('reports the source renamed when the write of the files fails after it', async () => {
-    const adapter = accessTo(root).adapter;
+    const adapter = adapterOver(root);
     vi.spyOn(adapter, 'renamePlugin').mockRejectedValue(new Error('disk full'));
 
     const result = await renamePlugin({ adapter, client }, PLUGIN, 'Renamed Patch.esp', 'Fallout4');
@@ -70,7 +70,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
   });
 
   it('puts a rename of Overwrite\'s plugin to the adapter as the run-time output', async () => {
-    const adapter = accessTo(root).adapter;
+    const adapter = adapterOver(root);
     const checkOnAdapter = vi.spyOn(adapter, 'checkPluginRename').mockResolvedValue({ applied: true });
     const renamePluginOnAdapter = vi.spyOn(adapter, 'renamePlugin').mockResolvedValue();
 
@@ -85,7 +85,7 @@ describe('confirmRename — what is known before any write', () => {
   let root: string;
   let client: InMemoryMEditClient;
   const confirm = (ask: ReturnType<typeof scriptedDialog>, plugin = PLUGIN) =>
-    confirmRename({ adapter: accessTo(root).adapter, client, ask }, plugin, 'Renamed Patch.esp', 'Fallout4');
+    confirmRename({ adapter: adapterOver(root), client, ask }, plugin, 'Renamed Patch.esp', 'Fallout4');
   const dependants = (dependantPlugins: PluginAddress[], unreadable: PluginAddress[] = []) =>
     client.setQueryAnswer('getPluginDependants', { dependants: dependantPlugins, unreadable });
 

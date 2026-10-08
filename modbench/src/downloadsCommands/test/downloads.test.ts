@@ -6,19 +6,20 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
-  deleteDownloads, excludeDownloads, includeDownloads, type DownloadsAccess,
+  deleteDownloads, excludeDownloads, includeDownloads,
 } from '../downloads';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
-import { accessTo, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
+import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
+import { adapterOver, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 import { assertSelectionOutcome } from '../../test/surfacingDoubles';
 import type { MoveToTrash } from '../../ports/trash';
 
 let root: string;
-let access: DownloadsAccess;
+let adapter: InstanceAdapter;
 
 beforeEach(() => {
   root = cloneCorpusFixture();
-  access = accessTo(root);
+  adapter = adapterOver(root);
 });
 afterEach(() => rm(root, { recursive: true, force: true }));
 
@@ -47,14 +48,14 @@ describe('excludeDownloads / includeDownloads — one name', () => {
   const refusedFor = (name: string, reasonContains: string) => ({ landed: [], refused: [{ item: name, reasonContains }] });
 
   it('excluding a file gone from disk is refused, naming it, and writes it no metadata', async () => {
-    assertSelectionOutcome(await excludeDownloads(access, ['foo.7z']), refusedFor('foo.7z', 'foo.7z'));
+    assertSelectionOutcome(await excludeDownloads(adapter, ['foo.7z']), refusedFor('foo.7z', 'foo.7z'));
     await expect(readFile(metaPath('foo.7z'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('including a file gone from disk is refused, naming it, and leaves its stale metadata alone', async () => {
     await writeFile(metaPath('foo.7z'), '[General]\r\nremoved=true\r\n');
 
-    assertSelectionOutcome(await includeDownloads(access, ['foo.7z']), refusedFor('foo.7z', 'foo.7z'));
+    assertSelectionOutcome(await includeDownloads(adapter, ['foo.7z']), refusedFor('foo.7z', 'foo.7z'));
     expect(await readFile(metaPath('foo.7z'), 'utf8')).toBe('[General]\r\nremoved=true\r\n');
   });
 
@@ -62,13 +63,13 @@ describe('excludeDownloads / includeDownloads — one name', () => {
     await writeArchive('foo.7z');
     await mkdir(metaPath('foo.7z'));
 
-    assertSelectionOutcome(await excludeDownloads(access, ['foo.7z']), refusedFor('foo.7z', 'EISDIR'));
+    assertSelectionOutcome(await excludeDownloads(adapter, ['foo.7z']), refusedFor('foo.7z', 'EISDIR'));
   });
 
   it('an exclude racing an installed mark leaves both marks set, rather than the second writer dropping the first key', async () => {
     await writeArchive('foo.7z');
 
-    await Promise.all([excludeDownloads(access, ['foo.7z']), access.adapter.markDownloadedFile('foo.7z', 'Installed')]);
+    await Promise.all([excludeDownloads(adapter, ['foo.7z']), adapter.markDownloadedFile('foo.7z', 'Installed')]);
 
     expect(await statusOf('foo.7z')).toMatchObject({ excluded: true, status: 'Installed' });
   });
@@ -79,7 +80,7 @@ describe('deleteDownloads', () => {
     const file = await writeArchive('manual.7z');
     const { trash, trashed } = recordingTrash();
 
-    const outcome = await deleteDownloads(access, [file], trash);
+    const outcome = await deleteDownloads(adapter, [file], trash);
 
     expect(outcome).toEqual({ landed: [{ name: 'manual.7z' }], refused: [] });
     expect(trashed).toEqual([file.path]);
@@ -88,14 +89,11 @@ describe('deleteDownloads', () => {
   it('hands the Instance adapter the metadata by the file\'s name, not a path the command joins itself', async () => {
     const file = await writeArchive('foo.7z');
     const asked: string[] = [];
-    const counted: DownloadsAccess = {
-      ...access,
-      adapter: {
-        ...access.adapter,
-        trashDownloadedFileMeta: (name, trash) => {
-          asked.push(name);
-          return access.adapter.trashDownloadedFileMeta(name, trash);
-        },
+    const counted: InstanceAdapter = {
+      ...adapter,
+      trashDownloadedFileMeta: (name, trash) => {
+        asked.push(name);
+        return adapter.trashDownloadedFileMeta(name, trash);
       },
     };
 

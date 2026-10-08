@@ -107,19 +107,19 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   own(markFirstReadLanded(instance));
   const refreshIndex = () => refresh(client, instanceRoot, instance.value);
   const { modSync, pluginSync } = own(instanceSyncs({
-    instance, syncMods: modSyncOver(access), syncPlugins: pluginSyncOver(access), channel: outputChannel,
+    instance, syncMods: modSyncOver(adapter), syncPlugins: pluginSyncOver(adapter), channel: outputChannel,
   }));
   const trackSelection = selectionInFocusedView(
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
   const plugins = own(createPluginsView({
-    instance, access, recordBrowser, client: pluginFacts, pluginSync, channel: outputChannel, statusBar, registerRepositories, reporterFor,
+    instance, adapter, recordBrowser, client: pluginFacts, pluginSync, channel: outputChannel, statusBar, registerRepositories, reporterFor,
     ask, recordWrite, trackSelection, modsView: MODS_KEY_ARGS.view,
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     log: (level, msg) => outputChannel[level](msg),
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
   const { view: downloadsView, nameFilter: downloadsFilter } = own(createDownloadsView({
-    access, instance, reporter: reporterFor('downloadList'), ask, trash,
+    adapter, instance, reporter: reporterFor('downloadList'), ask, trash,
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
@@ -147,7 +147,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   own(loadOrderPutOnEachValue(instance, putLoadOrder));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putLoadOrder));
   const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
-  ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor }));
+  ownAll(own, registerToolboxCommands({ adapter, instance, extensionId, reporterFor }));
   own(deps.focusedView.follow('modbench.modList', mods.view));
   own(deps.focusedView.follow('modbench.pluginListTree', plugins.followed));
   own(deps.focusedView.follow('modbench.downloads', downloadsView));

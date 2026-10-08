@@ -11,18 +11,13 @@ import type {
   DataFolderPlugins, DecidePluginOrder, InstanceAdapter, PluginEntry, PluginOrderChange,
 } from '../instanceAdapter/instanceAdapter';
 
-/** What a plugins command reaches the instance through. */
-export interface PluginsAccess {
-  readonly adapter: InstanceAdapter;
-}
-
 async function changePluginOrder(
-  access: PluginsAccess, profile: string, decide: DecidePluginOrder,
+  adapter: InstanceAdapter, profile: string, decide: DecidePluginOrder,
 ): Promise<CommandResult> {
   try {
     // A change already true of the order is not written: for `syncPlugins` that is the
     // difference between a loop that settles and one that does not.
-    const { wrote } = await access.adapter.changePluginOrder(profile, decide);
+    const { wrote } = await adapter.changePluginOrder(profile, decide);
     return { applied: true, wrote };
   } catch (err) {
     return refuse(err);
@@ -40,11 +35,11 @@ export interface PluginParticipation {
  *  selection in one write (commands.md, "A selection is one gesture") — every entry lands or is
  *  refused by name, whatever state each one asks for. */
 export async function setPluginsParticipation(
-  access: PluginsAccess, profile: string, entries: readonly PluginParticipation[],
+  adapter: InstanceAdapter, profile: string, entries: readonly PluginParticipation[],
 ): Promise<SelectionResult<string>> {
   let landed: string[] = [];
   let refused: ItemRefusal<string>[] = [];
-  const outcome = await changePluginOrder(access, profile, (order) => {
+  const outcome = await changePluginOrder(adapter, profile, (order) => {
     const known = new Set(order.map((entry) => entry.name));
     const found = entries.filter((entry) => known.has(entry.name));
     landed = found.map((entry) => entry.name);
@@ -58,9 +53,9 @@ export async function setPluginsParticipation(
 /** `setPluginsParticipation`, one state for the whole selection — the menu and the key's own
  *  shape, which never mixes directions in one gesture. */
 export function setPluginsEnabled(
-  access: PluginsAccess, profile: string, pluginNames: readonly string[], enabled: boolean,
+  adapter: InstanceAdapter, profile: string, pluginNames: readonly string[], enabled: boolean,
 ): Promise<SelectionResult<string>> {
-  return setPluginsParticipation(access, profile, pluginNames.map((name) => ({ name, enabled })));
+  return setPluginsParticipation(adapter, profile, pluginNames.map((name) => ({ name, enabled })));
 }
 
 /** Where a drag landed in the Plugins tree. */
@@ -81,7 +76,7 @@ async function orderFactsFrom(masters: PluginMasters): Promise<PluginOrderFactsO
 }
 
 export async function reorderPlugins(
-  access: PluginsAccess, masters: PluginMasters, profile: string, plugins: readonly PluginAddress[], drop: Drop,
+  adapter: InstanceAdapter, masters: PluginMasters, profile: string, plugins: readonly PluginAddress[], drop: Drop,
   loadedWithNoLine: readonly string[],
 ): Promise<CommandResult> {
   const pluginNames = plugins.map((plugin) => plugin.name);
@@ -89,7 +84,7 @@ export async function reorderPlugins(
   const factsOf = await orderFactsFrom(masters);
   // Settled against the order the change lands on, so a tree a generation behind plugins.txt
   // cannot land the block at a stale index.
-  return changePluginOrder(access, profile, (order) => {
+  return changePluginOrder(adapter, profile, (order) => {
     const names = order.map((p) => p.name);
     // A line for a plugin the game loads with no line does not place it.
     const refusal = moveOrderRefusal(names.filter((name) => !noLine.has(pluginKey(name))), pluginNames, drop, factsOf);
@@ -129,7 +124,7 @@ const changedSinceRead = (order: readonly PluginEntry[], read: readonly PluginEn
   order.length !== read.length || order.some((line, i) => line.name !== read[i]?.name);
 
 async function syncPlugins(
-  access: PluginsAccess, { profile, pluginOrder, provided, inData, loadedWithNoLine }: PluginSyncInputs,
+  adapter: InstanceAdapter, { profile, pluginOrder, provided, inData, loadedWithNoLine }: PluginSyncInputs,
 ): Promise<PluginSyncResult> {
   // Without the Data folder's listing, a line for a Data plugin would be dropped. A game folder
   // not found is told once, as the instance's state (common.md, States, story 5).
@@ -144,7 +139,7 @@ async function syncPlugins(
   const inDataNames = inData.names;
 
   let delta: PluginLinesDelta = { added: [], dropped: [] };
-  const result = await changePluginOrder(access, profile, (order) => {
+  const result = await changePluginOrder(adapter, profile, (order) => {
     if (changedSinceRead(order, pluginOrder)) return [];
     delta = pluginLinesDelta(order.map((e) => e.name), addable, inDataNames);
     return [
@@ -167,6 +162,6 @@ interface PluginSyncInputs {
 export type PluginSyncRun = (inputs: PluginSyncInputs) => Promise<PluginSyncResult>;
 
 /** `syncPlugins` bound to one instance. */
-export function pluginSyncOver(access: PluginsAccess): PluginSyncRun {
-  return (inputs) => syncPlugins(access, inputs);
+export function pluginSyncOver(adapter: InstanceAdapter): PluginSyncRun {
+  return (inputs) => syncPlugins(adapter, inputs);
 }

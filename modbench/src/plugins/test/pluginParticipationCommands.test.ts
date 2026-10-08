@@ -30,7 +30,7 @@ import { PluginNode, ImplicitMasterNode } from '../PluginsTreeProvider';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
-import { accessTo } from '../../test/mo2/adapterOver';
+import { adapterOver } from '../../test/mo2/adapterOver';
 import { progressSteps } from '../../test/recordedProgress';
 
 const LONG_AGO = new Date('2020-01-01T00:00:00Z');
@@ -63,7 +63,7 @@ const instance = () => ({
 
 function registered(viewSelection: () => PluginNode[] = () => []) {
   const reporter = recordingReporter();
-  registerPluginEnableCommands(accessTo(dir), instance(), viewSelection, reporter);
+  registerPluginEnableCommands(adapterOver(dir), instance(), viewSelection, reporter);
   return reporter;
 }
 

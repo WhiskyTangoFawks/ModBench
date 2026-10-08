@@ -9,6 +9,7 @@
   },
   "references": [
     { "path": "../drivingLib" },
+    { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
     { "path": "../instanceCommands" },
     { "path": "../ports" },
