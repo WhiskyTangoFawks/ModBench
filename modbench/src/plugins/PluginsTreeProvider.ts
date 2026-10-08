@@ -9,7 +9,7 @@ import { rowResourceUri } from './recordResourceUri';
 import { blankIcon } from '../drivingLib/blankIcon';
 import { IndexingNode, type RecordBrowserNode, type RecordBrowser } from './RecordBrowser';
 import { ErrorNode } from '../drivingLib/errorNode';
-import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
+import { exactPluginAddressKey, pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
 import { placeOf, type PluginWarning } from './pluginFacts';
 import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
@@ -75,7 +75,7 @@ interface PluginsTreeProviderOptions {
 // plugins.md, A row, Identity: VS Code keeps expansion and selection across a rebuild by it, and
 // refuses two rows that share one.
 function rowIdentity(kind: string, plugin: PluginAddress, formKey?: string): string {
-  return [kind, pluginAddressKey(plugin), ...(formKey === undefined ? [] : [formKey])].join(':');
+  return [kind, exactPluginAddressKey(plugin), ...(formKey === undefined ? [] : [formKey])].join(':');
 }
 
 function openHeaderCommand(header: PluginAddress): vscode.Command {

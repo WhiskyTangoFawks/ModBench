@@ -297,6 +297,15 @@ describe('the MO2 Instance adapter', () => {
       expect(folders.holding({ kind: 'mod', name: 'No Such Mod' })).toBeUndefined();
     });
 
+    it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) answers each of two folders whose names differ only in case for the entry spelled as its own', async () => {
+      await mkdir(join(root, 'mods', 'ModA'));
+      await mkdir(join(root, 'mods', 'moda'));
+      const folders = present(await adapter.modFolders(), 'the mod folders');
+
+      expect(folders.holding({ kind: 'mod', name: 'moda' })?.path).toBe(join(root, 'mods', 'moda'));
+      expect(folders.holding({ kind: 'mod', name: 'ModA' })?.path).toBe(join(root, 'mods', 'ModA'));
+          });
+
     it('hands over a link it cannot follow rather than answering it as a folder', async () => {
       await symlink(join(root, 'mods', 'Loop'), join(root, 'mods', 'Loop'));
       const skipped: string[] = [];
@@ -336,7 +345,7 @@ describe('the MO2 Instance adapter', () => {
 
       const found = (dataFolder: string): GameFolder => ({ kind: 'found', root: game, dataFolder });
 
-      it('answers the plugin files at the Data folder\'s root, case-folded', async () => {
+      it('answers the plugin files at the Data folder\'s root, as the folder spells them', async () => {
         const data = join(game, 'Data');
         await mkdir(join(data, 'Nested.esp'), { recursive: true });
         await writeFile(join(data, 'Fallout4.ESM'), '');
@@ -345,7 +354,16 @@ describe('the MO2 Instance adapter', () => {
 
         const plugins = await adapter.gameFolderPlugins(found(data));
 
-        expect(plugins).toEqual({ kind: 'listed', names: new Set(['fallout4.esm', 'patch.esp']) });
+        expect(plugins).toEqual({ kind: 'listed', names: new Set(['Fallout4.ESM', 'Patch.esp']) });
+      });
+
+      it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) answers both of two files whose names differ only in case', async () => {
+        const data = join(game, 'Data');
+        await mkdir(data, { recursive: true });
+        await writeFile(join(data, 'Foo.esp'), '');
+        await writeFile(join(data, 'foo.esp'), '');
+
+        expect(await adapter.gameFolderPlugins(found(data))).toEqual({ kind: 'listed', names: new Set(['Foo.esp', 'foo.esp']) });
       });
 
       it('answers unresolved when the game folder was not found', async () => {
