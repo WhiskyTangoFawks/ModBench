@@ -585,7 +585,8 @@ describe('package.json command titles and categories', () => {
 
   it('offers every catalog gesture in the palette', () => {
     const gestureIds = catalogCommandIds(commandsMarkdown.slice(0, commandsMarkdown.indexOf('## System commands')));
-    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id));
+    const declared = new Set(commands.map((c) => c.command));
+    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id) || !declared.has(id));
     expect(
       hidden,
       'commands.md, Entry points are not gestures: every gesture is also in the command palette.',
@@ -1076,6 +1077,7 @@ describe('package.json Plugins palette entries', () => {
   describePaletteGate('modbench.pluginListTree', [
     ['modbench.plugin.reveal', { 'modbench.plugin.singlePlugin': true }],
     ['modbench.plugin.rename', { 'modbench.plugin.singleTracked': true }],
+    ['modbench.plugin.move', { 'modbench.plugin.holdsPluginLine': true }],
     ['modbench.plugin.decompile', { 'modbench.plugin.allInTrackedMod': true }],
     ['modbench.record.create', { 'modbench.plugin.singleCreatable': true }],
     ['modbench.record.delete', { 'modbench.plugin.allDeletableRecords': true, ...IN_PLUGINS }],
