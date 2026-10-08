@@ -30,6 +30,8 @@ public interface IPluginAdapter
     /// tool holds it against a reader. Neither a read of its bytes nor a parse.</summary>
     bool CanRead(RegisteredPlugin plugin);
 
+    bool GameFolderExists(string gameFolder);
+
     /// <summary>What a plugin's own binary says about itself, which is what the Index holds for it.
     /// <c>Unreachable</c> is the throw that stopped a full walk: the count is a readout, not a
     /// gate.</summary>

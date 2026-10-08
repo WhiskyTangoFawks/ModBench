@@ -264,10 +264,12 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     }
 
     private static bool? TemporaryExterior(CopySource source, RecordIdentity container, GameRelease release) =>
-        CanBePartial.TemporaryExterior(
-            (source.RecordFlags(container) & PersistentFlag.Bit) != 0,
-            source.ContainerOf(container) is not null,
-            RecordTypeDispatch.For(release).IsCell(container.RecordType) ? source.WorldspaceOf(container) is null : null);
+        RecordTypeDispatch.For(release).IsCell(container.RecordType)
+            ? CanBePartial.TemporaryExterior(
+                (source.RecordFlags(container) & PersistentFlag.Bit) != 0,
+                source.ContainerOf(container) is not null,
+                source.WorldspaceOf(container) is null)
+            : null;
 
     private SourceDocument PartialFormOf(SourceDocument container, RecordTableSchema schema, GameRelease release)
     {

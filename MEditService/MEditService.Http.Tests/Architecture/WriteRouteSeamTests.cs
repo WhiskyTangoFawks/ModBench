@@ -34,7 +34,6 @@ public sealed class WriteRouteSeamTests
         """Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400)""",
         """Results.Problem("At least one destination is required.", statusCode: 400)""",
         """Results.Problem("Every destination needs a name and an origin.", statusCode: 400)""",
-        """Results.Problem("The replace Option does not apply to a copy as new.", statusCode: 400)""",
         """Results.Problem("Plugin name is required.", statusCode: 400)""",
         """Results.Problem("The folder and the origin are required.", statusCode: 400)""",
         """Results.Problem("Origin is required.", statusCode: 400)""",
@@ -43,8 +42,6 @@ public sealed class WriteRouteSeamTests
         """Results.Problem("At least one mod is required.", statusCode: 400)""",
         """Results.Problem("Every mod needs a name.", statusCode: 400)""",
         """Results.Problem("A record type is required.", statusCode: 400)""",
-        """Results.Problem($"Game directory not found: {req.GameDirectory}", statusCode: 400)""",
-        """Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400)""",
         """Results.Problem("Each plugin entry must have a non-empty Name, Path, Origin and Provider.", statusCode: 400)""",
         """Results.Problem("The snapshot must state its active plugins and those loaded with no line.", statusCode: 400)""",
     ];

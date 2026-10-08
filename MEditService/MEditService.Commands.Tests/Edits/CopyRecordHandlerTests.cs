@@ -81,4 +81,18 @@ public sealed class CopyRecordHandlerTests
         Assert.Single(result.Landed);
         Assert.Empty(result.Refused);
     }
+
+    [Fact]
+    public void CopyingAsNew_WithReplace_RefusesTheSelection_AndWritesNothing()
+    {
+        using var mod = CopyFixture.Create();
+        var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
+        var before = TrackedTree.Records(mod.DestinationModFolder, mod.DestinationPlugin);
+
+        var result = mod.CopyHandler.CopySync([npc], CopyMode.New, [mod.DestinationPlugin], replace: true);
+
+        Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.SelectionRefusal?.Refusal);
+        Assert.Empty(result.Landed);
+        Assert.Equal(before, TrackedTree.Records(mod.DestinationModFolder, mod.DestinationPlugin));
+    }
 }
