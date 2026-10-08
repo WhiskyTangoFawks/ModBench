@@ -30,8 +30,8 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map() },
   };
   const value = { ...base, ...overrides };
-  const pluginOrder = value.plugins.filter((plugin) => plugin.slot !== null && plugin.winning)
-    .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0))
+  const pluginOrder = value.plugins.filter((plugin) => plugin.line !== null && plugin.winning)
+    .sort((a, b) => (a.line ?? 0) - (b.line ?? 0))
     .map(({ name, enabled }) => ({ name, enabled }));
   return {
     ...value, modSyncArguments: modSyncArgumentsOf(value), pluginSyncArguments: pluginSyncArgumentsOf({ ...value, pluginOrder }), ...overrides,

@@ -9,7 +9,7 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
 
     private readonly ScratchDirectory _modFolder = new("medit-istracked-");
 
-    private RegisteredPlugin Registered => new(PluginAt.Name, PluginAt.Origin, "", new PluginProvider.FromMod("Mod", _modFolder));
+    private RegisteredPlugin Registered => new(PluginAt.Name, PluginAt.Origin, "", new PluginProvider.FromMod("Mod", _modFolder), Line: null);
 
     public void Dispose() => _modFolder.Dispose();
 

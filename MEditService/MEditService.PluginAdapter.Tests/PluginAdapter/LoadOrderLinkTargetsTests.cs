@@ -38,7 +38,7 @@ public sealed class LoadOrderLinkTargetsTests
             .Build();
 
     private static RegisteredPlugin Plugin(PluginFixtureData data, string name) =>
-        new(name, PluginOrigin.DataDirectory, Path.Combine(data.DataFolder, name), PluginProvider.Game);
+        new(name, PluginOrigin.DataDirectory, Path.Combine(data.DataFolder, name), PluginProvider.Game, Line: null);
 
     private static IReadOnlyList<RegisteredPlugin> Paths(PluginFixtureData data, params string[] names) =>
         [.. names.Select(name => Plugin(data, name))];

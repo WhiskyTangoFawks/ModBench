@@ -105,7 +105,7 @@ internal sealed class PluginCompileService(
 
         var content = ContentFacts(tree, plugin, loadOrder);
 
-        var loadOrderNames = loadOrder.Active.Select(c => c.Name).ToList();
+        var loadOrderNames = loadOrder.InJudgedOrder().Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         PreparedPluginSave save;
         try

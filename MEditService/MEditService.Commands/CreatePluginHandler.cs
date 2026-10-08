@@ -28,7 +28,7 @@ public sealed class CreatePluginHandler
             ? PluginProvider.NoMod
             : loadOrder.Plugins.FirstOrDefault(p => string.Equals(p.Origin, address.Origin, StringComparison.OrdinalIgnoreCase))?.Provider
                 ?? new PluginProvider.FromMod(address.Origin, folder);
-        var plugin = new RegisteredPlugin(address.Name, address.Origin, path, provider);
+        var plugin = new RegisteredPlugin(address.Name, address.Origin, path, provider, Line: null);
         if (!SourceRepository.IsTracked(plugin)) return new PluginCreateResult();
 
         string failure;

@@ -103,6 +103,24 @@ public sealed class CopyContainerVisibleCopyTests : IDisposable
     }
 
     [Fact]
+    public void ACopiedInContainer_IntoADestinationWithNoLine_IsNotJudged_AndCarriesTheSourcesFields()
+    {
+        var master = Plugin("Later.esm", mod =>
+        {
+            InAnInteriorBlock(mod, CellOf(BaseCell, "LaterCell", LaterWaterHeight));
+            mod.Statics.Add(new Static(LaterStatic, Fallout4Release.Fallout4) { EditorID = "LaterStatic" });
+        });
+        var source = SourceWithARefInTheCell("Source.esm", BaseWaterHeight, 0);
+        var destination = MasteringThrough("Dest.esp", LaterStatic);
+        _plugins.Load((source, false), (master, false), (destination, true));
+        _plugins.Relist(Address(destination), entry => entry with { Slot = null });
+
+        CopyRefIntoDestination(source, destination);
+
+        Assert.Equal("SourceCell", DestinationCell(destination)["EditorID"].Require().GetValue<string>());
+    }
+
+    [Fact]
     public void ACopiedInContainer_IgnoresADestinationMasterThatLoadsBeforeTheSource()
     {
         var master = Plugin("Base.esm", mod =>

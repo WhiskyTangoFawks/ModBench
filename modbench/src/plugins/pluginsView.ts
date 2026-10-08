@@ -41,7 +41,7 @@ import type { ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
 
 export interface PluginsViewDeps {
-  /** The tree's only row input: name, origin, slot, enabled and winning for every plugin. */
+  /** The tree's only row input: name, origin, line, enabled and winning for every plugin. */
   instance: PluginsInstance & Pick<Instance, 'quiet'>;
   adapter: InstanceAdapter;
   /** The record browser that supplies a plugin row's children. */
