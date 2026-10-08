@@ -34,7 +34,7 @@ export interface DownloadFile extends DownloadRow {
 
 // Archive filenames come from two places and are compared, never displayed, so they are folded: a
 // Windows filename is case-insensitive.
-export const archiveKey = (filename: string): string => filename.toLowerCase();
+const archiveKey = (filename: string): string => filename.toLowerCase();
 
 export type UpgradeTier = 'fileId' | 'archiveFilename';
 
@@ -53,7 +53,7 @@ const isArchiveFilenameMatch = (mod: Mod, downloadName: string): boolean =>
 
 const TIER_RANK: Record<'fileId' | 'archiveFilename' | 'none', number> = { fileId: 0, archiveFilename: 1, none: 2 };
 
-export function upgradeCandidates(
+function upgradeCandidates(
   mods: readonly ModlistEntry[],
   download: Pick<DownloadRow, 'modID' | 'fileID' | 'name'>,
 ): UpgradeCandidate[] {

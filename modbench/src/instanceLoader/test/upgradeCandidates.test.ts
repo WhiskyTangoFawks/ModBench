@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { upgradeCandidates } from '../downloadRows';
-import type { DownloadRow, InstanceValue } from '../instance';
+import { buildDownloadRows } from '../downloadRows';
+import type { DownloadedFile } from '../../instanceAdapter/instanceAdapter';
+import type { InstanceValue } from '../instance';
 
 const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): InstanceValue['mods'][number] => ({
   kind: 'mod',
@@ -8,11 +9,16 @@ const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): I
   ...over,
 });
 
-const download = (over: { modID?: string; fileID?: string; name?: string }): Pick<DownloadRow, 'modID' | 'fileID' | 'name'> =>
-  ({ name: 'foo.7z', ...over });
+const download = (over: { modID?: string; fileID?: string; name?: string }): DownloadedFile => {
+  const { name = 'foo.7z', ...ids } = over;
+  return {
+    name, path: `/downloads/${name}`, metaPath: `/downloads/${name}.meta`, size: 1, mtimeMs: 1,
+    meta: { status: 'Downloaded', excluded: false, ...ids },
+  };
+};
 
-const offered = (mods: InstanceValue['mods'], row: Pick<DownloadRow, 'modID' | 'fileID' | 'name'>) =>
-  upgradeCandidates(mods, row).map((c) => [c.modName, c.tier]);
+const offered = (mods: InstanceValue['mods'], file: DownloadedFile) =>
+  (buildDownloadRows([file], new Map(), mods)[0]?.upgrades ?? []).map((c) => [c.modName, c.tier]);
 
 describe('the upgrade candidates of a download', () => {
   it('is empty when the download carries no mod id', () => {
