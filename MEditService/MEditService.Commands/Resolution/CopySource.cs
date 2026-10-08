@@ -30,6 +30,8 @@ internal sealed class CopySource(
 
     internal PluginAddress Plugin => plugin;
 
+    internal LoadOrderSnapshot Snapshot => loadOrder;
+
     /// <summary>The record type and EditorID this plugin's copy names <paramref name="formKey"/>, or
     /// null when it holds nothing under that key. A tracked plugin's document that is no record
     /// document refuses rather than reading as none.</summary>

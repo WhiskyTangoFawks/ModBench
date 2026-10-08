@@ -19,27 +19,16 @@ internal sealed class LoadOrderResolution(
     private CopySource SourceIn(LoadOrderSnapshot snapshot, PluginAddress plugin) =>
         new(plugin, snapshot, adapter, codec, schemaReflector);
 
-    /// <summary>The walk to the left among the masters <paramref name="plugin"/>'s source tree requires, or
-    /// the refusal of a tree that cannot be read. The walk reads the load order held now, whole.</summary>
-    internal RecordEditResult? WalkAmongMastersOf(
-        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        string spelled, string readFromAMaster, out MastersWalk walk)
-    {
-        var current = loadOrder.Current;
-        walk = new MastersWalk(this, current, plugin, new HashSet<string>());
-        try
-        {
-            walk = new MastersWalk(this, current, plugin, RequiredMasters.InTheTree(repository, plugin, schemas));
-            return null;
-        }
-        catch (UnreadableSourceDocumentException ex)
-        {
-            return RecordEditResult.RefusedAt(
-                RecordEditRefusal.RecordParseFailed, spelled,
-                $"'{spelled}': {readFromAMaster} comes only from a master of {plugin.Name}, " +
-                $"which its source tree names, and that tree cannot be read: {ex.Message.TrimEnd('.')}. Nothing was written.");
-        }
-    }
+    /// <summary>The walk to the left among the masters <paramref name="plugin"/>'s source tree requires,
+    /// over the load order held now, whole. The tree is read on the first walk.</summary>
+    internal MastersWalk WalkAmongMastersOf(
+        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        WalkIn(loadOrder.Current, repository, plugin, schemas);
+
+    private MastersWalk WalkIn(
+        LoadOrderSnapshot snapshot, SourceRepository repository, PluginAddress plugin,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        new(this, snapshot, plugin, new Lazy<IReadOnlySet<string>>(() => RequiredMasters.InTheTree(repository, plugin, schemas)));
 
     /// <summary>The name of the plugin originating <paramref name="formKey"/> when <paramref name="destination"/>
     /// loads before it, so a copy there would be an underride. Null when it loads after, or either is not placed.</summary>
@@ -64,20 +53,16 @@ internal sealed class LoadOrderResolution(
         out string? text)
     {
         text = null;
-        var current = loadOrder.Current;
-        int IndexOf(PluginAddress plugin) => current.LoadOrderIndex(plugin) ?? current.Active.Count;
+        var snapshot = source.Snapshot;
+        int IndexOf(PluginAddress plugin) => snapshot.LoadOrderIndex(plugin) ?? snapshot.Active.Count;
         var sourcePartial = source.IsPartialForm(identity);
         if (!sourcePartial && IndexOf(destinationPlugin) <= IndexOf(source.Plugin)) return null;
 
-        var spelled = identity.FormKey;
-        if (WalkAmongMastersOf(
-                destinationRepository, destinationPlugin, schemaReflector.GetSchemas(current.GameRelease), spelled,
-                "the copy of a container the destination can see", out var masters) is { } refused) return refused;
-
+        var masters = WalkIn(snapshot, destinationRepository, destinationPlugin, schemaReflector.GetSchemas(snapshot.GameRelease));
         switch (masters.NearestCopy(identity.FormKey, _ => true, PartialFormFlag.Bit))
         {
             case LeftCopy.Unreadable unreadable:
-                return unreadable.Refusal(spelled, "the copy of a container the destination can see is carried in");
+                return unreadable.Refusal(identity.FormKey, "the copy of a container the destination can see is carried in");
             case LeftCopy.Found found when sourcePartial || IndexOf(found.Plugin) > IndexOf(source.Plugin):
                 text = found.Text;
                 return null;
@@ -95,9 +80,7 @@ internal sealed class LoadOrderResolution(
         try
         {
             if (repository.GetCellAt(plugin, worldspace, grid.X, grid.Y, schemas) is { } held) return new GridCellHolder.Plugins(held);
-            if (WalkAmongMastersOf(repository, plugin, schemas, spelled, subject, out var masters) is { } unreadable)
-                return new GridCellHolder.Unreadable(unreadable);
-            switch (masters.NearestCell(worldspace, grid.X, grid.Y))
+            switch (WalkAmongMastersOf(repository, plugin, schemas).NearestCell(worldspace, grid.X, grid.Y))
             {
                 case LeftCopy.Unreadable left:
                     return new GridCellHolder.Unreadable(
@@ -120,7 +103,7 @@ internal sealed class LoadOrderResolution(
     }
 
     internal sealed class MastersWalk(
-        LoadOrderResolution resolution, LoadOrderSnapshot snapshot, PluginAddress plugin, IReadOnlySet<string> masters)
+        LoadOrderResolution resolution, LoadOrderSnapshot snapshot, PluginAddress plugin, Lazy<IReadOnlySet<string>> masters)
     {
         /// <summary>The nearest master's copy of <paramref name="formKey"/> that <paramref name="says"/> accepts,
         /// passing over one whose header holds a flag of <paramref name="passOver"/>. An unreadable copy ends the walk.</summary>
@@ -139,12 +122,21 @@ internal sealed class LoadOrderResolution(
             Walk(worldspace, source => source.CellAt(worldspace, x, y) is { } identity ? source.Body(identity) : null);
 
         // The plugins left of this one, nearest first, until one answers a text. An unreadable one ends the
-        // walk, named by what it was asked about.
+        // walk, named by what it was asked about, as does a source tree that cannot say which are masters.
         private LeftCopy Walk(string askedAbout, Func<CopySource, string?> answer)
         {
+            IReadOnlySet<string> required;
+            try
+            {
+                required = masters.Value;
+            }
+            catch (UnreadableSourceDocumentException ex)
+            {
+                return new LeftCopy.Unreadable($"the source tree that names {plugin.Name}'s masters", ex.Message);
+            }
             var index = snapshot.LoadOrderIndex(plugin) ?? snapshot.Active.Count;
             var asked = snapshot.Active.Take(index).Reverse().Select(registered => registered.Key)
-                .Where(left => masters.Contains(left.Name));
+                .Where(left => required.Contains(left.Name));
             foreach (var left in asked)
             {
                 using var source = resolution.SourceIn(snapshot, left);
@@ -154,7 +146,7 @@ internal sealed class LoadOrderResolution(
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
-                    return new LeftCopy.Unreadable(left.Name, askedAbout, source.Diagnose(ex));
+                    return new LeftCopy.Unreadable($"{left.Name}'s copy of {askedAbout}", source.Diagnose(ex));
                 }
             }
             return new LeftCopy.None();
