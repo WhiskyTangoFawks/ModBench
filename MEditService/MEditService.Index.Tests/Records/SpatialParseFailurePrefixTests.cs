@@ -1,9 +1,6 @@
-using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -191,28 +188,5 @@ public sealed class SpatialParseFailurePrefixTests
             Index.Dispose();
             _dataFolder.Dispose();
         }
-    }
-
-    private sealed class DiagnosingAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
-    {
-        public string? Unreadable { get; set; }
-
-        public override IPluginDocuments OpenDocuments(
-            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-            PluginStrings? strings = null) =>
-            new Diagnosed(base.OpenDocuments(modPath, gameRelease, schemas, strings), Unreadable);
-    }
-
-    private sealed class Diagnosed(IPluginDocuments inner, string? unreadable) : IPluginDocuments
-    {
-        public PluginDocument Header => inner.Header;
-        public IReadOnlyList<RecordTypeFailure> Failures => inner.Failures;
-
-        public IEnumerable<PluginDocument> Records => inner.Records.Select(record =>
-            record.FormKey == unreadable
-                ? record with { Text = $"{{\"FormKey\": \"{record.FormKey}\"}}", ParseDiagnosis = "could not be read" }
-                : record);
-
-        public void Dispose() => inner.Dispose();
     }
 }

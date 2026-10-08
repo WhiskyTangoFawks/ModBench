@@ -2,10 +2,10 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
-using MEditService.Index.Queries;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 

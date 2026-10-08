@@ -20,14 +20,10 @@ public class RegistrationScopingTests
     {
         public FixtureWithEveryKindOfExtractedRowAndBetaOverridingAlphasNpc(string prefix)
         {
-            string sharedNpcFk = "", askerFk = "";
+            string sharedNpcFk = "";
             (string, string, string, string, string, string, string) betaKeys = ("", "", "", "", "", "", "");
             Plugins = new PluginFixtureBuilder(prefix)
-                .WithPlugin(AlphaKey.Name, mod =>
-                {
-                    (_, sharedNpcFk, _, _, _, _, _) = Populate(mod, "A");
-                    askerFk = mod.Npcs.AddNew("AlphaOnlyAsker").FormKey.ToString();
-                }, origin: AlphaKey.Origin)
+                .WithPlugin(AlphaKey.Name, mod => (_, sharedNpcFk, _, _, _, _, _) = Populate(mod, "A"), origin: AlphaKey.Origin)
                 .WithPlugin(BetaKey.Name, (mod, built) =>
                 {
                     betaKeys = Populate(mod, "B");
@@ -38,7 +34,6 @@ public class RegistrationScopingTests
                 .BuildScattered();
             (BetaRaceFk, BetaNpcFk, BetaWorldspaceFk, BetaCellFk, BetaPlacedFk, BetaQuestFk, BetaTopicFk) = betaKeys;
             SharedNpcFk = sharedNpcFk;
-            AskerFk = askerFk;
 
             Holder = new LoadOrderHolder();
             Opens = new GatedPluginAdapter();
@@ -55,7 +50,6 @@ public class RegistrationScopingTests
         public GatedPluginAdapter Opens { get; }
         public LoadOrderHolder Holder { get; }
         public string SharedNpcFk { get; }
-        public string AskerFk { get; }
         public string BetaNpcFk { get; }
         public string BetaRaceFk { get; }
         public string BetaWorldspaceFk { get; }
@@ -71,7 +65,7 @@ public class RegistrationScopingTests
             Index.Records.GetRecords(types: null, plugin: null, search: null, limit: 1000, offset: 0).Items;
 
         public FormKeyResolutionState ResolutionOfBetasNpc() =>
-            Index.ResolutionOf(AskerFk, AlphaKey, BetaNpcFk).State;
+            Index.ResolutionOf(SharedNpcFk, AlphaKey, BetaNpcFk).State;
 
         public void Reconcile(IReadOnlyList<LoadOrderEntry> snapshot) =>
             Index.Reconcile(Holder, Plugins.GameDirectory, snapshot, GameRelease.Fallout4);

@@ -1,13 +1,9 @@
-using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Query;
 
@@ -250,7 +246,7 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
     [Fact]
     public void GetWorldspaceBlocks_RollsACellsParseFailureUpItsSubBlockAndBlock_SoACollapsedNodeStillShowsTheErrorBeneathIt()
     {
-        using var index = Indexes.Reconciled(_fixture, adapter: new UnreadableRecordAdapter(FormKeyOf("CellA")));
+        using var index = Indexes.Reconciled(_fixture, adapter: new DiagnosingAdapter { Unreadable = FormKeyOf("CellA") });
 
         var result = index.Worldspaces.GetWorldspaceBlocks(Plugin, FormKeyOf("Grouped"));
 
@@ -268,32 +264,11 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
     [Fact]
     public void GetWorldspaces_MarksOnlyTheWorldspaceTheIndexFindsAFailureBeneath()
     {
-        using var index = Indexes.Reconciled(_fixture, adapter: new UnreadableRecordAdapter(FormKeyOf("CellA")));
+        using var index = Indexes.Reconciled(_fixture, adapter: new DiagnosingAdapter { Unreadable = FormKeyOf("CellA") });
 
         var result = index.Worldspaces.GetWorldspaces(Plugin);
 
         Assert.True(result.Single(w => w.FormKey == FormKeyOf("Grouped")).HasParseFailure);
         Assert.False(result.Single(w => w.FormKey == FormKeyOf("Scrambled")).HasParseFailure);
-    }
-
-    private sealed class UnreadableRecordAdapter(string formKey) : DelegatingPluginAdapter(TestAdapters.Mutagen())
-    {
-        public override IPluginDocuments OpenDocuments(
-            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-            PluginStrings? strings = null) =>
-            new Unreadable(base.OpenDocuments(modPath, gameRelease, schemas, strings), formKey);
-    }
-
-    private sealed class Unreadable(IPluginDocuments inner, string formKey) : IPluginDocuments
-    {
-        public PluginDocument Header => inner.Header;
-        public IReadOnlyList<RecordTypeFailure> Failures => inner.Failures;
-
-        public IEnumerable<PluginDocument> Records => inner.Records.Select(record =>
-            record.FormKey == formKey
-                ? record with { Text = $"{{\"FormKey\": \"{record.FormKey}\"}}", ParseDiagnosis = "could not be read" }
-                : record);
-
-        public void Dispose() => inner.Dispose();
     }
 }
