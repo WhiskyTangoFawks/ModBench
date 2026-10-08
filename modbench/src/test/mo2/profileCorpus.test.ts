@@ -6,7 +6,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { rm } from 'node:fs/promises';
 import { switchProfile } from '../../instanceCommands/profile';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from './corpusFixture';
-import { accessTo, readActiveProfile, readModlistEntries } from './adapterOver';
+import { adapterOver, readActiveProfile, readModlistEntries } from './adapterOver';
 
 const INI = 'ModOrganizer.ini';
 
@@ -20,7 +20,7 @@ describe('profile corpus', () => {
 
   it('switchProfile repoints ModOrganizer.ini only, leaving every profile file untouched', async () => {
     const before = await snapshotTree(dir);
-    await switchProfile(accessTo(dir), 'Secondary', ['Default', 'Secondary']);
+    await switchProfile(adapterOver(dir), 'Secondary', ['Default', 'Secondary']);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([INI]));
 

@@ -32,7 +32,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { AskQuestion } from '../../ports/dialog';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { accessTo } from '../../test/mo2/adapterOver';
+import { adapterOver } from '../../test/mo2/adapterOver';
 import { present } from '../../ports/present';
 import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
 
@@ -51,7 +51,7 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
   const ask = Object.assign<AskQuestion, { asked: typeof dialog.asked }>(
     (...args) => { stepsWhenAsked.push([...progressSteps]); return dialog(...args); }, { asked: dialog.asked });
   const renameFiles = vi.fn().mockResolvedValue(undefined);
-  const access = { ...accessTo('/instance'), adapter: { ...accessTo('/instance').adapter, renamePlugin: renameFiles, checkPluginRename: vi.fn().mockResolvedValue({ applied: true }) } };
+  const adapter = { ...adapterOver('/instance'), renamePlugin: renameFiles, checkPluginRename: vi.fn().mockResolvedValue({ applied: true }) };
   const instance = {
     value: instanceValueFixture({
       gameRelease: 'Fallout4',
@@ -66,7 +66,7 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
     },
   };
   const reporter = recordingReporter();
-  registerRenamePluginCommand({ client, adapter: access.adapter, ask, instance, reporter }, () => selection);
+  registerRenamePluginCommand({ client, adapter, ask, instance, reporter }, () => selection);
   const run = present(handlers.get('modbench.plugin.rename'), 'the rename plugin command');
   const validate = async (value: string): Promise<string | undefined> => {
     let validated: string | undefined;

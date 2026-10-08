@@ -8,17 +8,12 @@ import type { DownloadedFile, InstanceAdapter } from '../instanceAdapter/instanc
 import { goneFromDisk } from '../coreLib/commandRefusals';
 import { selectionOutcomeOf, type CommandResult } from '../coreLib/commandResult';
 
-/** What a downloads command reaches the instance through. */
-export interface DownloadsAccess {
-  readonly adapter: InstanceAdapter;
-}
-
 // `metadataLeftBehind` is delete's own: the file trashed but its metadata didn't.
 type DownloadsCommandResult = CommandResult<{ wrote: boolean; metadataLeftBehind?: string }>;
 
-async function mark(access: DownloadsAccess, name: string, excluded: 'Excluded' | 'Included'): Promise<DownloadsCommandResult> {
+async function mark(adapter: InstanceAdapter, name: string, excluded: 'Excluded' | 'Included'): Promise<DownloadsCommandResult> {
   try {
-    const marked = await access.adapter.markDownloadedFile(name, excluded);
+    const marked = await adapter.markDownloadedFile(name, excluded);
     if (marked.gone) return { applied: false, refusal: goneFromDisk(name) };
     return { applied: true, wrote: marked.wrote };
   } catch (err) {
@@ -26,22 +21,22 @@ async function mark(access: DownloadsAccess, name: string, excluded: 'Excluded' 
   }
 }
 
-function excludeDownload(access: DownloadsAccess, name: string): Promise<DownloadsCommandResult> {
-  return mark(access, name, 'Excluded');
+function excludeDownload(adapter: InstanceAdapter, name: string): Promise<DownloadsCommandResult> {
+  return mark(adapter, name, 'Excluded');
 }
 
-function includeDownload(access: DownloadsAccess, name: string): Promise<DownloadsCommandResult> {
-  return mark(access, name, 'Included');
+function includeDownload(adapter: InstanceAdapter, name: string): Promise<DownloadsCommandResult> {
+  return mark(adapter, name, 'Included');
 }
 
 const bareName = (name: string): string => name;
 
-export function excludeDownloads(access: DownloadsAccess, names: readonly string[]): Promise<SelectionOutcome<string>> {
-  return selectionOutcomeOf(names, (name) => excludeDownload(access, name), bareName);
+export function excludeDownloads(adapter: InstanceAdapter, names: readonly string[]): Promise<SelectionOutcome<string>> {
+  return selectionOutcomeOf(names, (name) => excludeDownload(adapter, name), bareName);
 }
 
-export function includeDownloads(access: DownloadsAccess, names: readonly string[]): Promise<SelectionOutcome<string>> {
-  return selectionOutcomeOf(names, (name) => includeDownload(access, name), bareName);
+export function includeDownloads(adapter: InstanceAdapter, names: readonly string[]): Promise<SelectionOutcome<string>> {
+  return selectionOutcomeOf(names, (name) => includeDownload(adapter, name), bareName);
 }
 
 /** A downloaded file to delete: its name, and the path it is trashed from. */
@@ -59,15 +54,15 @@ const toDeletedDownload = ({ name }: DownloadToDelete, landed?: { metadataLeftBe
 
 /** Never touches the mod installed from any of them. */
 export function deleteDownloads(
-  access: DownloadsAccess, files: readonly DownloadToDelete[], trash: MoveToTrash,
+  adapter: InstanceAdapter, files: readonly DownloadToDelete[], trash: MoveToTrash,
 ): Promise<SelectionOutcome<DeletedDownload>> {
-  return selectionOutcomeOf(files, (file) => deleteDownload(access, file, trash), toDeletedDownload);
+  return selectionOutcomeOf(files, (file) => deleteDownload(adapter, file, trash), toDeletedDownload);
 }
 
 // The file is trashed first, so a failure there refuses with the sidecar untouched. Past that
 // point a metadata trash failure comes back as `metadataLeftBehind` (downloads.md, Reporting story 2).
 async function deleteDownload(
-  access: DownloadsAccess, file: DownloadToDelete, trash: MoveToTrash,
+  adapter: InstanceAdapter, file: DownloadToDelete, trash: MoveToTrash,
 ): Promise<DownloadsCommandResult> {
   try {
     await trash(file.path);
@@ -75,7 +70,7 @@ async function deleteDownload(
     return refuse(err);
   }
   try {
-    await access.adapter.trashDownloadedFileMeta(file.name, trash);
+    await adapter.trashDownloadedFileMeta(file.name, trash);
   } catch (err) {
     return { applied: true, wrote: true, metadataLeftBehind: errorMessage(err) };
   }

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../test/mo2/fakeVscodeWatcher';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './vscodeMock';
-import { accessTo, adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
+import { adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
 
 vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
@@ -79,7 +79,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
     instance, channel: { error: () => {}, info: () => {} }, syncMods: noModSync,
     syncPlugins: (args) => {
       loadedWithNoLine.push(args.loadedWithNoLine);
-      const run = pluginSyncOver(accessTo(root))(args);
+      const run = pluginSyncOver(adapterOver(root))(args);
       syncs.push(run);
       return run;
     },
@@ -169,7 +169,7 @@ describe('plugin sync keeps another tool\'s plugins.txt write', () => {
     await writeFile(join(root, 'profiles', PROFILE, 'modlist.txt'), '+Extra\r\n+Provider\r\n');
     await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Extra.esp\r\n*Base.esp\r\n');
 
-    await pluginSyncOver(accessTo(root))(readBefore.pluginSyncArguments);
+    await pluginSyncOver(adapterOver(root))(readBefore.pluginSyncArguments);
     watcherFor('profiles/*/plugins.txt').fireChange();
     const { writes, quiescent } = await driveToQuiescence(instance, syncs, 8);
 
@@ -198,7 +198,7 @@ describe('the game folder not found, across the whole instance', () => {
     instances.push(instance);
     toolboxes.push(new ToolboxProvider({ instance, channel }));
     const { pluginSync, modSync } = instanceSyncs({
-      instance, channel, syncMods: modSyncOver(accessTo(root)), syncPlugins: pluginSyncOver(accessTo(root)),
+      instance, channel, syncMods: modSyncOver(adapterOver(root)), syncPlugins: pluginSyncOver(adapterOver(root)),
     });
 
     await instance.refresh();
@@ -229,7 +229,7 @@ describe('a gesture writes the profile the Instance last landed', () => {
     watcherFor('ModOrganizer.ini').fireChange();
     expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
 
-    const result = await setPluginsEnabled(accessTo(root), instance.value.activeProfile, ['Base.esp'], false);
+    const result = await setPluginsEnabled(adapterOver(root), instance.value.activeProfile, ['Base.esp'], false);
 
     expect(result).toEqual({ applied: true, outcome: { landed: ['Base.esp'], refused: [] } });
     expect(await pluginsOf(OTHER_PROFILE)).toBe('Base.esp\r\n');

@@ -24,7 +24,7 @@ export async function installDownloadedFile(
     const row = downloads.kind === 'listed' ? downloads.rows.find((listed) => listed.name === argument.row.name) : undefined;
     if (!row) throw new Error(`"${argument.row.name}" is gone from Downloads.`);
     const target = await chooseInstallTarget(
-      row, (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)));
+      row, (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access.adapter, name)));
     if (!target) return;
     const outcome = await runWritingGesture(deps.progressViewId, instance, () => installFromArchive(access, target, row.path, {
       gameName: instance.value.gameName, modID: row.modID, fileID: row.fileID, version: row.version,

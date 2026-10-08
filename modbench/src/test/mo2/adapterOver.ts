@@ -22,7 +22,7 @@ export const STEADY_WINDOW: ConstructorParameters<typeof Instance>[0]['window'] 
   onDidChangeWindowState: () => ({ dispose: () => {} }),
 };
 
-/** What every command family reaches the instance through, over `root`. */
+/** What install reaches the instance through, over `root`. */
 export function accessTo(root: string, answers: AdapterAnswers = {}): { instanceRoot: string; adapter: InstanceAdapter } {
   return { instanceRoot: root, adapter: adapterOver(root, answers) };
 }

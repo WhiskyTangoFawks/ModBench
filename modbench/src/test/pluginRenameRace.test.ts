@@ -71,7 +71,7 @@ describe('a rename while a recompute is reading', () => {
       },
     });
     const { pluginSync } = instanceSyncs({
-      instance, syncMods: modSyncOver({ adapter: writer }), syncPlugins: pluginSyncOver({ adapter: writer }), channel: { error: () => {}, info: () => {} },
+      instance, syncMods: modSyncOver(writer), syncPlugins: pluginSyncOver(writer), channel: { error: () => {}, info: () => {} },
     });
     await instance.refresh();
     await pluginSync.settled();
