@@ -1,8 +1,6 @@
-using MEditService.Codec.Serialization;
-using MEditService.Index;
-using MEditService.LoadOrder;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
-using MEditService.SourceAdapter;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -13,63 +11,62 @@ public sealed class RecordFileQueryTests : IDisposable
     private const string Npc = "000800:Filed.esp";
     private static readonly PluginAddress Plugin = new("Filed.esp", "FiledMod");
 
-    private readonly ScratchDirectory _modFolder = new("medit-record-file-query-");
+    private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("record-file-query")
+        .WithPlugin(Plugin.Name, mod => mod.Npcs.AddNew("FiledNpc"), origin: Plugin.Origin)
+        .BuildScattered();
 
-    public void Dispose() => _modFolder.Dispose();
+    public void Dispose() => _fixture.Dispose();
 
-    private IRecordQueryService Service() =>
-        QueryHost.Records(
-            new FakeIndex(new FakeReads(
-                new Dictionary<PluginAddress, PluginContent>(),
-                [new FakeRow(new RecordDocument(Npc, Plugin, 0, IsWinner: true, "FiledNpc", "npc_", "{}", []))])),
-            FakeLoadOrder.Of(
-                GameRelease.Fallout4,
-                new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)));
+    private LoadOrderEntry Entry => _fixture.Plugins.Single();
 
-    private string TrackTheNpc()
-    {
-        var document = Path.Combine(PluginSourceRoot.For(Plugin.Name), "Npcs", "FiledNpc - 000800_Filed.esp.json");
-        SourceRepository.Track(_modFolder, [(
-            [new TreeFile(document, "{\"FormKey\": \"000800:Filed.esp\", \"EditorID\": \"FiledNpc\"}"u8.ToArray())],
-            new DecompiledPlugin(Plugin.Name, null))]);
-        return Path.Combine(_modFolder, document);
-    }
+    private string NpcFile =>
+        Path.Combine(PluginSourceRoot.In(Entry.ModFolderOf(), Plugin.Name), "Npcs", "FiledNpc - 000800_Filed.esp.json");
+
+    private OpenedIndex Reconciled() => Indexes.Reconciled(_fixture);
 
     [Fact]
     public void ATrackedCopy_IsInItsFile()
     {
-        var file = TrackTheNpc();
+        TrackedMods.Track(Entry, _fixture.GameDirectory);
+        using var index = Reconciled();
 
-        Assert.Equal(new RecordFile(file), Service().GetRecordFile(Plugin, Npc));
+        Assert.Equal(new RecordFile(NpcFile), index.Records.GetRecordFile(Plugin, Npc));
     }
 
     [Fact]
     public void ATrackedCopyWhoseFileIsGone_HasNoAnswer()
     {
-        File.Delete(TrackTheNpc());
+        TrackedMods.Track(Entry, _fixture.GameDirectory);
+        using var index = Reconciled();
 
-        Assert.Null(Service().GetRecordFile(Plugin, Npc));
+        File.Delete(NpcFile);
+
+        Assert.Null(index.Records.GetRecordFile(Plugin, Npc));
     }
 
     [Fact]
     public void AnUntrackedCopy_IsInNoFile()
     {
-        Assert.Equal(new RecordFile(null), Service().GetRecordFile(Plugin, Npc));
+        using var index = Reconciled();
+
+        Assert.Equal(new RecordFile(null), index.Records.GetRecordFile(Plugin, Npc));
     }
 
     [Fact]
     public void ACopyInATrackedModWithNoSourceForItsPlugin_IsInNoFile()
     {
-        SourceRepository.Track(_modFolder, [(
-            [new TreeFile(Path.Combine(PluginSourceRoot.For("Other.esp"), "000000_Other.esp.json"), "{}"u8.ToArray())],
-            new DecompiledPlugin("Other.esp", null))]);
+        TrackedMods.Track(Entry, _fixture.GameDirectory);
+        Directory.Delete(PluginSourceRoot.In(Entry.ModFolderOf(), Plugin.Name), recursive: true);
+        using var index = Reconciled();
 
-        Assert.Equal(new RecordFile(null), Service().GetRecordFile(Plugin, Npc));
+        Assert.Equal(new RecordFile(null), index.Records.GetRecordFile(Plugin, Npc));
     }
 
     [Fact]
     public void ACopyThePluginDoesNotHold_HasNoAnswer()
     {
-        Assert.Null(Service().GetRecordFile(Plugin with { Origin = "AnotherMod" }, Npc));
+        using var index = Reconciled();
+
+        Assert.Null(index.Records.GetRecordFile(Plugin with { Origin = "AnotherMod" }, Npc));
     }
 }

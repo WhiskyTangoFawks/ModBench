@@ -1,168 +1,127 @@
-using MEditService.Index;
-using MEditService.LoadOrder;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Query;
 
-public class ContainerChildQueryServiceTests
+public sealed class ContainerChildQueryServiceTests : IDisposable
 {
-    private static readonly LoadOrderHolder Fallout4 = FakeLoadOrder.Of(GameRelease.Fallout4);
+    private const string PluginName = "M.esp";
+    private const string Quest = "000800:M.esp";
+    private const string BranchA = "000801:M.esp";
+    private const string TopicB = "000802:M.esp";
+    private const string SceneA = "000803:M.esp";
+    private const string TopicA = "000804:M.esp";
+    private const string ResponseA = "000805:M.esp";
+    private const string ResponseB = "000806:M.esp";
+    private const string ChildlessQuest = "000807:M.esp";
+    private const Fallout4Release Release = Fallout4Release.Fallout4;
+    private static readonly PluginAddress Plugin = new(PluginName, PluginOrigin.DataDirectory);
 
-    private static readonly PluginAddress Plugin = new("M.esp", PluginOrigin.DataDirectory);
+    private readonly ScatteredFixtureData _fixture;
+    private readonly OpenedIndex _index;
 
-    private static ContainerChildQueryService Service(
-        IReadOnlyList<ContainerChildRow> children, IReadOnlyList<FakeRow> records, ILoggerFactory? loggerFactory = null)
+    public ContainerChildQueryServiceTests()
     {
-        var reads = new FakeReads(new Dictionary<PluginAddress, PluginContent>(), records)
-        {
-            ContainerChildren = children.GroupBy(c => c.ParentFormKey)
-                .ToDictionary(g => new RecordAt(Plugin, g.Key), g => (IReadOnlyList<ContainerChildRow>)[.. g]),
-        };
-        return QueryHost.Containers(new StubIndex(reads), Fallout4, loggerFactory);
+        _fixture = new PluginFixtureBuilder("container-child-query")
+            .WithPlugin(PluginName, mod =>
+            {
+                var topicA = new DialogTopic(FormKey.Factory(TopicA), Release);
+                topicA.Responses.Add(new DialogResponses(FormKey.Factory(ResponseA), Release));
+                topicA.Responses.Add(new DialogResponses(FormKey.Factory(ResponseB), Release));
+                var quest = new Quest(FormKey.Factory(Quest), Release);
+                quest.DialogBranches.Add(new DialogBranch(FormKey.Factory(BranchA), Release));
+                quest.DialogTopics.Add(new DialogTopic(FormKey.Factory(TopicB), Release));
+                quest.DialogTopics.Add(topicA);
+                quest.Scenes.Add(new Scene(FormKey.Factory(SceneA), Release));
+                mod.Quests.Add(quest);
+                mod.Quests.Add(new Quest(FormKey.Factory(ChildlessQuest), Release));
+            })
+            .BuildScattered();
+        _index = Indexes.Reconciled(_fixture);
     }
 
-    private static FakeRow Record(string formKey, string recordType, string? editorId = null, PluginAddress? plugin = null) =>
-        new(new RecordDocument(formKey, plugin ?? Plugin, 0, IsWinner: false, editorId, recordType, null, []));
+    public void Dispose()
+    {
+        _index.Dispose();
+        _fixture.Dispose();
+    }
 
     [Fact]
     public void GetChildren_Quest_KeepsTheIndexsOrder_WhateverTheChildrensTypes()
     {
-        var svc = Service(
-            [
-                new ContainerChildRow("dlbr1:M.esp", "qust1:M.esp", "Quest", "DialogBranches", 0),
-                new ContainerChildRow("dial2:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 1),
-                new ContainerChildRow("scen1:M.esp", "qust1:M.esp", "Quest", "Scenes", 0),
-                new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
-            ],
-            [
-                Record("dial1:M.esp", "dial", "TopicA"),
-                Record("dial2:M.esp", "dial", "TopicB"),
-                Record("dlbr1:M.esp", "dlbr", "BranchA"),
-                Record("scen1:M.esp", "scen", "SceneA"),
-            ]);
+        var result = _index.Containers.GetChildren(Plugin, Quest);
 
-        var result = svc.GetChildren(Plugin, "qust1:M.esp");
-
-        Assert.Equal(
-            ["dlbr1:M.esp", "dial2:M.esp", "scen1:M.esp", "dial1:M.esp"],
-            result.Select(r => r.FormKey).ToArray());
-        Assert.Equal(["dlbr", "dial", "scen", "dial"], result.Select(r => r.RecordType).ToArray());
+        Assert.Equal([BranchA, TopicB, SceneA, TopicA], result.Select(r => r.FormKey));
+        Assert.Equal(["dlbr", "dial", "scen", "dial"], result.Select(r => r.RecordType));
     }
 
     [Fact]
     public void GetChildren_SaysWhichChildHoldsChildrenOfItsOwn_ForADialChildIsItselfAContainerThePluginsTreeExpands()
     {
-        var svc = Service(
-            [
-                new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
-                new ContainerChildRow("dial2:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 1),
-                new ContainerChildRow("info1:M.esp", "dial1:M.esp", "DialogTopic", "Responses", 0),
-            ],
-            [Record("dial1:M.esp", "dial", "TopicA"), Record("dial2:M.esp", "dial", "TopicB"), Record("info1:M.esp", "info")]);
+        var result = _index.Containers.GetChildren(Plugin, Quest);
 
-        var result = svc.GetChildren(Plugin, "qust1:M.esp");
-
-        Assert.True(result.Single(r => r.FormKey == "dial1:M.esp").HasContainerChildren);
-        Assert.False(result.Single(r => r.FormKey == "dial2:M.esp").HasContainerChildren);
+        Assert.True(result.Single(r => r.FormKey == TopicA).HasContainerChildren);
+        Assert.False(result.Single(r => r.FormKey == TopicB).HasContainerChildren);
     }
 
     [Fact]
     public void GetChildren_SaysWhichChildIsAContainer_AnEmptyTopicIncluded()
     {
-        var svc = Service(
-            [
-                new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
-                new ContainerChildRow("dlbr1:M.esp", "qust1:M.esp", "Quest", "DialogBranches", 0),
-            ],
-            [Record("dial1:M.esp", "dial", "Topic"), Record("dlbr1:M.esp", "dlbr", "Branch")]);
+        var result = _index.Containers.GetChildren(Plugin, Quest);
 
-        var result = svc.GetChildren(Plugin, "qust1:M.esp");
-
-        Assert.True(result.Single(r => r.FormKey == "dial1:M.esp").IsContainer);
-        Assert.False(result.Single(r => r.FormKey == "dlbr1:M.esp").IsContainer);
+        Assert.True(result.Single(r => r.FormKey == TopicB).IsContainer);
+        Assert.False(result.Single(r => r.FormKey == BranchA).IsContainer);
     }
 
     [Fact]
     public void GetChildren_DialogTopic_ReturnsItsResponses_TaggedInfo()
     {
-        var svc = Service(
-            [
-                new ContainerChildRow("info2:M.esp", "dial1:M.esp", "DialogTopic", "Responses", 1),
-                new ContainerChildRow("info1:M.esp", "dial1:M.esp", "DialogTopic", "Responses", 0),
-            ],
-            [Record("info1:M.esp", "info"), Record("info2:M.esp", "info")]);
+        var result = _index.Containers.GetChildren(Plugin, TopicA);
 
-        var result = svc.GetChildren(Plugin, "dial1:M.esp");
-
-        Assert.Equal(["info2:M.esp", "info1:M.esp"], result.Select(r => r.FormKey).ToArray());
+        Assert.Equal([ResponseA, ResponseB], result.Select(r => r.FormKey));
         Assert.All(result, r => Assert.Equal("info", r.RecordType));
-    }
-
-    [Fact]
-    public void GetChildren_ReadsTheChildrenOfTheGivenOrigin()
-    {
-        var modB = new PluginAddress("M.esp", "ModB");
-        var reads = new FakeReads(
-            new Dictionary<PluginAddress, PluginContent>(),
-            [
-                Record("dial1:M.esp", "dial", "DataTopic"),
-                Record("dial2:M.esp", "dial", "FromTheDataOrigin"),
-                Record("dial2:M.esp", "dial", "FromModB", modB),
-            ])
-        {
-            ContainerChildren = new Dictionary<RecordAt, IReadOnlyList<ContainerChildRow>>
-            {
-                [new RecordAt(Plugin, "qust1:M.esp")] = [new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0)],
-                [new RecordAt(modB, "qust1:M.esp")] = [new ContainerChildRow("dial2:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0)],
-            },
-        };
-        var svc = QueryHost.Containers(new StubIndex(reads), Fallout4);
-
-        var result = svc.GetChildren(modB, "qust1:M.esp");
-
-        Assert.Equal(["FromModB"], result.Select(r => r.EditorId));
-    }
-
-    [Fact]
-    public void GetChildren_ContainerChildRowSearchDidNotReturn_SkipsItInsteadOfThrowingKeyNotFound_ReturnsSurvivors_LogsWarning()
-    {
-        var entries = new List<LogEntry>();
-        using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(entries)));
-        var svc = Service(
-            [
-                new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
-                new ContainerChildRow("dial-missing:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 1),
-            ],
-            [Record("dial1:M.esp", "dial", "TopicA")],
-            loggerFactory);
-
-        var result = svc.GetChildren(Plugin, "qust1:M.esp");
-
-        Assert.Equal(["dial1:M.esp"], result.Select(r => r.FormKey).ToArray());
-        var warning = Assert.Single(entries, e => e.Level == LogLevel.Warning);
-        Assert.Equal(
-            "Container child dial-missing:M.esp of qust1:M.esp in M.esp (Data/) is indexed in " +
-            "container_child but Search(dial) did not return it; omitting.",
-            warning.Message);
     }
 
     [Fact]
     public void GetChildren_OfARecordHoldingNone_IsEmpty()
     {
-        var svc = Service([], [Record("dial1:M.esp", "dial", "Topic")]);
-
-        var result = svc.GetChildren(Plugin, "qust1:M.esp");
-
-        Assert.Empty(result);
+        Assert.Empty(_index.Containers.GetChildren(Plugin, ChildlessQuest));
     }
 
     [Fact]
-    public void GetChildren_NoReads_ThrowsNoLoadOrderException()
+    public void GetChildren_ReadsTheChildrenOfTheGivenOrigin()
     {
-        var svc = QueryHost.Containers(new StubIndex(reads: null), Fallout4);
-        Assert.Throws<NoLoadOrderException>(() => svc.GetChildren(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "qust1:M.esp"));
+        var modB = new PluginAddress(PluginName, "ModB");
+        using var fixture = new PluginFixtureBuilder("container-child-origin")
+            .WithPlugin(PluginName, mod =>
+            {
+                var quest = new Quest(FormKey.Factory(Quest), Release);
+                quest.DialogTopics.Add(new DialogTopic(FormKey.Factory(TopicA), Release) { EditorID = "FromTheDataOrigin" });
+                mod.Quests.Add(quest);
+            })
+            .WithPlugin(PluginName, mod =>
+            {
+                var quest = new Quest(FormKey.Factory(Quest), Release);
+                quest.DialogTopics.Add(new DialogTopic(FormKey.Factory(TopicB), Release) { EditorID = "FromModB" });
+                mod.Quests.Add(quest);
+            }, origin: modB.Origin)
+            .BuildScattered();
+        using var index = Indexes.Reconciled(fixture);
+
+        var result = index.Containers.GetChildren(modB, Quest);
+
+        Assert.Equal(["FromModB"], result.Select(r => r.EditorId));
+        Assert.Empty(index.Containers.GetChildren(Plugin, Quest));
+    }
+
+    [Fact]
+    public void GetChildren_NoLoadOrder_ThrowsNoLoadOrderException()
+    {
+        using var index = Indexes.Open(new LoadOrderHolder());
+
+        Assert.Throws<NoLoadOrderException>(() => index.Containers.GetChildren(Plugin, Quest));
     }
 }

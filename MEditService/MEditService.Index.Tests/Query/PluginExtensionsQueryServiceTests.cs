@@ -1,17 +1,23 @@
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
-using MEditService.Index.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Query;
 
 public sealed class PluginExtensionsQueryServiceTests
 {
+    private static PluginExtensionsQueryService Holding(GameRelease release)
+    {
+        var holder = new LoadOrderHolder();
+        holder.Apply(SnapshotPlugins.Snapshot("GameDir", null, release, []));
+        return new PluginExtensionsQueryService(holder);
+    }
+
     [Fact]
     public void GetCreatable_AReleaseWithLightPlugins_NamesEveryExtension()
     {
-        var extensions = new PluginExtensionsQueryService(FakeLoadOrder.Of(GameRelease.Fallout4)).GetCreatable();
-
-        Assert.Equal([".esm", ".esl", ".esp"], extensions);
+        Assert.Equal([".esm", ".esl", ".esp"], Holding(GameRelease.Fallout4).GetCreatable());
     }
 
     [Theory]
@@ -19,9 +25,7 @@ public sealed class PluginExtensionsQueryServiceTests
     [InlineData(GameRelease.OblivionRE)]
     public void GetCreatable_AReleaseWithoutLightPlugins_LeavesOutEsl(GameRelease release)
     {
-        var extensions = new PluginExtensionsQueryService(FakeLoadOrder.Of(release)).GetCreatable();
-
-        Assert.Equal([".esm", ".esp"], extensions);
+        Assert.Equal([".esm", ".esp"], Holding(release).GetCreatable());
     }
 
     [Fact]

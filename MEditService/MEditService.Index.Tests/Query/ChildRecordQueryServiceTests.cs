@@ -1,56 +1,84 @@
-using MEditService.LoadOrder;
-using MEditService.Ports;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Index.Tests.Query;
 
-public sealed class ChildRecordQueryServiceTests
+public sealed class ChildRecordQueryServiceTests : IDisposable
 {
     private static readonly PluginAddress Source = new("Source.esm", "SourceMod");
     private static readonly PluginAddress Holder = new("Holder.esp", "HolderMod");
     private static readonly PluginAddress Bare = new("Bare.esp", "BareMod");
     private static readonly PluginAddress NotAsked = new("NotAsked.esp", "NotAskedMod");
 
-    private static readonly RecordAt Quest = new(Source, "000800:Source.esm");
-    private static readonly RecordAt Npc = new(Source, "000801:Source.esm");
+    private readonly ScatteredFixtureData _fixture;
+    private readonly RecordAt _quest;
+    private readonly RecordAt _npc;
 
-    private static (ChildRecordQueryService Service, FakeIndex Index) Over(LoadOrderState state = LoadOrderState.Ready)
+    public ChildRecordQueryServiceTests()
     {
-        var reads = new FakeReads(new Dictionary<PluginAddress, PluginContent>(), [])
-        {
-            RecordsWithChildren = new HashSet<RecordAt> { Quest },
-            ChildHolders = new HashSet<PluginAddress>(PluginAddress.Comparer) { Holder, NotAsked },
-        };
-        var index = new FakeIndex(reads, new LoadOrderStatus(state, 0, 0, [], true, []));
-        return (new ChildRecordQueryService(index), index);
+        string quest = "", npc = "";
+        _fixture = new PluginFixtureBuilder("child-record-query")
+            .WithPlugin(Source.Name, mod =>
+            {
+                var topicHolder = new Quest(mod) { EditorID = "TopicHolder" };
+                topicHolder.DialogTopics.Add(new DialogTopic(mod) { EditorID = "HeldTopic" });
+                mod.Quests.Add(topicHolder);
+                quest = topicHolder.FormKey.ToString();
+                npc = mod.Npcs.AddNew("Childless").FormKey.ToString();
+            }, origin: Source.Origin)
+            .WithPlugin(Holder.Name, (mod, built) => mod.Quests.Add(built[0].Quests.Single().DeepCopy()), origin: Holder.Origin)
+            .WithPlugin(Bare.Name, (mod, built) => mod.Npcs.Add(built[0].Npcs.Single().DeepCopy()), origin: Bare.Origin)
+            .WithPlugin(NotAsked.Name, (mod, built) => mod.Quests.Add(built[0].Quests.Single().DeepCopy()), origin: NotAsked.Origin)
+            .BuildScattered();
+        _quest = new RecordAt(Source, quest);
+        _npc = new RecordAt(Source, npc);
     }
+
+    public void Dispose() => _fixture.Dispose();
 
     [Fact]
     public void TheRecordsWithChildRecords_AreTheOnesTheIndexSaysHoldAny_InTheOrderAsked()
     {
-        var (service, _) = Over();
+        using var index = Indexes.Reconciled(_fixture);
 
-        Assert.Equal([Quest], service.WithChildRecords([Npc, Quest]));
+        Assert.Equal([_quest], index.ChildRecords.WithChildRecords([_npc, _quest]));
     }
 
     [Fact]
     public void TheHoldingDestinations_AreOnlyThoseAsked_PerRecord()
     {
-        var (service, _) = Over();
+        using var index = Indexes.Reconciled(_fixture);
 
-        var answer = service.DestinationsHoldingChildRecords([Quest, Npc], [Holder, Bare]);
+        var answer = index.ChildRecords.DestinationsHoldingChildRecords([_quest, _npc], [Holder, Bare]);
 
-        Assert.Equal([Quest, Npc], answer.Select(a => a.Record));
-        Assert.All(answer, a => Assert.Equal([Holder], a.Destinations));
+        Assert.Equal([_quest, _npc], answer.Select(a => a.Record));
+        Assert.Equal<PluginAddress>([Holder], answer[0].Destinations);
+        Assert.Empty(answer[1].Destinations);
     }
 
-    [Theory]
-    [InlineData(LoadOrderState.None)]
-    [InlineData(LoadOrderState.Reconciling)]
-    public void TheHoldingDestinations_AreNotAnswered_UntilEveryPluginIsIndexed(LoadOrderState state)
+    [Fact]
+    public void TheHoldingDestinations_AreNotAnswered_BeforeALoadOrderArrives()
     {
-        var (service, _) = Over(state);
+        using var index = Indexes.Open(new LoadOrderHolder());
 
-        Assert.Throws<NoLoadOrderException>(() => service.DestinationsHoldingChildRecords([Quest], [Holder]));
+        Assert.Throws<NoLoadOrderException>(() => index.ChildRecords.DestinationsHoldingChildRecords([_quest], [Holder]));
+    }
+
+    [Fact]
+    public async Task TheHoldingDestinations_AreNotAnswered_UntilEveryPluginIsIndexed()
+    {
+        var holder = new LoadOrderHolder();
+        using var gate = new GatedPluginAdapter(gateBefore: NotAsked.Name);
+        using var index = Indexes.Open(holder, gate);
+        var load = Task.Run(() => index.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4));
+        await gate.WaitUntilParkedAsync();
+
+        Assert.Throws<NoLoadOrderException>(() => index.ChildRecords.DestinationsHoldingChildRecords([_quest], [Holder]));
+
+        gate.Release();
+        await load;
     }
 }

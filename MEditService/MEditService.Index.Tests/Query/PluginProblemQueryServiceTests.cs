@@ -1,139 +1,176 @@
-using MEditService.Index;
-using MEditService.LoadOrder;
-using MEditService.Ports;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Query;
 
-public sealed class PluginProblemQueryServiceTests
+public sealed class PluginProblemQueryServiceTests : IDisposable
 {
-    private static LoadOrderEntry Plugin(string name, bool enabled = true) =>
-        new(name, $@"C:\mods\SomeMod\{name}", "SomeMod", enabled ? 0 : null, enabled, Winning: true);
+    private const string Absent = "000ABC:Absent.esp";
 
-    private static MissingReferenceOnFile OnFile(LoadOrderEntry plugin, string field = "Race", string target = "000ABC:Absent.esp") =>
-        new(new MissingReference(plugin.Key, $"000800:{plugin.Name}", "npc_", "Referrer", target, field), "Npcs/Referrer.json", null);
-
-    private static MissingReferenceOnFile Unplaced(LoadOrderEntry plugin) =>
-        OnFile(plugin) with { SourceRelativePath = null, Failure = $"{plugin.Name}'s source holds no file for 000800:{plugin.Name}." };
-
-    private static IReadOnlyList<PluginProblems>? Ask(
-        LoadOrderState state, IReadOnlyList<LoadOrderEntry> tracked, IReadOnlyList<MissingReferenceOnFile> missing,
-        IReadOnlyList<SourceFileFailure> failures, params LoadOrderEntry[] plugins) =>
-        Ask(state, tracked.ToDictionary(plugin => plugin.Key, _ => DerivedFrom.SourceTree, PluginAddress.Comparer), missing, failures, plugins);
-
-    private static IReadOnlyList<PluginProblems>? Ask(
-        LoadOrderState state, IReadOnlyDictionary<PluginAddress, DerivedFrom> derivations,
-        IReadOnlyList<MissingReferenceOnFile> missing, IReadOnlyList<SourceFileFailure> failures, LoadOrderEntry[] plugins)
+    private sealed record Plugin(string Name, bool RefersToAbsent = true, bool Enabled = true, bool Tracked = true)
     {
-        var reads = new FakeReads(new Dictionary<PluginAddress, PluginContent>(), [])
-        {
-            Derivations = derivations,
-            MissingReferences = missing,
-        };
-        var status = new LoadOrderStatus(state, plugins.Length, plugins.Length, [], ConflictsComputed: false, []);
-        var index = new FakeIndex(reads, status) { SourceFileFailures = failures };
-        return new PluginProblemQueryService(index, FakeLoadOrder.Of(GameRelease.Fallout4, plugins)).GetProblems();
+        public string Referrer => $"000800:{Name}";
     }
 
-    private static IReadOnlyList<PluginProblems> Ready(
-        IReadOnlyList<LoadOrderEntry> tracked, IReadOnlyList<MissingReferenceOnFile> missing, params LoadOrderEntry[] plugins) =>
-        Failing(tracked, missing, [], plugins);
+    private static readonly Plugin Broken = new("Broken.esp");
 
-    private static IReadOnlyList<PluginProblems> Failing(
-        IReadOnlyList<LoadOrderEntry> tracked, IReadOnlyList<MissingReferenceOnFile> missing,
-        IReadOnlyList<SourceFileFailure> failures, params LoadOrderEntry[] plugins) =>
-        Ask(LoadOrderState.Ready, tracked, missing, failures, plugins) ?? throw new InvalidOperationException("The index was ready.");
+    private ScatteredFixtureData? _fixture;
+    private readonly GatedPluginAdapter _brokensBinaryUnreadable = new(poisonPlugin: Broken.Name);
+
+    public void Dispose()
+    {
+        _brokensBinaryUnreadable.Dispose();
+        _fixture?.Dispose();
+    }
+
+    private IReadOnlyList<LoadOrderEntry> Build(params Plugin[] plugins)
+    {
+        var builder = new PluginFixtureBuilder("plugin-problems");
+        foreach (var plugin in plugins)
+        {
+            builder.WithPlugin(plugin.Name, mod =>
+            {
+                var referrer = mod.Npcs.AddNew("Referrer");
+                if (plugin.RefersToAbsent) referrer.Race.SetTo(FormKey.Factory(Absent));
+                mod.Npcs.AddNew("Other");
+            }, enabled: plugin.Enabled, origin: $"{Path.GetFileNameWithoutExtension(plugin.Name)}Mod");
+        }
+        _fixture = builder.BuildScattered();
+        foreach (var plugin in plugins.Where(p => p.Tracked))
+            TrackedMods.Track(Entry(plugin), _fixture.GameDirectory);
+        return _fixture.Plugins;
+    }
+
+    private ScatteredFixtureData Fixture => _fixture ?? throw new InvalidOperationException("Build the fixture first.");
+
+    private LoadOrderEntry Entry(Plugin plugin) => Fixture.Plugins.Single(entry => entry.Name == plugin.Name);
+
+    private OpenedIndex Reconciled(params Plugin[] plugins)
+    {
+        Build(plugins);
+        return Indexes.Reconciled(Fixture);
+    }
+
+    private static IReadOnlyList<PluginProblems> Ready(OpenedIndex index) =>
+        index.Problems.GetProblems() ?? throw new InvalidOperationException("The index was ready.");
+
+    private string SourceFileHolding(Plugin plugin, string editorId) =>
+        Directory.EnumerateFiles(PluginSourceRoot.In(Entry(plugin).ModFolderOf(), plugin.Name), "*.json", SearchOption.AllDirectories)
+            .Single(file => File.ReadAllText(file).Contains($"\"{editorId}\"", StringComparison.Ordinal));
+
+    private string Relative(Plugin plugin, string path) => Path.GetRelativePath(Entry(plugin).ModFolderOf(), path);
+
+    private (string Document, string Backup) BackupClaimingTheFormKeyOf(Plugin plugin, string editorId)
+    {
+        var document = SourceFileHolding(plugin, editorId);
+        var backup = Path.Combine(
+            Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(document) ?? "", "Backup")).FullName, Path.GetFileName(document));
+        File.Copy(document, backup);
+        return (Relative(plugin, document), Relative(plugin, backup));
+    }
+
+    private (OpenedIndex Index, string Document, string Backup) BrokenReadFromItsTree_ThenStoppedByAClaimedFormKey()
+    {
+        Build(Broken);
+        var index = Indexes.Reconciled(Fixture, adapter: _brokensBinaryUnreadable);
+        var (document, backup) = BackupClaimingTheFormKeyOf(Broken, "Other");
+        index.NextSnapshotUntil(() => index.Status.Failures.Count > 0, "the re-read's failure");
+        return (index, document, backup);
+    }
 
     [Fact]
     public void GetProblems_AFileThePluginsReadStoppedAt_IsAProblemOnThatFile_SayingWhy()
     {
-        var plugin = Plugin("Broken.esp");
-        var stray = new SourceFileFailure(plugin.Key, "Npcs/Stray.json", null, "'Npcs/Stray.json' declares no FormKey.");
+        var plugin = new Plugin("Strayed.esp", RefersToAbsent: false);
+        Build(plugin);
+        var stray = Path.Combine(Path.GetDirectoryName(SourceFileHolding(plugin, "Other")) ?? "", "Stray.json");
+        File.WriteAllText(stray, "{}");
+        using var index = Indexes.Reconciled(Fixture);
 
-        var answer = Assert.Single(Failing([plugin], [], [stray], plugin));
+        var answer = Assert.Single(Ready(index));
 
         var problem = Assert.Single(answer.Problems);
         Assert.Equal(
-            ((string?)null, (string?)null, "Npcs/Stray.json", "'Npcs/Stray.json' declares no FormKey."),
-            (problem.FormKey, problem.TargetFormKey, problem.SourceRelativePath, problem.Message));
+            ((string?)null, (string?)null, Relative(plugin, stray)),
+            (problem.FormKey, problem.TargetFormKey, problem.SourceRelativePath));
+        Assert.Contains("declares no FormKey", problem.Message, StringComparison.Ordinal);
         Assert.Null(answer.Failure);
     }
 
     [Fact]
     public void GetProblems_FilesThatClaimOneFormKey_AreAProblemOnEach_NamingIt()
     {
-        var plugin = Plugin("Twice.esp");
-        SourceFileFailure Claiming(string file) => new(plugin.Key, file, "000800:Twice.esp", "Both hold 000800:Twice.esp.");
+        var plugin = new Plugin("Twice.esp", RefersToAbsent: false);
+        Build(plugin);
+        var (document, backup) = BackupClaimingTheFormKeyOf(plugin, "Referrer");
+        using var index = Indexes.Reconciled(Fixture);
 
-        var answer = Assert.Single(Failing([plugin], [], [Claiming("Npcs/A.json"), Claiming("Npcs/Backup/A.json")], plugin));
+        var answer = Assert.Single(Ready(index));
 
-        Assert.Equal(
-            [("000800:Twice.esp", "Npcs/A.json"), ("000800:Twice.esp", "Npcs/Backup/A.json")],
-            answer.Problems.Select(p => (p.FormKey, p.SourceRelativePath)));
+        Assert.Equivalent(
+            new[] { (plugin.Referrer, document), (plugin.Referrer, backup) },
+            answer.Problems.Select(p => (p.FormKey, p.SourceRelativePath)), strict: true);
     }
 
     [Fact]
     public void GetProblems_APluginWhoseReadStopsAtAFile_IsAnsweredWithThatFile_AndTheLinksItsLastGoodReadLeft()
     {
-        var plugin = Plugin("Broken.esp");
+        var (index, document, backup) = BrokenReadFromItsTree_ThenStoppedByAClaimedFormKey();
+        using var _ = index;
+        Assert.False(index.PluginRowOf(Entry(Broken).KeyOf())?.PluginSourceUnreadable);
 
-        var answer = Assert.Single(Failing(
-            [plugin], [OnFile(plugin)], [new(plugin.Key, "Npcs/Stray.json", null, "Unreadable.")], plugin));
+        var answer = Assert.Single(Ready(index));
 
-        Assert.Equal(["Npcs/Stray.json", "Npcs/Referrer.json"], answer.Problems.Select(p => p.SourceRelativePath));
+        Assert.Equivalent(new[] { document, backup }, answer.Problems.SkipLast(1).Select(p => p.SourceRelativePath), strict: true);
+        Assert.Equal(
+            (Absent, Relative(Broken, SourceFileHolding(Broken, "Referrer"))),
+            (answer.Problems[^1].TargetFormKey, answer.Problems[^1].SourceRelativePath));
         Assert.Null(answer.Failure);
     }
 
     [Fact]
     public void GetProblems_APluginWhoseReadStopsAtAFile_AndWhoseLinksTheTreeCannotPlace_IsAnsweredWithThatFile_AndTheFailure()
     {
-        var plugin = Plugin("Broken.esp");
+        var (index, document, backup) = BrokenReadFromItsTree_ThenStoppedByAClaimedFormKey();
+        using var _ = index;
 
-        var answer = Assert.Single(Failing(
-            [plugin], [OnFile(plugin), Unplaced(plugin)], [new(plugin.Key, "Npcs/Stray.json", null, "Unreadable.")], plugin));
+        File.Delete(SourceFileHolding(Broken, "Referrer"));
 
-        Assert.Equal("Npcs/Stray.json", Assert.Single(answer.Problems).SourceRelativePath);
-        Assert.Contains("Broken.esp", answer.Failure, StringComparison.Ordinal);
+        var answer = Assert.Single(Ready(index));
+        Assert.Equivalent(new[] { document, backup }, answer.Problems.Select(p => p.SourceRelativePath), strict: true);
+        Assert.Contains(Broken.Referrer, answer.Failure, StringComparison.Ordinal);
     }
-
-    [Fact]
-    public void GetProblems_APluginItsBinaryStandsInFor_IsAnsweredWithTheFilesItsTreeStopsAt()
-    {
-        var plugin = Plugin("FellBack.esp");
-
-        var answer = Assert.Single(Failing([], [], [new(plugin.Key, "Npcs/Stray.json", null, "'Npcs/Stray.json' declares no FormKey.")], plugin));
-
-        Assert.Equal(plugin.Key, answer.Plugin);
-        var problem = Assert.Single(answer.Problems);
-        Assert.Equal(("Npcs/Stray.json", "'Npcs/Stray.json' declares no FormKey."), (problem.SourceRelativePath, problem.Message));
-    }
-
-    private static IReadOnlyList<PluginProblems> SourceUnreadable(
-        LoadOrderEntry plugin, IReadOnlyList<MissingReferenceOnFile> missing, IReadOnlyList<SourceFileFailure> failures) =>
-        Ask(LoadOrderState.Ready,
-            new Dictionary<PluginAddress, DerivedFrom>(PluginAddress.Comparer) { [plugin.Key] = DerivedFrom.BinaryForUnreadableSource },
-            missing, failures, [plugin])
-        ?? throw new InvalidOperationException("The index was ready.");
 
     [Fact]
     public void GetProblems_APluginWhosePluginSourceIsUnreadable_IsAnsweredWithTheFilesItsReadStoppedAt_AndNoLinkOfItsPluginFile()
     {
-        var plugin = Plugin("FellBack.esp");
+        var plugin = new Plugin("FellBack.esp");
+        Build(plugin);
+        var (document, backup) = BackupClaimingTheFormKeyOf(plugin, "Referrer");
+        using var index = Indexes.Reconciled(Fixture);
+        Assert.True(index.PluginRowOf(Entry(plugin).KeyOf())?.PluginSourceUnreadable);
 
-        var answer = Assert.Single(SourceUnreadable(plugin, [OnFile(plugin)], [new(plugin.Key, "Npcs/Stray.json", null, "Unreadable.")]));
+        var answer = Assert.Single(Ready(index));
 
-        Assert.Equal(["Npcs/Stray.json"], answer.Problems.Select(p => p.SourceRelativePath));
+        Assert.Equal(Entry(plugin).KeyOf(), answer.Plugin);
+        Assert.Equivalent(new[] { document, backup }, answer.Problems.Select(p => p.SourceRelativePath), strict: true);
+        Assert.All(answer.Problems, p => Assert.Null(p.TargetFormKey));
         Assert.Null(answer.Failure);
     }
 
     [Fact]
     public void GetProblems_APluginWhosePluginSourceIsMissing_IsAnsweredWithNoProblems()
     {
-        var plugin = Plugin("NoSource.esp");
+        var plugin = new Plugin("NoSource.esp");
+        Build(plugin);
+        Directory.Delete(PluginSourceRoot.In(Entry(plugin).ModFolderOf(), plugin.Name), recursive: true);
+        using var index = Indexes.Reconciled(Fixture);
 
-        var answer = Assert.Single(SourceUnreadable(plugin, [Unplaced(plugin)], []));
+        var answer = Assert.Single(Ready(index));
 
         Assert.Empty(answer.Problems);
         Assert.Null(answer.Failure);
@@ -142,13 +179,16 @@ public sealed class PluginProblemQueryServiceTests
     [Fact]
     public void GetProblems_AMissingReferenceOfATrackedPlugin_IsAProblemOnTheReferrersFile_NamingItsTarget_WordedAsTheGridWordsIt()
     {
-        var plugin = Plugin("Refers.esp");
+        var plugin = new Plugin("Refers.esp");
+        using var index = Reconciled(plugin);
 
-        var answer = Assert.Single(Ready([plugin], [OnFile(plugin, "Items[10].Item", "000ABC:Absent.esp")], plugin));
+        var answer = Assert.Single(Ready(index));
 
         var problem = Assert.Single(answer.Problems);
         Assert.Equal(
-            ("000800:Refers.esp", "000ABC:Absent.esp", "Items[10].Item", "Npcs/Referrer.json", "Items[10].Item: [000ABC:Absent.esp] <Error: Could not be resolved>"),
+            ("000800:Refers.esp", Absent, "Race",
+             Path.Combine(PluginSourceRoot.For(plugin.Name), "Npcs", "Referrer - 000800_Refers.esp.json"),
+             "Race: [000ABC:Absent.esp] <Error: Could not be resolved>"),
             (problem.FormKey, problem.TargetFormKey, problem.FieldPath, problem.SourceRelativePath, problem.Message));
         Assert.Null(answer.Failure);
     }
@@ -156,25 +196,28 @@ public sealed class PluginProblemQueryServiceTests
     [Fact]
     public void GetProblems_APluginWhoseReferrerTheTreeCannotPlace_IsAFailureOfThatPluginAlone_NotOfTheAnswer()
     {
-        var gone = Plugin("Gone.esp");
-        var intact = Plugin("Intact.esp");
+        var gone = new Plugin("Gone.esp");
+        var intact = new Plugin("Intact.esp");
+        using var index = Reconciled(gone, intact);
 
-        var answer = Ready([gone, intact], [OnFile(gone), Unplaced(gone), OnFile(intact)], gone, intact);
+        File.Delete(SourceFileHolding(gone, "Referrer"));
 
-        var failed = Assert.Single(answer, p => p.Plugin == gone.Key);
+        var answer = Ready(index);
+        var failed = Assert.Single(answer, p => p.Plugin == Entry(gone).KeyOf());
         Assert.Empty(failed.Problems);
-        Assert.Contains("Gone.esp", failed.Failure, StringComparison.Ordinal);
-        Assert.Single(Assert.Single(answer, p => p.Plugin == intact.Key).Problems);
+        Assert.Contains(gone.Referrer, failed.Failure, StringComparison.Ordinal);
+        Assert.Single(Assert.Single(answer, p => p.Plugin == Entry(intact).KeyOf()).Problems);
     }
 
     [Fact]
     public void GetProblems_AnActiveTrackedPluginWithNoMissingReference_IsAnsweredWithNoProblems()
     {
-        var plugin = Plugin("Clean.esp");
+        var plugin = new Plugin("Clean.esp", RefersToAbsent: false);
+        using var index = Reconciled(plugin);
 
-        var answer = Assert.Single(Ready([plugin], [], plugin));
+        var answer = Assert.Single(Ready(index));
 
-        Assert.Equal(plugin.Key, answer.Plugin);
+        Assert.Equal(Entry(plugin).KeyOf(), answer.Plugin);
         Assert.Empty(answer.Problems);
         Assert.Null(answer.Failure);
     }
@@ -182,24 +225,32 @@ public sealed class PluginProblemQueryServiceTests
     [Fact]
     public void GetProblems_AnActivePluginNoTreeBacks_IsNotAnswered_ForItHasNoSourceFile()
     {
-        Assert.Empty(Ready([], [], Plugin("Binary.esp")));
+        using var index = Reconciled(new Plugin("Binary.esp", Tracked: false));
+
+        Assert.Empty(Ready(index));
     }
 
     [Fact]
     public void GetProblems_ATrackedPluginThatIsNotActive_IsNotAnswered()
     {
-        var plugin = Plugin("Dormant.esp", enabled: false);
+        using var index = Reconciled(new Plugin("Dormant.esp", Enabled: false));
 
-        Assert.Empty(Ready([plugin], [], plugin));
+        Assert.Empty(Ready(index));
     }
 
-    [Theory]
-    [InlineData(LoadOrderState.Reconciling)]
-    [InlineData(LoadOrderState.None)]
-    public void GetProblems_BeforeTheIndexIsReady_AnswersNothing_ForAPartialSetReadsAsNoProblem(LoadOrderState state)
+    [Fact]
+    public async Task GetProblems_WhileTheIndexIsReconciling_AnswersNothing_ForAPartialSetReadsAsNoProblem()
     {
-        var plugin = Plugin("Clean.esp");
+        var plugins = Build(new Plugin("Clean.esp", RefersToAbsent: false), new Plugin("Later.esp", Tracked: false));
+        var holder = new LoadOrderHolder();
+        using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
+        using var index = Indexes.Open(holder, gate);
+        var load = Task.Run(() => index.Reconcile(holder, Fixture.GameDirectory, plugins, GameRelease.Fallout4));
+        await gate.WaitUntilParkedAsync();
 
-        Assert.Null(Ask(state, [plugin], [], [], plugin));
+        Assert.Null(index.Problems.GetProblems());
+
+        gate.Release();
+        await load;
     }
 }
