@@ -1,3 +1,4 @@
+using MEditService.PluginAdapter;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.Ports;

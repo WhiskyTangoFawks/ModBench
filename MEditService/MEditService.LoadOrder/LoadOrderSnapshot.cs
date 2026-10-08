@@ -114,12 +114,6 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     public int? LoadOrderIndex(PluginAddress address) =>
         _loadOrderIndex.TryGetValue(address, out var index) ? index : null;
 
-    public Registration RegistrationOf(PluginAddress address) => new(LoadOrderIndex(address));
-
-    /// <summary>Records that cannot be edited: a plugin the game provides (editor.md's read-only
-    /// status). A tracked plugin is its files, active or not (commands.md § Principles).</summary>
-    public bool IsImmutable(PluginAddress address) => ProviderOf(address) == PluginProvider.Game;
-
     /// <summary>Whether <paramref name="plugin"/> loads before <paramref name="other"/>. A plugin that is
     /// not active is judged at its <c>plugins.txt</c> line; with none, null (commands.md § Principles).</summary>
     public bool? LoadsBefore(PluginAddress plugin, PluginAddress other) =>

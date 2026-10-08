@@ -1,3 +1,4 @@
+using MEditService.PluginAdapter;
 using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
