@@ -465,10 +465,10 @@ describe('HttpMEditClient — getRecordsComparison', () => {
   it('rejects with the backend\'s detail on a 404, a copy no plugin holds', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(404, { detail: 'Copies not found: 000801:A.esp in A.esp (AMod).' })));
 
-    const refused: unknown = await makeClient(fetch).getRecordsComparison(copies).catch((e: unknown) => e);
+    const refusal = expect(makeClient(fetch).getRecordsComparison(copies)).rejects;
 
-    expect(refused).not.toBeInstanceOf(RecordsGoneError);
-    expect(refused).toMatchObject({ message: expect.stringMatching(/failed \(404\): Copies not found: 000801:A.esp in A.esp \(AMod\)\./) });
+    await refusal.toThrow(/failed \(404\): Copies not found: 000801:A.esp in A.esp \(AMod\)\./);
+    await refusal.not.toBeInstanceOf(RecordsGoneError);
   });
 
   it('rejects naming the records no plugin holds, when the 404 does', async () => {
@@ -476,10 +476,11 @@ describe('HttpMEditClient — getRecordsComparison', () => {
       detail: 'Copies not found: 000801:A.esp in A.esp (AMod).', goneFormKeys: ['000801:A.esp'],
     })));
 
-    const refused: unknown = await makeClient(fetch).getRecordsComparison(copies).catch((e: unknown) => e);
+    const refusal = expect(makeClient(fetch).getRecordsComparison(copies)).rejects;
 
-    expect(refused).toBeInstanceOf(RecordsGoneError);
-    expect(refused).toMatchObject({ goneFormKeys: ['000801:A.esp'], message: expect.stringContaining('Copies not found') });
+    await refusal.toBeInstanceOf(RecordsGoneError);
+    await refusal.toThrow(/Copies not found/);
+    await refusal.toHaveProperty('goneFormKeys', ['000801:A.esp']);
   });
 
   it('rejects on any other non-OK answer', async () => {

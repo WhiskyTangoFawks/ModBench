@@ -622,7 +622,7 @@ class HttpMEditClient implements MEditClient {
     try {
       this.ensureOk('getRecordsComparison', response, error);
     } catch (refused) {
-      const gone: unknown = (error as { goneFormKeys?: unknown } | undefined)?.goneFormKeys;
+      const gone: unknown = typeof error === 'object' && 'goneFormKeys' in error ? error.goneFormKeys : undefined;
       if (!Array.isArray(gone) || !(refused instanceof Error)) throw refused;
       throw new RecordsGoneError(refused.message, gone.filter((key): key is string => typeof key === 'string'));
     }
