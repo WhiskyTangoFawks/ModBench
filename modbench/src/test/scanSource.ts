@@ -36,33 +36,30 @@ const ENDS_AN_OPERAND = new Set([
   SyntaxKind.SuperKeyword, SyntaxKind.TrueKeyword, SyntaxKind.FalseKeyword, SyntaxKind.NullKeyword,
 ]);
 
-const endsAnOperand = (kind: ts.SyntaxKind): boolean =>
-  ENDS_AN_OPERAND.has(kind) || (kind >= SyntaxKind.FirstContextualKeyword && kind <= SyntaxKind.LastContextualKeyword);
-
-interface Token { kind: ts.SyntaxKind; text: string }
+interface Token { kind: ts.SyntaxKind; text: string; endsAnOperand: boolean }
 
 function indexBeforeTypeArguments(tokens: readonly Token[], end: number): number {
   if (tokens[end]?.kind !== SyntaxKind.GreaterThanToken) return end;
   let depth = 0;
   for (let i = end; i >= 0; i--) {
-    if (tokens[i].kind === SyntaxKind.GreaterThanToken) depth++;
-    else if (tokens[i].kind === SyntaxKind.LessThanToken && --depth === 0) return i - 1;
+    const kind = tokens[i]?.kind;
+    if (kind === SyntaxKind.GreaterThanToken) depth++;
+    else if (kind === SyntaxKind.LessThanToken && --depth === 0) return i - 1;
   }
   return -1;
 }
 
-/** The tokens before a string literal that make it a module specifier: `from 's'`, `import 's'`,
- *  `import('s')` and `vi.<module call>('s')`, which may carry type arguments. */
 function namesAModule(tokens: readonly Token[]): boolean {
   const last = tokens.length - 1;
-  if (tokens[last]?.kind === SyntaxKind.FromKeyword || tokens[last]?.kind === SyntaxKind.ImportKeyword) return true;
-  if (tokens[last]?.kind !== SyntaxKind.OpenParenToken) return false;
+  const lastKind = tokens[last]?.kind;
+  if (lastKind === SyntaxKind.FromKeyword || lastKind === SyntaxKind.ImportKeyword) return true;
+  if (lastKind !== SyntaxKind.OpenParenToken) return false;
   const callee = indexBeforeTypeArguments(tokens, last - 1);
   if (tokens[callee]?.kind === SyntaxKind.ImportKeyword) return true;
   const dot = tokens[callee - 1]?.kind;
   return tokens[callee]?.kind === SyntaxKind.Identifier && VI_MODULE_CALLS.has(tokens[callee].text)
     && (dot === SyntaxKind.DotToken || dot === SyntaxKind.QuestionDotToken)
-    && tokens[callee - 2]?.kind === SyntaxKind.Identifier && tokens[callee - 2].text === 'vi'
+    && tokens[callee - 2]?.kind === SyntaxKind.Identifier && tokens[callee - 2]?.text === 'vi'
     && tokens[callee - 3]?.kind !== SyntaxKind.DotToken;
 }
 
@@ -72,28 +69,30 @@ export function importSpecifiers(sourceText: string, fileName: string): string[]
   );
   const found: string[] = [];
   const before: Token[] = [];
-  const openTemplates: number[] = [];
+  const openBracesInTemplates: number[] = [];
+  const bumpInnermostTemplate = (by: number): void => {
+    openBracesInTemplates[openBracesInTemplates.length - 1] = (openBracesInTemplates[openBracesInTemplates.length - 1] ?? 0) + by;
+  };
   for (let kind = scanner.scan(); kind !== SyntaxKind.EndOfFileToken; kind = scanner.scan()) {
-    const previous = before.at(-1);
-    if ((kind === SyntaxKind.SlashToken || kind === SyntaxKind.SlashEqualsToken) && !(previous && endsAnOperand(previous.kind))) {
+    const inTemplate = openBracesInTemplates.length > 0;
+    if ((kind === SyntaxKind.SlashToken || kind === SyntaxKind.SlashEqualsToken) && !before.at(-1)?.endsAnOperand) {
       kind = scanner.reScanSlashToken();
     } else if (kind === SyntaxKind.TemplateHead) {
-      openTemplates.push(0);
-    } else if (kind === SyntaxKind.OpenBraceToken && openTemplates.length > 0) {
-      openTemplates[openTemplates.length - 1]++;
-    } else if (kind === SyntaxKind.CloseBraceToken && openTemplates.length > 0) {
-      if (openTemplates[openTemplates.length - 1] > 0) openTemplates[openTemplates.length - 1]--;
+      openBracesInTemplates.push(0);
+    } else if (kind === SyntaxKind.OpenBraceToken && inTemplate) {
+      bumpInnermostTemplate(1);
+    } else if (kind === SyntaxKind.CloseBraceToken && inTemplate) {
+      if ((openBracesInTemplates[openBracesInTemplates.length - 1] ?? 0) > 0) bumpInnermostTemplate(-1);
       else {
         kind = scanner.reScanTemplateToken(false);
-        if (kind === SyntaxKind.TemplateTail) openTemplates.pop();
+        if (kind === SyntaxKind.TemplateTail) openBracesInTemplates.pop();
       }
     }
     const text = scanner.getTokenValue();
-    const literal = kind === SyntaxKind.StringLiteral || kind === SyntaxKind.NoSubstitutionTemplateLiteral;
-    if (literal && namesAModule(before) && (kind === SyntaxKind.StringLiteral || before.at(-1)?.kind === SyntaxKind.OpenParenToken)) {
-      found.push(text);
-    }
-    before.push({ kind, text });
+    const isString = kind === SyntaxKind.StringLiteral;
+    const isCallArgument = kind === SyntaxKind.NoSubstitutionTemplateLiteral && before.at(-1)?.kind === SyntaxKind.OpenParenToken;
+    if ((isString || isCallArgument) && namesAModule(before)) found.push(text);
+    before.push({ kind, text, endsAnOperand: ENDS_AN_OPERAND.has(kind) || scanner.isIdentifier() });
   }
   return found;
 }
