@@ -422,7 +422,7 @@ export class Instance implements Subscription {
     ]);
     for (const note of runtimeOutput.notes) log(`[instance] ${runtimeOutput.origin}: ${note}`);
     const { gameFolder, dataFolderPlugins, creationClub } = game;
-    const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder);
+    const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
     const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins);
     const installedInto = downloadsOutcome.kind === 'listed' && downloadsOutcome.files
       ? await this.readInstalledInto(entries, modFolders?.all ?? [])

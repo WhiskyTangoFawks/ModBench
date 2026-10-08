@@ -144,8 +144,8 @@ export type DownloadedFiles =
   | { readonly kind: 'listed'; readonly downloadsDir: string; readonly files: readonly DownloadedFile[] | undefined }
   | { readonly kind: 'unresolved'; readonly reason: string };
 
-/** The plugin files at the root of the game folder's Data folder, case-folded; or why there is no
- *  answer: a game folder not found, or a Data folder that could not be listed. */
+/** The plugin files at the root of the game folder's Data folder, as the folder spells them; or why
+ *  there is no answer: a game folder not found, or a Data folder that could not be listed. */
 export type DataFolderPlugins =
   | { readonly kind: 'listed'; readonly names: ReadonlySet<string> }
   | { readonly kind: 'unresolved' }
