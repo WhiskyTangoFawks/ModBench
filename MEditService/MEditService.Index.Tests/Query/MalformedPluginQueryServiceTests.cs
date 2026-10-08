@@ -63,6 +63,15 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
     }
 
     [Fact]
+    public void GetLoadOrderDiagnoses_APluginLoadedWithNoLineAndOneDifferingOnlyInCase_AreBothUnread_ForTheirNamesCannotBeToldApart()
+    {
+        var master = Plugin(Malformed, origin: "CleanedMasters") with { LoadedWithNoLine = true };
+        var upper = master with { Name = Malformed.ToUpperInvariant(), LoadedWithNoLine = false, Enabled = false };
+
+        Assert.Empty(Diagnose(upper, master));
+    }
+
+    [Fact]
     public void GetLoadOrderDiagnoses_AUserPluginInTheGameFolder_IsReported_ForWhereTheFileSitsDecidesNothing()
     {
         var placed = Plugin(Malformed, origin: PluginOrigin.DataDirectory);
