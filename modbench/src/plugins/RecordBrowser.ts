@@ -12,7 +12,7 @@ import { pluginAddressKey, pluginAddressOf, type PluginAddress } from '../wire/p
 import type { PluginConditions } from './pluginFacts';
 import { errorMessage } from '../ports/errorMessage';
 import type { SyncMessage } from '../drivingLib/nameFilter';
-import { blankIcon } from './blankIcon';
+import { blankIcon } from '../drivingLib/blankIcon';
 import { UNLIMITED_RECORDS } from '../client';
 
 // "Could not be read into its document" rather than "Mutagen could not parse it": ingest's one
