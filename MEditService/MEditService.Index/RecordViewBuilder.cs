@@ -55,8 +55,8 @@ internal static class RecordViewBuilder
         if (col.AbsentIsNull) return null;
         return col.ApiType switch
         {
-            "bool" => col.Field.Default is null ? "false" : Invariant(col.Field.Default),
-            "int" or "float" => col.Field.Default is null ? "0" : Invariant(col.Field.Default),
+            "bool" => col.Field.Default is { } declared ? Invariant(declared) : "false",
+            "int" or "float" => col.Field.Default is { } declared ? Invariant(declared) : "0",
             "flags" => "''",
             "enum" or "color" or "hex" or "vector" => col.Field.Default is string text ? $"'{text}'" : null,
             _ => null,
@@ -76,7 +76,7 @@ internal static class RecordViewBuilder
         {
             // A [Flags] enum is written as an array of member names. Joining them keeps the column
             // text and keeps `LIKE '%SomeFlag%'` working. A major record's Record Flags is its raw
-            // integer, which an INTEGER column filters by its bits.
+            // integer, which a numeric column filters by its bits.
             raw = $"array_to_string(CAST(json_extract(body, {path}) AS VARCHAR[]), ', ')";
         }
         else if (SqlType(col) == "VARCHAR")

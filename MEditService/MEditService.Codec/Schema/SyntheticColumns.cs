@@ -8,5 +8,5 @@ internal static class SyntheticColumns
         game.Annotations.SyntheticFlagMembersFor(getterType).Select(row => new ColumnSpec(
             new FieldMetadata(row.Name, "bool", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
             row.Name,
-                        Synthetic: new SyntheticBit(backingPathPrefix + row.BackingMember, row.Flag)));
+            Synthetic: new SyntheticBit(backingPathPrefix + row.BackingMember, row.Flag)));
 }

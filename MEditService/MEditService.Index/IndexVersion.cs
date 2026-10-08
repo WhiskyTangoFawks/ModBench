@@ -20,7 +20,7 @@ internal static class IndexVersion
     }
 
     // Table name, column name and SQL type of every reflected column, in a deterministic order —
-    // the whole of what the generated views and the extracted columns are built from.
+    // what the generated views' column types are built from.
     private static string SchemaDigest(SchemaReflector reflector, GameRelease release)
     {
         var sb = new StringBuilder();

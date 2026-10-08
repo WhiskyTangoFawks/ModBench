@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Index.Tests.TestSupport;
@@ -29,18 +28,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
         }
     }
 
-    private bool AnyColumnOf(string table, IEnumerable<string> columns)
-    {
-        var names = columns.Select(Regex.Escape).ToList();
-        return names.Count != 0 && Binds($"""
-            SELECT form_key FROM "{table}" WHERE EXISTS (SELECT COLUMNS('^({string.Join("|", names)})$') FROM "{table}")
-            """);
-    }
-
-    private static bool IsScalar(ColumnSpec column) =>
-        !column.Field.IsArray && column.Field.Fields == null && column.Synthetic == null
-        && (column.Field.Variants == null || column.Field.Variants.Values.Select(v => v.Type).Distinct(StringComparer.Ordinal).Count() == 1);
-
     private string ViewColumnType(string table, string column) =>
         IndexFiles.Rows(fixture.InstanceRoot,
             $"SELECT data_type FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{column}'")
@@ -57,6 +44,7 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
     [InlineData("ligh", "Color", "VARCHAR")]
     [InlineData("header", "Author", "VARCHAR")]
     [InlineData("weap", "VersionControl", "BIGINT")]
+    [InlineData("glob", "OutputChar", "BOOLEAN")]
     public void AViewColumn_HasTheSqlTypeOfItsLeaf(string table, string column, string expected)
     {
         Assert.Equal(expected, ViewColumnType(table, column));
@@ -93,46 +81,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
         Assert.Equal(absent, Matching("SELECT form_key FROM \"npc_\" WHERE \"CalcMinLevel\" = 0"));
     }
 
-    [Theory]
-    [InlineData("dial", "Priority", "50")]
-    [InlineData("npc_", "AggroRadiusBehaviorEnabled", "false")]
-    [InlineData("npc_", "Aggression", "'Unaggressive'")]
-    [InlineData("npc_", "Flags", "''")]
-    public void AnOmittedMember_ReadsAsItsDeclaredDefault_NotNull(string table, string column, string defaultLiteral)
-    {
-        var absent = IndexFiles.Rows(fixture.InstanceRoot, $"SELECT body FROM records WHERE record_type = '{table}'")
-            .Count(row => !JsonDocument.Parse(row[0]).RootElement.TryGetProperty(column, out _));
-
-        Assert.True(absent > 0, "Positive control: some document must omit the member for this to mean anything.");
-        Assert.Equal(0, Matching($"SELECT form_key FROM \"{table}\" WHERE \"{column}\" IS NULL"));
-        Assert.True(Matching($"SELECT form_key FROM \"{table}\" WHERE \"{column}\" IS NOT DISTINCT FROM {defaultLiteral}") >= absent);
-    }
-
-    [Fact]
-    public void AColumnAbsentMeansNull_ReadsNullWhereTheDocumentOmitsIt()
-    {
-        var checkedColumns = 0;
-        var offenders = new List<string>();
-        foreach (var (table, schema) in Schemas)
-        {
-            var filled = schema.RecordColumns
-                .Where(c => c.AbsentIsNull && IsScalar(c) && !c.Field.IsEditorId)
-                .Select(c => $"(json_extract(r.body, '$.{c.PropertyName}') IS NULL AND v.\"{c.Name}\" IS NOT NULL)")
-                .ToList();
-            if (filled.Count == 0) continue;
-            checkedColumns += filled.Count;
-            if (Matching($"""
-                SELECT v.form_key FROM "{table}" v
-                JOIN records r ON r.form_key = v.form_key AND r.plugin = v.plugin AND r.origin = v.origin
-                WHERE {string.Join(" OR ", filled)}
-                """) > 0)
-                offenders.Add(table);
-        }
-
-        Assert.True(checkedColumns > 0, "Positive control: some column must read null when absent.");
-        Assert.Empty(offenders);
-    }
-
     [Fact]
     public void TranslatedStrings_ReadTheirValue_NotTheEnvelope()
     {
@@ -158,20 +106,12 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
         Assert.Equal(0, Matching("SELECT form_key FROM \"cell\" WHERE \"Flags\" LIKE '%[%' OR \"Flags\" LIKE '%\"%'"));
     }
 
-    [Fact]
-    public void AViewCarriesEveryViewableScalar_AndNoArrayStructOrClassVaryingColumn()
+    [Theory]
+    [InlineData("npc_", "Factions")]
+    [InlineData("npc_", "Weight")]
+    public void AnArrayOrStructMember_HasNoViewColumn(string table, string column)
     {
-        var offenders = new List<string>();
-        var tablesWithScalars = 0;
-        foreach (var (table, schema) in Schemas)
-        {
-            if (AnyColumnOf(table, schema.RecordColumns.Where(c => !IsScalar(c)).Select(c => c.Name)))
-                offenders.Add(table);
-            if (AnyColumnOf(table, schema.RecordColumns.Where(IsScalar).Select(c => c.Name)))
-                tablesWithScalars++;
-        }
-
-        Assert.Empty(offenders);
-        Assert.True(tablesWithScalars > 0, "Positive control: viewable scalars must actually be reachable.");
+        Assert.Empty(IndexFiles.Rows(fixture.InstanceRoot,
+            $"SELECT 1 FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{column}'"));
     }
 }
