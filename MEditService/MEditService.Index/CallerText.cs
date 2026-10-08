@@ -3,7 +3,7 @@ using MEditService.Codec.Schema;
 
 namespace MEditService.Index;
 
-public static class CallerText
+internal static class CallerText
 {
     /// <summary>The body a copy is read from when the caller's text yields none.</summary>
     public const string NoBody = "{}";

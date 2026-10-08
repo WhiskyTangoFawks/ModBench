@@ -3,9 +3,10 @@ using System.Diagnostics;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index;

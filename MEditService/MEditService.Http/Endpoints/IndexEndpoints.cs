@@ -1,5 +1,5 @@
 using MEditService.Ports;
-using MEditService.Queries;
+using MEditService.Index.Queries;
 
 namespace MEditService.Http.Endpoints;
 

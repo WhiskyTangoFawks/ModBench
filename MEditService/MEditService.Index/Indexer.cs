@@ -72,17 +72,19 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     }
 
     /// <summary>ADR-0010: drops the index file, floors its sequence at what this process
-    /// handed out, and refills it off the caller's thread; a file another window holds is refused.</summary>
-    public StoreRebuild RebuildStore(GameRelease gameRelease, string instanceRoot)
+    /// handed out, and refills it off the caller's thread; a file another window holds is refused,
+    /// and the refusal returned.</summary>
+    public string? RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
         var previousSequence = Sequence;
         _reconciler.Close();
         // Released before the reconcile below opens the same file for its own scope.
         using (var rebuilt = _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence, out var refusal))
         {
-            if (rebuilt is null) return new StoreRebuild(Task.CompletedTask, refusal);
+            if (rebuilt is null) return refusal;
         }
-        return new StoreRebuild(_reconciler.StartReconcile());
+        _ = _reconciler.StartReconcile();
+        return null;
     }
 
     public void Subscribe() => _holder.Arrived += OnArrived;

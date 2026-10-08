@@ -6,7 +6,7 @@ namespace MEditService.Index;
 
 /// <summary>ADR-0014: the Index as Queries sees it — the reads, the
 /// status, the sequence and the filter, plus setting and clearing the filter and the rebuild.</summary>
-public interface IQueryIndex
+internal interface IQueryIndex
 {
     /// <summary>Where the projection is and what it has established so far (ADR-0013): anything
     /// derived from the whole plugin set gates on this. Never null — no load order is a state.
@@ -37,5 +37,5 @@ public interface IQueryIndex
 
     void ClearFilter();
 
-    StoreRebuild RebuildStore(GameRelease gameRelease, string instanceRoot);
+    string? RebuildStore(GameRelease gameRelease, string instanceRoot);
 }

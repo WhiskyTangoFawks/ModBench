@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.Queries;
+using MEditService.Index.Queries;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Http;

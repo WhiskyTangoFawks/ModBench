@@ -5,7 +5,7 @@ namespace MEditService.Index;
 
 /// <summary>One plugin's copy of one record. <see cref="Body"/> is the document the index stores (ADR-0005):
 /// for the header, the root <c>RecordData.json</c>.</summary>
-public record RecordDocument(
+internal sealed record RecordDocument(
     string FormKey,
     PluginAddress Plugin,
     int LoadOrderIndex,
@@ -19,22 +19,20 @@ public record RecordDocument(
     // ParseFailedDocument wrote, and no write may land on it.
     string? ParseDiagnosis = null);
 
-public record OverrideStackEntry(
+internal sealed record OverrideStackEntry(
     PluginAddress Plugin,
     int LoadOrderIndex,
     bool IsWinner,
     RecordDocument Effective,
     bool HasWorkingTreeChange);
 
-/// <summary>Every plugin's copy of one record, in load order — the "override stack". Named
-/// <c>RecordOverrides</c> only because CA1711 rejects a public type name ending in "Stack" that is
-/// not a collection.</summary>
-public record RecordOverrides(string FormKey, string RecordType, IReadOnlyList<OverrideStackEntry> Entries);
+/// <summary>Every plugin's copy of one record, in load order.</summary>
+internal sealed record OverrideStack(string FormKey, string RecordType, IReadOnlyList<OverrideStackEntry> Entries);
 
 /// <summary><c>GroupOnly</c> lists a group in FormID order, otherwise by EditorID.
 /// <c>SearchFormKey</c> is a FormID search's FormKey, matched beside the EditorID text.
 /// <c>Plugin</c> and <c>Origin</c> filter apart (ADR-0012).</summary>
-public sealed record RecordQuery(
+internal sealed record RecordQuery(
     RecordQueryScope Scope,
     IReadOnlyList<string>? RecordTypes = null,
     PluginName? Plugin = null,
@@ -47,7 +45,7 @@ public sealed record RecordQuery(
 
 /// <summary>The record filter narrows the navigator and never a search: plugins.md says of it, "It never
 /// narrows the Editor or Referenced By".</summary>
-public enum RecordQueryScope { Navigator, Search }
+internal enum RecordQueryScope { Navigator, Search }
 
 /// <summary>One record type's row count for one plugin, from one grouped query.</summary>
-public record RecordTypeCount(string Type, int Count, bool HasParseFailure);
+internal sealed record RecordTypeCount(string Type, int Count, bool HasParseFailure);

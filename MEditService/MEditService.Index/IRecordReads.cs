@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 
 namespace MEditService.Index;
@@ -5,7 +6,7 @@ namespace MEditService.Index;
 /// <summary>Every read the index answers. A record read
 /// sees only the active plugins (ADR-0012); a plugin's own facts answer while the
 /// snapshot names it.</summary>
-public interface IRecordReads
+internal interface IRecordReads
 {
     /// <summary>What the Index read out of each plugin it has open, keyed by identity. A plugin it has
     /// not reached, or could not open, is absent, so this is also "which plugins are open?".
@@ -27,7 +28,7 @@ public interface IRecordReads
 
     /// <summary>Every plugin's copy of <paramref name="formKey"/>, in load order. Null if the
     /// FormKey isn't indexed anywhere.</summary>
-    RecordOverrides? GetOverrideStack(string formKey);
+    OverrideStack? GetOverrideStack(string formKey);
 
     PagedResult<RecordSummary> Search(RecordQuery query);
 
@@ -60,10 +61,9 @@ public interface IRecordReads
     /// <summary>What each registered plugin's rows were derived from. A plugin with no rows is absent.</summary>
     IReadOnlyDictionary<PluginAddress, DerivedFrom> GetDerivations();
 
-    /// <summary>Every plugin holding at least one record Mutagen could not read, as
-    /// <c>ColumnKey.Of(name, origin)</c> values: the tree's "has a failure below it" for a plugin
-    /// row, answered from the page it already has.</summary>
-    IReadOnlySet<string> GetPluginsWithParseFailures();
+    /// <summary>Every plugin holding at least one record Mutagen could not read: the tree's "has a
+    /// failure below it" for a plugin row, answered from the page it already has.</summary>
+    IReadOnlySet<PluginAddress> GetPluginsWithParseFailures();
 
     // Worldspace tree reads (plugins.md, The tree, story 6) from the placement / cell_location side
     // tables, in the order xEdit's navigator lists them.

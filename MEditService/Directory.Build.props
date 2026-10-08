@@ -24,7 +24,6 @@
   <PropertyGroup>
     <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Http'">true</MutagenBanIncluded>
     <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Commands'">true</MutagenBanIncluded>
-    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Queries'">true</MutagenBanIncluded>
     <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.LoadOrder'">true</MutagenBanIncluded>
     <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Ports'">true</MutagenBanIncluded>
     <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Index'">true</MutagenBanIncluded>

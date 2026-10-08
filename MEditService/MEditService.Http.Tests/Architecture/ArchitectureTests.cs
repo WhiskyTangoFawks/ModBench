@@ -2,11 +2,10 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
-using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
-using MEditService.Queries;
+using MEditService.Index.Queries;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 
@@ -19,7 +18,6 @@ public sealed class ArchitectureTests
         typeof(RecordTextCodec).Assembly,
         typeof(TrackHandler).Assembly,
         typeof(Program).Assembly,
-        typeof(IQueryIndex).Assembly,
         typeof(LoadOrderSnapshot).Assembly,
         typeof(IPluginAdapter).Assembly,
         typeof(INotificationPublisher).Assembly,
@@ -29,7 +27,7 @@ public sealed class ArchitectureTests
 
     private static readonly (Assembly Assembly, string Namespace)[] ReadModelAndWireRecordNamespaces =
     [
-        (typeof(IRecordQueryService).Assembly, "MEditService.Queries"),
+        (typeof(IRecordQueryService).Assembly, "MEditService.Index.Queries"),
         (typeof(Program).Assembly, "MEditService.Http"),
     ];
 
@@ -198,47 +196,19 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void TheIndexInterface_HoldsOnlyMembersTheQueryServicesCall()
+    public void TheRecordIndexFace_HandsOutNoLoadOrder()
     {
-        var queries = SourceTree
-            .CSharpFiles(Path.Combine(ServiceProjects.SolutionDirectory(), "MEditService.Queries"))
-            .Select(File.ReadAllText)
-            .ToList();
-        var propertiesAndNonAccessorMethods = typeof(IQueryIndex).GetProperties().Select(m => m.Name)
-            .Concat(typeof(IQueryIndex).GetMethods().Where(m => !m.IsSpecialName).Select(m => m.Name));
-        var uncalled = propertiesAndNonAccessorMethods
-            .Where(name => !queries.Exists(text => text.Contains($".{name}", StringComparison.Ordinal)))
-            .ToList();
-        Assert.True(uncalled.Count == 0,
-            $"{nameof(IQueryIndex)} carries members no query service calls:\n" + string.Join("\n", uncalled));
-    }
-
-    [Fact]
-    public void TheIndexSurface_HandsOutNoLoadOrder()
-    {
-        var offenders = new[] { typeof(IQueryIndex), typeof(IRecordReads) }
-            .SelectMany(type => type.GetMembers(EveryMember).Select(member => (Type: type, Member: member)))
-            .Where(m => VisibleOutsideItsType(m.Member))
+        var offenders = typeof(IRecordQueryService).Assembly.GetExportedTypes()
+            .SelectMany(type => type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+                .Select(member => (Type: type, Member: member)))
             .Where(m => m.Member.Name == "LoadOrder" || ReturnsALoadOrder(m.Member))
             .Select(m => $"{m.Type.Name}.{m.Member.Name}")
             .Order(StringComparer.Ordinal)
             .ToList();
 
         Assert.True(offenders.Count == 0,
-            "The Index hands out a load order:\n" + string.Join("\n", offenders));
+            "The record index hands out a load order:\n" + string.Join("\n", offenders));
     }
-
-    private const BindingFlags EveryMember =
-        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
-
-    private static bool VisibleOutsideItsType(MemberInfo member) => member switch
-    {
-        PropertyInfo property =>
-            property.GetMethod?.IsPrivate == false || property.SetMethod?.IsPrivate == false,
-        FieldInfo field => !field.IsPrivate,
-        MethodBase method => !method.IsPrivate,
-        _ => true,
-    };
 
     private static bool ReturnsALoadOrder(MemberInfo member) =>
         IsALoadOrder(member switch

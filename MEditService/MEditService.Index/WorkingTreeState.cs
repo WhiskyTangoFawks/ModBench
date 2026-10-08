@@ -1,6 +1,6 @@
-namespace MEditService.Index;
+using MEditService.Index.Queries;
 
-public enum WorkingTreeState { None, Modified, Added }
+namespace MEditService.Index;
 
 internal static class WorkingTreeStates
 {

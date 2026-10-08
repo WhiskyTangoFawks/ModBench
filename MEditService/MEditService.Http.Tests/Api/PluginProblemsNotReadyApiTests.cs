@@ -8,7 +8,9 @@ namespace MEditService.Http.Tests.Api;
 
 public sealed class PluginProblemsNotReadyApiTests : HostedTests
 {
-    protected override MEditHost CreateHost() => new(ReconcilingIndex.Replace);
+    private readonly ParkedPluginAdapter _parked = new();
+
+    protected override MEditHost CreateHost() => new(_parked.Replace);
 
     [Fact]
     public async Task GetProblems_WhileTheIndexIsReconciling_Is503AndSaysItIsNotFinished()
@@ -20,6 +22,7 @@ public sealed class PluginProblemsNotReadyApiTests : HostedTests
             .EnsureSuccessStatusCode();
 
         var response = await Client.GetAsync(new Uri("/plugins/problems", UriKind.Relative));
+        _parked.Release();
 
         var problem = await response.AssertIsProblem(HttpStatusCode.ServiceUnavailable);
         Assert.Contains("index is not ready", problem.GetProperty("detail").GetString(), StringComparison.Ordinal);
