@@ -68,14 +68,14 @@ export function registerDownloadsSingleRowCommands(
 ): vscode.Disposable[] {
   return [
     registerGesture('modbench.downloadedFile.open', viewSelection, async (entry) => {
-      const row = singularArgument(entry, 'download')?.row;
+      const row = singularArgument(entry, 'download')?.argument.row;
       if (!row) return;
       await reportFailure(reporter, `Open File for "${row.name}" failed.`, async () => {
         await vscode.env.openExternal(vscode.Uri.file(row.path));
       });
     }),
     registerGesture('modbench.downloadedFile.openMeta', viewSelection, async (entry) => {
-      const row = singularArgument(entry, 'download')?.row;
+      const row = singularArgument(entry, 'download')?.argument.row;
       if (!row) return;
       await reportFailure(reporter, `Open Meta File for "${row.name}" failed.`, async () => {
         await vscode.window.showTextDocument(vscode.Uri.file(row.sidecarPath));
@@ -91,7 +91,7 @@ export function registerDownloadsMultiRowCommands(
   access: DownloadsAccess, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
-  const rows = (entry: GestureEntry<DownloadsTreeNode>) => pluralArgument(entry, 'download').map((node) => node.row);
+  const rows = (entry: GestureEntry<DownloadsTreeNode>) => pluralArgument(entry, 'download').map((node) => node.argument.row);
   return [
     registerGesture('modbench.downloadedFile.delete', viewSelection, (entry) =>
       deleteSelection(access, instance, rows(entry), reporter, ask, trash, log)),

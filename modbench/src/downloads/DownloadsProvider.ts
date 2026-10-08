@@ -10,6 +10,8 @@ import {
 } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
+import type { DownloadArgument, UpgradeCandidate } from '../drivingLib/argument';
+import { upgradeCandidates } from './upgradeCandidates';
 
 // Mirrors the reference tool's own colour-coded Status cell. The icon is always set explicitly so
 // the file-icon theme never takes over; a colour is affordable because every row is an archive.
@@ -53,8 +55,10 @@ export class DownloadNode extends vscode.TreeItem {
   readonly kind = 'download' as const;
   /** The Argument view on Nexus reads, which the Mods row supplies under the same name. */
   readonly nexusModId: string | undefined;
-  constructor(public readonly row: DownloadFile) {
+  readonly argument: DownloadArgument;
+  constructor(public readonly row: DownloadFile, upgrades: readonly UpgradeCandidate[] = []) {
     super(row.displayName, vscode.TreeItemCollapsibleState.None);
+    this.argument = { kind: 'download', row, upgrades };
     this.nexusModId = row.modID;
     this.id = row.name;
     this.iconPath = downloadStatusIcon(row.status);
@@ -183,6 +187,6 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     // excluded-filtering, then sort — the acceptance criterion the three compose by.
     const archives = filterArchiveRows(downloads);
     const rows = sortDownloadRows(filterExcludedRows(archives, this.showExcluded), this.sortColumn, this.sortDescending);
-    return rows.map((row) => new DownloadNode(row));
+    return rows.map((row) => new DownloadNode(row, upgradeCandidates(this.instanceValue, row)));
   }
 }

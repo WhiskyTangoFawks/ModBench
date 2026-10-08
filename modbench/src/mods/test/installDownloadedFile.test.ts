@@ -30,26 +30,20 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { installDownloadedFile, type DownloadInstallDeps } from '../installDownloaded';
-import type { DownloadRow, Instance, InstanceValue } from '../../instanceLoader/instance';
+import type { DownloadRow, Instance } from '../../instanceLoader/instance';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
+import type { DownloadArgument, UpgradeCandidate } from '../../drivingLib/argument';
 import { accessTo } from '../../test/mo2/adapterOver';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-const node = (root: string, name: string, row: Partial<DownloadRow> = {}): { row: ReturnType<typeof downloadRowFixture> } =>
-  ({ row: downloadRowFixture(name, row, root) });
+const argumentOf = (
+  root: string, name: string, upgrades: readonly UpgradeCandidate[] = [], row: Partial<DownloadRow> = {},
+): DownloadArgument => ({ kind: 'download', row: downloadRowFixture(name, row, root), upgrades });
 
-const fakeInstance = (
-  mods: InstanceValue['mods'] = [], gameName = 'Fallout 4',
-): Pick<Instance, 'value' | 'refresh'> => ({
-  value: instanceValueFixture({ mods, gameName }),
+const fakeInstance = (): Pick<Instance, 'value' | 'refresh'> => ({
+  value: instanceValueFixture({ gameName: 'Fallout 4' }),
   refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
-});
-
-const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): InstanceValue['mods'][number] => ({
-  kind: 'mod',
-  enabled: true,
-  ...over,
 });
 
 const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDeps => ({
@@ -100,7 +94,7 @@ describe('installDownloadedFile', () => {
     await writeMeta(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -114,7 +108,7 @@ describe('installDownloadedFile', () => {
     const archive = await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    await installDownloadedFile(node(root, 'foo.7z', { modID: '123', fileID: '456', version: '2.0' }).row, accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z', [], { modID: '123', fileID: '456', version: '2.0' }), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -130,7 +124,7 @@ describe('installDownloadedFile', () => {
     const before = await readFile(meta, 'utf8');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -148,7 +142,7 @@ describe('installDownloadedFile', () => {
     });
     const report = recordingReporter();
 
-    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), report, installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), report, installDeps());
 
     await vi.waitFor(() => expect(downloadsLogLines).toHaveLength(1));
     const line = present(downloadsLogLines[0], 'the one recorded Output line');
@@ -166,7 +160,7 @@ describe('installDownloadedFile', () => {
     const meta = await writeMeta(root, 'foo.7z');
     showInputBox.mockResolvedValueOnce(undefined);
 
-    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
 
     await vi.waitFor(() => expect(showInputBox).toHaveBeenCalled());
     expect(installFromArchive).not.toHaveBeenCalled();
@@ -180,7 +174,7 @@ describe('installDownloadedFile', () => {
     installFromArchive.mockResolvedValueOnce({ applied: false, refusal: 'boom' });
     const report = recordingReporter();
 
-    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), report, installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), report, installDeps());
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'boom' }]);
@@ -193,7 +187,7 @@ describe('installDownloadedFile', () => {
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: true });
     const warnIfFomod = vi.fn();
 
-    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), fakeInstance(), recordingReporter(), installDeps({ warnIfFomod }));
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), recordingReporter(), installDeps({ warnIfFomod }));
 
     await vi.waitFor(() => expect(warnIfFomod).toHaveBeenCalledWith('foo', true));
   });
@@ -203,206 +197,99 @@ const ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR = { modID: '111', fileID: '999' };
 
 interface FakeUpgradeItem { label: string; description?: string; choice: unknown }
 
-describe('installDownloadedFile: the upgrade pick', () => {
+const NEW_MOD_ITEM = { label: 'Install as a new mod…', choice: { kind: 'new' } };
+
+describe('installDownloadedFile: the pick among the upgrades the Argument carries', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('shows one row per candidate — file-id match named and first — plus a trailing new-mod row, and pre-selects the file-id match', async () => {
+  async function pickAmong(upgrades: readonly UpgradeCandidate[], act: (double: ReturnType<typeof fakeQuickPick<FakeUpgradeItem>>) => void) {
     const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([
-      mod({ name: 'No Match', nexusId: '111', version: '1.0' }),
-      mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFiles: [{ nexusId: '111', fileId: '999' }] }),
-    ]);
-    const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
-    createQuickPick.mockReturnValue(qp);
-
-    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
+    const archive = await writeArchive(root, 'foo.7z');
+    const double = fakeQuickPick<FakeUpgradeItem>();
+    createQuickPick.mockReturnValue(double.qp);
+    const installing = installDownloadedFile(
+      argumentOf(root, 'foo.7z', upgrades, ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
-    escape();
+    act(double);
     await installing;
+    return { root, archive, qp: double.qp };
+  }
 
+  it('shows one row per upgrade, in the Argument\'s order, plus a trailing new-mod row, and pre-selects the file-id match', async () => {
+    const { qp } = await pickAmong(
+      [{ modName: 'The Match', version: '2.0', tier: 'fileId' }, { modName: 'No Match', version: '1.0' }], (d) => d.escape());
+
+    const theMatch = { label: 'The Match (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'The Match' } };
     expect(qp.items).toEqual([
-      { label: 'The Match (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'The Match' } },
+      theMatch,
       { label: 'No Match (v1.0)', description: undefined, choice: { kind: 'upgrade', name: 'No Match' } },
-      { label: 'Install as a new mod…', choice: { kind: 'new' } },
+      NEW_MOD_ITEM,
     ]);
-    expect(qp.activeItems).toEqual([{ label: 'The Match (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'The Match' } }]);
+    expect(qp.activeItems).toEqual([theMatch]);
   });
 
-  it('labels an archiveFilename match "Installed from this file" and pre-selects it, with no fileId match present', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([
-      mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
-    ]);
-    const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
-    createQuickPick.mockReturnValue(qp);
+  it('labels an archiveFilename match "Installed from this file" and pre-selects it', async () => {
+    const { qp } = await pickAmong([{ modName: 'Harder VATS', version: '1.0', tier: 'archiveFilename' }], (d) => d.escape());
 
-    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
-    escape();
-    await installing;
-
-    const tier2Item = { label: 'Harder VATS (v1.0)', description: 'Installed from this file', choice: { kind: 'upgrade', name: 'Harder VATS' } };
-    expect(qp.items).toEqual([tier2Item, { label: 'Install as a new mod…', choice: { kind: 'new' } }]);
-    expect(qp.activeItems).toEqual([tier2Item]);
+    const item = { label: 'Harder VATS (v1.0)', description: 'Installed from this file', choice: { kind: 'upgrade', name: 'Harder VATS' } };
+    expect(qp.items).toEqual([item, NEW_MOD_ITEM]);
+    expect(qp.activeItems).toEqual([item]);
   });
 
-  it('hides the archiveFilename label when a fileId match exists elsewhere in the pool', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([
-      mod({ name: 'By Name', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
-      mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFiles: [{ nexusId: '111', fileId: '999' }] }),
-    ]);
-    const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
-    createQuickPick.mockReturnValue(qp);
-
-    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
-    escape();
-    await installing;
-
-    expect(qp.items).toEqual([
-      { label: 'By File Id (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'By File Id' } },
-      { label: 'By Name (v1.0)', description: undefined, choice: { kind: 'upgrade', name: 'By Name' } },
-      { label: 'Install as a new mod…', choice: { kind: 'new' } },
-    ]);
-  });
-
-  it('pre-selects "Install as a new mod…" when neither tier matches, even with a tierless mod listed', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([mod({ name: 'Some Mod', nexusId: '111', version: '1.0' })]);
-    const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
-    createQuickPick.mockReturnValue(qp);
-
-    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
-    escape();
-    await installing;
+  it('pre-selects "Install as a new mod…" when no upgrade carries a tier', async () => {
+    const { qp } = await pickAmong([{ modName: 'Some Mod', version: '1.0' }], (d) => d.escape());
 
     expect(qp.items).toEqual([
       { label: 'Some Mod (v1.0)', description: undefined, choice: { kind: 'upgrade', name: 'Some Mod' } },
-      { label: 'Install as a new mod…', choice: { kind: 'new' } },
+      NEW_MOD_ITEM,
     ]);
-    expect(qp.activeItems).toEqual([{ label: 'Install as a new mod…', choice: { kind: 'new' } }]);
+    expect(qp.activeItems).toEqual([NEW_MOD_ITEM]);
   });
 
-  it('choosing a candidate calls install with the upgrade shape naming that mod', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    const { qp, accept } = fakeQuickPick<FakeUpgradeItem>();
-    createQuickPick.mockReturnValue(qp);
+  it('choosing an upgrade calls install with the upgrade shape naming that mod, and asks no name', async () => {
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
-    accept({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } });
-    await installing;
+    const { root, archive } = await pickAmong(
+      [{ modName: 'Harder VATS', version: '1.0' }],
+      (d) => d.accept({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } }));
 
-    await vi.waitFor(() => {
-      expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'upgrade', name: 'Harder VATS' }, archive,
-        { gameName: 'Fallout 4', modID: '111', fileID: '999', version: undefined },
-      );
-    });
+    expect(installFromArchive).toHaveBeenCalledWith(
+      expect.objectContaining({ instanceRoot: root }), { kind: 'upgrade', name: 'Harder VATS' }, archive,
+      { gameName: 'Fallout 4', modID: '111', fileID: '999', version: undefined },
+    );
     expect(showInputBox).not.toHaveBeenCalled();
   });
 
   it('choosing "Install as a new mod…" calls install with the new-mod shape', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    const { qp, accept } = fakeQuickPick<FakeUpgradeItem>();
-    createQuickPick.mockReturnValue(qp);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
-    accept({ label: 'Install as a new mod…', choice: { kind: 'new' } });
-    await installing;
+    const { root, archive } = await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(NEW_MOD_ITEM));
 
-    await vi.waitFor(() => {
-      expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
-        { gameName: 'Fallout 4', modID: '111', fileID: '999', version: undefined },
-      );
-    });
+    expect(installFromArchive).toHaveBeenCalledWith(
+      expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
+      { gameName: 'Fallout 4', modID: '111', fileID: '999', version: undefined },
+    );
   });
 
   it('Esc installs nothing', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
-    createQuickPick.mockReturnValue(qp);
-
-    const installing = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
-    escape();
-    await installing;
+    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.escape());
     await afterAMacrotaskNotAMicrotask();
 
     expect(installFromArchive).not.toHaveBeenCalled();
   });
 
-  it('a download with no mod id never shows the pick, even with installed mods present', async () => {
+  it('an Argument with no upgrades shows no pick and installs as a new mod', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), instance, recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
 
-    await vi.waitFor(() => {
-      expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
-        { gameName: 'Fallout 4', modID: undefined, fileID: undefined, version: undefined },
-      );
-    });
+    expect(installFromArchive).toHaveBeenCalledWith(
+      expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
+      { gameName: 'Fallout 4', modID: undefined, fileID: undefined, version: undefined },
+    );
     expect(createQuickPick).not.toHaveBeenCalled();
-  });
-
-  it('a download with a mod id no installed mod carries never shows the pick, even when a mod was installed from this file', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([
-      mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' }),
-      mod({ name: 'Hand Installed', archiveFilename: 'foo.7z' }),
-    ]);
-    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
-
-    await installDownloadedFile(node(root, 'foo.7z', { modID: '222' }).row, accessTo(root), instance, recordingReporter(), installDeps());
-
-    await vi.waitFor(() => {
-      expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
-        { gameName: 'Fallout 4', modID: '222', fileID: undefined, version: undefined },
-      );
-    });
-    expect(createQuickPick).not.toHaveBeenCalled();
-  });
-
-  it('matches an archiveFilename candidate through the pick with a differently-cased filename', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'Foo.7z');
-    const instance = fakeInstance([
-      mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'FOO.7Z' }),
-    ]);
-    const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
-    createQuickPick.mockReturnValue(qp);
-
-    const installing = installDownloadedFile(node(root, 'Foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), instance, recordingReporter(), installDeps());
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
-    escape();
-    await installing;
-
-    expect(qp.items).toEqual([
-      { label: 'Harder VATS (v1.0)', description: 'Installed from this file', choice: { kind: 'upgrade', name: 'Harder VATS' } },
-      { label: 'Install as a new mod…', choice: { kind: 'new' } },
-    ]);
   });
 });
 
@@ -416,7 +303,7 @@ describe('installDownloadedFile: the progress bar and the read', () => {
     await writeArchive(root, 'foo.7z');
     installFromArchive.mockImplementationOnce(() => { progressSteps.push('install'); return Promise.resolve({ applied: true, wrote: true, isFomod: false }); });
 
-    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), instanceThatReads, recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), instanceThatReads, recordingReporter(), installDeps());
 
     expect(progressSteps).toEqual([opens, 'install', reads, 'progress closes']);
   });
@@ -426,7 +313,7 @@ describe('installDownloadedFile: the progress bar and the read', () => {
     await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: false, refusal: 'boom' });
 
-    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), instanceThatReads, recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), instanceThatReads, recordingReporter(), installDeps());
 
     expect(progressSteps).toEqual([opens, reads, 'progress closes']);
   });
@@ -436,9 +323,8 @@ describe('installDownloadedFile: the progress bar and the read', () => {
     await writeArchive(root, 'foo.7z');
     const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
-    const installed = fakeInstance([mod({ name: 'Foo Mod', nexusId: '111', version: '1.0' })]);
 
-    const running = installDownloadedFile(node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR).row, accessTo(root), installed, recordingReporter(), installDeps());
+    const running = installDownloadedFile(argumentOf(root, 'foo.7z', [{ modName: 'Foo Mod', version: '1.0' }], ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
     await running;
@@ -451,7 +337,7 @@ describe('installDownloadedFile: the progress bar and the read', () => {
     await writeArchive(root, 'foo.7z');
     showInputBox.mockResolvedValueOnce(undefined);
 
-    await installDownloadedFile(node(root, 'foo.7z').row, accessTo(root), instanceThatReads, recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), instanceThatReads, recordingReporter(), installDeps());
 
     expect(progressSteps).toEqual([]);
   });

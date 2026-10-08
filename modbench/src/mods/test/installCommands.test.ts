@@ -8,12 +8,13 @@ interface InputBoxOptionsDoubleOfJustPromptAndValidateInput {
   validateInput?: (value: string) => string | undefined;
 }
 
-const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuickPick, openExternal } = vi.hoisted(() => ({
+const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuickPick, openExternal, createQuickPick } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
   executeCommand: vi.fn((_command: string, _uri?: { fsPath: string }) => Promise.resolve()),
   showOpenDialog: vi.fn(),
   showInputBox: vi.fn<(options?: InputBoxOptionsDoubleOfJustPromptAndValidateInput) => Promise<string | undefined>>(),
   showQuickPick: vi.fn(),
+  createQuickPick: vi.fn(),
   openExternal: vi.fn(),
 }));
 
@@ -21,7 +22,7 @@ vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
   return {
     commands: { registerCommand, executeCommand },
-    window: { showOpenDialog, showInputBox, showQuickPick, withProgress: recordedWithProgress },
+    window: { showOpenDialog, showInputBox, showQuickPick, createQuickPick, withProgress: recordedWithProgress },
     env: { openExternal },
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
     Uri: { file: uriFile, parse: (s: string) => ({ toString: () => s }) },
@@ -39,6 +40,7 @@ vi.mock('../../install/install', async (importOriginal) => ({
 }));
 
 import { registerModInstallCommands } from '../installCommands';
+import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -214,12 +216,27 @@ describe('modbench.mod.install: a downloaded file is its source', () => {
     const row = downloadRowFixture('foo.7z');
 
     registerModInstallCommands(deps());
-    const outcome = await invoke('modbench.mod.install', { kind: 'download', row });
+    const outcome = await invoke('modbench.mod.install', { argument: { kind: 'download', row, upgrades: [] } });
 
     expect(installFromArchive).toHaveBeenCalledWith(ACCESS, { kind: 'new', name: 'Foo' }, row.path, expect.objectContaining({ modID: row.modID }));
     expect(showQuickPick).not.toHaveBeenCalled();
     expect(showOpenDialog).not.toHaveBeenCalled();
     expect(outcome).toEqual({ installed: true });
+  });
+
+  it('upgrades the mod the Argument names when the user picks it, computing no target itself', async () => {
+    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
+    const row = downloadRowFixture('foo.7z');
+    const { qp, accept } = fakeQuickPick<{ label: string; choice: unknown }>();
+    createQuickPick.mockReturnValue(qp);
+
+    registerModInstallCommands(deps());
+    const running = invoke('modbench.mod.install', { argument: { kind: 'download', row, upgrades: [{ modName: 'Harder VATS', tier: 'fileId' }] } });
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    accept({ label: 'Harder VATS', choice: { kind: 'upgrade', name: 'Harder VATS' } });
+    await running;
+
+    expect(installFromArchive).toHaveBeenCalledWith(ACCESS, { kind: 'upgrade', name: 'Harder VATS' }, row.path, expect.anything());
   });
 
   it('a mod row as Argument is no source, so it asks archive or folder', async () => {

@@ -45,6 +45,22 @@ const makeProviderOverRowsNeverOnDisk = (
   return new DownloadsProvider(options);
 };
 
+describe('a row\'s Argument', () => {
+  it('carries the downloaded file and the installed mods it could upgrade, found from the Instance value', async () => {
+    const file = row({ name: 'foo.zip', modID: '111' });
+    const instance = new FakeInstance(instanceValueFixture({
+      downloads: { kind: 'listed', rows: [file] },
+      mods: [{ kind: 'mod', enabled: true, name: 'Harder VATS', nexusId: '111', version: '1.0' }],
+    }));
+
+    const [node] = await makeProviderOverRowsNeverOnDisk([file], { instance }).getChildren();
+
+    expect(expectInstanceOf(node, DownloadNode).argument).toEqual({
+      kind: 'download', row: file, upgrades: [{ modName: 'Harder VATS', version: '1.0', tier: undefined }],
+    });
+  });
+});
+
 describe('DownloadNode', () => {
   it('label is the row displayName; id is pinned to the raw filename', () => {
     const node = new DownloadNode(row({ name: 'foo_1_2_3.zip', displayName: 'Sleep or Save' }));

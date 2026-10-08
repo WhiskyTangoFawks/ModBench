@@ -1,9 +1,10 @@
-import type { DownloadFile, Instance } from '../instanceLoader/instance';
+import type { Instance } from '../instanceLoader/instance';
 import { installFromArchive, installNameRefusal, type InstallAccess } from '../install/install';
 import { chooseInstallTarget } from './installTarget';
 import { promptModName } from '../drivingLib/promptModName';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { errorMessage } from '../ports/errorMessage';
+import type { DownloadArgument } from '../drivingLib/argument';
 import type { Reporter } from '../ports/reporter';
 
 export interface DownloadInstallDeps {
@@ -17,14 +18,15 @@ export interface DownloadInstallDeps {
 // The row holds the archive's path and its own mod id, file id and version, so install re-reads
 // no sidecar; install marks the download installed.
 export async function installDownloadedFile(
-  row: DownloadFile, access: InstallAccess, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
+  argument: DownloadArgument, access: InstallAccess, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
   deps: DownloadInstallDeps,
 ): Promise<boolean> {
+  const { row } = argument;
   const { name } = row;
   let downloadRefusal: string | undefined;
   try {
     const target = await chooseInstallTarget(
-      instance.value, row, (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)));
+      argument, (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)));
     if (!target) return false;
     const outcome = await runWritingGesture(deps.progressView, instance, () => installFromArchive(access, target, row.path, {
       gameName: instance.value.gameName, modID: row.modID, fileID: row.fileID, version: row.version,

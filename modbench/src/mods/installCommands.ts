@@ -1,11 +1,12 @@
 // The install gesture: a downloaded file handed as the Argument, or an archive or a folder the user picks.
 
 import * as vscode from 'vscode';
-import type { DownloadFile, Instance } from '../instanceLoader/instance';
+import type { Instance } from '../instanceLoader/instance';
 import {
   ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, installFromArchive, installFromFolder, installNameRefusal,
   type InstallAccess,
 } from '../install/install';
+import { downloadArgumentOf } from '../drivingLib/argument';
 import { promptModName } from '../drivingLib/promptModName';
 import { reportFailure } from '../drivingLib/reportFailure';
 import type { Reporter } from '../ports/reporter';
@@ -25,15 +26,6 @@ interface ModInstallDeps {
   log: (line: string) => void;
   /** The view a downloaded file's install runs its progress bar under. */
   downloadsView: string;
-}
-
-interface DownloadedFileSource {
-  kind: 'download';
-  row: DownloadFile;
-}
-
-function isDownloadedFile(argument: unknown): argument is DownloadedFileSource {
-  return typeof argument === 'object' && argument !== null && 'kind' in argument && argument.kind === 'download' && 'row' in argument;
 }
 
 interface SourceKindItem extends vscode.QuickPickItem {
@@ -70,10 +62,11 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
     return { installed: succeeded };
   };
   return [
-    vscode.commands.registerCommand('modbench.mod.install', async (source?: unknown): Promise<InstallOutcome> => {
-      if (isDownloadedFile(source)) {
+    vscode.commands.registerCommand('modbench.mod.install', async (argument?: unknown): Promise<InstallOutcome> => {
+      const download = downloadArgumentOf(argument);
+      if (download) {
         const installed = await installDownloadedFile(
-          source.row, access, instance, reporterFor('installFromArchive'), { warnIfFomod, log, progressView: downloadsView });
+          download, access, instance, reporterFor('installFromArchive'), { warnIfFomod, log, progressView: downloadsView });
         return { installed };
       }
       const picked = await vscode.window.showQuickPick<SourceKindItem>(
