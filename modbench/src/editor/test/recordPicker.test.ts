@@ -8,13 +8,14 @@ vi.mock('vscode', () => ({
 
 import { pickRecord, type RecordPickerDeps } from '../recordPicker';
 import type { RecordSummary } from '../../client';
+import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 
 beforeEach(() => { createQuickPick.mockReset(); });
 
 function makeRecord(i: number, editorId: string | null = `Record${i}`): RecordSummary {
   return {
     formKey: `Fallout4.esm:${String(i).padStart(6, '0')}`, plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true, editorId,
-    origin: 'Data',
+    origin: DATA_DIRECTORY_ORIGIN,
     workingTreeState: 'None',
     hasContainerChildren: false,
   hasParseFailure: false,

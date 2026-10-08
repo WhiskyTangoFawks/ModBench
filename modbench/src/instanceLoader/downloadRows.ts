@@ -55,7 +55,7 @@ export function modsByArchiveFilename(
 export function buildDownloadRows(
   files: readonly DownloadedFile[], installedInto: ReadonlyMap<string, readonly string[]>,
 ): DownloadFile[] {
-  const rows = files.map((file): DownloadFile => {
+  return files.map((file): DownloadFile => {
     const meta = file.meta;
     // Installed is the mods' own answer, never the metadata's: a claimed install outlives the mod
     // it names, so an uncorroborated installed and uninstalled read alike.
@@ -81,7 +81,4 @@ export function buildDownloadRows(
       sidecarPath: file.metaPath,
     };
   });
-  // Newest first, the reference tool's own arrival order; which column the tree sorts by is the
-  // view's.
-  return rows.sort((a, b) => b.mtimeMs - a.mtimeMs);
 }

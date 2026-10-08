@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot } from '../MEditClient';
+import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 
 const READY_STATUS: LoadOrderProgress = {
   totalPlugins: 1, activePlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
@@ -11,8 +12,8 @@ const BACKEND_FAILED: LoadOrderOutcome = { outcome: 'backendFailed' };
 
 function snapshot(name: string): LoadOrderSnapshot {
   return {
-    plugins: [{ name, path: `/game/Data/${name}`, origin: 'Data', provider: { kind: 'Game' } }],
-    active: [{ name, origin: 'Data' }],
+    plugins: [{ name, path: `/game/Data/${name}`, origin: DATA_DIRECTORY_ORIGIN, provider: { kind: 'Game' } }],
+    active: [{ name, origin: DATA_DIRECTORY_ORIGIN }],
     loadedWithNoLine: [],
     gameDirectory: '/game/Data',
     instanceRoot: '/instance',
