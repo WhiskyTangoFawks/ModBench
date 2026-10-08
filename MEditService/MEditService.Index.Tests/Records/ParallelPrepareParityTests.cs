@@ -1,6 +1,6 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
-using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -26,12 +26,12 @@ public class ParallelPrepareParityTests
             }, origin: "ModA")
             .BuildScattered();
         var entry = fixture.Plugins.Single();
-        var key = new PluginAddress(entry.Name, entry.Origin);
-        using var index = Indexes.Reconciled(fixture);
+        using var index = Indexes.Reconciled(fixture, fixture.InstanceRoot);
         using var mod = Fallout4Mod.CreateFromBinaryOverlay(entry.Path, Fallout4Release.Fallout4);
 
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var stored = index.ListedIn(key).ToDictionary(row => row.FormKey, row => index.BodyOf(row.FormKey, key));
+        var stored = IndexFiles.Rows(fixture.InstanceRoot, $"SELECT form_key, body FROM records WHERE record_type <> '{PluginHeader.RecordType}'")
+            .ToDictionary(row => row[0], row => row[1]);
         var expected = mod.EnumerateMajorRecords().ToDictionary(
             record => record.FormKey.ToString(),
             record => codec.SerializeToText(record, GameRelease.Fallout4));
