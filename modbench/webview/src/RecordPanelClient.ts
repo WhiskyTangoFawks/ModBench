@@ -11,8 +11,8 @@ import { isColumnCopies, type ColumnCopy, type ModRepository } from '../../src/w
 // slice of state untouched.
 type LoadResult =
   | {
-      // Null is a record held by no active plugin.
-      ok: true; result: CompareResult | null; immutableSet: Set<ColumnKey> | null;
+      // Null is a record held by no active plugin, the one `goneRecord` names.
+      ok: true; result: CompareResult | null; goneRecord: string | undefined; immutableSet: Set<ColumnKey> | null;
       // Null exactly when immutableSet is, but degrading the opposite way: to "nothing is
       // editable" (commands.md, No dead entries). Read fail-closed.
       trackedSet: Set<ColumnKey> | null;
@@ -68,6 +68,7 @@ export function createRecordPanelClient(): RecordPanelClient {
       return {
         ok: true,
         result,
+        goneRecord: result ? undefined : answer.goneRecord,
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p))) : null,
         trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p))) : null,
         sourceUnreadableSet: pluginList ? new Set(pluginList.filter(p => p.pluginSourceUnreadable).map(p => columnKey(p))) : null,

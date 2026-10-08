@@ -18,7 +18,7 @@ import {
   type RebuildIndexOutcome, type CopyItem, type CopyMode, type RecordChildHolders,
   type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditChangesOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
-  type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
+  type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused, RecordsGoneError,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
@@ -619,7 +619,13 @@ class HttpMEditClient implements MEditClient {
 
   async getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult> {
     const { data, error, response } = await this.apiClient.POST('/records/compare', { body: { copies } });
-    this.ensureOk('getRecordsComparison', response, error);
+    try {
+      this.ensureOk('getRecordsComparison', response, error);
+    } catch (refused) {
+      const gone: unknown = (error as { goneFormKeys?: unknown } | undefined)?.goneFormKeys;
+      if (!Array.isArray(gone) || !(refused instanceof Error)) throw refused;
+      throw new RecordsGoneError(refused.message, gone.filter((key): key is string => typeof key === 'string'));
+    }
     if (!data) throw new Error('getRecordsComparison: ok response carried no body');
     return data;
   }

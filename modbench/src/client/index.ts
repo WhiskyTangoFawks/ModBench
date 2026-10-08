@@ -9,5 +9,5 @@ export type {
   LoadOrderRefusal, PluginLoadFailure, CompareResult, RecordTypeChoice, GridPosition, WorkingTreeStatesBeneath,
 } from './MEditClient';
 export type { RecordEditEnvelope } from './MEditClient';
-export { isMEditGone, isRefused, UNLIMITED_RECORDS } from './MEditClient';
+export { isMEditGone, isRefused, RecordsGoneError, UNLIMITED_RECORDS } from './MEditClient';
 export { createMEditClient, stopMEditClient } from './HttpMEditClient';

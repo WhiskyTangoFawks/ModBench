@@ -66,6 +66,21 @@ public sealed class CompareRecordsApiTests : HostedTests
     }
 
     [Fact]
+    public async Task ARecordNoPluginHolds_Is404_NamingItAsGone_ApartFromACopyMissingOnlyFromItsPlugin()
+    {
+        var (npc, weapon) = await Loaded();
+        const string nowhere = "00DEAD:Nowhere.esp";
+
+        var response = await Client.PostAsJsonAsync("/records/compare", new
+        {
+            copies = new[] { Copy(npc, WithNpc, WithNpcMod), Copy(weapon, WithNpc, WithNpcMod), Copy(nowhere, WithNpc, WithNpcMod) },
+        });
+
+        var problem = await response.AssertIsProblem(HttpStatusCode.NotFound);
+        Assert.Equal([nowhere], problem.GetProperty("goneFormKeys").EnumerateArray().Select(k => k.GetString()));
+    }
+
+    [Fact]
     public async Task NoCopies_Is400()
     {
         await Loaded();

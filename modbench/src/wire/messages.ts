@@ -227,8 +227,9 @@ export type ModRepository = 'tracked' | 'untracked';
 export type RecordLoadAnswer =
   | {
       ok: true;
-      // Null is a record held by no active plugin.
+      // Null is a record held by no active plugin: the one `goneRecord` names.
       compare: components['schemas']['CompareResult'] | null;
+      goneRecord?: string | undefined;
       plugins: components['schemas']['PluginResponse'][] | null;
       conflictsComputed: boolean;
       // The plugins mEdit cannot read, as the Plugins tree is told them.
@@ -375,7 +376,7 @@ function parseFormKeyPicked(w: { requestId?: unknown; formKey?: unknown }): Exte
 }
 
 function parseRecordLoadAnswer(w: {
-  requestId?: unknown; ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
+  requestId?: unknown; ok?: unknown; compare?: unknown; goneRecord?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
   documentPlugin?: unknown; modsByOrigin?: unknown;
 }): { requestId: string } & RecordLoadAnswer {
   if (!isString(w.requestId)) throw new Error('Expected "recordLoadAnswered" to carry a string requestId.');
@@ -388,11 +389,14 @@ function parseRecordLoadAnswer(w: {
 }
 
 function parseAnswered(w: {
-  compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; documentPlugin?: unknown;
+  compare?: unknown; goneRecord?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; documentPlugin?: unknown;
   modsByOrigin?: unknown;
 }): RecordLoadAnswer {
   if (w.compare !== null && !isCompareResultShape(w.compare)) {
     throw new Error('Expected an answered "recordLoadAnswered" to carry a compare object or null.');
+  }
+  if (w.compare === null && !isString(w.goneRecord)) {
+    throw new Error('Expected an answered "recordLoadAnswered" with no compare to name the record that is gone.');
   }
   if (w.plugins !== null && !isPluginResponseArray(w.plugins)) {
     throw new Error('Expected "recordLoadAnswered" to carry a plugins array or null.');
@@ -406,7 +410,7 @@ function parseAnswered(w: {
   if (!isPluginAddress(w.documentPlugin)) throw new Error('Expected "recordLoadAnswered" to carry the document\'s plugin.');
   if (!isModsByOrigin(w.modsByOrigin)) throw new Error('Expected "recordLoadAnswered" to carry its mods by origin.');
   return {
-    ok: true, compare: w.compare, plugins: w.plugins, conflictsComputed: w.conflictsComputed,
+    ok: true, compare: w.compare, ...(isString(w.goneRecord) && { goneRecord: w.goneRecord }), plugins: w.plugins, conflictsComputed: w.conflictsComputed,
     loadFailures: w.loadFailures, documentPlugin: w.documentPlugin, modsByOrigin: w.modsByOrigin,
   };
 }

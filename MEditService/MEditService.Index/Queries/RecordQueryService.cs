@@ -143,7 +143,11 @@ internal sealed class RecordQueryService(
             if (document == null) missing.Add(copy);
             else documents.Add(document);
         }
-        if (missing.Count > 0) throw new RecordCopiesMissingException(missing);
+        if (missing.Count > 0)
+        {
+            var gone = missing.Select(c => c.FormKey).Distinct().Where(k => reads.GetOverrideStack(k) == null).ToList();
+            throw new RecordCopiesMissingException(missing, gone);
+        }
 
         var records = documents.ConvertAll(ToRecordDetail);
         // Two copies may come from one plugin, so a column is named by its place as well.

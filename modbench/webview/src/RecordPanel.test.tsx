@@ -1161,8 +1161,8 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
   });
 });
 
-const loaded = (result: CompareResult | null, conflictsComputed = true) => ({
-  ok: true as const, result, immutableSet: new Set<string>(), trackedSet: new Set<string>(), sourceUnreadableSet: new Set<string>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
+const loaded = (result: CompareResult | null, conflictsComputed = true, goneRecord = '000001:Fallout4.esm') => ({
+  ok: true as const, result, goneRecord: result === null ? goneRecord : undefined, immutableSet: new Set<string>(), trackedSet: new Set<string>(), sourceUnreadableSet: new Set<string>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
 });
 
 function deferred<T>() {
@@ -1243,6 +1243,18 @@ describe('RecordPanel — states', () => {
 
     await waitFor(() => screen.getByText('000001:Fallout4.esm is gone.'));
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
+  });
+
+  it('names the column record that is gone, not the tab\'s own', async () => {
+    const load = vi.fn()
+      .mockResolvedValueOnce(loaded(compareResult))
+      .mockResolvedValue(loaded(null, true, '000777:Column.esm'));
+    renderPanel(compareResult, { load });
+    await waitFor(() => screen.getByText('Override Name'));
+
+    loadRecord();
+
+    await waitFor(() => screen.getByText('000777:Column.esm is gone.'));
   });
 
   it('says the last read failed, beside the gone record, until a good read replaces it', async () => {

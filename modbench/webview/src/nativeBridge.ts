@@ -65,7 +65,7 @@ export function requestRecordLoad(formKey: string, columns: ColumnCopy[]): Promi
       if (msg.type !== EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED) return { ok: false, error: 'Mismatched reply.' };
       return msg.ok
         ? {
-          ok: true, compare: msg.compare, plugins: msg.plugins, conflictsComputed: msg.conflictsComputed,
+          ok: true, compare: msg.compare, goneRecord: msg.goneRecord, plugins: msg.plugins, conflictsComputed: msg.conflictsComputed,
           loadFailures: msg.loadFailures, documentPlugin: msg.documentPlugin, modsByOrigin: msg.modsByOrigin,
         }
         : { ok: false, error: msg.error };

@@ -83,6 +83,16 @@ describe('the record load request the webview asks of the host, because nothing 
     expect(() => parseExtensionToWebview(answered)).toThrow();
   });
 
+  it('rejects an answer with no comparison that names no record as gone', () => {
+    const answered = {
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, plugins: null, conflictsComputed: true,
+      loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: {},
+    };
+
+    expect(() => parseExtensionToWebview(answered)).toThrow(/gone/);
+    expect(parseExtensionToWebview({ ...answered, goneRecord: '000001:A.esp' })).toEqual({ ...answered, goneRecord: '000001:A.esp' });
+  });
+
   it('rejects an answer that names no plugin whole as the one whose copy the tab\'s document holds', () => {
     const answered = {
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, plugins: null, conflictsComputed: true, loadFailures: [],
@@ -102,7 +112,7 @@ describe('the record load request the webview asks of the host, because nothing 
 
   it('rejects an answer whose mods by origin are missing or name a state other than tracked or untracked', () => {
     const answered = {
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, plugins: null, conflictsComputed: true,
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, goneRecord: '000001:A.esp', plugins: null, conflictsComputed: true,
       loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' },
     };
 

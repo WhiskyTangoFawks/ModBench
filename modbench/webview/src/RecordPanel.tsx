@@ -52,7 +52,7 @@ const messageStyle: React.CSSProperties = {
 export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>) {
   const [formKey, setFormKey] = useState<string>(mEditWindow.mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
-  const [gone, setGone] = useState(false);
+  const [goneRecord, setGoneRecord] = useState<string | null>(null);
   const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
   // Null until /plugins answers, and null again when it fails: fail-closed, so a panel that has
   // not heard from /plugins offers no editing, compile or track (commands.md, No dead entries).
@@ -140,7 +140,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       setFormKey(fk);
       setError(null);
       setResult(loaded.result);
-      setGone(loaded.result === null);
+      setGoneRecord(loaded.goneRecord ?? null);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
       // Unguarded, unlike the two above: a null must replace a previous record's answer, so an
       // unknown state reads as neither tracked nor untracked.
@@ -232,7 +232,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return () => window.removeEventListener('message', handler);
   }, [refresh, pasteIntoFocused, client, formKey]);
 
-  const gridShown = result !== null && !gone;
+  const gridShown = result !== null && goneRecord === null;
   const scrollRestored = useRef(false);
   useLayoutEffect(() => {
     const grid = scroller.current;
@@ -268,10 +268,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     color: fg,
   };
 
-  if (gone) {
+  if (goneRecord !== null) {
     return (
       <div style={containerStyle}>
-        {formKey} is gone.{error && ` The last read failed: ${error}`}
+        {goneRecord} is gone.{error && ` The last read failed: ${error}`}
       </div>
     );
   }

@@ -24,6 +24,13 @@ export function isMEditGone(status: BackendStatus): status is 'disconnected' | '
   return status === 'disconnected' || status === 'stopped';
 }
 
+/** A comparison of several records refused because records it names are held by no plugin. */
+export class RecordsGoneError extends Error {
+  constructor(message: string, readonly goneFormKeys: readonly string[]) {
+    super(message);
+  }
+}
+
 /** A write verb's outright refusal — non-2xx, a thrown request, or write-gate contention.
  *  `message` is the ready-to-show toast (common.md, Reporting); a 200 typed refusal lives on the
  *  success arm. */
@@ -233,7 +240,7 @@ export interface MEditClient {
   getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null>;
   /** Several records side by side: one column per copy, in the order given, with no conflict
    *  state on any cell or row. Rejects when a copy is held by no plugin and given no `documentText`;
-   *  the detail names each. */
+   *  the detail names each, and a `RecordsGoneError` when a record is held by no plugin at all. */
   getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
   /** The referrers of the active plugins and of the inactive tracked ones. */

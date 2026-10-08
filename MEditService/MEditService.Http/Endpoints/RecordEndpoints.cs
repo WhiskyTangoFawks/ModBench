@@ -350,7 +350,9 @@ internal static class RecordEndpoints
         }
         catch (RecordCopiesMissingException missing)
         {
-            return Results.Problem(missing.Message, statusCode: 404);
+            return Results.Problem(
+                missing.Message, statusCode: 404,
+                extensions: new Dictionary<string, object?> { ["goneFormKeys"] = missing.GoneFormKeys });
         }
     }
 

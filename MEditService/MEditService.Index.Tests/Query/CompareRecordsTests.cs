@@ -150,6 +150,18 @@ public sealed class CompareRecordsTests : IDisposable
     }
 
     [Fact]
+    public void ARecordNoPluginHolds_IsNamedGone_ApartFromACopyMissingOnlyFromItsPlugin()
+    {
+        var nowhere = new RecordCopy("00DEAD:Nowhere.esp", ModPlugin);
+        var swordInBase = Copy(_sword, BasePlugin);
+
+        var refusal = Assert.Throws<RecordCopiesMissingException>(
+            () => Compare(Copy(_chest, BasePlugin), swordInBase, nowhere));
+
+        Assert.Equal([nowhere.FormKey], refusal.GoneFormKeys);
+    }
+
+    [Fact]
     public void TheRecordTypeNameIsTheFirstCopys()
     {
         Assert.Equal("Weapon", Compare(Copy(_sword, ModPlugin), Copy(_chest, BasePlugin)).RecordTypeName);
