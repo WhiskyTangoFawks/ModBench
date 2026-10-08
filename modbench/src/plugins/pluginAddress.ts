@@ -1,17 +1,16 @@
-import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
+import { exactPluginAddressKey, pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 
-const spelling = ({ name, origin }: PluginAddress): string => JSON.stringify([origin, name]);
-
-/** Every fact is filed under origin and filename as spelled (ADR-0012). A reader whose spelling
- *  matches none exactly reads the one plugin it matches without case, never one of several. */
+/** Filed by spelling, so plugins whose names differ only in case stay apart. mEdit may answer in
+ *  a spelling from before a case-only change, so a reader matching none reads the sole plugin it
+ *  matches without case. */
 export class ByPluginAddress<T> {
-  private readonly bySpelling = new Map<string, Map<string, T>>();
+  private readonly byFoldedAddress = new Map<string, Map<string, T>>();
 
   set(plugin: PluginAddress, value: T): void {
     const key = pluginAddressKey(plugin);
-    const spellings = this.bySpelling.get(key) ?? new Map<string, T>();
-    spellings.set(spelling(plugin), value);
-    this.bySpelling.set(key, spellings);
+    const spellings = this.byFoldedAddress.get(key) ?? new Map<string, T>();
+    spellings.set(exactPluginAddressKey(plugin), value);
+    this.byFoldedAddress.set(key, spellings);
   }
 
   // `this` narrows to an array-valued instance.
@@ -28,11 +27,11 @@ export class ByPluginAddress<T> {
   }
 
   private exact(plugin: PluginAddress): T | undefined {
-    return this.bySpelling.get(pluginAddressKey(plugin))?.get(spelling(plugin));
+    return this.byFoldedAddress.get(pluginAddressKey(plugin))?.get(exactPluginAddressKey(plugin));
   }
 
   private onlyMatch(plugin: PluginAddress): T | undefined {
-    const spellings = this.bySpelling.get(pluginAddressKey(plugin));
+    const spellings = this.byFoldedAddress.get(pluginAddressKey(plugin));
     return spellings?.size === 1 ? [...spellings.values()][0] : undefined;
   }
 }

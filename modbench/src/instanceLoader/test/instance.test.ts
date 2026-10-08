@@ -1231,6 +1231,36 @@ describe('Instance — what a command is handed instead of probing for it', () =
     expect(loadOrderSnapshot && 'active' in loadOrderSnapshot ? loadOrderSnapshot.active : []).toContainEqual({ name: 'DLCCoast.esm', origin: 'Consumer' });
   });
 
+  it('carries a game master a mod provides at its file\'s spelling, the one the snapshot sends', async () => {
+    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
+    const dataFolder = join(root, 'Game', 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    await writeFile(join(root, 'mods', 'Consumer', 'dlccoast.esm'), '');
+    setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
+
+    await instance.refresh();
+
+    const provided = { name: 'dlccoast.esm', origin: 'Consumer' };
+    expect(instance.value.pluginsLoadedWithNoLine).toEqual([provided]);
+    expect(instance.value.loadOrderSnapshot).toMatchObject({ loadedWithNoLine: [provided] });
+  });
+
+  it('sends both plugins of a mod whose names differ only in case, whatever case the line names them in', async () => {
+    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
+    const dataFolder = join(root, 'Game', 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    await writeFile(join(root, 'mods', 'Consumer', 'Foo.esp'), '');
+    await writeFile(join(root, 'mods', 'Consumer', 'foo.esp'), '');
+    await writeFile(join(root, 'profiles', 'Default', 'plugins.txt'), '*FOO.esp\n');
+    setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
+
+    await instance.refresh();
+
+    const { loadOrderSnapshot } = instance.value;
+    const sent = loadOrderSnapshot && 'plugins' in loadOrderSnapshot ? loadOrderSnapshot.plugins : [];
+    expect(sent.map((p) => [p.origin, p.name]).sort()).toEqual([['Consumer', 'Foo.esp'], ['Consumer', 'foo.esp']]);
+  });
+
   it('carries no answer and no snapshot while the game folder is not found', async () => {
     const { instance } = await minimalInstanceWithoutCorpusMasters();
 
