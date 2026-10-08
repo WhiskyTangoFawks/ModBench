@@ -9,9 +9,6 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>A change to one record's document: located by a read, reconstituted through the
-/// whole-mod door compile reads with, changed, written back through the codec. Any other text fails
-/// compile's round-trip gate.</summary>
 public static class SourceEdits
 {
     public static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
@@ -20,9 +17,9 @@ public static class SourceEdits
         SourceRepository repository, PluginAddress plugin, RecordIdentity identity, GameRelease release, Action<T> change)
         where T : class, IMajorRecord
     {
-        repository.Get(plugin, identity).Require();
+        var located = repository.Get(plugin, identity).Require();
         var record = (T)TreeOf(repository, plugin, release).EnumerateMajorRecords()
-            .Single(candidate => candidate.FormKey.ToString() == identity.FormKey);
+            .Single(candidate => candidate.FormKey.ToString() == located.FormKey);
         change(record);
         Write(repository, plugin, record, identity.RecordType, release);
     }
@@ -44,8 +41,8 @@ public static class SourceEdits
             File.WriteAllBytes(path, file.Content);
         }
 
-        var root = files.Select(file => Path.GetDirectoryName(file.RelativePath) ?? "").MinBy(directory => directory.Length) ?? "";
-        return RecordTextCodecGeneratorSeed.DeserializeWholeMod(Path.Combine(scratch, root), InlineWorkDropoff.Instance, CancellationToken.None)
+        return RecordTextCodecGeneratorSeed.DeserializeWholeMod(
+                PluginSourceRoot.In(scratch, plugin.Name), InlineWorkDropoff.Instance, CancellationToken.None)
             .GetAwaiter().GetResult();
     }
 }

@@ -1,5 +1,6 @@
 using System.Text;
 using MEditService.Codec.Serialization;
+using MEditService.Codec.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -34,6 +35,20 @@ public class RecordTextCodecTests
         var text = codec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
 
         Assert.Equal(text, codec.RoundTrip(text, GameRelease.Fallout4, "weap"));
+    }
+
+    [Fact]
+    public async Task AWeapon_ReadsBackFieldFaithful_BecauseTheOmitCustomizationsAreVerifiedNoOpsForAStandaloneWeaponBothTargetingOnlyGroupCellWorldspaceFieldsItDoesNotHave()
+    {
+        var original = MakeWeapon();
+        var mod = new Fallout4Mod(original.FormKey.ModKey, Fallout4Release.Fallout4);
+        mod.Weapons.Add(original);
+
+        var readBack = await ReadBack.ThroughTheWholeModDoor<IWeaponGetter>(mod, original);
+
+        var leaves = MaskInspector.CountLeaves(original.GetEqualsMask(readBack)).ToList();
+        Assert.Equal(81, leaves.Count);
+        Assert.Empty(leaves.Where(l => !l.Value).Select(l => l.Path));
     }
 
     [Fact]

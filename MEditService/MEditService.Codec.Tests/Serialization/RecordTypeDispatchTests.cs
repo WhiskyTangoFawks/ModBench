@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.Codec.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -40,6 +41,37 @@ public class RecordTypeDispatchTests
 
         Assert.Contains("\"Test NPC Name\"", text, StringComparison.Ordinal);
         Assert.Equal(text, codec.RoundTrip(text, GameRelease.Fallout4, "npc_"));
+    }
+
+    [Fact]
+    public async Task AnNpc_ReadsBackFieldFaithful()
+    {
+        var original = MakeNpc();
+        var mod = new Fallout4Mod(original.FormKey.ModKey, Fallout4Release.Fallout4);
+        mod.Npcs.Add(original);
+
+        AssertFieldFaithful(MaskInspector.CountLeaves(original.GetEqualsMask(await ReadBack.ThroughTheWholeModDoor<INpcGetter>(mod, original))));
+    }
+
+    [Fact]
+    public async Task ACell_ReadsBackFieldFaithful()
+    {
+        var original = MakeCell();
+        var mod = new Fallout4Mod(original.FormKey.ModKey, Fallout4Release.Fallout4);
+        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+        subBlock.Cells.Add(original);
+        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+        block.SubBlocks.Add(subBlock);
+        mod.Cells.Records.Add(block);
+
+        AssertFieldFaithful(MaskInspector.CountLeaves(original.GetEqualsMask(await ReadBack.ThroughTheWholeModDoor<ICellGetter>(mod, original))));
+    }
+
+    private static void AssertFieldFaithful(IEnumerable<(string Path, bool Value)> leaves)
+    {
+        var all = leaves.ToList();
+        Assert.NotEmpty(all);
+        Assert.Empty(all.Where(l => !l.Value).Select(l => l.Path));
     }
 
     [Fact]

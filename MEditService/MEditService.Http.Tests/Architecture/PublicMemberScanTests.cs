@@ -36,7 +36,9 @@ public sealed class PublicMemberScanTests
             uncalled.Count == 0,
             $"{uncalled.Count} public member(s) have no caller in another production assembly. Make "
             + "each one internal, or delete it if nothing calls it, and drive its tests through the "
-            + "box's entry:\n" + string.Join("\n", uncalled));
+            + "box's entry. A property System.Text.Json reads stays public on an internal type: made "
+            + "internal, it drops off the wire. Public consts and enum members go unchecked, because "
+            + "the compiler copies them into their readers:\n" + string.Join("\n", uncalled));
     }
 
     private static HashSet<Key> Exposed(List<VisibleMember> members, World world)
@@ -73,7 +75,8 @@ public sealed class PublicMemberScanTests
     private sealed class Assembly(string name, MetadataReader reader)
     {
         private const string ComposedByWebApplicationFactory = "Program";
-        private const string EmittedPublicByMutagensSerializationGenerator = "Mutagen.";
+        private const string MutagenNamespace = "Mutagen.";
+        private const string MixInsTheSerializationGeneratorEmitsPublic = "MixIns";
         private const string DependencyInjection = "Microsoft.Extensions.DependencyInjection";
         private readonly SignatureNames names = new(reader, name);
 
@@ -133,7 +136,7 @@ public sealed class PublicMemberScanTests
             {
                 var type = reader.GetTypeDefinition(handle);
                 var owner = Key.OfType(name, names.Of(handle));
-                if (!IsVisible(type) || owner.Type.StartsWith(EmittedPublicByMutagensSerializationGenerator, StringComparison.Ordinal))
+                if (!IsVisible(type) || IsSerializationGeneratorMixIns(type))
                     continue;
                 var heldPublic = owner.Type == ComposedByWebApplicationFactory || HoldsConstantsItsReadersCopy(type);
                 yield return new VisibleMember(owner.Type, owner, true, [owner], TypeExposes(type), _ => heldPublic);
@@ -141,6 +144,12 @@ public sealed class PublicMemberScanTests
                     yield return member;
             }
         }
+
+        private bool IsSerializationGeneratorMixIns(TypeDefinition type) =>
+            type.GetDeclaringType().IsNil
+            && reader.GetString(type.Namespace).StartsWith(MutagenNamespace, StringComparison.Ordinal)
+            && reader.GetString(type.Name).EndsWith(MixInsTheSerializationGeneratorEmitsPublic, StringComparison.Ordinal)
+            && (type.Attributes & (TypeAttributes.Abstract | TypeAttributes.Sealed)) == (TypeAttributes.Abstract | TypeAttributes.Sealed);
 
         private ImmutableArray<Key> TypeExposes(TypeDefinition type)
         {

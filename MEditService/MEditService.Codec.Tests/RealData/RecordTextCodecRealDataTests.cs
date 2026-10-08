@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MEditService.Codec.Serialization;
+using MEditService.Codec.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -56,5 +57,22 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
 
         Assert.Equal(deepParsedText, overlayText);
         Assert.Equal(deepParsedText, roundTripped);
+    }
+
+    [Fact]
+    public async Task ARealWeapon_ReadsBackFieldFaithful()
+    {
+        var deepParsed = (IFallout4ModGetter)ModFactory.ImportSetter(
+            new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
+            GameRelease.Fallout4);
+        var weapon = deepParsed.Weapons.Single(w => w.EditorID == AffectedWeaponEditorId);
+        var mod = new Fallout4Mod(deepParsed.ModKey, Fallout4Release.Fallout4);
+        mod.Weapons.Add(weapon.DeepCopy());
+
+        var readBack = await ReadBack.ThroughTheWholeModDoor<IWeaponGetter>(mod, weapon);
+
+        var leaves = MaskInspector.CountLeaves(weapon.GetEqualsMask(readBack)).ToList();
+        Assert.NotEmpty(leaves);
+        Assert.Empty(leaves.Where(l => !l.Value).Select(l => l.Path));
     }
 }
