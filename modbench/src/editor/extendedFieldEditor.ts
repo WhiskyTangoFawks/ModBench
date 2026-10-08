@@ -5,7 +5,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { PathHop, StringValueContext } from '../wire/messages';
 import { columnKey } from '../wire/columnKey';
 import { pluginAddressOf, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
-import type { EditAddress } from './followRecord';
+import type { EditAddress } from './recordTab';
 import { followReportedCopies, type CopyChanged } from './recordCopy';
 
 /** Where a cell's text lives: the plugin copy of the record, and the field's path. */

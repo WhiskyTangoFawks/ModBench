@@ -3,45 +3,6 @@ import { isKeyArgs } from '../drivingLib/copyValue';
 /** A record tab's focused cell, as the context its right-click menu hands a command. */
 export type FocusedCellContext = object;
 
-/** The focused cell of each open record tab, and of the one in focus: what a field gesture from
- *  the palette acts on. `show` hears the in-focus tab's cell whenever it changes. */
-export class FocusedCells<TPanel> {
-  private readonly cells = new Map<TPanel, FocusedCellContext>();
-
-  /** `activePanel` is the record tab in focus, which the caller owns. `entered` hears the user
-   *  take the focus: a cell clicked, or the panel gaining it. */
-  constructor(
-    private readonly activePanel: () => TPanel | undefined,
-    private readonly show: (cell: FocusedCellContext | undefined) => void,
-    private readonly entered: () => void,
-  ) {}
-
-  current(): FocusedCellContext | undefined {
-    const active = this.activePanel();
-    return active === undefined ? undefined : this.cells.get(active);
-  }
-
-  setCell(panel: TPanel, cell: FocusedCellContext | undefined, userFocus = false): void {
-    if (cell === undefined) this.cells.delete(panel);
-    else this.cells.set(panel, cell);
-    if (panel === this.activePanel()) this.show(cell);
-    if (userFocus) this.entered();
-  }
-
-  /** The caller has made a panel the one in focus. */
-  panelFocused(): void {
-    this.show(this.current());
-    this.entered();
-  }
-
-  /** Called while the panel is still the one in focus, so its cell is shown away. */
-  removePanel(panel: TPanel): void {
-    const wasActive = panel === this.activePanel();
-    this.cells.delete(panel);
-    if (wasActive) this.show(undefined);
-  }
-}
-
 function focusedCellKeys(cell: FocusedCellContext | undefined): Record<string, unknown> {
   const field = (name: string): unknown => (cell === undefined ? undefined : Reflect.get(cell, name));
   const section = field('webviewSection');
