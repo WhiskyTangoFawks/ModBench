@@ -544,6 +544,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.plugin.move",
+        "title": "Move Plugin…",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.plugin.enable",
         "title": "Enable Plugin",
         "category": "Modbench"
@@ -701,6 +706,10 @@
         {
           "command": "modbench.plugin.rename",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleTracked"
+        },
+        {
+          "command": "modbench.plugin.move",
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance"
         },
         {
           "command": "modbench.plugin.enable",

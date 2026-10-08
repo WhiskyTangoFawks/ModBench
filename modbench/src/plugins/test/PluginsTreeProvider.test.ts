@@ -959,6 +959,41 @@ describe('PluginsTreeProvider — a drop asks for the place it is shown, in eith
   });
 });
 
+describe('PluginsTreeProvider — the places a move offers are the drops on its rows', () => {
+  const LINES = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
+  const treeOfLines = () => pluginsTreeOver(new FakeInstance(valueOf(LINES.map((name, slot) => plugin({ name, slot })), ['Fallout4.esm'])));
+
+  it('losing at the top: above each row outside the selection, as shown, then the bottom of the view at the winning end', () => {
+    const tree = treeOfLines();
+
+    expect(tree.movePlaces(['B.esp', 'D.esp'])).toEqual([
+      { label: 'A.esp', drop: { kind: 'before', name: 'A.esp' } },
+      { label: 'C.esp', drop: { kind: 'before', name: 'C.esp' } },
+      { label: 'E.esp', drop: { kind: 'before', name: 'E.esp' } },
+      { label: 'Bottom of the view', drop: { kind: 'winningEnd' } },
+    ]);
+  });
+
+  it('winning at the top: above each row outside the selection, as shown, then the bottom of the view at the losing end', () => {
+    const tree = treeOfLines();
+    tree.setViewDirection('winningAtTop');
+
+    expect(tree.movePlaces(['B.esp', 'D.esp'])).toEqual([
+      { label: 'E.esp', drop: { kind: 'after', name: 'E.esp' } },
+      { label: 'C.esp', drop: { kind: 'after', name: 'C.esp' } },
+      { label: 'A.esp', drop: { kind: 'after', name: 'A.esp' } },
+      { label: 'Bottom of the view', drop: { kind: 'losingEnd' } },
+    ]);
+  });
+
+  it('offers a row the name filter hides', () => {
+    const tree = treeOfLines();
+    tree.setFilter('b');
+
+    expect(tree.movePlaces(['B.esp']).map(({ label }) => label)).toEqual(['A.esp', 'C.esp', 'D.esp', 'E.esp', 'Bottom of the view']);
+  });
+});
+
 describe('PluginsTreeProvider — the locked plugins follow the instance value', () => {
   const LINES = () => [plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data/' }), plugin({ name: 'Mod.esp', slot: 1 })];
   const shapeOf = async (tree: PluginsTreeProvider) => (await tree.getChildren())

@@ -137,7 +137,8 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     ...registerPluginEnableCommands(
       access, instance, selected.rows, reporterFor('pluginListTree.enableDisable')),
     ...registerPluginGestures(deps, { tree, view, progress, selection: selected.rows, compileProblems }),
-    registerPluginMoveCommand(access, client, instance, selected.rows, reporterFor('pluginListTree.move')),
+    registerPluginMoveCommand(access, client, instance, { selection: selected.rows, movePlaces: (names) => tree.movePlaces(names) },
+      reporterFor('pluginListTree.move')),
     ...registerFilterCommands({
       client, treeProvider: recordBrowser, refreshMatchingPlugins: () => { void tree.facts.refresh(); },
       showRecordFilter, reporter: reporterFor('recordFilter'),

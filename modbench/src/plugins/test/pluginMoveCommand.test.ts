@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { handlers, registerCommand } = vi.hoisted(() => {
+const { handlers, registerCommand, picks } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   return {
     handlers,
+    picks: { label: undefined as string | undefined },
     registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void> | void) => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
@@ -17,7 +18,10 @@ vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
   return {
     commands: { registerCommand },
-    window: { withProgress: recordedWithProgress },
+    window: {
+      withProgress: recordedWithProgress,
+      showQuickPick: (items: { label: string }[]) => Promise.resolve(items.find(({ label }) => label === picks.label)),
+    },
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
   };
 });
@@ -26,6 +30,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { MEditClient, PluginMetadata } from '../../client';
+import type { PluginsDrop } from '../../pluginsCommands/plugins';
 import { registerPluginMoveCommand } from '../pluginMoveCommand';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -49,6 +54,7 @@ let dir: string;
 beforeEach(async () => {
   handlers.clear();
   progressSteps.length = 0;
+  picks.label = undefined;
   dir = await mkdtemp(join(tmpdir(), 'plugin-move-'));
   await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
   await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'A.esp\r\nB.esp\r\nC.esp\r\n');
@@ -56,6 +62,11 @@ beforeEach(async () => {
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
 const plugins = () => readFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'utf8');
+
+const PLACES: { label: string; drop: PluginsDrop }[] = [
+  { label: 'C.esp', drop: { kind: 'before', name: 'C.esp' } },
+  { label: 'Bottom of the view', drop: { kind: 'winningEnd' } },
+];
 
 function registered(
   selection: PluginsTreeNode[] = [], masters: Pick<MEditClient, 'getPlugins'> = noMasters,
@@ -66,7 +77,7 @@ function registered(
     value: instanceValueFixture({ activeProfile: 'Default' }),
     refresh: () => { progressSteps.push('Instance loader: read every file again'); return refresh(); },
   };
-  registerPluginMoveCommand(accessTo(dir), masters, instance, () => selection, reporter);
+  registerPluginMoveCommand(accessTo(dir), masters, instance, { selection: () => selection, movePlaces: () => PLACES }, reporter);
   return { reporter };
 }
 
@@ -102,14 +113,45 @@ describe('modbench.plugin.move', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('refuses a call with no target, saying the target is missing', async () => {
+  it('with no target given, lands the block on the place picked', async () => {
+    const { reporter } = registered();
+    picks.label = 'C.esp';
+
+    await invoke([A]);
+
+    expect(reporter.reports).toEqual([]);
+    expect(await plugins()).toBe('B.esp\r\nA.esp\r\nC.esp\r\n');
+  });
+
+  it('asks for the place when the target given is not one', async () => {
+    registered();
+    picks.label = 'Bottom of the view';
+
+    await invoke([A], { kind: 'before' });
+
+    expect(await plugins()).toBe('B.esp\r\nC.esp\r\nA.esp\r\n');
+  });
+
+  it('moves nothing and says nothing when the pick is dismissed', async () => {
     const { reporter } = registered();
 
     await invoke([A]);
-    await invoke([A], { kind: 'before' });
 
-    expect(reporter.reports).toEqual(Array(2).fill({ severity: 'error', message: 'Could not move plugins.', detail: 'No target to move them to.' }));
+    expect(await plugins()).toBe('A.esp\r\nB.esp\r\nC.esp\r\n');
+    expect(reporter.reports).toEqual([]);
     expect(progressSteps).toEqual([]);
+  });
+
+  it('refuses a picked place the plugin-order rules refuse, as a drop there is refused', async () => {
+    const { reporter } = registered([], { getPlugins: () => Promise.resolve([held('A.esp', []), held('B.esp', ['A.esp']), held('C.esp', [])]) });
+    picks.label = 'C.esp';
+
+    await invoke([A]);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.',
+    }]);
+    expect(await plugins()).toBe('A.esp\r\nB.esp\r\nC.esp\r\n');
   });
 
   it('says why a move is refused by the plugin-order rules, naming both plugins', async () => {
@@ -135,7 +177,7 @@ describe('modbench.plugin.move', () => {
     const reporter = recordingReporter();
         const masters = { getPlugins: () => Promise.resolve([held('DLCRobot.esm', []), held('A.esp', []), held('X.esp', ['DLCRobot.esm'])]) };
     const value = instanceValueFixture({ activeProfile: 'Default', pluginsLoadedWithNoLine: [{ name: 'DLCRobot.esm', origin: 'Data/' }] });
-    registerPluginMoveCommand(accessTo(dir), masters, { value, refresh: () => Promise.resolve() }, () => [], reporter);
+    registerPluginMoveCommand(accessTo(dir), masters, { value, refresh: () => Promise.resolve() }, { selection: () => [], movePlaces: () => [] }, reporter);
 
     await invoke([{ name: 'X.esp', origin: 'ModX' }], LOSING_END);
 

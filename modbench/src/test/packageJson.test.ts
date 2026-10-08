@@ -585,7 +585,8 @@ describe('package.json command titles and categories', () => {
 
   it('offers every catalog gesture in the palette', () => {
     const gestureIds = catalogCommandIds(commandsMarkdown.slice(0, commandsMarkdown.indexOf('## System commands')));
-    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id));
+    const declared = new Set(commands.map((c) => c.command));
+    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id) || !declared.has(id));
     expect(
       hidden,
       'commands.md, Entry points are not gestures: every gesture is also in the command palette.',
