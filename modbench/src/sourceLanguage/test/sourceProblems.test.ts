@@ -326,4 +326,13 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     expect([...shown]).toEqual([]);
     expect(status.at(-1)).toBeUndefined();
   });
+
+  it('names every unplaced plugin in one language status line', async () => {
+    const other = { name: 'Other.esp', origin: 'OtherMod' };
+    const { answered, status } = feed({});
+
+    await answered([{ plugin: PLUGIN, problems: [], failure: 'one' }, { plugin: other, problems: [], failure: 'two' }]);
+
+    expect(status.at(-1)).toBe('Showing the last good read: "Refers.esp": one; "Other.esp": two');
+  });
 });

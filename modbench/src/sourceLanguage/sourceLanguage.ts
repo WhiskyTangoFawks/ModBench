@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
-import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
+import { isPluginSourcePath, PLUGIN_SOURCE_GLOB } from '../instanceAdapter/instanceAdapter';
 import type { RecordDocumentClient } from '../drivingLib/recordDocument';
 import { hoverAt } from './formKeyHover';
 import { definitionsOf } from './formKeyDefinition';
@@ -18,6 +18,7 @@ interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'originFiles'> {
 
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };
 const pluginSource: vscode.DocumentSelector = { language: 'json' };
+const pluginSourceStatusSelector: vscode.DocumentSelector = { language: 'json', pattern: PLUGIN_SOURCE_GLOB };
 
 const diagnosticOf = ({ message, start, end }: ProblemOnFile): vscode.Diagnostic =>
   new vscode.Diagnostic(new vscode.Range(start.line, start.character, end.line, end.character), message, vscode.DiagnosticSeverity.Warning);
@@ -38,7 +39,7 @@ function sourceProblems(deps: SourceLanguageDeps): vscode.Disposable {
   let status: vscode.LanguageStatusItem | undefined;
   const languageStatus = (text: string | undefined) => {
     if (text === undefined) { status?.dispose(); status = undefined; return; }
-    status ??= vscode.languages.createLanguageStatusItem('modbench.sourceProblems', pluginSource);
+    status ??= vscode.languages.createLanguageStatusItem('modbench.sourceProblems', pluginSourceStatusSelector);
     status.severity = vscode.LanguageStatusSeverity.Warning;
     status.text = text;
   };

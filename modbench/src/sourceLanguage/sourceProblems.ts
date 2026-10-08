@@ -109,7 +109,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
       const kept = new Set(unplaced.map(({ key }) => key));
       held = new Map([...ofPlugin].map(([key, onFiles]) => [key, kept.has(key) ? new Map([...held.get(key) ?? [], ...onFiles]) : onFiles]));
       publish(new Map([...held.values()].flatMap((onFiles) => [...onFiles])));
-      languageStatus(unplaced.length > 0 ? lastRead(unplaced.map(({ plugin, why }) => `"${plugin}": ${why}`).join(' ')) : undefined);
+      languageStatus(unplaced.length > 0 ? lastRead(unplaced.map(({ plugin, why }) => `"${plugin}": ${why}`).join('; ')) : undefined);
       tellUnplaced(unplaced);
       tellUnread(unread);
     } catch (error) {

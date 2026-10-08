@@ -155,6 +155,9 @@ export const DOWNLOADS_WATCH_GLOB = '**';
 // A glob matches case, and a plugin's extension is any case, so each letter is a class.
 const anyCase = (text: string): string => text.replace(/./g, (c) => `[${c.toLowerCase()}${c.toUpperCase()}]`);
 
+/** Every file inside a folder that is plugin source, as `isPluginSourcePath` takes it. */
+export const PLUGIN_SOURCE_GLOB = `**/${anyCase(PLUGIN_SOURCE_FOLDER)}/**`;
+
 /** The plugin files at the root of the game folder's Data folder, the Data folder its base. */
 export const DATA_FOLDER_PLUGINS_GLOB = `*.{${[...PLUGIN_EXTENSIONS].map((ext) => anyCase(ext.slice(1))).join(',')}}`;
 
