@@ -124,7 +124,11 @@ public record CopyText(PluginAddress Plugin, string DocumentText);
 
 public record RenderedDocument(string FileName, string Text);
 
-public record RecordFile(string? Path);
+/// <summary>Where a plugin's copy of a record is a document. <paramref name="Path"/> is the file in
+/// plugin source holding it, and <paramref name="IsContainersDocument"/> says that file is the
+/// document of the record carrying the copy. With no file, <paramref name="RenderedFileName"/> names the
+/// copy's rendered document.</summary>
+public record CopyDocument(string? Path, bool IsContainersDocument, string? RenderedFileName);
 
 // ADR-0012.
 public record ReferenceResult(

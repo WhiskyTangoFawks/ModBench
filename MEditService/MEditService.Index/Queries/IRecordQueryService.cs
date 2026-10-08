@@ -27,7 +27,7 @@ public interface IRecordQueryService
     // Null when the plugin holds no such record.
     RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey);
     // Null when the plugin holds no such record.
-    RecordFile? GetRecordFile(PluginAddress plugin, string formKey);
+    CopyDocument? GetCopyDocument(PluginAddress plugin, string formKey);
     RecordOfFileAnswer GetRecordOfFile(string path);
 
     // Answered in every state, "no load order yet" included (ADR-0013).

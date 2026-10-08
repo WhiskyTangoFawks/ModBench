@@ -91,7 +91,7 @@ internal static class Wire
     internal static async Task<string> RecordFileText(this HttpClient client, string formKey, string plugin, string origin)
     {
         var file = await client.GetAsync(
-            $"/plugins/{Uri.EscapeDataString(plugin)}/records/{Uri.EscapeDataString(formKey)}/file?origin={Uri.EscapeDataString(origin)}");
+            $"/plugins/{Uri.EscapeDataString(plugin)}/records/{Uri.EscapeDataString(formKey)}/document?origin={Uri.EscapeDataString(origin)}");
         var path = file.IsSuccessStatusCode ? (await file.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("path").GetString() : null;
         return path is null ? "" : await File.ReadAllTextAsync(path);
     }

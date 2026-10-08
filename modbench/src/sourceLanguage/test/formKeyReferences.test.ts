@@ -41,14 +41,11 @@ function references(rows: ReferenceResult[], copies: Record<string, Copy>, answe
   const client: ReferencesClient = {
     getReferencesInActiveOrTrackedPlugins: () => Promise.resolve(rows),
     getRecordOwner: () => Promise.reject(new Error('A referrer\'s copy names its plugin.')),
-    getRecordFile: (plugin, formKey) => {
-      const copy = copies[key(formKey, plugin)];
-      return Promise.resolve(copy ? { path: copy.file ?? null } : null);
-    },
-    getRecordOfFile: (path) => Promise.resolve({ formKey: firstOnFile(path)?.[0].split(' ')[0] ?? '' }),
-    getRenderedDocument: (plugin, formKey) => {
-      const copy = copies[key(formKey, plugin)];
-      return Promise.resolve(copy?.rendered ? { fileName: copy.rendered } : null);
+    getCopyDocument: (plugin, formKey) => {
+      const copyKey = key(formKey, plugin);
+      const copy = copies[copyKey];
+      if (copy?.file) return Promise.resolve({ path: copy.file, isContainersDocument: firstOnFile(copy.file)?.[0] !== copyKey });
+      return Promise.resolve(copy?.rendered ? { path: null, isContainersDocument: false, renderedFileName: copy.rendered } : null);
     },
     ...answering,
   };

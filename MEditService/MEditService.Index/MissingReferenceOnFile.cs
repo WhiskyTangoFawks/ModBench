@@ -16,7 +16,7 @@ internal static class SourceFilePlacement
             var identity = new RecordIdentity(reference.FormKey, reference.RecordType, reference.EditorId);
             // RelativePathOf answers a flat record's would-be path when its file is gone; FullPathOf
             // answers only a file that is there.
-            return repository.FullPathOf(reference.Plugin, identity) is not null
+            return repository.DocumentOf(reference.Plugin, identity) is not null
                 ? new MissingReferenceOnFile(reference, repository.RelativePathOf(reference.Plugin, identity), null)
                 : Failed(reference, $"{reference.Plugin.Name}'s source holds no file for {reference.FormKey}.");
         }

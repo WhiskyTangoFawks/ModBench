@@ -341,7 +341,7 @@ describe('Referenced By, as record tabs retarget and close', () => {
       client.setQueryAnswer('getReferences', []);
       client.setQueryAnswer('getComparison', null);
       client.setQueryAnswer('getPlugins', activeA);
-      client.setQueryAnswer('getRecordFile', { path: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
+      client.setQueryAnswer('getCopyDocument', { path: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json', isContainersDocument: false });
       client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
       client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], documents: [] });
       const { open, referencedBy } = makeEditor(client);
@@ -498,7 +498,7 @@ describe('a record tab whose record an edit of its FormID moved', () => {
     client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', null);
     client.setQueryAnswer('getPlugins', activeA);
-    client.setQueryAnswer('getRecordFile', { path: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
+    client.setQueryAnswer('getCopyDocument', { path: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json', isContainersDocument: false });
     client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
     const { open } = makeEditor(client);
     const tab = open(OLD);
@@ -524,7 +524,7 @@ describe('an edit of a FormID, fired with no panel', () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', null);
-    client.setQueryAnswer('getRecordFile', { path: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
+    client.setQueryAnswer('getCopyDocument', { path: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json', isContainersDocument: false });
     client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
     client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], documents: [] });
     const { open } = makeEditor(client);
@@ -545,8 +545,7 @@ describe('a record gesture from the palette', () => {
     const plugins = { selection: [{ argument: { kind: 'record', plugin: { name: 'A.esp', origin: 'ModA' }, formKey: '000803:A.esp' } }], onDidChangeSelection: (listener: (event: { selection: unknown[] }) => void) => { listener({ selection: [] }); return { dispose: () => undefined }; } };
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getRecordOwner', COPY_PLUGIN);
-    client.setQueryAnswer('getRecordFile', { path: null });
-    client.setQueryAnswer('getRenderedDocument', { fileName: 'Placed.json', text: '{}' });
+    client.setQueryAnswer('getCopyDocument', { path: null, isContainersDocument: false, renderedFileName: 'Placed.json' });
     const { focusedView } = makeEditor(client, ['modbench.pluginListTree']);
     focusedView.follow('modbench.pluginListTree', plugins);
 
@@ -617,7 +616,7 @@ describe('the Editor\'s file systems', () => {
 
   it('read a child record through its container\'s file', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getRecordFile', { path: CELL_FILE });
+    client.setQueryAnswer('getCopyDocument', { path: CELL_FILE, isContainersDocument: true });
     client.setQueryAnswer('getRecordOfFile', null);
     makeEditor(client);
     h.disk.set(CELL_FILE, '{ "EditorID": "Cell" }');
@@ -888,7 +887,7 @@ describe('what a record tab\'s webview posts', () => {
     const path = [{ kind: 'member', name: 'Keywords' }];
     function editing(): InMemoryMEditClient {
       const editing = client();
-      editing.setQueryAnswer('getRecordFile', { path: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
+      editing.setQueryAnswer('getCopyDocument', { path: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json', isContainersDocument: false });
       editing.setQueryAnswer('getRecordOfFile', { formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA' });
       editing.setQueryAnswer('getEditChanges', { applied: true, moves: [], documents: [] });
       return editing;
@@ -1202,8 +1201,7 @@ describe('several records opened at once', () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getRecordOwner', winner);
-    client.setQueryAnswer('getRecordFile', { path: null });
-    client.setQueryAnswer('getRenderedDocument', { fileName: 'Gun.json', text: '{}' });
+    client.setQueryAnswer('getCopyDocument', { path: null, isContainersDocument: false, renderedFileName: 'Gun.json' });
     client.setQueryAnswer('getPlugins', activeA);
     client.setQueryAnswer('getComparison', null);
     return client;
@@ -1257,7 +1255,7 @@ describe('several records opened at once', () => {
   it('leave alone a file\'s tab that shows no record yet, whose page asks its first read only once it does', async () => {
     const GUN_FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
     const client = severalClient();
-    client.setQueryAnswer('getRecordFile', { path: GUN_FILE });
+    client.setQueryAnswer('getCopyDocument', { path: GUN_FILE, isContainersDocument: false });
     client.setQueryFailureOnce('getRecordOfFile', new Error('mEdit has not started'));
     client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
     const { openDocument } = makeEditor(client);

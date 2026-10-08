@@ -14,7 +14,7 @@ import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
-  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type RecordFile,
+  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyItem, type CopyMode, type RecordChildHolders,
   type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditChangesOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
@@ -650,15 +650,15 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getRecordFile({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RecordFile | null> {
-    return this.withTimeout(`getRecordFile(${plugin}, ${formKey})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/file', {
+  async getCopyDocument({ name: plugin, origin }: PluginAddress, formKey: string): Promise<CopyDocument | null> {
+    return this.withTimeout(`getCopyDocument(${plugin}, ${formKey})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/document', {
         params: { path: { plugin, formKey }, query: { origin } },
         signal,
       });
       if (response.status === 404) return null;
-      this.ensureOk(`getRecordFile(${plugin}, ${formKey})`, response, error);
-      if (!data) throw new Error(`getRecordFile(${plugin}, ${formKey}): ok response carried no body`);
+      this.ensureOk(`getCopyDocument(${plugin}, ${formKey})`, response, error);
+      if (!data) throw new Error(`getCopyDocument(${plugin}, ${formKey}): ok response carried no body`);
       return data;
     });
   }

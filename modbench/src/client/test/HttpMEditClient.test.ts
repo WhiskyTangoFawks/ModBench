@@ -1043,15 +1043,15 @@ describe('HttpMEditClient — a copy rendered as its document', () => {
   });
 });
 
-describe('HttpMEditClient — the file holding a copy of a record', () => {
-  it('asks mEdit for the file of the plugin\'s copy of the record and reads its path', async () => {
-    const file = { path: '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json' };
+describe('HttpMEditClient — the document of a copy of a record', () => {
+  it('asks mEdit for the document of the plugin\'s copy of the record', async () => {
+    const file = { path: '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json', isContainersDocument: false };
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, file)));
     const client = makeClient(fetch);
 
-    await expect(client.getRecordFile({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp')).resolves.toEqual(file);
+    await expect(client.getCopyDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp')).resolves.toEqual(file);
     const url = new URL(fetch.mock.calls[0]?.[0].url ?? '');
-    expect(url.pathname).toBe('/plugins/Shared.esp/records/000800%3AShared.esp/file');
+    expect(url.pathname).toBe('/plugins/Shared.esp/records/000800%3AShared.esp/document');
     expect(url.searchParams.get('origin')).toBe('ModA');
   });
 
@@ -1059,14 +1059,14 @@ describe('HttpMEditClient — the file holding a copy of a record', () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(404, { detail: 'The plugin holds no such record.' })));
     const client = makeClient(fetch);
 
-    await expect(client.getRecordFile({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp')).resolves.toBeNull();
+    await expect(client.getCopyDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp')).resolves.toBeNull();
   });
 
   it('rejects, naming the reason, when mEdit cannot answer', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
     const client = makeClient(fetch);
 
-    await expect(client.getRecordFile({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
+    await expect(client.getCopyDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
       .rejects.toThrow(/No load order has been loaded/);
   });
 });

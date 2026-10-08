@@ -6,9 +6,8 @@ interface CopyPlugin { name: string; origin: string }
 
 export interface RecordDocumentClient {
   getRecordOwner(formKey: string): Promise<CopyPlugin | undefined>;
-  getRecordFile(plugin: CopyPlugin, formKey: string): Promise<{ path?: string | null } | null>;
-  getRecordOfFile(path: string): Promise<{ formKey: string } | null>;
-  getRenderedDocument(plugin: CopyPlugin, formKey: string): Promise<{ fileName: string } | null>;
+  getCopyDocument(plugin: CopyPlugin, formKey: string): Promise<
+    { path?: string | null; isContainersDocument: boolean; renderedFileName?: string | null } | null>;
 }
 
 /** A plugin's copy of a record, as a document of that one copy states it. */
@@ -59,13 +58,10 @@ export async function recordDocument(
 }
 
 export async function copyDocument(client: RecordDocumentClient, { formKey, plugin }: RecordCopy): Promise<RecordDocument> {
-  const file = await client.getRecordFile(plugin, formKey);
-  if (file === null) return { refused: holdsNoCopy({ formKey, plugin }) };
-  if (!file.path) {
-    const rendered = await client.getRenderedDocument(plugin, formKey);
-    if (rendered === null) return { refused: holdsNoCopy({ formKey, plugin }) };
-    return { uri: renderedDocumentUri({ formKey, plugin }, rendered.fileName) };
+  const document = await client.getCopyDocument(plugin, formKey);
+  if (document === null) return { refused: holdsNoCopy({ formKey, plugin }) };
+  if (document.path) {
+    return { uri: document.isContainersDocument ? childRecordUri({ formKey, plugin }, document.path) : vscode.Uri.file(document.path) };
   }
-  if ((await client.getRecordOfFile(file.path))?.formKey === formKey) return { uri: vscode.Uri.file(file.path) };
-  return { uri: childRecordUri({ formKey, plugin }, file.path) };
+  return { uri: renderedDocumentUri({ formKey, plugin }, document.renderedFileName ?? '') };
 }

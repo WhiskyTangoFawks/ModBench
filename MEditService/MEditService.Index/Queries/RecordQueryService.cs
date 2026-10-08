@@ -266,29 +266,34 @@ internal sealed class RecordQueryService(
                 r.FormKey, r.Plugin, r.Origin, r.FieldPath, r.RecordType, schemas.DisplayNameFor(r.RecordType), r.EditorId))];
     }
 
-    // The index stores each copy's document as the codec writes it, or a stub (ADR-0005). A tracked
-    // copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
+    // The index stores each copy's document as the codec writes it, or a stub (ADR-0005).
     public RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey)
     {
         if (RequireReads().GetCopyText(formKey, plugin) is not var (identity, body)) return null;
-        var snapshot = _loadOrder.Require();
-        var tree = snapshot.Plugin(plugin) is { Provider: PluginProvider.FromMod mod } registered && SourceRepository.IsTracked(registered)
-            ? SourceRepository.Over(mod, snapshot.GameRelease)
-            : null;
-        return new RenderedDocument(tree?.FileNameOf(plugin, identity) ?? SourceRepository.FileNameOf(identity), body);
+        return new RenderedDocument(RenderedFileName(plugin, identity), body);
     }
 
     // A tracked plugin's truth is its tree (ADR-0006), so a copy whose file is gone has no answer.
-    public RecordFile? GetRecordFile(PluginAddress plugin, string formKey)
+    public CopyDocument? GetCopyDocument(PluginAddress plugin, string formKey)
     {
         if (RequireReads().GetCopyText(formKey, plugin) is not var (identity, _)) return null;
         var snapshot = _loadOrder.Require();
         if (snapshot.Plugin(plugin) is not { Provider: PluginProvider.FromMod mod } registered || !SourceRepository.SourceReads(registered))
-            return new RecordFile(null);
-        return SourceRepository.Over(mod, snapshot.GameRelease).FullPathOf(plugin, identity)
-            is { } path
-            ? new RecordFile(path)
+            return new CopyDocument(null, false, RenderedFileName(plugin, identity));
+        return SourceRepository.Over(mod, snapshot.GameRelease).DocumentOf(plugin, identity)
+            is { } file
+            ? new CopyDocument(file.Path, file.IsContainersDocument, null)
             : null;
+    }
+
+    // A tracked copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
+    private string RenderedFileName(PluginAddress plugin, RecordIdentity identity)
+    {
+        var snapshot = _loadOrder.Require();
+        var tree = snapshot.Plugin(plugin) is { Provider: PluginProvider.FromMod mod } registered && SourceRepository.IsTracked(registered)
+            ? SourceRepository.Over(mod, snapshot.GameRelease)
+            : null;
+        return tree?.FileNameOf(plugin, identity) ?? SourceRepository.FileNameOf(identity);
     }
 
     public RecordOfFileAnswer GetRecordOfFile(string path) => SourceRepository.RecordOfFile(_loadOrder.Require(), path);
