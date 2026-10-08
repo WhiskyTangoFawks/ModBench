@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
@@ -22,8 +23,8 @@ public sealed class RecordIndexRegistrationTests
 
         var version = holder.Apply(LoadOrderArrival.Snapshot(fixture.DataFolder, null, GameRelease.Fallout4, fixture.Plugins));
 
-        var index = provider.GetRequiredService<IQueryIndex>();
-        Waits.Reached(() => index.Status.Version >= version, "the status answering the arrival");
-        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        var records = provider.GetRequiredService<IRecordQueryService>();
+        Waits.Reached(() => records.GetStatus().Version >= version, "the status answering the arrival");
+        Assert.Equal(LoadOrderState.Ready, records.GetStatus().State);
     }
 }

@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -37,8 +38,8 @@ public sealed class FailedReadStateTests : IDisposable
     private OpenedIndex Reconciled(IPluginAdapter? adapter = null) =>
         Indexes.Reconciled(_fixture, _fixture.InstanceRoot, adapter, _loggerFactory);
 
-    private RecordDocument TheNpc(OpenedIndex index) =>
-        index.RequireReads().DocumentsOf(Plugin.KeyOf()).Single(d => d.EditorId == NpcEditorId);
+    private RecordSummary TheNpc(OpenedIndex index) =>
+        index.ListedIn(Plugin.KeyOf()).Single(row => row.EditorId == NpcEditorId);
 
     private string NpcDocument => Directory.EnumerateFiles(Plugin.ModFolderOf(), "*.json", SearchOption.AllDirectories)
         .Single(file => File.ReadAllText(file).Contains($"\"{NpcEditorId}\"", StringComparison.Ordinal));
@@ -76,9 +77,9 @@ public sealed class FailedReadStateTests : IDisposable
 
     private static bool Failed(OpenedIndex index) => index.Status.Failures.Any(f => f.Name == PluginName);
 
-    private DerivedFrom? DerivationOf(OpenedIndex index) => index.RequireReads().DerivationOf(Plugin.KeyOf());
+    private bool ReadFromSource(OpenedIndex index) => index.ReadFromItsPluginSource(Plugin.KeyOf());
 
-    private bool SourceUnreadable(OpenedIndex index) => DerivationOf(index) == DerivedFrom.BinaryForUnreadableSource;
+    private bool SourceUnreadable(OpenedIndex index) => index.ReadFromItsPluginFileForItsUnreadableSource(Plugin.KeyOf());
 
     private static string Reason(OpenedIndex index) => index.Status.Failures.Single(f => f.Name == PluginName).Reason;
 
@@ -93,8 +94,8 @@ public sealed class FailedReadStateTests : IDisposable
 
         index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
 
-        var failure = Assert.Single(index.SourceFileFailures);
-        Assert.Equal((Plugin.KeyOf(), Relative(StrayDocument), (string?)null), (failure.Plugin, failure.SourceRelativePath, failure.FormKey));
+        var failure = Assert.Single(index.SourceProblems());
+        Assert.Equal((Relative(StrayDocument), (string?)null), (failure.SourceRelativePath, failure.FormKey));
         Assert.Contains("declares no FormKey", failure.Message, StringComparison.Ordinal);
     }
 
@@ -112,8 +113,8 @@ public sealed class FailedReadStateTests : IDisposable
         var copy = Path.Combine(Path.GetDirectoryName(original).Require(), "Backup", Path.GetFileName(original));
         Assert.Equivalent(
             new[] { (Relative(original), formKey), (Relative(copy), formKey) },
-            index.SourceFileFailures.Select(f => (f.SourceRelativePath, f.FormKey)), strict: true);
-        Assert.All(index.SourceFileFailures, f => Assert.Contains(Relative(copy), f.Message, StringComparison.Ordinal));
+            index.SourceProblems().Select(f => (f.SourceRelativePath, f.FormKey)), strict: true);
+        Assert.All(index.SourceProblems(), f => Assert.Contains(Relative(copy), f.Message, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -126,7 +127,7 @@ public sealed class FailedReadStateTests : IDisposable
         using var index = Reconciled();
 
         var copy = Path.Combine(Path.GetDirectoryName(original).Require(), "Backup", Path.GetFileName(original));
-        Assert.Equivalent(new[] { Relative(original), Relative(copy) }, index.SourceFileFailures.Select(f => f.SourceRelativePath), strict: true);
+        Assert.Equivalent(new[] { Relative(original), Relative(copy) }, index.SourceProblems().Select(f => f.SourceRelativePath), strict: true);
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
         Assert.True(SourceUnreadable(index));
     }
@@ -140,9 +141,9 @@ public sealed class FailedReadStateTests : IDisposable
         index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
         Mend();
 
-        index.NextSnapshotUntil(() => DerivationOf(index) == DerivedFrom.SourceTree, "the mended tree read again");
+        index.NextSnapshotUntil(() => ReadFromSource(index), "the mended tree read again");
 
-        Assert.Empty(index.SourceFileFailures);
+        Assert.Empty(index.SourceProblems());
     }
 
     [Fact]
@@ -154,7 +155,7 @@ public sealed class FailedReadStateTests : IDisposable
         using var index = Reconciled(adapter);
 
         Assert.False(Failed(index));
-        Assert.Contains(index.RequireReads().DocumentsOf(Plugin.KeyOf()), d => d.EditorId == "WrittenAfterTheFailure");
+        Assert.Contains(index.ListedIn(Plugin.KeyOf()), row => row.EditorId == "WrittenAfterTheFailure");
     }
 
     [Fact]
@@ -199,7 +200,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the changed tree read again");
 
-        Assert.Empty(index.RequireReads().DocumentsOf(Plugin.KeyOf()));
+        Assert.Empty(index.ListedIn(Plugin.KeyOf()));
         Assert.DoesNotContain("showing", Reason(index), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -214,7 +215,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         Assert.Null(_armed);
         Assert.False(Failed(index));
-        Assert.Equal(DerivedFrom.SourceTree, DerivationOf(index));
+        Assert.True(ReadFromSource(index));
     }
 
     [Fact]
@@ -227,7 +228,7 @@ public sealed class FailedReadStateTests : IDisposable
         index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
         Assert.Null(_armed);
 
-        index.NextSnapshotUntil(() => DerivationOf(index) == DerivedFrom.SourceTree, "the mended tree read again");
+        index.NextSnapshotUntil(() => ReadFromSource(index), "the mended tree read again");
     }
 
     private string GitIndex => Path.Combine(Plugin.ModFolderOf(), ".git", "index");
@@ -265,8 +266,8 @@ public sealed class FailedReadStateTests : IDisposable
 
         File.Move(GitIndex + ".good", GitIndex, overwrite: true);
 
-        index.NextSnapshotUntil(() => DerivationOf(index) == DerivedFrom.SourceTree, "the tree read again");
-        Assert.Contains(index.RequireReads().DocumentsOf(Plugin.KeyOf()), d => d.EditorId == "RenamedNpc");
+        index.NextSnapshotUntil(() => ReadFromSource(index), "the tree read again");
+        Assert.Contains(index.ListedIn(Plugin.KeyOf()), row => row.EditorId == "RenamedNpc");
     }
 
     [Fact]
@@ -328,7 +329,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         index.NextSnapshotUntil(() => !Failed(index), "the binary read again");
 
-        Assert.Contains(index.RequireReads().DocumentsOf(Plugin.KeyOf()), d => d.EditorId == "WrittenBeforeTheHold");
+        Assert.Contains(index.ListedIn(Plugin.KeyOf()), row => row.EditorId == "WrittenBeforeTheHold");
     }
 
     [Fact]
@@ -358,7 +359,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         Assert.Null(_armed);
         Assert.False(Failed(index));
-        Assert.Equal(DerivedFrom.SourceTree, index.RequireReads().DerivationOf(Plugin.KeyOf()));
+        Assert.True(ReadFromSource(index));
     }
 
     [Fact]
@@ -419,7 +420,7 @@ public sealed class FailedReadStateTests : IDisposable
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, loggerFactory: _loggerFactory, notifications: new RowsChangedFaultsOnce());
 
         Assert.False(Failed(index));
-        Assert.Contains(index.RequireReads().DocumentsOf(Plugin.KeyOf()), d => d.EditorId == "EditedNpc");
+        Assert.Contains(index.ListedIn(Plugin.KeyOf()), row => row.EditorId == "EditedNpc");
     }
 
     private sealed class RowsChangedFaultsOnce : INotificationPublisher

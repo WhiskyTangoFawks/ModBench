@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
@@ -31,57 +32,55 @@ public sealed class RefreshByKeysTests : IDisposable
         _fixture.Dispose();
     }
 
-    private IRecordReads Reads => _index.RequireReads();
-
     private void Refresh() => _index.NextSnapshot();
 
     [Fact]
     public void AHandEditMadeBeforeAnyRefresh_LeavesTheServedDocumentUnchanged()
     {
-        var before = Reads.DocumentOf(_npc, _mod.KeyOf()).Body;
+        var before = _index.BodyOf(_npc, _mod.KeyOf());
 
-        _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
+        _mod.HandEdit(_index.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
 
-        Assert.Equal(before, Reads.DocumentOf(_npc, _mod.KeyOf()).Body);
-        Assert.Equal("FixtureNpc", Reads.GetDocument(_npc, _mod.KeyOf())?.EditorId);
+        Assert.Equal(before, _index.BodyOf(_npc, _mod.KeyOf()));
+        Assert.Equal("FixtureNpc", _index.CopyIn(_npc, _mod.KeyOf())?.EditorId);
 
         Refresh();
 
-        Assert.Equal("RenamedByHand", Reads.GetDocument(_npc, _mod.KeyOf())?.EditorId);
+        Assert.Equal("RenamedByHand", _index.CopyIn(_npc, _mod.KeyOf())?.EditorId);
     }
 
     [Fact]
     public void ARefreshedKeyTheIndexHasNeverSeen_LandsTheRecordTheTreeHasGained_ListedAsAdded()
     {
         var formKey = "000F00:Fixture.esp";
-        var body = Reads.DocumentOf(_npc, _mod.KeyOf()).BodyOf()
+        var body = _index.BodyOf(_npc, _mod.KeyOf())
             .Replace(_npc, formKey, StringComparison.Ordinal)
             .Replace("\"FixtureNpc\"", "\"HandCreated\"", StringComparison.Ordinal);
         TrackedMods.RepositoryOf(_mod).Put(_mod.KeyOf(), new SourceDocument(formKey, "npc_", "HandCreated", body));
 
         Refresh();
 
-        Assert.Equal("HandCreated", Reads.GetDocument(formKey, _mod.KeyOf())?.EditorId);
-        var listing = Reads.Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
+        Assert.Equal("HandCreated", _index.CopyIn(formKey, _mod.KeyOf())?.EditorId);
+        var listing = _index.Records.GetRecords(["npc_"], _mod.KeyOf(), search: null, limit: 50, offset: 0);
         Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == formKey).WorkingTreeState);
     }
 
     [Fact]
     public void ARefreshedKeyWhoseDocumentIsNotReadable_ReadsTheBinaryInTheTreesPlace()
     {
-        var npc = Reads.DocumentOf(_npc, _mod.KeyOf());
+        var npc = _index.DocumentOf(_npc, _mod.KeyOf());
         var file = _mod.SourceFileOf(npc);
         _mod.HandEdit(npc, "\"FixtureNpc\"", "\"RenamedByHand\"");
         Refresh();
-        Assert.Equal("RenamedByHand", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
+        Assert.Equal("RenamedByHand", _index.DocumentOf(_npc, _mod.KeyOf()).EditorId);
 
         const string notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold = "{ this is not json";
         File.WriteAllText(file, notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold);
 
         _index.NextSnapshotUntil(
-            () => Reads.DerivationOf(_mod.KeyOf()) == DerivedFrom.BinaryForUnreadableSource, "the binary read in the tree's place");
+            () => _index.PluginRowOf(_mod.KeyOf()) is { IsTracked: true, PluginSourceUnreadable: true }, "the binary read in the tree's place");
 
-        Assert.Equal("FixtureNpc", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
+        Assert.Equal("FixtureNpc", _index.DocumentOf(_npc, _mod.KeyOf()).EditorId);
         Assert.Empty(_index.Status.Failures);
     }
 }

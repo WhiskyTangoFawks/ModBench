@@ -31,19 +31,19 @@ import { present } from '../../ports/present';
 import { registerRecordCreateCommand } from '../createRecordCommand';
 import type { RecordPlace } from '../createdRecordSelection';
 import { PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
-import type { PluginTreeNode } from '../PluginTreeProvider';
+import type { RecordBrowserNode } from '../RecordBrowser';
 import { cellRow, recordGroupRow, recordRow, worldspaceRow } from './browserRows';
 
 const PLUGIN_ROW = new PluginNode({ name: 'MyPatch.esp', enabled: true }, 'ModA');
 const EDITABLE = { tracked: true, editable: true };
 const MY_PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
 const NPC = { type: 'npc_', count: 3, displayName: 'Non-Player Character' };
-let NPC_GROUP: PluginTreeNode;
-let OTHER_GROUP: PluginTreeNode;
-let RECORD_ROW: PluginTreeNode;
-let QUEST_ROW: PluginTreeNode;
-let CELL_ROW: PluginTreeNode;
-let WORLDSPACE_ROW: PluginTreeNode;
+let NPC_GROUP: RecordBrowserNode;
+let OTHER_GROUP: RecordBrowserNode;
+let RECORD_ROW: RecordBrowserNode;
+let QUEST_ROW: RecordBrowserNode;
+let CELL_ROW: RecordBrowserNode;
+let WORLDSPACE_ROW: RecordBrowserNode;
 
 beforeAll(async () => {
   NPC_GROUP = await recordGroupRow(NPC, MY_PATCH, EDITABLE);

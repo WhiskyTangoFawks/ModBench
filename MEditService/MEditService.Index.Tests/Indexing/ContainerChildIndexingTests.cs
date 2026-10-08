@@ -18,14 +18,12 @@ public sealed class ContainerChildIndexingTests : IDisposable
     private readonly string _response0Fk;
     private readonly string _response1Fk;
     private readonly string _cellFk;
-    private readonly string _navMesh0Fk;
-    private readonly string _landscapeFk;
     private readonly string _placedFk;
 
     public ContainerChildIndexingTests()
     {
         FormKey quest = default, topic0 = default, topic1 = default, response0 = default, response1 = default;
-        FormKey cell = default, navMesh0 = default, landscape = default, placed = default;
+        FormKey cell = default, placed = default;
         _fixture = new PluginFixtureBuilder("container-child")
             .WithPlugin(Key.Name, mod =>
             {
@@ -39,12 +37,8 @@ public sealed class ContainerChildIndexingTests : IDisposable
                 q.DialogTopics.Add(t0);
                 q.DialogTopics.Add(t1);
 
-                var c = new Cell(mod) { EditorID = "NavCell" };
-                var nav = new NavigationMesh(mod);
-                c.NavigationMeshes.Add(nav);
-                var land = new Landscape(mod);
-                c.Landscape = land;
-                var placedObject = new PlacedObject(mod) { EditorID = "PlacedInNavCell" };
+                var c = new Cell(mod) { EditorID = "PlacedCell" };
+                var placedObject = new PlacedObject(mod) { EditorID = "PlacedInCell" };
                 c.Persistent.Add(placedObject);
                 var intSub = new CellSubBlock { BlockNumber = 0 };
                 intSub.Cells.Add(c);
@@ -53,71 +47,55 @@ public sealed class ContainerChildIndexingTests : IDisposable
                 mod.Cells.Records.Add(intBlock);
 
                 (quest, topic0, topic1, response0, response1) = (q.FormKey, t0.FormKey, t1.FormKey, r0.FormKey, r1.FormKey);
-                (cell, navMesh0, landscape, placed) = (c.FormKey, nav.FormKey, land.FormKey, placedObject.FormKey);
+                (cell, placed) = (c.FormKey, placedObject.FormKey);
             })
             .Build();
         (_questFk, _topic0Fk, _topic1Fk, _response0Fk, _response1Fk) =
             (quest.ToString(), topic0.ToString(), topic1.ToString(), response0.ToString(), response1.ToString());
-        (_cellFk, _navMesh0Fk, _landscapeFk, _placedFk) =
-            (cell.ToString(), navMesh0.ToString(), landscape.ToString(), placed.ToString());
+        (_cellFk, _placedFk) = (cell.ToString(), placed.ToString());
     }
 
     public void Dispose() => _fixture.Dispose();
 
-    private static List<(string ChildFormKey, string SlotName, int SlotIndex)> Children(IRecordReads reads, string parentFormKey) =>
-        [.. reads.GetContainerChildren(Key, parentFormKey)
-            .OrderBy(r => r.SlotName, StringComparer.Ordinal).ThenBy(r => r.SlotIndex)
-            .Select(r => (r.ChildFormKey, r.SlotName, r.SlotIndex))];
+    private static List<(string FormKey, string RecordType)> Children(OpenedIndex index, string parentFormKey) =>
+        [.. index.Containers.GetChildren(Key, parentFormKey).Select(c => (c.FormKey, c.RecordType))];
 
     [Fact]
-    public void AQuestsDialogTopics_AreItsChildren_InOriginalOrder()
+    public void AQuestsDialogTopics_AreItsChildren()
     {
         using var index = Indexes.Reconciled(_fixture);
-        var rows = Children(index.RequireReads(), _questFk).Where(r => r.SlotName == "DialogTopics").ToList();
 
-        Assert.Equal([(_topic0Fk, "DialogTopics", 0), (_topic1Fk, "DialogTopics", 1)], rows);
+        Assert.Equal([(_topic0Fk, "dial"), (_topic1Fk, "dial")], Children(index, _questFk));
     }
 
     [Fact]
-    public void ADialogTopicsResponses_AreItsChildren_InOriginalOrder()
+    public void ADialogTopicsResponses_AreItsChildren()
     {
         using var index = Indexes.Reconciled(_fixture);
-        var rows = Children(index.RequireReads(), _topic0Fk);
 
-        Assert.Equal([(_response0Fk, "Responses", 0), (_response1Fk, "Responses", 1)], rows);
+        Assert.Equal([(_response0Fk, "info"), (_response1Fk, "info")], Children(index, _topic0Fk));
     }
 
     [Fact]
-    public void ACellsNavigationMeshesAndLandscape_AreItsChildren()
+    public void ACellsPlacedRef_IsListedOnce_InItsPlacementGroup()
     {
         using var index = Indexes.Reconciled(_fixture);
-        var rows = Children(index.RequireReads(), _cellFk);
+        var children = index.Worldspaces.GetCellChildRecords(Key, _cellFk);
 
-        Assert.Contains((_navMesh0Fk, "NavigationMeshes", 0), rows);
-        Assert.Contains((_landscapeFk, "Landscape", 0), rows);
-    }
-
-    [Fact]
-    public void ACellsPlacementGroups_AreNotAlsoItsContainerChildren()
-    {
-        using var index = Indexes.Reconciled(_fixture);
-        var reads = index.RequireReads();
-
-        Assert.NotNull(reads.PlacementGroupIn(Key, _cellFk, _placedFk));
-        Assert.DoesNotContain(Children(reads, _cellFk), r => r.SlotName is "Persistent" or "Temporary" or "TopCell" or "SubCells");
+        Assert.Single(children.Persistent.Concat(children.Temporary), c => c.FormKey == _placedFk);
+        Assert.Equal("persistent", index.PlacementGroupIn(Key, _cellFk, _placedFk));
     }
 
     [Fact]
     public void ADeletedPlugin_LeavesNoContainerChildren()
     {
         using var index = Indexes.Reconciled(_fixture);
-        var reads = index.RequireReads();
-        Assert.NotEmpty(reads.GetContainerChildren(Key, _questFk));
+        Assert.NotEmpty(Children(index, _questFk));
 
         File.Delete(_fixture.Plugins.Single().Path);
         index.NextSnapshot();
 
-        Assert.Empty(reads.GetContainerChildren(Key, _questFk));
-        Assert.Empty(reads.GetContainerChildren(Key, _topic0Fk));
+        Assert.Empty(Children(index, _questFk));
+        Assert.Empty(Children(index, _topic0Fk));
     }
 }

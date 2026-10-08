@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -39,7 +40,7 @@ public sealed class SqlDoorSchemaTests : IDisposable
     }
 
     private IReadOnlyList<RecordSummary> Listing() =>
-        _index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10)).Items;
+        _index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Items;
 
     [Fact]
     public void ARecordTypeView_ExposesTheIdentityColumns_AndTheDerivedWinnerAndLoadOrder()
@@ -101,7 +102,7 @@ public sealed class SqlDoorSchemaTests : IDisposable
 
         Assert.ThrowsAny<Exception>(() => _index.SetFilter("SELECT form_key FROM npc_ WHERE no_such_column = 1", "filter.sql"));
 
-        Assert.Equal("SELECT form_key FROM npc_ WHERE plugin = 'Over.esp'", _index.ActiveFilter?.Sql);
+        Assert.Equal("SELECT form_key FROM npc_ WHERE plugin = 'Over.esp'", _index.Records.GetFilter()?.Sql);
         Assert.Single(Listing(), i => i.Plugin == OverKey.Name);
     }
 }

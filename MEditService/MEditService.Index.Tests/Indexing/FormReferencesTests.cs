@@ -8,11 +8,11 @@ namespace MEditService.Index.Tests.Indexing;
 
 public class FormReferencesTests
 {
-    private static List<(string Source, string FieldPath, string RecordType)> ReferencesTo(IRecordReads reads, FormKey target) =>
-        [.. reads.GetReferencedBy(target.ToString()).Select(r => (r.FormKey, r.FieldPath, r.RecordType))];
+    private static List<(string Source, string FieldPath, string RecordType)> ReferencesTo(OpenedIndex index, FormKey target) =>
+        [.. index.Records.GetReferences(target.ToString()).Select(r => (r.FormKey, r.FieldPath, r.RecordType))];
 
-    private static (string Source, string FieldPath, string RecordType) TheReferenceTo(IRecordReads reads, FormKey target) =>
-        Assert.Single(ReferencesTo(reads, target));
+    private static (string Source, string FieldPath, string RecordType) TheReferenceTo(OpenedIndex index, FormKey target) =>
+        Assert.Single(ReferencesTo(index, target));
 
     [Fact]
     public void ScalarFormKeyField_IsIndexedInFormReferences()
@@ -30,7 +30,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var row = Assert.Single(ReferencesTo(index.RequireReads(), raceFormKey), r => r.FieldPath == "Race");
+        var row = Assert.Single(ReferencesTo(index, raceFormKey), r => r.FieldPath == "Race");
         Assert.Equal(npcFormKey.ToString(), row.Source);
         Assert.Equal("npc_", row.RecordType);
     }
@@ -48,7 +48,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        Assert.Empty(index.RequireReads().GetReferencedBy(raceFormKey.ToString()));
+        Assert.Empty(index.Records.GetReferences(raceFormKey.ToString()));
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public class FormReferencesTests
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
         index.NextSnapshot();
 
-        Assert.Single(ReferencesTo(index.RequireReads(), raceFormKey), r => r.FieldPath == "Race");
+        Assert.Single(ReferencesTo(index, raceFormKey), r => r.FieldPath == "Race");
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var row = Assert.Single(ReferencesTo(index.RequireReads(), kwFormKey), r => r.FieldPath == "Keywords[0]");
+        var row = Assert.Single(ReferencesTo(index, kwFormKey), r => r.FieldPath == "Keywords[0]");
         Assert.Equal(npcFormKey.ToString(), row.Source);
     }
 
@@ -111,7 +111,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var row = Assert.Single(ReferencesTo(index.RequireReads(), factionFormKey), r => r.FieldPath == "Factions[0].Faction");
+        var row = Assert.Single(ReferencesTo(index, factionFormKey), r => r.FieldPath == "Factions[0].Faction");
         Assert.Equal(npcFormKey.ToString(), row.Source);
     }
 
@@ -143,7 +143,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var row = TheReferenceTo(index.RequireReads(), targetFormKey);
+        var row = TheReferenceTo(index, targetFormKey);
         Assert.Equal(npcFormKey.ToString(), row.Source);
         Assert.Equal("VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Object", row.FieldPath);
         Assert.Equal("npc_", row.RecordType);
@@ -181,7 +181,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        Assert.Empty(ReferencesTo(index.RequireReads(), targetFormKey));
+        Assert.Empty(ReferencesTo(index, targetFormKey));
     }
 
     [Fact]
@@ -214,10 +214,9 @@ public class FormReferencesTests
             })
             .Build();
         using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
 
-        Assert.Contains(ReferencesTo(reads, target0Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Objects[0].Object");
-        Assert.Contains(ReferencesTo(reads, target1Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Objects[1].Object");
+        Assert.Contains(ReferencesTo(index, target0Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Objects[0].Object");
+        Assert.Contains(ReferencesTo(index, target1Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Objects[1].Object");
     }
 
     [Fact]
@@ -255,10 +254,9 @@ public class FormReferencesTests
             })
             .Build();
         using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
 
-        Assert.Contains(ReferencesTo(reads, target0Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Structs[0].Members[0].Object");
-        Assert.Contains(ReferencesTo(reads, target1Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Structs[1].Members[0].Object");
+        Assert.Contains(ReferencesTo(index, target0Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Structs[0].Members[0].Object");
+        Assert.Contains(ReferencesTo(index, target1Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Structs[1].Members[0].Object");
     }
 
     private static ScriptEntry ScriptWithObjectProperty(string scriptName, string propName, FormKey target)
@@ -290,7 +288,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var row = TheReferenceTo(index.RequireReads(), targetFormKey);
+        var row = TheReferenceTo(index, targetFormKey);
         Assert.Equal(questFormKey.ToString(), row.Source);
         Assert.Equal("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties[0].Object", row.FieldPath);
         Assert.Equal("qust", row.RecordType);
@@ -317,7 +315,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var row = TheReferenceTo(index.RequireReads(), targetFormKey);
+        var row = TheReferenceTo(index, targetFormKey);
         Assert.Equal(questFormKey.ToString(), row.Source);
         Assert.Equal("VirtualMachineAdapter.Aliases[0].Property.Object", row.FieldPath);
         Assert.Equal("qust", row.RecordType);
@@ -342,7 +340,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var row = TheReferenceTo(index.RequireReads(), targetFormKey);
+        var row = TheReferenceTo(index, targetFormKey);
         Assert.Equal(questFormKey.ToString(), row.Source);
         Assert.Equal("VirtualMachineAdapter.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("qust", row.RecordType);
@@ -370,7 +368,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var row = TheReferenceTo(index.RequireReads(), targetFormKey);
+        var row = TheReferenceTo(index, targetFormKey);
         Assert.Equal(packageFormKey.ToString(), row.Source);
         Assert.Equal("VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("pack", row.RecordType);
@@ -399,7 +397,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var row = Assert.Single(ReferencesTo(index.RequireReads(), targetFormKey), r => r.Source == sceneFormKey.ToString());
+        var row = Assert.Single(ReferencesTo(index, targetFormKey), r => r.Source == sceneFormKey.ToString());
         Assert.Equal("VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("scen", row.RecordType);
     }
@@ -427,7 +425,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        Assert.DoesNotContain(ReferencesTo(index.RequireReads(), targetFormKey), r => r.Source == questFormKey.ToString());
+        Assert.DoesNotContain(ReferencesTo(index, targetFormKey), r => r.Source == questFormKey.ToString());
     }
 
     [Fact]
@@ -455,7 +453,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var row = Assert.Single(ReferencesTo(index.RequireReads(), targetFormKey), r => r.Source == responseFormKey.ToString());
+        var row = Assert.Single(ReferencesTo(index, targetFormKey), r => r.Source == responseFormKey.ToString());
         Assert.Equal("VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("info", row.RecordType);
     }
@@ -498,13 +496,12 @@ public class FormReferencesTests
             })
             .Build();
         using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
 
-        var nestedRow = TheReferenceTo(reads, nestedTarget);
+        var nestedRow = TheReferenceTo(index, nestedTarget);
         Assert.Equal(questFormKey.ToString(), nestedRow.Source);
         Assert.Equal("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties[0].Members[0].Properties[0].Object", nestedRow.FieldPath);
 
-        var listRow = TheReferenceTo(reads, listTarget);
+        var listRow = TheReferenceTo(index, listTarget);
         Assert.Equal(questFormKey.ToString(), listRow.Source);
         Assert.Equal("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties[1].Structs[0].Members[0].Object", listRow.FieldPath);
     }

@@ -21,12 +21,11 @@ public class IndexAtomicityTests
         var key = new PluginAddress("Atomic.esp", PluginOrigin.DataDirectory);
         using var index = Indexes.Reconciled(fixture, adapter: new PartwayAdapter(
             afterRecords: 2, () => throw new InvalidOperationException("injected mid-plugin read failure")));
-        var reads = index.RequireReads();
 
         Assert.Contains(index.Status.Failures, f => f.Name == "Atomic.esp");
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "Atomic.esp");
-        Assert.Equal(0, reads.CountOf(key, "npc_"));
-        Assert.Empty(reads.DocumentsOf(key));
-        Assert.Empty(reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10)).Items);
+        Assert.Equal(0, index.CountOf(key, "npc_"));
+        Assert.Empty(index.ListedIn(key));
+        Assert.Empty(index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Items);
     }
 }

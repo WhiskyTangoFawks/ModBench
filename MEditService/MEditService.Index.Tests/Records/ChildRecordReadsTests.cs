@@ -96,52 +96,57 @@ public sealed class ChildRecordReadsTests : IDisposable
         return quest;
     }
 
-    private IRecordReads Reads => _index.RequireReads();
+    private bool HasChildRecords(PluginAddress plugin, string formKey) =>
+        _index.ChildRecords.WithChildRecords([new RecordAt(plugin, formKey)]).Count == 1;
+
+    private IReadOnlyList<PluginAddress> PluginsHoldingChildRecords(PluginAddress plugin, string formKey) =>
+        _index.ChildRecords.DestinationsHoldingChildRecords(
+            [new RecordAt(plugin, formKey)], [.. _fixture.Plugins.Select(p => p.KeyOf())]).Single().Destinations;
 
     [Fact]
     public void ARecordHasChildRecords_WhenItsPluginHoldsAnyBelowIt()
     {
-        Assert.True(Reads.HasChildRecords(Source, _quest));
-        Assert.True(Reads.HasChildRecords(Source, _topic));
-        Assert.True(Reads.HasChildRecords(Source, _worldspace));
-        Assert.True(Reads.HasChildRecords(Source, _cell));
-        Assert.False(Reads.HasChildRecords(Source, _loneQuest));
-        Assert.False(Reads.HasChildRecords(Source, _npc));
+        Assert.True(HasChildRecords(Source, _quest));
+        Assert.True(HasChildRecords(Source, _topic));
+        Assert.True(HasChildRecords(Source, _worldspace));
+        Assert.True(HasChildRecords(Source, _cell));
+        Assert.False(HasChildRecords(Source, _loneQuest));
+        Assert.False(HasChildRecords(Source, _npc));
     }
 
     [Fact]
     public void ARecordHasNoChildRecords_InAPluginThatHoldsOnlyTheRecordItself()
     {
-        Assert.False(Reads.HasChildRecords(QuestParentOnly, _quest));
-        Assert.True(Reads.HasChildRecords(QuestTopic, _quest));
+        Assert.False(HasChildRecords(QuestParentOnly, _quest));
+        Assert.True(HasChildRecords(QuestTopic, _quest));
     }
 
     [Fact]
     public void ThePluginsHoldingAQuestsChildRecords_AreThoseHoldingAnyOfThemAtAnyDepth()
     {
-        var holders = Reads.PluginsHoldingChildRecords(Source, _quest);
+        var holders = PluginsHoldingChildRecords(Source, _quest);
 
-        Assert.True(holders.SetEquals([Source, QuestResponseOnly, QuestTopic, TwinWithTopic]));
+        Assert.Equal([Source, QuestResponseOnly, QuestTopic, TwinWithTopic], holders);
     }
 
     [Fact]
     public void ThePluginsHoldingAWorldspacesChildRecords_AreThoseHoldingAnyCellOrReferenceBelowIt()
     {
-        var holders = Reads.PluginsHoldingChildRecords(Source, _worldspace);
+        var holders = PluginsHoldingChildRecords(Source, _worldspace);
 
-        Assert.True(holders.SetEquals([Source, WorldspaceWhole]));
+        Assert.Equal([Source, WorldspaceWhole], holders);
     }
 
     [Fact]
     public void ARecordWithNoChildRecords_HasNoPluginsHoldingThem()
     {
-        Assert.Empty(Reads.PluginsHoldingChildRecords(Source, _loneQuest));
+        Assert.Empty(PluginsHoldingChildRecords(Source, _loneQuest));
     }
 
     [Fact]
     public void TwoPluginsOfOneFilename_AreToldApartByOrigin()
     {
-        var holders = Reads.PluginsHoldingChildRecords(Source, _quest);
+        var holders = PluginsHoldingChildRecords(Source, _quest);
 
         Assert.Contains(TwinWithTopic, holders);
         Assert.DoesNotContain(TwinWithParentOnly, holders);

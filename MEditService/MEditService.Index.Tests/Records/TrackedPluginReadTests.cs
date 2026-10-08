@@ -31,22 +31,30 @@ public sealed class TrackedPluginReadTests : IDisposable
     private static readonly PluginAddress Tracked = new("Tracked.esp", "TrackedMod");
     private static readonly PluginAddress Plain = new("Plain.esp", "PlainMod");
 
+    private bool ReadsFromItsTree(PluginAddress plugin) =>
+        _index.PluginRowOf(plugin) is { IsTracked: true, PluginSourceUnreadable: false };
+
     [Fact]
     public void APluginIngestedFromItsSourceTree_ReadsAsDerivedFromIt()
     {
-        Assert.Equal(DerivedFrom.SourceTree, _index.RequireReads().DerivationOf(Tracked));
+        Assert.True(ReadsFromItsTree(Tracked));
     }
 
     [Fact]
     public void APluginIngestedFromItsBytes_ReadsAsDerivedFromThem()
     {
-        Assert.Equal(DerivedFrom.Binary, _index.RequireReads().DerivationOf(Plain));
+        Assert.False(_index.PluginRowOf(Plain)?.IsTracked ?? true);
     }
 
     [Fact]
-    public void TheDerivations_FindAPluginWhoseNameAndOriginDifferInCaseFromTheAskedKey()
+    public void ALoadOrderNamingATrackedPluginInAnotherCase_StillReadsItAsDerivedFromItsTree()
     {
-        Assert.Equal(DerivedFrom.SourceTree, _index.RequireReads().DerivationOf(new PluginAddress("TRACKED.ESP", "trackedmod")));
+        var recased = new PluginAddress("TRACKED.ESP", "trackedmod");
+        _index.Reconcile(_holder, _fixture.GameDirectory,
+            [.. _fixture.Plugins.Select(p => p.Name == Tracked.Name ? p with { Name = recased.Name, Origin = recased.Origin } : p)],
+            GameRelease.Fallout4);
+
+        Assert.True(ReadsFromItsTree(recased));
     }
 
     [Fact]
@@ -54,6 +62,6 @@ public sealed class TrackedPluginReadTests : IDisposable
     {
         _index.Reconcile(_holder, _fixture.GameDirectory, [.. _fixture.Plugins.Where(p => p.Name != Tracked.Name)], GameRelease.Fallout4);
 
-        Assert.Null(_index.RequireReads().DerivationOf(Tracked));
+        Assert.Null(_index.PluginRowOf(Tracked));
     }
 }

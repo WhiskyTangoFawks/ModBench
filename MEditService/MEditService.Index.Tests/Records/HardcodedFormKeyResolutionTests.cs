@@ -24,9 +24,8 @@ public class HardcodedFormKeyResolutionTests
         using var index = Indexes.Reconciled(fixture);
         var key = new PluginAddress("Hardcoded.esp", "ModA");
 
-        var doc = index.RequireReads().GetDocument(npcKey.ToString(), key);
+        var doc = index.DocumentOf(npcKey.ToString(), key);
 
-        Assert.NotNull(doc);
         var raceField = doc.Fields.Single(f => f.Metadata.Name.Equals("Race", StringComparison.OrdinalIgnoreCase));
         Assert.Null(raceField.CheckError);
     }

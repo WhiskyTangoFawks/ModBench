@@ -1,3 +1,5 @@
+using MEditService.Codec.Schema;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -24,7 +26,6 @@ public sealed class LinkResolutionTests
         var linkedKeyword = "";
         var dangling = new FormKey(masterInAnotherCase, 0xFFFFFF).ToString();
         var linkedRace = "";
-        List<string> moreLinkedKeywords = [];
         using var fixture = new PluginFixtureBuilder($"link-resolution-{moreKeywords}")
             .WithPlugin("Base.esm", mod =>
             {
@@ -42,7 +43,6 @@ public sealed class LinkResolutionTests
                 mod.ModHeader.MasterReferences.Add(new MasterReference { Master = masterInAnotherCase });
                 var keywords = built[0].Keywords.Select(k => new FormKey(masterInAnotherCase, k.FormKey.ID)).ToList();
                 linkedKeyword = keywords[0].ToString();
-                moreLinkedKeywords = [.. keywords.Skip(1).Select(k => k.ToString())];
                 linkedRace = new FormKey(masterInAnotherCase, built[0].Races.First().FormKey.ID).ToString();
                 var linker = mod.Npcs.AddNew("Linker");
                 npc = linker.FormKey;
@@ -56,21 +56,21 @@ public sealed class LinkResolutionTests
             })
             .Build();
         using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
-        var document = reads.DocumentOf(npc.ToString(), OverKey);
-        Assert.Contains(linkedKeyword, document.BodyOf(), StringComparison.Ordinal);
+        var linker = npc.ToString();
+        Assert.Contains(linkedKeyword, index.BodyOf(linker, OverKey), StringComparison.Ordinal);
 
-        Assert.Equal(ExpectedKeywordErrors, KeywordErrors(document));
-        var stack = reads.GetOverrideStack(npc.ToString());
-        Assert.NotNull(stack);
-        Assert.Equal(ExpectedKeywordErrors, KeywordErrors(Assert.Single(stack.Entries).Effective));
-        Assert.Equal(ExpectedKeywordErrors, KeywordErrors(reads.DocumentsOf(OverKey).Single(d => d.FormKey == npc.ToString())));
+        Assert.Equal(ExpectedKeywordErrors, KeywordErrors(index.DocumentOf(linker, OverKey)));
+        Assert.Equal(ExpectedKeywordErrors, KeywordErrors(Assert.Single(index.StackOf(linker))));
+        Assert.Equal(ExpectedKeywordErrors, KeywordErrors(index.Records.GetRecord(linker)
+            ?? throw new InvalidOperationException("Expected the linker to have a winner.")));
 
-        var resolve = reads.LinkResolver(npc.ToString());
-        Assert.Equal(new RecordLookupEntry("kywd", "WinningKeyword"), resolve(linkedKeyword));
-        Assert.Null(resolve(dangling));
-        Assert.Equal(new RecordLookupEntry("race", "LinkedRace"), resolve(linkedRace));
-        Assert.All(moreLinkedKeywords, k => Assert.Equal("kywd", resolve(k)?.RecordType));
+        Assert.Equal(
+            new FormKeyResolution(FormKeyResolutionState.ResolvedWrongType, "kywd", "WinningKeyword"),
+            index.ResolutionOf(linker, OverKey, linkedKeyword));
+        Assert.Equal(FormKeyResolutionState.Unresolved, index.ResolutionOf(linker, OverKey, dangling).State);
+        Assert.Equal(
+            new FormKeyResolution(FormKeyResolutionState.ResolvedValidType, "race", "LinkedRace"),
+            index.ResolutionOf(linker, OverKey, linkedRace));
     }
 
     private const string ResolverPlugin = "Fixture.esp";
@@ -78,7 +78,7 @@ public sealed class LinkResolutionTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void AResolverKeepsItsFirstAnswer_AfterTheIndexMovesOn_AndAFreshOneSeesTheNewRows(bool found)
+    public void ACompareAfterTheIndexMovesOn_ResolvesALinkAgainstTheNewRows(bool found)
     {
         var late = FormKey.Factory($"000900:{ResolverPlugin}");
         using var fixture = new PluginFixtureBuilder($"link-resolver-response-{found}")
@@ -90,10 +90,8 @@ public sealed class LinkResolutionTests
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
         var plugin = fixture.Plugins.Single();
-        var asker = index.RequireReads().DocumentsOf(plugin.KeyOf()).Single(d => d.RecordType == "npc_").FormKey;
-        var resolve = index.RequireReads().LinkResolver(asker);
-        var first = resolve(late.ToString())?.EditorId;
-        Assert.Equal(found ? "Before" : null, first);
+        var asker = index.Records.GetRecords(["npc_"], plugin.KeyOf(), search: null, limit: 1, offset: 0).Items.Single().FormKey;
+        Assert.Equal(found ? "Before" : null, index.ResolutionOf(asker, plugin.KeyOf(), late.ToString()).EditorId);
 
         PluginBinaries.Rewrite(plugin.Path, mod =>
         {
@@ -102,10 +100,9 @@ public sealed class LinkResolutionTests
         });
         index.NextSnapshot();
 
-        Assert.Equal(first, resolve(late.ToString())?.EditorId);
-        Assert.Equal("After", index.RequireReads().LinkResolver(asker)(late.ToString())?.EditorId);
+        Assert.Equal("After", index.ResolutionOf(asker, plugin.KeyOf(), late.ToString()).EditorId);
     }
 
-    private static string? KeywordErrors(RecordDocument document) =>
+    private static string? KeywordErrors(RecordDetail document) =>
         document.Fields.Single(f => f.Metadata.Name == "Keywords").CheckError;
 }

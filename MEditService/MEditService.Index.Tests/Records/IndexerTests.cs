@@ -41,16 +41,14 @@ public sealed class IndexerTests
     }
 
     private static string SharedNpc(OpenedIndex indexer) =>
-        indexer.RequireReads()
-            .Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: "A.esm", Limit: 10, Offset: 0))
+        indexer.Records.GetRecords(["npc_"], new PluginAddress("A.esm", PluginOrigin.DataDirectory), search: null, limit: 10, offset: 0)
             .Items.Single().FormKey;
 
-    private static string? WinnerOf(OpenedIndex indexer, string formKey)
-    {
-        var stack = indexer.RequireReads().GetOverrideStack(formKey)
-            ?? throw new InvalidOperationException($"Expected {formKey} to resolve to an override stack.");
-        return stack.Entries.Single(e => e.IsWinner).Plugin.Name;
-    }
+    private static string WinnerOf(OpenedIndex indexer, string formKey) =>
+        indexer.StackOf(formKey).Single(copy => copy.IsWinner).Plugin;
+
+    private static IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins(OpenedIndex indexer) =>
+        indexer.Records.GetPlugins().ToDictionary(row => row.Plugin.Key, row => row.Content, PluginAddress.Comparer);
 
     [Fact]
     public async Task AReDerivationAfterASnapshotMovedTheWinners_TakesItsWinnersFromTheHolder_NotFromThePluginsItHasOpen()
@@ -79,10 +77,10 @@ public sealed class IndexerTests
 
         ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, snapshot);
 
-        Assert.All(snapshot.Plugins, plugin => Assert.NotEmpty(indexer.RequireReads().DocumentsOf(plugin.Key)));
+        Assert.All(snapshot.Plugins, plugin => Assert.NotEmpty(indexer.ListedIn(plugin.Key)));
         Assert.Equal(
             snapshot.Plugins.Select(c => c.Key).OrderBy(k => k.Name, StringComparer.Ordinal),
-            indexer.RequireReads().OpenedPlugins.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
+            OpenedPlugins(indexer).Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
     }
 
     [Fact]
@@ -95,7 +93,7 @@ public sealed class IndexerTests
 
         ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, snapshot);
 
-        var opened = indexer.RequireReads().OpenedPlugins;
+        var opened = OpenedPlugins(indexer);
         var patch = opened[snapshot.Plugins.Single(c => c.Name == "B.esp").Key];
         Assert.Equal(["A.esm"], patch.Masters);
         Assert.Equal(1, patch.RecordCount);
@@ -114,7 +112,7 @@ public sealed class IndexerTests
 
         ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, snapshot);
 
-        var opened = indexer.RequireReads().OpenedPlugins;
+        var opened = OpenedPlugins(indexer);
         Assert.DoesNotContain(new PluginAddress("Gone.esp", "SomeMod"), opened.Keys);
         Assert.Contains(snapshot.Plugins.Single(c => c.Name == "A.esm").Key, opened.Keys);
     }
@@ -161,9 +159,7 @@ public sealed class IndexerTests
         ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, Snapshot(fx));
 
         var arrived = fx.Plugins[1];
-        var rows = indexer.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator,
-            Plugin: arrived.Name, Origin: arrived.Origin, Limit: 10, Offset: 0));
-        Assert.NotEmpty(rows.Items);
+        Assert.NotEmpty(indexer.ListedIn(arrived.KeyOf()));
     }
 
     [Fact]
@@ -182,8 +178,8 @@ public sealed class IndexerTests
 
         ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, Snapshot(fx));
 
-        var matched = indexer.RequireReads()
-            .Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: "C.esp", Origin: PluginOrigin.DataDirectory, Limit: 10, Offset: 0));
+        var matched = indexer.Records.GetRecords(
+            ["npc_"], new PluginAddress("C.esp", PluginOrigin.DataDirectory), search: null, limit: 10, offset: 0);
         Assert.Equal([charlieNpcOwnedNotOverriddenFromASoTheFilterCouldNotAlreadyHaveListedItsFormKey], matched.Items.Select(i => i.EditorId));
     }
 

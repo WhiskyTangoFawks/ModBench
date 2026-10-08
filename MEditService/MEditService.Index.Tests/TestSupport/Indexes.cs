@@ -30,6 +30,7 @@ internal static class Indexes
         services.AddSingleton(SharedSchemaReflector.Instance);
         services.AddSingleton(loggerFactory ?? NullLoggerFactory.Instance);
         services.AddSingleton(timeProvider ?? TimeProvider.System);
+        services.AddLogging();
         if (notifications is not null) services.AddSingleton(notifications);
         services.AddRecordIndex();
         return services.BuildServiceProvider();
@@ -40,11 +41,8 @@ internal static class Indexes
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        TimeProvider? timeProvider = null)
-    {
-        var container = Container(holder, adapter, loggerFactory, notifications, timeProvider);
-        return new OpenedIndex(container.GetRequiredService<IQueryIndex>(), holder, container);
-    }
+        TimeProvider? timeProvider = null) =>
+        new(Container(holder, adapter, loggerFactory, notifications, timeProvider), holder);
 
     internal static OpenedIndex Reconciled(
         PluginFixtureData fixture,
@@ -118,7 +116,7 @@ internal static class Indexes
         index.SetFilter(sql, "filter.sql");
         try
         {
-            return index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, Limit: 1)).Total;
+            return index.Records.GetRecords(types: null, plugin: null, search: null, limit: 1, offset: 0).Total;
         }
         finally
         {
@@ -136,7 +134,7 @@ internal static class Indexes
     }
 
     /// <summary>One record type's row count for one plugin, zero when the plugin holds none.</summary>
-    internal static int CountOf(this IRecordReads reads, PluginAddress plugin, string recordType) =>
-        reads.GetRecordTypeCounts(plugin)
+    internal static int CountOf(this OpenedIndex index, PluginAddress plugin, string recordType) =>
+        index.Records.GetPluginRecordTypes(plugin)
             .FirstOrDefault(c => string.Equals(c.Type, recordType, StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
 }

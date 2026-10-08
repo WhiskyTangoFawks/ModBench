@@ -8,7 +8,7 @@ public sealed class IndexHeldElsewhereApiTests : HostedTests
 {
     private const string Refusal = "Another window holds the index.";
 
-    protected override MEditHost CreateHost() => new(services => FailingIndex.Replace(services, Refusal));
+    protected override MEditHost CreateHost() => new(services => FailingQueries.Replace(services, Refusal));
 
     [Fact]
     public async Task PostRebuildIndex_WhenAnotherWindowHoldsTheIndex_Is423NamingTheRefusal()
