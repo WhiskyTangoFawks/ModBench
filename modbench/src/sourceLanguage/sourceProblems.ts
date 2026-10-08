@@ -1,10 +1,9 @@
-import { findNodeAtLocation, parseTree, type Node } from 'jsonc-parser';
 import type { MEditClient, PluginProblems } from '../client';
 import type { OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { findStringValue, isStringValue, recordObject } from './sourceText';
+import { problemSpan } from './sourceText';
 
 type SourceProblem = PluginProblems['problems'][number];
 
@@ -29,23 +28,10 @@ function positionAt(text: string, offset: number): Position {
   return { line: lines.length - 1, character: lines.at(-1)?.length ?? 0 };
 }
 
-// mEdit's field path is the document's own member names, an element's index in brackets.
-const locationOf = (fieldPath: string): (string | number)[] =>
-  fieldPath.split('.').flatMap((member) => [member.split('[')[0] ?? member, ...[...member.matchAll(/\[(\d+)\]/g)].map((index) => Number(index[1]))]);
-
-function spanOf(scope: Node, { formKey, targetFormKey, fieldPath }: SourceProblem): Node | undefined {
-  const spanned = targetFormKey ?? formKey;
-  if (!spanned) return undefined;
-  const atPath = fieldPath ? findNodeAtLocation(scope, locationOf(fieldPath)) : undefined;
-  return atPath && isStringValue(atPath, spanned) ? atPath : findStringValue(scope, spanned);
-}
-
 function onText(text: string, problem: SourceProblem): ProblemOnFile {
-  const root = parseTree(text);
-  const scope = root && problem.formKey ? (recordObject(root, problem.formKey) ?? root) : root;
-  const target = scope && spanOf(scope, problem);
+  const target = problemSpan(text, problem);
   return target
-    ? { message: problem.message, start: positionAt(text, target.offset), end: positionAt(text, target.offset + target.length) }
+    ? { message: problem.message, start: positionAt(text, target.start), end: positionAt(text, target.end) }
     : { message: problem.message, start: FIRST_LINE, end: FIRST_LINE };
 }
 

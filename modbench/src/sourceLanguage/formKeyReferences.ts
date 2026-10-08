@@ -1,33 +1,10 @@
-import { parseTree, type Node } from 'jsonc-parser';
 import type { MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { pluginAddressOf } from '../wire/pluginAddress';
 import type { RecordCopy } from '../drivingLib/recordDocument';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
-import { formKeyAt, ownFormKey, recordObject, type TextSpan } from './sourceText';
-
-const valuesOf = (node: Node): Node[] => (node.type === 'property' ? node.children?.slice(1) : node.children) ?? [];
-
-function firstReference(node: Node, formKey: string): Node | undefined {
-  const own = ownFormKey(node)?.parent;
-  for (const child of valuesOf(node)) {
-    // A nested object with a FormKey of its own is a child record, whose references are its own
-    // (editor-referenced-by.md, The tree, story 5).
-    if (child === own || ownFormKey(child) !== undefined) continue;
-    if (child.type === 'string' && child.value === formKey) return child;
-    const found = firstReference(child, formKey);
-    if (found) return found;
-  }
-  return undefined;
-}
-
-function referenceSpan(text: string, referrer: string, formKey: string): TextSpan {
-  const root = parseTree(text);
-  const record = root && recordObject(root, referrer);
-  const found = record && (firstReference(record, formKey) ?? ownFormKey(record));
-  return found ? { start: found.offset, end: found.offset + found.length } : { start: 0, end: 0 };
-}
+import { formKeyAt, referenceSpan } from './sourceText';
 
 interface ReferencesDeps<Document> extends RecordLocationDeps<Document> {
   client: RecordLocationDeps<Document>['client'] & Pick<MEditClient, 'getReferences'>;
