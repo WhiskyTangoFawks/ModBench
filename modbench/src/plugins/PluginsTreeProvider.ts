@@ -483,11 +483,6 @@ export class PluginsTreeProvider
       .join(' ');
   }
 
-  /** Whether compile applies to any plugin, which compile's palette entry reads. */
-  anyCompilable(): boolean {
-    return this.facts.rows.anyCompilable();
-  }
-
   /** The reconcile narrator's events go in here. */
   readonly facts: PluginFactsFeed;
 

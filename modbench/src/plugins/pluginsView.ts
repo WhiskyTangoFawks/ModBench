@@ -111,7 +111,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     for (const [name, value] of Object.entries(pluginsKeyContext(selected.rows(), (row) => tree.isEnabled(row)))) {
       void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
     }
-    void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', tree.anyCompilable());
+    void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', tree.facts.rows.anyCompilable());
   };
   showKeyContext();
   const keyContextSubscriptions = [view.onDidChangeSelection(showKeyContext), tree.onDidChangeTreeData(showKeyContext)];

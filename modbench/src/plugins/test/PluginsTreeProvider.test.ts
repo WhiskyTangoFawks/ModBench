@@ -45,6 +45,7 @@ import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { present } from '../../ports/present';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { CONTAINER_TYPES, listsForThePluginAsked } from '../../client/test/fixtures';
 
 function plugin(
@@ -1393,6 +1394,42 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
   });
 });
 
+describe('PluginsTreeProvider — the message line takes the first message that holds (common.md, States 5; plugins.md, States 1, 5 and 6)', () => {
+  const GAME_FOLDER_MESSAGE = "Game folder not found: set modbench.mods.gameDirectory. The Toolbox's Game row names each place Modbench looked.";
+  const indexFailed = { kind: 'failed', message: 'the index threw' } as const;
+
+  const withoutGameFolder = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]) =>
+    new FakeInstance({ ...valueOf(plugins), gameFolder: GAME_FOLDER_NOT_FOUND });
+
+  it('puts the game folder over a failed index', async () => {
+    const h = makeTree([A_ROW()], { instance: withoutGameFolder([A_ROW()]) });
+    h.tree.facts.refused(indexFailed);
+
+    expect(h.tree.viewMessage()).toBe(GAME_FOLDER_MESSAGE);
+  });
+
+  it('puts a failed index over no rows', async () => {
+    const h = makeTree([]);
+    await h.tree.getChildren();
+    h.tree.facts.refused(indexFailed);
+
+    expect(h.tree.viewMessage()).toBe('Indexing failed: the index threw');
+  });
+
+  it('puts no rows over a record filter that matched nothing', async () => {
+    const instance = new FakeInstance(valueOf([A_ROW()]));
+    const h = makeTree([], { instance });
+    h.tree.setRecordFilterSource('a.sql');
+    await reconcile(h, [held('A.esp', { hasMatchingRecords: false })]);
+    expect(h.tree.viewMessage()).toBe('No records match a.sql.');
+
+    instance.publish(valueOf([]));
+    await h.tree.getChildren();
+
+    expect(h.tree.viewMessage()).toBe(NO_PLUGINS_MESSAGE);
+  });
+});
+
 describe('PluginsTreeProvider — applyBackendUnreachable', () => {
   it('names the reason on a row, before any reconcile has landed', async () => {
     const h = makeTree([A_ROW()]);
@@ -1581,41 +1618,6 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     const rows = await h.tree.getChildren();
     expect(rows).toHaveLength(1);
     expect(h.tree.getTreeItem(present(rows[0], 'the sole row')).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
-  });
-
-  it('a filter set while the client is answering, then cleared, leaves no stale hidden row', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp')]);
-    expect(await h.tree.getChildren()).toHaveLength(1);
-
-    let resolveSlow!: (plugins: PluginMetadata[]) => void;
-    const slow = new Promise<PluginMetadata[]>((resolve) => { resolveSlow = resolve; });
-    h.client.setQueryAnswerOnce('getPlugins', slow);
-    h.client.setQueryAnswer('getPlugins', [held('A.esp')]);
-
-    const filterSet = h.tree.facts.refresh();
-    await h.tree.facts.refresh();
-    expect(await h.tree.getChildren()).toHaveLength(1);
-
-    resolveSlow([held('A.esp', { hasMatchingRecords: false })]);
-    await filterSet;
-
-    expect(await h.tree.getChildren()).toHaveLength(1);
-  });
-
-  it('a fact re-read during a reconcile hand-off leaves the hand-off standing', async () => {
-    const h = makeTree([A_ROW()]);
-    let resolveSlow!: (plugins: PluginMetadata[]) => void;
-    h.client.setQueryAnswerOnce('getPlugins', new Promise<PluginMetadata[]>((resolve) => { resolveSlow = resolve; }));
-    h.client.setQueryAnswer('getPlugins', [held('A.esp')]);
-
-    const handOff = h.tree.facts.reconciled([]);
-    await h.tree.facts.refresh();
-    resolveSlow([held('A.esp')]);
-
-    expect(await handOff).toBe(1);
-    const [row] = await h.tree.getChildren();
-    expect(rendered(await h.tree.getChildren(row))).not.toEqual(STILL_INDEXING);
   });
 });
 
@@ -2585,17 +2587,6 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
     expect(scan).toHaveLength(1);
     expect(present(scan[0], 'the sole scan-failure log entry').level).toBe('warn');
     expect(h.logged.some((l) => l.level === 'error')).toBe(false);
-  });
-
-  it('drops a reconcile answer that lands after a fresh load started', async () => {
-    const h = makeTree([A_ROW()]);
-    h.client.setQueryAnswer('getPlugins', [held('A.esp')]);
-    const landing = h.tree.facts.reconciled([]);
-    h.tree.facts.indexed([], []);
-
-    expect(await landing).toBeUndefined();
-    const [row] = await h.tree.getChildren();
-    expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
   });
 });
 

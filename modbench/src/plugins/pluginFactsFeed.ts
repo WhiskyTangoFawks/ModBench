@@ -10,7 +10,7 @@ export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' 
 
 export interface PluginFactsFeedDeps {
   client: PluginFactsClient;
-  /** The plugins the tree shows; a fact about any other is not asked for. */
+  /** The plugins the tree shows; mEdit's facts about any other are dropped. */
   shownPlugins: () => readonly PluginAddress[];
   /** The malformed-plugin scan's other surface, the Problems panel. */
   publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;

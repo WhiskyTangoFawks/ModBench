@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { PluginAddress, PluginMetadata } from '../../client';
+import type { PluginAddress, PluginDiagnosisReport, PluginMetadata } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { EventEmitter } from '../../test/vscodeMock';
@@ -10,22 +10,42 @@ import { PluginFactsFeed } from '../pluginFactsFeed';
 
 const A = { name: 'A.esp', origin: 'SomeMod' };
 const held = (overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name: 'A.esp', ...overrides });
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const diagnosis = (text: string): PluginDiagnosisReport => (
+  { plugin: 'A.esp', origin: 'SomeMod', defectClass: 'fixed-size-subrecord-short', message: text, text }
+);
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => { resolve = r; });
+  return { promise, resolve };
+}
+
+function watched<T>() {
+  const items: T[] = [];
+  const waiting: (() => void)[] = [];
+  return {
+    items,
+    push: (item: T) => { items.push(item); for (const wake of waiting.splice(0)) wake(); },
+    next: () => new Promise<void>((resolve) => { waiting.push(resolve); }),
+  };
+}
 
 function feedOver(client = new InMemoryMEditClient(), shown: readonly PluginAddress[] = [A]) {
-  const logged: { level: string; msg: string }[] = [];
-  const diagnoses: unknown[] = [];
-  const changedOutside: unknown[] = [];
+  const logged = watched<{ level: string; msg: string }>();
+  const diagnoses = watched<readonly PluginDiagnosisReport[]>();
+  const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
   const feed = new PluginFactsFeed({
     client, shownPlugins: () => shown,
     log: (level, msg) => logged.push({ level, msg }),
-    publishDiagnoses: (reports) => diagnoses.push(reports),
-    publishChangedOutside: (warnings) => changedOutside.push(warnings),
+    publishDiagnoses: diagnoses.push,
+    publishChangedOutside: changedOutside.push,
   });
   const changes = vi.fn();
   feed.onDidChange(changes);
   return { feed, client, logged, diagnoses, changedOutside, changes };
 }
+
+const trackedFlag = (feed: PluginFactsFeed) => feed.rows.contextFlags(A).includes('tracked');
 
 describe('PluginFactsFeed', () => {
   it('lands a reconcile: the plugins shown become queryable, the change event fires, and the count returns', async () => {
@@ -35,7 +55,7 @@ describe('PluginFactsFeed', () => {
 
     expect(await feed.reconciled([])).toBe(1);
 
-    expect(feed.rows.contextFlags(A)).toContain('tracked');
+    expect(trackedFlag(feed)).toBe(true);
     expect(feed.rows.contextFlags({ name: 'Unshown.esp', origin: 'SomeMod' })).toEqual([]);
     expect(changes).toHaveBeenCalled();
   });
@@ -47,7 +67,7 @@ describe('PluginFactsFeed', () => {
     expect(await feed.reconciled([])).toBeUndefined();
 
     expect(feed.rows.expansion(A)).toEqual({ kind: 'error', message: 'ECONNREFUSED' });
-    expect(logged.map((l) => l.level)).toEqual(['error']);
+    expect(logged.items.map((l) => l.level)).toEqual(['error']);
   });
 
   it('drops a reconcile answer that lands after a newer event', async () => {
@@ -57,43 +77,83 @@ describe('PluginFactsFeed', () => {
     feed.indexed([], []);
 
     expect(await landing).toBeUndefined();
-    expect(feed.rows.contextFlags(A)).toEqual([]);
+    expect(trackedFlag(feed)).toBe(false);
   });
 
-  it('publishes the malformed-plugin scan to the Problems panel, and a failed scan only warns', async () => {
-    const { feed, client, diagnoses, logged } = feedOver();
+  it('a fact re-read during a reconcile hand-off leaves the hand-off standing', async () => {
+    const { feed, client } = feedOver();
+    const slow = deferred<PluginMetadata[]>();
+    client.setQueryAnswerOnce('getPlugins', slow.promise);
+    client.setQueryAnswer('getPlugins', [held({ isTracked: true })]);
+    const handOff = feed.reconciled([]);
+    await feed.refresh();
+    slow.resolve([held({ isTracked: true })]);
+
+    expect(await handOff).toBe(1);
+    expect(trackedFlag(feed)).toBe(true);
+  });
+
+  it('a later re-read wins over an earlier one still in flight', async () => {
+    const { feed, client } = feedOver();
+    const slow = deferred<PluginMetadata[]>();
+    client.setQueryAnswerOnce('getPlugins', slow.promise);
+    client.setQueryAnswer('getPlugins', [held({ isTracked: false })]);
+    const earlier = feed.refresh();
+    await feed.refresh();
+    slow.resolve([held({ isTracked: true })]);
+    await earlier;
+
+    expect(trackedFlag(feed)).toBe(false);
+  });
+
+  it('publishes the malformed-plugin scan to the Problems panel', async () => {
+    const { feed, client, diagnoses } = feedOver();
     client.setQueryAnswer('getPlugins', [held()]);
-    client.setQueryAnswer('getDiagnoses', []);
-    await feed.reconciled([]);
-    await settle();
-    expect(diagnoses).toEqual([[]]);
+    client.setQueryAnswer('getDiagnoses', [diagnosis('first')]);
+    const published = diagnoses.next();
 
-    client.setQueryFailure('getDiagnoses', new Error('503'));
     await feed.reconciled([]);
-    await settle();
-    expect(diagnoses).toHaveLength(1);
-    expect(logged.map((l) => l.level)).toEqual(['warn']);
+    await published;
+
+    expect(diagnoses.items).toEqual([[diagnosis('first')]]);
+    expect(feed.rows.description(A)).toBe('malformed');
   });
 
-  it('takes the external-change notification itself: publishes the warning and fires the change event', () => {
+  it('a failed scan only warns and leaves the last answer', async () => {
+    const { feed, client, logged, diagnoses } = feedOver();
+    client.setQueryAnswer('getPlugins', [held()]);
+    client.setQueryFailure('getDiagnoses', new Error('503'));
+    const warned = logged.next();
+
+    await feed.reconciled([]);
+    await warned;
+
+    expect(logged.items.map((l) => l.level)).toEqual(['warn']);
+    expect(diagnoses.items).toEqual([]);
+  });
+
+  it('drops a scan answer that lands after a newer event', async () => {
+    const { feed, client, diagnoses } = feedOver();
+    const slowScan = deferred<PluginDiagnosisReport[]>();
+    client.setQueryAnswer('getPlugins', [held()]);
+    client.setQueryAnswerOnce('getDiagnoses', slowScan.promise);
+    await feed.reconciled([]);
+    feed.indexed([], []);
+
+    slowScan.resolve([diagnosis('stale')]);
+    await slowScan.promise;
+
+    expect(diagnoses.items).toEqual([]);
+    expect(feed.rows.description(A)).toBeUndefined();
+  });
+
+  it('takes the external-change notification itself: publishes A\'s warning and fires the change event', () => {
     const { client, changedOutside, changes } = feedOver();
 
     client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 0, changedPlugins: [{ name: 'A.esp', bytesSha256: 'ab12' }] });
 
-    expect(changedOutside).toHaveLength(1);
+    expect(changedOutside.items.map((warnings) => warnings.map(({ plugin, origin }) => ({ plugin, origin })))).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod' }]]);
     expect(changes).toHaveBeenCalledOnce();
-  });
-
-  it('a fact re-read leaves a reconcile hand-off standing', async () => {
-    const { feed, client } = feedOver();
-    let resolveSlow!: (plugins: PluginMetadata[]) => void;
-    client.setQueryAnswerOnce('getPlugins', new Promise<PluginMetadata[]>((resolve) => { resolveSlow = resolve; }));
-    client.setQueryAnswer('getPlugins', [held()]);
-    const handOff = feed.reconciled([]);
-    await feed.refresh();
-    resolveSlow([held()]);
-
-    expect(await handOff).toBe(1);
   });
 
   it('stops listening for the notification once disposed', () => {
