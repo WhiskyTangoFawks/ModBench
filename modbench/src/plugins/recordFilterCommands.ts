@@ -2,11 +2,11 @@ import * as vscode from 'vscode';
 import type { MEditClient, RecordFilter } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import type { PluginTreeProvider } from './PluginTreeProvider';
+import type { RecordBrowser } from './RecordBrowser';
 
 export interface FilterCommandDeps {
   client: Pick<MEditClient, 'setFilter' | 'clearFilter' | 'getActiveFilter' | 'onNotification'>;
-  treeProvider: Pick<PluginTreeProvider, 'refresh'>;
+  treeProvider: Pick<RecordBrowser, 'refresh'>;
   /** Symmetric on purpose: a stale `false` surviving a clear would leave a plugin permanently
    *  hidden (plugins.md). */
   refreshMatchingPlugins: () => void;

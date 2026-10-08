@@ -6,7 +6,7 @@ import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import type { PluginsDrop } from '../pluginsCommands/plugins';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { lockedRowUri } from './ImplicitMasterDecorationProvider';
-import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
+import { IndexingNode, type RecordBrowserNode, type RecordBrowser } from './RecordBrowser';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
 import { placeOf, type PluginWarning } from './pluginFacts';
@@ -41,10 +41,10 @@ function isDropPayload(value: unknown): value is { plugins: PluginAddress[] } {
     && value.plugins.every(isAddress);
 }
 
-/** The record browser a row's children are delegated to (ADR-0017). `PluginTreeProvider`
+/** The record browser a row's children are delegated to (ADR-0017). `RecordBrowser`
  *  satisfies it. */
-export type RecordBrowser = Pick<
-  PluginTreeProvider,
+export type RecordBrowserFacet = Pick<
+  RecordBrowser,
   'getPluginChildren' | 'getChildren' | 'getTreeItem' | 'onDidChangeTreeData'
 >;
 
@@ -52,7 +52,7 @@ interface PluginsTreeProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin: the row input. */
   instance: PluginsInstance;
   /** A row's children. */
-  records: RecordBrowser;
+  records: RecordBrowserFacet;
   /** Every plugin-keyed fact. */
   client: PluginFactsClient;
   /** The malformed-plugin scan's other surface, the Problems panel, which needs an instance root
@@ -137,7 +137,7 @@ export type PluginListNode = PluginNode | ImplicitMasterNode;
 
 /** What this tree hands VS Code: a load-order row, or one of the record browser's nodes under
  *  it. */
-export type PluginsTreeNode = PluginListNode | PluginTreeNode;
+export type PluginsTreeNode = PluginListNode | RecordBrowserNode;
 
 // The view is shared, so a drop must be able to tell these rows from another provider's.
 const OWN_ROW_KINDS = new Set<string>(['plugin', 'implicitMaster']);
@@ -173,7 +173,7 @@ export class PluginsTreeProvider
 
   private readonly dataFolderFile: (name: string) => string | undefined;
   private readonly instance: PluginsInstance;
-  private readonly records: RecordBrowser;
+  private readonly records: RecordBrowserFacet;
   private instanceValue: InstanceValue;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
