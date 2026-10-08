@@ -8,15 +8,11 @@ interface DefinitionDeps<Document> extends RecordLocationDeps<Document> {
   reporter: Pick<Reporter, 'shownOnSurface'>;
 }
 
-/** A refusal or a failure offers no definition, and is written to the Output once for each reason
- *  (common.md, Reporting). */
+/** A refusal or a failure offers no definition, and is written to the Output (common.md, Reporting). */
 export function definitionsOf<Document extends { getText(): string }>(
   { client, reporter, open }: DefinitionDeps<Document>,
 ): (text: string, offset: number) => Promise<RecordLocation<Document> | undefined> {
-  const told = new Set<string>();
   const tell = (formKey: string, why: string) => {
-    if (told.has(why)) return;
-    told.add(why);
     reporter.shownOnSurface('warning', `Go to Definition cannot open ${formKey}.`, why);
   };
   return async (text, offset) => {

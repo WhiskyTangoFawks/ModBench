@@ -8,7 +8,7 @@ import { formKeyAt, referenceSpan } from './sourceText';
 
 interface ReferencesDeps<Document> extends RecordLocationDeps<Document> {
   client: RecordLocationDeps<Document>['client'] & Pick<MEditClient, 'getReferencesInActiveOrTrackedPlugins'>;
-  reporter: Pick<Reporter, 'report'>;
+  reporter: Pick<Reporter, 'shownOnSurface'>;
 }
 
 export function referencesOf<Document extends { getText(): string }>(
@@ -19,7 +19,7 @@ export function referencesOf<Document extends { getText(): string }>(
     if (!found) return [];
     const { formKey } = found;
     const rows = await client.getReferencesInActiveOrTrackedPlugins(formKey).catch((error: unknown) => {
-      reporter.report('error', `Find All References cannot list what references ${formKey}.`, errorMessage(error));
+      reporter.shownOnSurface('error', `Find All References cannot list what references ${formKey}.`, errorMessage(error));
       return [];
     });
     const copies = new Map(rows.map((row): [string, RecordCopy] =>
@@ -28,8 +28,8 @@ export function referencesOf<Document extends { getText(): string }>(
       const document = await open(uri);
       return { uri, document, ...referenceSpan(document.getText(), copy.formKey, formKey) };
     });
-    if (leftOut.length > 0) {
-      reporter.report('warning', `Find All References on ${formKey} left out the copies it could not open.`, leftOut.join(' '));
+    for (const why of leftOut) {
+      reporter.shownOnSurface('warning', `Find All References on ${formKey} left out a copy it could not open.`, why);
     }
     return located;
   };

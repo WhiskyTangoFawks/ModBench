@@ -109,14 +109,14 @@ describe('Go to Definition on a FormKey (plugin-source.md, In the text editor, s
     ]);
   });
 
-  it('writes a reason once, however often it recurs', async () => {
+  it('writes the reason again each time it recurs', async () => {
     const { client, reporter, definitionAt } = definitions();
     client.setQueryAnswer('getRecordFile', null);
 
     await definitionAt(REFERENCING, AT_GUN);
     await definitionAt(REFERENCING, AT_GUN);
 
-    expect(reporter.shownFailures).toHaveLength(1);
+    expect(reporter.shownFailures).toHaveLength(2);
   });
 
   it('asks nothing for a string that is not a FormKey', async () => {

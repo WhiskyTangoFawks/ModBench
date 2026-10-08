@@ -143,11 +143,11 @@ describe('Find All References on a FormKey (plugin-source.md, In the text editor
   });
 
   describe('when a copy cannot be listed', () => {
-    const LEFT_OUT = `Find All References on ${GUN} left out the copies it could not open.`;
+    const LEFT_OUT = `Find All References on ${GUN} left out a copy it could not open.`;
     const tracked = { [key(STAND, modA)]: { file: STAND_FILE, text: `{ "FormKey": "${STAND}", "Model": "${GUN}" }` } };
     const uris = (found: Parameters<typeof listed>[0]) => listed(found).map(({ uri }) => uri);
 
-    it('notifies nothing when every copy is listed', async () => {
+    it('writes nothing when every copy is listed', async () => {
       const { reporter, referencesAt } = references([row(STAND, modA, 'Model')], tracked);
 
       await referencesAt(ASKING, AT_GUN(ASKING));
@@ -155,37 +155,38 @@ describe('Find All References on a FormKey (plugin-source.md, In the text editor
       expect([...reporter.reports, ...reporter.shownFailures]).toEqual([]);
     });
 
-    it('lists the copies it can, and notifies the copy left out, when a plugin holds no copy mEdit counted', async () => {
+    it('lists the copies it can, and writes the copy left out, when a plugin holds no copy mEdit counted', async () => {
       const { reporter, referencesAt } = references([row(STAND, modA, 'Model'), row(STAND, modB, 'Model')], tracked);
 
       expect(uris(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([`file:${STAND_FILE}`]);
-      expect(reporter.reports).toEqual([{ severity: 'warning', message: LEFT_OUT, detail: `B.esp (ModB) holds no ${STAND}.` }]);
+      expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: LEFT_OUT, detail: `B.esp (ModB) holds no ${STAND}.` }]);
     });
 
-    it('lists the copies it can, and notifies the copy left out and why, when a copy\'s document fails to open', async () => {
+    it('lists the copies it can, and writes the copy left out and why, when a copy\'s document fails to open', async () => {
       const { reporter, referencesAt } = references(
         [row(STAND, modA, 'Model'), row(STAND, modB, 'Model')], { ...tracked, [key(STAND, modB)]: { rendered: STAND_RENDERED } },
       );
 
       expect(uris(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([`file:${STAND_FILE}`]);
-      expect(reporter.reports).toEqual([{ severity: 'warning', message: LEFT_OUT, detail: `${STAND} in B.esp (ModB): The file is gone.` }]);
+      expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: LEFT_OUT, detail: `${STAND} in B.esp (ModB): The file is gone.` }]);
     });
 
-    it('lists nothing, and notifies why, when mEdit cannot answer what references it', async () => {
+    it('lists nothing, and writes to the Output why, when mEdit cannot answer what references it', async () => {
       const { reporter, referencesAt } = references([], {}, { getReferencesInActiveOrTrackedPlugins: () => Promise.reject(new Error('mEdit is gone.')) });
 
       expect(await referencesAt(ASKING, AT_GUN(ASKING))).toEqual([]);
-      expect(reporter.reports).toEqual([{ severity: 'error', message: `Find All References cannot list what references ${GUN}.`, detail: 'mEdit is gone.' }]);
+      expect(reporter.shownFailures).toEqual([{ severity: 'error', message: `Find All References cannot list what references ${GUN}.`, detail: 'mEdit is gone.' }]);
     });
 
-    it('notifies once for each time it is asked, naming every copy left out', async () => {
+    it('writes a line for each copy left out, each time it is asked', async () => {
       const { reporter, referencesAt } = references([row(STAND, modB, 'Model'), row(GUN, modB, 'Template')], {});
-      const once = { severity: 'warning', message: LEFT_OUT, detail: `B.esp (ModB) holds no ${STAND}. B.esp (ModB) holds no ${GUN}.` };
+      const line = (formKey: string) => ({ severity: 'warning', message: LEFT_OUT, detail: `B.esp (ModB) holds no ${formKey}.` });
 
       await referencesAt(ASKING, AT_GUN(ASKING));
       await referencesAt(ASKING, AT_GUN(ASKING));
 
-      expect(reporter.reports).toEqual([once, once]);
+      expect(reporter.shownFailures).toEqual([line(STAND), line(GUN), line(STAND), line(GUN)]);
+      expect(reporter.reports).toEqual([]);
     });
   });
 
