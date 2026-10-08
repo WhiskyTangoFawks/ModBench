@@ -9,9 +9,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 {
     private readonly SchemaReflector _reflector = reflector;
 
-    // ADR-0012: `mirror` holds every indexed plugin; `main` holds views of the active
-    // plugins. Every writer and every projection read names `mirror.`, and a write against a view
-    // fails loudly.
+    // ADR-0012: `mirror` holds every indexed plugin; `main` holds views over it. Every writer and
+    // every projection read names `mirror.`, and a write against a view fails loudly.
     internal const string MirrorSchema = "mirror";
 
     // ADR-0012, and Mutagen's ModKey: a FormKey names its plugin by filename, so it
@@ -120,26 +119,35 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     private static string ActiveJoin(string alias, string pluginColumn, string originColumn) =>
         $"{RegisteredJoin(alias, pluginColumn, originColumn)} AND p.load_order_idx IS NOT NULL";
 
+    internal const string PluginRecordsView = "plugin_records";
+
     private static void CreatePublicViews(DuckDBConnection connection)
     {
         foreach (var relation in PublicViews)
         {
-            var scope = relation.HoldsRecords
+            CreatePublicView(connection, relation.Table, relation, relation.HoldsRecords
                 ? ActiveJoin("t", relation.PluginColumn, relation.OriginColumn)
-                : RegisteredJoin("t", relation.PluginColumn, relation.OriginColumn);
-            var loadOrderColumn = relation.DerivesLoadOrder ? ", p.load_order_idx" : "";
-            var winnerColumn = relation.DerivesWinner ? ", (w.form_key IS NOT NULL) AS is_winner" : "";
-            var winnerJoin = relation.DerivesWinner
-                ? WinnerJoin("t", relation.PluginColumn, relation.OriginColumn)
-                : "";
-            Execute(connection, $"""
-                CREATE OR REPLACE VIEW "{relation.Table}" AS
-                SELECT t.*{loadOrderColumn}{winnerColumn}
-                FROM {MirrorSchema}."{relation.Table}" t
-                {scope}
-                {winnerJoin}
-                """);
+                : RegisteredJoin("t", relation.PluginColumn, relation.OriginColumn));
         }
+
+        var records = PublicViews.Single(relation => relation.Table == "records");
+        CreatePublicView(connection, PluginRecordsView, records, RegisteredJoin("t", records.PluginColumn, records.OriginColumn));
+    }
+
+    private static void CreatePublicView(DuckDBConnection connection, string view, PublicView relation, string scope)
+    {
+        var loadOrderColumn = relation.DerivesLoadOrder ? ", p.load_order_idx" : "";
+        var winnerColumn = relation.DerivesWinner ? ", (w.form_key IS NOT NULL) AS is_winner" : "";
+        var winnerJoin = relation.DerivesWinner
+            ? WinnerJoin("t", relation.PluginColumn, relation.OriginColumn)
+            : "";
+        Execute(connection, $"""
+            CREATE OR REPLACE VIEW "{view}" AS
+            SELECT t.*{loadOrderColumn}{winnerColumn}
+            FROM {MirrorSchema}."{relation.Table}" t
+            {scope}
+            {winnerJoin}
+            """);
     }
 
     // `body` is VARCHAR, never DuckDB's JSON type, which normalizes what it stores: "the same bytes
