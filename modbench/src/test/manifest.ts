@@ -1,4 +1,5 @@
-import { FOLDER_KEY } from '../drivingLib/folderContext';
+export const FOLDER_KEY = 'modbench.folder';
+export const INSTANCE_READ_KEY = 'modbench.instanceRead';
 
 export const IN_AN_INSTANCE = `${FOLDER_KEY} == instance`;
 

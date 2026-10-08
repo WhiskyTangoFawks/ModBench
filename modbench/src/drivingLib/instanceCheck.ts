@@ -1,5 +1,10 @@
 import * as vscode from 'vscode';
-import { FOLDER_KEY, type FolderCheck } from './folderContext';
+
+// VS Code reads `key == false` as `!key`, which an unset key also satisfies, so the instance
+// check's answer is a string and an unset key means the check has not run.
+const FOLDER_KEY = 'modbench.folder';
+
+type FolderCheck = 'instance' | 'notAnInstance';
 
 function answerInstanceCheck(root: string | undefined, isInstance: (root: string) => boolean): FolderCheck {
   const answer: FolderCheck = root !== undefined && isInstance(root) ? 'instance' : 'notAnInstance';

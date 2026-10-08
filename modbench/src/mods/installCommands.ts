@@ -7,7 +7,7 @@ import {
   type InstallAccess,
 } from '../install/install';
 import { downloadArgumentOf } from '../drivingLib/argument';
-import { promptModName } from '../drivingLib/promptModName';
+import { promptModName } from './promptModName';
 import { reportFailure } from '../drivingLib/reportFailure';
 import type { Reporter } from '../ports/reporter';
 import { runModsWriting } from './gestureEntry';
