@@ -10,8 +10,8 @@ namespace MEditService.Queries.Tests.Query;
 public sealed class VersionStampConflictTests
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
-    private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
-    private static readonly PluginAddress OverridePlugin = new("Over.esp", "Data");
+    private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress OverridePlugin = new("Over.esp", PluginOrigin.DataDirectory);
 
     [Theory]
     [InlineData("VersionControl")]
@@ -89,8 +89,8 @@ public sealed class VersionStampConflictTests
         };
         var plugins = new[]
         {
-            new LoadOrderEntry("Base.esm", "Base.esm", "Data", 0, Enabled: true, Winning: true),
-            new LoadOrderEntry("Over.esp", "Over.esp", "Data", 1, Enabled: true, Winning: true),
+            new LoadOrderEntry("Base.esm", "Base.esm", PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry("Over.esp", "Over.esp", PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
         };
         var service = QueryHost.Records(
             new FakeIndex(new FakeReads(opened, rows)), FakeLoadOrder.Of(Release, plugins));

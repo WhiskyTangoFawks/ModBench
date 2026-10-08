@@ -257,7 +257,7 @@ describe('registerCreatePluginCommand', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createPlugin', { refused: true, message: 'Could not create "MyPatch.esp" — A file is already there.' });
     showInputBox.mockResolvedValue('MyPatch.esp');
-    pickOrigin('overwrite');
+    pickOrigin('overwrite/');
 
     const { run, reporter } = invoke(client, makeMo2());
     await run();
@@ -275,7 +275,7 @@ describe('registerCreatePluginCommand', () => {
       mods: [{ kind: 'mod', name: 'Holding Mod', enabled: true }],
       plugins: [
         plugin('MyPatch.esp', 'Holding Mod', '/instance/mods/Holding Mod/MyPatch.esp'),
-        plugin('MyPatch.esp', 'overwrite', '/instance/overwrite/MyPatch.esp'),
+        plugin('MyPatch.esp', 'overwrite/', '/instance/overwrite/MyPatch.esp'),
       ],
     };
     showInputBox.mockResolvedValue('MyPatch.esp');
@@ -291,9 +291,9 @@ describe('registerCreatePluginCommand', () => {
 
   it('refreshes nothing once the plugin lands, and the rows show it when the next instance value arrives', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', origin: 'overwrite' });
+    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', origin: 'overwrite/' });
     showInputBox.mockResolvedValue('MyPatch.esp');
-    showQuickPick.mockResolvedValue({ label: 'Overwrite', origin: 'overwrite' });
+    showQuickPick.mockResolvedValue({ label: 'Overwrite', origin: 'overwrite/' });
     const mo2 = makeMo2();
     const instance = new FakeInstance(mo2.instance.value);
     const tree = pluginsTreeOver(instance);
@@ -309,7 +309,7 @@ describe('registerCreatePluginCommand', () => {
 
     instance.publish(instanceValueFixture({
       ...mo2.instance.value,
-      plugins: [{ name: 'MyPatch.esp', path: '/instance/overwrite/MyPatch.esp', origin: 'overwrite', slot: 0, enabled: true, winning: true }],
+      plugins: [{ name: 'MyPatch.esp', path: '/instance/overwrite/MyPatch.esp', origin: 'overwrite/', slot: 0, enabled: true, winning: true }],
     }));
 
     expect(changes).toBeGreaterThan(0);
@@ -328,7 +328,7 @@ describe('registerRevealInExplorerCommand', () => {
   it('reveals a locked row\'s file, resolved from the row', async () => {
     const { run } = invoke((name) => Promise.resolve(`/game/Data/${name}`));
 
-    await run(new ImplicitMasterNode('Fallout4.esm', 'Data'));
+    await run(new ImplicitMasterNode('Fallout4.esm', 'Data/'));
 
     expect(executeCommand).toHaveBeenCalledWith('revealFileInOS', { fsPath: '/game/Data/Fallout4.esm' });
   });
@@ -336,7 +336,7 @@ describe('registerRevealInExplorerCommand', () => {
   it('says the game folder was not found when a locked row resolves to no file', async () => {
     const { run, reporter } = invoke(() => Promise.resolve(undefined));
 
-    await run(new ImplicitMasterNode('Fallout4.esm', 'Data'));
+    await run(new ImplicitMasterNode('Fallout4.esm', 'Data/'));
 
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Could not resolve a file location for "Fallout4.esm" — the game folder was not found.', detail: undefined,
@@ -344,7 +344,7 @@ describe('registerRevealInExplorerCommand', () => {
   });
 
   it('reveals the one selected locked row from the palette', async () => {
-    const { run } = invoke((name) => Promise.resolve(`/game/Data/${name}`), [new ImplicitMasterNode('Fallout4.esm', 'Data')]);
+    const { run } = invoke((name) => Promise.resolve(`/game/Data/${name}`), [new ImplicitMasterNode('Fallout4.esm', 'Data/')]);
 
     await run();
 
@@ -409,7 +409,7 @@ describe('registerRevealInExplorerCommand', () => {
 
 describe('pluginsCopyValueText', () => {
   const plugin = new PluginNode({ name: 'Alpha.esp', enabled: true }, 'ModA');
-  const locked = new ImplicitMasterNode('Fallout4.esm', 'Data');
+  const locked = new ImplicitMasterNode('Fallout4.esm', 'Data/');
   const ALPHA = { name: 'Alpha.esp', origin: 'ModA' };
   let record: PluginTreeNode;
   let mixed: (PluginTreeNode | PluginNode | ImplicitMasterNode)[];

@@ -16,7 +16,7 @@ public enum PutLoadOrderRefusal
 /// refusal the user cannot act on is dead UI.</summary>
 public sealed record PutLoadOrderResult(bool Applied, PutLoadOrderRefusal Refusal, string Message, long Version = 0)
 {
-    public static PutLoadOrderResult Success(long version) => new(true, PutLoadOrderRefusal.None, "", version);
+    internal static PutLoadOrderResult Success(long version) => new(true, PutLoadOrderRefusal.None, "", version);
 
-    public static PutLoadOrderResult Refused(PutLoadOrderRefusal refusal, string message) => new(false, refusal, message);
+    internal static PutLoadOrderResult Refused(PutLoadOrderRefusal refusal, string message) => new(false, refusal, message);
 }

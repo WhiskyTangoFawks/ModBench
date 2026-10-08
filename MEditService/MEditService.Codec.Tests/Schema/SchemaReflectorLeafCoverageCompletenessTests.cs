@@ -63,7 +63,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
 
             var column = schema.RecordColumns.SingleOrDefault(c => c.PropertyName == property);
             AssertCovered(regressed, $"{owner}.{property}",
-                column == null ? null : column.Field.IsArray ? column.Field.ElementSpec?.SubFields : column.Field.SubFields);
+                column == null ? null : column.Field.ElementSpec?.SubFields ?? column.Field.SubFields);
         }
 
         foreach (var (owner, property) in CoveredNestedAbstractUnionsOfSubrecordsEmbeddedInsideOtherRecordTypes)
@@ -73,7 +73,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             {
                 foreach (var column in schema.RecordColumns)
                 {
-                    var nestedFields = column.Field.IsArray ? column.Field.ElementSpec?.SubFields : column.Field.SubFields;
+                    var nestedFields = column.Field.ElementSpec?.SubFields ?? column.Field.SubFields;
                     if (nestedFields == null) continue;
                     var match = nestedFields.SingleOrDefault(f => f.Name == property);
                     if (match == null) continue;

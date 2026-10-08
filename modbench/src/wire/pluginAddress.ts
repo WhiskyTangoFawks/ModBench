@@ -2,6 +2,9 @@ import type { components } from './generated/api';
 
 export type PluginAddress = components['schemas']['PluginAddress'];
 
+// Ends in `/`, which no folder name holds, so no mod shares it. Equal to mEdit's PluginOrigin.
+export const DATA_DIRECTORY_ORIGIN = 'Data/';
+
 export function pluginAddressKey({ name, origin }: PluginAddress): string {
   return JSON.stringify([origin.toLowerCase(), name.toLowerCase()]);
 }

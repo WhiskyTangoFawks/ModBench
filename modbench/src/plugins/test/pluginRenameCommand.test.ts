@@ -161,7 +161,7 @@ describe('modbench.plugin.rename', () => {
   it('takes nothing from a row that is no plugin line', async () => {
     const { client, run } = setup();
 
-    await run(new ImplicitMasterNode('Fallout4.esm', 'Data'));
+    await run(new ImplicitMasterNode('Fallout4.esm', 'Data/'));
 
     expect(showInputBox).not.toHaveBeenCalled();
     expect(client.calls).toEqual([]);

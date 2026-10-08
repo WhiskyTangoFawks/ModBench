@@ -11,8 +11,8 @@ namespace MEditService.Queries.Tests.Query;
 public sealed class VmadCompareTests
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
-    private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
-    private static readonly PluginAddress TopPlugin = new("Top.esp", "Data");
+    private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress TopPlugin = new("Top.esp", PluginOrigin.DataDirectory);
     private const string Field = "VirtualMachineAdapter";
 
     private readonly FormKey _scriptedNpc;
@@ -55,8 +55,8 @@ public sealed class VmadCompareTests
         };
         var plugins = new[]
         {
-            new LoadOrderEntry("Base.esm", "Base.esm", "Data", 0, Enabled: true, Winning: true),
-            new LoadOrderEntry("Top.esp", "Top.esp", "Data", 1, Enabled: true, Winning: true),
+            new LoadOrderEntry("Base.esm", "Base.esm", PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry("Top.esp", "Top.esp", PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
         };
         var holder = FakeLoadOrder.Of(Release, plugins);
         _service = QueryHost.Records(new FakeIndex(new FakeReads(opened, rows)), holder);

@@ -200,7 +200,7 @@ public sealed class CompiledTree
     public ModKey ModKey => _mod.ModKey;
 
     /// <summary>The removable ESL header flag, as opposed to light by <c>.esl</c> extension.</summary>
-    public bool IsSmallMaster => _mod.IsSmallMaster;
+    internal bool IsSmallMaster => _mod.IsSmallMaster;
 
     public bool IsLight(string fileName) => PluginFlagPredicates.IsLight(_mod, fileName);
 
@@ -217,7 +217,7 @@ public sealed class CompiledTree
     /// <summary>Each record as its own document, under the schema table it belongs to.</summary>
     public IEnumerable<PluginDocument> Documents(IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         _mod.EnumerateMajorRecords().Select(record => new PluginDocument(
-            RecordTableName.Of(record, schemas), record.FormKey.ToString(), _codec.SerializeToText(record, _gameRelease)));
+            RecordTableName.Of(record.GetType(), schemas), record.FormKey.ToString(), _codec.SerializeToText(record, _gameRelease)));
 
     /// <summary>What the current codec would write for this mod, which is what the round-trip gate
     /// compares the tree against.</summary>

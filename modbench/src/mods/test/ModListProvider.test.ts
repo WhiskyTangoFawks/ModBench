@@ -84,7 +84,7 @@ describe('the tree reads as mod order', () => {
     const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
 
     expect(rowsOf(await provider.getChildren())).toEqual([
-      'mod Oldest Mod', 'mod Old Mod', 'separator Early Section', 'separator Late Section', 'overwrite Overwrite',
+      'mod Oldest Mod', 'mod Old Mod', 'separator Early Section', 'separator Late Section', 'runtimeOutput Overwrite',
     ]);
   });
 
@@ -93,7 +93,7 @@ describe('the tree reads as mod order', () => {
     provider.setViewDirection('winningAtTop');
 
     expect(rowsOf(await provider.getChildren())).toEqual([
-      'overwrite Overwrite', 'separator Late Section', 'separator Early Section', 'mod Old Mod', 'mod Oldest Mod',
+      'runtimeOutput Overwrite', 'separator Late Section', 'separator Early Section', 'mod Old Mod', 'mod Oldest Mod',
     ]);
   });
 
@@ -140,7 +140,7 @@ describe('a line modlist.txt repeats, which MO2 reads as nothing and VS Code cou
     const gear = expectInstanceOf(roots.find((n) => n.kind === 'separator'), SeparatorNode);
     const children = await provider.getChildren(gear);
 
-    expect(rowsOf(roots)).toEqual(['mod Boots', 'separator Gear', 'overwrite Overwrite']);
+    expect(rowsOf(roots)).toEqual(['mod Boots', 'separator Gear', 'runtimeOutput Overwrite']);
     expect(rowsOf(children)).toEqual(['mod Armor']);
     expect(expectInstanceOf(children[0], ModNode).checkboxState).toBe(TreeItemCheckboxState.Checked);
     expect(provider.description()).toBe('2 / 2');
@@ -295,7 +295,7 @@ describe('a click on a separator, a mod, Overwrite or a folder only selects', ()
     const children = await Promise.all(roots.map((n) => provider.getChildren(n)));
     const rows = [...roots, ...children.flat()];
 
-    expect(rows.map((n) => n.kind).sort()).toEqual(['folder', 'mod', 'mod', 'overwrite', 'separator']);
+    expect(rows.map((n) => n.kind).sort()).toEqual(['folder', 'mod', 'mod', 'runtimeOutput', 'separator']);
     expect(rows.filter((n) => n.command !== undefined)).toEqual([]);
   });
 });
@@ -470,7 +470,7 @@ describe('ModListProvider', () => {
 
   it('renders a genuinely empty modlist immediately, as the Overwrite row alone, when the first landed value already carries none', async () => {
     const provider = makeProvider([], { instance: new FakeInstance(valueOf([]), SEQUENCE_ALREADY_LOADED) });
-    expect(rowsOf(await provider.getChildren())).toEqual(['overwrite Overwrite']);
+    expect(rowsOf(await provider.getChildren())).toEqual(['runtimeOutput Overwrite']);
   });
 
   describe('setFilter — grouping on (default)', () => {
@@ -531,7 +531,7 @@ describe('ModListProvider', () => {
       const provider = makeProvider(entries);
       provider.setFilter('alpha', false);
 
-      expect(rowsOf(await provider.getChildren())).toEqual(['mod Alpha Child', 'mod Alpha', 'overwrite Overwrite']);
+      expect(rowsOf(await provider.getChildren())).toEqual(['mod Alpha Child', 'mod Alpha', 'runtimeOutput Overwrite']);
     });
   });
 
@@ -701,7 +701,7 @@ describe('ModListProvider', () => {
       provider.setFilter('alpha', false);
       const roots = await provider.getChildren();
 
-      expect(rowsOf(roots)).toEqual(['overwrite Overwrite', 'mod Alpha', 'mod Alpha Child', 'mod Alpha Other']);
+      expect(rowsOf(roots)).toEqual(['runtimeOutput Overwrite', 'mod Alpha', 'mod Alpha Child', 'mod Alpha Other']);
     });
 
     it('the direction applies to the grouped, filtered list', async () => {
@@ -715,7 +715,7 @@ describe('ModListProvider', () => {
       provider.setFilter('alpha', true);
       const roots = await provider.getChildren();
 
-      expect(rowsOf(roots)).toEqual(['overwrite Overwrite', 'separator Group A', 'mod Alpha']);
+      expect(rowsOf(roots)).toEqual(['runtimeOutput Overwrite', 'separator Group A', 'mod Alpha']);
       const sepNode = expectInstanceOf(roots[1], SeparatorNode);
       const children = await provider.getChildren(sepNode);
       expect(children.map((n) => n.label)).toEqual(['Alpha Child', 'Alpha Other']);
@@ -788,7 +788,7 @@ describe('ModListProvider', () => {
       expect(row.checkboxState).toBeUndefined();
       expect(row.command).toBeUndefined();
       expect(row.resourceUri).toBeUndefined();
-      expect(row.contextValue).toBe('overwrite');
+      expect(row.contextValue).toBe('runtimeOutput');
     });
 
     it('cannot be dragged', async () => {

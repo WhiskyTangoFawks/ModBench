@@ -340,15 +340,15 @@ public sealed class SourceUnitNotFoundException : InvalidOperationException
     public static string NotCarried(string relativePath, string formKey) =>
         $"{relativePath} was found holding {formKey}, but its own text does not carry it. {DefectOrOutsideChange}";
 
-    public SourceUnitNotFoundException() : base("No document holds the record.")
+    internal SourceUnitNotFoundException() : base("No document holds the record.")
     {
     }
 
-    public SourceUnitNotFoundException(string message) : base(message)
+    internal SourceUnitNotFoundException(string message) : base(message)
     {
     }
 
-    public SourceUnitNotFoundException(string message, Exception innerException) : base(message, innerException)
+    internal SourceUnitNotFoundException(string message, Exception innerException) : base(message, innerException)
     {
     }
 }

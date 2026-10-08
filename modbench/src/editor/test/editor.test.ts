@@ -106,6 +106,7 @@ import { ReferencedByTreeProvider } from '../ReferencedByTreeProvider';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { comparisonOf } from '../../test/comparison';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
+import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 
 const COPY_PLUGIN = { name: 'A.esp', origin: 'ModA' };
 const renderedUri = (formKey: string, fileName: string) => vscode.Uri.from({
@@ -860,7 +861,7 @@ describe('what a record tab\'s webview posts', () => {
       ['an active plugin in an untracked mod', activeA, 'ModB', { ModB: 'untracked' }],
       ['a disabled plugin in an untracked mod', inactiveA, 'ModB', { ModB: 'untracked' }],
       ['a plugin in a mod whose folder spells the origin in another case', activeA, 'modb', { modb: 'untracked' }],
-      ['a plugin in the game folder', activeA, 'Data', {}],
+      ['a plugin in the game folder', activeA, DATA_DIRECTORY_ORIGIN, {}],
       ['a plugin in Overwrite', activeA, 'Overwrite', {}],
     ])('is answered with the repository state of the mod each origin names, for %s', async (_what, plugins, origin, modsByOrigin) => {
       const mEdit = client();

@@ -167,8 +167,8 @@ public sealed class CompilePluginLinkTests : IDisposable
         internal const string Fault = "the link cache could not be built";
 
         public override LinkAnswers LinkTargets(
-            IReadOnlyList<ModPath> loadOrder,
-            GameRelease gameRelease,
+            LoadOrderSnapshot loadOrder,
+            RegisteredPlugin compiled,
             IReadOnlyDictionary<string, RecordTableSchema> schemas,
             IReadOnlyCollection<string> formKeys) =>
             throw new InvalidOperationException(Fault);

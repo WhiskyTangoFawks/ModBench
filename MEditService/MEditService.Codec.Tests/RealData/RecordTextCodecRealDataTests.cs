@@ -46,23 +46,33 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
         var deepParsedText = codec.SerializeToText(deepParsedWeapon, GameRelease.Fallout4);
         swSerializeDeep.Stop();
 
-        var swDeserialize = Stopwatch.StartNew();
-        var roundTripped = (Weapon)RecordTextCodec.DeserializeText(
-            typeof(Weapon), codec.RoundTrip(deepParsedText, GameRelease.Fallout4, "weap"), GameRelease.Fallout4);
-        swDeserialize.Stop();
+        var swRoundTrip = Stopwatch.StartNew();
+        var roundTripped = codec.RoundTrip(deepParsedText, GameRelease.Fallout4, "weap");
+        swRoundTrip.Stop();
 
         output.WriteLine($"AC4: serialize (overlay) {swSerializeOverlay.ElapsedMilliseconds} ms, " +
             $"serialize (deep parse) {swSerializeDeep.ElapsedMilliseconds} ms, " +
-            $"deserialize {swDeserialize.ElapsedMilliseconds} ms " +
+            $"round trip {swRoundTrip.ElapsedMilliseconds} ms " +
             "(129 ms serialize / 55 ms deserialize measured on a 20 MB plugin).");
 
         Assert.Equal(deepParsedText, overlayText);
+        Assert.Equal(deepParsedText, roundTripped);
+    }
 
-        var mask = deepParsedWeapon.GetEqualsMask(roundTripped);
-        var leaves = MaskInspector.CountLeaves(mask).ToList();
-        var divergent = leaves.Where(l => !l.Value).Select(l => l.Path).ToList();
+    [Fact]
+    public async Task ARealWeapon_ReadsBackFieldFaithful()
+    {
+        var deepParsed = (IFallout4ModGetter)ModFactory.ImportSetter(
+            new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
+            GameRelease.Fallout4);
+        var weapon = deepParsed.Weapons.Single(w => w.EditorID == AffectedWeaponEditorId);
+        var mod = new Fallout4Mod(deepParsed.ModKey, Fallout4Release.Fallout4);
+        mod.Weapons.Add(weapon.DeepCopy());
 
+        var readBack = await ReadBack.ThroughTheWholeModDoor<IWeaponGetter>(mod, weapon);
+
+        var leaves = MaskInspector.CountLeaves(weapon.GetEqualsMask(readBack)).ToList();
         Assert.NotEmpty(leaves);
-        Assert.Empty(divergent);
+        Assert.Empty(leaves.Where(l => !l.Value).Select(l => l.Path));
     }
 }

@@ -32,7 +32,7 @@ const aliasesCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'NoConflict',
   overrides: [
     compareOverride({
-      formKey: '000001:Quest548.esp', plugin: 'MyMod.esp', origin: 'Data',
+      formKey: '000001:Quest548.esp', plugin: 'MyMod.esp', origin: 'Data/',
       isWinner: true, editorId: 'Quest548',
       fields: [{ metadata: aliasesMeta, value: [{ MutagenObjectType: 'QuestLocationAlias', name: 'OriginalLoc' }] }],
       conflictThis: 'Master',

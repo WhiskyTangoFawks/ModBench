@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.LoadOrder;
 using MEditService.Queries.Tests.TestSupport;
 using Mutagen.Bethesda;
 
@@ -23,7 +24,7 @@ public class ArrayChildDiffTests
     private static RecordDetail MakeRecord(string plugin, int loadOrder,
         FieldMetadata meta, object? value) =>
         new("000001:Test.esp", plugin, loadOrder, IsWinner: false, null,
-            [new FieldValue(meta, value)], "Data", RecordType: "Npc");
+            [new FieldValue(meta, value)], PluginOrigin.DataDirectory, RecordType: "Npc");
 
     private static IReadOnlyList<FieldDiff> RequireChildren(FieldDiff diff) =>
         diff.Children ?? throw new InvalidOperationException($"Expected '{diff.FieldName}' to have children.");

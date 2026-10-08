@@ -71,10 +71,7 @@ public sealed class DerivedContainerMembersTests
     [Fact]
     public void EmbeddedSlotsAndElementTypeBySlot_AreKeyedByGameAsWellAsName_BothCarryingTheSameThreePartKey()
     {
-        var quest = RecordTypes().First(t => t.Name == "Quest");
-
-        Assert.Contains(("Quest", "Scenes"), ContainerChildFields.EmbeddedSlotsFor(quest));
-        Assert.Empty(ContainerChildFields.EmbeddedSlotsFor(typeof(object)));
+        Assert.Contains(("Quest", "Scenes"), ContainerChildFields.EmbeddedSlotsFor(GameCategory.Fallout4));
     }
 
     private static bool EnumeratesAsMajorRecordsByMutagensOwnRegistration(IMod mod, Type element)

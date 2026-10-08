@@ -5,6 +5,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -181,8 +182,8 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     private sealed class FaultingOnClosingAMasterAskedForACell() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override IPluginRecordLookup OpenRecordLookup(
-            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-            new Faulting(base.OpenRecordLookup(modPath, gameRelease, schemas));
+            RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+            new Faulting(base.OpenRecordLookup(plugin, gameRelease, schemas));
 
         private sealed class Faulting(IPluginRecordLookup inner) : IPluginRecordLookup
         {
@@ -212,11 +213,11 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     private sealed class UntrackingAModWhenAMasterIsRead(string modFolder) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override IPluginRecordLookup OpenRecordLookup(
-            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+            RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas)
         {
             var repository = Path.Combine(modFolder, ".git");
             if (Directory.Exists(repository)) Directory.Move(repository, Path.Combine(modFolder, ".git-untracked"));
-            return base.OpenRecordLookup(modPath, gameRelease, schemas);
+            return base.OpenRecordLookup(plugin, gameRelease, schemas);
         }
     }
 

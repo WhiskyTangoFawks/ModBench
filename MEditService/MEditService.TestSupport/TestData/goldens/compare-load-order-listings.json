@@ -8,7 +8,7 @@
       "hasParseFailure": false,
       "isWinner": false,
       "loadOrderIndex": 0,
-      "origin": "Data",
+      "origin": "Data/",
       "parseDiagnosis": null,
       "plugin": "Base.esm",
       "workingTreeState": "None"
@@ -21,7 +21,7 @@
       "hasParseFailure": false,
       "isWinner": false,
       "loadOrderIndex": 1,
-      "origin": "Data",
+      "origin": "Data/",
       "parseDiagnosis": null,
       "plugin": "Mid.esp",
       "workingTreeState": "None"
@@ -34,7 +34,7 @@
       "hasParseFailure": false,
       "isWinner": true,
       "loadOrderIndex": 2,
-      "origin": "Data",
+      "origin": "Data/",
       "parseDiagnosis": null,
       "plugin": "Top.esp",
       "workingTreeState": "None"
@@ -47,7 +47,7 @@
       "hasParseFailure": false,
       "isWinner": true,
       "loadOrderIndex": 1,
-      "origin": "Data",
+      "origin": "Data/",
       "parseDiagnosis": null,
       "plugin": "Mid.esp",
       "workingTreeState": "None"
@@ -60,7 +60,7 @@
       "hasParseFailure": false,
       "isWinner": true,
       "loadOrderIndex": 0,
-      "origin": "Data",
+      "origin": "Data/",
       "parseDiagnosis": null,
       "plugin": "Base.esm",
       "workingTreeState": "None"
@@ -141,7 +141,7 @@
       "masterIssues": [],
       "masters": [],
       "name": "Base.esm",
-      "origin": "Data",
+      "origin": "Data/",
       "recordCount": 4
     },
     {
@@ -156,7 +156,7 @@
         "Base.esm"
       ],
       "name": "Mid.esp",
-      "origin": "Data",
+      "origin": "Data/",
       "recordCount": 3
     },
     {
@@ -171,7 +171,7 @@
         "Base.esm"
       ],
       "name": "Top.esp",
-      "origin": "Data",
+      "origin": "Data/",
       "recordCount": 2
     }
   ],
@@ -180,7 +180,7 @@
       "editorId": "ConflictedNPC",
       "fieldPath": "Race",
       "formKey": "000800:Base.esm",
-      "origin": "Data",
+      "origin": "Data/",
       "plugin": "Base.esm",
       "recordType": "npc_",
       "recordTypeName": "Non-Player Character"
@@ -189,7 +189,7 @@
       "editorId": "ConflictedNPC",
       "fieldPath": "Race",
       "formKey": "000800:Base.esm",
-      "origin": "Data",
+      "origin": "Data/",
       "plugin": "Mid.esp",
       "recordType": "npc_",
       "recordTypeName": "Non-Player Character"
@@ -199,35 +199,35 @@
     "000800:Base.esm": {
       "editorId": "ConflictedNPC",
       "isWinner": true,
-      "origin": "Data",
+      "origin": "Data/",
       "plugin": "Top.esp",
       "recordType": "npc_"
     },
     "000800:Mid.esp": {
       "editorId": "InjectedNPC",
       "isWinner": true,
-      "origin": "Data",
+      "origin": "Data/",
       "plugin": "Mid.esp",
       "recordType": "npc_"
     },
     "000801:Base.esm": {
       "editorId": "UnchangedWeapon",
       "isWinner": true,
-      "origin": "Data",
+      "origin": "Data/",
       "plugin": "Mid.esp",
       "recordType": "weap"
     },
     "000802:Base.esm": {
       "editorId": "SoleNPC",
       "isWinner": true,
-      "origin": "Data",
+      "origin": "Data/",
       "plugin": "Base.esm",
       "recordType": "npc_"
     },
     "000803:Base.esm": {
       "editorId": "ConflictedRecipe",
       "isWinner": true,
-      "origin": "Data",
+      "origin": "Data/",
       "plugin": "Top.esp",
       "recordType": "cobj"
     }

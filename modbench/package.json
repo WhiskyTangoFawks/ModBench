@@ -1115,7 +1115,7 @@
         },
         {
           "command": "modbench.mod.openFolder",
-          "when": "view == modbench.modList && viewItem == overwrite",
+          "when": "view == modbench.modList && viewItem == runtimeOutput",
           "group": "1_open@1"
         },
         {

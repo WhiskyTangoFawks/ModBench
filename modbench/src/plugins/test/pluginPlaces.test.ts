@@ -16,7 +16,7 @@ const value = instanceValueFixture({
   ],
   plugins: [
     plugin('Held.esp', 'Losing Mod', join('/instance', 'mods', 'Losing Mod', 'Held.esp')),
-    plugin('Other.esp', 'overwrite', join('/instance', 'overwrite', 'Other.esp')),
+    plugin('Other.esp', 'overwrite/', join('/instance', 'overwrite', 'Other.esp')),
   ],
   paths: {
     overwriteDir: join('/instance', 'overwrite'),
@@ -31,11 +31,11 @@ const value = instanceValueFixture({
 
 describe('pluginPlaces', () => {
   it('lists the enabled mods first, then Overwrite, and no separator or disabled mod', () => {
-    expect(pluginPlaces(value, 'New.esp').map((p) => p.origin)).toEqual(['Winning Mod', 'Losing Mod', 'overwrite']);
+    expect(pluginPlaces(value, 'New.esp').map((p) => p.origin)).toEqual(['Winning Mod', 'Losing Mod', 'overwrite/']);
   });
 
   it('leaves out only a place that already holds a plugin of that name, whatever its case', () => {
-    expect(pluginPlaces(value, 'held.ESP').map((p) => p.origin)).toEqual(['Winning Mod', 'overwrite']);
+    expect(pluginPlaces(value, 'held.ESP').map((p) => p.origin)).toEqual(['Winning Mod', 'overwrite/']);
     expect(pluginPlaces(value, 'Other.esp').map((p) => p.origin)).toEqual(['Winning Mod', 'Losing Mod']);
   });
 });
@@ -50,7 +50,7 @@ describe('holdsPlugin', () => {
 
 describe('placeFolder', () => {
   it("answers Overwrite's folder and an enabled mod's folder as the value names them", () => {
-    expect(placeFolder(value, 'overwrite')).toEqual({ folder: join('/instance', 'overwrite') });
+    expect(placeFolder(value, 'overwrite/')).toEqual({ folder: join('/instance', 'overwrite') });
     expect(placeFolder(value, 'Winning Mod')).toEqual({ folder: join('/instance', 'mods', 'Winning Mod') });
   });
 
@@ -64,6 +64,6 @@ describe('placeFolder', () => {
 
   it('answers Overwrite as unread while the value names no folder for it', () => {
     const unread = instanceValueFixture({ paths: { ...value.paths, overwriteDir: undefined } });
-    expect(placeFolder(unread, 'overwrite')).toEqual({ lost: 'unread' });
+    expect(placeFolder(unread, 'overwrite/')).toEqual({ lost: 'unread' });
   });
 });

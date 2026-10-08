@@ -57,7 +57,7 @@ public sealed class StoreRebuildTests : IDisposable
     {
         Reconcile(_fixture.InstanceRoot);
         Assert.Equal(1, _opens.OpenedTotal);
-        var held = _holder.Version;
+        var held = _holder.Held?.Version;
 
         await _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot).Refill;
 

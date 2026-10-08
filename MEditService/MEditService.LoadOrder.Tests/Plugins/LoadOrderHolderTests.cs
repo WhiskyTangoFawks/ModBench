@@ -29,7 +29,7 @@ public sealed class LoadOrderHolderTests
         var holder = new LoadOrderHolder();
         holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [], [], []));
 
-        holder.Apply(LoadOrderSnapshot.Empty);
+        holder.Apply(new LoadOrderSnapshot(string.Empty, null, default, [], [], []));
 
         Assert.Throws<NoLoadOrderException>(() => holder.Require());
     }
@@ -89,7 +89,7 @@ public sealed class LoadOrderHolderTests
 
         Assert.Equal([applied], arrivals);
         Assert.Equal(applied, again);
-        Assert.Equal(applied, holder.Version);
+        Assert.Equal(applied, holder.Held?.Version);
     }
 
     [Fact]

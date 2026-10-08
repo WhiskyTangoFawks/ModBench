@@ -261,7 +261,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
         using var index = LoadedIndex();
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var record = index.RequireReads().GetDocument(formKey, new PluginAddress(TestPluginFixture.PluginName, "Data"));
+        var record = index.RequireReads().GetDocument(formKey, new PluginAddress(TestPluginFixture.PluginName, PluginOrigin.DataDirectory));
 
         Assert.NotNull(record);
         Assert.Equal(TestPluginFixture.PluginName, record.Plugin.Name);
@@ -351,7 +351,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void ACountOfAPluginsType_IsItsRecordCount()
     {
         using var index = LoadedIndex();
-        var count = index.RequireReads().CountOf(new PluginAddress(TestPluginFixture.PluginName, "Data"), "npc_");
+        var count = index.RequireReads().CountOf(new PluginAddress(TestPluginFixture.PluginName, PluginOrigin.DataDirectory), "npc_");
         Assert.Equal(TestPluginFixture.RecordCount, count);
     }
 
@@ -359,7 +359,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void ACountOfAnUnknownPlugin_IsZero()
     {
         using var index = LoadedIndex();
-        var count = index.RequireReads().CountOf(new PluginAddress("NonExistent.esp", "Data"), "npc_");
+        var count = index.RequireReads().CountOf(new PluginAddress("NonExistent.esp", PluginOrigin.DataDirectory), "npc_");
         Assert.Equal(0, count);
     }
 
@@ -383,7 +383,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void AKnownFormKey_ResolvesToItsRecordTypeAndEditorId()
     {
         using var index = LoadedIndex();
-        var entry = index.RequireReads().Resolve(_fixture.Npc1FormKey.ToString());
+        var entry = index.RequireReads().LinkResolver(_fixture.Npc1FormKey.ToString())(_fixture.Npc1FormKey.ToString());
         Assert.NotNull(entry);
         Assert.Equal("npc_", entry.Value.RecordType);
         Assert.Equal("TestNPC01", entry.Value.EditorId);
@@ -393,7 +393,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void AnUnknownFormKey_ResolvesToNothing()
     {
         using var index = LoadedIndex();
-        var entry = index.RequireReads().Resolve("FFFFFF:Unknown.esp");
+        var entry = index.RequireReads().LinkResolver("FFFFFF:Unknown.esp")("FFFFFF:Unknown.esp");
         Assert.Null(entry);
     }
 

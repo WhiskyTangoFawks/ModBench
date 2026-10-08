@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -73,7 +74,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
         var recorded = repository.WriteBinary(Test, "SECOND", () =>
         {
             written = true;
-            File.WriteAllText(RefLockOfTest(modFolder), "");
+            LastWriteRecord.RefuseRefUpdates(modFolder);
         });
 
         Assert.False(recorded);
@@ -87,7 +88,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
         using var modFolder = new ScratchDirectory("medit-last-written-");
         var repository = TrackedOver(modFolder);
         repository.WriteBinary(Test, "FIRST", () => { });
-        File.WriteAllText(RefLockOfTest(modFolder), "");
+        LastWriteRecord.RefuseRefUpdates(modFolder);
         var written = false;
 
         var failure = Assert.Throws<GitCommandFailedException>(
@@ -97,9 +98,6 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
         Assert.DoesNotContain(modFolder, failure.Message, StringComparison.Ordinal);
         Assert.Equal(["FIRST"], repository.LastWrittenBinarySha256s(Test));
     }
-
-    private static string RefLockOfTest(string modFolder) =>
-        Path.Combine(modFolder, ".git", "refs", "medit", "last-compile", "Test.esp.lock");
 
     [Fact]
     public void ThePluginsOfOneTrack_AnswerOnlyTheirOwnBinaries()

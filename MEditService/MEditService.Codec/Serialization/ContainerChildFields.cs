@@ -33,7 +33,7 @@ public static class ContainerChildFields
 
     /// <summary>As <see cref="EmbeddedSlotsFor(GameCategory)"/>, from a type's own assembly. Empty
     /// for an assembly outside every game this build references.</summary>
-    public static IReadOnlySet<(string ParentType, string Slot)> EmbeddedSlotsFor(Type anyTypeInTheGame) =>
+    internal static IReadOnlySet<(string ParentType, string Slot)> EmbeddedSlotsFor(Type anyTypeInTheGame) =>
         ContainerMembers.CategoryOf(anyTypeInTheGame.Assembly) is { } category ? EmbeddedSlotsFor(category) : EmptyEmbeddedSlots;
 
     /// <summary>Whether a record of <paramref name="recordType"/> has child slots at all: the copy
@@ -51,7 +51,7 @@ public static class ContainerChildFields
     /// <summary>A binary overlay's runtime type is "NameBinaryOverlay" and a schema's record type
     /// its "INameGetter" interface; normalized once so ingest, Track and a document read key off the
     /// same name.</summary>
-    public static string NormalizedTypeName(Type recordType)
+    internal static string NormalizedTypeName(Type recordType)
     {
         var name = recordType.Name;
         if (name.EndsWith(OverlaySuffix, StringComparison.Ordinal)) return name[..^OverlaySuffix.Length];

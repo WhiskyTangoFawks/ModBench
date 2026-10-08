@@ -1195,7 +1195,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   });
 
   it('Overwrite menu: open folder', () => {
-    expect(placed(rowMenu('viewItem == overwrite'))).toEqual([['modbench.mod.openFolder', '1_open']]);
+    expect(placed(rowMenu('viewItem == runtimeOutput'))).toEqual([['modbench.mod.openFolder', '1_open']]);
   });
 
   const menuOn = (viewItem: string): [string, string][] =>

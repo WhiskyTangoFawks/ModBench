@@ -1,5 +1,6 @@
 using System.Text;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -20,9 +21,8 @@ public static class TreeSaves
     {
         var adapter = TestAdapters.Mutagen();
         var name = Path.GetFileName(pluginPath);
-        var modPath = new ModPath(ModKey.FromFileName(name), pluginPath);
-        var (files, missingStrings) = await adapter.ReadSourceAsync(
-            modPath, name, GameRelease.Fallout4, new PluginStrings(null, Path.GetDirectoryName(pluginPath) ?? throw new ArgumentException("No folder.", nameof(pluginPath))));
+        var (files, missingStrings) = await adapter.ReadSourceOfAsync(
+            new RegisteredPlugin(name, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game), GameRelease.Fallout4, new PluginStrings(null, Path.GetDirectoryName(pluginPath) ?? throw new ArgumentException("No folder.", nameof(pluginPath))));
         if (missingStrings is not null) throw new InvalidOperationException($"{name} declares {missingStrings}, which the disk lacks.");
 
         var edited = files.Select(file => new TreeFile(
@@ -36,6 +36,6 @@ public static class TreeSaves
         if (tree is null) throw new InvalidOperationException($"{name}'s source tree will not compile: {diagnosis}", error);
 
         return await tree.PrepareSaveAsync(
-            pluginPath, loadOrder ?? adapter.ReadContent(modPath, GameRelease.Fallout4).Content.Masters);
+            pluginPath, loadOrder ?? adapter.ReadContent(new ModPath(ModKey.FromFileName(name), pluginPath), GameRelease.Fallout4).Content.Masters);
     }
 }

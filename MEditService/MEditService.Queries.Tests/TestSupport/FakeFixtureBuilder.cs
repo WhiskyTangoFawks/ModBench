@@ -21,14 +21,14 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
 {
     private readonly List<(string Name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> Configure, string Origin)> _plugins = [];
 
-    internal FakeFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, string origin = "Data")
+    internal FakeFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, string origin = PluginOrigin.DataDirectory)
     {
         _plugins.Add((name, configure is null ? (_, _) => { } : (mod, _) => configure(mod), origin));
         return this;
     }
 
     internal FakeFixtureBuilder WithPlugin(
-        string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, string origin = "Data")
+        string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, string origin = PluginOrigin.DataDirectory)
     {
         _plugins.Add((name, configure, origin));
         return this;
@@ -64,7 +64,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
                 var key = new PluginAddress(name, origin);
                 var masters = written.ModHeader.MasterReferences.Select(m => m.Master.FileName.String).ToList();
                 var records = written.EnumerateMajorRecords()
-                    .Select(r => (Record: r, RecordType: RecordTableName.Of(r, schemas)))
+                    .Select(r => (Record: r, RecordType: RecordTableName.Of(r.GetType(), schemas)))
                     .Where(t => t.RecordType.Length > 0)
                     .ToList();
 

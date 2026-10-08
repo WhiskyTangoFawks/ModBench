@@ -100,15 +100,15 @@ public sealed class GitUnavailableException : Exception
 
     // RCS1194: the three standard exception constructors; EnsureOnPath throws through the
     // Exception?-taking one below, which pins the one actionable message.
-    public GitUnavailableException() : base(DefaultMessage)
+    internal GitUnavailableException() : base(DefaultMessage)
     {
     }
 
-    public GitUnavailableException(string message) : base(message)
+    internal GitUnavailableException(string message) : base(message)
     {
     }
 
-    public GitUnavailableException(string message, Exception innerException) : base(message, innerException)
+    internal GitUnavailableException(string message, Exception innerException) : base(message, innerException)
     {
     }
 
@@ -121,15 +121,15 @@ public sealed class GitUnavailableException : Exception
 /// own.</summary>
 public sealed class GitCommandFailedException : InvalidOperationException
 {
-    public GitCommandFailedException()
+    internal GitCommandFailedException()
     {
     }
 
-    public GitCommandFailedException(string message) : base(message)
+    internal GitCommandFailedException(string message) : base(message)
     {
     }
 
-    public GitCommandFailedException(string message, Exception innerException) : base(message, innerException)
+    internal GitCommandFailedException(string message, Exception innerException) : base(message, innerException)
     {
     }
 }

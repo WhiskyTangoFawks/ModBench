@@ -18,7 +18,7 @@ public sealed class ArchitectureTests
     [
         typeof(RecordTextCodec).Assembly,
         typeof(TrackHandler).Assembly,
-        typeof(RecordEditRequest).Assembly,
+        typeof(Program).Assembly,
         typeof(IQueryIndex).Assembly,
         typeof(LoadOrderSnapshot).Assembly,
         typeof(IPluginAdapter).Assembly,
@@ -30,14 +30,14 @@ public sealed class ArchitectureTests
     private static readonly (Assembly Assembly, string Namespace)[] ReadModelAndWireRecordNamespaces =
     [
         (typeof(IRecordQueryService).Assembly, "MEditService.Queries"),
-        (typeof(RecordEditRequest).Assembly, "MEditService.Http"),
+        (typeof(Program).Assembly, "MEditService.Http"),
     ];
 
     [Fact]
     public void PluginIdentity_TravelsAsAPluginAddressOnEveryInterface_AndAsNameAndOriginTogetherOnEveryDto()
     {
         var offenders = new List<string>();
-        foreach (var type in EveryBoxAssembly.SelectMany(box => box.GetExportedTypes()).Where(t => t.IsInterface))
+        foreach (var type in EveryBoxAssembly.SelectMany(box => box.GetTypes()).Where(t => t.IsInterface))
         {
             foreach (var method in type.GetMethods())
             {
@@ -47,7 +47,7 @@ public sealed class ArchitectureTests
             offenders.AddRange(StringPlugins(type.GetProperties().Select(p => (p.Name, p.PropertyType)).ToArray())
                 .Select(p => $"{type.Name}.{p}"));
         }
-        foreach (var record in ReadModelAndWireRecordNamespaces.SelectMany(box => box.Assembly.GetExportedTypes()
+        foreach (var record in ReadModelAndWireRecordNamespaces.SelectMany(box => box.Assembly.GetTypes()
             .Where(t => t.Namespace == box.Namespace && t.GetMethod("<Clone>$") != null)))
         {
             var primary = record.GetConstructors().MaxBy(c => c.GetParameters().Length)

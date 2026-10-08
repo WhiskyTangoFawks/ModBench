@@ -22,13 +22,13 @@ public interface IPluginAdapter
     /// <summary>The same plugin for a caller asking about a handful of records by key rather than
     /// streaming all of them. Owns the open until the result is disposed.</summary>
     IPluginRecordLookup OpenRecordLookup(
-        ModPath modPath,
+        RegisteredPlugin plugin,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas);
 
     /// <summary>Whether the plugin's file opens for reading right now — it is there, and no other
     /// tool holds it against a reader. Neither a read of its bytes nor a parse.</summary>
-    bool CanRead(ModPath modPath);
+    bool CanRead(RegisteredPlugin plugin);
 
     /// <summary>What a plugin's own binary says about itself, which is what the Index holds for it.
     /// <c>Unreachable</c> is the throw that stopped a full walk: the count is a readout, not a
@@ -36,12 +36,12 @@ public interface IPluginAdapter
     (PluginContent Content, Exception? Unreachable) ReadContent(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null);
 
-    /// <summary>What each of <paramref name="formKeys"/> names in the files at
-    /// <paramref name="loadOrder"/>, as the game resolves it, beside the unreadable files. The link
-    /// cache is built and dropped here (ADR-0005).</summary>
+    /// <summary>What each of <paramref name="formKeys"/> names, as the game resolves it, in the files
+    /// it loads (ADR-0013) with <paramref name="compiled"/> among them, beside the unreadable files.
+    /// The link cache lives only here (ADR-0005).</summary>
     LinkAnswers LinkTargets(
-        IReadOnlyList<ModPath> loadOrder,
-        GameRelease gameRelease,
+        LoadOrderSnapshot loadOrder,
+        RegisteredPlugin compiled,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         IReadOnlyCollection<string> formKeys);
 
@@ -66,15 +66,14 @@ public interface IPluginAdapter
     /// <summary>A plugin's binary read as the source tree it would commit.
     /// <c>MissingStringsFile</c> names the localization file it declares and the disk has not, in
     /// which case there are no files.</summary>
-    Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceAsync(
-        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
-        CancellationToken cancel = default);
+    Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceOfAsync(
+        RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default);
 
-    /// <summary>How the plugin at <paramref name="recompiledPath"/> differs from the one at
-    /// <paramref name="modPath"/> as the codec models them; null when they are model-identical. Both
-    /// are reparsed, since only written bytes show what the writer does.</summary>
-    string? DivergenceBetween(
-        ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings);
+    /// <summary>How the plugin at <paramref name="recompiledPath"/> differs from the named one as the
+    /// codec models them; null when they are model-identical. Both are reparsed, since only written
+    /// bytes show what the writer does.</summary>
+    string? DivergenceFrom(
+        string pluginFileName, string pluginFilePath, string recompiledPath, GameRelease gameRelease, PluginStrings strings);
 
     /// <summary>How the file at <paramref name="recompiledPath"/> differs at the byte level from the one
     /// at <paramref name="originalPath"/>. Throws when either cannot be read.</summary>

@@ -38,14 +38,14 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
 
     public RecordIdentity? IdentityOf(string formKey) =>
         Resolve(formKey) is { } record
-            ? new RecordIdentity(record.FormKey.ToString(), RecordTableName.Of(record, _schemas), record.EditorID)
+            ? new RecordIdentity(record.FormKey.ToString(), RecordTableName.Of(record.GetType(), _schemas), record.EditorID)
             : null;
 
     public long? RecordFlagsOf(string formKey) => Resolve(formKey)?.MajorRecordFlagsRaw;
 
     public string? TextOf(string formKey) =>
         Resolve(formKey) is { } record
-            ? Encoding.UTF8.GetString(DeletedRecord.Serialize(_codec, record, _schemas[RecordTableName.Of(record, _schemas)], _mod.GameRelease, _file))
+            ? Encoding.UTF8.GetString(DeletedRecord.Serialize(_codec, record, _schemas[RecordTableName.Of(record.GetType(), _schemas)], _mod.GameRelease, _file))
             : null;
 
     public DocumentContainment? ContainmentOf(string formKey) =>
@@ -92,7 +92,7 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
         var containments = new Dictionary<string, DocumentContainment>(StringComparer.Ordinal);
         foreach (var record in _mod.EnumerateMajorRecords())
         {
-            var parentType = RecordTableName.Of(record, _schemas);
+            var parentType = RecordTableName.Of(record.GetType(), _schemas);
             foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(record))
             {
                 containments.TryAdd(

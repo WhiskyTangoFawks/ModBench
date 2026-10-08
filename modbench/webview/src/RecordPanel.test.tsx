@@ -1042,12 +1042,12 @@ describe('RecordPanel — a plugin mEdit cannot read', () => {
   });
 
   it('says it shows the last good read, with the reason, when a plugin the panel shows cannot be read', async () => {
-    renderPanel(compareResult, { loadFailures: [{ name: 'MyMod.esp', origin: 'Data', reason: 'truncated' }] });
+    renderPanel(compareResult, { loadFailures: [{ name: 'MyMod.esp', origin: 'Data/', reason: 'truncated' }] });
     await waitFor(() => screen.getByText('Showing the last good read: MyMod.esp: truncated'));
   });
 
   it('says nothing of a plugin the panel does not show', async () => {
-    renderPanel(compareResult, { loadFailures: [{ name: 'Elsewhere.esp', origin: 'Data', reason: 'truncated' }] });
+    renderPanel(compareResult, { loadFailures: [{ name: 'Elsewhere.esp', origin: 'Data/', reason: 'truncated' }] });
     await waitFor(() => screen.getByText(/TestNPC/, { selector: 'div' }));
     expect(screen.queryByText(/Showing the last good read/)).not.toBeInTheDocument();
   });
@@ -1060,7 +1060,7 @@ describe('RecordPanel — a plugin mEdit cannot read', () => {
       conflictsComputed: true, loadFailures,
     });
     const load = vi.fn()
-      .mockResolvedValueOnce(answered([{ name: 'MyMod.esp', origin: 'Data', reason: 'truncated' }]))
+      .mockResolvedValueOnce(answered([{ name: 'MyMod.esp', origin: 'Data/', reason: 'truncated' }]))
       .mockResolvedValue(answered([]));
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText(/Showing the last good read/));
@@ -2519,7 +2519,7 @@ describe('RecordPanel — several records side by side', () => {
 
     fireEvent.click(required(screen.getByText('B.esp').closest('th'), 'the Knife column\'s header'));
 
-    const A = { name: 'A.esp', origin: 'Data' };
+    const A = { name: 'A.esp', origin: 'Data/' };
     expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE)).toEqual([[{
       type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE,
       records: [{ formKey: KNIFE, plugin: { name: 'B.esp', origin: 'ModB' } }, { formKey: GUN, plugin: A }, { formKey: AMMO, plugin: A }],
@@ -2569,7 +2569,7 @@ describe('RecordPanel — several records side by side', () => {
   it('reads at once with the records the host shows beside its own from now on', async () => {
     const { client } = renderPanel(sideBySide, { plugins: tracked });
     await waitFor(() => expect(client.load).toHaveBeenCalledTimes(1));
-    const columns = [{ formKey: AMMO, plugin: { name: 'A.esp', origin: 'Data' } }];
+    const columns = [{ formKey: AMMO, plugin: { name: 'A.esp', origin: 'Data/' } }];
 
     sendMessage({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns });
 

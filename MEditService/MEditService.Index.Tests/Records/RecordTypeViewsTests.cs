@@ -8,7 +8,7 @@ namespace MEditService.Index.Tests.Records;
 
 public sealed class RecordTypeViewsTests
 {
-    private static readonly PluginAddress Plugin = new("Lazy.esp", "Data");
+    private static readonly PluginAddress Plugin = new("Lazy.esp", PluginOrigin.DataDirectory);
 
     [Fact]
     public void EveryTypedRead_AnswersBeforeAnyFilter_AndAFilterNamingARecordTypeStillNarrows()
@@ -27,7 +27,7 @@ public sealed class RecordTypeViewsTests
             ?? throw new InvalidOperationException($"Expected a document for '{npc}' in '{Plugin}'.")).EditorId);
         Assert.Contains(reads.DocumentsOf(Plugin), d => d.FormKey == npc);
         Assert.Contains(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: Plugin.Name, Origin: Plugin.Origin, Limit: 10)).Items, i => i.FormKey == npc);
-        Assert.Equal("npc_", reads.Resolve(npc)?.RecordType);
+        Assert.Equal("npc_", reads.LinkResolver(npc)(npc)?.RecordType);
         Assert.Contains(reads.GetRecordTypeCounts(Plugin), c => c.Type == "npc_" && c.Count == 1);
 
         index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'LazyNpc'", "filter.sql");

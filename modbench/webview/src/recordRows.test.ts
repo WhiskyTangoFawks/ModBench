@@ -5,8 +5,8 @@ import { columnKey } from '../../src/wire/columnKey';
 import { navRows, recordRows, shownCell, visibleRows, FORM_ID_ROW, RECORD_HEADER_ROW, type FieldRow, type RecordRow } from './recordRows';
 import type { ColumnKey, CompareResult, FieldMetadata } from './types';
 
-const MASTER = columnKey({ name: 'Fallout4.esm', origin: 'Data' });
-const MOD = columnKey({ name: 'MyMod.esp', origin: 'Data' });
+const MASTER = columnKey({ name: 'Fallout4.esm', origin: 'Data/' });
+const MOD = columnKey({ name: 'MyMod.esp', origin: 'Data/' });
 
 const bounds = fieldMeta({
   name: 'Bounds', type: 'struct',
@@ -202,7 +202,7 @@ describe('a cell\'s context, which its right-click hands a command and the host\
   it('a cell in a column that can be edited names its plugin copy, its path, that the plugin holds the field, and the text it copies', () => {
     expect(row?.cells.get(MOD)?.context).toEqual({
       webviewSection: 'cell editableCell', copyText: '7', preventDefaultContextMenuItems: true,
-      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', path: [{ kind: 'member', name: 'Level' }], holdsValue: true,
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data/', path: [{ kind: 'member', name: 'Level' }], holdsValue: true,
     });
   });
 

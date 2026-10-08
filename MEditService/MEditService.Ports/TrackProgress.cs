@@ -19,5 +19,5 @@ public enum TrackPhase
 /// records.</summary>
 public sealed record TrackProgress(string? Mod, TrackPhase Phase, int PluginsDone, int PluginsTotal)
 {
-    public static readonly TrackProgress Idle = new(null, TrackPhase.Idle, 0, 0);
+    internal static readonly TrackProgress Idle = new(null, TrackPhase.Idle, 0, 0);
 }

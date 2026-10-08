@@ -23,14 +23,15 @@ public class FormLookupTests
         using var index = Indexes.Reconciled(fixture);
         var reads = index.RequireReads();
 
-        Assert.Equal(new RecordLookupEntry("npc_", "TestNPC01"), reads.Resolve(npc.ToString()));
-        Assert.Equal(new RecordLookupEntry("race", "TestRace01"), reads.Resolve(race.ToString()));
+        Assert.Equal(new RecordLookupEntry("npc_", "TestNPC01"), reads.LinkResolver(npc.ToString())(npc.ToString()));
+        Assert.Equal(new RecordLookupEntry("race", "TestRace01"), reads.LinkResolver(race.ToString())(race.ToString()));
 
-        var header = reads.Resolve(PluginHeader.FormKeyFor(ModKey.FromFileName("Lookup.esp")));
+        var headerKey = PluginHeader.FormKeyFor(ModKey.FromFileName("Lookup.esp"));
+        var header = reads.LinkResolver(headerKey)(headerKey);
         Assert.NotNull(header);
         Assert.Equal(PluginHeader.RecordType, header.Value.RecordType);
         Assert.Null(header.Value.EditorId);
-        Assert.Equal(3, reads.DocumentsOf(new PluginAddress("Lookup.esp", "Data")).Count);
+        Assert.Equal(3, reads.DocumentsOf(new PluginAddress("Lookup.esp", PluginOrigin.DataDirectory)).Count);
     }
 
     [Fact]
@@ -41,7 +42,7 @@ public class FormLookupTests
             .WithPlugin("Reindex.esp", mod => npcFormKey = mod.Npcs.AddNew("TestNPC01").FormKey)
             .Build();
         using var index = Indexes.Reconciled(fixture);
-        var key = new PluginAddress("Reindex.esp", "Data");
+        var key = new PluginAddress("Reindex.esp", PluginOrigin.DataDirectory);
         var reads = index.RequireReads();
         var before = reads.DocumentsOf(key).Count;
 
@@ -50,6 +51,6 @@ public class FormLookupTests
 
         Assert.Equal(before, reads.DocumentsOf(key).Count);
         Assert.Equal(1, reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10)).Total);
-        Assert.Equal(new RecordLookupEntry("npc_", "TestNPC01"), reads.Resolve(npcFormKey.ToString()));
+        Assert.Equal(new RecordLookupEntry("npc_", "TestNPC01"), reads.LinkResolver(npcFormKey.ToString())(npcFormKey.ToString()));
     }
 }

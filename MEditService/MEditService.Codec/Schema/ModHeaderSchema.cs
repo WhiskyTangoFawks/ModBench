@@ -63,7 +63,6 @@ internal static class ModHeaderSchema
         return new RecordTableSchema
         {
             TableName = PluginHeader.RecordType,
-            DisplayName = RecordDisplayNames.For(PluginHeader.RecordType),
             RecordType = headerGetterType,
             RecordColumns = columns,
             IsHeader = true,

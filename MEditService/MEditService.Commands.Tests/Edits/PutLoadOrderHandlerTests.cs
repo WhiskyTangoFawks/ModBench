@@ -35,7 +35,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
         Assert.Equal(GameRelease.Fallout4, _holder.Current.GameRelease);
         Assert.Equal([a, b], _holder.Current.Plugins);
         Assert.Equal([b], _holder.Current.Active);
-        Assert.Equal(_holder.Version, result.Version);
+        Assert.Equal(_holder.Held?.Version, result.Version);
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
         var result = Put(GameRelease.Fallout4, [a, other], a, other);
 
         Assert.Equal(PutLoadOrderRefusal.InvalidSnapshot, result.Refusal);
-        Assert.Equal(LoadOrderSnapshot.Empty, _holder.Current);
+        Assert.Null(_holder.Held);
     }
 
     [Fact]
@@ -58,6 +58,6 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(PutLoadOrderRefusal.UnsupportedGameRelease, result.Refusal);
         Assert.Contains("SkyrimSE", result.Message, StringComparison.Ordinal);
-        Assert.Equal(LoadOrderSnapshot.Empty, _holder.Current);
+        Assert.Null(_holder.Held);
     }
 }

@@ -8,8 +8,8 @@ namespace MEditService.Commands.Tests.TestSupport;
 /// hops and an optional value (ADR-0005).</summary>
 internal static class Envelopes
 {
-    internal static PathHop Member(string name) => PathHop.Member(name);
-    internal static PathHop At(int index) => PathHop.At(index);
+    internal static PathHop Member(string name) => new(PathHop.MemberKind, Name: name);
+    internal static PathHop At(int index) => new(PathHop.IndexKind, Index: index);
 
     internal static RecordEditEnvelope SetAt(JsonElement value, params PathHop[] path) =>
         new(RecordEditEnvelope.Set, path, value);

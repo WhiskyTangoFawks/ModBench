@@ -11,9 +11,9 @@ namespace MEditService.Queries.Tests.Query;
 public sealed class CompareRecordsTests
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
-    private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
-    private static readonly PluginAddress ModPlugin = new("Mod.esp", "Data");
-    private static readonly PluginAddress InactivePlugin = new("Off.esp", "Data");
+    private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress ModPlugin = new("Mod.esp", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress InactivePlugin = new("Off.esp", PluginOrigin.DataDirectory);
 
     private readonly Fallout4Mod _baseMod = new(ModKey.FromFileName("Base.esm"), Fallout4Release.Fallout4);
     private readonly Fallout4Mod _modMod = new(ModKey.FromFileName("Mod.esp"), Fallout4Release.Fallout4);
@@ -41,8 +41,8 @@ public sealed class CompareRecordsTests
         _service = QueryHost.Records(
             new FakeIndex(new FakeReads(opened, rows)),
             FakeLoadOrder.Of(Release,
-                new LoadOrderEntry("Base.esm", "Base.esm", "Data", 0, Enabled: true, Winning: true),
-                new LoadOrderEntry("Mod.esp", "Mod.esp", "Data", 1, Enabled: true, Winning: true)));
+                new LoadOrderEntry("Base.esm", "Base.esm", PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
+                new LoadOrderEntry("Mod.esp", "Mod.esp", PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true)));
     }
 
     private static ContainerEntry Entry(FormKey item) =>

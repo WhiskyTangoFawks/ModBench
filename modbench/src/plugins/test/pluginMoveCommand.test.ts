@@ -85,7 +85,7 @@ describe('modbench.plugin.move', () => {
   });
 
   it('takes the focused view\'s selection when no plugin is named, leaving out a row that is not a plugin line', async () => {
-    const { reporter } = registered([new PluginNode({ name: 'C.esp', enabled: true }, 'ModC'), new ImplicitMasterNode('Fallout4.esm', 'Data')]);
+    const { reporter } = registered([new PluginNode({ name: 'C.esp', enabled: true }, 'ModC'), new ImplicitMasterNode('Fallout4.esm', 'Data/')]);
 
     await invoke(undefined, LOSING_END);
 
@@ -134,7 +134,7 @@ describe('modbench.plugin.move', () => {
     await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'DLCRobot.esm\r\nA.esp\r\nX.esp\r\n');
     const reporter = recordingReporter();
         const masters = { getPlugins: () => Promise.resolve([held('DLCRobot.esm', []), held('A.esp', []), held('X.esp', ['DLCRobot.esm'])]) };
-    const value = instanceValueFixture({ activeProfile: 'Default', pluginsLoadedWithNoLine: [{ name: 'DLCRobot.esm', origin: 'Data' }] });
+    const value = instanceValueFixture({ activeProfile: 'Default', pluginsLoadedWithNoLine: [{ name: 'DLCRobot.esm', origin: 'Data/' }] });
     registerPluginMoveCommand(accessTo(dir), masters, { value, refresh: () => Promise.resolve() }, () => [], reporter);
 
     await invoke([{ name: 'X.esp', origin: 'ModX' }], LOSING_END);

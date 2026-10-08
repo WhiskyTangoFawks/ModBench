@@ -28,7 +28,7 @@ function makeRecord(
     loadOrderIndex: 0,
     isWinner: true,
     editorId: `Record${i}`,
-    origin: 'Data',
+    origin: 'Data/',
     workingTreeState,
     hasContainerChildren,
     hasParseFailure: false,
@@ -54,14 +54,14 @@ function makeClient(overrides: Partial<{
   return client;
 }
 
-const PLUGIN0: PluginAddress = { name: 'Plugin0.esp', origin: 'Data' };
+const PLUGIN0: PluginAddress = { name: 'Plugin0.esp', origin: 'Data/' };
 
 function openedArguments(row: PluginTreeNode): unknown {
   return row.command?.arguments;
 }
 
 async function containerRowOver(
-  record: RecordSummary, origin = 'Data', client = makeClient(), provider = new PluginTreeProvider(client),
+  record: RecordSummary, origin = 'Data/', client = makeClient(), provider = new PluginTreeProvider(client),
 ) {
   const row = await recordRow(record, origin, undefined, 'qust', { client, provider });
   return { provider, repo: client, row };
@@ -115,7 +115,7 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
     const repo = makeClient({ recordTypes: [{ type: 'weap', count: 10 }, { type: 'npc_', count: 3 }] });
     const provider = new PluginTreeProvider(repo);
 
-    const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
+    const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
 
     expect(children).toHaveLength(2);
     expect(children.map(c => [c.label, c.description])).toEqual([['weap', '10'], ['npc_', '3']]);
@@ -151,7 +151,7 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }, { type: 'cell', count: 2 }] });
     const provider = new PluginTreeProvider(repo);
 
-    const groups = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' }, { tracked: true, editable: true });
+    const groups = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, { tracked: true, editable: true });
 
     expect(groups.map(g => [g.label, g.contextValue])).toEqual([
       ['wrld', 'recordType tracked editable creatable'],
@@ -183,7 +183,7 @@ describe('PluginTreeProvider.getChildren of a record-type group', () => {
 
     expect(children).toHaveLength(FALLOUT4_ESM_INFO_COUNT);
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
-    expect(repo.calls).toContainEqual({ method: 'getRecords', args: [{ name: 'Plugin0.esp', origin: 'Data' }, 'weap', 0, expect.any(Number)] });
+    expect(repo.calls).toContainEqual({ method: 'getRecords', args: [{ name: 'Plugin0.esp', origin: 'Data/' }, 'weap', 0, expect.any(Number)] });
     const limitArg = present(repo.calls.find(c => c.method === 'getRecords'), 'the getRecords call').args[3];
     if (typeof limitArg !== 'number') throw new Error(`Expected a number, got ${String(limitArg)}`);
     expect(limitArg).toBeGreaterThan(FALLOUT4_ESM_INFO_COUNT);
@@ -253,7 +253,7 @@ describe('a record-type group row', () => {
 });
 
 describe('a record row', () => {
-  const rowOf = async (record: RecordSummary, origin = 'Data', conditions?: PluginConditions) =>
+  const rowOf = async (record: RecordSummary, origin = 'Data/', conditions?: PluginConditions) =>
     recordRow(record, origin, conditions);
 
   it('wires .command to modbench.record.open with its own copy: its record\'s plugin in the row\'s origin', async () => {
@@ -279,20 +279,20 @@ describe('a record row', () => {
   });
 
   it('states a record of a tracked plugin', async () => {
-    expect((await rowOf(makeRecord(0), 'Data', { tracked: true, editable: true })).contextValue).toBe('record tracked editable');
+    expect((await rowOf(makeRecord(0), 'Data/', { tracked: true, editable: true })).contextValue).toBe('record tracked editable');
   });
 
   it('states a record of an untracked plugin', async () => {
-    expect((await rowOf(makeRecord(0), 'Data', { tracked: false, editable: true })).contextValue).toBe('record untracked editable');
+    expect((await rowOf(makeRecord(0), 'Data/', { tracked: false, editable: true })).contextValue).toBe('record untracked editable');
   });
 
   it('states an override as it states the plugin\'s own records', async () => {
     const record: RecordSummary = { ...makeRecord(0), plugin: 'PatchMod.esp' };
-    expect((await rowOf(record, 'Data', { tracked: true, editable: true })).contextValue).toBe('record tracked editable');
+    expect((await rowOf(record, 'Data/', { tracked: true, editable: true })).contextValue).toBe('record tracked editable');
   });
 
   it('states a record of an immutable plugin read-only', async () => {
-    expect((await rowOf(makeRecord(0), 'Data', { tracked: false, editable: false })).contextValue).toBe('record untracked');
+    expect((await rowOf(makeRecord(0), 'Data/', { tracked: false, editable: false })).contextValue).toBe('record untracked');
   });
 
   it('offers no record edit on a row whose plugin no caller has described', async () => {
@@ -324,7 +324,7 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     const [row] = await provider.getChildren(typeNode);
 
     expect(read).toEqual([[present(row, 'the record row').resourceUri]]);
-    expect(provider.workingTreeStateOf(recordResourceUri({ name: record.plugin, origin: 'Data' }, record.formKey))).toBe('Modified');
+    expect(provider.workingTreeStateOf(recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey))).toBe('Modified');
   });
 
   it('names nothing when a group answers from its cache', async () => {
@@ -346,9 +346,9 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     provider.refresh();
     await provider.getChildren(typeNode);
 
-    const uri = recordResourceUri({ name: record.plugin, origin: 'Data' }, record.formKey);
+    const uri = recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey);
     expect(read).toEqual([[uri], [uri]]);
-    expect(provider.workingTreeStateOf(recordResourceUri({ name: record.plugin, origin: 'Data' }, record.formKey))).toBe('Modified');
+    expect(provider.workingTreeStateOf(recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey))).toBe('Modified');
   });
 
   it('drops a read that was in flight when a refresh came, and names only the read that follows it', async () => {
@@ -365,17 +365,17 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     await inFlight;
 
     expect(read).toEqual([]);
-    expect(provider.workingTreeStateOf(recordResourceUri({ name: record.plugin, origin: 'Data' }, record.formKey))).toBeUndefined();
+    expect(provider.workingTreeStateOf(recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey))).toBeUndefined();
 
     await provider.getChildren(typeNode);
 
-    expect(read).toEqual([[recordResourceUri({ name: record.plugin, origin: 'Data' }, record.formKey)]]);
-    expect(provider.workingTreeStateOf(recordResourceUri({ name: record.plugin, origin: 'Data' }, record.formKey))).toBe('Modified');
+    expect(read).toEqual([[recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey)]]);
+    expect(provider.workingTreeStateOf(recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey))).toBe('Modified');
   });
 
   it('workingTreeStateOf is undefined for a record nothing has cached yet', () => {
     const provider = new PluginTreeProvider(makeClient());
-    expect(provider.workingTreeStateOf(recordResourceUri({ name: 'Plugin0.esp', origin: 'Data' }, '000001:Fallout4.esm'))).toBeUndefined();
+    expect(provider.workingTreeStateOf(recordResourceUri({ name: 'Plugin0.esp', origin: 'Data/' }, '000001:Fallout4.esm'))).toBeUndefined();
   });
 
   it('workingTreeStateOf is undefined for a URI outside the medit-record: scheme', async () => {
@@ -383,7 +383,7 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     const { provider, typeNode } = await readGroup(makeClient({ records: { items: [record], total: 1 } }));
     await provider.getChildren(typeNode);
 
-    const { path } = recordResourceUri({ name: record.plugin, origin: 'Data' }, record.formKey);
+    const { path } = recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey);
     expect(provider.workingTreeStateOf(fakeUri(path))).toBeUndefined();
   });
 });
@@ -457,7 +457,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
   }
 
   it('states a tracked, editable plugin on its groups, records, a container\'s children, worldspace, cells and placed references', async () => {
-    const states = (await rowsBeneath(new PluginTreeProvider(spatialClient()), { name: 'Plugin0.esp', origin: 'Data' }, TRACKED))
+    const states = (await rowsBeneath(new PluginTreeProvider(spatialClient()), { name: 'Plugin0.esp', origin: 'Data/' }, TRACKED))
       .map((n) => String(n.contextValue));
 
     expect(states).toEqual([
@@ -472,7 +472,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
   });
 
   it('states an untracked plugin untracked on every row beneath it', async () => {
-    const states = (await rowsBeneath(new PluginTreeProvider(spatialClient()), { name: 'Plugin0.esp', origin: 'Data' }, { tracked: false, editable: true }))
+    const states = (await rowsBeneath(new PluginTreeProvider(spatialClient()), { name: 'Plugin0.esp', origin: 'Data/' }, { tracked: false, editable: true }))
       .map((n) => String(n.contextValue));
 
     const CONDITION_WORDS = new Set(['tracked', 'untracked', 'editable']);
@@ -508,7 +508,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }] }] }],
     });
     const provider = new PluginTreeProvider(repo);
-    const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
+    const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
     const [wsNode] = await provider.getChildren(wsRoot);
 
     const wsChildren = await provider.getChildren(wsNode);
@@ -535,7 +535,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       blocks: [],
     });
     const provider = new PluginTreeProvider(repo);
-    const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
+    const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
     const [wsNode] = await provider.getChildren(wsRoot);
 
     const wsChildren = await provider.getChildren(wsNode);
@@ -571,7 +571,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       ...oneSubBlock([interiorCell('b:M.esp', 'RoomB')], 3, 7),
     ]);
     const provider = new PluginTreeProvider(repo);
-    const [cellGroup] = await provider.getPluginChildren({ name: 'M.esp', origin: 'Data' });
+    const [cellGroup] = await provider.getPluginChildren({ name: 'M.esp', origin: 'Data/' });
 
     const blocks = await provider.getChildren(present(cellGroup, 'the Cell group'));
     const subBlocks = await provider.getChildren(present(blocks[1], 'the second block'));
@@ -587,7 +587,7 @@ describe('PluginTreeProvider worldspace tree', () => {
     repo.setQueryAnswer('getInteriorCells', oneSubBlock(Array.from({ length: 60 }, (_, i) => interiorCell(`${i}:M.esp`, `Room${i}`))));
     const provider = new PluginTreeProvider(repo);
 
-    const cells = await interiorCellsBeneath(provider, await soleGroup(provider, { name: 'M.esp', origin: 'Data' }));
+    const cells = await interiorCellsBeneath(provider, await soleGroup(provider, { name: 'M.esp', origin: 'Data/' }));
 
     expect(cells).toHaveLength(60);
     expect(repo.calls.filter(c => c.method === 'getInteriorCells')).toHaveLength(1);
@@ -645,16 +645,16 @@ describe('PluginTreeProvider fetch failures', () => {
     });
     const provider = new PluginTreeProvider(repo);
 
-    const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
+    const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
 
-    expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: [{ name: 'Plugin0.esp', origin: 'Data' }] });
+    expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: [{ name: 'Plugin0.esp', origin: 'Data/' }] });
     expect(children.map(c => c.label)).toEqual(['Cell', 'Weapon', 'Worldspace']);
   });
 
   it('getPluginChildren: records below it carry the open-editor command', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'weap', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
-    const [recordType] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
+    const [recordType] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
 
     const [record] = await provider.getChildren(recordType);
 
@@ -666,7 +666,7 @@ describe('PluginTreeProvider fetch failures', () => {
     repo.setQueryFailure('getRecordTypes', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
 
-    const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
+    const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
 
     expect(children.map(c => [c.contextValue, c.label])).toEqual(FAILED_TO_LOAD);
   });
@@ -909,7 +909,7 @@ function makeContainerChild(
   formKey: string, recordType: string, editorId: string | null = null, hasContainerChildren = false,
 ): ContainerChildSummary {
   return {
-    formKey, editorId, plugin: 'Plugin0.esp', origin: 'Data',
+    formKey, editorId, plugin: 'Plugin0.esp', origin: 'Data/',
     loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', recordType, hasContainerChildren, isContainer: CONTAINER_TYPES.has(recordType),
     hasParseFailure: false,
   };
@@ -920,7 +920,7 @@ describe('which record rows are containers is mEdit\'s answer', () => {
     const repo = makeClient({ recordTypes: [{ type: 'xxxx', count: 1, isContainer: true }], records: { items: [makeRecord(0, 'None', true)], total: 1 } });
     repo.setQueryAnswer('getContainerChildren', [makeContainerChild('child1:Fallout4.esm', 'yyyy')]);
     const provider = new PluginTreeProvider(repo);
-    const [typeNode] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
+    const [typeNode] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
     const [row] = await provider.getChildren(present(typeNode, 'the sole group'));
 
     const children = await provider.getChildren(present(row, 'the sole record row'));
@@ -932,7 +932,7 @@ describe('which record rows are containers is mEdit\'s answer', () => {
   it('a group mEdit calls no container lists leaves, whatever the type', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'qust', count: 1, isContainer: false }], records: { items: [makeRecord(0, 'None', true)], total: 1 } });
     const provider = new PluginTreeProvider(repo);
-    const [typeNode] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
+    const [typeNode] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
 
     const [row] = await provider.getChildren(present(typeNode, 'the sole group'));
 
@@ -946,7 +946,7 @@ describe('which record rows are containers is mEdit\'s answer', () => {
       { ...makeContainerChild('child1:Fallout4.esm', 'xxxx', null, true), isContainer: true },
       { ...makeContainerChild('child2:Fallout4.esm', 'dial', null, true), isContainer: false },
     ]);
-    const { provider, row } = await containerRowOver(makeRecord(0, 'None', true), 'Data', repo);
+    const { provider, row } = await containerRowOver(makeRecord(0, 'None', true), 'Data/', repo);
 
     const children = await provider.getChildren(row);
 
@@ -964,11 +964,11 @@ describe('PluginTreeProvider.getChildren of a container row', () => {
       makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA'),
       makeContainerChild('dlbr1:Fallout4.esm', 'dlbr', 'BranchA'),
     ]);
-    const { provider, row } = await containerRowOver({ ...makeRecord(0, 'None', true), formKey: 'qust1:Fallout4.esm' }, 'Data', repo);
+    const { provider, row } = await containerRowOver({ ...makeRecord(0, 'None', true), formKey: 'qust1:Fallout4.esm' }, 'Data/', repo);
 
     const children = await provider.getChildren(row);
 
-    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: [{ name: 'Plugin0.esp', origin: 'Data' }, 'qust1:Fallout4.esm'] });
+    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: [{ name: 'Plugin0.esp', origin: 'Data/' }, 'qust1:Fallout4.esm'] });
     expect(children.map(c => c.label)).toEqual(['TopicA', 'BranchA']);
     expect(present(children[0], 'the first child').command).toMatchObject({ command: 'modbench.record.open' });
   });
@@ -976,13 +976,13 @@ describe('PluginTreeProvider.getChildren of a container row', () => {
   it('a container\'s listed child answers its working-tree state and is named as read', async () => {
     const repo = makeClient();
     repo.setQueryAnswer('getContainerChildren', [{ ...makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA'), workingTreeState: 'Added' }]);
-    const { provider, row } = await containerRowOver({ ...makeRecord(0, 'None', true), formKey: 'qust1:Fallout4.esm' }, 'Data', repo);
+    const { provider, row } = await containerRowOver({ ...makeRecord(0, 'None', true), formKey: 'qust1:Fallout4.esm' }, 'Data/', repo);
     const read: (readonly unknown[])[] = [];
     provider.onDidReadRecords((uris) => read.push(uris));
 
     const [child] = await provider.getChildren(row);
 
-    const uri = recordResourceUri({ name: 'Plugin0.esp', origin: 'Data' }, 'dial1:Fallout4.esm');
+    const uri = recordResourceUri({ name: 'Plugin0.esp', origin: 'Data/' }, 'dial1:Fallout4.esm');
     expect(present(child, 'the listed child').resourceUri).toEqual(uri);
     expect(read).toEqual([[uri]]);
     expect(provider.workingTreeStateOf(uri)).toBe('Added');
@@ -995,7 +995,7 @@ describe('PluginTreeProvider.getChildren of a container row', () => {
       makeContainerChild('dial2:Fallout4.esm', 'dial', 'TopicB', false),
       makeContainerChild('scen1:Fallout4.esm', 'scen', 'SceneA'),
     ]);
-    const { provider, row } = await containerRowOver({ ...makeRecord(0, 'None', true), formKey: 'qust1:Fallout4.esm' }, 'Data', repo);
+    const { provider, row } = await containerRowOver({ ...makeRecord(0, 'None', true), formKey: 'qust1:Fallout4.esm' }, 'Data/', repo);
 
     const children = await provider.getChildren(row);
 
@@ -1011,11 +1011,11 @@ describe('PluginTreeProvider.getChildren of a container row', () => {
     repo.setQueryAnswer('getContainerChildren', [
       makeContainerChild('info1:Fallout4.esm', 'info'),
     ]);
-    const { provider, row } = await containerRowOver({ ...makeRecord(0, 'None', true), formKey: 'dial1:Fallout4.esm' }, 'Data', repo);
+    const { provider, row } = await containerRowOver({ ...makeRecord(0, 'None', true), formKey: 'dial1:Fallout4.esm' }, 'Data/', repo);
 
     const children = await provider.getChildren(row);
 
-    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: [{ name: 'Plugin0.esp', origin: 'Data' }, 'dial1:Fallout4.esm'] });
+    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: [{ name: 'Plugin0.esp', origin: 'Data/' }, 'dial1:Fallout4.esm'] });
     expect(children).toHaveLength(1);
   });
 
@@ -1091,7 +1091,7 @@ describe('the failure prefix', () => {
     });
     const provider = new PluginTreeProvider(repo);
 
-    const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
+    const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
     const [failing, healthy] = await provider.getChildren(wsRoot);
     const [blockNode] = await provider.getChildren(failing);
     const [subBlock] = await provider.getChildren(blockNode);
@@ -1121,7 +1121,7 @@ describe('the failure prefix', () => {
     ]));
     const provider = new PluginTreeProvider(repo);
 
-    const [interiorRootOrUndefined] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data' });
+    const [interiorRootOrUndefined] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
     const interiorRoot = present(interiorRootOrUndefined, 'the interior-cells root');
     const [block] = await provider.getChildren(interiorRoot);
     const [subBlock] = await provider.getChildren(present(block, 'the sole block'));

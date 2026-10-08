@@ -4,7 +4,6 @@ using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.TestSupport;
 
@@ -18,9 +17,10 @@ internal static class TrackedMods
         var modFolder = Path.GetDirectoryName(pluginPath)
             ?? throw new ArgumentException("A plugin path names a file inside a mod folder.", nameof(pluginPath));
         var pluginName = Path.GetFileName(pluginPath);
-        var modPath = new ModPath(ModKey.FromFileName(pluginName), pluginPath);
         var (files, missingStrings) = TestAdapters.Mutagen()
-            .ReadSourceAsync(modPath, pluginName, release, new PluginStrings(modFolder, dataFolder))
+            .ReadSourceOfAsync(
+                new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game), release,
+                new PluginStrings(modFolder, dataFolder))
             .GetAwaiter().GetResult();
         if (missingStrings is not null)
             throw new InvalidOperationException($"{pluginName} declares strings file '{missingStrings}' and the disk has none.");

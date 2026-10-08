@@ -13,7 +13,7 @@ import { RecordDecorationProvider } from '../RecordDecorationProvider';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import { present } from '../../ports/present';
 
-const PLUGIN: PluginAddress = { name: 'Plugin0.esp', origin: 'Data' };
+const PLUGIN: PluginAddress = { name: 'Plugin0.esp', origin: 'Data/' };
 
 function badgeOf(provider: PluginTreeProvider, row: PluginTreeNode): string | undefined {
   const badges = new RecordDecorationProvider(provider);

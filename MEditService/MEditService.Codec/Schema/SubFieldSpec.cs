@@ -43,11 +43,11 @@ public sealed record SubFieldSpec(
     IReadOnlyList<string>? ExtendedKeyMembers = null)
 {
     /// <summary>Derived from ApiType rather than carried, so the two can never disagree.</summary>
-    public bool IsArray => ApiType == "array";
+    internal bool IsArray => ApiType == "array";
 
     /// <summary>A read-only member has no writable members of its own, so its reason reaches every
     /// member below it.</summary>
-    public FieldMetadata ToFieldMetadata(string? inheritedReason = null)
+    internal FieldMetadata ToFieldMetadata(string? inheritedReason = null)
     {
         var reason = ReadOnlyReason ?? inheritedReason;
         return new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumMembers,

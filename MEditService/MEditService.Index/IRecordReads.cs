@@ -35,13 +35,10 @@ public interface IRecordReads
     /// per-type loop.</summary>
     IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin);
 
-    /// <summary>O(1) FormKey → (record type, EditorID) lookup against the winning override,
-    /// backed by <c>form_lookup</c>.</summary>
-    RecordLookupEntry? Resolve(string formKey);
-
-    /// <summary>One response's <see cref="Resolve"/> about <paramref name="formKey"/>, each distinct
-    /// FormKey asked once. The store resolves the links its copies carry in one query up front.</summary>
-    Func<string, RecordLookupEntry?> LinkResolver(string formKey) => FormKeyResolutionCache.Memoize(Resolve);
+    /// <summary>One response's FormKey → (record type, EditorID) lookup against the winning override,
+    /// about <paramref name="formKey"/>, each distinct FormKey asked once. The store resolves the
+    /// links its copies carry in one query up front.</summary>
+    Func<string, RecordLookupEntry?> LinkResolver(string formKey);
 
     IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey);
 

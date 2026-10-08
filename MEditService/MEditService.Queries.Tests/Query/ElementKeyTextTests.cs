@@ -49,7 +49,8 @@ public class ElementKeyTextTests
         var spelled = JsonDocument.Parse("""{"Stage":10,"StageIndex":0}""").RootElement;
 
         Assert.Equal("10 / 0", ElementKey.Of(omitted, ["Stage", "StageIndex"], FragmentElement).Text);
-        Assert.Equal(0, ElementKey.Of(omitted, ["Stage", "StageIndex"], FragmentElement).CompareTo(
+        Assert.Equal(0, ElementKey.Order.Compare(
+            ElementKey.Of(omitted, ["Stage", "StageIndex"], FragmentElement),
             ElementKey.Of(spelled, ["Stage", "StageIndex"], FragmentElement)));
     }
 
@@ -69,7 +70,7 @@ public class ElementKeyTextTests
         var unset = ElementKey.Of(JsonDocument.Parse("{}").RootElement, ["Number"], element);
         var zero = ElementKey.Of(JsonDocument.Parse("""{"Number":0}""").RootElement, ["Number"], element);
 
-        Assert.NotEqual(0, unset.CompareTo(zero));
+        Assert.NotEqual(0, ElementKey.Order.Compare(unset, zero));
     }
 
     [Fact]
@@ -79,7 +80,8 @@ public class ElementKeyTextTests
         var completion = JsonDocument.Parse("""{"Flags":["OnCompletion"]}""").RootElement;
 
         Assert.Equal("OnStart", ElementKey.Of(start, ["Flags"], FragmentElement).Text);
-        Assert.True(ElementKey.Of(start, ["Flags"], FragmentElement).CompareTo(
+        Assert.True(ElementKey.Order.Compare(
+            ElementKey.Of(start, ["Flags"], FragmentElement),
             ElementKey.Of(completion, ["Flags"], FragmentElement)) < 0);
     }
 }

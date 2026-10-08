@@ -5,11 +5,10 @@ using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog.WorkEngine;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
-/// <summary>A change to one record's document, made the way the source is made: read through the
-/// codec, changed, written back through it. Any other text fails compile's round-trip gate.</summary>
 public static class SourceEdits
 {
     public static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
@@ -18,8 +17,9 @@ public static class SourceEdits
         SourceRepository repository, PluginAddress plugin, RecordIdentity identity, GameRelease release, Action<T> change)
         where T : class, IMajorRecord
     {
-        var body = repository.Get(plugin, identity).Require().Body;
-        var record = (T)RecordTextCodec.DeserializeText(typeof(T), body, release);
+        var located = repository.Get(plugin, identity).Require();
+        var record = (T)TreeOf(repository, plugin, release).EnumerateMajorRecords()
+            .Single(candidate => candidate.FormKey.ToString() == located.FormKey);
         change(record);
         Write(repository, plugin, record, identity.RecordType, release);
     }
@@ -29,4 +29,20 @@ public static class SourceEdits
         repository.Put(plugin, new SourceDocument(
             record.FormKey.ToString(), recordType, record.EditorID,
             Codec.SerializeToText(record, release)));
+
+    private static IMod TreeOf(SourceRepository repository, PluginAddress plugin, GameRelease release)
+    {
+        var files = SourceRepository.DoorFilesOf(plugin.Name, repository.FilesOf(plugin).Files, release);
+        using var scratch = new ScratchDirectory("medit-source-edit-");
+        foreach (var file in files)
+        {
+            var path = Path.Combine(scratch, file.RelativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? scratch);
+            File.WriteAllBytes(path, file.Content);
+        }
+
+        return RecordTextCodecGeneratorSeed.DeserializeWholeMod(
+                PluginSourceRoot.In(scratch, plugin.Name), InlineWorkDropoff.Instance, CancellationToken.None)
+            .GetAwaiter().GetResult();
+    }
 }

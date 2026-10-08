@@ -136,10 +136,22 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     {
         PutRenamedPersistentRef();
 
-        var owner = (Cell)RecordTextCodec.DeserializeText(typeof(Cell), File.ReadAllText(FullPath(CellPath)), Release);
+        var owner = OwnerAsTheCodecReadsIt();
 
-        Assert.Equal(["RenamedRef"], owner.Persistent.Select(placed => placed.EditorID ?? throw new InvalidOperationException("Expected a placed ref to carry its EditorID.")).ToArray());
+        Assert.Equal(["RenamedRef"], EditorIdsIn(owner, "Persistent"));
     }
+
+    private JsonElement OwnerAsTheCodecReadsIt()
+    {
+        using var owner = JsonDocument.Parse(_codec.RoundTrip(File.ReadAllText(FullPath(CellPath)), Release, "cell"));
+        return owner.RootElement.Clone();
+    }
+
+    private static string[] EditorIdsIn(JsonElement owner, string slot) =>
+        owner.TryGetProperty(slot, out var held)
+            ? [.. held.EnumerateArray().Select(placed => placed.GetProperty("EditorID").GetString()
+                ?? throw new InvalidOperationException("Expected a placed ref to carry its EditorID."))]
+            : [];
 
     private void PutRenamedPersistentRef()
     {
@@ -184,11 +196,11 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     {
         Repository.Remove(Plugin, Identity(_persistentRef, "refr"));
 
-        var owner = (Cell)RecordTextCodec.DeserializeText(typeof(Cell), File.ReadAllText(FullPath(CellPath)), Release);
+        var owner = OwnerAsTheCodecReadsIt();
 
-        Assert.Empty(owner.Persistent);
-        Assert.Equal(["TempRef"], owner.Temporary.Select(placed => placed.EditorID ?? throw new InvalidOperationException("Expected a placed ref to carry its EditorID.")).ToArray());
-        Assert.Equal("CellLandscape", owner.Landscape?.EditorID);
+        Assert.Empty(EditorIdsIn(owner, "Persistent"));
+        Assert.Equal(["TempRef"], EditorIdsIn(owner, "Temporary"));
+        Assert.Equal("CellLandscape", owner.GetProperty("Landscape").GetProperty("EditorID").GetString());
     }
 
     [Fact]

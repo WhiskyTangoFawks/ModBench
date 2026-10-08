@@ -1,6 +1,5 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -36,14 +35,13 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
             Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{\"a\":3}"), File("weap/A.esp/000004.json", "{}")], Sha);
         var unchanged = Path.Combine(Root, "npc_", "A.esp", "000001.json");
         var rewritten = Path.Combine(Root, "armo", "A.esp", "000003.json");
-        var unchangedBefore = FileStamp.Of(unchanged);
-        var rewrittenBefore = FileStamp.Of(rewritten);
+        var longAgo = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        System.IO.File.SetLastWriteTimeUtc(unchanged, longAgo);
 
         Repository.ReplaceSourceFrom(
             Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{\"a\":33}")], Sha);
 
-        Assert.Equal(unchangedBefore, FileStamp.Of(unchanged));
-        Assert.NotEqual(rewrittenBefore, FileStamp.Of(rewritten));
+        Assert.Equal(longAgo, System.IO.File.GetLastWriteTimeUtc(unchanged));
         Assert.Equal("{\"a\":33}", System.IO.File.ReadAllText(rewritten));
         Assert.Equal(["armo/A.esp/000003.json", "npc_/A.esp/000001.json"], FilesUnderRoot());
         Assert.False(Directory.Exists(Path.Combine(Root, "weap")));

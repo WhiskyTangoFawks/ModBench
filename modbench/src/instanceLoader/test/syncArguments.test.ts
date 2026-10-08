@@ -19,7 +19,7 @@ describe('pluginSyncArgumentsOf', () => {
       gameRelease: 'SkyrimSE',
       gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
       dataFolderPlugins: { kind: 'listed', names: new Set(['skyrim.esm']) },
-      pluginsLoadedWithNoLine: [{ name: 'Skyrim.esm', origin: 'Data' }],
+      pluginsLoadedWithNoLine: [{ name: 'Skyrim.esm', origin: 'Data/' }],
       files: winners({
         relativePath: 'Mine.esp', winner: join('/instance', 'mods', 'My Mod', 'Mine.esp'), winnerOrigin: modOrigin('My Mod'),
         providers: [modOrigin('My Mod')],

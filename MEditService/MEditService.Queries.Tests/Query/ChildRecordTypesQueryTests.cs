@@ -13,7 +13,7 @@ public sealed class ChildRecordTypesQueryTests
 {
     private const string PluginName = "Holds.esp";
     private const string Worldspace = "000801:Holds.esp";
-    private static readonly PluginAddress Plugin = new(PluginName, "Data");
+    private static readonly PluginAddress Plugin = new(PluginName, PluginOrigin.DataDirectory);
 
     private readonly FakeReads _reads;
     private readonly IRecordQueryService _svc;
@@ -106,6 +106,6 @@ public sealed class ChildRecordTypesQueryTests
     [Fact]
     public void ARecordThePluginDoesNotHold_HasNoAnswer()
     {
-        Assert.Null(_svc.GetChildRecordTypes(new PluginAddress("Other.esp", "Data"), _quest.ToString()));
+        Assert.Null(_svc.GetChildRecordTypes(new PluginAddress("Other.esp", PluginOrigin.DataDirectory), _quest.ToString()));
     }
 }

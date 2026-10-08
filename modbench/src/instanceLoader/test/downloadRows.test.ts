@@ -42,11 +42,6 @@ describe('buildDownloadRows', () => {
     });
   });
 
-  it('defaults to Filetime (mtimeMs) descending, re-sorting entries that arrive out of order', () => {
-    const rows = rowsClaimedByNoMod([file('b.zip', 2), file('a.zip', 1), file('c.zip', 3)]);
-    expect(rows.map((r) => r.name)).toEqual(['c.zip', 'b.zip', 'a.zip']);
-  });
-
   it('carries the excluded flag through without filtering (filtering is a view concern)', () => {
     const rows = rowsClaimedByNoMod([file('foo.zip', 100, metaOf({ excluded: true }))]);
     expect(soleRow(rows)).toMatchObject({ name: 'foo.zip', excluded: true });

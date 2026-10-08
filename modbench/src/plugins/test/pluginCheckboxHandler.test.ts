@@ -94,7 +94,7 @@ describe('onPluginCheckboxChanged', () => {
   });
 
   it('ignores a non-plugin row (a record-tree row sharing the merged view)', async () => {
-    const recordNode = await recordRow(recordSummaryFixture(), 'Data');
+    const recordNode = await recordRow(recordSummaryFixture(), 'Data/');
 
     await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, accessTo(dir), profile, recordingReporter(), instance);
 
@@ -128,7 +128,7 @@ describe('a check box ends when the read lands (common.md, A gesture that writes
 
   it('opens no progress for a record row', async () => {
     await onPluginCheckboxChanged(
-      { items: [[await recordRow(recordSummaryFixture(), 'Data'), 1]] }, accessTo(dir), profile, recordingReporter(), instance);
+      { items: [[await recordRow(recordSummaryFixture(), 'Data/'), 1]] }, accessTo(dir), profile, recordingReporter(), instance);
 
     expect(progressSteps).toEqual([]);
   });

@@ -40,7 +40,7 @@ export const holdsNoCopy = ({ formKey, plugin }: RecordCopy): string =>
 // before it tell apart two copies of one name.
 function renderedDocumentUri(copy: RecordCopy, fileName: string): vscode.Uri {
   return vscode.Uri.from({
-    scheme: RENDERED_DOCUMENT_SCHEME, path: `/${copy.plugin.origin}/${copy.plugin.name}/${fileName}`, query: copyQuery(copy),
+    scheme: RENDERED_DOCUMENT_SCHEME, path: `/${encodeURIComponent(copy.plugin.origin)}/${copy.plugin.name}/${fileName}`, query: copyQuery(copy),
   });
 }
 

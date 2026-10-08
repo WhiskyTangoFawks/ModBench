@@ -1,11 +1,9 @@
+using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
-using Noggog;
 
 namespace MEditService.Index.Tests.Records;
 
@@ -22,19 +20,24 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 
     private string CellBody() => _fixture.Reads.DocumentOf(_fixture.EmbedCell, _fixture.Plugin).BodyOf();
 
-    private string CellBodyAfterCodecRoundTripThrough(Action<IMajorRecord> change)
+    private string CellBodyAfterCodecRoundTripThrough(Action<JsonArray> changeTemporaryRefs)
     {
-        var cell = (IMajorRecord)RecordTextCodec.DeserializeText(typeof(Cell), CellBody(), GameRelease.Fallout4);
-        change(cell);
-        return Codec.SerializeToText(cell, GameRelease.Fallout4);
+        var cell = JsonNode.Parse(CellBody())?.AsObject() ?? throw new InvalidOperationException("Expected the cell's body to be an object.");
+        changeTemporaryRefs(cell["Temporary"]?.AsArray() ?? throw new InvalidOperationException("Expected the cell to hold temporary refs."));
+        return Codec.RoundTrip(cell.ToJsonString(), GameRelease.Fallout4, "cell");
     }
 
     [Fact]
     public void ApplyingAContainersDocument_WithAChildHeldAtNeitherRef_CreatesTheChildsRowAndPlacement()
     {
         var newRef = FormKey.Factory($"000F10:{ContainerMod.PluginName}");
-        var body = CellBodyAfterCodecRoundTripThrough(cell => ((Cell)cell).Temporary.Add(
-            new PlacedObject(newRef, Fallout4Release.Fallout4) { EditorID = "AppendedRef", Position = new P3Float(4f, 5f, 6f) }));
+        var body = CellBodyAfterCodecRoundTripThrough(temporary =>
+        {
+            var appended = (temporary[0]?.DeepClone().AsObject()) ?? throw new InvalidOperationException("Expected a temporary ref to copy.");
+            appended["FormKey"] = newRef.ToString();
+            appended["EditorID"] = "AppendedRef";
+            temporary.Add(appended);
+        });
 
         Project(_fixture.EmbedCell, body);
 
@@ -50,10 +53,10 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     public void ApplyingAContainersDocument_ThatNoLongerCarriesAChild_RemovesTheChildAtEffective()
     {
         var removed = _fixture.TemporaryRef;
-        var body = CellBodyAfterCodecRoundTripThrough(cell =>
+        var body = CellBodyAfterCodecRoundTripThrough(temporary =>
         {
-            var target = ((Cell)cell).Temporary.Single(p => p.FormKey.ToString() == removed);
-            Assert.True(((Cell)cell).Temporary.Remove(target));
+            var target = temporary.Single(placed => placed?["FormKey"]?.GetValue<string>() == removed);
+            Assert.True(temporary.Remove(target));
         });
 
         Project(_fixture.EmbedCell, body);

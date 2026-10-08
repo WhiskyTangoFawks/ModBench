@@ -8,14 +8,17 @@ namespace MEditService.TestSupport;
 /// lists them.</summary>
 public static class PlacedRecordTables
 {
+    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
+        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+
     public static IReadOnlyList<RecordTableSchema> Fallout4 { get; } =
     [
-        .. SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Values
+        .. Schemas.Values
             .Where(schema => typeof(IPlacedGetter).IsAssignableFrom(schema.RecordType))
-            .OrderBy(schema => schema.DisplayName, StringComparer.OrdinalIgnoreCase),
+            .OrderBy(schema => Schemas.DisplayNameFor(schema.TableName), StringComparer.OrdinalIgnoreCase),
     ];
 
     public static IEnumerable<string> Names => Fallout4.Select(schema => schema.TableName);
 
-    public static IEnumerable<string> DisplayNames => Fallout4.Select(schema => schema.DisplayName);
+    public static IEnumerable<string> DisplayNames => Names.Select(Schemas.DisplayNameFor);
 }

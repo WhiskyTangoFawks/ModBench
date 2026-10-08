@@ -2,7 +2,7 @@ using MEditService.Queries;
 
 namespace MEditService.Http.Endpoints;
 
-public static class WorldspaceEndpoints
+internal static class WorldspaceEndpoints
 {
     public static IEndpointRouteBuilder MapWorldspaceEndpoints(this IEndpointRouteBuilder app, ILoggerFactory loggerFactory)
     {

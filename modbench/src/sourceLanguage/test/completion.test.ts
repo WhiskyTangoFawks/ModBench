@@ -2,13 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { completionsAt } from '../completion';
 import type { CompareResult, RecordPage, RecordSummary } from '../../client';
 import { comparisonOf, fieldOf, type Field } from '../../test/comparison';
+import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 
 const OWNER = '000801:Mod.esp';
 const CHILD = '000802:Mod.esp';
 const GUN = '000900:Mod.esp';
 
 const record = (editorId: string | null, formKey: string, isWinner = true): RecordSummary => ({
-  formKey, plugin: formKey.split(':')[1] ?? '', loadOrderIndex: 0, isWinner, editorId, origin: 'Data', workingTreeState: 'None',
+  formKey, plugin: formKey.split(':')[1] ?? '', loadOrderIndex: 0, isWinner, editorId, origin: DATA_DIRECTORY_ORIGIN, workingTreeState: 'None',
   hasContainerChildren: false, hasParseFailure: false,
 });
 

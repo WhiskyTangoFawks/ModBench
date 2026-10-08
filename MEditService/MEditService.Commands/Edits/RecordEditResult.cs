@@ -154,7 +154,7 @@ public sealed record RecordEditResult(
     internal static RecordEditResult Refused(RecordEditRefusal refusal, string message) =>
         new(false, refusal, message);
 
-    public static RecordEditResult RefusedAt(RecordEditRefusal refusal, string path, string message) =>
+    internal static RecordEditResult RefusedAt(RecordEditRefusal refusal, string path, string message) =>
         new(false, refusal, message, Path: path);
 }
 

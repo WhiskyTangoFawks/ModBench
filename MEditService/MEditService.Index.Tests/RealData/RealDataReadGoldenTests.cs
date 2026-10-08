@@ -8,7 +8,7 @@ namespace MEditService.Index.Tests.RealData;
 public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
 {
     private readonly IRecordReads _repo = fixture.Reads;
-    private const string Origin = "Data";
+    private const string Origin = PluginOrigin.DataDirectory;
     private const int PerType = 3;
     private const int WholeType = 5000;
 
@@ -119,7 +119,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
                         .ThenBy(x => x.FieldPath, StringComparer.Ordinal)
                         .Take(5).ToList(),
                 }),
-            Resolved = allFormKeys.ToDictionary(fk => fk, _repo.Resolve),
+            Resolved = allFormKeys.ToDictionary(fk => fk, fk => _repo.LinkResolver(fk)(fk)),
         };
 
         Assert.NotEmpty(captured.ReferencedBy);

@@ -20,24 +20,24 @@ public class SchemaReflectorTests
     [InlineData("pmis", typeof(IPlacedMissileGetter), "Placed Missile")]
     public void APlacedVariant_IsATableOfItsOwnType_UnderXEditsName(string table, Type getter, string displayName)
     {
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)[table];
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
 
-        Assert.Equal(getter, schema.RecordType);
-        Assert.Equal(displayName, schema.DisplayName);
+        Assert.Equal(getter, schemas[table].RecordType);
+        Assert.Equal(displayName, schemas.DisplayNameFor(table));
     }
 
     [Fact]
     public void GetSchemas_Acti_DisplayName_MatchesXEdit()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.Equal("Activator", schemas["acti"].DisplayName);
+        Assert.Equal("Activator", schemas.DisplayNameFor("acti"));
     }
 
     [Fact]
     public void GetSchemas_Gmst_DisplayName_MatchesXEdit()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.Equal("Game Setting", schemas["gmst"].DisplayName);
+        Assert.Equal("Game Setting", schemas.DisplayNameFor("gmst"));
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public class SchemaReflectorTests
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var missing = schemas
-            .Where(kv => string.IsNullOrEmpty(kv.Value.DisplayName) || kv.Value.DisplayName == kv.Key)
+            .Where(kv => string.IsNullOrEmpty(schemas.DisplayNameFor(kv.Key)) || schemas.DisplayNameFor(kv.Key) == kv.Key)
             .Select(kv => kv.Key)
             .ToList();
         Assert.Empty(missing);
@@ -420,12 +420,10 @@ public class SchemaReflectorTests
         var resistances = destructible.Field.SubFields?.FirstOrDefault(f => f.Name == "Resistances");
         Assert.NotNull(resistances);
         Assert.Equal("array", resistances.ApiType);
-        Assert.True(resistances.IsArray);
 
         var stages = destructible.Field.SubFields?.FirstOrDefault(f => f.Name == "Stages");
         Assert.NotNull(stages);
         Assert.Equal("array", stages.ApiType);
-        Assert.True(stages.IsArray);
         var stagesElementSpec = stages.ElementSpec
             ?? throw new InvalidOperationException("Expected 'Stages' to declare an element spec.");
         var stagesSubFields = stagesElementSpec.SubFields
@@ -479,7 +477,7 @@ public class SchemaReflectorTests
 
         var coordinates = col.Field.ElementSpec?.SubFields?.FirstOrDefault(f => f.Name == "Coordinates");
         Assert.NotNull(coordinates);
-        Assert.True(coordinates.IsArray);
+        Assert.Equal("array", coordinates.ApiType);
         var coordinatesElementSpec = coordinates.ElementSpec
             ?? throw new InvalidOperationException("Expected 'Coordinates' to declare an element spec.");
         Assert.Equal("vector", coordinatesElementSpec.ApiType);

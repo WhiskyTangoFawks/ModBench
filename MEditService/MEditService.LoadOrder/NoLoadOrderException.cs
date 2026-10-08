@@ -12,7 +12,7 @@ public sealed class NoLoadOrderException : Exception
     {
     }
 
-    public NoLoadOrderException(string message, Exception innerException) : base(message, innerException)
+    internal NoLoadOrderException(string message, Exception innerException) : base(message, innerException)
     {
     }
 }
