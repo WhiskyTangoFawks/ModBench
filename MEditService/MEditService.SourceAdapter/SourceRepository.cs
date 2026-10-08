@@ -103,7 +103,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary>The record's own text, or null when no document holds it. The identity comes back as
     /// asked; the body is the tree's answer, spliced out of another record's document when that is
     /// what carries it.</summary>
-    public SourceDocument? Get(PluginAddress plugin, RecordIdentity identity)
+    public SourceDocument? RecordOf(PluginAddress plugin, RecordIdentity identity)
     {
         if (Locator.Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
 
@@ -116,13 +116,11 @@ public sealed class SourceRepository : ISourceRepositoryReads
     public SourceDocument? Get(
         PluginAddress plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
-        if (Locator.IdentityOf(plugin, formKey, schemas) is { } identity) return Get(plugin, identity);
+        if (Locator.IdentityOf(plugin, formKey, schemas) is { } identity) return RecordOf(plugin, identity);
         return Locator.UnreadableDocumentFor(plugin, formKey) is { } why
             ? throw new UnreadableSourceDocumentException($"{plugin.Name}'s document for {formKey} is no record document: {why}")
             : null;
     }
-
-    SourceDocument? ISourceRepositoryReads.RecordOf(PluginAddress plugin, RecordIdentity identity) => Get(plugin, identity);
 
     /// <summary>Throws <see cref="UnreadableSourceDocumentException"/>, naming the file that carries
     /// <paramref name="identity"/>, when <paramref name="body"/> holds what reading the whole tree

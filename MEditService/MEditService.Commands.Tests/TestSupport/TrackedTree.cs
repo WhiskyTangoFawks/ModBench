@@ -105,7 +105,7 @@ internal static class TrackedTree
     internal static void SetNextObjectId(string modFolder, PluginAddress plugin, uint nextObjectId)
     {
         var repository = Repository(modFolder);
-        var header = repository.Get(plugin, PluginHeader.IdentityOf(plugin.Name))
+        var header = repository.RecordOf(plugin, PluginHeader.IdentityOf(plugin.Name))
             ?? throw new InvalidOperationException($"Expected {plugin.Name}'s tree to hold its header document.");
         var moved = HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), nextObjectId);
         repository.Put(plugin, header with { Body = Encoding.UTF8.GetString(moved) });

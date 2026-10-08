@@ -186,7 +186,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     }
 
     private static SourceDocument DocumentOf(Destination destination, RecordIdentity existing) =>
-        destination.Repository.Get(destination.Plugin, existing) ?? throw NoDocumentCarries(destination.Plugin, existing.FormKey);
+        destination.Repository.RecordOf(destination.Plugin, existing) ?? throw NoDocumentCarries(destination.Plugin, existing.FormKey);
 
     private static JsonNode RequireParsed(string text) =>
         JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a document's text to parse as JSON.");

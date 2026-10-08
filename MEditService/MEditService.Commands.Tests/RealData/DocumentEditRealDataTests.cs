@@ -118,7 +118,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
             var result = _editHandler.Edit(_plugin, identity.FormKey, gesture.Envelope);
             if (!result.Applied) { failures.Add($"{named}: {result.Refusal} {result.Message}"); continue; }
             var treeAsTheEditLeftIt = TrackedTree();
-            var after = treeAsTheEditLeftIt.Get(_plugin, identity)?.Body
+            var after = treeAsTheEditLeftIt.RecordOf(_plugin, identity)?.Body
                 ?? throw new InvalidOperationException($"Expected an applied edit on {identity.FormKey} to read back a document.");
             failures.AddRange(Strays(named, before, after, gesture.Path));
             treeAsTheEditLeftIt.Put(_plugin, new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, before));

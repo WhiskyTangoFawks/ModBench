@@ -120,7 +120,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void Get_OfAPlacedReferenceInsideItsCell_IsTheChildsOwnText()
     {
-        var body = Repository.Get(Plugin, Identity(_persistentRef, "refr"))?.Body;
+        var body = Repository.RecordOf(Plugin, Identity(_persistentRef, "refr"))?.Body;
 
         Assert.NotNull(body);
         Assert.Equal(_persistentRef.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
@@ -131,7 +131,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void Get_OfAnInteriorCell_IsTheTextOfItsOwnRecordDataJson()
     {
-        var body = Repository.Get(Plugin, Identity(_interiorCell, "cell"))?.Body;
+        var body = Repository.RecordOf(Plugin, Identity(_interiorCell, "cell"))?.Body;
 
         Assert.Equal(File.ReadAllText(FullPath(InteriorCellPath)), body);
     }
@@ -139,7 +139,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void Get_OfAnExteriorCell_IsFoundUnderItsWorldspacesOwnFolder()
     {
-        var body = Repository.Get(Plugin, Identity(_exteriorCell, "cell"))?.Body;
+        var body = Repository.RecordOf(Plugin, Identity(_exteriorCell, "cell"))?.Body;
 
         Assert.Equal(File.ReadAllText(FullPath(ExteriorCellPath)), body);
     }
@@ -147,7 +147,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void Get_OfAPlacedReferenceInsideAnExteriorCell_ReadsThatCellsDirectoryAsACell()
     {
-        var body = Repository.Get(Plugin, Identity(_exteriorRef, "refr"))?.Body;
+        var body = Repository.RecordOf(Plugin, Identity(_exteriorRef, "refr"))?.Body;
 
         Assert.NotNull(body);
         Assert.Equal(_exteriorRef.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
@@ -157,7 +157,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void Get_OfAWorldspacesTopCellsPlacedReference_ReachesTwoEmbedLevelsDown()
     {
-        var body = Repository.Get(Plugin, Identity(_topCellRef, "refr"))?.Body;
+        var body = Repository.RecordOf(Plugin, Identity(_topCellRef, "refr"))?.Body;
 
         Assert.NotNull(body);
         Assert.Equal(_topCellRef.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
@@ -166,7 +166,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void Get_OfAQuestsDialogTopic_IsTheChildsOwnText()
     {
-        var body = Repository.Get(Plugin, Identity(_topic, "dial"))?.Body;
+        var body = Repository.RecordOf(Plugin, Identity(_topic, "dial"))?.Body;
 
         Assert.NotNull(body);
         Assert.Equal(_topic.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
@@ -176,7 +176,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void Get_OfAResponseInsideAQuestsTopic_IsTheChildsOwnText()
     {
-        var body = Repository.Get(Plugin, Identity(_response, "info"))?.Body;
+        var body = Repository.RecordOf(Plugin, Identity(_response, "info"))?.Body;
 
         Assert.NotNull(body);
         Assert.Equal(_response.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
@@ -228,7 +228,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var document = Repository.Get(Plugin, _topic.FormKey.ToString(), Schemas);
 
         Assert.Equal(Identity(_topic, "dial"), document?.Identity);
-        Assert.Equal(Repository.Get(Plugin, Identity(_topic, "dial"))?.Body, document?.Body);
+        Assert.Equal(Repository.RecordOf(Plugin, Identity(_topic, "dial"))?.Body, document?.Body);
     }
 
     [Fact]
@@ -422,7 +422,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         HoldTheTemporaryRefTwiceInItsCell();
 
         AssertClaimedTwiceByTheInteriorCell(Assert.Throws<AmbiguousSourceUnitException>(
-            () => Repository.Get(Plugin, Identity(_temporaryRef, "refr"))));
+            () => Repository.RecordOf(Plugin, Identity(_temporaryRef, "refr"))));
     }
 
     [Fact]
@@ -450,7 +450,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         GiveTheTemporaryRefItsCellsOwnFormKey();
 
         AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(
-            () => Repository.Get(Plugin, Identity(_interiorCell, "cell"))));
+            () => Repository.RecordOf(Plugin, Identity(_interiorCell, "cell"))));
     }
 
     [Fact]
@@ -489,7 +489,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         Assert.Equal(
             new ClaimedFormKey(_quest.FormKey.ToString(), [QuestPath]),
-            Assert.Throws<AmbiguousSourceUnitException>(() => Repository.Get(Plugin, Identity(_quest, "qust"))).Claim);
+            Assert.Throws<AmbiguousSourceUnitException>(() => Repository.RecordOf(Plugin, Identity(_quest, "qust"))).Claim);
     }
 
     [Fact]
@@ -664,18 +664,18 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void Get_OfARecordNoDocumentCarries_IsNull()
     {
-        Assert.Null(Repository.Get(Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent")));
+        Assert.Null(Repository.RecordOf(Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent")));
     }
 
     [Fact]
     public void Get_AfterAHandEditMovedAChildToAnotherOwner_FindsItAtTheNewOwner_NotFromTheMapBuiltBeforeTheMove()
     {
         var repository = Repository;
-        Assert.NotNull(repository.Get(Plugin, Identity(_temporaryRef, "refr")));
+        Assert.NotNull(repository.RecordOf(Plugin, Identity(_temporaryRef, "refr")));
 
         MoveTemporaryRef(_interiorCell, _exteriorCell);
 
-        var found = repository.Get(Plugin, Identity(_temporaryRef, "refr"));
+        var found = repository.RecordOf(Plugin, Identity(_temporaryRef, "refr"));
         Assert.NotNull(found);
         Assert.Equal(_temporaryRef.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(found.Body));
         Assert.Equal(
@@ -747,8 +747,8 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.DoesNotContain("\"Response\"", questText, StringComparison.Ordinal);
         Assert.Contains("\"Response2\"", questText, StringComparison.Ordinal);
         Assert.Contains("\"Topic\"", questText, StringComparison.Ordinal);
-        Assert.Null(repository.Get(Plugin, Identity(_response, "info")));
-        Assert.NotNull(repository.Get(Plugin, Identity(_response2, "info")));
+        Assert.Null(repository.RecordOf(Plugin, Identity(_response, "info")));
+        Assert.NotNull(repository.RecordOf(Plugin, Identity(_response2, "info")));
     }
 
     [Fact]
@@ -794,8 +794,8 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Equal(SourceRemoval.Removed, repository.Remove(Plugin, Identity(_exteriorCell, "cell")));
 
         Assert.False(Directory.Exists(Path.GetDirectoryName(FullPath(ExteriorCellPath))));
-        Assert.Null(repository.Get(Plugin, Identity(_exteriorCell, "cell")));
-        Assert.NotNull(repository.Get(Plugin, Identity(_worldspace, "wrld")));
+        Assert.Null(repository.RecordOf(Plugin, Identity(_exteriorCell, "cell")));
+        Assert.NotNull(repository.RecordOf(Plugin, Identity(_worldspace, "wrld")));
     }
 
     [Fact]

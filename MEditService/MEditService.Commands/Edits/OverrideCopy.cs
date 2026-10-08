@@ -141,7 +141,7 @@ internal sealed class OverrideCopy
         CopySource source, RecordIdentity identity, string body, RecordIdentity existingTarget,
         RecordCopy.Destination destination, GameRelease release)
     {
-        var existing = destination.Repository.Get(destination.Plugin, existingTarget)
+        var existing = destination.Repository.RecordOf(destination.Plugin, existingTarget)
             ?? throw new InvalidOperationException(
                 $"{destination.Plugin.Name} holds {identity.FormKey}, but no document in its source tree carries it.");
 
