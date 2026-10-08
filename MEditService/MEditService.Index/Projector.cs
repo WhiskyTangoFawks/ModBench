@@ -35,7 +35,7 @@ internal sealed class Projector(
         var repository = Over(plugin.Registered);
 
         var timer = Stopwatch.StartNew();
-        using (var documents = repository.OpenDocuments(plugin.Key, index.Schemas))
+        using (var documents = repository.OpenDocuments(plugin.Key))
             index.Index(documents, plugin, plugin.Path, DerivedFrom.SourceTree);
         var indexMs = timer.ElapsedMilliseconds;
 
@@ -55,7 +55,7 @@ internal sealed class Projector(
     internal IReadOnlyList<string> LearnWorkingTreeStates(RegisteredPlugin plugin)
     {
         var key = plugin.Key;
-        var changes = Over(plugin).ChangedSinceLastCommit(key, index.Schemas);
+        var changes = Over(plugin).ChangedSinceLastCommit(key);
 
         var learned = changes.ToDictionary(
             change => change.Key,
@@ -128,7 +128,7 @@ internal sealed class Projector(
             throw new UnreadableSourceDocumentException(
                 $"The source of {formKey} in {key.Name} ({key.Origin}) is not a readable document.");
         }
-        if (workingTreeText != null) repository.RefuseUnreadable(key, identity, workingTreeText, index.Schemas);
+        if (workingTreeText != null) repository.RefuseUnreadable(key, identity, workingTreeText);
 
         return string.Equals(workingTreeText, effective.Body, StringComparison.Ordinal)
             ? []

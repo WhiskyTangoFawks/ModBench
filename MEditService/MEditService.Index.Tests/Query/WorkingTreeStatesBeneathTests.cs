@@ -3,7 +3,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -12,7 +11,6 @@ namespace MEditService.Index.Tests.Query;
 
 public sealed class WorkingTreeStatesBeneathTests : IDisposable
 {
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
     private static readonly WorkingTreeState[] ModifiedAndAdded = [WorkingTreeState.Modified, WorkingTreeState.Added];
 
     private readonly IndexedContainerMod _fixture = new();
@@ -35,7 +33,7 @@ public sealed class WorkingTreeStatesBeneathTests : IDisposable
         added["EditorID"] = "AddedRef";
         temporary.Add(added);
         Index.Project(_fixture.Entry,
-            [(_fixture.TopCell, Codec.RoundTrip(cell.ToJsonString(), GameRelease.Fallout4, "cell"))]);
+            [(_fixture.TopCell, RecordTextCodec.RoundTrip(cell.ToJsonString(), GameRelease.Fallout4, "cell"))]);
     }
 
     private void RenameTheNpc() =>

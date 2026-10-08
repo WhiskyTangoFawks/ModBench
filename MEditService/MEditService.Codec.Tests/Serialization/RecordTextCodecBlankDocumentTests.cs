@@ -15,7 +15,7 @@ public sealed class RecordTextCodecBlankDocumentTests
     public void BlankDocument_ForAContainerLevel_CarriesTheIdentityGiven()
     {
         var document = RecordTextCodec.BlankDocument(
-            typeof(WorldspaceBlock), GameRelease.Fallout4,
+            nameof(WorldspaceBlock), GameRelease.Fallout4,
             new JsonObject { ["BlockNumberX"] = 3, ["BlockNumberY"] = -2 });
 
         using var parsed = JsonDocument.Parse(document);
@@ -27,7 +27,7 @@ public sealed class RecordTextCodecBlankDocumentTests
     public void BlankDocument_IsSpelledByTheCodec_NotByTheIdentityGiven_BecauseTheCodecMintsTheDocumentOfAnEmptyInstanceSoNothingOutsideItConstructsAContainerLevel()
     {
         var document = RecordTextCodec.BlankDocument(
-            typeof(WorldspaceBlock), GameRelease.Fallout4,
+            nameof(WorldspaceBlock), GameRelease.Fallout4,
             new JsonObject { ["BlockNumberX"] = 3, ["BlockNumberY"] = -2 });
 
         Assert.Equal("{\n  \"BlockNumberY\": -2,\n  \"BlockNumberX\": 3\n}", document);
@@ -37,11 +37,11 @@ public sealed class RecordTextCodecBlankDocumentTests
     public void BlankDocument_ForAContainerLevel_RoundTripsThroughTheCodec()
     {
         var document = RecordTextCodec.BlankDocument(
-            typeof(WorldspaceBlock), GameRelease.Fallout4,
+            nameof(WorldspaceBlock), GameRelease.Fallout4,
             new JsonObject { ["BlockNumberX"] = 3, ["BlockNumberY"] = -2 });
 
         var readBackAndWritten = RecordTextCodec.BlankDocument(
-            typeof(WorldspaceBlock), GameRelease.Fallout4, ParseObject(document));
+            nameof(WorldspaceBlock), GameRelease.Fallout4, ParseObject(document));
 
         Assert.Equal(document, readBackAndWritten);
     }
@@ -49,7 +49,7 @@ public sealed class RecordTextCodecBlankDocumentTests
     [Fact]
     public void BlankDocument_WithNoIdentity_NamesNoMemberAtAll()
     {
-        var document = RecordTextCodec.BlankDocument(typeof(WorldspaceSubBlock), GameRelease.Fallout4, []);
+        var document = RecordTextCodec.BlankDocument(nameof(WorldspaceSubBlock), GameRelease.Fallout4, []);
 
         using var parsed = JsonDocument.Parse(document);
         Assert.Empty(parsed.RootElement.EnumerateObject());
@@ -60,7 +60,7 @@ public sealed class RecordTextCodecBlankDocumentTests
     {
         var identity = new JsonObject { ["FormKey"] = "000802:Source.esm" };
 
-        var document = RecordTextCodec.BlankDocument(typeof(Cell), GameRelease.Fallout4, identity);
+        var document = RecordTextCodec.BlankDocument("cell", GameRelease.Fallout4, identity);
 
         using var parsed = JsonDocument.Parse(document);
         Assert.Equal("000802:Source.esm", parsed.RootElement.GetProperty("FormKey").GetString());
@@ -68,6 +68,6 @@ public sealed class RecordTextCodecBlankDocumentTests
         Assert.Equal(
             document,
             RecordTextCodec.BlankDocument(
-                typeof(Cell), GameRelease.Fallout4, ParseObject(document)));
+                "cell", GameRelease.Fallout4, ParseObject(document)));
     }
 }

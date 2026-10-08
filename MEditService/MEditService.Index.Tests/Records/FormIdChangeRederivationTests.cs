@@ -3,7 +3,6 @@ using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -93,12 +92,11 @@ public sealed class FormIdChangeRederivationTests : IDisposable
 
     private static void RekeyTheWorldspace(OneExteriorCellWorldspaceFixture fixture, string newWorldspaceKey)
     {
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var current = fixture.Index.DocumentOf(fixture.Worldspace, fixture.Plugin);
         var rekeying = new DocumentRekey(
-            (document, newKey) => RecordDocumentEdits.WithFormKey(codec, document.Body, GameRelease.Fallout4, document.RecordType, newKey),
+            (document, newKey) => RecordDocumentEdits.WithFormKey(document.Body, GameRelease.Fallout4, document.RecordType, newKey),
             (owner, oldKey, newKey) => RecordDocumentEdits.WithEmbeddedChildFormKey(
-                codec, owner.Body, GameRelease.Fallout4, owner.RecordType, oldKey, newKey));
+                owner.Body, GameRelease.Fallout4, owner.RecordType, oldKey, newKey));
         var repository = TrackedMods.RepositoryOf(fixture.Entry);
         var identity = new RecordIdentity(fixture.Worldspace, current.RecordType, current.EditorId);
         var carrying = repository.RecordOf(fixture.Plugin, identity).Require();

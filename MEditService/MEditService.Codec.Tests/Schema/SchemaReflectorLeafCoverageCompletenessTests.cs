@@ -58,7 +58,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         var regressed = new List<string>();
         foreach (var (owner, property) in CoveredAbstractUnionsNamedSoAByproductTypeQuietlyChangingShapeIsNoticed)
         {
-            var schema = schemas.Values.SingleOrDefault(s => s.RecordType.Name == owner);
+            var schema = schemas.Values.SingleOrDefault(s => OwnersOf(s)[0].Name == owner);
             if (schema == null) { regressed.Add($"{owner} (schema not found)"); continue; }
 
             var column = schema.RecordColumns.SingleOrDefault(c => c.PropertyName == property);
@@ -77,7 +77,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
                     if (nestedFields == null) continue;
                     var match = nestedFields.SingleOrDefault(f => f.Name == property);
                     if (match == null) continue;
-                    var ownPropWhoseNestedTypeIsReDerivedToExcludeASameNamedPropertyOnAnUnrelatedStruct = DirectDataProperties(schema.RecordType, HandKeptSkipOfEditorIdTheWritePathOwnsAndGrupTimestampsSoADriftFailsLoud)
+                    var ownPropWhoseNestedTypeIsReDerivedToExcludeASameNamedPropertyOnAnUnrelatedStruct = DirectDataProperties(OwnersOf(schema)[0], HandKeptSkipOfEditorIdTheWritePathOwnsAndGrupTimestampsSoADriftFailsLoud)
                         .FirstOrDefault(p => p.Name == column.PropertyName);
                     if (ownPropWhoseNestedTypeIsReDerivedToExcludeASameNamedPropertyOnAnUnrelatedStruct == null
                         || NestedGetterType(ownPropWhoseNestedTypeIsReDerivedToExcludeASameNamedPropertyOnAnUnrelatedStruct.PropertyType)?.Name != owner) continue;
@@ -216,7 +216,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     private static IReadOnlyList<Type> OwnersOf(RecordTableSchema schema) =>
         EveryGetterInterfaceUnderOneGrupSignatureBecauseATablesColumnsAreTheUnionOfItsSiblingsSoADiscoveryWinnerSweepMissesTheRest[schema.TableName] is var siblings && siblings.Any()
             ? [.. siblings]
-            : [schema.RecordType];
+            : [typeof(IFallout4ModHeaderGetter)];
 
     private static IEnumerable<PropertyInfo> DirectDataProperties(Type type, HashSet<string> skip)
     {

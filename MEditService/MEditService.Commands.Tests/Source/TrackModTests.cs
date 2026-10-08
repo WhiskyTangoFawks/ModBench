@@ -96,7 +96,7 @@ public sealed class TrackModTests
         Assert.Equal("FirstNpc", first.EditorId);
         Assert.Equal("SecondNpc", second.EditorId);
 
-        using var roundTripped = JsonDocument.Parse(SourceEdits.Codec.RoundTrip(first.Body, GameRelease.Fallout4, "npc_"));
+        using var roundTripped = JsonDocument.Parse(RecordTextCodec.RoundTrip(first.Body, GameRelease.Fallout4, "npc_"));
         Assert.Equal(npc1.FormKey.ToString(), roundTripped.RootElement.GetProperty("FormKey").GetString());
 
         Assert.DoesNotContain(

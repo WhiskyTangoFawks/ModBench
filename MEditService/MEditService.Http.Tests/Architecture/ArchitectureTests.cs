@@ -251,7 +251,7 @@ public sealed class ArchitectureTests
 
     private static readonly string[] PluginBinaryWriters = ["MutagenPluginAdapter.cs"];
 
-    private static readonly string[] ModFactoryCallers = ["MutagenPluginAdapter.cs", "RecordTypeDispatch.cs"];
+    private static readonly string[] ModFactoryCallers = ["MutagenPluginAdapter.cs", "RecordTypes.cs"];
 
     [Fact]
     public void APluginBinary_IsOpenedAndWrittenOnlyByThePluginAdapter()

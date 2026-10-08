@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -14,7 +13,6 @@ namespace MEditService.Index.Tests.Records;
 public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
 {
     private static readonly string[] CellChildFields = ["Persistent", "Temporary", "NavigationMeshes", "Landscape"];
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private string? StoredBody(string formKey) =>
         fixture.Index.Records.GetRenderedDocument(CutDownPluginFixture.Plugin, formKey)?.Text;
@@ -31,7 +29,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
         var withInlinedChildren = new List<(ICellGetter Cell, string[] Fields)>();
         foreach (var cell in overlay.EnumerateMajorRecords<ICellGetter>(throwIfUnknown: false))
         {
-            using var doc = JsonDocument.Parse(Codec.SerializeToText(cell, GameRelease.Fallout4));
+            using var doc = JsonDocument.Parse(RecordTextCodec.SerializeToText(cell, GameRelease.Fallout4));
             var present = CellChildFields.Where(f => doc.RootElement.TryGetProperty(f, out _)).ToArray();
             if (present.Length > 0) withInlinedChildren.Add((cell, present));
         }
@@ -65,7 +63,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
 
         var questMeasuredToHoldTopicsSpriggitDoesNotEmbed = setterMod.EnumerateMajorRecords<IQuest>().First(q => q.DialogTopics.Count > 0);
 
-        var bytesATrackWritesToASourceFile = Codec.SerializeToText(questMeasuredToHoldTopicsSpriggitDoesNotEmbed, GameRelease.Fallout4);
+        var bytesATrackWritesToASourceFile = RecordTextCodec.SerializeToText(questMeasuredToHoldTopicsSpriggitDoesNotEmbed, GameRelease.Fallout4);
 
         var body = StoredBody(questMeasuredToHoldTopicsSpriggitDoesNotEmbed.FormKey.ToString());
 
@@ -79,7 +77,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
         using var overlay = OpenPlugin();
 
         var weapon = ((IFallout4ModGetter)overlay).Weapons.First();
-        var expected = Codec.SerializeToText(weapon, GameRelease.Fallout4);
+        var expected = RecordTextCodec.SerializeToText(weapon, GameRelease.Fallout4);
 
         Assert.Equal(expected, StoredBody(weapon.FormKey.ToString()));
     }

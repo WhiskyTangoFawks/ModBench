@@ -1,76 +1,35 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 using MEditService.Codec.Schema;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Serialization;
 
 /// <summary>Reading and writing a container's child major records through the members
 /// <see cref="ContainerMembers"/> derives. Nothing is stripped.</summary>
-public static class ContainerChildFields
+internal static class ContainerChildFields
 {
     /// <summary>The child-major field names for <paramref name="recordType"/>, or null when it is not a
     /// known container shape, or its assembly is outside every game this build references.</summary>
-    public static IReadOnlyList<string>? EnumerateChildFieldsFor(Type recordType) =>
+    internal static IReadOnlyList<string>? EnumerateChildFieldsFor(Type recordType) =>
         ContainerMembers.CategoryOf(recordType.Assembly) is { } category
-        && ContainerMembers.Derived.ChildFieldsByType.TryGetValue((category, NormalizedTypeName(recordType)), out var fields)
+        && ContainerMembers.Derived.ChildFieldsByType.TryGetValue((category, RecordTypes.ClassNameOf(recordType)), out var fields)
             ? fields
             : null;
 
-    private static readonly ConcurrentDictionary<GameCategory, IReadOnlySet<(string ParentType, string Slot)>> EmbeddedSlotsByCategory = new();
-
-    private static readonly IReadOnlySet<(string ParentType, string Slot)> EmptyEmbeddedSlots = new HashSet<(string, string)>();
-
-    /// <summary>One game's embedded slots, (ParentType, Slot) pairs with the game itself dropped —
-    /// two games can share both a type name and a slot name.</summary>
-    public static IReadOnlySet<(string ParentType, string Slot)> EmbeddedSlotsFor(GameCategory category) =>
-        EmbeddedSlotsByCategory.GetOrAdd(category, c => ContainerMembers.Derived.EmbeddedSlots
-            .Where(slot => slot.Game == c)
-            .Select(slot => (slot.ParentType, slot.Slot))
-            .ToHashSet());
-
-    /// <summary>As <see cref="EmbeddedSlotsFor(GameCategory)"/>, from a type's own assembly. Empty
-    /// for an assembly outside every game this build references.</summary>
-    internal static IReadOnlySet<(string ParentType, string Slot)> EmbeddedSlotsFor(Type anyTypeInTheGame) =>
-        ContainerMembers.CategoryOf(anyTypeInTheGame.Assembly) is { } category ? EmbeddedSlotsFor(category) : EmptyEmbeddedSlots;
-
-    /// <summary>Whether a record of <paramref name="recordType"/> has child slots at all: the copy
-    /// gestures land one own-fields-only, and replace an existing override in place rather than
-    /// refusing.</summary>
-    public static bool HasChildFields(string recordType, GameRelease release) =>
-        RecordTypeDispatch.For(release).ConcreteFor(recordType) is { } concrete
-        && EnumerateChildFieldsFor(concrete) != null;
-
-    private const string OverlaySuffix = "BinaryOverlay";
-
-    private const string GetterPrefix = "I";
-    private const string GetterSuffix = "Getter";
-
-    /// <summary>A binary overlay's runtime type is "NameBinaryOverlay" and a schema's record type
-    /// its "INameGetter" interface; normalized once so ingest, Track and a document read key off the
-    /// same name.</summary>
-    internal static string NormalizedTypeName(Type recordType)
-    {
-        var name = recordType.Name;
-        if (name.EndsWith(OverlaySuffix, StringComparison.Ordinal)) return name[..^OverlaySuffix.Length];
-        return recordType.IsInterface && name.StartsWith(GetterPrefix, StringComparison.Ordinal) && name.EndsWith(GetterSuffix, StringComparison.Ordinal)
-            ? name[GetterPrefix.Length..^GetterSuffix.Length]
-            : name;
-    }
+    private static bool IsEmbeddedSlot(Type parent, string slot) =>
+        ContainerMembers.CategoryOf(parent.Assembly) is { } category
+        && ContainerMembers.Derived.EmbeddedSlots.Contains((category, RecordTypes.ClassNameOf(parent), slot));
 
     /// <summary><see cref="Child"/> is the real object hanging off Parent, not a copy: mutating it and
     /// reserializing the document's root is how an embedded child is written.</summary>
     internal readonly record struct EmbeddedChild(IMajorRecordGetter Parent, string SlotName, int SlotIndex, IMajorRecord Child);
 
     /// <summary>The child through Mutagen's own object model, not a JSON pointer, so existing writers
-    /// apply unchanged. Descends only through <see cref="EmbeddedSlotsFor(Type)"/>: a worldspace's
+    /// apply unchanged. Descends only through an embedded slot: a worldspace's
     /// blocks have directories.</summary>
     internal static EmbeddedChild? FindEmbeddedChild(IMajorRecordGetter parent, string formKey)
     {
-        var parentType = NormalizedTypeName(parent.GetType());
-        var embeddedSlots = EmbeddedSlotsFor(parent.GetType());
-
         foreach (var (slotName, slotIndex, child) in EnumerateChildren(parent))
         {
             if (child.FormKey.ToString().Equals(formKey, StringComparison.Ordinal))
@@ -79,7 +38,7 @@ public static class ContainerChildFields
                 return child is IMajorRecord settable ? new EmbeddedChild(parent, slotName, slotIndex, settable) : null;
             }
 
-            if (!embeddedSlots.Contains((parentType, slotName))) continue;
+            if (!IsEmbeddedSlot(parent.GetType(), slotName)) continue;
             if (FindEmbeddedChild(child, formKey) is { } deeper) return deeper;
         }
 

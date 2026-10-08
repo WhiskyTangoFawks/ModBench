@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -20,16 +19,16 @@ internal static class SourceTransactionActs
 
     internal static void Rekey(
         this SourceTransaction transaction, SourceRepository repository, PluginAddress plugin, RecordIdentity identity, string newFormKey,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, DocumentRekey rekey) =>
+        DocumentRekey rekey) =>
         transaction.Apply(repository.ChangesToRekey(
-            plugin, OwnerDocument(repository, plugin, identity, schemas), identity, newFormKey, rekey));
+            plugin, OwnerDocument(repository, plugin, identity), identity, newFormKey, rekey));
 
     private static SourceDocument OwnerDocument(
-        SourceRepository repository, PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        SourceRepository repository, PluginAddress plugin, RecordIdentity identity)
     {
         var owner = identity;
-        while (repository.ContainerOf(plugin, owner, schemas) is { } container)
-            owner = repository.Get(plugin, container.ParentFormKey, schemas).Require().Identity;
+        while (repository.ContainerOf(plugin, owner) is { } container)
+            owner = repository.Get(plugin, container.ParentFormKey).Require().Identity;
         return repository.RecordOf(plugin, owner).Require();
     }
 }

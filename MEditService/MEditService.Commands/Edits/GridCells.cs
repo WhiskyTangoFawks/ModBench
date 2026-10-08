@@ -10,14 +10,14 @@ internal static class GridCells
 {
     /// <summary>A bare cell under the FormKey <paramref name="allocator"/> draws next, at <paramref name="grid"/>.</summary>
     internal static RecordEditResult? Mint(
-        FormKeyAllocator allocator, RecordTextCodec codec, RecordTableSchema schema, GameRelease release,
+        FormKeyAllocator allocator, RecordTableSchema schema, GameRelease release,
         (int X, int Y) grid, out JsonObject cell)
     {
         cell = [];
         if (allocator.Next(out var formKey) is { } exhausted) return exhausted;
-        cell = JsonNode.Parse(RecordMint.BareDocument(codec, schema, release, formKey, editorId: null)) as JsonObject
+        cell = JsonNode.Parse(RecordMint.BareDocument(schema, release, formKey, editorId: null)) as JsonObject
             ?? throw new InvalidOperationException($"Expected the minted cell {formKey}'s document to hold a JSON object.");
-        cell[RecordTypeDispatch.CellGridMember] = PlacedCell.GridAt(grid.X, grid.Y);
+        cell[RecordTypes.CellGridMember] = PlacedCell.GridAt(grid.X, grid.Y);
         return null;
     }
 }

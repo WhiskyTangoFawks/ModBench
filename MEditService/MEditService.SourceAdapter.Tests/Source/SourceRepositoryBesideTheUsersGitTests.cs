@@ -30,7 +30,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
         var repository = SourceRepository.Open(TestMod.In(modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{modFolder}' to be tracked.");
         Assert.Empty(repository.ChangedSinceLastCommit(
-            new PluginAddress(Plugin, "TestMod"), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)));
+            new PluginAddress(Plugin, "TestMod")));
 
         Assert.Equal(before, File.ReadAllBytes(IndexOf(modFolder)));
 

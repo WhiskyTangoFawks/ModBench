@@ -9,13 +9,11 @@ namespace MEditService.Commands.Edits;
 /// where the game names one plugin, only a cell that plugin defines can.</summary>
 internal static class CanBePartial
 {
-    internal static bool TypeDeclares(Type recordType) => PartialFormFlag.IsPartialFormable(recordType);
-
     /// <summary><paramref name="temporaryExterior"/> is null while a cell's placement is not yet known.</summary>
     internal static Verdict Of(RecordTableSchema schema, GameRelease release, string? formKey, bool? temporaryExterior)
     {
-        if (!TypeDeclares(schema.RecordType)) return new Verdict.TypeDoesNotDeclare();
-        if (!RecordTypeDispatch.For(release).IsCell(schema.TableName)) return new Verdict.Can();
+        if (!schema.IsPartialFormable) return new Verdict.TypeDoesNotDeclare();
+        if (!RecordTypes.For(release).IsCell(schema.TableName)) return new Verdict.Can();
         if (temporaryExterior is not { } temporary) return new Verdict.NeedsPlacement();
         if (temporary) return new Verdict.TemporaryExterior();
         return PartialFormFlag.CellsDefinedIn(release) is { } only && FormKey.TryFactory(formKey, out var key) && key.ModKey != only

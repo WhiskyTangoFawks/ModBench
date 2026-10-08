@@ -5,7 +5,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -18,7 +17,6 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
 {
     private const int Deleted = 0x0020, Persistent = 0x0400, PartialForm = 0x4000, Compressed = 0x40000;
 
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
     private static readonly ModKey Fallout4Esm = ModKey.FromFileName("Fallout4.esm");
 
     private readonly DocumentEditFixture _fixture = new();
@@ -75,7 +73,7 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
         var deleted = SetFlags(formKey, Deleted);
 
         Assert.True(
-            JsonNode.DeepEquals(Parse(Codec.SerializeToText(headerAlone, GameRelease.Fallout4)), deleted),
+            JsonNode.DeepEquals(Parse(RecordTextCodec.SerializeToText(headerAlone, GameRelease.Fallout4)), deleted),
             deleted.ToJsonString());
     }
 
@@ -188,7 +186,7 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
         var partial = SetFlags(formKey, PartialForm);
 
         Assert.True(
-            JsonNode.DeepEquals(Parse(Codec.SerializeToText(headerAndEditorId, GameRelease.Fallout4)), partial),
+            JsonNode.DeepEquals(Parse(RecordTextCodec.SerializeToText(headerAndEditorId, GameRelease.Fallout4)), partial),
             partial.ToJsonString());
     }
 

@@ -17,7 +17,7 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
     internal static RecordEmptying? Of(JsonObject record, RecordTableSchema schema, ColumnSpec column, JsonElement? value)
     {
         if (RecordFlagsWrite.Of(record, schema, column, value) is not { } write) return null;
-        var partialFormable = CanBePartial.TypeDeclares(schema.RecordType);
+        var partialFormable = schema.IsPartialFormable;
         var makesPartialForm = partialFormable && write.Sets(PartialFormFlag.Bit);
         var deletes = !makesPartialForm && write.Sets(DeletedFlag.Bit);
         var flags = write.Next;
@@ -37,13 +37,13 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
 
     // The flags a copy a refill passes over: Deleted, and Partial Form where the type can be one.
     private static long EmptyingBits(RecordTableSchema schema) =>
-        CanBePartial.TypeDeclares(schema.RecordType) ? DeletedFlag.Bit | PartialFormFlag.Bit : DeletedFlag.Bit;
+        schema.IsPartialFormable ? DeletedFlag.Bit | PartialFormFlag.Bit : DeletedFlag.Bit;
 
     /// <summary>The refusal of a refill whose nearest copy to the left cannot be read.</summary>
     internal static RecordEditResult? RefuseRefill(LeftCopy? copyOnTheLeft, RecordTableSchema schema, string? formKey, string spelled)
     {
         if (copyOnTheLeft is not LeftCopy.Unreadable unreadable) return null;
-        var neither = CanBePartial.TypeDeclares(schema.RecordType) ? "neither Partial Form nor Deleted" : "not Deleted";
+        var neither = schema.IsPartialFormable ? "neither Partial Form nor Deleted" : "not Deleted";
         return unreadable.Refusal(spelled, $"{formKey}'s own fields come from its nearest copy to the left that is {neither}");
     }
 
@@ -93,9 +93,9 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
         return JsonSerializer.SerializeToElement(flags);
     }
 
-    internal void Apply(JsonObject record, RecordTableSchema schema, JsonObject? left)
+    internal void Apply(JsonObject record, RecordTableSchema schema, GameRelease release, JsonObject? left)
     {
-        foreach (var field in OwnFields(schema))
+        foreach (var field in OwnFields(schema, release))
         {
             var member = field.PropertyName;
             var isEditorId = field.Field.IsEditorId;
@@ -117,13 +117,13 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
 
     /// <summary>Makes <paramref name="record"/> a Partial Form as the record-flag edit does. False, changing
     /// nothing, when it already is one.</summary>
-    internal static bool MakePartialForm(JsonObject record, RecordTableSchema schema)
+    internal static bool MakePartialForm(JsonObject record, RecordTableSchema schema, GameRelease release)
     {
         var flags = schema.RecordColumns.Single(c => c.Name == RecordHeaderFlags.Member);
         var write = JsonSerializer.SerializeToElement(RecordFlagsWrite.HeldBy(record) | PartialFormFlag.Bit);
         if (Of(record, schema, flags, write) is not { } emptying) return false;
         ClearAliases(record, flags);
-        emptying.Apply(record, schema, left: null);
+        emptying.Apply(record, schema, release, left: null);
         record[RecordHeaderFlags.Member] = JsonNode.Parse(emptying.FlagsWith(left: null).GetRawText());
         return true;
     }
@@ -140,9 +140,9 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
     internal static JsonObject? LeftOf(LeftCopy? copyOnTheLeft) =>
         copyOnTheLeft?.FoundText is { } text ? JsonNode.Parse(text) as JsonObject : null;
 
-    private static IEnumerable<ColumnSpec> OwnFields(RecordTableSchema schema)
+    private static IEnumerable<ColumnSpec> OwnFields(RecordTableSchema schema, GameRelease release)
     {
-        var children = ContainerChildFields.EnumerateChildFieldsFor(schema.RecordType) ?? [];
+        var children = RecordTypes.For(release).ChildSlotsOf(schema.TableName);
         return schema.RecordColumns
             .Where(c => !c.Field.IsRecordHeaderMember && !c.Field.IsDiscriminator)
             .Where(c => !children.Contains(c.PropertyName, StringComparer.Ordinal));

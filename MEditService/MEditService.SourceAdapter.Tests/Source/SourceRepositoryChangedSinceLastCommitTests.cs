@@ -4,7 +4,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -40,7 +39,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     }
 
     private static IReadOnlyDictionary<string, RecordChange> ChangesIn(SourceRepository repository) =>
-        repository.ChangedSinceLastCommit(Plugin, SharedSchemaReflector.Instance.GetSchemas(Release));
+        repository.ChangedSinceLastCommit(Plugin);
 
     [Fact]
     public void AnUnstagedEditNeverGitAdded_ToAFileTrackAlreadyCommitted_IsModified()
@@ -230,8 +229,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         var worldspacePath = PluginSourceRoot.ContainerDocument(Path.Combine(
             PluginSourceRoot.For(PluginName), "Worldspaces",
             $"{worldspace.EditorID} - {worldspace.FormKey.ID:X6}_{worldspace.FormKey.ModKey.FileName}"));
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var repository = Tracked(new TreeFile(worldspacePath, Encoding.UTF8.GetBytes(codec.SerializeToText(worldspace, Release))));
+        var repository = Tracked(new TreeFile(worldspacePath, Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(worldspace, Release))));
 
         var file = Path.Combine(_modFolder, worldspacePath);
         File.WriteAllText(file, File.ReadAllText(file).Replace("EditedRef", "Renamed", StringComparison.Ordinal));

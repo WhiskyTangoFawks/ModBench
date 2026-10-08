@@ -11,21 +11,10 @@ namespace MEditService.SourceAdapter;
 /// handed.</summary>
 internal static class EmbeddedChildSplice
 {
-    /// <summary>The class name the owner's slots are keyed by: from the record type its path decides,
-    /// or from the document's own discriminator when the path cannot name one.</summary>
-    internal static string? ContainerTypeName(string? ownerRecordType, byte[] ownerBytes, GameRelease release) =>
-        EmbeddedChildLocator.ContainerTypeName(ownerRecordType, ownerBytes, release);
-
-    /// <summary>Where <paramref name="formKey"/> sits inside <paramref name="ownerBytes"/>, or null
-    /// when no child slot of the owner carries it.</summary>
-    internal static EmbeddedChildSpan? Find(
-        byte[] ownerBytes, string? ownerTypeName, string formKey, GameRelease release) =>
-        EmbeddedChildLocator.Find(ownerBytes, ownerTypeName, formKey, release);
-
-    /// <summary>The same text for a caller holding the owner and asking by identity. Null when no
+    /// <summary>The child's text for a caller holding the owner and asking by identity. Null when no
     /// embedded slot of the owner carries <paramref name="formKey"/>.</summary>
-    internal static string? TextOf(byte[] ownerBytes, string? ownerTypeName, string formKey, GameRelease release) =>
-        Find(ownerBytes, ownerTypeName, formKey, release) is { } span ? Extract(ownerBytes, span, release) : null;
+    internal static string? TextOf(byte[] ownerBytes, string? ownerRecordType, string formKey, GameRelease release) =>
+        EmbeddedChildLocator.Find(ownerBytes, ownerRecordType, formKey, release) is { } span ? Extract(ownerBytes, span, release) : null;
 
     /// <summary>The child's own text as the codec spells it standalone: the span de-indented, and
     /// without the discriminator a document of an unambiguous type carries none of.</summary>
@@ -34,7 +23,7 @@ internal static class EmbeddedChildSplice
         var text = DeIndent(
             Encoding.UTF8.GetString(ownerBytes, span.Start, span.End - span.Start), IndentAt(ownerBytes, span.Start));
 
-        return span.Discriminator is { } named && !RecordTypeDispatch.For(release).IsPathAmbiguous(named)
+        return span.Discriminator is { } named && !RecordTypes.For(release).IsPathAmbiguous(named)
             ? WithoutDiscriminator(text)
             : text;
     }

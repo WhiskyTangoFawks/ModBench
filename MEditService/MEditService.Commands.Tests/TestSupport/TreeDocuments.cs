@@ -1,10 +1,7 @@
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
-using MEditService.TestSupport;
-using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -12,12 +9,10 @@ namespace MEditService.Commands.Tests.TestSupport;
 /// record's own, an embedded child belonging to the document that carries it.</summary>
 internal static class TreeDocuments
 {
-    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
-        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     internal static IReadOnlyList<SourceDocument> Of(SourceRepository repository, PluginAddress plugin)
     {
-        using var documents = repository.OpenDocuments(plugin, Schemas);
+        using var documents = repository.OpenDocuments(plugin);
         var roots = new List<PluginDocument>();
         try
         {

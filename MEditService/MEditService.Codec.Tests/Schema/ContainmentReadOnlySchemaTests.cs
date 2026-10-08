@@ -18,7 +18,7 @@ public sealed class ContainmentReadOnlySchemaTests
     {
         var slots = Schemas.Values
             .SelectMany(schema => schema.RecordColumns
-                .Where(c => ContainerChildFields.EnumerateChildFieldsFor(schema.RecordType)?.Contains(c.PropertyName) == true)
+                .Where(c => RecordTypes.For(GameRelease.Fallout4).ChildSlotsOf(schema.TableName).Contains(c.PropertyName))
                 .Select(column => (Schema: schema, Column: column)))
             .ToList();
         Assert.Contains(slots, s => s.Schema.TableName == "cell" && s.Column.Name == "NavigationMeshes");

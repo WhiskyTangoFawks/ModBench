@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
@@ -11,8 +10,7 @@ namespace MEditService.Commands.Edits;
 /// <summary>The write side's target gate (target-architecture.d2 medit_core.commands): which plugin and record a gesture may write, and its pre-write refusals.
 /// An internal seam, tested through the gestures.</summary>
 internal sealed class WriteTargets(
-    LoadOrderHolder loadOrder,
-    SchemaReflector schemaReflector)
+    LoadOrderHolder loadOrder)
 {
     internal readonly record struct EditTarget(GameRelease Release, RecordIdentity Identity, SourceRepository Repository);
 
@@ -60,7 +58,7 @@ internal sealed class WriteTargets(
         var release = loadOrder.Current.GameRelease;
         try
         {
-            if (repository.CarryingFromText(plugin, formKey, text, schemaReflector.GetSchemas(release)) is not var (record, document))
+            if (repository.CarryingFromText(plugin, formKey, text) is not var (record, document))
             {
                 refused = RecordNotFound(plugin, formKey);
                 return false;
@@ -84,7 +82,7 @@ internal sealed class WriteTargets(
             RecordEditRefusal.RecordNotFound,
             $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document carries it.");
 
-    private RecordEditResult? ResolveInTheTree(
+    private static RecordEditResult? ResolveInTheTree(
         PluginAddress plugin, string formKey, SourceRepository repository, GameRelease release, out EditTarget target,
         out SourceDocument? found)
     {
@@ -92,7 +90,7 @@ internal sealed class WriteTargets(
         found = null;
         try
         {
-            found = repository.Get(plugin, formKey, schemaReflector.GetSchemas(release));
+            found = repository.Get(plugin, formKey);
         }
         catch (Exception ex) when (ex is not (OutOfMemoryException or AmbiguousSourceUnitException))
         {

@@ -6,7 +6,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index;
@@ -18,7 +17,6 @@ internal sealed class DuckDbRecordIndex : IDisposable
 
     // Constructed rather than injected: it is stateless apart from static reflection caches, and
     // every construction site would otherwise learn a dependency it has no say in.
-    private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private readonly Store _store;
     private readonly IndexWriteGate _gate;
@@ -44,9 +42,8 @@ internal sealed class DuckDbRecordIndex : IDisposable
         _logger = logger;
         _projection = new Projection(this);
 
-        var containers = new ContainerDocuments(store.Release, store.Schemas);
-        _pluginIngest = new PluginIngest(Connection, logger, containers);
-        _workingTreeOverlay = new WorkingTreeOverlay(Connection, logger, _codec, containers, store.Schemas, store.Release);
+        _pluginIngest = new PluginIngest(Connection, logger, store.Release);
+        _workingTreeOverlay = new WorkingTreeOverlay(Connection, logger, store.Schemas, store.Release);
 
         Commit(_ =>
         {

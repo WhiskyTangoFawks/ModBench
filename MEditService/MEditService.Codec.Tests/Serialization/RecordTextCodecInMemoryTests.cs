@@ -1,6 +1,5 @@
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -10,7 +9,6 @@ namespace MEditService.Codec.Tests.Serialization;
 
 public class RecordTextCodecInMemoryTests
 {
-    private static RecordTextCodec Codec() => new(NullLogger<RecordTextCodec>.Instance);
 
     [Fact]
     public void SerializeToText_ForAPopulatedContainer_TouchesNoFilesystem_ThroughTheWorkingDirectoryWhereChildPathsLandBecauseTheyAreRelativeToAnEmptyStreamPackageFolder()
@@ -23,7 +21,7 @@ public class RecordTextCodecInMemoryTests
         var workingDirectory = Directory.GetCurrentDirectory();
         var before = Directory.GetDirectories(workingDirectory).ToHashSet(StringComparer.Ordinal);
 
-        var text = Codec().SerializeToText(quest, GameRelease.Fallout4);
+        var text = RecordTextCodec.SerializeToText(quest, GameRelease.Fallout4);
 
         Assert.NotEmpty(text);
         Assert.Equal(before, Directory.GetDirectories(workingDirectory).ToHashSet(StringComparer.Ordinal));

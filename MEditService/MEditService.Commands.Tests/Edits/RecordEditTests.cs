@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceAdapter;
@@ -56,7 +57,7 @@ public sealed class RecordEditTests : IDisposable
     {
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        using var reparsed = JsonDocument.Parse(SourceEdits.Codec.RoundTrip(
+        using var reparsed = JsonDocument.Parse(RecordTextCodec.RoundTrip(
             _mod.Document(_mod.Npc.ToString()).Require().Body, GameRelease.Fallout4, CompileFixture.NpcRecordType));
         Assert.Equal(_mod.Npc.ToString(), reparsed.RootElement.GetProperty("FormKey").GetString());
         Assert.Equal(0.75f, reparsed.RootElement.GetProperty("HeightMax").GetSingle());
@@ -164,8 +165,7 @@ public sealed class RecordEditTests : IDisposable
     }
 
     private string Unreadable() => Assert.Throws<UnreadableSourceDocumentException>(
-        () => _mod.Repository.Require().Get(
-            _mod.Plugin, _mod.Npc.ToString(), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4))).Message;
+        () => _mod.Repository.Require().Get(_mod.Plugin, _mod.Npc.ToString())).Message;
 
     [Fact]
     public void EditEditorId_OfADocumentThatIsNotJson_RefusesAsUnreadable_AndRenamesNothing()

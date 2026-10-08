@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -25,7 +26,7 @@ public class UnionArrayAddInventoryTests
                 .Select(column => (Table: table.Key, Column: column.Name, Kinds: KindsOf(column))));
         foreach (var shape in columns.GroupBy(column => column.Kinds, StringComparer.Ordinal))
         {
-            var (table, column, _) = shape.OrderByDescending(c => CreatableRecordTypes.Includes(c.Table, GameRelease.Fallout4)).First();
+            var (table, column, _) = shape.OrderByDescending(c => RecordTypes.For(GameRelease.Fallout4).IsCreatable(c.Table)).First();
             data.Add(table, column);
         }
         return data;

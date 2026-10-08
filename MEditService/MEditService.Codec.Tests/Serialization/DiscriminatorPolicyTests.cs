@@ -1,7 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -14,7 +13,6 @@ public sealed class DiscriminatorPolicyTests
 
     private const string Discriminator = "MutagenObjectType";
 
-    private static RecordTextCodec Codec() => new(NullLogger<RecordTextCodec>.Instance);
 
     private static Weapon MakeWeapon() =>
         new(Mod) { EditorID = "PolicyWeapon", BaseDamage = 7, Value = 11 };
@@ -25,7 +23,7 @@ public sealed class DiscriminatorPolicyTests
     [Fact]
     public void SerializeToText_ForAWeapon_WritesNoTopLevelDiscriminator()
     {
-        var text = Codec().SerializeToText(MakeWeapon(), GameRelease.Fallout4);
+        var text = RecordTextCodec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
 
         using var doc = JsonDocument.Parse(text);
         Assert.False(doc.RootElement.TryGetProperty(Discriminator, out _),
@@ -35,7 +33,7 @@ public sealed class DiscriminatorPolicyTests
     [Fact]
     public void RoundTrip_ForAWeaponDocument_ReconstitutesFromRecordType_BecauseAConcreteElementTypeWritesNoDiscriminatorAndItsIdentityIsTheIndexsRecordType()
     {
-        var weapon = ReadBack.Of(Codec(), MakeWeapon(), GameRelease.Fallout4, "weap");
+        var weapon = ReadBack.Of(MakeWeapon(), GameRelease.Fallout4, "weap");
 
         Assert.Equal("PolicyWeapon", weapon.GetProperty("EditorID").GetString());
         Assert.Equal(7u, weapon.GetProperty("BaseDamage").GetUInt32());
@@ -44,7 +42,7 @@ public sealed class DiscriminatorPolicyTests
     [Fact]
     public void SerializeToText_ForAGlobalFloat_KeepsTheDiscriminator_BecauseADiscriminatorIsWrittenOnlyWhenTheGroupElementTypeIsAbstract()
     {
-        var text = Codec().SerializeToText(MakeGlobalFloat(), GameRelease.Fallout4);
+        var text = RecordTextCodec.SerializeToText(MakeGlobalFloat(), GameRelease.Fallout4);
 
         using var doc = JsonDocument.Parse(text);
         Assert.Equal("GlobalFloat", doc.RootElement.GetProperty(Discriminator).GetString());
@@ -56,10 +54,9 @@ public sealed class DiscriminatorPolicyTests
     [InlineData(null)]
     public void RoundTrip_ForAGlobalFloatDocument_KeepsItGlobalFloat_UnderTheGrupSignatureIngestStoresTheLowercasedClrNameTracksSourcePathFallsBackToAndNoRecordType(string? recordType)
     {
-        var codec = Codec();
-        var text = codec.SerializeToText(MakeGlobalFloat(), GameRelease.Fallout4);
+        var text = RecordTextCodec.SerializeToText(MakeGlobalFloat(), GameRelease.Fallout4);
 
-        using var roundTripped = JsonDocument.Parse(codec.RoundTrip(text, GameRelease.Fallout4, recordType));
+        using var roundTripped = JsonDocument.Parse(RecordTextCodec.RoundTrip(text, GameRelease.Fallout4, recordType));
 
         Assert.Equal("GlobalFloat", roundTripped.RootElement.GetProperty(Discriminator).GetString());
         Assert.Equal(2.5f, roundTripped.RootElement.GetProperty("Data").GetSingle());
@@ -71,7 +68,7 @@ public sealed class DiscriminatorPolicyTests
         var cell = new Cell(Mod) { EditorID = "DiscriminatorCell" };
         cell.Persistent.Add(new PlacedObject(Mod) { EditorID = "PersistentRef" });
 
-        var text = Codec().SerializeToText(cell, GameRelease.Fallout4);
+        var text = RecordTextCodec.SerializeToText(cell, GameRelease.Fallout4);
 
         using var doc = JsonDocument.Parse(text);
         Assert.False(doc.RootElement.TryGetProperty(Discriminator, out _), "CELL's group element is concrete.");

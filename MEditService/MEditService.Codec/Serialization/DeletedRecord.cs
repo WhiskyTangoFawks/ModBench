@@ -12,18 +12,18 @@ internal static class DeletedRecord
     /// <summary>The record's document, or its header's where it is deleted, its file gives it no field and
     /// the overlay cannot serialize it. Any other failure is the caller's to diagnose.</summary>
     internal static byte[] Serialize(
-        RecordTextCodec codec, IMajorRecordGetter record, RecordTableSchema schema, GameRelease release, IRecordFieldProbe file)
+        IMajorRecordGetter record, RecordTableSchema schema, GameRelease release, IRecordFieldProbe file)
     {
         try
         {
-            return codec.SerializeToBytes(record, release);
+            return RecordTextCodec.SerializeToBytes(record, release);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException
             && (record.MajorRecordFlagsRaw & DeletedFlag.Bit) != 0
             && file.HoldsNoFields(record.FormKey)
             && HeaderOf(record, schema, release) is { } header)
         {
-            return codec.SerializeToBytes(header, release);
+            return RecordTextCodec.SerializeToBytes(header, release);
         }
     }
 

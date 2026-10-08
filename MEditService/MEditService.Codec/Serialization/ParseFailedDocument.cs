@@ -14,7 +14,7 @@ internal static class ParseFailedDocument
     {
         var members = new List<string>();
         // A path-ambiguous document leads with its concrete type, which the reader dispatches on.
-        var dispatch = RecordTypeDispatch.For(release);
+        var dispatch = RecordTypes.For(release);
         if (dispatch.IsPathAmbiguous(record.GetType())
             && dispatch.ConcreteFor(record.GetType().Name) is { } concrete)
         {

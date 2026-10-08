@@ -95,7 +95,6 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     public LinkAnswers LinkTargets(
         LoadOrderSnapshot loadOrder,
         RegisteredPlugin compiled,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas,
         IReadOnlyCollection<string> formKeys)
     {
         // A copy a line names stands for its filename; a plugin with no line is found after them.
@@ -111,7 +110,7 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
             .DistinctBy(plugin => plugin.Name, StringComparer.OrdinalIgnoreCase)
             .Select(plugin => new ModPath(plugin.Path))
             .ToList();
-        return LoadOrderLinks.Targets(files, loadOrder.GameRelease, schemas, formKeys);
+        return LoadOrderLinks.Targets(files, loadOrder.GameRelease, formKeys);
     }
 
     private static bool SameFile(RegisteredPlugin plugin, RegisteredPlugin other) =>
@@ -119,10 +118,9 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
 
     public Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files,
-        RecordTextCodec codec,
         GameRelease gameRelease,
         CancellationToken cancel = default) =>
-        PluginTrees.ReadTreeAsync(files, codec, gameRelease, cancel);
+        PluginTrees.ReadTreeAsync(files, gameRelease, cancel);
 
     public Task WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,

@@ -19,7 +19,7 @@ internal sealed class RequiredMasters(PluginAddress plugin)
         SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var required = new RequiredMasters(plugin);
-        using var documents = repository.OpenDocuments(plugin, schemas);
+        using var documents = repository.OpenDocuments(plugin);
         foreach (var document in documents.Records) required.Add(document, schemas[document.RecordType]);
         return required.Masters;
     }

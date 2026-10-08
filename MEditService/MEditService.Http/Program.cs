@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Composition;
 using MEditService.Http;
 using MEditService.Http.Endpoints;
@@ -72,7 +71,6 @@ try
     // One Index for the whole process (ADR-0014). Which file it opens comes from the
     // load request (ADR-0010), not from here.
     builder.Services.AddRecordIndex();
-    builder.Services.AddSingleton<RecordTextCodec>();
     // The handlers (ADR-0014) are registered where the module they share is visible,
     // and resolved by the route that names the gesture.
     builder.Services.AddCommandHandlers();

@@ -114,6 +114,5 @@ internal static class DocumentText
     /// record type its path decides — the one fact the text alone cannot supply.</summary>
     internal static EmbeddedChildSpan? EmbeddedChildIn(
         byte[] ownerBytes, SourceUnit unit, string formKey, GameRelease release) =>
-        EmbeddedChildSplice.Find(
-            ownerBytes, EmbeddedChildSplice.ContainerTypeName(unit.OwnerRecordType, ownerBytes, release), formKey, release);
+        EmbeddedChildLocator.Find(ownerBytes, unit.OwnerRecordType, formKey, release);
 }

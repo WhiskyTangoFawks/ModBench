@@ -8,7 +8,7 @@ namespace MEditService.Codec.Schema;
 public enum CellPlace { Interior, Exterior, PersistentWorldspaceCell }
 
 /// <summary>What xEdit's Add lists on a container record, among the types an open member of it holds
-/// in the game. A type with no schema is left out: no row would show the new record.</summary>
+/// in the game. A type the game lacks is left out.</summary>
 public static class ChildRecordTypes
 {
     private enum Narrowing { None, NotPersistent, NotPersistentExterior }
@@ -33,13 +33,13 @@ public static class ChildRecordTypes
     /// container that is no cell.</summary>
     public static IReadOnlyList<string> Of(
         string containerType, string containerText, CellPlace? place,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
+        GameRelease release)
     {
         if (!XEditAddList.TryGetValue(containerType, out var adds)) return [];
         using var document = JsonDocument.Parse(containerText);
-        var container = Read(containerType, document.RootElement, schemas, release);
+        var container = Read(containerType, document.RootElement, release);
         return [.. adds
-            .Where(add => SlotFor(add, place, container, schemas, release) is ChildSlot.Open or ChildSlot.Several)
+            .Where(add => SlotFor(add, place, container, release) is ChildSlot.Open or ChildSlot.Several)
             .Select(add => add.Type)];
     }
 
@@ -47,20 +47,20 @@ public static class ChildRecordTypes
     /// <see cref="ChildSlot.Filled"/> only when a held single-record member is all that stands in the way.</summary>
     public static ChildSlot SlotFor(
         string containerType, JsonElement container, CellPlace? place, string recordType,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
+        GameRelease release)
     {
         if (!XEditAddList.TryGetValue(containerType, out var adds)
             || adds.Where(add => add.Type.Equals(recordType, StringComparison.OrdinalIgnoreCase)).ToList() is not [var offered])
             return new ChildSlot.NotHeld();
-        return SlotFor(offered, place, Read(containerType, container, schemas, release), schemas, release);
+        return SlotFor(offered, place, Read(containerType, container, release), release);
     }
 
     private static ChildSlot SlotFor(
         (string Type, Narrowing Narrowing) add, CellPlace? place, Container container,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
+        GameRelease release)
     {
-        if (!Allows(add.Narrowing, place, container.Persistent) || !schemas.ContainsKey(add.Type)
-            || RecordTypeDispatch.For(release).ConcreteFor(add.Type) is not { } held) return new ChildSlot.NotHeld();
+        if (!Allows(add.Narrowing, place, container.Persistent)
+            || RecordTypes.For(release).ConcreteFor(add.Type) is not { } held) return new ChildSlot.NotHeld();
 
         var takers = container.Members.Where(member => member.Holds.Any(type => type.IsAssignableFrom(held))).ToList();
         return takers.Where(member => member.HeldBy is null).ToList() switch
@@ -87,17 +87,17 @@ public static class ChildRecordTypes
     private sealed record Container(IReadOnlyList<Member> Members, bool Persistent);
 
     private static Container Read(
-        string containerType, JsonElement root, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release) =>
-        new(MembersOf(containerType, root, schemas, release), PersistentFlag.IsSet(root));
+        string containerType, JsonElement root, GameRelease release) =>
+        new(MembersOf(containerType, root, release), PersistentFlag.IsSet(root));
 
     // None for a deleted container: it holds nothing.
     private static List<Member> MembersOf(
-        string containerType, JsonElement root, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
+        string containerType, JsonElement root, GameRelease release)
     {
-        if (RecordTypeDispatch.For(release).ConcreteFor(containerType) is not { } container) return [];
+        if (RecordTypes.For(release).ConcreteFor(containerType) is not { } container) return [];
         if (DeletedFlag.IsSet(root)) return [];
 
-        var held = new ContainerDocuments(release, schemas).ChildrenOf(containerType, root)
+        var held = new ContainerDocuments(release).ChildrenOf(containerType, root)
             .GroupBy(child => child.SlotName, StringComparer.Ordinal)
             .ToDictionary(slot => slot.Key, slot => slot.First().FormKey, StringComparer.Ordinal);
         var category = release.ToCategory();

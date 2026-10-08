@@ -11,7 +11,7 @@ namespace MEditService.Commands.Edits;
 
 /// <summary>A placed record moving into another cell of its worldspace. A
 /// cell the plugin lacks is copied in from the nearest of its masters to hold it, or created, as xEdit's Add does.</summary>
-internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCodec codec, SchemaReflector schemaReflector, ILogger logger)
+internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger)
 {
     // The cell document that takes the record in, the worldspace a new one goes in, and the header's
     // changes that move its Next Object ID past a cell minted for it.
@@ -70,7 +70,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
         var record = group[crossing.Prefix[^1].RequireIndex()]
             ?? throw new InvalidOperationException($"{holder.FormKey}'s document has no record at {RecordEditEnvelope.Spell(crossing.Prefix)}.");
         group.RemoveAt(crossing.Prefix[^1].RequireIndex());
-        var given = Document(holder, codec.RoundTrip(root.ToJsonString(), release, holder.RecordType));
+        var given = Document(holder, RecordTextCodec.RoundTrip(root.ToJsonString(), release, holder.RecordType));
 
         var worldspace = crossing.Prefix is [{ Name: PlacedCell.WorldspacePersistentCellMember }, ..]
             ? holder.FormKey
@@ -80,7 +80,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
 
         var move = new Move(
             plugin, repository, release, moved, worldspace,
-            schemaReflector.GetSchemas(release).Keys.Single(RecordTypeDispatch.For(release).IsCell), spelled);
+            RecordTypes.For(release).Cell, spelled);
         var landing = crossing.Into is AnotherCell.GridCell grid ? IntoGridCell(move, grid, record) : IntoPersistentCell(move, record);
         return landing.Finish(landed => new RecordEditChanges(
             RecordEditResult.Success(),
@@ -91,7 +91,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
 
     private Step<Landed> IntoPersistentCell(Move move, JsonNode record)
     {
-        if (move.Repository.Get(move.Plugin, move.Worldspace, schemaReflector.GetSchemas(move.Release)) is not { } document)
+        if (move.Repository.Get(move.Plugin, move.Worldspace) is not { } document)
         {
             return new Step<Landed>.Refused(CellGroupMove.Unknown(
                 move.Spelled, move.Moved.FormKey, $"{move.Plugin.Name} holds no document for its worldspace {move.Worldspace}"));
@@ -115,7 +115,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
         {
             TakeIn(landing.Cell, PersistentFlag.PersistentGroup, record);
             return new Step<Landed>.Done(new(
-                Document(document.Identity, codec.RoundTrip(worldspace.ToJsonString(), move.Release, document.RecordType)), null,
+                Document(document.Identity, RecordTextCodec.RoundTrip(worldspace.ToJsonString(), move.Release, document.RecordType)), null,
                 landing.HeaderChanges));
         });
     }
@@ -138,18 +138,18 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
             CopiedOrNew(move, left, copy => JsonNode.Parse(copy), 0, (grid.X, grid.Y)).Then<Landed>(landing =>
             {
                 TakeIn(landing.Cell, PersistentFlag.TemporaryGroup, record);
-                var text = codec.RoundTrip(landing.Cell.ToJsonString(), move.Release, move.CellType);
+                var text = RecordTextCodec.RoundTrip(landing.Cell.ToJsonString(), move.Release, move.CellType);
                 return new Step<Landed>.Done(new(
                     new SourceDocument(GridCellHolder.FormKeyOf(landing.Cell), move.CellType, EditorIds.In(text), text),
                     move.Worldspace, landing.HeaderChanges));
             });
     }
 
-    private Landed IntoHeldCell(Move move, SourceDocument held, JsonNode record)
+    private static Landed IntoHeldCell(Move move, SourceDocument held, JsonNode record)
     {
         var cell = Parsed(held.Body, held.FormKey);
         TakeIn(cell, PersistentFlag.TemporaryGroup, record);
-        return new(Document(held.Identity, codec.RoundTrip(cell.ToJsonString(), move.Release, held.RecordType)), null, SourceChanges.None);
+        return new(Document(held.Identity, RecordTextCodec.RoundTrip(cell.ToJsonString(), move.Release, held.RecordType)), null, SourceChanges.None);
     }
 
     // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile; ADR-0018).
@@ -168,13 +168,13 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
                 var copy = cellIn(found.Text)?.ToJsonString()
                     ?? throw new InvalidOperationException($"The copy of a master of {move.Plugin.Name} holds no cell where it was found.");
                 return new Step<CellIn>.Done(new(
-                    Parsed(ContainerDocumentEdits.WithoutChildren(codec, copy, move.Release, move.CellType), move.Worldspace),
+                    Parsed(ContainerDocumentEdits.WithoutChildren(copy, move.Release, move.CellType), move.Worldspace),
                     SourceChanges.None));
         }
 
         var allocator = FormKeyAllocator.Over(move.Repository, move.Plugin, move.Release);
         if (GridCells.Mint(
-                allocator, codec, schemaReflector.GetSchemas(move.Release)[move.CellType], move.Release, grid,
+                allocator, schemaReflector.GetSchemas(move.Release)[move.CellType], move.Release, grid,
                 out var cell) is { } exhausted)
             return new Step<CellIn>.Refused(exhausted with { Path = move.Spelled });
         if (flags != 0) cell[RecordHeaderFlags.Member] = flags;

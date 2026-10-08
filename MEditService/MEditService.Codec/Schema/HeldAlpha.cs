@@ -14,8 +14,6 @@ internal sealed class HeldAlpha(ILogger logger)
 {
     internal const string WarningPrefix = "SchemaReflector: a colour's alpha unavailable";
 
-    private const string OverlaySuffix = "BinaryOverlay";
-
     private readonly ConcurrentDictionary<PropertyInfo, bool> _held = new();
 
     /// <summary>A member whose overlay names no binary type, and an array element, which has no member
@@ -41,7 +39,7 @@ internal sealed class HeldAlpha(ILogger logger)
         if (ReflectedTypes.GetSetterType(ReflectedTypes.DeclaringTypeOf(prop)) is not { } setter) return null;
         return new[] { setter, LoquiUnions.ConcreteUnder(setter) }
             .OfType<Type>()
-            .Select(owner => owner.Assembly.GetType(owner.FullName + OverlaySuffix))
+            .Select(owner => owner.Assembly.GetType(owner.FullName + Serialization.RecordTypes.OverlaySuffix))
             .OfType<Type>()
             .Select(overlay => overlay.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .FirstOrDefault(p => p.Name == prop.Name && (Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType) == typeof(Color))?.GetMethod)

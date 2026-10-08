@@ -138,7 +138,7 @@ public record ReferenceResult(
     string FormKey, string Plugin, string Origin, string FieldPath, string RecordType, string RecordTypeName, string? EditorId);
 
 // HasParseFailure: whether this subtree holds a record Mutagen could not read, so the tree renders
-// the failure prefix instead of walking children. IsCreatable: CreatableRecordTypes' own verdict.
+// the failure prefix instead of walking children. IsCreatable: RecordTypes' verdict.
 // IsContainer: the type holds child records in the game; an empty one counts.
 public record PluginRecordTypeCount(
     string Type, int Count, string DisplayName, bool HasParseFailure, bool IsCreatable, bool IsContainer);

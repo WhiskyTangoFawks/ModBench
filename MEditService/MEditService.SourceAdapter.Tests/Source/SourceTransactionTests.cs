@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
@@ -24,15 +23,13 @@ public sealed class SourceTransactionTests : IDisposable
 
     private static string Fk(string hex) => $"{hex}:{PluginName}";
 
-    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
-        SharedSchemaReflector.Instance.GetSchemas(Release);
 
     private static readonly DocumentRekey RewritesTheKey = new(
         (document, newFormKey) => document.Body.Replace(document.FormKey, newFormKey, StringComparison.Ordinal),
         (_, _, _) => null);
 
     private void Rekey(SourceTransaction transaction, string recordType, string editorId, string from, string to) =>
-        transaction.Rekey(Repo, Plugin, new RecordIdentity(Fk(from), recordType, editorId), Fk(to), Schemas, RewritesTheKey);
+        transaction.Rekey(Repo, Plugin, new RecordIdentity(Fk(from), recordType, editorId), Fk(to), RewritesTheKey);
 
     private string? RolledBack(Action<SourceTransaction> acts) => TransactionRollback.After(Repo, acts);
 
@@ -142,7 +139,7 @@ public sealed class SourceTransactionTests : IDisposable
         {
             const string body = "{\n  \"FormKey\": \"000910:Fixture.esp\",\n  \"EditorID\": \"Out\",\n  \"Grid\": {\n    \"Point\": \"9, -9\"\n  }\n}";
             transaction.PutInWorldspace(Repo, Plugin, new SourceDocument(Fk("000910"), "cell", "Out", body), Fk("000900"));
-            Assert.Equal(Fk("000910"), Repo.GetCellAt(Plugin, Fk("000900"), 9, -9, Schemas)?.FormKey);
+            Assert.Equal(Fk("000910"), Repo.GetCellAt(Plugin, Fk("000900"), 9, -9)?.FormKey);
         });
 
         Assert.Null(left);

@@ -1,11 +1,9 @@
 using System.Text;
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -21,7 +19,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly ScratchDirectory _modFolder = new("medit-embedded-");
-    private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
@@ -92,8 +89,8 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     private static string Leaf(IMajorRecordGetter record) =>
         $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
 
-    private byte[] Serialize(IMajorRecordGetter record) =>
-        Encoding.UTF8.GetBytes(_codec.SerializeToText(record, Release));
+    private static byte[] Serialize(IMajorRecordGetter record) =>
+        Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));
 
     private SourceRepository Repository =>
         SourceRepository.Open(TestMod.In(_modFolder), Release) ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
@@ -185,8 +182,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
     private RecordIdentity? IdentityOf(IMajorRecordGetter record) =>
         Repository.Get(
-            Plugin, record.FormKey.ToString(),
-            SharedSchemaReflector.Instance.GetSchemas(Release))?.Identity;
+            Plugin, record.FormKey.ToString())?.Identity;
 
     [Fact]
     public void Get_APlacedReferenceInsideItsCell_NamesItsTypeAndEditorId_FromTheTypeWrittenIntoItsOwnTextForItsSlotHoldsAnAbstractElementType()
@@ -220,12 +216,11 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
             IdentityOf(_topCellRef));
     }
 
-    private static IReadOnlyDictionary<string, RecordTableSchema> Schemas => SharedSchemaReflector.Instance.GetSchemas(Release);
 
     [Fact]
     public void Get_ByFormKey_OfAChildAnotherRecordsDocumentCarries_IsTheChildsOwnTextUnderItsIdentity()
     {
-        var document = Repository.Get(Plugin, _topic.FormKey.ToString(), Schemas);
+        var document = Repository.Get(Plugin, _topic.FormKey.ToString());
 
         Assert.Equal(Identity(_topic, "dial"), document?.Identity);
         Assert.Equal(Repository.RecordOf(Plugin, Identity(_topic, "dial"))?.Body, document?.Body);
@@ -234,7 +229,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void Get_ByFormKey_OfAKeyNothingCarries_IsNull()
     {
-        Assert.Null(Repository.Get(Plugin, "00FFFF:Embedded.esp", Schemas));
+        Assert.Null(Repository.Get(Plugin, "00FFFF:Embedded.esp"));
     }
 
     [Fact]
@@ -243,7 +238,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         File.WriteAllText(FullPath(Path.Combine(Root, "Quests", "Broken - 000FFF_Embedded.esp.json")), "[1]");
 
         var refused = Assert.Throws<UnreadableSourceDocumentException>(
-            () => Repository.Get(Plugin, "000FFF:Embedded.esp", Schemas));
+            () => Repository.Get(Plugin, "000FFF:Embedded.esp"));
 
         Assert.Contains("000FFF:Embedded.esp", refused.Message, StringComparison.Ordinal);
         Assert.Contains("its root is not a JSON object", refused.Message, StringComparison.Ordinal);
@@ -264,7 +259,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         GiveANumberForTheEditorId(QuestPath, "Quest");
 
         var refused = Assert.Throws<UnreadableSourceDocumentException>(
-            () => Repository.Get(Plugin, _quest.FormKey.ToString(), Schemas));
+            () => Repository.Get(Plugin, _quest.FormKey.ToString()));
 
         Assert.Equal((QuestPath, _quest.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
         Assert.Contains("its 'EditorID' is not a string", refused.Message, StringComparison.Ordinal);
@@ -276,7 +271,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         GiveANumberForTheEditorId(InteriorCellPath, "TempRef");
 
         var refused = Assert.Throws<UnreadableSourceDocumentException>(
-            () => Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas));
+            () => Repository.Get(Plugin, _temporaryRef.FormKey.ToString()));
 
         Assert.Equal((InteriorCellPath, _temporaryRef.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
         Assert.Contains($"its 'Temporary' names '{_temporaryRef.FormKey}', whose 'EditorID' is not a string", refused.Message, StringComparison.Ordinal);
@@ -288,7 +283,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var text = File.ReadAllText(FullPath(QuestPath)).Replace("\"EditorID\": \"Quest\"", "\"EditorID\": 5", StringComparison.Ordinal);
 
         var refused = Assert.Throws<UnreadableSourceDocumentException>(
-            () => Repository.CarryingFromText(Plugin, _quest.FormKey.ToString(), text, Schemas));
+            () => Repository.CarryingFromText(Plugin, _quest.FormKey.ToString(), text));
 
         Assert.Contains(QuestPath, refused.Message, StringComparison.Ordinal);
         Assert.Contains("its 'EditorID' is not a string", refused.Message, StringComparison.Ordinal);
@@ -332,7 +327,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         File.WriteAllText(FullPath(InteriorCellPath), InteriorCellWithItsRefsTyped("PlacedObjekt"));
 
         AssertNamesTheInteriorCellsUntypedRef("PlacedObjekt", Assert.Throws<UnreadableSourceDocumentException>(
-            () => Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas)));
+            () => Repository.Get(Plugin, _temporaryRef.FormKey.ToString())));
     }
 
     [Fact]
@@ -340,7 +335,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     {
         AssertNamesTheInteriorCellsUntypedRef("PlacedObjekt", Assert.Throws<UnreadableSourceDocumentException>(
             () => Repository.CarryingFromText(
-                Plugin, _temporaryRef.FormKey.ToString(), InteriorCellWithItsRefsTyped("PlacedObjekt"), Schemas)));
+                Plugin, _temporaryRef.FormKey.ToString(), InteriorCellWithItsRefsTyped("PlacedObjekt"))));
     }
 
     [Fact]
@@ -351,7 +346,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains("NotAFormKey", text, StringComparison.Ordinal);
 
         var refused = Assert.Throws<UnreadableSourceDocumentException>(
-            () => Repository.CarryingFromText(Plugin, _temporaryRef.FormKey.ToString(), text, Schemas));
+            () => Repository.CarryingFromText(Plugin, _temporaryRef.FormKey.ToString(), text));
 
         Assert.Equal($"The text given for {InteriorCellPath} declares NotAFormKey, which is no FormKey.", refused.Message);
     }
@@ -362,7 +357,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         File.WriteAllText(FullPath(InteriorCellPath), InteriorCellWithItsRefsTyped("Npc"));
 
         AssertNamesTheInteriorCellsUntypedRef(
-            "Npc", Assert.Throws<UnreadableSourceDocumentException>(() => Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas)));
+            "Npc", Assert.Throws<UnreadableSourceDocumentException>(() => Repository.Get(Plugin, _temporaryRef.FormKey.ToString())));
     }
 
     private string TopCellFormKey => _worldspace.TopCell.Require().FormKey.ToString();
@@ -390,7 +385,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         TypeTheTopCell(type);
 
         AssertNamesTheWorldspacesTopCellTyped(type, Assert.Throws<UnreadableSourceDocumentException>(
-            () => Repository.Get(Plugin, TopCellFormKey, Schemas)));
+            () => Repository.Get(Plugin, TopCellFormKey)));
     }
 
     [Theory]
@@ -399,7 +394,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     public void ReadingTheTree_WhenAChildInASingleTypeSlotIsTypedAsNothingTheSlotHolds_IsRefusedNamingItsOwnersFileAndWhy(string type)
     {
         TypeTheTopCell(type);
-        using var tree = Repository.OpenDocuments(Plugin, Schemas);
+        using var tree = Repository.OpenDocuments(Plugin);
 
         AssertNamesTheWorldspacesTopCellTyped(type, Assert.Throws<UnreadableSourceDocumentException>(() => tree.Records.ToList()));
     }
@@ -429,7 +424,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     public void ReadingTheTree_WhenADocumentHoldsAChildTwice_IsRefusedAsAClaimOfThatDocument()
     {
         HoldTheTemporaryRefTwiceInItsCell();
-        using var tree = Repository.OpenDocuments(Plugin, Schemas);
+        using var tree = Repository.OpenDocuments(Plugin);
 
         AssertClaimedTwiceByTheInteriorCell(Assert.Throws<AmbiguousSourceUnitException>(() => tree.Records.ToList()));
     }
@@ -459,7 +454,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         GiveTheTemporaryRefItsCellsOwnFormKey();
 
         AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(
-            () => Repository.Get(Plugin, _interiorCell.FormKey.ToString(), Schemas)));
+            () => Repository.Get(Plugin, _interiorCell.FormKey.ToString())));
     }
 
     [Fact]
@@ -469,7 +464,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(
             () => Repository.CarryingFromText(
-                Plugin, _interiorCell.FormKey.ToString(), File.ReadAllText(FullPath(InteriorCellPath)), Schemas)));
+                Plugin, _interiorCell.FormKey.ToString(), File.ReadAllText(FullPath(InteriorCellPath)))));
     }
 
     [Fact]
@@ -478,7 +473,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         GiveTheTemporaryRefItsCellsOwnFormKey();
 
         AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(
-            () => Repository.ContainerOf(Plugin, Identity(_persistentRef, "refr"), Schemas)));
+            () => Repository.ContainerOf(Plugin, Identity(_persistentRef, "refr"))));
     }
 
     [Fact]
@@ -495,7 +490,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void ContainerOf_APlacedReferenceInsideItsCell_NamesTheCellAndTheSlot()
     {
-        var container = Repository.ContainerOf(Plugin, Identity(_persistentRef, "refr"), Schemas);
+        var container = Repository.ContainerOf(Plugin, Identity(_persistentRef, "refr"));
 
         Assert.Equal(_interiorCell.FormKey.ToString(), container?.ParentFormKey);
         Assert.Equal("Persistent", container?.SlotName);
@@ -504,7 +499,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void ContainerOf_ATopicInsideItsQuest_NamesTheQuestAndTheSlot()
     {
-        var container = Repository.ContainerOf(Plugin, Identity(_topic, "dial"), Schemas);
+        var container = Repository.ContainerOf(Plugin, Identity(_topic, "dial"));
 
         Assert.Equal(_quest.FormKey.ToString(), container?.ParentFormKey);
         Assert.Equal("DialogTopics", container?.SlotName);
@@ -522,7 +517,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         GiveTheInteriorCellsDocumentNoFormKey();
 
         var refused = Assert.Throws<UnreadableSourceDocumentException>(
-            () => Repository.ContainerOf(Plugin, Identity(_temporaryRef, "refr"), Schemas));
+            () => Repository.ContainerOf(Plugin, Identity(_temporaryRef, "refr")));
 
         Assert.Contains("names no document of its own", refused.Message, StringComparison.Ordinal);
     }
@@ -533,17 +528,17 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         GiveTheInteriorCellsDocumentNoFormKey();
 
         var refused = Assert.Throws<UnreadableSourceDocumentException>(
-            () => Repository.ContainerOf(Plugin, Identity(_temporaryRef, "refr"), Schemas));
+            () => Repository.ContainerOf(Plugin, Identity(_temporaryRef, "refr")));
 
         Assert.Contains("names no document of its own", refused.Message, StringComparison.Ordinal);
     }
 
     private const string FreeFormKey = "000F00:Embedded.esp";
 
-    private DocumentRekey Rekeying => new(
-        (document, newKey) => RecordDocumentEdits.WithFormKey(_codec, document.Body, Release, document.RecordType, newKey),
+    private static DocumentRekey Rekeying => new(
+        (document, newKey) => RecordDocumentEdits.WithFormKey(document.Body, Release, document.RecordType, newKey),
         (owner, oldKey, newKey) => RecordDocumentEdits.WithEmbeddedChildFormKey(
-            _codec, owner.Body, Release, owner.RecordType, oldKey, newKey));
+            owner.Body, Release, owner.RecordType, oldKey, newKey));
 
     private static (IReadOnlyList<string> Gone, IReadOnlyList<string> Appeared) Difference(
         IReadOnlyList<string> before, IReadOnlyList<string> after) =>
@@ -556,15 +551,15 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         var left = TransactionRollback.After(Repository, transaction =>
         {
-            transaction.Rekey(Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, Rekeying);
+            transaction.Rekey(Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Rekeying);
 
             var (gone, appeared) = Difference(before, TreeSnapshot.Of(_modFolder));
             Assert.Single(gone);
             Assert.Single(appeared);
             Assert.StartsWith($"file {InteriorCellPath.Replace('\\', '/')} ", gone[0], StringComparison.Ordinal);
             Assert.StartsWith($"file {InteriorCellPath.Replace('\\', '/')} ", appeared[0], StringComparison.Ordinal);
-            Assert.NotNull(Repository.Get(Plugin, FreeFormKey, Schemas));
-            Assert.Null(Repository.Get(Plugin, _temporaryRef.FormKey.ToString(), Schemas));
+            Assert.NotNull(Repository.Get(Plugin, FreeFormKey));
+            Assert.Null(Repository.Get(Plugin, _temporaryRef.FormKey.ToString()));
         });
 
         Assert.Null(left);
@@ -578,7 +573,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         var left = TransactionRollback.After(Repository, transaction =>
         {
-            transaction.Rekey(Repository, Plugin, Identity(_worldspace, "wrld"), FreeFormKey, Schemas, Rekeying);
+            transaction.Rekey(Repository, Plugin, Identity(_worldspace, "wrld"), FreeFormKey, Rekeying);
 
             var child = Repository.RelativePathOf(Plugin, Identity(_exteriorCell, "cell"));
             Assert.Contains("000F00_Embedded.esp", child, StringComparison.Ordinal);
@@ -596,7 +591,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         var left = TransactionRollback.After(Repository, transaction =>
         {
-            transaction.Rekey(Repository, Plugin, Identity(_quest, "qust"), FreeFormKey, Schemas, Rekeying);
+            transaction.Rekey(Repository, Plugin, Identity(_quest, "qust"), FreeFormKey, Rekeying);
 
             var (gone, appeared) = Difference(before, TreeSnapshot.Of(_modFolder));
             Assert.Single(gone);
@@ -623,7 +618,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void ChangesToRewrite_OfAChildItsOwnersTextNamesWhereItsTypeHoldsNone_RefusesAsNoDocumentHoldingIt()
     {
-        var folder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat").Require();
+        var folder = RecordTypes.For(Release).FolderNameFor("globalfloat").Require();
         var carrier = Path.Combine(_modFolder, Root, folder, $"Carrier - 00A000_{PluginName}.json");
         Directory.CreateDirectory(Path.GetDirectoryName(carrier).Require());
         File.WriteAllText(
@@ -648,7 +643,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         var refused = Assert.Throws<SourceUnitNotFoundException>(() => TransactionRollback.After(
             Repository, transaction => transaction.Rekey(
-                Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, Schemas, ownerLacksIt)));
+                Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey, ownerLacksIt)));
 
         Assert.Contains("its own text does not carry it", refused.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("Nothing was written", refused.Message, StringComparison.Ordinal);
@@ -658,7 +653,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void ContainerOf_ARecordWithADocumentOfItsOwn_IsNull()
     {
-        Assert.Null(Repository.ContainerOf(Plugin, Identity(_quest, "qust"), Schemas));
+        Assert.Null(Repository.ContainerOf(Plugin, Identity(_quest, "qust")));
     }
 
     [Fact]
@@ -699,7 +694,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void RelativePathOf_ForAChildInsideADocumentOfAPathAmbiguousGroup_FindsThatDocument_ThoughGlobalsMapsToFourTypesSoOnlyTheDocumentNamesItsOwn()
     {
-        var folder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat")
+        var folder = RecordTypes.For(Release).FolderNameFor("globalfloat")
             ?? throw new InvalidOperationException("Expected 'globalfloat' to resolve to a group folder.");
         var carrier = Path.Combine(_modFolder, Root, folder, "Carrier - 00A000_Embedded.esp.json");
         Directory.CreateDirectory(Path.GetDirectoryName(carrier) ?? throw new InvalidOperationException($"Expected '{carrier}' to have a parent directory."));
@@ -925,10 +920,9 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     public void Get_EveryEmbeddedChildAskedInOneOperation_NamesEachOne()
     {
         var repository = Repository;
-        var schemas = SharedSchemaReflector.Instance.GetSchemas(Release);
         IMajorRecordGetter[] children = [_persistentRef, _temporaryRef, _topCellRef, _exteriorRef, _topic, _response, _response2];
 
-        var named = children.Select(child => repository.Get(Plugin, child.FormKey.ToString(), schemas)?.EditorId);
+        var named = children.Select(child => repository.Get(Plugin, child.FormKey.ToString())?.EditorId);
 
         Assert.Equal(children.Select(child => child.EditorID), named);
     }

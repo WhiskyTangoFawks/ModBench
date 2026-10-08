@@ -12,7 +12,7 @@ namespace MEditService.Commands.Edits;
 
 /// <summary>The container half of both copy modes: a child lands inside its container's document, the
 /// container copied in when absent, as a Partial Form where the game allows (ADR-0007).</summary>
-internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger, RecordTextCodec codec)
+internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger)
 {
     /// <summary>The tracked plugin a copy lands in: its repository and its key. No folder — every
     /// write here is a put, and the repository decides where a document goes.</summary>
@@ -24,11 +24,11 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         Destination destination, GameRelease release, bool replace)
     {
         var formKey = child.FormKey;
-        var landing = child with { Body = ContainerDocumentEdits.WithoutChildren(codec, child.Body, release, child.RecordType) };
+        var landing = child with { Body = ContainerDocumentEdits.WithoutChildren(child.Body, release, child.RecordType) };
 
         if (destination.Repository.FormKeysUsed(destination.Plugin).Contains(formKey))
         {
-            if (Identity(destination, formKey, release) is not { } existing) return RefuseKeyWithNoDocument(destination, formKey);
+            if (Identity(destination, formKey) is not { } existing) return RefuseKeyWithNoDocument(destination, formKey);
             if (!replace) return RefuseHeldWithoutReplace(formKey, destination.Plugin);
 
             // Replaced in place, never duplicated.
@@ -56,7 +56,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         Destination destination, GameRelease release)
     {
         var containerFormKey = container.ParentFormKey;
-        if (destination.Repository.Get(destination.Plugin, containerFormKey, schemaReflector.GetSchemas(release))
+        if (destination.Repository.Get(destination.Plugin, containerFormKey)
             is not { } containerDocument)
         {
             return CopyContainerInAround(transaction, source, container, child, destination, release);
@@ -65,7 +65,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         // The container may itself be embedded (a topic inside its quest's document); its put lands
         // wherever the tree holds it.
         var withChild = ContainerDocumentEdits.WithChildAppended(
-                codec, containerDocument.Body, release, containerDocument.RecordType, containerFormKey,
+                containerDocument.Body, release, containerDocument.RecordType, containerFormKey,
                 container.SlotName, child.Body, child.RecordType)
             ?? throw new InvalidOperationException(
                 $"{containerFormKey} was found, but its own text does not carry it.");
@@ -86,7 +86,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         var withChild = ownFields with
         {
             Body = ContainerDocumentEdits.WithChildAppended(
-                       codec, ownFields.Body, release, ownFields.RecordType, containerFormKey, container.SlotName,
+                       ownFields.Body, release, ownFields.RecordType, containerFormKey, container.SlotName,
                        child.Body, child.RecordType)
                    ?? throw new InvalidOperationException(
                        $"The copy of {containerFormKey} does not carry its own FormKey."),
@@ -115,7 +115,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         var existingDocument = DocumentOf(destination, existing);
 
         var withOwnFields = ContainerDocumentEdits.WithOwnFieldsReplaced(
-            codec, existingDocument.Body, existing.RecordType, replacement.Body, replacement.RecordType, release);
+            existingDocument.Body, existing.RecordType, replacement.Body, replacement.RecordType, release);
 
         destination.Repository.Put(
             destination.Plugin,
@@ -138,7 +138,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         SourceTransaction transaction, CopySource source, SourceDocument container, Destination destination, GameRelease release)
     {
         var formKey = container.FormKey;
-        var sourceCell = RecordTypeDispatch.For(release).IsCell(container.RecordType) ? source.Identity(formKey) : null;
+        var sourceCell = RecordTypes.For(release).IsCell(container.RecordType) ? source.Identity(formKey) : null;
         if (sourceCell is { } cell && source.WorldspaceOf(cell) is { } worldspace)
         {
             return PlaceExteriorCell(transaction, source, worldspace, container, destination, release);
@@ -168,7 +168,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
             return RefuseKeyWithNoDocument(destination, cellFormKey);
 
         SourceDocument? worldspaceCopy = null;
-        if (Identity(destination, worldspaceFormKey, release) is null)
+        if (Identity(destination, worldspaceFormKey) is null)
         {
             var worldspace = HeldBy(source, worldspaceFormKey);
             if (!TryCopyIn(source, worldspace, destination, release, out var copied, out var refused)) return refused;
@@ -191,20 +191,20 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     private static JsonNode RequireParsed(string text) =>
         JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a document's text to parse as JSON.");
 
-    private SourceDocument WithGridFrom(string sourceCellText, SourceDocument cell, GameRelease release)
+    private static SourceDocument WithGridFrom(string sourceCellText, SourceDocument cell, GameRelease release)
     {
-        var grid = RequireParsed(sourceCellText).AsObject()[RecordTypeDispatch.CellGridMember];
+        var grid = RequireParsed(sourceCellText).AsObject()[RecordTypes.CellGridMember];
         if (grid == null) return cell;
 
         var withGrid = RequireParsed(cell.Body).AsObject();
-        withGrid[RecordTypeDispatch.CellGridMember] = grid.DeepClone();
-        return cell with { Body = codec.RoundTrip(withGrid.ToJsonString(), release, cell.RecordType) };
+        withGrid[RecordTypes.CellGridMember] = grid.DeepClone();
+        return cell with { Body = RecordTextCodec.RoundTrip(withGrid.ToJsonString(), release, cell.RecordType) };
     }
 
     /// <summary>What the destination's tree names at <paramref name="formKey"/>, or null when nothing
     /// in it carries that key at the working tree.</summary>
-    internal RecordIdentity? Identity(Destination destination, string formKey, GameRelease release) =>
-        destination.Repository.Get(destination.Plugin, formKey, schemaReflector.GetSchemas(release))?.Identity;
+    internal static RecordIdentity? Identity(Destination destination, string formKey) =>
+        destination.Repository.Get(destination.Plugin, formKey)?.Identity;
 
     internal static RecordEditResult RefuseHeldWithoutReplace(string formKey, PluginAddress destination) =>
         RecordEditResult.Refused(
@@ -257,28 +257,28 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     }
 
     private static bool? TemporaryExterior(CopySource source, RecordIdentity container, GameRelease release) =>
-        RecordTypeDispatch.For(release).IsCell(container.RecordType)
+        RecordTypes.For(release).IsCell(container.RecordType)
             ? CanBePartial.TemporaryExterior(
                 (source.RecordFlags(container) & PersistentFlag.Bit) != 0,
                 source.ContainerOf(container) is not null,
                 source.WorldspaceOf(container) is null)
             : null;
 
-    private SourceDocument PartialFormOf(SourceDocument container, RecordTableSchema schema, GameRelease release)
+    private static SourceDocument PartialFormOf(SourceDocument container, RecordTableSchema schema, GameRelease release)
     {
-        var body = ContainerDocumentEdits.WithoutChildren(codec, container.Body, release, container.RecordType);
+        var body = ContainerDocumentEdits.WithoutChildren(container.Body, release, container.RecordType);
         var record = RequireParsed(body).AsObject();
-        return RecordEmptying.MakePartialForm(record, schema)
-            ? container with { Body = codec.RoundTrip(record.ToJsonString(), release, container.RecordType) }
+        return RecordEmptying.MakePartialForm(record, schema, release)
+            ? container with { Body = RecordTextCodec.RoundTrip(record.ToJsonString(), release, container.RecordType) }
             : container with { Body = body };
     }
 
     // The container as xEdit copies it in: the copy the destination can see, its own fields only.
-    private SourceDocument OwnFieldsOf(CopySource source, RecordIdentity container, string? visibleText, GameRelease release)
+    private static SourceDocument OwnFieldsOf(CopySource source, RecordIdentity container, string? visibleText, GameRelease release)
     {
         var visible = visibleText is null
             ? source.Document(container)
             : new SourceDocument(container.FormKey, container.RecordType, EditorIds.In(visibleText), visibleText);
-        return visible with { Body = ContainerDocumentEdits.WithoutChildren(codec, visible.Body, release, visible.RecordType) };
+        return visible with { Body = ContainerDocumentEdits.WithoutChildren(visible.Body, release, visible.RecordType) };
     }
 }
