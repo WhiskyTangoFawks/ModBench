@@ -303,63 +303,6 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         || (leaf.EndsWith(tail, StringComparison.Ordinal)
             && leaf.EndsWith($" - {tail}", StringComparison.Ordinal));
 
-    // One place that knows a container is a directory and a flat record a file, so callers and
-    // the rollback cannot disagree.
-    internal static void MoveEntry(string from, string to)
-    {
-        if (Directory.Exists(from)) Directory.Move(from, to);
-        else File.Move(from, to);
-    }
-
-    // The codec's own write-then-rename, for the writers that hold text rather than a record: an
-    // interrupted direct write leaves a partial file that dirty detection reads as an edit.
-    internal static void WriteTextAtomic(string filePath, string body)
-    {
-        var tempPath = filePath + ".tmp";
-        try
-        {
-            File.WriteAllText(tempPath, body);
-            File.Move(tempPath, filePath, overwrite: true);
-        }
-        catch
-        {
-            File.Delete(tempPath);
-            throw;
-        }
-    }
-
-    // The levels of directory that do not exist yet, deepest first — what creating it mints, and
-    // so what undoing it has to take away again.
-    internal static List<string> LevelsMintedBy(string directory)
-    {
-        var minted = new List<string>();
-        for (var level = directory;
-             !string.IsNullOrEmpty(level) && !Directory.Exists(level);
-             level = Path.GetDirectoryName(level))
-        {
-            minted.Add(level);
-        }
-        return minted;
-    }
-
-    // Removes the directories this call minted when write throws: an empty record directory is
-    // invisible to git and fails the next ingest, since the reader opens every one unconditionally.
-    internal static void InMintedDirectory(string directory, Action write)
-    {
-        var minted = LevelsMintedBy(directory);
-
-        try
-        {
-            Directory.CreateDirectory(directory);
-            write();
-        }
-        catch
-        {
-            RemoveMintedLevels(minted);
-            throw;
-        }
-    }
-
     /// <summary>Where a new document lands, and the block level documents the tree lacks above it, outermost
     /// first. Null for a record with no group folder, which lands inside its container's document.</summary>
     internal (IReadOnlyList<DocumentChange> Levels, SourceUnit Unit)? PlaceNewDocument(
@@ -496,24 +439,6 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     }
 
     private static readonly string EmptyLevelDocument = new JsonObject().ToJsonString();
-
-    // Takes back the levels LevelsMintedBy named, deepest first, so a parent is already empty by
-    // the time it is reached. A level something else filled stops the walk.
-    internal static void RemoveMintedLevels(List<string> minted)
-    {
-        foreach (var stray in minted)
-        {
-            // Never reached (the create died at an ancestor): skip, so the levels that did land are still
-            // removed.
-            if (!Directory.Exists(stray)) continue;
-
-            try { Directory.Delete(stray); }
-            catch (DirectoryNotFoundException) { /* vanished under us; its ancestors still stand */ }
-            catch (IOException) { break; }
-            catch (UnauthorizedAccessException) { break; }
-        }
-    }
-
 }
 
 /// <summary>Two source units under one plugin's tree carry the same FormKey: corruption, not a

@@ -150,7 +150,7 @@ public sealed class SourceTransactionTests : IDisposable
     }
 
     [Fact]
-    public void Rollback_LeavesAMintedDirectoryAThirdPartyHasSinceFilled()
+    public void Rollback_LeavesAMintedDirectoryAThirdPartyHasSinceFilled_AndNamesIt()
     {
         var pluginRoot = Path.Combine(_root, "plugin-source", PluginName);
 
@@ -160,7 +160,8 @@ public sealed class SourceTransactionTests : IDisposable
             File.WriteAllText(Path.Combine(pluginRoot, "theirs.json"), "another tool's");
         });
 
-        Assert.Null(left);
+        Assert.Contains("plugin-source/Fixture.esp", left?.Replace('\\', '/'));
+        Assert.Contains("hold something this change did not write", left);
         Assert.True(File.Exists(Path.Combine(pluginRoot, "theirs.json")));
         Assert.False(Directory.Exists(Path.Combine(pluginRoot, "Npcs")));
     }

@@ -114,7 +114,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var failure = TrackWhoseCommitHookRuns($"echo theirs > '{theirs}'");
 
         Assert.Equal("theirs", File.ReadAllText(theirs).Trim());
-        Assert.Contains("plugin-source/A.esp holds something Modbench did not write", failure.Message.Replace('\\', '/'));
+        Assert.Contains("plugin-source/A.esp — hold something this change did not write", failure.Message.Replace('\\', '/'));
         Assert.False(File.Exists(Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json")));
     }
 
@@ -126,7 +126,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var failure = TrackWhoseCommitHookRuns($"echo theirs > '{changed}'");
 
         Assert.Equal("theirs", File.ReadAllText(changed).Trim());
-        Assert.Contains("000001.json was changed by another program", failure.Message);
+        Assert.Contains("000001.json — changed by something else", failure.Message);
     }
 
     [PosixFact]
@@ -137,7 +137,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var failure = TrackWhoseCommitHookRuns($"echo theirs > '{gitignore}'");
 
         Assert.Equal("theirs", File.ReadAllText(gitignore).Trim());
-        Assert.Contains(".gitignore was changed by another program", failure.Message);
+        Assert.Contains(".gitignore — changed by something else", failure.Message);
     }
 
     private Exception TrackWhoseCommitHookRuns(string script)

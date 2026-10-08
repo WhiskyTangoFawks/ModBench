@@ -118,7 +118,7 @@ public sealed class DeleteRecordHandlerTests
         var refused = Assert.Single(result.Refused);
         Assert.Contains("Access to the path", refused.Message, StringComparison.Ordinal);
         Assert.Contains(
-            $"{Path.GetRelativePath(mod.ModFolder, link)} could not be put back", refused.Message, StringComparison.Ordinal);
+            $"{Path.GetRelativePath(mod.ModFolder, link)} \u2014 could not be restored", refused.Message, StringComparison.Ordinal);
         Assert.Single(DocumentsCarrying(mod, "\"LockedWorld\""));
         Assert.Equal(before, TreeTampering.FilesUnder(freeBlock));
     }
