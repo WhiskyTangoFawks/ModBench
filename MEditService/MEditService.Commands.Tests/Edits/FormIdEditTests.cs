@@ -14,7 +14,7 @@ public sealed class FormIdEditTests
     private const string FreeFormKey = "000F00:Fixture.esp";
 
     [Fact]
-    public void EditingTheFormId_MovesTheRecordToTheNewFormKey_OldGoneAtTheWorkingTree_StillUsed_NewChangedSinceTheLastCommit()
+    public void EditingTheFormId_MovesTheRecordToTheNewFormKey_OldGoneAtTheWorkingTree_NewChangedSinceTheLastCommit()
     {
         using var mod = SourceEditFixture.Tracked();
 
@@ -23,24 +23,8 @@ public sealed class FormIdEditTests
         Assert.True(result.Applied, result.Message);
         Assert.Equal(FreeFormKey, result.NewFormKey);
         Assert.Null(mod.Document(mod.Npc.ToString()));
-        Assert.True(mod.Uses(mod.Npc.ToString()));
         Assert.NotNull(mod.Document(FreeFormKey));
         Assert.Contains(FreeFormKey, mod.ChangedFormKeys());
-    }
-
-    [Fact]
-    public void EditingTheFormId_OfANeverCommittedAddedRecord_LeavesTheOldFormKeyUnused()
-    {
-        using var mod = SourceEditFixture.Tracked();
-        const string oldFormKey = "800000:Fixture.esp";
-        TrackedTree.Seed(mod.ModFolder, mod.Plugin, oldFormKey);
-
-        var result = mod.EditHandler.SetFormId(mod.Plugin, oldFormKey, FreeFormKey);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Null(mod.Document(oldFormKey));
-        Assert.False(mod.Uses(oldFormKey));
-        Assert.NotNull(mod.Document(FreeFormKey));
     }
 
     [Fact]
@@ -220,5 +204,29 @@ public sealed class FormIdEditTests
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
         Assert.Contains("Track its mod", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EditingTheFormId_MovesTheNextObjectIdPastTheNewFormKey()
+    {
+        using var mod = SourceEditFixture.Tracked();
+
+        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "000F00:Fixture.esp");
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(0xF01u, mod.NextObjectId());
+    }
+
+    [Fact]
+    public void EditingTheFormId_OnATreeWithNoHeaderDocument_RefusesAsUnreadable_AndWritesNothing()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        File.Delete(Path.Combine(mod.ModFolder, TreeTampering.HeaderDocumentOf(mod.Plugin.Name)));
+        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+
+        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), FreeFormKey);
+
+        Assert.Equal(RecordEditRefusal.PluginSourceUnreadable, result.Refusal);
+        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
     }
 }

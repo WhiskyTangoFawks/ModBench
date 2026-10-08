@@ -15,6 +15,9 @@ internal static class SourceTransactionActs
         this SourceTransaction transaction, SourceRepository repository, PluginAddress plugin, SourceDocument cell, string worldspace) =>
         transaction.Apply(repository.ChangesToPutInWorldspace(plugin, cell, worldspace));
 
+    internal static void PutInWorldspace(this SourceRepository repository, PluginAddress plugin, SourceDocument cell, string worldspace) =>
+        SourceTransaction.Atomically(repository, transaction => transaction.PutInWorldspace(repository, plugin, cell, worldspace));
+
     internal static void Rekey(
         this SourceTransaction transaction, SourceRepository repository, PluginAddress plugin, RecordIdentity identity, string newFormKey,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, DocumentRekey rekey) =>

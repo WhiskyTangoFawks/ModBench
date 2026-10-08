@@ -66,17 +66,23 @@ internal sealed class SourceRepositoryWrites(
 
     /// <summary>What putting a document changes: a held one's as <see cref="ChangesToRewrite"/> says, a new one's
     /// document and each block level the tree lacks above it.</summary>
-    internal SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document) =>
-        locator.LocateToPlace(plugin, document.Identity) is { } unit
+    internal SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document)
+    {
+        RefuseOverwritingWhatIsNoDocument(plugin, document);
+        return locator.LocateToPlace(plugin, document.Identity) is { } unit
             ? ChangesToHeld(unit, document)
             : ChangesToPlace(plugin, document, placement: null);
+    }
 
     /// <summary>What putting an exterior cell changes: a held cell's as <see cref="ChangesToRewrite"/> says, a new
     /// one's at the block its grid falls in.</summary>
-    internal SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
-        locator.LocateToPlace(plugin, cell.Identity) is { } unit
+    internal SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace)
+    {
+        RefuseOverwritingWhatIsNoDocument(plugin, cell);
+        return locator.LocateToPlace(plugin, cell.Identity) is { } unit
             ? ChangesToHeld(unit, cell)
             : ChangesToPlace(plugin, cell, PlacementIn(worldspace, cell));
+    }
 
     /// <summary>What rewriting a document the tree holds changes: its text, inside its owner's when embedded, and
     /// the move to its leaf name. One no document holds throws, since an edit never creates.</summary>
@@ -105,7 +111,7 @@ internal sealed class SourceRepositoryWrites(
     }
 
     // A file whose text is not a document is something else's, and writing over it drops what it wrote.
-    internal void RefuseOverwritingWhatIsNoDocument(PluginAddress plugin, SourceDocument document)
+    private void RefuseOverwritingWhatIsNoDocument(PluginAddress plugin, SourceDocument document)
     {
         if (document.RecordType == PluginHeader.RecordType
             || locator.LocateToPlace(plugin, document.Identity) is not { IsEmbedded: false } unit

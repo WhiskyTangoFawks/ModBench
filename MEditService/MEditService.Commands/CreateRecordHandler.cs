@@ -79,13 +79,17 @@ public sealed class CreateRecordHandler
                 $"'{recordType}' is held inside another record's document, and creating one is not supported yet.");
         }
 
-        if (FormKeyAllocator.Over(repository, plugin, release).Next(out var targetFormKey)
-            is { } refusedTarget) return refusedTarget;
+        var allocator = FormKeyAllocator.Over(repository, plugin, release);
+        if (allocator.Next(out var targetFormKey) is { } refusedTarget) return refusedTarget;
 
         var body = RecordMint.BareDocument(_codec, schema, release, targetFormKey, editorId: null);
         if (RecordTypeDispatch.For(release).IsCell(recordType)) body = AsInteriorCell(body);
 
-        repository.Put(plugin, new SourceDocument(targetFormKey, recordType, null, body));
+        SourceTransaction.Atomically(repository, transaction =>
+        {
+            transaction.Apply(repository.ChangesToPut(plugin, new SourceDocument(targetFormKey, recordType, null, body)));
+            transaction.Apply(allocator.HeaderChanges());
+        });
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -167,10 +171,15 @@ public sealed class CreateRecordHandler
                 throw new InvalidOperationException($"Expected HolderOfCell to answer one of its holders, not {holder.GetType().Name}.");
         }
 
-        if (GridCells.Mint(repository, plugin, _codec, schemas[recordType], release, grid, out var cell) is { } exhausted) return exhausted;
+        var allocator = FormKeyAllocator.Over(repository, plugin, release);
+        if (GridCells.Mint(allocator, _codec, schemas[recordType], release, grid, out var cell) is { } exhausted) return exhausted;
         var formKey = GridCellHolder.FormKeyOf(cell);
         var text = _codec.RoundTrip(cell.ToJsonString(), release, recordType);
-        repository.PutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace);
+        SourceTransaction.Atomically(repository, transaction =>
+        {
+            transaction.Apply(repository.ChangesToPutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace));
+            transaction.Apply(allocator.HeaderChanges());
+        });
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -188,7 +197,8 @@ public sealed class CreateRecordHandler
         Landing landing)
     {
         var (container, root, slot) = landing;
-        if (FormKeyAllocator.Over(repository, plugin, release).Next(out var formKey) is { } refusedTarget) return refusedTarget;
+        var allocator = FormKeyAllocator.Over(repository, plugin, release);
+        if (allocator.Next(out var formKey) is { } refusedTarget) return refusedTarget;
         var child = ObjectOf(RecordMint.BareDocument(_codec, schema, release, formKey, editorId: null), $"the minted {recordType}");
         if (!PlacedCell.TryAsCreatedIn(child, slot, root, release, out var unplaceable))
             return RecordEditResult.Refused(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, unplaceable);
@@ -197,7 +207,10 @@ public sealed class CreateRecordHandler
             ?? throw new InvalidOperationException($"{container.FormKey} was found, but its own text does not carry it.");
 
         SourceTransaction.Atomically(repository, transaction =>
-            transaction.Apply(repository.ChangesToRewrite(plugin, container with { Body = withChild })));
+        {
+            transaction.Apply(repository.ChangesToRewrite(plugin, container with { Body = withChild }));
+            transaction.Apply(allocator.HeaderChanges());
+        });
 
         if (_logger.IsEnabled(LogLevel.Information))
         {

@@ -186,7 +186,7 @@ describe('modbench.record.create', () => {
 
   it('reports a refusal as mEdit words it, and stops awaiting a record it did not write', async () => {
     const { client, steps, reporter, create } = harness();
-    const message = 'MyPatch.esp has exhausted its ESL FormKey space. Clear the light flag in the header, or change a record\'s FormID.';
+    const message = 'MyPatch.esp has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address. Clear the light flag in the header to draw above it.';
     client.setCommandHandler('createRecord', () => Promise.resolve({ refused: true, message }));
 
     await create(NPC_GROUP);

@@ -54,6 +54,16 @@ public static class HeaderDocument
                 streamCreator: new SupplyRootDocument(rootPath, body)));
     }
 
+    public static uint NextObjectId(byte[] body) => Read(body).NextFormID;
+
+    /// <summary>The document with its header's Next Object ID set to <paramref name="nextObjectId"/>.</summary>
+    public static byte[] WithNextObjectId(byte[] body, uint nextObjectId)
+    {
+        var mod = (IMod)Read(body);
+        mod.NextFormID = nextObjectId;
+        return Write(mod);
+    }
+
     /// <summary>Whether the document's header carries the ESL flag — read through <see cref="Read"/>,
     /// never string-matched out of the JSON, so the answer is the door's own.</summary>
     public static bool IsLight(byte[] body) => Read(body) is IModFlagsGetter flags && flags.IsSmallMaster;

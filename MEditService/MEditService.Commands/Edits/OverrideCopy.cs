@@ -101,12 +101,12 @@ internal sealed class OverrideCopy
         var isCell = RecordTypeDispatch.For(release).IsCell(identity.RecordType);
         if (isCell && source.WorldspaceOf(identity) is { } worldspace)
         {
-            var placed = _recordCopy.PlaceExteriorCell(
-                source, worldspace,
+            var placed = SourceTransaction.Atomically(destination.Repository, transaction => _recordCopy.PlaceExteriorCell(
+                transaction, source, worldspace,
                 new SourceDocument(
                     formKey, identity.RecordType, identity.EditorId,
                     StripEmbeddedChildren(body, identity.RecordType, release)),
-                destination, release);
+                destination, release));
             if (placed.Applied && _logger.IsEnabled(LogLevel.Information))
             {
                 _logger.LogInformation(

@@ -126,4 +126,27 @@ public sealed class PluginTreeReadTests
             new ModPath(ModKey.FromFileName("Lower.esp"), recompiledPath), GameRelease.Fallout4);
         Assert.Equal(["AlphaBase.esm"], written.Content.Masters);
     }
+
+    [Fact]
+    public async Task WriteFromTree_WritesTheNextObjectIdTheSourceHolds_NotOnePastItsHighestRecord()
+    {
+        using var data = new PluginFixtureBuilder("writetree-next-object-id")
+            .WithPlugin(
+                "Counter.esp",
+                mod =>
+                {
+                    mod.Npcs.AddNew("OnlyNpc");
+                    mod.ModHeader.Stats.NextFormID = 0x900;
+                },
+                writeParams: new BinaryWriteParameters { NextFormID = NextFormIDOption.NoCheck })
+            .Build();
+        var files = await ReadTreeFiles(data, "Counter.esp");
+        var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Counter.esp");
+
+        await Adapter.WriteFromTreeAsync(files, recompiledPath, []);
+
+        using var written = Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("Counter.esp"), recompiledPath), Fallout4Release.Fallout4);
+        Assert.Equal(0x900u, written.ModHeader.Stats.NextFormID);
+    }
 }
