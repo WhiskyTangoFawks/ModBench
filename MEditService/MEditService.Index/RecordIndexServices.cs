@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
@@ -8,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Index;
 
-/// <summary>The record index's one registration: the host takes the index as <see cref="IQueryIndex"/>.</summary>
+/// <summary>The record index's one registration: the host takes its query services, the box's face.</summary>
 public static class RecordIndexServices
 {
     public static IServiceCollection AddRecordIndex(this IServiceCollection services)
@@ -26,6 +27,19 @@ public static class RecordIndexServices
             return index;
         });
         services.AddHostedService<IndexAtStartup>();
+        services.AddSingleton<IRecordQueryService, RecordQueryService>();
+        services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
+        services.AddSingleton(sp => new MalformedPluginQueryService(
+            sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>()));
+        services.AddSingleton(sp => new PluginDependantsQueryService(
+            sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>()));
+        services.AddSingleton<PluginExtensionsQueryService>();
+        services.AddSingleton(sp => new PluginProblemQueryService(
+            sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>()));
+        services.AddSingleton(sp => new ContainerChildQueryService(
+            sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<ILogger<ContainerChildQueryService>>()));
+        services.AddSingleton(sp => new ChildRecordQueryService(sp.GetRequiredService<IQueryIndex>()));
         return services;
     }
 

@@ -75,7 +75,6 @@ internal sealed class IndexedContainerMod : IDisposable
     public ContainerMod Mod => _mod;
     public LoadOrderEntry Entry => _mod.Entry;
     public PluginAddress Plugin => _mod.Plugin;
-    public IRecordReads Reads => Index.RequireReads();
 
     public string Cell => _mod.Cell.ToString();
     public string EmbedCell => _mod.EmbedCell.ToString();

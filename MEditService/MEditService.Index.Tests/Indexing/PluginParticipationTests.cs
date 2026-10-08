@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -29,7 +30,7 @@ public class PluginParticipationTests
         [.. fixture.Plugins.Select(p => p.Name == "PluginB.esp" ? p with { Enabled = false } : p)];
 
     private static Dictionary<string, bool> WinnersByPlugin(OpenedIndex index, FormKey npcKey) =>
-        index.RequireReads().GetOverrideStack(npcKey.ToString())?.Entries.ToDictionary(o => o.Plugin.Name, o => o.IsWinner) ?? [];
+        index.StackOf(npcKey.ToString()).ToDictionary(o => o.Plugin, o => o.IsWinner);
 
     [Fact]
     public void DisablingAPluginByReconcile_MatchesIndexingItDisabledFromStart()
@@ -78,19 +79,23 @@ public class PluginParticipationTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        Assert.Null(index.RequireReads().GetOverrideStack(npcKey.ToString()));
-        Assert.Null(index.RequireReads().GetDocument(npcKey.ToString()));
+        Assert.Empty(index.StackOf(npcKey.ToString()));
+        Assert.Null(index.Records.GetRecord(npcKey.ToString()));
     }
 
     [Fact]
     public void DisabledOnlyFormKey_DoesNotResolve()
     {
-        FormKey npcKey = default;
+        FormKey npcKey = default, linker = default;
         using var fixture = new PluginFixtureBuilder("participation-lookup")
             .WithPlugin("Disabled.esp", mod => npcKey = mod.Npcs.AddNew("OnlyInDisabled").FormKey, enabled: false)
+            .WithPlugin("Linker.esp", mod => linker = mod.Npcs.AddNew("Linker").FormKey)
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        Assert.Null(index.RequireReads().LinkResolver(npcKey.ToString())(npcKey.ToString()));
+        var resolution = index.ResolutionOf(
+            linker.ToString(), new PluginAddress("Linker.esp", PluginOrigin.DataDirectory), npcKey.ToString());
+
+        Assert.Equal(FormKeyResolutionState.Unresolved, resolution.State);
     }
 }

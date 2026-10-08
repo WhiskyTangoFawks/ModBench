@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -27,63 +28,51 @@ public sealed class WorkingTreeChangeTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private static string EditorIdColumnOf(RecordDocument document) =>
-        document.EditorId ?? throw new InvalidOperationException("The fixture record has no EditorID.");
+    private RecordSummary RowOf(OpenedIndex index) =>
+        index.RowOf(_formKey, _baseKey) ?? throw new InvalidOperationException($"Expected {_formKey} to be listed.");
 
     [Fact]
     public void AnEdit_MakesTheEffectiveDocumentServeTheNewBody()
     {
         using var index = Indexes.Reconciled(_fixture);
-        var reads = index.RequireReads();
-        var committed = reads.DocumentOf(_formKey, _baseKey);
-        var committedBody = committed.BodyOf();
+        var committed = index.DocumentOf(_formKey, _baseKey);
+        var committedBody = index.BodyOf(_formKey, _baseKey);
         var editedBody = committedBody.Replace("OriginalName", "EditedName", StringComparison.Ordinal);
         Assert.NotEqual(committedBody, editedBody);
 
         index.Edit(_base, committed, editedBody);
 
-        var effective = reads.DocumentOf(_formKey, _baseKey);
-        Assert.Equal(editedBody, effective.Body);
-        Assert.Equal("EditedName", EditorIdColumnOf(effective));
+        Assert.Equal(editedBody, index.BodyOf(_formKey, _baseKey));
+        Assert.Equal("EditedName", index.DocumentOf(_formKey, _baseKey).EditorId);
     }
 
     [Fact]
-    public void AnEdit_MarksTheOverrideStackEntryAsCarryingAWorkingTreeChange()
+    public void AnEdit_MarksTheRecordsRowModified()
     {
         using var index = Indexes.Reconciled(_fixture);
-        var reads = index.RequireReads();
-        var committed = reads.DocumentOf(_formKey, _baseKey);
+        var committed = index.DocumentOf(_formKey, _baseKey);
+        Assert.Equal(WorkingTreeState.None, RowOf(index).WorkingTreeState);
 
-        var clean = reads.StackEntry(_formKey, _baseKey);
-        Assert.NotNull(clean);
-        Assert.False(clean.HasWorkingTreeChange);
+        index.Edit(_base, committed, index.BodyOf(_formKey, _baseKey).Replace("OriginalName", "EditedName", StringComparison.Ordinal));
 
-        index.Edit(_base, committed, committed.BodyOf().Replace("OriginalName", "EditedName", StringComparison.Ordinal));
-
-        var dirty = reads.StackEntry(_formKey, _baseKey);
-        Assert.NotNull(dirty);
-        Assert.True(dirty.HasWorkingTreeChange);
-        Assert.Equal("EditedName", EditorIdColumnOf(dirty.Effective));
+        var dirty = RowOf(index);
+        Assert.Equal(WorkingTreeState.Modified, dirty.WorkingTreeState);
+        Assert.Equal("EditedName", dirty.EditorId);
     }
 
     [Fact]
     public void EditingBackToTheCommittedBytes_ConvergesToClean()
     {
         using var index = Indexes.Reconciled(_fixture);
-        var reads = index.RequireReads();
-        var committed = reads.DocumentOf(_formKey, _baseKey);
-        var committedBody = committed.BodyOf();
+        var committed = index.DocumentOf(_formKey, _baseKey);
+        var committedBody = index.BodyOf(_formKey, _baseKey);
 
         index.Edit(_base, committed, committedBody.Replace("OriginalName", "EditedName", StringComparison.Ordinal));
-        var dirty = reads.StackEntry(_formKey, _baseKey);
-        Assert.NotNull(dirty);
-        Assert.True(dirty.HasWorkingTreeChange);
+        Assert.Equal(WorkingTreeState.Modified, RowOf(index).WorkingTreeState);
 
-        index.Edit(_base, reads.DocumentOf(_formKey, _baseKey), committedBody);
+        index.Edit(_base, index.DocumentOf(_formKey, _baseKey), committedBody);
 
-        var reverted = reads.StackEntry(_formKey, _baseKey);
-        Assert.NotNull(reverted);
-        Assert.False(reverted.HasWorkingTreeChange);
-        Assert.Equal(committedBody, reverted.Effective.Body);
+        Assert.Equal(WorkingTreeState.None, RowOf(index).WorkingTreeState);
+        Assert.Equal(committedBody, index.BodyOf(_formKey, _baseKey));
     }
 }

@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -37,15 +38,15 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         page.Items.Single(i => i.FormKey == formKey);
 
     private PagedResult<RecordSummary> Listing(OpenedIndex index) =>
-        index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: _baseKey.Name, Origin: _baseKey.Origin, RecordTypes: ["npc_"], Limit: 50));
+        index.Records.GetRecords(["npc_"], _baseKey, search: null, limit: 50, offset: 0);
 
     [Fact]
     public void Search_EditedRecord_ReportsModified_AndUntouchedSiblingReportsNone()
     {
         using var index = Indexes.Reconciled(_fixture);
         var edited = _editedFormKey.ToString();
-        var committed = index.RequireReads().DocumentOf(edited, _baseKey);
-        index.Edit(_base, committed, committed.BodyOf().Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal));
+        var committed = index.DocumentOf(edited, _baseKey);
+        index.Edit(_base, committed, index.BodyOf(edited, _baseKey).Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal));
 
         var page = Listing(index);
 
@@ -57,9 +58,9 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     public void Search_NewlyCreatedRecord_ReportsAdded()
     {
         using var index = Indexes.Reconciled(_fixture);
-        var template = index.RequireReads().DocumentOf(_untouchedFormKey.ToString(), _baseKey);
+        var template = index.DocumentOf(_untouchedFormKey.ToString(), _baseKey);
         var created = new FormKey(_untouchedFormKey.ModKey, _untouchedFormKey.ID + 1).ToString();
-        var body = template.BodyOf()
+        var body = index.BodyOf(_untouchedFormKey.ToString(), _baseKey)
             .Replace(_untouchedFormKey.ToString(), created, StringComparison.Ordinal)
             .Replace("Untouched", "CreatedInTree", StringComparison.Ordinal);
         index.Create(_base, created, "npc_", "CreatedInTree", body);
@@ -75,8 +76,8 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture);
         var edited = _editedFormKey.ToString();
-        var committed = index.RequireReads().DocumentOf(edited, _baseKey);
-        index.Edit(_base, committed, committed.BodyOf().Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal));
+        var committed = index.DocumentOf(edited, _baseKey);
+        index.Edit(_base, committed, index.BodyOf(edited, _baseKey).Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal));
         Assert.Equal(WorkingTreeState.Modified, SummaryFor(Listing(index), edited).WorkingTreeState);
 
         _base.Git("add", "-A");
@@ -91,17 +92,17 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture);
         var edited = _editedFormKey.ToString();
-        var committed = index.RequireReads().DocumentOf(edited, _baseKey);
-        index.Edit(_base, committed, committed.BodyOf().Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal));
+        var committed = index.DocumentOf(edited, _baseKey);
+        index.Edit(_base, committed, index.BodyOf(edited, _baseKey).Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal));
         using (new FileStream(_base.SourceFileOf(committed), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
         {
             index.NextSnapshotUntil(
-                () => index.RequireReads().DerivationOf(_baseKey) == DerivedFrom.BinaryForUnreadableSource, "the binary read in the tree's place");
+                () => index.PluginRowOf(_baseKey) is { IsTracked: true, PluginSourceUnreadable: true }, "the binary read in the tree's place");
 
             Assert.Equal(WorkingTreeState.None, SummaryFor(Listing(index), edited).WorkingTreeState);
         }
 
-        index.NextSnapshotUntil(() => index.RequireReads().DerivationOf(_baseKey) == DerivedFrom.SourceTree, "the tree read again");
+        index.NextSnapshotUntil(() => index.PluginRowOf(_baseKey) is { IsTracked: true, PluginSourceUnreadable: false }, "the tree read again");
 
         Assert.Equal(WorkingTreeState.Modified, SummaryFor(Listing(index), edited).WorkingTreeState);
     }

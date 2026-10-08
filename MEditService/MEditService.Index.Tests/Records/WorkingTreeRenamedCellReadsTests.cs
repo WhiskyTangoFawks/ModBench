@@ -11,7 +11,7 @@ public sealed class WorkingTreeRenamedCellReadsTests : IDisposable
 
     private void RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(string formKey, string from, string to)
     {
-        var before = _fixture.Reads.DocumentOf(formKey, _fixture.Plugin).BodyOf();
+        var before = _fixture.Index.BodyOf(formKey, _fixture.Plugin);
         _fixture.Index.Project(_fixture.Entry, [(formKey, before.Replace(from, to, StringComparison.Ordinal))]);
     }
 
@@ -21,8 +21,8 @@ public sealed class WorkingTreeRenamedCellReadsTests : IDisposable
         var topCell = _fixture.TopCell;
         RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(topCell, ContainerModPlugin.TopCellEditorId, "RenamedTopCell");
 
-        var effective = _fixture.Reads.GetWorldspaceCells(_fixture.Plugin, _fixture.Worldspace)
-            .Single(c => c.FormKey == topCell);
+        var effective = _fixture.Index.Worldspaces.GetWorldspaceBlocks(_fixture.Plugin, _fixture.Worldspace)
+            .TopCells.Single(c => c.FormKey == topCell);
 
         Assert.Equal("RenamedTopCell", effective.EditorId);
     }
@@ -33,7 +33,9 @@ public sealed class WorkingTreeRenamedCellReadsTests : IDisposable
         var cell = _fixture.Cell;
         RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(cell, ContainerModPlugin.CellEditorId, "RenamedCell");
 
-        var effective = _fixture.Reads.GetInteriorCells(_fixture.Plugin).Single(c => c.FormKey == cell);
+        var effective = _fixture.Index.Worldspaces.GetInteriorCells(_fixture.Plugin)
+            .SelectMany(block => block.SubBlocks).SelectMany(subBlock => subBlock.Cells)
+            .Single(c => c.FormKey == cell);
 
         Assert.Equal("RenamedCell", effective.EditorId);
     }
@@ -44,7 +46,7 @@ public sealed class WorkingTreeRenamedCellReadsTests : IDisposable
         var temporaryRef = _fixture.TemporaryRef;
         RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(temporaryRef, ContainerModPlugin.TemporaryRefEditorId, "RenamedTempRef");
 
-        var effective = _fixture.Reads.GetCellChildRecords(_fixture.Plugin, _fixture.EmbedCell)
+        var effective = _fixture.Index.Worldspaces.GetCellChildRecords(_fixture.Plugin, _fixture.EmbedCell)
             .Temporary.Single(p => p.FormKey == temporaryRef);
 
         Assert.Equal("RenamedTempRef", effective.EditorId);

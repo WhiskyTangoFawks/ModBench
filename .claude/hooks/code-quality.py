@@ -37,7 +37,6 @@ CS_PROJECTS = {
     "MEditService/MEditService.LoadOrder": "MEditService.LoadOrder",
     "MEditService/MEditService.PluginAdapter": "MEditService.PluginAdapter",
     "MEditService/MEditService.Ports": "MEditService.Ports",
-    "MEditService/MEditService.Queries": "MEditService.Queries",
     "MEditService/MEditService.SourceAdapter": "MEditService.SourceAdapter",
     "MEditService/MEditService.Codec.Tests": "MEditService.Codec.Tests",
     "MEditService/MEditService.Commands.Tests": "MEditService.Commands.Tests",
@@ -46,7 +45,6 @@ CS_PROJECTS = {
     "MEditService/MEditService.LoadOrder.Tests": "MEditService.LoadOrder.Tests",
     "MEditService/MEditService.PluginAdapter.Tests": "MEditService.PluginAdapter.Tests",
     "MEditService/MEditService.Ports.Tests": "MEditService.Ports.Tests",
-    "MEditService/MEditService.Queries.Tests": "MEditService.Queries.Tests",
     "MEditService/MEditService.SourceAdapter.Tests": "MEditService.SourceAdapter.Tests",
     "MEditService/MEditService.TestSupport": "MEditService.TestSupport",
 }

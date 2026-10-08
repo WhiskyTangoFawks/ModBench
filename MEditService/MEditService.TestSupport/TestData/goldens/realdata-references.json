@@ -9,7 +9,8 @@
           "FormKey": "003648:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "qust"
+          "RecordType": "qust",
+          "RecordTypeName": "Quest"
         },
         {
           "EditorId": null,
@@ -17,7 +18,8 @@
           "FormKey": "0048EB:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "dial",
+          "RecordTypeName": "Dialog Topic"
         },
         {
           "EditorId": "ArturoGreetScene",
@@ -25,7 +27,8 @@
           "FormKey": "004E1E:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "scen"
+          "RecordType": "scen",
+          "RecordTypeName": "Scene"
         },
         {
           "EditorId": null,
@@ -33,7 +36,8 @@
           "FormKey": "0057DD:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "dial",
+          "RecordTypeName": "Dialog Topic"
         },
         {
           "EditorId": null,
@@ -41,7 +45,8 @@
           "FormKey": "00581D:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "dial",
+          "RecordTypeName": "Dialog Topic"
         }
       ]
     },
@@ -54,7 +59,8 @@
           "FormKey": "0180F8:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         },
         {
           "EditorId": null,
@@ -62,7 +68,8 @@
           "FormKey": "02B89C:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         },
         {
           "EditorId": null,
@@ -70,7 +77,8 @@
           "FormKey": "02B8A0:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         },
         {
           "EditorId": null,
@@ -78,7 +86,8 @@
           "FormKey": "02B8A1:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         },
         {
           "EditorId": null,
@@ -86,7 +95,8 @@
           "FormKey": "02B8A2:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         }
       ]
     },
@@ -99,7 +109,8 @@
           "FormKey": "005834:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         },
         {
           "EditorId": null,
@@ -107,7 +118,8 @@
           "FormKey": "017BB2:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         },
         {
           "EditorId": null,
@@ -115,7 +127,8 @@
           "FormKey": "01DA84:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         },
         {
           "EditorId": null,
@@ -123,7 +136,8 @@
           "FormKey": "01DAAA:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         },
         {
           "EditorId": null,
@@ -131,7 +145,8 @@
           "FormKey": "01F611:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         }
       ]
     },
@@ -144,7 +159,8 @@
           "FormKey": "0179D9:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "dial",
+          "RecordTypeName": "Dialog Topic"
         },
         {
           "EditorId": null,
@@ -152,7 +168,8 @@
           "FormKey": "0179DA:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "dial",
+          "RecordTypeName": "Dialog Topic"
         },
         {
           "EditorId": null,
@@ -160,7 +177,8 @@
           "FormKey": "0179DB:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "dial",
+          "RecordTypeName": "Dialog Topic"
         },
         {
           "EditorId": null,
@@ -168,7 +186,8 @@
           "FormKey": "0179DC:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "dial",
+          "RecordTypeName": "Dialog Topic"
         },
         {
           "EditorId": "DialogueGenericPlayer",
@@ -176,7 +195,8 @@
           "FormKey": "0179EF:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "qust"
+          "RecordType": "qust",
+          "RecordTypeName": "Quest"
         }
       ]
     },
@@ -189,7 +209,8 @@
           "FormKey": "0179F1:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "dial",
+          "RecordTypeName": "Dialog Topic"
         },
         {
           "EditorId": "DialogueConcordArea",
@@ -197,7 +218,8 @@
           "FormKey": "0179F3:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "qust"
+          "RecordType": "qust",
+          "RecordTypeName": "Quest"
         },
         {
           "EditorId": "DialogueConcordArea",
@@ -205,7 +227,8 @@
           "FormKey": "0179F3:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "qust"
+          "RecordType": "qust",
+          "RecordTypeName": "Quest"
         },
         {
           "EditorId": "DialogueConcordArea",
@@ -213,7 +236,8 @@
           "FormKey": "0179F3:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "qust"
+          "RecordType": "qust",
+          "RecordTypeName": "Quest"
         },
         {
           "EditorId": "DialogueConcordArea",
@@ -221,7 +245,8 @@
           "FormKey": "0179F3:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "qust"
+          "RecordType": "qust",
+          "RecordTypeName": "Quest"
         }
       ]
     },
@@ -234,7 +259,8 @@
           "FormKey": "0057E4:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         },
         {
           "EditorId": null,
@@ -242,7 +268,8 @@
           "FormKey": "01F685:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         },
         {
           "EditorId": null,
@@ -250,7 +277,8 @@
           "FormKey": "030E13:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         },
         {
           "EditorId": null,
@@ -258,7 +286,8 @@
           "FormKey": "030E14:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "info",
+          "RecordTypeName": "Dialog response"
         },
         {
           "EditorId": "NatMQ103Scene",
@@ -266,7 +295,8 @@
           "FormKey": "08BB68:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "scen"
+          "RecordType": "scen",
+          "RecordTypeName": "Scene"
         }
       ]
     },
@@ -279,7 +309,8 @@
           "FormKey": "01DAD7:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "dial",
+          "RecordTypeName": "Dialog Topic"
         }
       ]
     },
@@ -292,7 +323,8 @@
           "FormKey": "02650D:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "dial",
+          "RecordTypeName": "Dialog Topic"
         }
       ]
     },
@@ -305,7 +337,8 @@
           "FormKey": "0782A8:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "cell"
+          "RecordType": "cell",
+          "RecordTypeName": "Cell"
         }
       ]
     },
@@ -318,7 +351,8 @@
           "FormKey": "0CA9C8:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "dial",
+          "RecordTypeName": "Dialog Topic"
         },
         {
           "EditorId": null,
@@ -326,7 +360,8 @@
           "FormKey": "247E8E:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "dial",
+          "RecordTypeName": "Dialog Topic"
         }
       ]
     },
@@ -339,7 +374,8 @@
           "FormKey": "1A6C7B:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "achr"
+          "RecordType": "achr",
+          "RecordTypeName": "Placed NPC"
         },
         {
           "EditorId": null,
@@ -347,7 +383,8 @@
           "FormKey": "2169D2:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "refr"
+          "RecordType": "refr",
+          "RecordTypeName": "Placed Object"
         }
       ]
     },
@@ -360,7 +397,8 @@
           "FormKey": "1A6C6F:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "achr"
+          "RecordType": "achr",
+          "RecordTypeName": "Placed NPC"
         }
       ]
     },
@@ -373,7 +411,8 @@
           "FormKey": "1A6C71:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "achr"
+          "RecordType": "achr",
+          "RecordTypeName": "Placed NPC"
         }
       ]
     },
@@ -386,7 +425,8 @@
           "FormKey": "24A068:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "misc"
+          "RecordType": "misc",
+          "RecordTypeName": "Misc. Item"
         }
       ]
     },
@@ -399,7 +439,8 @@
           "FormKey": "24A069:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "misc"
+          "RecordType": "misc",
+          "RecordTypeName": "Misc. Item"
         }
       ]
     },
@@ -412,7 +453,8 @@
           "FormKey": "24A06B:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "misc"
+          "RecordType": "misc",
+          "RecordTypeName": "Misc. Item"
         }
       ]
     },
@@ -425,7 +467,8 @@
           "FormKey": "24A313:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "acti"
+          "RecordType": "acti",
+          "RecordTypeName": "Activator"
         },
         {
           "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
@@ -433,7 +476,8 @@
           "FormKey": "24A314:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "acti"
+          "RecordType": "acti",
+          "RecordTypeName": "Activator"
         },
         {
           "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
@@ -441,7 +485,8 @@
           "FormKey": "24A315:Fallout4.esm",
           "Origin": "Data/",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "acti"
+          "RecordType": "acti",
+          "RecordTypeName": "Activator"
         }
       ]
     }
@@ -449,211 +494,263 @@
   "Resolved": {
     "000800:mEditTestSubset.esm": {
       "EditorId": "Commonwealth",
-      "RecordType": "wrld"
+      "RecordType": "wrld",
+      "State": "ResolvedWrongType"
     },
     "003648:Fallout4.esm": {
       "EditorId": "DialogueDiamondCity",
-      "RecordType": "qust"
+      "RecordType": "qust",
+      "State": "ResolvedWrongType"
     },
     "0048EB:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "dial"
+      "RecordType": "dial",
+      "State": "ResolvedWrongType"
     },
     "004E1E:Fallout4.esm": {
       "EditorId": "ArturoGreetScene",
-      "RecordType": "scen"
+      "RecordType": "scen",
+      "State": "ResolvedWrongType"
     },
     "0057DD:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "dial"
+      "RecordType": "dial",
+      "State": "ResolvedWrongType"
     },
     "0057DE:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "info"
+      "RecordType": "info",
+      "State": "ResolvedWrongType"
     },
     "0057DF:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "info"
+      "RecordType": "info",
+      "State": "ResolvedWrongType"
     },
     "0057E0:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "info"
+      "RecordType": "info",
+      "State": "ResolvedWrongType"
     },
     "00581D:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "dial"
+      "RecordType": "dial",
+      "State": "ResolvedWrongType"
     },
     "00583D:Fallout4.esm": {
       "EditorId": "MyrnaGreetScene",
-      "RecordType": "scen"
+      "RecordType": "scen",
+      "State": "ResolvedWrongType"
     },
     "00DB41:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "cell"
+      "RecordType": "cell",
+      "State": "ResolvedWrongType"
     },
     "00DB42:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "cell"
+      "RecordType": "cell",
+      "State": "ResolvedWrongType"
     },
     "00DB43:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "cell"
+      "RecordType": "cell",
+      "State": "ResolvedWrongType"
     },
     "0179EF:Fallout4.esm": {
       "EditorId": "DialogueGenericPlayer",
-      "RecordType": "qust"
+      "RecordType": "qust",
+      "State": "ResolvedWrongType"
     },
     "0179F3:Fallout4.esm": {
       "EditorId": "DialogueConcordArea",
-      "RecordType": "qust"
+      "RecordType": "qust",
+      "State": "ResolvedWrongType"
     },
     "017B27:Fallout4.esm": {
       "EditorId": "NatGreetScene",
-      "RecordType": "scen"
+      "RecordType": "scen",
+      "State": "ResolvedWrongType"
     },
     "01DADA:Fallout4.esm": {
       "EditorId": "DialogueDiamondCitySharedBranch",
-      "RecordType": "dlbr"
+      "RecordType": "dlbr",
+      "State": "ResolvedWrongType"
     },
     "0267FA:Fallout4.esm": {
       "EditorId": "DialogueGenericPlayerSharedQuestion",
-      "RecordType": "dlbr"
+      "RecordType": "dlbr",
+      "State": "ResolvedWrongType"
     },
     "0782AA:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "refr"
+      "RecordType": "refr",
+      "State": "ResolvedWrongType"
     },
     "0782B7:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "refr"
+      "RecordType": "refr",
+      "State": "ResolvedWrongType"
     },
     "0782B8:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "refr"
+      "RecordType": "refr",
+      "State": "ResolvedWrongType"
     },
     "0A96BF:Fallout4.esm": {
       "EditorId": "FeralGhoulGlowingRace",
-      "RecordType": "race"
+      "RecordType": "race",
+      "State": "ResolvedValidType"
     },
     "0CA9D0:Fallout4.esm": {
       "EditorId": "DialogueConcordAreaSharedBranch",
-      "RecordType": "dlbr"
+      "RecordType": "dlbr",
+      "State": "ResolvedWrongType"
     },
     "187AF9:Fallout4.esm": {
       "EditorId": "RaiderDogRace",
-      "RecordType": "race"
+      "RecordType": "race",
+      "State": "ResolvedValidType"
     },
     "1A6C6F:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "achr"
+      "RecordType": "achr",
+      "State": "ResolvedWrongType"
     },
     "1A6C71:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "achr"
+      "RecordType": "achr",
+      "State": "ResolvedWrongType"
     },
     "1A6C7B:Fallout4.esm": {
       "EditorId": null,
-      "RecordType": "achr"
+      "RecordType": "achr",
+      "State": "ResolvedWrongType"
     },
     "1A6D64:Fallout4.esm": {
       "EditorId": "TurretWorkshopRace",
-      "RecordType": "race"
+      "RecordType": "race",
+      "State": "ResolvedValidType"
     },
     "2499C4:Fallout4.esm": {
       "EditorId": "EncRadRoachAmbushLegendary",
-      "RecordType": "npc_"
+      "RecordType": "npc_",
+      "State": "ResolvedWrongType"
     },
     "2499C8:Fallout4.esm": {
       "EditorId": "LvlMutantHoundLegendary",
-      "RecordType": "npc_"
+      "RecordType": "npc_",
+      "State": "ResolvedWrongType"
     },
     "249D44:Fallout4.esm": {
       "EditorId": "CIS_CompanionInSceneFaction",
-      "RecordType": "fact"
+      "RecordType": "fact",
+      "State": "ResolvedWrongType"
     },
     "249E8F:Fallout4.esm": {
       "EditorId": "TunnelingRaceNoDirtFromFurniture",
-      "RecordType": "fact"
+      "RecordType": "fact",
+      "State": "ResolvedWrongType"
     },
     "24A068:Fallout4.esm": {
       "EditorId": "shipment_Wood_250",
-      "RecordType": "misc"
+      "RecordType": "misc",
+      "State": "ResolvedWrongType"
     },
     "24A069:Fallout4.esm": {
       "EditorId": "shipment_Rubber_large",
-      "RecordType": "misc"
+      "RecordType": "misc",
+      "State": "ResolvedWrongType"
     },
     "24A06B:Fallout4.esm": {
       "EditorId": "shipment_Ceramic_large",
-      "RecordType": "misc"
+      "RecordType": "misc",
+      "State": "ResolvedWrongType"
     },
     "24A157:Fallout4.esm": {
       "EditorId": "CC_PetDogFaction",
-      "RecordType": "fact"
+      "RecordType": "fact",
+      "State": "ResolvedWrongType"
     },
     "24A313:Fallout4.esm": {
       "EditorId": "VRWorkshopShared_AttackMarker_SentryBot",
-      "RecordType": "acti"
+      "RecordType": "acti",
+      "State": "ResolvedWrongType"
     },
     "24A314:Fallout4.esm": {
       "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
-      "RecordType": "acti"
+      "RecordType": "acti",
+      "State": "ResolvedWrongType"
     },
     "24A315:Fallout4.esm": {
       "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
-      "RecordType": "acti"
+      "RecordType": "acti",
+      "State": "ResolvedWrongType"
     },
     "24A340:Fallout4.esm": {
       "EditorId": "VRWorkshopShared_TutorialShown_VRWorkshop",
-      "RecordType": "glob"
+      "RecordType": "glob",
+      "State": "ResolvedWrongType"
     },
     "24A341:Fallout4.esm": {
       "EditorId": "VRWorkshopShared_TutorialShown_VRAttackMarker",
-      "RecordType": "glob"
+      "RecordType": "glob",
+      "State": "ResolvedWrongType"
     },
     "24A342:Fallout4.esm": {
       "EditorId": "VRWorkshopShared_TutorialShown_VRPod",
-      "RecordType": "glob"
+      "RecordType": "glob",
+      "State": "ResolvedWrongType"
     },
     "24A37F:Fallout4.esm": {
       "EditorId": "VRWorkshopShared_LvlSynthCourser",
-      "RecordType": "npc_"
+      "RecordType": "npc_",
+      "State": "ResolvedWrongType"
     },
     "24A3AF:Fallout4.esm": {
       "EditorId": "VRWorkshopShared_SuperSledge_NonPlayable",
-      "RecordType": "weap"
+      "RecordType": "weap",
+      "State": "ResolvedWrongType"
     },
     "24A3B0:Fallout4.esm": {
       "EditorId": "VRWorkshopShared_AlienBlaster_NonPlayable",
-      "RecordType": "weap"
+      "RecordType": "weap",
+      "State": "ResolvedWrongType"
     },
     "24A3B1:Fallout4.esm": {
       "EditorId": "VRWorkshopShared_GaussRifle_NonPlayable",
-      "RecordType": "weap"
+      "RecordType": "weap",
+      "State": "ResolvedWrongType"
     },
     "24A3FE:Fallout4.esm": {
       "EditorId": "cc_Armor_Power_X01_Helm",
-      "RecordType": "armo"
+      "RecordType": "armo",
+      "State": "ResolvedWrongType"
     },
     "24A3FF:Fallout4.esm": {
       "EditorId": "cc_Armor_Power_X01_LegLeft",
-      "RecordType": "armo"
+      "RecordType": "armo",
+      "State": "ResolvedWrongType"
     },
     "24A400:Fallout4.esm": {
       "EditorId": "cc_Armor_Power_X01_LegRight",
-      "RecordType": "armo"
+      "RecordType": "armo",
+      "State": "ResolvedWrongType"
     },
     "24A403:Fallout4.esm": {
       "EditorId": "dn_HasPiggyBank",
-      "RecordType": "kywd"
+      "RecordType": "kywd",
+      "State": "ResolvedWrongType"
     },
     "24A405:Fallout4.esm": {
       "EditorId": "WorkshopRecipeFilterCreationClub02Holiday03ccFSVFO4007",
-      "RecordType": "kywd"
+      "RecordType": "kywd",
+      "State": "ResolvedWrongType"
     },
     "24A406:Fallout4.esm": {
       "EditorId": "WorkshopRecipeFilterCreationClub02HolidayHalloween",
-      "RecordType": "kywd"
+      "RecordType": "kywd",
+      "State": "ResolvedWrongType"
     }
   }
 }

@@ -29,11 +29,11 @@ public sealed class SecondWindowRefusedTests
 
         Assert.Equal(LoadOrderState.HeldElsewhere, index.Status.State);
         Assert.Contains("another Modbench window", index.Status.Message, StringComparison.Ordinal);
-        Assert.Throws<NoLoadOrderException>(() => index.RequireReads());
+        Assert.Throws<NoLoadOrderException>(() => index.Records.GetPlugins());
         Assert.Equal(filesWhileHeld, Directory.GetFiles(indexDir).Select(Path.GetFileName).Order().ToList());
 
         otherWindow.Dispose();
         index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
-        Assert.NotEmpty(index.RequireReads().DocumentsOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 }

@@ -12,7 +12,7 @@ public sealed class IndexFailureApiTests : HostedTests
     private const string Origin = "HeldMod";
     private const string EscapedFormKey = "000800%3AHeld.esp";
 
-    protected override MEditHost CreateHost() => new(services => FailingIndex.Replace(services));
+    protected override MEditHost CreateHost() => new(services => FailingQueries.Replace(services));
 
     private static async Task AssertIsProblem500(HttpResponseMessage response) =>
         await response.AssertIsProblem(HttpStatusCode.InternalServerError);
