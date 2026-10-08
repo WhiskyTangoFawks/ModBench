@@ -47,13 +47,16 @@ public sealed class CompareRecordsApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ACopyNoPluginHolds_Is404()
+    public async Task ACopyNoPluginHolds_Is404_NamingTheRecordAndThePlugin()
     {
         var (npc, _) = await Loaded();
 
         var response = await Client.PostAsJsonAsync("/records/compare", new { copies = new[] { Copy(npc, WithWeapon, WithWeaponMod) } });
 
-        await response.AssertIsProblem(HttpStatusCode.NotFound);
+        var detail = (await response.AssertIsProblem(HttpStatusCode.NotFound)).GetProperty("detail").GetString();
+        Assert.Contains(npc, detail);
+        Assert.Contains(WithWeapon, detail);
+        Assert.Contains(WithWeaponMod, detail);
     }
 
     [Fact]

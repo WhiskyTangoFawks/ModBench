@@ -60,7 +60,7 @@ public sealed class CompareRecordsTests : IDisposable
         new(record.FormKey.ToString(), plugin, text);
 
     private CompareResult Compare(params RecordCopy[] copies) =>
-        _index.Records.GetCompareRecords(copies) ?? throw new InvalidOperationException("Expected the copies to compare.");
+        _index.Records.GetCompareRecords(copies);
 
     private static string Column(CompareResult compare, int index) =>
         compare.Overrides[index].Column ?? throw new InvalidOperationException("Expected the column to be named.");
@@ -137,9 +137,16 @@ public sealed class CompareRecordsTests : IDisposable
     }
 
     [Fact]
-    public void ACopyNoPluginHolds_AndNoTextGives_FailsTheWholeQuery()
+    public void CopiesNoPluginHolds_AndNoTextGives_FailTheWholeQuery_NamingEachOne()
     {
-        Assert.Null(_index.Records.GetCompareRecords([Copy(_chest, BasePlugin), Copy(_sword, BasePlugin)]));
+        var sword = Copy(_sword, BasePlugin);
+        var chestInMod = Copy(_chest, ModPlugin);
+        var message = Assert.Throws<RecordCopiesMissingException>(
+            () => _index.Records.GetCompareRecords([Copy(_chest, BasePlugin), sword, chestInMod])).Message;
+
+        Assert.Contains($"{sword.FormKey} in {BasePlugin.Name} ({BasePlugin.Origin})", message);
+        Assert.Contains($"{chestInMod.FormKey} in {ModPlugin.Name} ({ModPlugin.Origin})", message);
+        Assert.DoesNotContain($"{_chest.FormKey} in {BasePlugin.Name}", message);
     }
 
     [Fact]

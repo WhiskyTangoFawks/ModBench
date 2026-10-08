@@ -344,9 +344,14 @@ internal static class RecordEndpoints
         if (copies.Any(c => string.IsNullOrWhiteSpace(c.FormKey)
                 || string.IsNullOrWhiteSpace(c.Plugin.Name) || string.IsNullOrWhiteSpace(c.Plugin.Origin)))
             return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
-        return svc.GetCompareRecords(copies) is { } result
-            ? Results.Ok(result)
-            : Results.Problem("A record has no copy in the plugin named, and no document was given for it.", statusCode: 404);
+        try
+        {
+            return Results.Ok(svc.GetCompareRecords(copies));
+        }
+        catch (RecordCopiesMissingException missing)
+        {
+            return Results.Problem(missing.Message, statusCode: 404);
+        }
     }
 
     internal static IResult CompareRecord(string formKey, CopyText copy, IRecordQueryService svc)

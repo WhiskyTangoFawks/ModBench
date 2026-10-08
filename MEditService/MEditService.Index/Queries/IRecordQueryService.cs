@@ -15,7 +15,7 @@ public interface IRecordQueryService
 
     CompareResult? GetCompare(string formKey, CopyText? text = null);
 
-    CompareResult? GetCompareRecords(IReadOnlyList<RecordCopy> copies);
+    CompareResult GetCompareRecords(IReadOnlyList<RecordCopy> copies);
 
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(PluginAddress plugin);
     WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin);
