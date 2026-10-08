@@ -120,8 +120,7 @@ class IndicatorDecorationProvider implements vscode.FileDecorationProvider, vsco
 
 /** A provider per indicator: VS Code takes one decoration from each, and joins their badges. It
  *  never re-queries a provider, so each fires on every new instance value (ADR-0003), setting
- *  change, and separator opened or closed. A collapsed separator carries the indicators of the mods
- *  beneath it (MO2's collapsed separator). */
+ *  change, and separator opened or closed. A collapsed separator carries what the mods beneath it hold. */
 export class ModIndicatorDecorations implements vscode.Disposable {
   readonly providers: readonly IndicatorDecorationProvider[];
   private carriers: Carriers | undefined;
