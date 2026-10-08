@@ -35,6 +35,7 @@ As a user, I want:
 | Description | the status words below, left out when the plugin has none | common, A view, story 3 |
 | Icon | the status below; none when the plugin has no status | common, A view, story 3 |
 | Tooltip | the file name, its origin (the mod, Overwrite or the game folder), "read-only" when its records cannot be edited, and a line for each status | ruling |
+| Badge | while collapsed, the badges of the records beneath it (common.md story 11) | VS Code's source control badges |
 | Identity | the row's kind and the plugin, as (origin, filename) | ADR-0012 |
 
 A plugin's statuses follow. The first that holds, in this order, sets the icon:
@@ -74,6 +75,7 @@ A `plugins.txt` line that names one is not a second row.
 | Label | the type's name, as xEdit names it | xEdit |
 | Description | how many records it holds | xEdit's child count |
 | Icon | `$(error)` red when a record beneath it could not be read; none otherwise | |
+| Badge | while collapsed, the badges of the records beneath it (common.md story 11) | VS Code's source control badges |
 
 ### Record
 
@@ -135,7 +137,7 @@ As a user, I want:
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's Argument in the catalog says. Source: catalog Argument
 2. A click on a record to open it in the record panel, and a click on an enabled plugin row to open its header, which is a record. A click on a disabled plugin row only selects it. Source: catalog `open`
 3. Enable or disable over a mixed selection to behave as in Mods (Menus and keys, story 2). Source: mods.md
-4. The gestures that edit a plugin's records absent on an untracked plugin, on a plugin whose plugin source is unreadable, and on a plugin that is not active: create record and delete, and the plugin as a copy destination. Track or decompile is on its row. Source: No dead entries
+4. The gestures that edit a plugin's records absent on an untracked plugin and on a plugin whose plugin source is unreadable: create record and delete, and the plugin as a copy destination. Track or decompile is on its row. Source: No dead entries
 5. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its file name. Source: catalog `copy value`; [editor-fields.md](editor-fields.md)
 
 ## Drag and drop
@@ -223,9 +225,9 @@ As a user, I want:
 
 As a user, I want:
 
-1. A pick of the mode, then a pick of the destination: the plugins I can edit, each with its load index. A destination that already holds a copy asks whether to replace it. Esc on either copies nothing. Source: catalog `copy`
+1. A pick of the mode, then a pick of the destination: the plugins I can edit, each with its load index, or `(not active)`. A destination that already holds a copy asks whether to replace it. Esc on either copies nothing. Source: catalog `copy`
 2. A copy as new to take the next free FormKey. A reference to itself follows it.
-3. A copy as override into a plugin that loads before the source refused: that is an underride. A cell or a worldspace copied as new refused.
+3. A copy as override into a plugin that loads before the source refused: that is an underride. A plugin that is not active is judged at its line in `plugins.txt`, and one with no line is not judged. A cell or a worldspace copied as new refused.
 4. A container the destination lacks copied in as an override, in every mode. Where the game lets it be a Partial Form, it is one, so it carries only its children and overrides none of the container's own fields. Source: xEdit; editor-fields.md, Partial Form; ruling
 5. A copy, in either mode, to copy each record without its child records. To copy a child record too, I select it. Source: xEdit; commands.md, An all variant is select all, then the gesture
 
