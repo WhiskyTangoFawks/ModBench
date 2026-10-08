@@ -10,7 +10,7 @@ namespace MEditService.SourceAdapter;
 /// <summary>Documents by identity over one tracked mod folder (ADR-0014), and ADR-0007's
 /// git verbs beneath them. Every verb tolerates the folder having vanished since last observed —
 /// MO2's Replace install shell-deletes mod folders.</summary>
-public sealed class SourceRepository
+public sealed class SourceRepository : ISourceRepositoryReads
 {
     private readonly string _modFolder;
     private readonly string _modName;
@@ -121,6 +121,8 @@ public sealed class SourceRepository
             ? throw new UnreadableSourceDocumentException($"{plugin.Name}'s document for {formKey} is no record document: {why}")
             : null;
     }
+
+    SourceDocument? ISourceRepositoryReads.RecordOf(PluginAddress plugin, RecordIdentity identity) => Get(plugin, identity);
 
     /// <summary>Throws <see cref="UnreadableSourceDocumentException"/>, naming the file that carries
     /// <paramref name="identity"/>, when <paramref name="body"/> holds what reading the whole tree

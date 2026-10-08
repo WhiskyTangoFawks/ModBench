@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index.Queries;
@@ -20,11 +21,13 @@ public sealed class PluginProblemQueryService
 {
     private readonly IQueryIndex _index;
     private readonly LoadOrderHolder _loadOrder;
+    private readonly ISourceAdapter _source;
 
-    internal PluginProblemQueryService(IQueryIndex index, LoadOrderHolder loadOrder)
+    internal PluginProblemQueryService(IQueryIndex index, LoadOrderHolder loadOrder, ISourceAdapter source)
     {
         _index = index;
         _loadOrder = loadOrder;
+        _source = source;
     }
 
     /// <summary>A plugin the index has not reached holds no record yet, so every link into it would
@@ -37,7 +40,9 @@ public sealed class PluginProblemQueryService
         var stopped = _index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
         var held = snapshot.Plugins.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         var missing = reads
-            .GetReferencesToMissingRecordsOnFiles(plugin => held.GetValueOrDefault(plugin)?.Provider as PluginProvider.FromMod)
+            .GetReferencesToMissingRecordsOnFiles(plugin => held.GetValueOrDefault(plugin)?.Provider is PluginProvider.FromMod mod
+                ? _source.Over(mod, snapshot.GameRelease)
+                : null)
             .ToLookup(row => row.Reference.Plugin, PluginAddress.Comparer);
         return
         [

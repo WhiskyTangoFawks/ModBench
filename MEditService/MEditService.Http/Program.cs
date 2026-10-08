@@ -10,6 +10,7 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using Serilog;
 using Serilog.Events;
 
@@ -66,6 +67,7 @@ try
     builder.Services.AddSingleton<SseNotificationPublisher>();
     builder.Services.AddSingleton<INotificationPublisher>(sp => sp.GetRequiredService<SseNotificationPublisher>());
     builder.Services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
+    builder.Services.AddSingleton<ISourceAdapter, GitSourceAdapter>();
     builder.Services.AddSingleton<LoadOrderHolder>();
     // One Index for the whole process (ADR-0014). Which file it opens comes from the
     // load request (ADR-0010), not from here.

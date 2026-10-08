@@ -11,21 +11,16 @@ namespace MEditService.Index;
 /// <summary>Reads a system of record (a tracked plugin's source tree, or its binary's hash) and writes
 /// what differs into the Store (ADR-0015).</summary>
 internal sealed class Projector(
-    DuckDbRecordIndex index, Func<PluginAddress, PluginMetadata?> held, ILogger logger)
+    DuckDbRecordIndex index, Func<PluginAddress, PluginMetadata?> held, ISourceAdapter source, ILogger logger)
 {
-    /// <summary>The mod of the tree this plugin ingests from, or null when it reads its binary.
-    /// Re-derived every call: a mod manager can replace the folder wholesale.</summary>
-    internal static PluginProvider.FromMod? TreeModOf(RegisteredPlugin plugin) =>
-        SourceRepository.SourceReads(plugin) ? ModOf(plugin) : null;
-
     /// <summary>The truth <paramref name="plugin"/> is derived from, as its folder answers now.</summary>
-    internal static DerivedFrom TruthOf(RegisteredPlugin plugin)
+    internal DerivedFrom TruthOf(RegisteredPlugin plugin)
     {
-        if (SourceRepository.SourceReads(plugin)) return DerivedFrom.SourceTree;
-        return SourceRepository.IsTracked(plugin) ? DerivedFrom.BinaryForUnreadableSource : DerivedFrom.Binary;
+        if (source.SourceReads(plugin)) return DerivedFrom.SourceTree;
+        return source.IsTracked(plugin) ? DerivedFrom.BinaryForUnreadableSource : DerivedFrom.Binary;
     }
 
-    internal static PluginProvider.FromMod ModOf(RegisteredPlugin plugin) =>
+    private static PluginProvider.FromMod ModOf(RegisteredPlugin plugin) =>
         plugin.Provider as PluginProvider.FromMod
         ?? throw new InvalidOperationException($"'{plugin.Name}' from '{plugin.Origin}' reads a source tree, so a mod provides it.");
 
@@ -38,7 +33,7 @@ internal sealed class Projector(
 
         // Over rather than Open: the documents read the same either way, and a repository verb over an
         // untracked folder answers empty instead of throwing.
-        var repository = SourceRepository.Over(mod, index.Release);
+        var repository = source.Over(mod, index.Release);
 
         var timer = Stopwatch.StartNew();
         using (var documents = repository.OpenDocuments(plugin.Key, index.Schemas))
@@ -61,7 +56,7 @@ internal sealed class Projector(
     internal IReadOnlyList<string> LearnWorkingTreeStates(RegisteredPlugin plugin)
     {
         var (key, mod) = (plugin.Key, ModOf(plugin));
-        var changes = SourceRepository.Over(mod, index.Release).ChangedSinceLastCommit(key, index.Schemas);
+        var changes = source.Over(mod, index.Release).ChangedSinceLastCommit(key, index.Schemas);
 
         var learned = changes.ToDictionary(
             change => change.Key,
@@ -92,7 +87,7 @@ internal sealed class Projector(
         // The tree is what these rows are re-derived from, so it is what the plugin is derived from
         // (ADR-0007), bytes moved or not: a plugin tracked after indexing arrives here
         // still stamped from its binary.
-        if (SourceRepository.SourceReads(plugin))
+        if (source.SourceReads(plugin))
             index.RestampDerivation(key, DerivedFrom.SourceTree);
 
         // A key the index does not hold is a record the tree has gained or got back, and no document
@@ -105,7 +100,7 @@ internal sealed class Projector(
 
         // One repository for the batch, so its listing memo and embedded-owner map are built once
         // rather than once per key.
-        var repository = SourceRepository.Over(mod, index.Release);
+        var repository = source.Over(mod, index.Release);
         var touched = new List<string>();
         foreach (var formKey in formKeys)
             touched.AddRange(RefreshOneKey(repository, key, formKey));
@@ -117,14 +112,14 @@ internal sealed class Projector(
     });
 
     // Re-derives one key's rows. Called again with the same bytes, nothing below fires.
-    private List<string> RefreshOneKey(SourceRepository repository, PluginAddress key, string formKey)
+    private List<string> RefreshOneKey(ISourceRepositoryReads repository, PluginAddress key, string formKey)
     {
         // Gone since the batch was read: another key's projection in this same batch took it (a
         // container's document carries its children's rows).
         if (index.StoredRow(key, formKey) is not { } effective) return [];
 
         var identity = new RecordIdentity(formKey, effective.RecordType, effective.EditorId);
-        var workingTreeText = repository.Get(key, identity)?.Body;
+        var workingTreeText = repository.RecordOf(key, identity)?.Body;
 
         // Never exclusive owners of the file: it can be caught mid-save, or hand-edited into
         // something that is not a document. Rows stay as they stand until it reads as one again, and
@@ -162,7 +157,7 @@ internal sealed class Projector(
         var key = registered.Key;
         // Nothing to re-derive from: the tree went away between the signal and this line, or the
         // rows came from its binary and a source key is not its to answer for.
-        if (!SourceRepository.SourceReads(registered)) return;
+        if (!source.SourceReads(registered)) return;
         if (held(key) is not { } plugin)
         {
             logger.LogWarning(
