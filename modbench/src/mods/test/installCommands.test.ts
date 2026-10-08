@@ -63,8 +63,8 @@ function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
     access: ACCESS,
     instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
-    installDownloaded: vi.fn(),
     warnIfFomod: vi.fn(),
+    downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     ...over,
   };
 }
@@ -207,28 +207,44 @@ describe('modbench.mod.install: a failed install', () => {
 describe('modbench.mod.install: a downloaded file is its source', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('hands the downloaded file to the Downloads flow and asks nothing itself', async () => {
-    const installDownloaded = vi.fn().mockResolvedValueOnce(true);
+  it('installs the downloaded file the Argument carries, and asks no source', async () => {
+    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
+    showInputBox.mockResolvedValueOnce('Foo');
     const row = downloadRowFixture('foo.7z');
 
-    registerModInstallCommands(deps({ installDownloaded }));
-    const outcome = await invoke('modbench.mod.install', { kind: 'download', row });
+    registerModInstallCommands(deps());
+    const outcome = await invoke('modbench.mod.install', { argument: { kind: 'download', row, upgrades: [] } });
 
-    expect(installDownloaded).toHaveBeenCalledWith(row);
+    expect(installFromArchive).toHaveBeenCalledWith(ACCESS, { kind: 'new', name: 'Foo' }, row.path, expect.objectContaining({ modID: row.modID }));
     expect(showQuickPick).not.toHaveBeenCalled();
     expect(showOpenDialog).not.toHaveBeenCalled();
     expect(outcome).toEqual({ installed: true });
   });
 
+  it('reports a download install through the downloads reporter and log it was given, not the mod list\'s', async () => {
+    const reporter = recordingReporter();
+    const log = vi.fn();
+    showInputBox.mockResolvedValue('Foo');
+    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false, downloadRefusal: 'locked' });
+    installFromArchive.mockResolvedValueOnce({ applied: false, refusal: 'disk full' });
+    const argument = { argument: { kind: 'download', row: downloadRowFixture('foo.7z'), upgrades: [] } };
+
+    registerModInstallCommands(deps({ downloadInstall: { reporter, log, progressViewId: 'modbench.downloads' }, reporterFor: () => recordingReporter() }));
+    await invoke('modbench.mod.install', argument);
+    await invoke('modbench.mod.install', argument);
+
+    expect(log).toHaveBeenCalledWith('"foo.7z" was installed, but its Downloads status could not be updated: locked');
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'disk full' }]);
+  });
+
   it('a mod row as Argument is no source, so it asks archive or folder', async () => {
-    const installDownloaded = vi.fn();
     showQuickPick.mockResolvedValueOnce(undefined);
 
-    registerModInstallCommands(deps({ installDownloaded }));
+    registerModInstallCommands(deps());
     await invoke('modbench.mod.install', { kind: 'mod', mod: { name: 'Some Mod' } });
 
     expect(showQuickPick).toHaveBeenCalled();
-    expect(installDownloaded).not.toHaveBeenCalled();
+    expect(installFromArchive).not.toHaveBeenCalled();
   });
 });
 
