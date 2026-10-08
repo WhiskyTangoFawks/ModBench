@@ -7,6 +7,7 @@ export interface ModFacts {
   trackedMods: () => ReadonlySet<string>;
   modDirs: () => ReadonlyMap<string, string>;
   isDisabledOrInDisabledMod: (plugin: PluginAddress) => boolean;
+  overridingOrigin: (plugin: PluginAddress) => string | undefined;
   onChange: (listener: () => void) => vscode.Disposable;
 }
 

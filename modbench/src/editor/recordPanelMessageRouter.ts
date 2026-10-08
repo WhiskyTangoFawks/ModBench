@@ -60,12 +60,15 @@ export function routerDepsForTab(
   shared: SharedRecordPanelDeps, tab: RecordTab, tabs: Pick<RecordTabs, 'setCell'>, document: TabDocument,
 ): RouteRecordPanelMessageDeps {
   const reply = (m: ExtensionToWebview) => { tab.post(m); };
-  let disabled = shared.modFacts.isDisabledOrInDisabledMod(document.plugin);
+  const standing = () => JSON.stringify([
+    shared.modFacts.isDisabledOrInDisabledMod(document.plugin), shared.modFacts.overridingOrigin(document.plugin),
+  ]);
+  let read = standing();
   tab.own(shared.modFacts.onChange(() => {
     reply({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: modsByOrigin(tab.origins, shared.modFacts) });
-    const now = shared.modFacts.isDisabledOrInDisabledMod(document.plugin);
-    if (now === disabled) return;
-    disabled = now;
+    const now = standing();
+    if (now === read) return;
+    read = now;
     tab.refresh();
   }));
   return {
@@ -194,11 +197,13 @@ async function answerRecordLoad(
   deps.originsShown(origins);
   deps.titleFromRead(m.formKey, overrides);
   deps.readAnswered(m.formKey, m.columns);
+  const fileOverriddenBy = pluginActive || m.columns.length > 0 || answered.fileCopyAlone
+    ? null : deps.modFacts.overridingOrigin(deps.plugin) ?? null;
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     ...answered, plugins: listed,
     conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
-    modsByOrigin: modsByOrigin(origins, deps.modFacts),
+    modsByOrigin: modsByOrigin(origins, deps.modFacts), fileOverriddenBy,
   });
 }
 

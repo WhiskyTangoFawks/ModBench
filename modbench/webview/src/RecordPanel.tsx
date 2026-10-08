@@ -65,6 +65,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [loadFailures, setLoadFailures] = useState<PluginLoadFailure[]>([]);
   const [fileColumn, setFileColumn] = useState<ColumnKey | undefined>(undefined);
   const [fileCopyAlone, setFileCopyAlone] = useState(false);
+  const [fileOverriddenBy, setFileOverriddenBy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(mEditWindow.mEditLoadError ?? null);
   const [given] = useState(placeGiven);
   const [collapsedRows, setCollapsedRows] = useState<Set<string>>(() => new Set(given.collapsedRows));
@@ -112,10 +113,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // editor.md, A column's header: a Partial Form column is dimmed, header and cells alike. One
   // definition of a column's look, so the header and the cells cannot disagree.
   const partialFormColumns = useMemo(() => columnKeysWhere(result?.overrides, o => o.isPartialForm), [result]);
+  const dimmedColumns = useMemo(
+    () => new Set<ColumnKey>([...partialFormColumns, ...(fileOverriddenBy !== null && fileColumn !== undefined ? [fileColumn] : [])]),
+    [partialFormColumns, fileOverriddenBy, fileColumn]);
   const columnStyle = useCallback((key: ColumnKey | typeof LABEL_COLUMN): React.CSSProperties => ({
-    ...(key !== LABEL_COLUMN && partialFormColumns.has(key) ? { opacity: DIMMED_OPACITY } : {}),
+    ...(key !== LABEL_COLUMN && dimmedColumns.has(key) ? { opacity: DIMMED_OPACITY } : {}),
     ...columnWidthStyle(key !== LABEL_COLUMN && collapsedColumns.has(key) ? COLLAPSED_COLUMN_WIDTH : columnWidths.get(key)),
-  }), [partialFormColumns, collapsedColumns, columnWidths]);
+  }), [dimmedColumns, collapsedColumns, columnWidths]);
 
   // The column key alone is a rendering key; the override carries the compound identity (ADR-0012)
   // the write path needs and the values a wire path resolves against.
@@ -154,6 +158,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       setLoadFailures(loaded.loadFailures);
       setFileColumn(loaded.fileColumn);
       setFileCopyAlone(loaded.fileCopyAlone);
+      setFileOverriddenBy(loaded.fileOverriddenBy);
     } catch (e) {
       if (read === latestRead.current) setError(e instanceof Error ? e.message : String(e));
     }
@@ -369,6 +374,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                   <PluginHeader
                     key={col.key}
                     override={col.override}
+                    overriddenBy={col.key === fileColumn ? fileOverriddenBy : null}
                     notActive={fileCopyAlone && col.key === fileColumn}
                     isImmutable={isImmutable}
                     isTracked={tracked}

@@ -168,6 +168,7 @@ const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =
 
 const NO_MODS: ModFacts = {
   trackedMods: () => new Set<string>(), modDirs: () => new Map<string, string>(), isDisabledOrInDisabledMod: () => false,
+  overridingOrigin: () => undefined,
   onChange: () => ({ dispose: () => undefined }),
 };
 
@@ -880,6 +881,61 @@ describe('a file whose plugin is disabled, or in a disabled mod', () => {
   });
 });
 
+describe('a file whose plugin is overridden', () => {
+  const GUN = '000801:A.esp';
+  const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+  const typedFile = { isDirty: true, getText: () => '{ "EditorID": "Typed" }' };
+  const overriddenBy = (origin: string | undefined): ModFacts => ({ ...NO_MODS, overridingOrigin: () => origin });
+
+  function clientFor(plugins: typeof inactiveA) {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', []);
+    client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: 'A.esp', origin: 'ModA' });
+    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModA', isWinner: false, editorId: 'Gun' }]));
+    client.setQueryAnswer('getPlugins', plugins);
+    return client;
+  }
+
+  async function told(modFacts: ModFacts, plugins = inactiveA) {
+    const tab = await makeEditor(clientFor(plugins), [], modFacts).openFile(FILE, typedFile);
+    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
+    await settle();
+    return tab.webview.postMessage.mock.calls.map((call: unknown[]) => call[0])
+      .filter((m: unknown) => Reflect.get(Object(m), 'type') === 'recordLoadAnswered')
+      .map((m: unknown): unknown => Reflect.get(Object(m), 'fileOverriddenBy'));
+  }
+
+  it('has its tab told the mod that overrides it', async () => {
+    expect(await told(overriddenBy('ModB'))).toEqual(['ModB']);
+  });
+
+  it('has its tab told no mod when nothing overrides it', async () => {
+    expect(await told(overriddenBy(undefined))).toEqual([null]);
+  });
+
+  it('has its tab told no mod while mEdit has its plugin active', async () => {
+    expect(await told(overriddenBy('ModB'), activeA)).toEqual([null]);
+  });
+
+  it('is read again when the instance changes the mod that overrides it', async () => {
+    let origin: string | undefined = 'ModB';
+    const changed: (() => void)[] = [];
+    const modFacts: ModFacts = {
+      ...NO_MODS, overridingOrigin: () => origin,
+      onChange: (listener) => { changed.push(listener); return { dispose: () => undefined }; },
+    };
+    const tab = await makeEditor(clientFor(inactiveA), [], modFacts).openFile(FILE, typedFile);
+    const reads = () => tab.webview.postMessage.mock.calls.filter(([message]: unknown[]) => Reflect.get(Object(message), 'type') === 'loadRecord');
+
+    changed.forEach((listener) => { listener(); });
+    expect(reads()).toEqual([]);
+    origin = 'ModC';
+    changed.forEach((listener) => { listener(); });
+
+    expect(reads()).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
+  });
+});
+
 describe('a record tab closed while its read is in flight', () => {
   it('is told nothing and keeps its title when the read lands', async () => {
     const PLACED = '000803:A.esp';
@@ -1060,7 +1116,7 @@ describe('what a record tab\'s webview posts', () => {
 
       expect(loadAnswered(tab)).toEqual([{
         type: 'recordLoadAnswered', requestId: 'r1', ok: true, compare, plugins: activeA, conflictsComputed: true,
-        loadFailures: [failure], documentPlugin: COPY_PLUGIN, modsByOrigin: {}, fileCopyAlone: false,
+        loadFailures: [failure], documentPlugin: COPY_PLUGIN, modsByOrigin: {}, fileCopyAlone: false, fileOverriddenBy: null,
       }]);
       expect(comparisonsAsked(mEdit)).toEqual([[GUN, undefined]]);
     });

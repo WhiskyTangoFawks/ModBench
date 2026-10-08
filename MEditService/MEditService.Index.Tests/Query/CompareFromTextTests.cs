@@ -15,6 +15,7 @@ public sealed class CompareFromTextTests : IDisposable
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
     private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
     private static readonly PluginAddress ModPlugin = new("Mod.esp", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress GapPlugin = new("Gap.esp", PluginOrigin.DataDirectory);
     private static readonly PluginAddress InactivePlugin = new("Off.esp", PluginOrigin.DataDirectory);
     private static readonly ModKey Base = ModKey.FromFileName(BasePlugin.Name);
     private static readonly FormKey Chest = new(Base, 0x800);
@@ -33,6 +34,7 @@ public sealed class CompareFromTextTests : IDisposable
     {
         _fixture = new PluginFixtureBuilder("medit-compare-from-text")
             .WithPlugin(BasePlugin.Name, mod => mod.Containers.Add(ChestCopy()))
+            .WithPlugin(GapPlugin.Name)
             .WithPlugin(ModPlugin.Name, mod => mod.Containers.Add(ChestCopy()))
             .Build();
         _index = Indexes.Reconciled(_fixture);
@@ -93,6 +95,30 @@ public sealed class CompareFromTextTests : IDisposable
         Assert.Equal(
             without.Overrides.Select(o => o.ConflictThis), compare.Overrides.Take(2).Select(o => o.ConflictThis));
         Assert.Equal(StatesOf(without.Diffs).Where(r => r.States != ""), StatesOf(compare.Diffs).Where(r => r.States != ""));
+    }
+
+    [Fact]
+    public void AnOverriddenCopy_IsAColumnJustBeforeThePluginThatOverridesIt_OutsideTheComparison()
+    {
+        var overridden = new PluginAddress(ModPlugin.Name, "OtherMod");
+        var without = _index.Records.GetCompare(Chest.ToString()) ?? throw new InvalidOperationException("Expected the record to compare.");
+
+        var compare = Compare(overridden, OtherChestText);
+
+        Assert.Equal([BasePlugin, overridden, ModPlugin], compare.Overrides.Select(AddressOf));
+        Assert.Null(compare.Overrides[1].ConflictThis);
+        Assert.Equal(without.ConflictAll, compare.ConflictAll);
+        Assert.All(Flatten(compare.Diffs), d => Assert.DoesNotContain(d.CellStates.Keys, key => key.Contains(overridden.Origin, StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void AnOverriddenCopy_WhoseOverriderHoldsNoCopy_IsAColumnWhereTheOverriderWouldBe()
+    {
+        var overridden = new PluginAddress(GapPlugin.Name, "OtherMod");
+
+        var compare = Compare(overridden, OtherChestText);
+
+        Assert.Equal([BasePlugin, overridden, ModPlugin], compare.Overrides.Select(AddressOf));
     }
 
     [Fact]
