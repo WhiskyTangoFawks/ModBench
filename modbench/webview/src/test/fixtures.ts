@@ -59,6 +59,7 @@ export interface PanelOpts {
    *  opened without a plugin opens it. */
   fileColumn?: string;
   fileCopyAlone?: boolean;
+  fileOverriddenBy?: string | null;
   /** A whole `load` of the test's own — a rejection, or one that answers differently each call. */
   load?: RecordPanelClient['load'];
 }
@@ -91,6 +92,7 @@ export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}):
       loadFailures: opts.loadFailures ?? [],
       fileColumn: opts.fileColumn ?? winnerColumn(compare()),
       fileCopyAlone: opts.fileCopyAlone ?? false,
+      fileOverriddenBy: opts.fileOverriddenBy ?? null,
     })),
   };
 }

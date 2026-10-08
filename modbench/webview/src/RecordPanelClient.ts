@@ -34,6 +34,7 @@ interface LoadedPanel {
   // The column of the copy the tab's document holds; undefined when the read holds no such copy.
   fileColumn: ColumnKey | undefined;
   fileCopyAlone: boolean;
+  fileOverriddenBy: string | null;
 }
 
 // The host's mEdit client answers this read. Reads only — a refusal has to
@@ -86,6 +87,7 @@ export function createRecordPanelClient(): RecordPanelClient {
         loadFailures: answer.loadFailures,
         fileColumn: fileCopy && copyColumnKey(fileCopy),
         fileCopyAlone: answer.fileCopyAlone,
+        fileOverriddenBy: answer.fileOverriddenBy,
       };
     },
   };

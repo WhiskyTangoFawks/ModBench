@@ -125,8 +125,23 @@ internal sealed class RecordQueryService(
                 o, classification.PluginStates.TryGetValue(ColumnKey.Of(o.Plugin, o.Origin), out var state) ? state : null,
                 column: null, snapshot, reads))
             .ToList();
+        if (outsideTheComparison.Count == 1) PlaceBeforeOverrider(annotated, snapshot);
 
         return new CompareResult(annotated, classification.Diffs, conflictAll, RequireSchemas().DisplayNameFor(recordType));
+    }
+
+    // The outside copy is last. When its plugin is overridden, it moves to just before the place of the
+    // active plugin of its filename.
+    private static void PlaceBeforeOverrider(List<CompareOverride> columns, LoadOrderSnapshot snapshot)
+    {
+        var overridden = columns[^1];
+        var overrider = snapshot.Active.FirstOrDefault(p => string.Equals(p.Name, overridden.Plugin, StringComparison.OrdinalIgnoreCase));
+        if (overrider is null) return;
+        var overriderIndex = snapshot.Active.ToList().IndexOf(overrider);
+        var at = columns.Count - 1;
+        var before = columns.Take(at).Count(c => c.LoadOrderIndex < overriderIndex);
+        columns.RemoveAt(at);
+        columns.Insert(before, overridden);
     }
 
     private static MissingCopy MissingCopyOf(IRecordReads reads, RecordCopy copy) =>

@@ -225,7 +225,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const modFacts = {
     trackedMods: () => views.facts.trackedMods(), modDirs: () => views.facts.modDirs(),
-    isDisabledOrInDisabledMod: (plugin: PluginAddress) => views.facts.isDisabledOrInDisabledMod(plugin),
+    standingOf: (plugin: PluginAddress) => views.facts.standingOf(plugin),
     onChange: (listener: () => void) => views.facts.onChange(listener),
   };
   const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...modFacts });
