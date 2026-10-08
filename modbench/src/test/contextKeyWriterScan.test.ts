@@ -5,8 +5,8 @@ import { tsFiles } from './tsFiles';
 import { SRC } from './scanSource';
 
 describe('each key has one writer', () => {
-  const FOLDER_OWNERS = ['drivingLib/folderContext.ts', 'drivingLib/instanceCheck.ts'];
-  const FIRST_READ_OWNERS = ['drivingLib/folderContext.ts', 'drivingLib/instanceFirstRead.ts'];
+  const FOLDER_OWNERS = ['drivingLib/instanceCheck.ts'];
+  const FIRST_READ_OWNERS = ['drivingLib/instanceFirstRead.ts'];
   const production = tsFiles(SRC, { exclude: ['generated', 'test'] });
   const naming = (pattern: RegExp) =>
     production.filter((path) => pattern.test(readFileSync(path, 'utf8'))).map((path) => relative(SRC, path));

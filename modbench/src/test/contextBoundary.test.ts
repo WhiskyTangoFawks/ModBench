@@ -147,8 +147,8 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
       });
     });
 
-    const LIB_FILE = join('drivingLib', 'recordDocument.ts');
-    const importingTheLibFile = "import { recordDocument } from '../drivingLib/recordDocument';\n";
+    const LIB_FILE = join('drivingLib', 'recordArgument.ts');
+    const importingTheLibFile = "import { recordArgumentOf } from '../drivingLib/recordArgument';\n";
     const plantLibFileImportedFrom = (root: string, ...dirs: string[]) => {
       mkdirSync(join(root, 'drivingLib'), { recursive: true });
       writeFileSync(join(root, LIB_FILE), 'export const formKey = 1;\n');
@@ -182,7 +182,7 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     it('FormKey vocabulary in a driving lib file the composition root alone imports is caught', () => {
       withPlantedTree((root) => {
         plantLibFileImportedFrom(root);
-        writeFileSync(join(root, 'extension.ts'), "import { recordDocument } from './drivingLib/recordDocument';\n");
+        writeFileSync(join(root, 'extension.ts'), "import { recordArgumentOf } from './drivingLib/recordArgument';\n");
         expect(findOffenders(root)).toEqual([LIB_FILE]);
       });
     });
@@ -191,7 +191,7 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
       withPlantedTree((root) => {
         mkdirSync(join(root, 'drivingLib'), { recursive: true });
         writeFileSync(join(root, LIB_FILE), "import { between } from './between';\nexport const formKey = between;\n");
-        writeFileSync(join(root, 'drivingLib', 'between.ts'), "import * as document from './recordDocument';\nexport const between = document;\n");
+        writeFileSync(join(root, 'drivingLib', 'between.ts'), "import * as argument from './recordArgument';\nexport const between = argument;\n");
         expect(findOffenders(root)).toEqual([LIB_FILE]);
       });
     });
@@ -199,9 +199,9 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     it('FormKey vocabulary in a driving lib file a Mods-shaped file reaches through another lib file is caught', () => {
       withPlantedTree((root) => {
         plantLibFileImportedFrom(root, 'editor');
-        writeFileSync(join(root, 'drivingLib', 'between.ts'), "export { recordDocument } from './recordDocument';\n");
+        writeFileSync(join(root, 'drivingLib', 'between.ts'), "export { recordArgumentOf } from './recordArgument';\n");
         mkdirSync(join(root, 'mods'), { recursive: true });
-        writeFileSync(join(root, 'mods', 'importer.ts'), "import { recordDocument } from '../drivingLib/between';\n");
+        writeFileSync(join(root, 'mods', 'importer.ts'), "import { recordArgumentOf } from '../drivingLib/between';\n");
         expect(findOffenders(root)).toEqual([LIB_FILE]);
       });
     });
@@ -209,9 +209,9 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     it('FormKey vocabulary in a driving lib file the Editing views alone reach through another lib file is not caught', () => {
       withPlantedTree((root) => {
         plantLibFileImportedFrom(root);
-        writeFileSync(join(root, 'drivingLib', 'between.ts'), "export { recordDocument } from './recordDocument';\n");
+        writeFileSync(join(root, 'drivingLib', 'between.ts'), "export { recordArgumentOf } from './recordArgument';\n");
         mkdirSync(join(root, 'editor'), { recursive: true });
-        writeFileSync(join(root, 'editor', 'importer.ts'), "import { recordDocument } from '../drivingLib/between';\n");
+        writeFileSync(join(root, 'editor', 'importer.ts'), "import { recordArgumentOf } from '../drivingLib/between';\n");
         expect(findOffenders(root)).toEqual([]);
       });
     });

@@ -1,7 +1,7 @@
 import type { Instance } from '../instanceLoader/instance';
 import { installFromArchive, installNameRefusal, type InstallAccess } from '../install/install';
 import { chooseInstallTarget } from './installTarget';
-import { promptModName } from '../drivingLib/promptModName';
+import { promptModName } from './promptModName';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { DownloadArgument } from '../drivingLib/argument';
