@@ -21,7 +21,7 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IRecordQue
 
     public CompareResult? GetCompare(string formKey, CopyText? text = null) => throw Failed();
 
-    public CompareResult? GetCompareRecords(IReadOnlyList<RecordCopy> copies) => throw Failed();
+    public CompareResult GetCompareRecords(IReadOnlyList<RecordCopy> copies) => throw Failed();
 
     public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(PluginAddress plugin) => throw Failed();
 

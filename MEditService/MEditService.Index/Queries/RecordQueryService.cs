@@ -128,20 +128,22 @@ internal sealed class RecordQueryService(
         return new CompareResult(annotated, classification.Diffs, conflictAll, RequireSchemas().DisplayNameFor(recordType));
     }
 
-    public CompareResult? GetCompareRecords(IReadOnlyList<RecordCopy> copies)
+    public CompareResult GetCompareRecords(IReadOnlyList<RecordCopy> copies)
     {
         var reads = _index.RequireWholeSetReads();
         var snapshot = _loadOrder.Require();
 
         var documents = new List<RecordDocument>(copies.Count);
+        var missing = new List<RecordCopy>();
         foreach (var copy in copies)
         {
             var document = copy.DocumentText is { } text
                 ? CopyFromText(reads, copy.FormKey, copy.Plugin, snapshot.LoadOrderIndex(copy.Plugin) ?? NotInLoadOrder, text)
                 : reads.GetDocument(copy.FormKey, copy.Plugin);
-            if (document == null) return null;
-            documents.Add(document);
+            if (document == null) missing.Add(copy);
+            else documents.Add(document);
         }
+        if (missing.Count > 0) throw new RecordCopiesMissingException(missing);
 
         var records = documents.ConvertAll(ToRecordDetail);
         // Two copies may come from one plugin, so a column is named by its place as well.

@@ -730,7 +730,7 @@ describe('a record file\'s tab', () => {
 
     it('reads the file\'s column from the unsaved text beside the other records the tab shows', async () => {
       const client = holdingClient();
-      client.setQueryAnswer('getRecordsComparison', null);
+      client.setQueryAnswer('getRecordsComparison', comparisonOf('000800:A.esp', []));
       const { openFile } = makeEditor(client);
       const tab = await openFile(FILE, fileDocument('{ "EditorID": "Typed" }', true));
       const column = { formKey: '000900:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
@@ -1287,7 +1287,7 @@ describe('several records opened at once', () => {
 
   it('read the tab again when mEdit reports a record of another column changed, and not for a record it does not show', async () => {
     const client = severalClient();
-    client.setQueryAnswer('getRecordsComparison', null);
+    client.setQueryAnswer('getRecordsComparison', comparisonOf('000800:A.esp', []));
     const { openDocument } = makeEditor(client);
     const tab = await openDocument(gunDocument);
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [{ formKey: AMMO, plugin: winner }] });
@@ -1299,9 +1299,36 @@ describe('several records opened at once', () => {
     expect(tab.webview.postMessage.mock.calls).toEqual([[expect.objectContaining({ type: 'recordLoadAnswered' })], [{ type: 'loadRecord', formKey: GUN }]]);
   });
 
+  describe('refused for a copy no plugin holds', () => {
+    const reason = `getRecordsComparison failed (404): Copies not found: ${AMMO} in B.esp (ModB).`;
+    const loadWithAColumn = async (client: InMemoryMEditClient) => {
+      client.setQueryFailure('getRecordsComparison', new Error(reason));
+      const { openDocument } = makeEditor(client);
+      const tab = await openDocument(gunDocument);
+      tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [{ formKey: AMMO, plugin: winner }] });
+      await settle();
+      return tab;
+    };
+
+    it('answer with the reason mEdit gave, naming each copy, when the tab\'s own record is held', async () => {
+      const client = severalClient();
+      client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true }]));
+
+      const tab = await loadWithAColumn(client);
+
+      expect(tab.webview.postMessage).toHaveBeenCalledWith({ type: 'recordLoadAnswered', requestId: 'r1', ok: false, error: reason });
+    });
+
+    it('answer that the record is gone when no plugin holds the tab\'s own record', async () => {
+      const tab = await loadWithAColumn(severalClient());
+
+      expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'recordLoadAnswered', ok: true, compare: null }));
+    });
+  });
+
   it('read the first record\'s copy and the columns the tab shows side by side, in that order', async () => {
     const client = severalClient();
-    client.setQueryAnswer('getRecordsComparison', null);
+    client.setQueryAnswer('getRecordsComparison', comparisonOf('000800:A.esp', []));
     const { openDocument } = makeEditor(client);
     const tab = await openDocument(gunDocument);
 
