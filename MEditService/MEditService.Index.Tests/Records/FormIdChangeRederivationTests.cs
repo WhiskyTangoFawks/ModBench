@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
@@ -14,20 +15,27 @@ namespace MEditService.Index.Tests.Records;
 public sealed class FormIdChangeRederivationTests : IDisposable
 {
     private readonly IndexedContainerMod _mod = new();
-    private IRecordReads Reads => _mod.Reads;
+    private OpenedIndex Index => _mod.Index;
 
     public void Dispose() => _mod.Dispose();
 
-    private string EmbeddedNavmeshKeyReadFromTheLiveContainerChildRows =>
-        Reads.GetContainerChildren(_mod.Plugin, _mod.EmbedCell).Single(c => c.SlotName == "NavigationMeshes").ChildFormKey;
+    private IEnumerable<ChildRecordSummary> ChildrenOf(string cellKey)
+    {
+        var children = Index.Worldspaces.GetCellChildRecords(_mod.Plugin, cellKey);
+        return children.Persistent.Concat(children.Temporary);
+    }
 
-    private ContainerChildRow? NavmeshRowOf(string cellKey, string navmeshKey) =>
-        Reads.GetContainerChildren(_mod.Plugin, cellKey).Where(c => c.ChildFormKey == navmeshKey).Select(c => (ContainerChildRow?)c).SingleOrDefault();
+    private string EmbeddedNavmeshKeyReadFromTheLiveChildRows =>
+        ChildrenOf(_mod.EmbedCell).Single(c => c.RecordType == "navm").FormKey;
+
+    private bool HoldsNavmesh(string cellKey, string navmeshKey) =>
+        Index.Worldspaces.GetCellChildRecords(_mod.Plugin, cellKey).Temporary
+            .Any(c => c.FormKey == navmeshKey && c.RecordType == "navm");
 
     private void ChangeFormIdWithATwoSidedPutAndRemoveThenNextSnapshot(string oldFormKey, string newFormKey, string newBody)
     {
         var repository = TrackedMods.RepositoryOf(_mod.Entry);
-        var current = Reads.DocumentOf(oldFormKey, _mod.Plugin);
+        var current = Index.DocumentOf(oldFormKey, _mod.Plugin);
         repository.Put(_mod.Plugin, new SourceDocument(newFormKey, current.RecordType, current.EditorId, newBody));
         repository.Remove(_mod.Plugin, new RecordIdentity(oldFormKey, current.RecordType, current.EditorId));
         _mod.Index.NextSnapshot();
@@ -37,59 +45,57 @@ public sealed class FormIdChangeRederivationTests : IDisposable
     public void ChangingTheFormIdOfAContainersOwnRecord_RepointsItsChildrensRows_AndTheOldKeyAnswersNothing()
     {
         var oldCellKey = _mod.EmbedCell;
-        var navmesh = EmbeddedNavmeshKeyReadFromTheLiveContainerChildRows;
+        var navmesh = EmbeddedNavmeshKeyReadFromTheLiveChildRows;
         const string newCellKey = "F00010:ContainerFixture.esp";
-        var before = Reads.DocumentOf(oldCellKey, _mod.Plugin).BodyOf();
+        var before = Index.BodyOf(oldCellKey, _mod.Plugin);
         var newBody = before.Replace(oldCellKey, newCellKey, StringComparison.Ordinal);
         Assert.NotEqual(before, newBody);
 
         ChangeFormIdWithATwoSidedPutAndRemoveThenNextSnapshot(oldCellKey, newCellKey, newBody);
 
-        Assert.Contains(Reads.GetContainerChildren(_mod.Plugin, newCellKey), c => c.ChildFormKey == navmesh);
-        Assert.Equal("temporary", Reads.PlacementGroupIn(_mod.Plugin, newCellKey, _mod.TemporaryRef));
+        Assert.True(HoldsNavmesh(newCellKey, navmesh));
+        Assert.Equal("temporary", Index.PlacementGroupIn(_mod.Plugin, newCellKey, _mod.TemporaryRef));
 
-        Assert.Null(Reads.GetDocument(oldCellKey, _mod.Plugin));
-        Assert.Empty(Reads.GetContainerChildren(_mod.Plugin, oldCellKey));
+        Assert.Null(Index.CopyIn(oldCellKey, _mod.Plugin));
+        Assert.Empty(ChildrenOf(oldCellKey));
     }
 
     [Fact]
-    public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_MovesItsContainerChildRow_ToTheNewFormKey_WithTheSameSlot()
+    public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_MovesItsChildRow_ToTheNewFormKey()
     {
         var cellKey = _mod.EmbedCell;
-        var oldNavmeshKey = EmbeddedNavmeshKeyReadFromTheLiveContainerChildRows;
+        var oldNavmeshKey = EmbeddedNavmeshKeyReadFromTheLiveChildRows;
         const string newNavmeshKey = "F00011:ContainerFixture.esp";
-        var before = Assert.NotNull(NavmeshRowOf(cellKey, oldNavmeshKey));
-        var document = Reads.DocumentOf(cellKey, _mod.Plugin);
-        var newBody = document.BodyOf().Replace(oldNavmeshKey, newNavmeshKey, StringComparison.Ordinal);
-        Assert.NotEqual(document.BodyOf(), newBody);
+        var document = Index.DocumentOf(cellKey, _mod.Plugin);
+        var before = Index.BodyOf(cellKey, _mod.Plugin);
+        var newBody = before.Replace(oldNavmeshKey, newNavmeshKey, StringComparison.Ordinal);
+        Assert.NotEqual(before, newBody);
 
-        _mod.Index.Edit(_mod.Entry, document, newBody);
+        Index.Edit(_mod.Entry, document, newBody);
 
-        Assert.Null(NavmeshRowOf(cellKey, oldNavmeshKey));
-        var after = Assert.NotNull(NavmeshRowOf(cellKey, newNavmeshKey));
-        Assert.Equal(before.SlotName, after.SlotName);
-        Assert.Equal(before.SlotIndex, after.SlotIndex);
+        Assert.False(HoldsNavmesh(cellKey, oldNavmeshKey));
+        Assert.True(HoldsNavmesh(cellKey, newNavmeshKey));
     }
 
     [Fact]
     public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_WithoutTheNextSnapshotsValidation_LeavesTheStaleRowInPlace()
     {
         var cellKey = _mod.EmbedCell;
-        var oldNavmeshKey = EmbeddedNavmeshKeyReadFromTheLiveContainerChildRows;
+        var oldNavmeshKey = EmbeddedNavmeshKeyReadFromTheLiveChildRows;
         const string newNavmeshKey = "F00012:ContainerFixture.esp";
-        var document = Reads.DocumentOf(cellKey, _mod.Plugin);
-        var newBody = document.BodyOf().Replace(oldNavmeshKey, newNavmeshKey, StringComparison.Ordinal);
+        var document = Index.DocumentOf(cellKey, _mod.Plugin);
+        var newBody = Index.BodyOf(cellKey, _mod.Plugin).Replace(oldNavmeshKey, newNavmeshKey, StringComparison.Ordinal);
 
         TrackedMods.RepositoryOf(_mod.Entry).Put(_mod.Plugin, new SourceDocument(cellKey, document.RecordType, document.EditorId, newBody));
 
-        Assert.NotNull(NavmeshRowOf(cellKey, oldNavmeshKey));
-        Assert.Null(NavmeshRowOf(cellKey, newNavmeshKey));
+        Assert.True(HoldsNavmesh(cellKey, oldNavmeshKey));
+        Assert.False(HoldsNavmesh(cellKey, newNavmeshKey));
     }
 
     private static void RekeyTheWorldspace(OneExteriorCellWorldspaceFixture fixture, string newWorldspaceKey)
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var current = fixture.Reads.DocumentOf(fixture.Worldspace, fixture.Plugin);
+        var current = fixture.Index.DocumentOf(fixture.Worldspace, fixture.Plugin);
         var rekeying = new DocumentRekey(
             (document, newKey) => RecordDocumentEdits.WithFormKey(codec, document.Body, GameRelease.Fallout4, document.RecordType, newKey),
             (owner, oldKey, newKey) => RecordDocumentEdits.WithEmbeddedChildFormKey(
@@ -108,32 +114,29 @@ public sealed class FormIdChangeRederivationTests : IDisposable
     }
 
     [Fact]
-    public async Task ChangingTheFormIdOfAWorldspace_RepointsItsExteriorCellsCellLocationRow_AndTheOldKeyAnswersNothing()
+    public void ChangingTheFormIdOfAWorldspace_MovesItsExteriorCell_AndTheOldKeyAnswersNothing()
     {
         using var fixture = new OneExteriorCellWorldspaceFixture();
-        var before = Assert.NotNull(fixture.Reads.GetCellLocation(fixture.Plugin, fixture.ExteriorCell));
-        Assert.Equal(fixture.Worldspace, before.ParentWorldspace);
+        Assert.Equal([fixture.ExteriorCell], fixture.CellsOf(fixture.Worldspace));
         const string newWorldspaceKey = "F00020:WorldspaceFormId.esp";
 
         RekeyTheWorldspace(fixture, newWorldspaceKey);
         RederiveTheWholePluginBecauseParentWorldspaceIsDerivedByWalkingTheWholeBlockTree(fixture);
 
-        var after = Assert.NotNull(fixture.Reads.GetCellLocation(fixture.Plugin, fixture.ExteriorCell));
-        Assert.Equal(newWorldspaceKey, after.ParentWorldspace);
-        Assert.Contains(fixture.Reads.GetWorldspaceCells(fixture.Plugin, newWorldspaceKey), c => c.FormKey == fixture.ExteriorCell);
-        Assert.Empty(fixture.Reads.GetWorldspaceCells(fixture.Plugin, fixture.Worldspace));
+        Assert.Equal([fixture.ExteriorCell], fixture.CellsOf(newWorldspaceKey));
+        Assert.Empty(fixture.CellsOf(fixture.Worldspace));
     }
 
     [Fact]
-    public void ChangingTheFormIdOfAWorldspace_WithoutRevalidation_LeavesItsCellLocationRowStale()
+    public void ChangingTheFormIdOfAWorldspace_WithoutRevalidation_LeavesItsExteriorCellUnderTheOldKey()
     {
         using var fixture = new OneExteriorCellWorldspaceFixture();
         const string newWorldspaceKey = "F00021:WorldspaceFormId.esp";
 
         RekeyTheWorldspace(fixture, newWorldspaceKey);
 
-        var stale = Assert.NotNull(fixture.Reads.GetCellLocation(fixture.Plugin, fixture.ExteriorCell));
-        Assert.Equal(fixture.Worldspace, stale.ParentWorldspace);
+        Assert.Equal([fixture.ExteriorCell], fixture.CellsOf(fixture.Worldspace));
+        Assert.Empty(fixture.CellsOf(newWorldspaceKey));
     }
 
     private sealed class OneExteriorCellWorldspaceFixture : IDisposable
@@ -145,7 +148,6 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         public LoadOrderEntry Entry { get; }
         public PluginAddress Plugin => Entry.KeyOf();
         public OpenedIndex Index { get; }
-        public IRecordReads Reads => Index.RequireReads();
         public string Worldspace { get; }
         public string ExteriorCell { get; }
 
@@ -171,6 +173,10 @@ public sealed class FormIdChangeRederivationTests : IDisposable
             (Worldspace, ExteriorCell) = (worldspace.ToString(), exteriorCell.ToString());
             Index = Indexes.Reconciled(_fixture);
         }
+
+        public IEnumerable<string> CellsOf(string worldspace) =>
+            Index.Worldspaces.GetWorldspaceBlocks(Plugin, worldspace).Blocks
+                .SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells).Select(c => c.FormKey);
 
         public void Dispose()
         {

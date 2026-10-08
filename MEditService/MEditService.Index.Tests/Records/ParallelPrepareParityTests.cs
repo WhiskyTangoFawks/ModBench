@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -32,12 +31,7 @@ public class ParallelPrepareParityTests
         using var mod = Fallout4Mod.CreateFromBinaryOverlay(entry.Path, Fallout4Release.Fallout4);
 
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var all = index.RequireReads().DocumentsOf(key);
-        var headerTheCodecCannotProduceBecauseAModHeaderIsNotAMajorRecord = Assert.Single(all, d => d.RecordType == PluginHeader.RecordType);
-        Assert.NotNull(headerTheCodecCannotProduceBecauseAModHeaderIsNotAMajorRecord.Body);
-        var stored = all.Where(d => d != headerTheCodecCannotProduceBecauseAModHeaderIsNotAMajorRecord).ToDictionary(
-            d => d.FormKey,
-            d => d.Body ?? throw new InvalidOperationException($"Expected document '{d.FormKey}' to carry a body."));
+        var stored = index.ListedIn(key).ToDictionary(row => row.FormKey, row => index.BodyOf(row.FormKey, key));
         var expected = mod.EnumerateMajorRecords().ToDictionary(
             record => record.FormKey.ToString(),
             record => codec.SerializeToText(record, GameRelease.Fallout4));
