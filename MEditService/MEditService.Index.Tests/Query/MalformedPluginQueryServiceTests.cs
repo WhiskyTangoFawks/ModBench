@@ -10,7 +10,8 @@ namespace MEditService.Index.Tests.Query;
 
 public sealed class MalformedPluginQueryServiceTests : IDisposable
 {
-    private const string Malformed = "LitR - TrueStorms.esp";
+    private const string Malformed = ShortRdatRegionPlugin.FileName;
+    private static readonly string Anchor = $"REGN {ShortRdatRegionPlugin.FormId:X8} ({ShortRdatRegionPlugin.EditorId})";
     private const string ShortRdat = "fixed-size-subrecord-short";
 
     private readonly ScratchDirectory _instance = new("medit-malformed-query-");
@@ -21,15 +22,15 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
 
     private LoadOrderEntry Plugin(
         string name, string origin = "SomeMod", int? slot = 0, bool enabled = true, bool winning = true,
-        string? committedFixtureBytes = Malformed)
+        bool malformed = true)
     {
         var path = Path.Combine(Directory.CreateDirectory(Path.Combine(_instance, "mods", origin)).FullName, name);
-        if (committedFixtureBytes is null) new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4).WriteToBinary(path);
-        else File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", committedFixtureBytes), path);
+        if (malformed) File.WriteAllBytes(path, (ShortRdatRegionPlugin.Plugin with { FileName = name }).Bytes);
+        else new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4).WriteToBinary(path);
         return new LoadOrderEntry(name, path, origin, slot, enabled, winning);
     }
 
-    private LoadOrderEntry Clean(string name, int slot = 0) => Plugin(name, slot: slot, committedFixtureBytes: null);
+    private LoadOrderEntry Clean(string name, int slot = 0) => Plugin(name, slot: slot, malformed: false);
 
     private PluginDiagnosisReport[] Diagnose(params LoadOrderEntry[] plugins)
     {
@@ -44,12 +45,12 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
 
         Assert.Equal(Malformed, report.Plugin);
         Assert.Equal("SomeMod", report.Origin);
-        Assert.Equal("REGN 001D2AF4 (DowntownRegion)", report.Anchor);
+        Assert.Equal(Anchor, report.Anchor);
         Assert.Equal(ShortRdat, report.DefectClass);
         Assert.Equal("repairable (lossless)", report.Tail);
         Assert.Equal("RDAT is 6 bytes; a REGN RDAT is always 8", report.Message);
         Assert.Equal(
-            "REGN 001D2AF4 (DowntownRegion) — fixed-size-subrecord-short, repairable (lossless): "
+            $"{Anchor} — fixed-size-subrecord-short, repairable (lossless): "
             + "RDAT is 6 bytes; a REGN RDAT is always 8",
             report.Text);
     }
@@ -116,7 +117,7 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
     [Fact]
     public void GetLoadOrderDiagnoses_TwoPluginsOfOneName_ReportAgainstTheirOwnOrigins_ForAFilenameIsNotAnIdentity()
     {
-        var winner = Plugin(Malformed, origin: "WinningMod", committedFixtureBytes: null);
+        var winner = Plugin(Malformed, origin: "WinningMod", malformed: false);
         var overridden = Plugin(Malformed, origin: "LosingMod", winning: false);
 
         Assert.Equal("LosingMod", Assert.Single(Diagnose(winner, overridden)).Origin);
@@ -127,7 +128,7 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
     {
         var disabled = Plugin("Disabled.esp", origin: "DisabledMod", slot: 0, enabled: false);
         var second = Plugin("Second.esp", origin: "SecondMod", slot: 2);
-        var first = Plugin("First.esp", origin: "FirstMod", slot: 1, committedFixtureBytes: null);
+        var first = Plugin("First.esp", origin: "FirstMod", slot: 1, malformed: false);
         var mod = new Fallout4Mod(ModKey.FromFileName(first.Name), Fallout4Release.Fallout4);
         MisshapedPerks.Add(mod, "FirstPerk");
         MisshapedPerks.Add(mod, "SecondPerk");
@@ -138,7 +139,7 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
 
         Assert.Equal(
             [("First.esp", "PERK 00000800 (FirstPerk)"), ("First.esp", "PERK 00000801 (SecondPerk)"),
-             ("Second.esp", "REGN 001D2AF4 (DowntownRegion)"), ("Disabled.esp", "REGN 001D2AF4 (DowntownRegion)")],
+             ("Second.esp", Anchor), ("Disabled.esp", Anchor)],
             reports.Select(r => (r.Plugin, r.Anchor)));
     }
 
