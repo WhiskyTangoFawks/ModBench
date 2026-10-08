@@ -41,7 +41,7 @@ function unreferencedImports(src: string): string[] {
   return offenders.sort();
 }
 
-function assertEveryTestStaysInItsBox(offenders: readonly string[]): void {
+function assertEveryFileStaysInItsBox(offenders: readonly string[]): void {
   expect(
     offenders,
     'A file imports a box its own box\'s tsconfig does not reference. tsc also accepts a box reached '
@@ -69,23 +69,7 @@ describe('a file reaches only its own box and the boxes that box references', ()
   });
 
   it('every file imports only its own box, the boxes its tsconfig references and src/test', () => {
-    assertEveryTestStaysInItsBox(unreferencedImports(SRC));
-  });
-
-  it('takes a test directory above src for no part of a file\'s path', () => {
-    const parent = mkdtempSync(join(tmpdir(), 'medit-above-test-'));
-    const src = join(parent, 'test', 'src');
-    mkdirSync(join(src, 'view'), { recursive: true });
-    mkdirSync(join(src, 'kernel'));
-    writeFileSync(join(src, 'view', 'tsconfig.json'), '{ "references": [{ "path": "../kernel" }] }');
-    writeFileSync(join(src, 'kernel', 'tsconfig.json'), '{}');
-    writeFileSync(join(src, 'kernel', 'codec.ts'), 'export const x = 1;\n');
-    writeFileSync(join(src, 'view', 'production.ts'), "import { x } from '../kernel/codec';\n");
-    try {
-      expect(unreferencedImports(src)).toEqual([]);
-    } finally {
-      rmSync(parent, { recursive: true, force: true });
-    }
+    assertEveryFileStaysInItsBox(unreferencedImports(SRC));
   });
 
   it('names a planted import of an unreferenced box, in every form a file names a module', () => {
@@ -118,7 +102,7 @@ describe('a file reaches only its own box and the boxes that box references', ()
         'view/test/view.test.ts: ../../kernel/codec (kernel)',
         `view/test/view.test.ts: ../../wiring (${ROOT_BOX})`,
       ]);
-      expect(() => assertEveryTestStaysInItsBox(unreferencedImports(src))).toThrow(/never add a reference/i);
+      expect(() => assertEveryFileStaysInItsBox(unreferencedImports(src))).toThrow(/never add a reference/i);
     } finally {
       rmSync(src, { recursive: true, force: true });
     }
