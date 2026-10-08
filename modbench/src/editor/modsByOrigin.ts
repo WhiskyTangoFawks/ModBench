@@ -1,4 +1,4 @@
-import { modOfOrigin } from '../drivingLib/modOfOrigin';
+import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import type * as vscode from 'vscode';
 import type { ModRepository } from '../wire/messages';
 
