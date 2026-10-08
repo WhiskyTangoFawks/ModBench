@@ -28,15 +28,17 @@ import { recordingReporter } from './surfacingDoubles';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 
 describe('the Downloads-Mods seam: modbench.mod.install given a Downloads row', () => {
-  it('offers the upgrades the real DownloadNode carries', async () => {
+  it('offers the upgrades the Instance value lists for the file of a real DownloadNode', async () => {
+    const row = downloadRowFixture('foo.7z', { upgrades: [{ modName: 'Harder VATS', version: '1.0', tier: 'fileId' }] });
+    const instance = { value: instanceValueFixture({ downloads: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() };
     const { qp, escape } = fakeQuickPick<{ label: string }>();
     createQuickPick.mockReturnValue(qp);
     registerModInstallCommands({
-      access: accessTo('/instance'), instance: { value: instanceValueFixture(), refresh: () => Promise.resolve() },
+      access: accessTo('/instance'), instance,
       reporterFor: () => recordingReporter(), warnIfFomod: vi.fn(),
       downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     });
-    const node = new DownloadNode(downloadRowFixture('foo.7z'), [{ modName: 'Harder VATS', version: '1.0', tier: 'fileId' }]);
+    const node = new DownloadNode(downloadRowFixture('foo.7z'));
 
     const handler = registerCommand.mock.calls.find((c) => c[0] === 'modbench.mod.install')?.[1];
     const running = handler?.(node);

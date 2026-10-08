@@ -30,19 +30,15 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { installDownloadedFile, type DownloadInstallDeps } from '../installDownloaded';
-import type { DownloadRow, Instance } from '../../instanceLoader/instance';
+import type { DownloadFile, DownloadRow, Instance } from '../../instanceLoader/instance';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
-import type { DownloadArgument, UpgradeCandidate } from '../../drivingLib/argument';
+import type { UpgradeCandidate } from '../../instanceLoader/instance';
 import { accessTo } from '../../test/mo2/adapterOver';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-const argumentOf = (
-  root: string, name: string, upgrades: readonly UpgradeCandidate[] = [], row: Partial<DownloadRow> = {},
-): DownloadArgument => ({ kind: 'download', row: downloadRowFixture(name, row, root), upgrades });
-
-const fakeInstance = (): Pick<Instance, 'value' | 'refresh'> => ({
-  value: instanceValueFixture({ gameName: 'Fallout 4' }),
+const fakeInstance = (rows: readonly DownloadFile[] = []): Pick<Instance, 'value' | 'refresh'> => ({
+  value: instanceValueFixture({ gameName: 'Fallout 4', downloads: { kind: 'listed', rows } }),
   refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
 });
 
@@ -54,11 +50,15 @@ const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDe
   ...over,
 });
 
+const installRow = (root: string, deps: DownloadInstallDeps, row: Partial<DownloadRow> = {}): Promise<boolean> => {
+  const file = downloadRowFixture('foo.7z', row, root);
+  return installDownloadedFile({ kind: 'download', row: file }, accessTo(root), fakeInstance([file]), deps);
+};
+
 const afterAMacrotaskNotAMicrotask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 let instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem: string[] = [];
 let downloadsLogLines: string[] = [];
-const instanceThatReads = fakeInstance();
 
 afterEach(async () => {
   await Promise.all(instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem.map((root) => rm(root, { recursive: true, force: true })));
@@ -95,7 +95,7 @@ describe('installDownloadedFile', () => {
     await writeMeta(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
+    await installRow(root, installDeps({ reporter: recordingReporter() }));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -109,7 +109,7 @@ describe('installDownloadedFile', () => {
     const archive = await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z', [], { modID: '123', fileID: '456', version: '2.0' }), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
+    await installRow(root, installDeps({ reporter: recordingReporter() }), { modID: '123', fileID: '456', version: '2.0' });
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -125,7 +125,7 @@ describe('installDownloadedFile', () => {
     const before = await readFile(meta, 'utf8');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
+    await installRow(root, installDeps({ reporter: recordingReporter() }));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -143,7 +143,7 @@ describe('installDownloadedFile', () => {
     });
     const report = recordingReporter();
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: report }));
+    await installRow(root, installDeps({ reporter: report }));
 
     await vi.waitFor(() => expect(downloadsLogLines).toHaveLength(1));
     const line = present(downloadsLogLines[0], 'the one recorded Output line');
@@ -161,7 +161,7 @@ describe('installDownloadedFile', () => {
     const meta = await writeMeta(root, 'foo.7z');
     showInputBox.mockResolvedValueOnce(undefined);
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
+    await installRow(root, installDeps({ reporter: recordingReporter() }));
 
     await vi.waitFor(() => expect(showInputBox).toHaveBeenCalled());
     expect(installFromArchive).not.toHaveBeenCalled();
@@ -175,7 +175,7 @@ describe('installDownloadedFile', () => {
     installFromArchive.mockResolvedValueOnce({ applied: false, refusal: 'boom' });
     const report = recordingReporter();
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: report }));
+    await installRow(root, installDeps({ reporter: report }));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'boom' }]);
@@ -188,7 +188,7 @@ describe('installDownloadedFile', () => {
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: true });
     const warnIfFomod = vi.fn();
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter(), warnIfFomod }));
+    await installRow(root, installDeps({ reporter: recordingReporter(), warnIfFomod }));
 
     await vi.waitFor(() => expect(warnIfFomod).toHaveBeenCalledWith('foo', true));
   });
@@ -200,7 +200,7 @@ interface FakeUpgradeItem { label: string; description?: string; choice: unknown
 
 const NEW_MOD_ITEM = { label: 'Install as a new mod…', choice: { kind: 'new' } };
 
-describe('installDownloadedFile: the pick among the upgrades the Argument carries', () => {
+describe('installDownloadedFile: the pick among the upgrades the Instance value lists', () => {
   beforeEach(() => vi.clearAllMocks());
 
   async function pickAmong(upgrades: readonly UpgradeCandidate[], act: (double: ReturnType<typeof fakeQuickPick<FakeUpgradeItem>>) => void) {
@@ -208,15 +208,14 @@ describe('installDownloadedFile: the pick among the upgrades the Argument carrie
     const archive = await writeArchive(root, 'foo.7z');
     const double = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(double.qp);
-    const installing = installDownloadedFile(
-      argumentOf(root, 'foo.7z', upgrades, ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
+    const installing = installRow(root, installDeps({ reporter: recordingReporter() }), { ...ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR, upgrades });
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     act(double);
     await installing;
     return { root, archive, qp: double.qp };
   }
 
-  it('shows one row per upgrade, in the Argument\'s order, plus a trailing new-mod row, and pre-selects the file-id match', async () => {
+  it('shows one row per upgrade, in the listed order, plus a trailing new-mod row, and pre-selects the file-id match', async () => {
     const { qp } = await pickAmong(
       [{ modName: 'The Match', version: '2.0', tier: 'fileId' }, { modName: 'No Match', version: '1.0' }], (d) => d.escape());
 
@@ -279,12 +278,24 @@ describe('installDownloadedFile: the pick among the upgrades the Argument carrie
     expect(installFromArchive).not.toHaveBeenCalled();
   });
 
-  it('an Argument with no upgrades shows no pick and installs as a new mod', async () => {
+  it('refuses a file the Instance value does not list, naming it', async () => {
+    const root = await makeInstanceRoot();
+    const report = recordingReporter();
+
+    const installed = await installDownloadedFile(
+      { kind: 'download', row: downloadRowFixture('foo.7z', {}, root) }, accessTo(root), fakeInstance(), installDeps({ reporter: report }));
+
+    expect(installed).toBe(false);
+    expect(installFromArchive).not.toHaveBeenCalled();
+    expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: '"foo.7z" is gone from Downloads.' }]);
+  });
+
+  it('a listed file with no upgrades shows no pick and installs as a new mod', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
+    await installRow(root, installDeps({ reporter: recordingReporter() }));
 
     expect(installFromArchive).toHaveBeenCalledWith(
       expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
@@ -304,7 +315,7 @@ describe('installDownloadedFile: the progress bar and the read', () => {
     await writeArchive(root, 'foo.7z');
     installFromArchive.mockImplementationOnce(() => { progressSteps.push('install'); return Promise.resolve({ applied: true, wrote: true, isFomod: false }); });
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), instanceThatReads, installDeps({ reporter: recordingReporter() }));
+    await installRow(root, installDeps({ reporter: recordingReporter() }));
 
     expect(progressSteps).toEqual([opens, 'install', reads, 'progress closes']);
   });
@@ -314,7 +325,7 @@ describe('installDownloadedFile: the progress bar and the read', () => {
     await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: false, refusal: 'boom' });
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), instanceThatReads, installDeps({ reporter: recordingReporter() }));
+    await installRow(root, installDeps({ reporter: recordingReporter() }));
 
     expect(progressSteps).toEqual([opens, reads, 'progress closes']);
   });
@@ -325,7 +336,9 @@ describe('installDownloadedFile: the progress bar and the read', () => {
     const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    const running = installDownloadedFile(argumentOf(root, 'foo.7z', [{ modName: 'Foo Mod', version: '1.0' }], ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
+    const running = installRow(
+      root, installDeps({ reporter: recordingReporter() }),
+      { ...ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR, upgrades: [{ modName: 'Foo Mod', version: '1.0' }] });
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
     await running;
@@ -338,7 +351,7 @@ describe('installDownloadedFile: the progress bar and the read', () => {
     await writeArchive(root, 'foo.7z');
     showInputBox.mockResolvedValueOnce(undefined);
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), instanceThatReads, installDeps({ reporter: recordingReporter() }));
+    await installRow(root, installDeps({ reporter: recordingReporter() }));
 
     expect(progressSteps).toEqual([]);
   });
