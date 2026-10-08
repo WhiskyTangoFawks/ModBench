@@ -155,6 +155,12 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([own, beta]).selectionToggle).toBe('enable');
   });
 
+  it('move sees a selection holding a plugin with a plugins.txt line', () => {
+    expect(context([own, lockedRow('Fallout4.esm'), alpha]).holdsPluginLine).toBe(true);
+    expect(context([own, lockedRow('Fallout4.esm')]).holdsPluginLine).toBe(false);
+    expect(context([]).holdsPluginLine).toBe(false);
+  });
+
   it('Space does nothing over a selection with no plugin', () => {
     expect(context([own, lockedRow('Fallout4.esm')]).selectionToggle).toBeUndefined();
   });
