@@ -1,6 +1,7 @@
 // The switch profile gesture (ADR-0015).
 
 import { refuse } from '../ports/refuse';
+import type { CommandResult } from '../coreLib/commandResult';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
 /** What switch profile reaches the instance through. */
@@ -8,10 +9,7 @@ export interface ProfileAccess {
   readonly adapter: InstanceAdapter;
 }
 
-/** `wrote` is false when the profile was already selected. */
-export type ProfileCommandResult =
-  | { applied: true; wrote: boolean }
-  | { applied: false; refusal: string };
+export type ProfileCommandResult = CommandResult;
 
 /** Refuses a name the value's `profiles` does not hold: selecting a profile whose directory is
  *  not there points the whole instance at files that do not exist, which no later read can tell

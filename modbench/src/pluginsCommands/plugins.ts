@@ -2,10 +2,11 @@
 
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { dropIndexIn, type Drop } from './dropIndex';
+import type { CommandResult, SelectionResult } from '../coreLib/commandResult';
 import { refuse } from '../ports/refuse';
 import type { MEditClient, PluginAddress, PluginMetadata } from '../client';
 import { moveOrderRefusal, type PluginOrderFactsOf } from './pluginOrder';
-import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import type { ItemRefusal } from '../ports/selectionOutcome';
 import type {
   DataFolderPlugins, DecidePluginOrder, InstanceAdapter, PluginEntry, PluginOrderChange,
 } from '../instanceAdapter/instanceAdapter';
@@ -15,11 +16,7 @@ export interface PluginsAccess {
   readonly adapter: InstanceAdapter;
 }
 
-/** `wrote` is false when the gesture was already true of plugin order: a command that changes
- *  nothing writes nothing, so it never fires the watch. */
-export type PluginsCommandResult =
-  | { applied: true; wrote: boolean }
-  | { applied: false; refusal: string };
+export type PluginsCommandResult = CommandResult;
 
 async function changePluginOrder(
   access: PluginsAccess, profile: string, decide: DecidePluginOrder,
@@ -34,11 +31,7 @@ async function changePluginOrder(
   }
 }
 
-/** A gesture over a selection, in one write: each item landed or refused by name, or the whole
- *  selection refused once when plugin order cannot be read or written. */
-export type PluginsSelectionResult =
-  | { applied: true; outcome: SelectionOutcome<string> }
-  | { applied: false; refusal: string };
+export type PluginsSelectionResult = SelectionResult<string>;
 
 /** One plugin's target state — the check box's own shape, where several rows toggled at once can
  *  each ask for a different state. */

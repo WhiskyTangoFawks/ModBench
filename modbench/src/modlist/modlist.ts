@@ -7,16 +7,14 @@ import {
   type ModFolder, type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk, newModNameRefusal } from '../coreLib/commandRefusals';
+import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 
 /** What a modlist command reaches the instance through. */
 export interface ModlistAccess {
   readonly adapter: InstanceAdapter;
 }
 
-/** `wrote` is false when the gesture was already true of mod order. */
-export type ModlistCommandResult =
-  | { applied: true; wrote: boolean }
-  | { applied: false; refusal: string };
+export type ModlistCommandResult = CommandResult;
 
 async function changeModOrder(access: ModlistAccess, profile: string, decide: DecideModOrder): Promise<ModlistCommandResult> {
   try {
@@ -27,11 +25,7 @@ async function changeModOrder(access: ModlistAccess, profile: string, decide: De
   }
 }
 
-/** A gesture over a selection, in one write: each item landed or refused by name, or the whole
- *  selection refused once when mod order cannot be read or written. */
-export type ModlistSelectionResult =
-  | { applied: true; outcome: SelectionOutcome<string> }
-  | { applied: false; refusal: string };
+export type ModlistSelectionResult = SelectionResult<string>;
 
 type EntryKind = EntryRef['kind'];
 
@@ -92,19 +86,16 @@ export interface OriginFileRef {
 export async function markFiles(
   access: ModlistAccess, files: readonly OriginFileRef[], mark: OriginFileMark,
 ): Promise<SelectionOutcome<OriginFileRef>> {
-  const landed: OriginFileRef[] = [];
-  const refused: ItemRefusal<OriginFileRef>[] = [];
-  for (const file of files) {
+  return selectionOutcomeOf(files, async (file): Promise<CommandResult> => {
     try {
       const marked = await access.adapter.markOriginFile(file.origin, file.relativePath, mark);
-      if (marked.gone) refused.push({ item: file, reason: goneFromDisk(file.relativePath) });
-      else if ('refusal' in marked) refused.push({ item: file, reason: marked.refusal });
-      else landed.push(file);
+      if (marked.gone) return { applied: false, refusal: goneFromDisk(file.relativePath) };
+      if ('refusal' in marked) return { applied: false, refusal: marked.refusal };
+      return { applied: true, wrote: true };
     } catch (err) {
-      refused.push({ item: file, reason: errorMessage(err) });
+      return refuse(err);
     }
-  }
-  return { landed, refused };
+  }, (file) => file);
 }
 
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
@@ -170,9 +161,7 @@ interface TrashedEntry {
   lineRefusal?: string;
 }
 
-type TrashThenUnlistResult =
-  | { applied: true; outcome: SelectionOutcome<TrashedEntry> }
-  | { applied: false; refusal: string };
+type TrashThenUnlistResult = SelectionResult<TrashedEntry>;
 
 const dropOf = (entry: EntryRef): ModOrderChange =>
   (entry.kind === 'mod' ? { kind: 'dropMod', mod: entry.name } : { kind: 'dropSeparator', separator: entry.name });
@@ -239,9 +228,7 @@ interface UninstalledMod extends TrashedEntry {
   markRefusal?: string;
 }
 
-export type UninstallModsResult =
-  | { applied: true; outcome: SelectionOutcome<UninstalledMod> }
-  | { applied: false; refusal: string };
+export type UninstallModsResult = SelectionResult<UninstalledMod>;
 
 /** `modbench.mod.uninstall` over the selection: each mod's folder to the trash, then its line,
  *  then its downloaded file marked unless that file is gone (mods.md, Reporting, story 4). */
