@@ -39,7 +39,7 @@ type ReferencesClient = Parameters<typeof referencesOf<{ getText(): string }>>[0
 function references(rows: ReferenceResult[], copies: Record<string, Copy>, answering: Partial<ReferencesClient> = {}) {
   const firstOnFile = (path: string) => Object.entries(copies).find(([, copy]) => copy.file === path);
   const client: ReferencesClient = {
-    getReferencesInTrackedPlugins: () => Promise.resolve(rows),
+    getReferencesInActiveOrTrackedPlugins: () => Promise.resolve(rows),
     getRecordOwner: () => Promise.reject(new Error('A referrer\'s copy names its plugin.')),
     getRecordFile: (plugin, formKey) => {
       const copy = copies[key(formKey, plugin)];
@@ -172,7 +172,7 @@ describe('Find All References on a FormKey (plugin-source.md, In the text editor
     });
 
     it('lists nothing, and notifies why, when mEdit cannot answer what references it', async () => {
-      const { reporter, referencesAt } = references([], {}, { getReferencesInTrackedPlugins: () => Promise.reject(new Error('mEdit is gone.')) });
+      const { reporter, referencesAt } = references([], {}, { getReferencesInActiveOrTrackedPlugins: () => Promise.reject(new Error('mEdit is gone.')) });
 
       expect(await referencesAt(ASKING, AT_GUN(ASKING))).toEqual([]);
       expect(reporter.reports).toEqual([{ severity: 'error', message: `Find All References cannot list what references ${GUN}.`, detail: 'mEdit is gone.' }]);
@@ -190,11 +190,11 @@ describe('Find All References on a FormKey (plugin-source.md, In the text editor
   });
 
   it('asks nothing for a string that is not a FormKey', async () => {
-    const getReferencesInTrackedPlugins = vi.fn(() => Promise.resolve([]));
-    const { referencesAt } = references([], {}, { getReferencesInTrackedPlugins });
+    const getReferencesInActiveOrTrackedPlugins = vi.fn(() => Promise.resolve([]));
+    const { referencesAt } = references([], {}, { getReferencesInActiveOrTrackedPlugins });
     const text = '{ "Name": "Rusty Gun" }';
 
     expect(await referencesAt(text, text.indexOf('Rusty'))).toEqual([]);
-    expect(getReferencesInTrackedPlugins).not.toHaveBeenCalled();
+    expect(getReferencesInActiveOrTrackedPlugins).not.toHaveBeenCalled();
   });
 });

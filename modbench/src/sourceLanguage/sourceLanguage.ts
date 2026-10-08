@@ -13,7 +13,7 @@ import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type Sourc
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'originFiles'> {
   reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInTrackedPlugins' | 'getPlugins'> & RecordDocumentClient & SourceProblemsDeps['client'];
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrTrackedPlugins' | 'getPlugins'> & RecordDocumentClient & SourceProblemsDeps['client'];
 }
 
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };

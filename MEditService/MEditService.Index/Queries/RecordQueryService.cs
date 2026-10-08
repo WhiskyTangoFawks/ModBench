@@ -247,8 +247,8 @@ internal sealed class RecordQueryService(
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
         Referrers(RequireReads().GetReferencedBy(targetFormKey));
 
-    public IReadOnlyList<ReferenceResult> GetReferencesInTrackedPlugins(string targetFormKey) =>
-        Referrers(RequireReads().GetReferencedByInEveryRegisteredPlugin(targetFormKey));
+    public IReadOnlyList<ReferenceResult> GetReferencesInActiveOrTrackedPlugins(string targetFormKey) =>
+        Referrers(RequireReads().GetReferencedByInActiveOrTrackedPlugins(targetFormKey));
 
     private IReadOnlyList<ReferenceResult> Referrers(IReadOnlyList<ReferenceRow> rows)
     {
@@ -256,6 +256,8 @@ internal sealed class RecordQueryService(
         var snapshot = _loadOrder.Require();
         return [.. rows
             .OrderBy(r => snapshot.LoadOrderIndex(new PluginAddress(r.Plugin, r.Origin)) ?? int.MaxValue)
+            .ThenBy(r => r.Origin, StringComparer.Ordinal)
+            .ThenBy(r => r.Plugin, StringComparer.Ordinal)
             .Select(r => new ReferenceResult(
                 r.FormKey, r.Plugin, r.Origin, r.FieldPath, r.RecordType, schemas.DisplayNameFor(r.RecordType), r.EditorId))];
     }

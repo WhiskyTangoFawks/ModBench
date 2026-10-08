@@ -12,8 +12,8 @@ public sealed class ReferenceApiTests(LoadedApiFixture<TestPluginFixture> loaded
     [Theory]
     [InlineData("FFFFFF:Unknown.esp", "references")]
     [InlineData("not-a-formkey", "references")]
-    [InlineData("FFFFFF:Unknown.esp", "references-in-tracked-plugins")]
-    [InlineData("not-a-formkey", "references-in-tracked-plugins")]
+    [InlineData("FFFFFF:Unknown.esp", "references-in-active-or-tracked-plugins")]
+    [InlineData("not-a-formkey", "references-in-active-or-tracked-plugins")]
     public async Task GetReferences_UnresolvableFormKey_Returns200WithEmptyArray(string rawFormKey, string route)
     {
         var encoded = Uri.EscapeDataString(rawFormKey);

@@ -126,16 +126,17 @@ internal static class RecordEndpoints
         .ProducesProblem(503);
 
         app.MapGet("/records/{formKey}/references", (string formKey, IRecordQueryService svc) =>
-            GetReferences(formKey, svc.GetReferences, logger))
+            GetReferences(nameof(IRecordQueryService.GetReferences), formKey, svc.GetReferences, logger))
         .WithName("GetReferences")
         .WithTags("Records")
         .Produces<IReadOnlyList<ReferenceResult>>()
         .ProducesProblem(503)
         .ProducesProblem(500);
 
-        app.MapGet("/records/{formKey}/references-in-tracked-plugins", (string formKey, IRecordQueryService svc) =>
-            GetReferences(formKey, svc.GetReferencesInTrackedPlugins, logger))
-        .WithName("GetReferencesInTrackedPlugins")
+        app.MapGet("/records/{formKey}/references-in-active-or-tracked-plugins", (string formKey, IRecordQueryService svc) =>
+            GetReferences(
+                nameof(IRecordQueryService.GetReferencesInActiveOrTrackedPlugins), formKey, svc.GetReferencesInActiveOrTrackedPlugins, logger))
+        .WithName("GetReferencesInActiveOrTrackedPlugins")
         .WithTags("Records")
         .Produces<IReadOnlyList<ReferenceResult>>()
         .ProducesProblem(503)
@@ -358,11 +359,11 @@ internal static class RecordEndpoints
     }
 
     internal static IResult GetReferences(
-        string formKey, Func<string, IReadOnlyList<ReferenceResult>> read, ILogger logger)
+        string operation, string formKey, Func<string, IReadOnlyList<ReferenceResult>> read, ILogger logger)
     {
         if (logger.IsEnabled(LogLevel.Information))
         {
-            logger.LogInformation("Received GetReferences for {FormKey}", formKey);
+            logger.LogInformation("Received {Operation} for {FormKey}", operation, formKey);
         }
         return Results.Ok(read(Uri.UnescapeDataString(formKey)));
     }

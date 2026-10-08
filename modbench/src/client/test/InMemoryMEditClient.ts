@@ -9,7 +9,7 @@ import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
   | 'getRecords' | 'searchRecords'
-  | 'getRecordOwner' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInTrackedPlugins'
+  | 'getRecordOwner' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrTrackedPlugins'
   | 'getRenderedDocument' | 'getRecordFile' | 'getRecordOfFile'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
@@ -352,10 +352,10 @@ export class InMemoryMEditClient implements MEditClient {
   getReferences(...args: Parameters<MEditClient['getReferences']>): ReturnType<MEditClient['getReferences']> {
     return this.query('getReferences', args);
   }
-  getReferencesInTrackedPlugins(
-    ...args: Parameters<MEditClient['getReferencesInTrackedPlugins']>
-  ): ReturnType<MEditClient['getReferencesInTrackedPlugins']> {
-    return this.query('getReferencesInTrackedPlugins', args);
+  getReferencesInActiveOrTrackedPlugins(
+    ...args: Parameters<MEditClient['getReferencesInActiveOrTrackedPlugins']>
+  ): ReturnType<MEditClient['getReferencesInActiveOrTrackedPlugins']> {
+    return this.query('getReferencesInActiveOrTrackedPlugins', args);
   }
   getEditChanges(...args: Parameters<MEditClient['getEditChanges']>): ReturnType<MEditClient['getEditChanges']> {
     return this.query('getEditChanges', args);

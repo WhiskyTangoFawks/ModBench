@@ -286,13 +286,20 @@ internal sealed class RelationReads(
     public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)
     {
         using var connection = store.OpenReadConnection();
-        return GetReferences(connection, RecordScope.Active, targetFormKey);
+        return GetReferences(connection, "form_references fr", "", targetFormKey);
     }
 
-    public IReadOnlyList<ReferenceRow> GetReferencedByInEveryRegisteredPlugin(string targetFormKey)
+    private static readonly string ActiveOrTrackedReferrers = $"""
+        {TableDdlBuilder.MirrorSchema}.form_references fr
+        {TableDdlBuilder.RegisteredJoin("fr", "source_plugin", "source_origin")}
+        JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
+          ON d.plugin = fr.source_plugin AND d.origin = fr.source_origin
+        """;
+
+    public IReadOnlyList<ReferenceRow> GetReferencedByInActiveOrTrackedPlugins(string targetFormKey)
     {
         using var connection = store.OpenReadConnection();
-        return GetReferences(connection, RecordScope.EveryRegisteredPlugin, targetFormKey);
+        return GetReferences(connection, ActiveOrTrackedReferrers, $"AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')", targetFormKey);
     }
 
     public IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
@@ -627,14 +634,14 @@ internal sealed class RelationReads(
         return cmd.ExecuteScalar() as string;
     }
 
-    private static List<ReferenceRow> GetReferences(DuckDBConnection connection, RecordScope scope, string targetFormKey)
+    private static List<ReferenceRow> GetReferences(DuckDBConnection connection, string referrers, string restriction, string targetFormKey)
     {
         // WorkingTreeOverlay keeps form_references rewritten as the working tree changes, so this
         // already sees every edit without applying anything itself.
         var sql = $"""
             SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
-            FROM {scope.Referrers}
-            WHERE fr.target_form_key = $1
+            FROM {referrers}
+            WHERE fr.target_form_key = $1 {restriction}
             """;
 
         using var cmd = connection.CreateCommand();
