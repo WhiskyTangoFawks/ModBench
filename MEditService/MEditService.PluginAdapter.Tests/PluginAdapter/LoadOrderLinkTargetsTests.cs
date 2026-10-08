@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
@@ -16,6 +17,7 @@ public sealed class LoadOrderLinkTargetsTests
     private FormKey _keyword;
     private FormKey _race;
     private FormKey _overriddenKeyword;
+    private FormKey _placedRef;
 
     private PluginFixtureData TwoPluginLoadOrder(string prefix) =>
         new PluginFixtureBuilder(prefix)
@@ -24,6 +26,11 @@ public sealed class LoadOrderLinkTargetsTests
                 _keyword = mod.Keywords.AddNew("BaseKeyword").FormKey;
                 _race = mod.Races.AddNew("BaseRace").FormKey;
                 _overriddenKeyword = mod.Keywords.AddNew("OverriddenKeyword").FormKey;
+                var placed = new PlacedObject(mod) { EditorID = "BasePlacedRef" };
+                var cell = new Cell(mod) { EditorID = "BaseCell" };
+                cell.Temporary.Add(placed);
+                mod.Cells.Add(new CellBlock { BlockNumber = 0, SubBlocks = [new CellSubBlock { BlockNumber = 0, Cells = [cell] }] });
+                _placedRef = placed.FormKey;
             })
             .WithPlugin(PatchName, (mod, built) =>
                 mod.Keywords.GetOrAddAsOverride(built[0].Keywords.First(k => k.EditorID == "OverriddenKeyword")).EditorID =
@@ -59,6 +66,16 @@ public sealed class LoadOrderLinkTargetsTests
 
         Assert.Equal(new ResolvedFormKey("kywd", "BaseKeyword"), targets[_keyword.ToString()]);
         Assert.Equal(new ResolvedFormKey("race", "BaseRace"), targets[_race.ToString()]);
+    }
+
+    [Fact]
+    public void AFormKeyOfARecordEmbeddedInAnotherPluginsContainer_IsNamedByItsRecordTypeAndEditorId()
+    {
+        using var data = TwoPluginLoadOrder("link-targets-embedded");
+
+        var targets = Targets(Paths(data, BaseName, PatchName), _placedRef.ToString());
+
+        Assert.Equal(new ResolvedFormKey("refr", "BasePlacedRef"), targets[_placedRef.ToString()]);
     }
 
     [Fact]
