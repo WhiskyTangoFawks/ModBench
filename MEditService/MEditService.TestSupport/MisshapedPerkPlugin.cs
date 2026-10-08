@@ -10,6 +10,7 @@ public static class MisshapedPerkPlugin
     public const string FileName = "Misshaped Perks.esp";
     public const string EditorId = "HarborMisshapedPerk";
     public const uint FormId = 0x000008EF;
+    public static readonly string Anchor = $"PERK {0x01000000 | FormId:X8} ({EditorId})";
     public static readonly string FormKey = $"{FormId:X6}:{FileName}";
 
     private static readonly FormKey PerkInTheMaster = new(ModKey.FromFileName("Fallout4.esm"), 0x000800);
