@@ -7,7 +7,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Index.Queries;
 
 /// <summary>What is wrong in a plugin's source, on its file: a link at <paramref name="FieldPath"/> to
-/// <paramref name="TargetFormKey"/>, which no active plugin holds, or a file the read stopped at.</summary>
+/// <paramref name="TargetFormKey"/>, which neither it nor an active plugin holds, or a file the read stopped at.</summary>
 public sealed record SourceProblem(
     string? FormKey, string? TargetFormKey, string? FieldPath, string SourceRelativePath, string Message);
 
@@ -15,7 +15,7 @@ public sealed record SourceProblem(
 /// its <paramref name="Problems"/> are not a clean bill (ADR-0019).</summary>
 public sealed record PluginProblems(PluginAddress Plugin, IReadOnlyList<SourceProblem> Problems, string? Failure = null);
 
-/// <summary>The Problems panel's source, per active tracked plugin, in load order. A plugin whose read
+/// <summary>The Problems panel's source, per tracked plugin, active or not. A plugin whose read
 /// failed is answered with the files that stopped it, and the links of rows its tree gave.</summary>
 public sealed class PluginProblemQueryService
 {
@@ -38,13 +38,13 @@ public sealed class PluginProblemQueryService
         var reads = _index.RequireReads();
         var derivations = reads.GetDerivations();
         var stopped = _index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
-        var held = snapshot.Active.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
+        var held = snapshot.Plugins.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         var missing = reads
             .GetReferencesToMissingRecordsOnFiles(plugin => held.GetValueOrDefault(plugin)?.Provider as PluginProvider.FromMod)
             .ToLookup(row => row.Reference.Plugin, PluginAddress.Comparer);
         return
         [
-            .. snapshot.Active
+            .. snapshot.Plugins
                 .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsTracked() || stopped.Contains(plugin.Key))
                 .Select(plugin => ProblemsOf(
                     plugin.Key, snapshot.GameRelease, [.. stopped[plugin.Key].Select(Problem)],
