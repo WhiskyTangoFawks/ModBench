@@ -12,6 +12,9 @@ public static class MisshapedPerkPlugin
     public const uint FormId = 0x000008EF;
     public static readonly string FormKey = $"{FormId:X6}:{FileName}";
 
+    public const uint ReadableFormId = 0x00000800;
+    public static readonly string ReadableFormKey = $"{ReadableFormId:X6}:{FileName}";
+
     private static readonly string[] ReadableEditorIds = ["HarborReadablePerkOne", "HarborReadablePerkTwo"];
 
     public static GeneratedPlugin Plugin => new(FileName, MisshapedPerks.Misshape(Readable()));
