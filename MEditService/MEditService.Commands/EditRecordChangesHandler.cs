@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -14,6 +15,7 @@ namespace MEditService.Commands;
 public sealed class EditRecordChangesHandler
 {
     private readonly WriteTargets _targets;
+    private readonly LoadOrderResolution _resolution;
     private readonly RecordTextCodec _codec;
     private readonly SchemaReflector _schemaReflector;
     private readonly ILogger<EditRecordChangesHandler> _logger;
@@ -21,11 +23,12 @@ public sealed class EditRecordChangesHandler
     private readonly CellLanding _cellLanding;
 
     internal EditRecordChangesHandler(
-        WriteTargets targets, RecordTextCodec codec, SchemaReflector schemaReflector, ILogger<EditRecordChangesHandler> logger)
+        WriteTargets targets, LoadOrderResolution resolution, RecordTextCodec codec, SchemaReflector schemaReflector,
+        ILogger<EditRecordChangesHandler> logger)
     {
-        (_targets, _codec, _schemaReflector, _logger) = (targets, codec, schemaReflector, logger);
+        (_targets, _resolution, _codec, _schemaReflector, _logger) = (targets, resolution, codec, schemaReflector, logger);
         _formKeyChange = new(codec, logger);
-        _cellLanding = new(targets, codec, schemaReflector, logger);
+        _cellLanding = new(resolution, codec, schemaReflector, logger);
     }
 
     /// <summary><paramref name="given"/> stands in for the file of the document carrying the record.</summary>
@@ -87,15 +90,14 @@ public sealed class EditRecordChangesHandler
         LeftCopy? refillCopyOnTheLeft = null;
         if (cellToLookUp is not null || refills)
         {
-            if (WriteTargets.MastersOf(
+            if (_resolution.WalkAmongMastersOf(
                     repository, plugin, schemas, spelled, $"the copy of {formKey} read to its left", out var masters) is { } unreadable)
                 return unreadable;
             if (cellToLookUp is not null)
-                cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, cellToLookUp, PlacedCell.Says, among: masters);
+                cellCopyOnTheLeft = masters.NearestCopy(cellToLookUp, PlacedCell.Says);
             if (refills)
             {
-                refillCopyOnTheLeft = _targets.NearestCopyToTheLeft(
-                    plugin, formKey, _ => true, RecordEmptying.EmptyingBits(schema), masters);
+                refillCopyOnTheLeft = masters.NearestCopy(formKey, _ => true, RecordEmptying.EmptyingBits(schema));
             }
         }
 
@@ -132,7 +134,7 @@ public sealed class EditRecordChangesHandler
 
         return new RecordEditChanges(
             RecordEditResult.Success(),
-            repository.ChangesToRewrite(plugin, new SourceDocument(target.FormKey, target.RecordType, WriteTargets.EditorIdOf(newText), newText)));
+            repository.ChangesToRewrite(plugin, new SourceDocument(target.FormKey, target.RecordType, EditorIds.In(newText), newText)));
     }
 
     private static string? Unreadable(Func<string, string> roundTrip, string text)

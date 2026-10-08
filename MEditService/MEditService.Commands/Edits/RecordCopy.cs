@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -11,7 +12,7 @@ namespace MEditService.Commands.Edits;
 /// <summary>The container half of both copy modes: a child lands inside its container's document,
 /// copied in as an override with its own fields when the destination lacks it. One write path with
 /// the write side (ADR-0007).</summary>
-internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaReflector, ILogger logger, RecordTextCodec codec)
+internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger, RecordTextCodec codec)
 {
     /// <summary>The tracked plugin a copy lands in: its repository and its key. No folder — every
     /// write here is a put, and the repository decides where a document goes.</summary>
@@ -90,7 +91,8 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
     {
         var containerFormKey = container.ParentFormKey;
         var sourceContainer = HeldBy(source, containerFormKey);
-        if (targets.HighestOverrideVisibleToTheDestination(source, sourceContainer, destination, out var visibleText) is { } refused)
+        if (resolution.HighestOverrideVisibleToTheDestination(
+                source, sourceContainer, destination.Repository, destination.Plugin, out var visibleText) is { } refused)
             return refused;
         var ownFields = OwnFieldsOf(source, sourceContainer, visibleText, release);
         var withChild = ownFields with
@@ -223,7 +225,8 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
         if (Identity(destination, worldspaceFormKey, release) is null)
         {
             var worldspace = HeldBy(source, worldspaceFormKey);
-            if (targets.HighestOverrideVisibleToTheDestination(source, worldspace, destination, out var visibleText) is { } refused)
+            if (resolution.HighestOverrideVisibleToTheDestination(
+                source, worldspace, destination.Repository, destination.Plugin, out var visibleText) is { } refused)
                 return refused;
             worldspaceCopy = OwnFieldsOf(source, worldspace, visibleText, release);
         }
@@ -404,7 +407,7 @@ internal sealed class RecordCopy(WriteTargets targets, SchemaReflector schemaRef
     {
         var visible = visibleText is null
             ? source.Document(container)
-            : new SourceDocument(container.FormKey, container.RecordType, WriteTargets.EditorIdOf(visibleText), visibleText);
+            : new SourceDocument(container.FormKey, container.RecordType, EditorIds.In(visibleText), visibleText);
         return visible with { Body = ContainerDocumentEdits.WithoutChildren(codec, visible.Body, release, visible.RecordType) };
     }
 }

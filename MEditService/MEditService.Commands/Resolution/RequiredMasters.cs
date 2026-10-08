@@ -5,7 +5,7 @@ using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Commands.Edits;
+namespace MEditService.Commands.Resolution;
 
 /// <summary>The masters a plugin's content requires (ADR-0008), gathered one document at a
 /// time, with the links that require them.</summary>
