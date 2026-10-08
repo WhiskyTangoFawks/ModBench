@@ -68,15 +68,19 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
 
   // The clearing can outrun the reply to the set that it clears, so what mEdit holds decides what shows.
   const onCleared = async ({ source, reason }: { source: string; reason: string }): Promise<void> => {
-    const wasShown = showRecordFilter.shownSource() === source;
+    const shownBefore = showRecordFilter.shownSource();
     const wasApplying = applying === source;
     if (wasApplying) clearedWhileApplying.add(source);
     const message = `The record filter ${source} was cleared`;
-    if (wasShown || wasApplying) reporter.report('warning', message, reason);
-    else reporter.shownOnSurface('warning', message, reason);
+    const say = (viewChanged: boolean): void => {
+      if (viewChanged || wasApplying || shownBefore === source) reporter.report('warning', message, reason);
+      else reporter.shownOnSurface('warning', message, reason);
+    };
     try {
       show(await client.getActiveFilter());
+      say(showRecordFilter.shownSource() !== shownBefore);
     } catch (e) {
+      say(false);
       reporter.report('error', 'Could not read the record filter', errorMessage(e));
     }
   };
