@@ -21,7 +21,7 @@ public class UnionArrayAddInventoryTests
         var columns = schemas
             .OrderBy(table => table.Key, StringComparer.Ordinal)
             .SelectMany(table => table.Value.RecordColumns
-                .Where(column => column.Field.ElementSpec?.SubFields?.Any(field => field.IsDiscriminator) == true)
+                .Where(column => column.Field.ElementType?.Fields?.Any(field => field.IsDiscriminator) == true)
                 .Select(column => (Table: table.Key, Column: column.Name, Kinds: KindsOf(column))));
         foreach (var shape in columns.GroupBy(column => column.Kinds, StringComparer.Ordinal))
         {
@@ -32,7 +32,7 @@ public class UnionArrayAddInventoryTests
     }
 
     private static string KindsOf(ColumnSpec column) =>
-        string.Join("|", column.Field.ElementSpec.Require().SubFields.Require().Single(f => f.IsDiscriminator).EnumMembers.Select(m => m.Value));
+        string.Join("|", column.Field.ElementType.Require().Fields.Require().Single(f => f.IsDiscriminator).EnumMembers.Select(m => m.Value));
 
     [Theory]
     [MemberData(nameof(UnionArrays))]
@@ -49,7 +49,7 @@ public class UnionArrayAddInventoryTests
         using var document = JsonDocument.Parse(after);
         var written = document.RootElement.GetProperty(col.PropertyName);
         Assert.Equal(1, written.GetArrayLength());
-        var discriminator = col.Field.ElementSpec.Require().SubFields.Require().Single(f => f.IsDiscriminator);
+        var discriminator = col.Field.ElementType.Require().Fields.Require().Single(f => f.IsDiscriminator);
         Assert.Equal(
             discriminator.EnumMembers[0].Value,
             written[0].GetProperty(discriminator.Name).GetString());

@@ -5,18 +5,18 @@ namespace MEditService.Codec.Tests.Schema;
 
 public class FormReferenceCollectorTests
 {
-    private static ColumnSpec Column(SubFieldSpec field) => new(field, field.Name, "JSON");
+    private static ColumnSpec Column(FieldMetadata field) => new(field, field.Name, "JSON");
 
     private static ColumnSpec ScalarFormKeyCol(string name) =>
-        new(new SubFieldSpec(name, "formKey", [], []), name, "VARCHAR");
+        new(new FieldMetadata(name, "formKey", false, [], []), name, "VARCHAR");
 
     private static ColumnSpec ArrayFormKeyCol(string name) =>
-        Column(new SubFieldSpec(name, "array", [], [], ElementSpec: new SubFieldSpec(name, "formKey", [], [])));
+        Column(new FieldMetadata(name, "array", true, [], [], ElementType: new FieldMetadata(name, "formKey", false, [], [])));
 
     private static ColumnSpec ArrayStructCol(string name, params string[] fkSubFields) =>
-        Column(new SubFieldSpec(name, "array", [], [],
-            ElementSpec: new SubFieldSpec(name, "struct", [], [],
-                SubFields: [.. fkSubFields.Select(f => new SubFieldSpec(f, "formKey", [], []))])));
+        Column(new FieldMetadata(name, "array", true, [], [],
+            ElementType: new FieldMetadata(name, "struct", false, [], [],
+                Fields: [.. fkSubFields.Select(f => new FieldMetadata(f, "formKey", false, [], []))])));
 
     private static List<(string Path, string Fk)> Collect(ColumnSpec col, string? value)
     {
@@ -110,7 +110,7 @@ public class FormReferenceCollectorTests
     [Fact]
     public void Collect_UnknownApiType_IsNotYielded()
     {
-        var col = new ColumnSpec(new SubFieldSpec("Name", "string", [], []), "Name", "VARCHAR");
+        var col = new ColumnSpec(new FieldMetadata("Name", "string", false, [], []), "Name", "VARCHAR");
         Assert.Empty(Collect(col, "some value"));
     }
 
@@ -155,7 +155,7 @@ public class FormReferenceCollectorTests
     [Fact]
     public void Collect_ArrayWithNullElementType_IsNotYielded_BecauseSchemaReflectorProducesOneForOpaqueLoquiElements()
     {
-        var col = Column(new SubFieldSpec("items", "array", [], [], ElementSpec: null));
+        var col = Column(new FieldMetadata("items", "array", true, [], [], ElementType: null));
         var hits = Collect(col, "[\"000001:Fallout4.esm\"]");
         Assert.Empty(hits);
     }
@@ -163,10 +163,10 @@ public class FormReferenceCollectorTests
     [Fact]
     public void Collect_ArrayStruct_NestedStructSubField_FormKeyReached()
     {
-        var innerFk = new SubFieldSpec("Target", "formKey", [], []);
-        var innerStruct = new SubFieldSpec("inner", "struct", [], [], SubFields: [innerFk]);
-        var elemSpec = new SubFieldSpec("", "struct", [], [], SubFields: [innerStruct]);
-        var col = Column(new SubFieldSpec("links", "array", [], [], ElementSpec: elemSpec));
+        var innerFk = new FieldMetadata("Target", "formKey", false, [], []);
+        var innerStruct = new FieldMetadata("inner", "struct", false, [], [], Fields: [innerFk]);
+        var elemSpec = new FieldMetadata("", "struct", false, [], [], Fields: [innerStruct]);
+        var col = Column(new FieldMetadata("links", "array", true, [], [], ElementType: elemSpec));
 
         var json = "[{\"inner\":{\"Target\":\"000001:Plugin.esp\"}}]";
         var hits = Collect(col, json);
@@ -178,17 +178,17 @@ public class FormReferenceCollectorTests
     [Fact]
     public void Collect_ARecordWithANestedStruct_AListOfLinks_AndAUnionField_YieldsEachTargetOnce_TheLeafNamedByTheDocumentsOwnDiscriminatorDecidingTheShape()
     {
-        var nested = Column(new SubFieldSpec("Ownership", "struct", [], [],
-            SubFields: [new SubFieldSpec("Owner", "struct", [], [],
-                SubFields: [new SubFieldSpec("Faction", "formKey", [], [])])]));
-        var list = Column(new SubFieldSpec("Keywords", "array", [], [],
-            ElementSpec: new SubFieldSpec("Keywords", "formKey", [], [])));
-        var union = Column(new SubFieldSpec("Value", "struct", [], [], Variants: new Dictionary<string, SubFieldSpec>
+        var nested = Column(new FieldMetadata("Ownership", "struct", false, [], [],
+            Fields: [new FieldMetadata("Owner", "struct", false, [], [],
+                Fields: [new FieldMetadata("Faction", "formKey", false, [], [])])]));
+        var list = Column(new FieldMetadata("Keywords", "array", true, [], [],
+            ElementType: new FieldMetadata("Keywords", "formKey", false, [], [])));
+        var union = Column(new FieldMetadata("Value", "struct", false, [], [], Variants: new Dictionary<string, FieldMetadata>
         {
-            ["ObjectValue"] = new SubFieldSpec("Value", "struct", [], [],
-                SubFields: [new SubFieldSpec("Object", "formKey", [], [])]),
-            ["StringValue"] = new SubFieldSpec("Value", "struct", [], [],
-                SubFields: [new SubFieldSpec("Text", "string", [], [])]),
+            ["ObjectValue"] = new FieldMetadata("Value", "struct", false, [], [],
+                Fields: [new FieldMetadata("Object", "formKey", false, [], [])]),
+            ["StringValue"] = new FieldMetadata("Value", "struct", false, [], [],
+                Fields: [new FieldMetadata("Text", "string", false, [], [])]),
         }));
 
         using var document = JsonDocument.Parse($$"""

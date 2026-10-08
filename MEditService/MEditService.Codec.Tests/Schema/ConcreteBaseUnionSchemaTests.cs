@@ -16,8 +16,8 @@ public sealed class ConcreteBaseUnionSchemaTests
         reflector.GetSchemas(GameRelease.Fallout4)["npc_"].RecordColumns
             .Single(c => c.Name == "VirtualMachineAdapter");
 
-    private static IReadOnlyList<SubFieldSpec> RequireSubFields(SubFieldSpec field) =>
-        field.SubFields ?? throw new InvalidOperationException($"Expected '{field.Name}' to have sub-fields.");
+    private static IReadOnlyList<FieldMetadata> RequireSubFields(FieldMetadata field) =>
+        field.Fields ?? throw new InvalidOperationException($"Expected '{field.Name}' to have sub-fields.");
 
     private static IReadOnlyList<FieldMetadata> RequireFields(FieldMetadata meta) =>
         meta.Fields ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have fields.");
@@ -36,7 +36,7 @@ public sealed class ConcreteBaseUnionSchemaTests
 
     private static FieldMetadata ScriptPropertyElement(ColumnSpec adapter)
     {
-        var scripts = RequireFields(adapter.ToFieldMetadata()).Single(f => f.Name == "Scripts");
+        var scripts = RequireFields(adapter.Field).Single(f => f.Name == "Scripts");
         var properties = RequireFields(RequireElementType(scripts)).Single(f => f.Name == "Properties");
         return RequireElementType(properties);
     }

@@ -81,7 +81,7 @@ public static class LoquiUnions
     // Members grouped by name across leaves: one leaf's becomes its field; a shared name becomes one
     // field, carrying a variant per leaf when the leaves disagree on its shape. The base's own
     // members BuildSubSchema reached are excluded.
-    internal static List<SubFieldSpec> BuildUnionLeafFields(
+    internal static List<FieldMetadata> BuildUnionLeafFields(
         Type getterInterface,
         LoquiUnion union,
         GameReflection game,
@@ -96,7 +96,7 @@ public static class LoquiUnions
         // A leaf Enter declines is left out entirely, members and discriminator value both, which is
         // how a documented truncation ends.
         var reached = new List<(Type GetterType, string ClassName)>();
-        var leaves = new List<(string ClassName, IReadOnlyList<SubFieldSpec> Members)>();
+        var leaves = new List<(string ClassName, IReadOnlyList<FieldMetadata> Members)>();
         foreach (var (getterType, className) in union.Leaves)
         {
             var leafPath = getterType == getterInterface ? path : SubFieldReflection.Enter(path, getterType, game);
@@ -107,13 +107,13 @@ public static class LoquiUnions
                 .Where(declarations => declarations.Count > 0)
                 .Select(ReflectedTypes.MostDerived)
                 .Select(p => SubFieldReflection.GetSubFieldInfo(p, game, leafPath, logger))
-                .OfType<SubFieldSpec>()
+                .OfType<FieldMetadata>()
                 .ToList();
             reached.Add((getterType, className));
             leaves.Add((className, members));
         }
 
-        var result = UnionMembers(leaves, s => s.Name, s => s.ToFieldMetadata())
+        var result = UnionMembers(leaves, s => s.Name, s => s)
             .Select(m => m.First with { AllowsNull = true, Variants = m.Variants })
             .ToList();
         result.Add(BuildUnionDiscriminatorField(union with { Leaves = reached }));
@@ -133,7 +133,7 @@ public static class LoquiUnions
             .Select(l => (l.ClassName, (IReadOnlyList<ColumnSpec>)[.. ColumnReflection.ReflectColumns(l.GetterType, game, logger).Where(c => !baseNames.Contains(c.Name))]))
             .ToList();
 
-        columns.AddRange(UnionMembers(leaves, c => c.Name, c => c.ToFieldMetadata())
+        columns.AddRange(UnionMembers(leaves, c => c.Name, c => c.Field)
             .Select(m => m.First with
             {
                 Field = m.First.Field with
@@ -175,8 +175,8 @@ public static class LoquiUnions
 
     // An enum, so the editor's enum-leaf rule renders it and the class names stay wire tokens
     // LeafLabel labels. Setting it switches the object's leaf; see editor-fields.md, A field of several kinds.
-    internal static SubFieldSpec BuildUnionDiscriminatorField(LoquiUnion union) =>
-        new(UnionTypeDiscriminator, "enum", LeafSpec.NoFormKeyTypes,
+    internal static FieldMetadata BuildUnionDiscriminatorField(LoquiUnion union) =>
+        new(UnionTypeDiscriminator, "enum", false, LeafSpec.NoFormKeyTypes,
             [.. union.Leaves.Select(l => new EnumMember(
                 l.ClassName, Label: LeafLabel.For(ReflectedTypes.LeafTypeName(union.SetterType), LeafLabel.ClassWord(l.ClassName))))],
             AllowsNull: true, DisplayLabel: UnionTypeDiscriminatorLabel, IsDiscriminator: true);

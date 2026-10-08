@@ -167,7 +167,7 @@ public class HeaderIndexingTests
     public void HeaderSchema_MastersColumn_ReasonReachesEveryMemberBelow()
     {
         var masters = Reflector.GetSchemas(GameRelease.Fallout4)[PluginHeader.RecordType]
-            .RecordColumns.Single(c => c.Name == "MasterReferences").ToFieldMetadata();
+            .RecordColumns.Single(c => c.Name == "MasterReferences").Field;
 
         var element = Assert.IsType<FieldMetadata>(masters.ElementType);
         Assert.Equal(masters.ReadOnlyReason, element.ReadOnlyReason);
