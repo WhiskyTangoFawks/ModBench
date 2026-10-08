@@ -118,7 +118,7 @@ export function pluginsLoadedWithNoLineOf(
   });
 }
 
-// The game and MO2 join a name to its file without regard to case, so a name finds every Data folder
+// The game joins a name to its file without regard to case, so a name finds every Data folder
 // file that differs from it only in case.
 const dataSpellings = (inData: DataFolderPlugins, name: string): string[] =>
   inData.kind === 'listed' ? [...inData.names].filter((spelled) => foldPath(spelled) === foldPath(name)) : [];
