@@ -26,30 +26,93 @@ export const rootFiles = (src: string = SRC): string[] =>
 
 const VI_MODULE_CALLS = new Set(['mock', 'doMock', 'unmock', 'doUnmock', 'importActual', 'importMock']);
 
-function isModuleCall(call: ts.CallExpression): boolean {
-  if (call.expression.kind === ts.SyntaxKind.ImportKeyword) return true;
-  const callee = call.expression;
-  return ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression)
-    && callee.expression.text === 'vi' && VI_MODULE_CALLS.has(callee.name.text);
+const { SyntaxKind } = ts;
+
+const ENDS_AN_OPERAND = new Set([
+  SyntaxKind.PrivateIdentifier, SyntaxKind.NumericLiteral, SyntaxKind.BigIntLiteral,
+  SyntaxKind.StringLiteral, SyntaxKind.NoSubstitutionTemplateLiteral, SyntaxKind.TemplateTail,
+  SyntaxKind.RegularExpressionLiteral, SyntaxKind.CloseParenToken, SyntaxKind.CloseBracketToken,
+  SyntaxKind.CloseBraceToken, SyntaxKind.PlusPlusToken, SyntaxKind.MinusMinusToken, SyntaxKind.ThisKeyword,
+  SyntaxKind.SuperKeyword, SyntaxKind.TrueKeyword, SyntaxKind.FalseKeyword, SyntaxKind.NullKeyword,
+]);
+
+const BEGINS_AN_OPERAND = new Set([SyntaxKind.AwaitKeyword, SyntaxKind.YieldKeyword, SyntaxKind.OfKeyword]);
+
+interface Token { kind: ts.SyntaxKind; text: string; endsAnOperand: boolean }
+
+const isMemberAccess = (kind: ts.SyntaxKind | undefined): boolean =>
+  kind === SyntaxKind.DotToken || kind === SyntaxKind.QuestionDotToken;
+
+function indexBeforeTypeArguments(tokens: readonly Token[], end: number): number {
+  if (tokens[end]?.kind !== SyntaxKind.GreaterThanToken) return end;
+  let depth = 0;
+  for (let i = end; i >= 0; i--) {
+    const kind = tokens[i]?.kind;
+    if (kind === SyntaxKind.GreaterThanToken) depth++;
+    else if (kind === SyntaxKind.LessThanToken && --depth === 0) return i - 1;
+  }
+  return -1;
 }
 
+function isBareImport(tokens: readonly Token[], index: number): boolean {
+  return tokens[index]?.kind === SyntaxKind.ImportKeyword && !isMemberAccess(tokens[index - 1]?.kind);
+}
+
+function fromClosesADeclaration(tokens: readonly Token[], from: number): boolean {
+  for (let i = from - 1; i >= 0; i--) {
+    const kind = tokens[i]?.kind;
+    if (kind === SyntaxKind.ImportKeyword || kind === SyntaxKind.ExportKeyword) return true;
+    if (kind === SyntaxKind.SemicolonToken) return false;
+  }
+  return false;
+}
+
+function namesAModule(tokens: readonly Token[]): boolean {
+  const last = tokens.length - 1;
+  const lastKind = tokens[last]?.kind;
+  if (lastKind === SyntaxKind.FromKeyword) return fromClosesADeclaration(tokens, last);
+  if (isBareImport(tokens, last)) return true;
+  if (lastKind !== SyntaxKind.OpenParenToken) return false;
+  const callee = indexBeforeTypeArguments(tokens, last - 1);
+  if (isBareImport(tokens, callee)) return true;
+  return tokens[callee]?.kind === SyntaxKind.Identifier && VI_MODULE_CALLS.has(tokens[callee].text)
+    && isMemberAccess(tokens[callee - 1]?.kind)
+    && tokens[callee - 2]?.kind === SyntaxKind.Identifier && tokens[callee - 2]?.text === 'vi'
+    && !isMemberAccess(tokens[callee - 3]?.kind);
+}
+
+/** Reads TypeScript, not JSX. Throws on a token it cannot read, so a misread file never drops its imports in silence. */
 export function importSpecifiers(sourceText: string, fileName: string): string[] {
-  const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
+  if (fileName.endsWith('.tsx')) throw new Error(`${fileName}: the import reader does not read JSX`);
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest, true, ts.LanguageVariant.Standard, sourceText,
+    (message) => {
+      const line = sourceText.slice(0, scanner.getTokenEnd()).split('\n').length;
+      throw new Error(`${fileName}:${line}: the import reader cannot read this file: ${ts.flattenDiagnosticMessageText(message.message, ' ')}`);
+    },
+  );
   const found: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
-      && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-      found.push(node.moduleSpecifier.text);
-    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)
-      && ts.isStringLiteral(node.argument.literal)) {
-      found.push(node.argument.literal.text);
-    } else if (ts.isCallExpression(node) && isModuleCall(node)) {
-      const [first] = node.arguments;
-      if (first && ts.isStringLiteralLike(first)) found.push(first.text);
+  const before: Token[] = [];
+  const braceOpensTemplateSpan: boolean[] = [];
+  for (let kind = scanner.scan(); kind !== SyntaxKind.EndOfFileToken; kind = scanner.scan()) {
+    const previous = before.at(-1);
+    if ((kind === SyntaxKind.SlashToken || kind === SyntaxKind.SlashEqualsToken) && !previous?.endsAnOperand) {
+      kind = scanner.reScanSlashToken();
+    } else if (kind === SyntaxKind.TemplateHead) {
+      braceOpensTemplateSpan.push(true);
+    } else if (kind === SyntaxKind.OpenBraceToken) {
+      braceOpensTemplateSpan.push(false);
+    } else if (kind === SyntaxKind.CloseBraceToken && braceOpensTemplateSpan.pop()) {
+      kind = scanner.reScanTemplateToken(false);
+      if (kind === SyntaxKind.TemplateMiddle) braceOpensTemplateSpan.push(true);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+    const text = scanner.getTokenValue();
+    const isString = kind === SyntaxKind.StringLiteral;
+    const isCallArgument = kind === SyntaxKind.NoSubstitutionTemplateLiteral && previous?.kind === SyntaxKind.OpenParenToken;
+    if ((isString || isCallArgument) && namesAModule(before)) found.push(text);
+    const endsAnOperand = ENDS_AN_OPERAND.has(kind) || (scanner.isIdentifier() && !BEGINS_AN_OPERAND.has(kind));
+    before.push({ kind, text, endsAnOperand });
+  }
   return found;
 }
 
