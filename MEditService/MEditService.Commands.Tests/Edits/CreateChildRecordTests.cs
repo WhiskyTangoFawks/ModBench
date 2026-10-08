@@ -315,4 +315,13 @@ public sealed class CreateChildRecordTests : IDisposable
     private string[] SlotOf(FormKey container, string slot) =>
         [.. JsonNode.Parse(_fixture.Document(container.ToString()).Require().Body).Require()[slot].Require().AsArray()
             .Select(child => child.Require()["FormKey"].Require().GetValue<string>())];
+
+    [Fact]
+    public void ACreatedChild_MovesTheNextObjectIdPastItsFormKey()
+    {
+        var result = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, "dial", _fixture.Quest.ToString());
+
+        Assert.Equal("000815:ContainerFixture.esp", result.NewFormKey);
+        Assert.Equal(0x816u, _fixture.NextObjectId());
+    }
 }

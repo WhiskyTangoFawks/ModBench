@@ -52,21 +52,17 @@ public sealed class CopyAsOverrideTests
             untracked.Document(untracked.DestinationPlugin, untracked.SourceNpc.ToString()).Require().Body);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void CopyRecordAsOverride_Refuses_WhenTheDestinationHoldsTheFormKeyAtTheLastCommitOnly_WithOrWithoutReplace(bool replace)
+    [Fact]
+    public void CopyRecordAsOverride_OfARecordTheDestinationDeletedSinceTheLastCommit_LandsItAgain()
     {
         using var mod = CopyFixture.Create();
         mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false).OnlyLanded();
         mod.CommitDestination();
         Assert.Empty(mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.DestinationPlugin, mod.SourceNpc.ToString())]).Refused);
 
-        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: replace);
-        var refused = result.OnlyRefused();
+        mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false).OnlyLanded();
 
-        Assert.Equal(RecordEditRefusal.FormKeyCollision, refused.Refusal);
-        Assert.Contains("the last commit", refused.Message, StringComparison.Ordinal);
+        Assert.NotNull(mod.Document(mod.DestinationPlugin, mod.SourceNpc.ToString()));
     }
 
     [Fact]

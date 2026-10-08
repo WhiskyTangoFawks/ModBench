@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Codec.Schema;
@@ -17,4 +18,6 @@ public static class PluginHeader
 
     /// <summary>The null form, which no major record can occupy.</summary>
     public static string FormKeyFor(ModKey plugin) => FormKey.Factory($"000000:{plugin}").ToString();
+
+    public static RecordIdentity IdentityOf(string pluginName) => new(FormKeyFor(ModKey.FromFileName(pluginName)), RecordType, null);
 }

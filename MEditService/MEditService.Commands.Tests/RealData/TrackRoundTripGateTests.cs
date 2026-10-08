@@ -90,7 +90,6 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
 
     [Theory]
     [InlineData("\"MasterReferences\"")]
-    [InlineData("\"NextFormID\"")]
     [InlineData("\"NumRecords\"")]
     public void Track_OfTheRealFixture_WritesNoValueThePluginDerives(string member)
     {

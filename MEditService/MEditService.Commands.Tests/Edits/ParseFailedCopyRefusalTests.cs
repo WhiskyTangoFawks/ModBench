@@ -64,7 +64,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
         var newFormKey = result.OnlyLanded().Require();
         Assert.NotNull(_mod.Document(_mod.DestinationPlugin, newFormKey));
-        Assert.Equal([newFormKey], _mod.ChangedFormKeys(_mod.DestinationPlugin));
+        Assert.Equal(["000000:Destination.esp", newFormKey], _mod.ChangedFormKeys(_mod.DestinationPlugin));
     }
 
     private sealed class ParseFailedCopyFixture : IDisposable, ITrackedPlugins

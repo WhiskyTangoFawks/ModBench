@@ -199,4 +199,33 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.Empty(compiledQuest.DialogBranches);
         Assert.Empty(compiledQuest.Scenes);
     }
+
+    [Fact]
+    public void CopyAsNewRecord_OfAResponseWhoseChainItCopiesIn_MovesTheDestinationsNextObjectIdPastIt()
+    {
+        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+
+        Assert.Equal("000801:ContainerDestination.esp", result.OnlyLanded());
+        Assert.Equal(0x802u, _fixture.NextObjectId(_fixture.DestinationPlugin));
+    }
+
+    [Fact]
+    public void CopyAsNewRecord_OfAResponseIntoATopicTheDestinationHolds_MovesTheDestinationsNextObjectIdPastIt()
+    {
+        _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false).OnlyLanded();
+
+        var second = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response2.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+
+        Assert.Equal("000802:ContainerDestination.esp", second.OnlyLanded());
+        Assert.Equal(0x803u, _fixture.NextObjectId(_fixture.DestinationPlugin));
+    }
+
+    [Fact]
+    public void CopyAsNewRecord_OfAReferenceInAnExteriorCellTheDestinationLacks_MovesTheDestinationsNextObjectIdPastIt()
+    {
+        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorPersistentRef.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+
+        Assert.Equal("000801:ContainerDestination.esp", result.OnlyLanded());
+        Assert.Equal(0x802u, _fixture.NextObjectId(_fixture.DestinationPlugin));
+    }
 }

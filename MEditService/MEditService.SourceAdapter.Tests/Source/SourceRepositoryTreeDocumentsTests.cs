@@ -97,13 +97,12 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     }
 
     [Fact]
-    public void FormKeysUsed_AKeyTheWorkingTreeDeleted_StaysUsedWhileTheCommitHoldsIt()
+    public void FormKeysUsed_AKeyTheWorkingTreeDeleted_IsNotUsed_ThoughTheLastCommitHoldsIt()
     {
         var repository = Tracked();
         repository.Remove(Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId));
 
-        Assert.Empty(TreeDocuments.Of(repository, Plugin));
-        Assert.Contains(NpcFormKey, repository.FormKeysUsed(Plugin));
+        Assert.DoesNotContain(NpcFormKey, repository.FormKeysUsed(Plugin));
     }
 
     [Fact]

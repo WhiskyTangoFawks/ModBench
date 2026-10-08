@@ -15,12 +15,21 @@ public sealed class SourceTransaction
 
     /// <summary>Runs <paramref name="write"/> on a new transaction. A throw puts back what it applied and is
     /// rethrown, or becomes the rollback's report when that left a path standing.</summary>
-    public static void Atomically(SourceRepository repository, Action<SourceTransaction> write)
+    public static void Atomically(SourceRepository repository, Action<SourceTransaction> write) =>
+        Atomically(repository, transaction =>
+        {
+            write(transaction);
+            return true;
+        });
+
+    /// <summary><see cref="Atomically(SourceRepository, Action{SourceTransaction})"/>, answering what
+    /// <paramref name="write"/> answers.</summary>
+    public static T Atomically<T>(SourceRepository repository, Func<SourceTransaction, T> write)
     {
         var transaction = new SourceTransaction(repository);
         try
         {
-            write(transaction);
+            return write(transaction);
         }
         catch (Exception cause) when (cause is not OutOfMemoryException)
         {

@@ -55,8 +55,7 @@ public sealed class CopyFixture : TestInstance, ITrackedPlugins
         DestinationNpc = destinationNpc.FormKey;
     }
 
-    /// <summary>Commits the destination's working tree, so what it holds now is what HEAD holds —
-    /// the state a later working-tree deletion does not free.</summary>
+    /// <summary>Commits the destination's working tree, so what it holds now is what HEAD holds.</summary>
     public void CommitDestination()
     {
         TrackedTree.Commit(DestinationModFolder);

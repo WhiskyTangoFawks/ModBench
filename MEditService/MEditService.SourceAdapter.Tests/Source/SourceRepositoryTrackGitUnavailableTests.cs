@@ -8,7 +8,7 @@ namespace MEditService.SourceAdapter.Tests.Source;
 public sealed class SourceRepositoryTrackGitUnavailableTests
 {
     [Fact]
-    public void Track_WithGitNotOnPath_ThrowsGitUnavailableException_NotARawProcessException()
+    public void Track_WithGitNotOnPath_ThrowsGitUnavailableException_NotARawProcessException_AndLeavesTheFolderEmpty()
     {
         using var modFolder = new ScratchDirectory("medit-track-nogit-");
         var previousPath = Environment.GetEnvironmentVariable("PATH");
@@ -22,6 +22,7 @@ public sealed class SourceRepositoryTrackGitUnavailableTests
 
             Assert.Contains("git", ex.Message, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("PATH", ex.Message, StringComparison.Ordinal);
+            Assert.Empty(Directory.EnumerateFileSystemEntries(modFolder));
         }
         finally
         {

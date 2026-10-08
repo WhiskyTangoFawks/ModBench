@@ -7,7 +7,6 @@ using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
@@ -85,8 +84,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, SchemaReflector schem
     // whole plugin, so the Problems entry lands on a file the author can open.
     internal static CompileDiagnostic PluginDiagnostic(PluginAddress plugin, SourceRepository repository, string message)
     {
-        var header = new RecordIdentity(
-            PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), PluginHeader.RecordType, null);
+        var header = PluginHeader.IdentityOf(plugin.Name);
         var path = repository.RelativePathOf(plugin, header)
             ?? throw new InvalidOperationException($"Expected {plugin.Name}'s header to have a document.");
         return new(header.FormKey, path, message);

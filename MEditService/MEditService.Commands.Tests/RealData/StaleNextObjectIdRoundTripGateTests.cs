@@ -31,19 +31,18 @@ public sealed class StaleNextObjectIdRoundTripGateTests
 
     [Theory]
     [MemberData(nameof(RealFixturesWithAStaleHeader))]
-    public async Task Save_OfARealPluginWithAStaleHeader_DerivesNextObjectIdAndNumRecordsFromContent(
+    public async Task Save_OfARealPluginWithAStaleHeader_KeepsItsNextObjectId_AndDerivesNumRecordsFromContent(
         string fileName, uint storedNextObjectId, uint storedNumRecords, uint derivedNumRecords)
     {
         using var scratch = new TrackedScratch(fileName);
         Assert.Equal((storedNextObjectId, storedNumRecords), ReadHeaderStats(scratch.PluginPath));
-        var oneAboveTheHighestNativeId = HighestNativeId(scratch.PluginPath) + 1;
 
         using (var prep = await TreeSaves.PrepareAsync(scratch.PluginPath))
         {
             prep.Commit();
         }
 
-        Assert.Equal((oneAboveTheHighestNativeId, derivedNumRecords), ReadHeaderStats(scratch.PluginPath));
+        Assert.Equal((storedNextObjectId, derivedNumRecords), ReadHeaderStats(scratch.PluginPath));
     }
 
     [Theory]
@@ -104,13 +103,6 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         using var overlay = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName(Path.GetFileName(pluginPath)), pluginPath), Fallout4Release.Fallout4);
         return (overlay.ModHeader.Stats.NextFormID, overlay.ModHeader.Stats.NumRecords);
-    }
-
-    private static uint HighestNativeId(string pluginPath)
-    {
-        var modKey = ModKey.FromFileName(Path.GetFileName(pluginPath));
-        using var overlay = Fallout4Mod.CreateFromBinaryOverlay(new ModPath(modKey, pluginPath), Fallout4Release.Fallout4);
-        return overlay.EnumerateMajorRecords().Where(r => r.FormKey.ModKey == modKey).Max(r => r.FormKey.ID);
     }
 
     private sealed class TrackedScratch : IDisposable

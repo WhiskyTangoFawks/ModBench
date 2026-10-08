@@ -356,4 +356,27 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Contains("moves into is copied in from the nearest of Override.esp's masters to hold it, and the source tree that names Override.esp's masters cannot be read", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, _plugins.Text(Override, _keys["Here"]));
     }
+
+    [Fact]
+    public void ClearingPersistent_WhereItCreatesACellAtItsGrid_MovesTheNextObjectIdPastTheCell()
+    {
+        Load(masterTracked: true);
+
+        SetFlags("Wanderer", 0);
+
+        var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)).Require();
+        Assert.Equal("000805:Override.esp", created.FormKey);
+        Assert.Equal(0x806u, TrackedTree.NextObjectId(_plugins.FolderOf(Override), Address(Override)));
+    }
+
+    [Fact]
+    public void SettingPersistent_WhereItCreatesThePersistentCell_MovesTheNextObjectIdPastTheCell()
+    {
+        Load(masterTracked: false, masterHasPersistentCell: false);
+
+        SetFlags("Mover", Persistent);
+
+        Assert.Equal("000805:Override.esp", Document(World)["TopCell"].Require()["FormKey"].Require().GetValue<string>());
+        Assert.Equal(0x806u, TrackedTree.NextObjectId(_plugins.FolderOf(Override), Address(Override)));
+    }
 }

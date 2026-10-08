@@ -221,10 +221,13 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         bool noModKeySync = false)
     {
         var toPath = plugin.BeginWrite.ToPath(destinationPath);
+        // Mutagen's default resets the Next Object ID to one past the highest FormID, which would
+        // hand a deleted record's FormKey out again (plugins.md, Create record, story 2).
         var writeBuilder = (masterOrder is null
                 ? toPath.WithLoadOrderFromHeaderMasters()
                 : toPath.WithLoadOrder(masterOrder.Select(name => ModKey.FromFileName(name))))
-            .WithNoDataFolder();
+            .WithNoDataFolder()
+            .NoNextFormIDProcessing();
         // A destination named other than plugin's ModKey needs this lifted.
         if (noModKeySync) writeBuilder = writeBuilder.NoModKeySync();
 

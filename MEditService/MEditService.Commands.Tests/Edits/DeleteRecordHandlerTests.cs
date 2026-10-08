@@ -183,7 +183,7 @@ public sealed class DeleteRecordHandlerTests
     }
 
     [Fact]
-    public void DeleteRecords_RemovesTheRecord_GoneFromTheTree_StillAtHead()
+    public void DeleteRecords_RemovesTheRecordFromTheTree()
     {
         using var mod = SourceEditFixture.Tracked();
 
@@ -191,23 +191,6 @@ public sealed class DeleteRecordHandlerTests
 
         Assert.Empty(result.Refused);
         Assert.Null(mod.Document(mod.Npc.ToString()));
-        Assert.True(mod.Uses(mod.Npc.ToString()));
-    }
-
-    [Fact]
-    public void DeleteRecords_OnANeverCommittedRecord_LeavesNothingUsed()
-    {
-        using var mod = SourceEditFixture.Tracked();
-        var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
-        Assert.True(created.Applied, created.Message);
-        Assert.NotNull(created.NewFormKey);
-        var newFormKey = created.NewFormKey;
-
-        var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, newFormKey)]);
-
-        Assert.Empty(result.Refused);
-        Assert.Null(mod.Document(newFormKey));
-        Assert.False(mod.Uses(newFormKey));
     }
 
     [Fact]

@@ -103,9 +103,8 @@ public sealed class EditRecordChangesTests : IDisposable
         var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("FormKey", "\"000F00:Fixture.esp\""), unsaved);
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        var document = Assert.Single(answer.Changes.Documents);
+        var document = answer.Changes.Documents.Single(change => change.Text.Contains("000F00:Fixture.esp", StringComparison.Ordinal));
         Assert.Contains("TypedButUnsaved", document.Text, StringComparison.Ordinal);
-        Assert.Contains("000F00:Fixture.esp", document.Text, StringComparison.Ordinal);
     }
 
     [Theory]

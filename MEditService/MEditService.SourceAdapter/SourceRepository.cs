@@ -219,16 +219,10 @@ public sealed class SourceRepository
     public IReadOnlySet<string> EditorIdsHeld(PluginAddress plugin) =>
         DocumentTokens.EditorIdsOf(Locator.ReadAll(plugin));
 
-    /// <summary>Every FormKey the plugin's source uses, committed or not: a record's own, an embedded
-    /// child's and the header's synthetic one. A deletion frees its key once committed.</summary>
+    /// <summary>Every FormKey the plugin's working tree uses: a record's own, an embedded child's and the
+    /// header's synthetic one.</summary>
     public IReadOnlySet<string> FormKeysUsed(PluginAddress plugin) =>
-        DocumentTokens.FormKeysOf([.. Locator.ReadAll(plugin), .. ReadAllCommitted(plugin)], _release);
-
-    /// <summary>Whether the last commit holds <paramref name="formKey"/> and the tree does not: a
-    /// deletion the tree has not committed.</summary>
-    public bool HeldOnlyAtLastCommit(PluginAddress plugin, string formKey) =>
-        DocumentTokens.FormKeysOf(ReadAllCommitted(plugin), _release).Contains(formKey)
-        && !DocumentTokens.FormKeysOf(Locator.ReadAll(plugin), _release).Contains(formKey);
+        DocumentTokens.FormKeysOf(Locator.ReadAll(plugin), _release);
 
     /// <summary>The plugin's tree as the documents it holds right now, each record's own. The caller
     /// disposes it.</summary>
@@ -266,27 +260,19 @@ public sealed class SourceRepository
     /// alone with the levels above it. A record another document carries is replaced at its own slot.
     /// A failure writes nothing.</summary>
     public void Put(PluginAddress plugin, SourceDocument document) =>
-        Write(plugin, document, () => ChangesToPut(plugin, document));
+        SourceTransaction.Atomically(this, transaction => transaction.Apply(ChangesToPut(plugin, document)));
 
-    /// <summary>The put of an exterior cell, which lands in the block its own grid falls in inside
-    /// <paramref name="worldspace"/>'s directory. A held cell is replaced where it is. A failure writes nothing.</summary>
-    public void PutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
-        Write(plugin, cell, () => ChangesToPutInWorldspace(plugin, cell, worldspace));
-
-    private void Write(PluginAddress plugin, SourceDocument document, Func<SourceChanges> changes)
-    {
-        Writes.RefuseOverwritingWhatIsNoDocument(plugin, document);
-        SourceTransaction.Atomically(this, transaction => transaction.Apply(changes()));
-    }
-
-    /// <summary>What <see cref="Put"/> changes, written nowhere.</summary>
+    /// <summary>What <see cref="Put"/> changes, written nowhere. A file at its path that is no document throws
+    /// as unreadable.</summary>
     public SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document) => Writes.ChangesToPut(plugin, document);
 
     /// <summary>What rewriting a document the tree holds changes, written nowhere. One no document holds
     /// throws: an edit never creates.</summary>
     public SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) => Writes.ChangesToRewrite(plugin, document);
 
-    /// <summary>What <see cref="PutInWorldspace"/> changes, written nowhere.</summary>
+    /// <summary>What putting an exterior cell changes, written nowhere: a new cell lands in its grid's block
+    /// under <paramref name="worldspace"/>, a held one where it is. A file there that is no document throws
+    /// as unreadable.</summary>
     public SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
         Writes.ChangesToPutInWorldspace(plugin, cell, worldspace);
 
@@ -352,11 +338,6 @@ public sealed class SourceRepository
                 $"{plugin.Name} is provided by '{plugin.Origin}', and this repository holds '{_modName}'.", nameof(plugin));
         }
     }
-
-    private IEnumerable<SourceDocument> ReadAllCommitted(PluginAddress plugin) =>
-        _git.BlobsAtRef(plugin.Name, "HEAD")
-            .Select(blob => Locator.DocumentAt(blob.RelativePath, blob.Text, plugin.Name))
-            .OfType<SourceDocument>();
 }
 
 /// <summary>Why a record is or is not out of the tree — three states a caller must tell apart, since
