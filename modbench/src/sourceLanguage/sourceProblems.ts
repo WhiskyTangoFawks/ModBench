@@ -48,7 +48,7 @@ function tellingOnce(say: (message: string, why: string) => void): (standing: To
 }
 
 type OnFiles = Map<string, ProblemOnFile[]>;
-/** A plugin's problems by file: the links it holds to missing records, and the files whose read stopped. */
+// A plugin's problems by file: the links it holds to missing records, and the files whose read stopped.
 interface Contribution { links: OnFiles; stops: OnFiles }
 interface Unplaced extends Told { plugin: string }
 interface Placed { ofPlugin: Map<string, Contribution | undefined>; unplaced: Unplaced[]; unread: Told[] }
