@@ -5,9 +5,7 @@ import { present } from '../ports/present';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom,
 } from './vscodeMock';
-import { IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
-import { FOLDER_KEY } from '../toolbox/instanceCheck';
-import { INSTANCE_READ_KEY } from '../drivingLib/instanceFirstRead';
+import { FOLDER_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
 const orderOf = (entry: MenuEntry): number => Number((entry.group ?? '').split('@')[1] ?? Number.NaN);

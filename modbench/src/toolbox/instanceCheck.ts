@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 /** VS Code reads `key == false` as `!key`, which an unset key also satisfies, so the instance
  *  check's answer is a string and an unset key means the check has not run. */
-export const FOLDER_KEY = 'modbench.folder';
+const FOLDER_KEY = 'modbench.folder';
 
 type FolderCheck = 'instance' | 'notAnInstance';
 

@@ -4,7 +4,8 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn() }));
 vi.mock('vscode', () => ({ commands: { executeCommand } }));
 
-import { INSTANCE_READ_KEY, firstReadOf, markFirstReadLanded } from '../instanceFirstRead';
+import { firstReadOf, markFirstReadLanded } from '../instanceFirstRead';
+import { INSTANCE_READ_KEY } from '../../test/manifest';
 import type { InstanceSubscriber, ReadFailureListener } from '../../instanceLoader/instance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
