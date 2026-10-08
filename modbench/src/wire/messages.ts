@@ -225,10 +225,8 @@ export type ModRepository = 'tracked' | 'untracked';
  *  sets from `plugins` (ADR-0005). `plugins` is null exactly when that one read
  *  failed, degrading only that slice. */
 export type RecordLoadAnswer =
-  | {
+  | ({
       ok: true;
-      // Null is a record held by no active plugin.
-      compare: components['schemas']['CompareResult'] | null;
       plugins: components['schemas']['PluginResponse'][] | null;
       conflictsComputed: boolean;
       // The plugins mEdit cannot read, as the Plugins tree is told them.
@@ -237,8 +235,14 @@ export type RecordLoadAnswer =
       // The repository state of each origin in the comparison that names a mod, read from the
       // instance. An origin in no mod is absent.
       modsByOrigin: Record<string, ModRepository>;
-    }
+    } & RecordRead)
   | { ok: false; error: string };
+
+/** What the read gave: the comparison, or the records held by no plugin at all (editor.md, States, story 4)
+ *  with mEdit's word on each copy only the plugin it names lacks (story 2). */
+export type RecordRead =
+  | { compare: components['schemas']['CompareResult'] }
+  | { compare: null; gone: string[]; copiesLacking: string[] };
 
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
@@ -256,6 +260,10 @@ function isModsByOrigin(value: unknown): value is Record<string, ModRepository> 
 
 function isString(value: unknown): value is string {
   return typeof value === 'string';
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(isString);
 }
 
 export function isRecordEditEnvelope(value: unknown): value is RecordEditEnvelope {
@@ -375,7 +383,7 @@ function parseFormKeyPicked(w: { requestId?: unknown; formKey?: unknown }): Exte
 }
 
 function parseRecordLoadAnswer(w: {
-  requestId?: unknown; ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
+  requestId?: unknown; ok?: unknown; compare?: unknown; gone?: unknown; copiesLacking?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
   documentPlugin?: unknown; modsByOrigin?: unknown;
 }): { requestId: string } & RecordLoadAnswer {
   if (!isString(w.requestId)) throw new Error('Expected "recordLoadAnswered" to carry a string requestId.');
@@ -387,13 +395,21 @@ function parseRecordLoadAnswer(w: {
   return { requestId: w.requestId, ...parseAnswered(w) };
 }
 
+function parseRead(w: { compare?: unknown; gone?: unknown; copiesLacking?: unknown }): RecordRead {
+  if (w.compare !== null) {
+    if (!isCompareResultShape(w.compare)) throw new Error('Expected an answered "recordLoadAnswered" to carry a compare object or null.');
+    return { compare: w.compare };
+  }
+  if (!isStringArray(w.gone) || w.gone.length === 0 || !isStringArray(w.copiesLacking)) {
+    throw new Error('Expected an answered "recordLoadAnswered" with no compare to name the records that are gone.');
+  }
+  return { compare: null, gone: w.gone, copiesLacking: w.copiesLacking };
+}
+
 function parseAnswered(w: {
-  compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; documentPlugin?: unknown;
+  compare?: unknown; gone?: unknown; copiesLacking?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; documentPlugin?: unknown;
   modsByOrigin?: unknown;
 }): RecordLoadAnswer {
-  if (w.compare !== null && !isCompareResultShape(w.compare)) {
-    throw new Error('Expected an answered "recordLoadAnswered" to carry a compare object or null.');
-  }
   if (w.plugins !== null && !isPluginResponseArray(w.plugins)) {
     throw new Error('Expected "recordLoadAnswered" to carry a plugins array or null.');
   }
@@ -406,7 +422,7 @@ function parseAnswered(w: {
   if (!isPluginAddress(w.documentPlugin)) throw new Error('Expected "recordLoadAnswered" to carry the document\'s plugin.');
   if (!isModsByOrigin(w.modsByOrigin)) throw new Error('Expected "recordLoadAnswered" to carry its mods by origin.');
   return {
-    ok: true, compare: w.compare, plugins: w.plugins, conflictsComputed: w.conflictsComputed,
+    ok: true, ...parseRead(w), plugins: w.plugins, conflictsComputed: w.conflictsComputed,
     loadFailures: w.loadFailures, documentPlugin: w.documentPlugin, modsByOrigin: w.modsByOrigin,
   };
 }

@@ -23,12 +23,14 @@ public sealed class CompareRecordsTests : IDisposable
     private readonly Container _chest;
     private readonly Container _otherChest;
     private readonly Weapon _sword;
+    private readonly Weapon _dagger;
 
     public CompareRecordsTests()
     {
         Container? chest = null;
         Container? otherChest = null;
         Weapon? sword = null;
+        Weapon? dagger = null;
         _fixture = new PluginFixtureBuilder("medit-compare-records")
             .WithPlugin(BasePlugin.Name, mod =>
             {
@@ -42,9 +44,14 @@ public sealed class CompareRecordsTests : IDisposable
                 mod.Containers.Add(otherChest);
                 mod.Weapons.Add(sword);
             })
+            .WithPlugin(InactivePlugin.Name, mod =>
+            {
+                dagger = new Weapon(mod) { EditorID = "Dagger", Name = "Dagger" };
+                mod.Weapons.Add(dagger);
+            }, enabled: false)
             .Build();
         _index = Indexes.Reconciled(_fixture);
-        (_chest, _otherChest, _sword) = (chest.Require(), otherChest.Require(), sword.Require());
+        (_chest, _otherChest, _sword, _dagger) = (chest.Require(), otherChest.Require(), sword.Require(), dagger.Require());
     }
 
     public void Dispose()
@@ -147,6 +154,28 @@ public sealed class CompareRecordsTests : IDisposable
         Assert.Contains($"{sword.FormKey} in {BasePlugin.Name} ({BasePlugin.Origin})", message);
         Assert.Contains($"{chestInMod.FormKey} in {ModPlugin.Name} ({ModPlugin.Origin})", message);
         Assert.DoesNotContain($"{_chest.FormKey} in {BasePlugin.Name}", message);
+    }
+
+    [Fact]
+    public void ARecordNoPluginHolds_IsNamedGone_ApartFromACopyMissingOnlyFromItsPlugin()
+    {
+        var nowhere = new RecordCopy("00DEAD:Nowhere.esp", ModPlugin);
+        var swordInBase = Copy(_sword, BasePlugin);
+
+        var refusal = Assert.Throws<RecordCopiesMissingException>(
+            () => Compare(Copy(_chest, BasePlugin), swordInBase, nowhere));
+
+        Assert.Equal(
+            [(nowhere.FormKey, CopyMissingReason.RecordGone), (swordInBase.FormKey, CopyMissingReason.NotInPlugin)],
+            refusal.Missing.OrderBy(m => m.Reason == CopyMissingReason.NotInPlugin).Select(m => (m.Copy.FormKey, m.Reason)));
+    }
+
+    [Fact]
+    public void ARecordOnlyADisabledPluginHolds_IsNotGone()
+    {
+        var refusal = Assert.Throws<RecordCopiesMissingException>(() => Compare(Copy(_dagger, BasePlugin)));
+
+        Assert.Equal(CopyMissingReason.NotInPlugin, Assert.Single(refusal.Missing).Reason);
     }
 
     [Fact]

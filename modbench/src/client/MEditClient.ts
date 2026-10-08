@@ -6,7 +6,7 @@ import {
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellChildRecords, type CellSummary,
   type ChildRecordSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
-  type PluginLoadFailure, type CompareResult, type RecordCopy, type CopyText,
+  type PluginLoadFailure, type CompareResult, type CompareRecordsResponse, type RecordCopy, type CopyText,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress } from '../wire/pluginAddress';
@@ -233,10 +233,9 @@ export interface MEditClient {
    *  Null: no active plugin holds it and no `text` gives it. With `text`, that plugin's column reads
    *  from it, outside the conflict states if inactive. */
   getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null>;
-  /** Several records side by side: one column per copy, in the order given, with no conflict
-   *  state on any cell or row. Rejects when a copy is held by no plugin and given no `documentText`;
-   *  the detail names each. */
-  getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult>;
+  /** Several records side by side: one column per copy, in order, with no conflict state. With no
+   *  `compare`, `missing` names each copy no plugin gave and why. */
+  getRecordsComparison(copies: RecordCopy[]): Promise<CompareRecordsResponse>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
   /** The referrers of the active plugins and of the inactive tracked ones. */
   getReferencesInActiveOrTrackedPlugins(formKey: string): Promise<ReferenceResult[]>;
@@ -307,5 +306,5 @@ export type {
   TrackStatus, PluginMetadata, PluginDiagnosisReport,
   RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, CompileDiagnostic,
-  LoadOrderRefusal, PluginLoadFailure, CompareResult, 
+  LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsResponse,
 };
