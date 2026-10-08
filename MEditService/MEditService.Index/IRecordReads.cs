@@ -3,9 +3,8 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Index;
 
-/// <summary>Every read the index answers. A record read sees only the active plugins (ADR-0012)
-/// unless it names one plugin and returns that plugin's own copy, which it reaches whatever the plugin's
-/// state; a plugin's own facts answer while the snapshot names it.</summary>
+/// <summary>A record read sees only the active plugins (ADR-0012), unless it names one plugin and
+/// returns that plugin's own copy. A plugin's own facts answer while the snapshot names it.</summary>
 internal interface IRecordReads
 {
     /// <summary>What the Index read out of each plugin it has open, keyed by identity. A plugin it has
