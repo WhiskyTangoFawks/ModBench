@@ -7,8 +7,9 @@ public sealed class LoadOrderTests
     private const string Data = @"C:\Games\Fallout4\Data";
     private const string Instance = @"C:\MO2\Fallout4";
 
-    private static RegisteredPlugin Registered(string name, string origin, int? line = null) =>
-        new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), new PluginProvider.FromMod(origin, Path.Combine(@"C:\MO2\mods", origin)), line);
+    private static RegisteredPlugin Registered(string name, string origin, int? line = null, bool lineNamesIt = true) =>
+        new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), new PluginProvider.FromMod(origin, Path.Combine(@"C:\MO2\mods", origin)),
+            line is { } place ? new PluginLine(place, lineNamesIt) : null);
 
     private static LoadOrderSnapshot Order(RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
         new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], []);
@@ -121,7 +122,7 @@ public sealed class LoadOrderTests
     public void AnOverriddenPlugin_DoesNotLoadBeforeTheWinnerOfItsLine()
     {
         var winner = Registered("A.esp", "HighPriorityMod", line: 0);
-        var overridden = Registered("A.esp", "LowPriorityMod", line: 0);
+        var overridden = Registered("A.esp", "LowPriorityMod", line: 0, lineNamesIt: false);
 
         var order = Order([overridden, winner], winner);
 
@@ -138,6 +139,19 @@ public sealed class LoadOrderTests
 
         Assert.Null(order.LoadsBefore(unlisted.Key, active.Key));
         Assert.Null(order.LoadsBefore(active.Key, unlisted.Key));
+    }
+
+    [Fact]
+    public void JudgedCopies_AreTheActivePlugins_AndTheCopyEachDisabledLineNames()
+    {
+        var active = Registered("A.esp", "ModA", line: 0);
+        var overridden = Registered("B.esp", "FirstMod", line: 1, lineNamesIt: false);
+        var named = Registered("B.esp", "SecondMod", line: 1);
+        var unlisted = Registered("U.esp", "ModU");
+
+        var order = Order([active, overridden, named, unlisted], active);
+
+        Assert.Equal([active, named], order.JudgedCopies());
     }
 
     [Fact]
@@ -167,7 +181,7 @@ public sealed class LoadOrderTests
     [Fact]
     public void AUserPluginInTheGameFolder_ProvidedByTheGame_IsImmutable_ActiveFromItsLine()
     {
-        var placed = new RegisteredPlugin("UserPatch.esp", PluginOrigin.DataDirectory, Path.Combine(Data, "UserPatch.esp"), PluginProvider.Game, Line: 0);
+        var placed = new RegisteredPlugin("UserPatch.esp", PluginOrigin.DataDirectory, Path.Combine(Data, "UserPatch.esp"), PluginProvider.Game, new PluginLine(0, NamesIt: true));
 
         var order = Order([placed], placed);
 

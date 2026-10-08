@@ -12,7 +12,7 @@ const BACKEND_FAILED: LoadOrderOutcome = { outcome: 'backendFailed' };
 
 function snapshot(name: string): LoadOrderSnapshot {
   return {
-    plugins: [{ name, path: `/game/Data/${name}`, origin: DATA_DIRECTORY_ORIGIN, provider: { kind: 'Game' }, line: null }],
+    plugins: [{ name, path: `/game/Data/${name}`, origin: DATA_DIRECTORY_ORIGIN, provider: { kind: 'Game' }, line: null, lineNamesIt: false }],
     active: [{ name, origin: DATA_DIRECTORY_ORIGIN }],
     loadedWithNoLine: [],
     gameDirectory: '/game/Data',

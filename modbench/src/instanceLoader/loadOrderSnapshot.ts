@@ -36,7 +36,8 @@ export interface LoadOrderPlugin {
 
 type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string } | { kind: 'Game' } | { kind: 'None' };
 
-type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin' | 'line'> & { provider: SnapshotProvider };
+// `lineNamesIt`: the line names this copy of its filename, for Editing's judgements (ADR-0013).
+type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin' | 'line'> & { provider: SnapshotProvider; lineNamesIt: boolean };
 
 /** The snapshot was not built, and why: the user is told once (common.md, Reporting). */
 export interface LoadOrderSnapshotRefusal {
@@ -218,7 +219,7 @@ export function loadOrderSnapshotOf(value: {
     },
   });
   const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p) =>
-    rowAt.get(pluginAddressKey(p)) ?? { ...p, path: fileInFolder(dataFolder, p.name), line: null });
+    rowAt.get(pluginAddressKey(p)) ?? { ...p, path: fileInFolder(dataFolder, p.name), line: null, winning: true });
   const placed = new Set(loadedWithNoLine.map((p) => foldPath(p.name)));
   const fromLines = rows
     .filter((p): p is LoadOrderPlugin & { line: number } => p.line !== null && p.enabled && p.winning)
@@ -231,14 +232,14 @@ export function loadOrderSnapshotOf(value: {
     });
   const sent = new Map<string, SnapshotPlugin>();
   const unprovided = new Map<string, string[]>();
-  for (const { name, path, origin, line } of [...loadedWithNoLine, ...rows]) {
+  for (const { name, path, origin, line, winning } of [...loadedWithNoLine, ...rows]) {
     const provider = whatProvides(origin);
     if (provider === undefined) {
       unprovided.set(origin, [...unprovided.get(origin) ?? [], name]);
       continue;
     }
     const key = pluginAddressKey({ name, origin });
-    if (!sent.has(key)) sent.set(key, { name, path, origin, provider, line });
+    if (!sent.has(key)) sent.set(key, { name, path, origin, provider, line, lineNamesIt: line !== null && winning });
   }
   if (unprovided.size > 0) return { refusal: refusalOf(unprovided) };
   return {

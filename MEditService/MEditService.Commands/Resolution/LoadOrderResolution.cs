@@ -149,8 +149,8 @@ internal sealed class LoadOrderResolution(
             {
                 return new LeftCopy.UnreadableMastersTree(plugin, ex.Message);
             }
-            // With no line no judgement applies, so every active master is to its left (commands.md § Principles).
-            var asked = snapshot.Active.Where(active => snapshot.LoadsBefore(active.Key, plugin) != false)
+            // With no line no judgement applies, so every judged master is to its left (commands.md § Principles).
+            var asked = snapshot.JudgedCopies().Where(copy => snapshot.LoadsBefore(copy.Key, plugin) != false)
                 .Reverse().Select(registered => registered.Key)
                 .Where(left => required.Contains(left.Name));
             foreach (var left in asked)

@@ -250,6 +250,24 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
+    public void ClearingDeleted_TakesTheCopyOfADisabledMasterThatItsLineNames()
+    {
+        var edited = Plugin("Override.esp", Mastering("Middle.esp", NpcCopy(Deleted)));
+        _plugins.Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), "Fallout4Mod", false, Listing.Winning),
+            (Plugin("Middle.esp", NpcCopy(0, "Guy", 0.8f)), "FirstMod", false, Listing.Winning),
+            (Plugin("Middle.esp", NpcCopy(0, "Guy", 0.9f)), "SecondMod", false, Listing.Overridden),
+            (edited, "OverrideMod", true, Listing.Winning));
+        _plugins.Relist(new("Middle.esp", "FirstMod"), entry => entry with { Winning = false });
+        _plugins.Relist(new("Middle.esp", "SecondMod"), entry => entry with { Winning = true, Enabled = false });
+        _edited = edited;
+
+        var undeleted = Written(TheNpc, 0);
+
+        Assert.Equal(0.9f, undeleted["HeightMax"]?.GetValue<float>());
+    }
+
+    [Fact]
     public void ClearingDeleted_TakesTheMastersCopy_OverANearerCopyOfAPluginThatIsNoMaster()
     {
         Load(

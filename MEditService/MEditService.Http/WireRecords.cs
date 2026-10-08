@@ -18,7 +18,7 @@ internal sealed record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
     IReadOnlyList<PluginAddress> LoadedWithNoLine, string GameDirectory, string InstanceRoot,
     string GameRelease);
-internal sealed record LoadOrderPlugin(string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line);
+internal sealed record LoadOrderPlugin(string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line, bool LineNamesIt);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum PluginProviderKind { Mod, Game, None }

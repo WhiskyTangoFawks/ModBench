@@ -945,6 +945,7 @@ export interface components {
             provider: components["schemas"]["PluginProviderRequest"];
             /** Format: int32 */
             line?: number | null;
+            lineNamesIt: boolean;
         };
         LoadOrderRequest: {
             plugins: components["schemas"]["LoadOrderPlugin"][];

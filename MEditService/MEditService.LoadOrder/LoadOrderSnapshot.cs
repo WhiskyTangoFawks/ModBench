@@ -5,12 +5,16 @@ using Place = (int ActivePluginsBefore, bool IsActive);
 
 namespace MEditService.LoadOrder;
 
-/// <summary>One plugin file in the instance (ADR-0013). <paramref name="Line"/>: the place of the
-/// <c>plugins.txt</c> line naming its filename, null when no line names it.</summary>
-public sealed record RegisteredPlugin(string Name, string Origin, string Path, PluginProvider Provider, int? Line)
+/// <summary>One plugin file in the instance (ADR-0013). <paramref name="Line"/>: the <c>plugins.txt</c> line
+/// naming its filename, null when no line names it.</summary>
+public sealed record RegisteredPlugin(string Name, string Origin, string Path, PluginProvider Provider, PluginLine? Line)
 {
     public PluginAddress Key => new(Name, Origin);
 }
+
+/// <summary>A <c>plugins.txt</c> line's place, and whether it names this copy of its filename: the copy Mod
+/// Management resolves the name to (ADR-0013).</summary>
+public readonly record struct PluginLine(int Place, bool NamesIt);
 
 /// <summary>ADR-0013's snapshot. Immutable: nothing here opens, holds or disposes a
 /// plugin file.</summary>
@@ -63,10 +67,10 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     {
         var places = active.Select((plugin, index) => (plugin.Key, Place: (index, true)))
             .ToDictionary(a => a.Key, a => (Place)a.Place, PluginAddress.Comparer);
-        var activeLines = active.Select(plugin => loadedWithNoLine.Contains(plugin) ? int.MinValue : plugin.Line ?? int.MaxValue).ToList();
+        var activeLines = active.Select(plugin => loadedWithNoLine.Contains(plugin) ? int.MinValue : plugin.Line?.Place ?? int.MaxValue).ToList();
         foreach (var plugin in plugins)
         {
-            if (plugin.Line is { } line) places.TryAdd(plugin.Key, (activeLines.Count(activeLine => activeLine <= line), false));
+            if (plugin.Line is { Place: var line }) places.TryAdd(plugin.Key, (activeLines.Count(activeLine => activeLine <= line), false));
         }
         return places;
     }
@@ -109,6 +113,11 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// not active is judged at its <c>plugins.txt</c> line; with none, null (commands.md § Principles).</summary>
     public bool? LoadsBefore(PluginAddress plugin, PluginAddress other) =>
         _places.TryGetValue(plugin, out var place) && _places.TryGetValue(other, out var otherPlace) ? place.CompareTo(otherPlace) < 0 : null;
+
+    /// <summary>The copy of each filename a judgement reads, the active one or the one its line names, in the
+    /// order <see cref="InJudgedOrder"/> gives.</summary>
+    public IEnumerable<RegisteredPlugin> JudgedCopies() =>
+        InJudgedOrder().Where(plugin => _loadOrderIndex.ContainsKey(plugin.Key) || plugin.Line is { NamesIt: true });
 
     /// <summary>Every plugin in the order <see cref="LoadsBefore"/> judges, those it does not judge last.</summary>
     public IEnumerable<RegisteredPlugin> InJudgedOrder() =>

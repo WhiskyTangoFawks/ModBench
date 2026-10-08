@@ -762,7 +762,7 @@ describe('HttpMEditClient — searchRecords', () => {
 });
 
 describe('HttpMEditClient — sendLoadOrder', () => {
-  const plugins = [{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', provider: { kind: 'Mod' as const, mod: 'A', folder: '/mods/A' }, line: 3 }];
+  const plugins = [{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', provider: { kind: 'Mod' as const, mod: 'A', folder: '/mods/A' }, line: 3, lineNamesIt: true }];
   const active = [{ name: 'Foo.esp', origin: 'A' }];
   const loadedWithNoLine = [{ name: 'Foo.esp', origin: 'A' }];
   const appliedBody = { applied: true, version: 1 };
