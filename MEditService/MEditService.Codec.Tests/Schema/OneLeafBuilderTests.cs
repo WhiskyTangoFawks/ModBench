@@ -26,7 +26,7 @@ public sealed class OneLeafBuilderTests
     private static List<(string Path, int Depth, FieldMetadata Meta)> FormLinkArrays() =>
     [
         .. Schemas
-            .SelectMany(s => s.Value.RecordColumns.SelectMany(c => Walk($"{s.Key}.{c.Name}", 0, c.ToFieldMetadata())))
+            .SelectMany(s => s.Value.RecordColumns.SelectMany(c => Walk($"{s.Key}.{c.Name}", 0, c.Field)))
             .Where(x => x.Meta is { Type: "array", ElementType.Type: "formKey" }),
     ];
 

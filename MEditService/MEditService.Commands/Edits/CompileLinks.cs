@@ -103,7 +103,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, SchemaReflector schem
         var root = document.RootElement;
         foreach (var column in schema.RecordColumns)
         {
-            var meta = column.ToFieldMetadata();
+            var meta = column.Field;
             // The collector's own gate: a column with no formKey leaf has nothing to check.
             if (!FormReferences.CarriesFormKeys(meta)) continue;
 

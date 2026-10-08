@@ -11,7 +11,7 @@ public class AbstractUnionDiscriminatorMetadataTests
     private static FieldMetadata Discriminator(string table, params string[] path)
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
-        var meta = schemas[table].RecordColumns.Single(c => c.Name == path[0]).ToFieldMetadata();
+        var meta = schemas[table].RecordColumns.Single(c => c.Name == path[0]).Field;
         foreach (var hop in path.Skip(1))
             meta = hop == "[]"
                 ? meta.ElementType
@@ -67,7 +67,7 @@ public class AbstractUnionDiscriminatorMetadataTests
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         foreach (var (table, schema) in schemas)
             foreach (var column in schema.RecordColumns)
-                foreach (var found in Walk(table, column.Name, column.ToFieldMetadata(), 0))
+                foreach (var found in Walk(table, column.Name, column.Field, 0))
                     yield return found;
     }
 

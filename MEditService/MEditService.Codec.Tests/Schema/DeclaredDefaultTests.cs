@@ -11,7 +11,7 @@ public sealed class DeclaredDefaultTests
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    private static FieldMetadata Vmad => Schemas["npc_"].RecordColumns.Single(c => c.Name == "VirtualMachineAdapter").ToFieldMetadata();
+    private static FieldMetadata Vmad => Schemas["npc_"].RecordColumns.Single(c => c.Name == "VirtualMachineAdapter").Field;
 
     private static FieldMetadata Member(FieldMetadata owner, string name) =>
         (owner.Fields ?? throw new InvalidOperationException($"Expected '{owner.Name}' to have sub-fields."))
@@ -43,7 +43,7 @@ public sealed class DeclaredDefaultTests
             ?? throw new InvalidOperationException("Expected 'Scripts' to have an array element type.");
         var property = Member(scriptsElement, "Properties").ElementType
             ?? throw new InvalidOperationException("Expected 'Properties' to have an array element type.");
-        var conditionsElement = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").ToFieldMetadata().ElementType
+        var conditionsElement = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementType
             ?? throw new InvalidOperationException("Expected 'Conditions' to have an array element type.");
         var data = Member(conditionsElement, "Data");
 

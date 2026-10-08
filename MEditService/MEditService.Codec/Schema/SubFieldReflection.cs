@@ -9,7 +9,7 @@ internal static class SubFieldReflection
 {
     // Walks only what getterInterface declares or inherits, never a more-derived sibling interface, so
     // a union's leaf members are unreachable from the base alone; LoquiUnions closes that gap below.
-    internal static List<SubFieldSpec> BuildSubSchema(
+    internal static List<FieldMetadata> BuildSubSchema(
         Type getterInterface,
         GameReflection game,
         ILogger logger,
@@ -21,7 +21,7 @@ internal static class SubFieldReflection
             .Select(member => member.Where(p => !game.Annotations.IsExcludedMember(p)).ToList())
             .Where(declarations => declarations.Count > 0);
 
-        var result = new List<SubFieldSpec>();
+        var result = new List<FieldMetadata>();
         foreach (var declarations in kept)
         {
             var spec = GetSubFieldInfo(ReflectedTypes.MostDerived(declarations), game, inner, logger);
@@ -60,7 +60,7 @@ internal static class SubFieldReflection
             "A re-entry the game's own data format cannot nest belongs in SchemaAnnotations.CycleTruncations.");
     }
 
-    internal static SubFieldSpec? GetSubFieldInfo(
+    internal static FieldMetadata? GetSubFieldInfo(
         PropertyInfo prop,
         GameReflection game,
         Type[] path,
@@ -74,24 +74,24 @@ internal static class SubFieldReflection
             null when ReflectedTypes.IsListType(core, out var elementType) =>
                 ListLeaves.BuildList(prop, elementType, game, path, logger),
             null when ReflectedTypes.IsLoquiInterface(core) => StructLeaves.BuildStruct(prop, core, game, path, logger),
-            _ => SchemaRefusals.ReportUnclassified<SubFieldSpec>(game, logger, prop, core, "member"),
+            _ => SchemaRefusals.ReportUnclassified<FieldMetadata>(game, logger, prop, core, "member"),
         };
 
         if (game.Annotations.ReadOnlyReasonFor(prop) is not { } reason) return spec;
         // A member a known defect governs is still named, opaque where the defect is what stopped the
         // walk reaching into it, so it is visible rather than silently dropped.
-        return (spec ?? Opaque(prop, core)) with { ReadOnlyReason = reason };
+        return (spec ?? Opaque(prop, core)).WithReadOnlyReason(reason);
     }
 
-    private static SubFieldSpec Opaque(PropertyInfo prop, Type core) =>
-        new(prop.Name, "struct", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, SubFields: [],
+    private static FieldMetadata Opaque(PropertyInfo prop, Type core) =>
+        new(prop.Name, "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, Fields: [],
             AllowsNull: ReflectedTypes.IsNullableMember(prop), LeafTypeName: ReflectedTypes.LeafTypeName(core));
 
     /// <summary>One classified leaf as the member it was reached as. A nullable member genuinely can
     /// be absent-meaning-null, so it reads as null rather than as a default it never had.</summary>
-    internal static SubFieldSpec ProjectSubField(PropertyInfo prop, bool nullable, LeafSpec leaf, GameReflection game)
+    internal static FieldMetadata ProjectSubField(PropertyInfo prop, bool nullable, LeafSpec leaf, GameReflection game)
     {
-        return new(prop.Name, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumMembers,
+        return new(prop.Name, leaf.ApiType, false, leaf.ValidFormKeyTypes, leaf.EnumMembers,
             // The leaf answers for a form link, whose getter type says nothing; every other kind is
             // the getter's own annotation, which is what tells an unset member from a defaulted one.
             AllowsNull: leaf.AllowsNull || ReflectedTypes.IsNullableMember(prop),

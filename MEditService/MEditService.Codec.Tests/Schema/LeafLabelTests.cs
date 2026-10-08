@@ -19,7 +19,7 @@ public sealed class LeafLabelTests
     [Fact]
     public void ANpcLevelUnion_LabelsALeafSharingTheBasesWholeName_WithTheBasesOwnWords()
     {
-        var labels = DiscriminatorLabels(Schemas["npc_"].RecordColumns.Single(c => c.Name == "Level").ToFieldMetadata());
+        var labels = DiscriminatorLabels(Schemas["npc_"].RecordColumns.Single(c => c.Name == "Level").Field);
 
         Assert.Equal("Npc Level", labels["NpcLevel"]);
     }
@@ -27,7 +27,7 @@ public sealed class LeafLabelTests
     [Fact]
     public void ANpcLevelUnion_LabelsALeafSharingNoWordsWithTheBase_WithAllOfTheLeafsOwnWords()
     {
-        var labels = DiscriminatorLabels(Schemas["npc_"].RecordColumns.Single(c => c.Name == "Level").ToFieldMetadata());
+        var labels = DiscriminatorLabels(Schemas["npc_"].RecordColumns.Single(c => c.Name == "Level").Field);
 
         Assert.Equal("Pc Level Mult", labels["PcLevelMult"]);
     }
@@ -35,7 +35,7 @@ public sealed class LeafLabelTests
     [Fact]
     public void AQuestAliasUnion_DropsTheWordTheBaseAndLeafShareAtTheStart()
     {
-        var aliases = Schemas["qust"].RecordColumns.Single(c => c.Name == "Aliases").ToFieldMetadata().ElementType
+        var aliases = Schemas["qust"].RecordColumns.Single(c => c.Name == "Aliases").Field.ElementType
             ?? throw new InvalidOperationException("Expected 'qust.Aliases' to have an array element type.");
         var labels = DiscriminatorLabels(aliases);
 
@@ -46,7 +46,7 @@ public sealed class LeafLabelTests
     [Fact]
     public void AMagicEffectArchetypeUnion_DropsTheWordsTheBaseAndLeafShareAtBothEnds()
     {
-        var labels = DiscriminatorLabels(Schemas["mgef"].RecordColumns.Single(c => c.Name == "Archetype").ToFieldMetadata());
+        var labels = DiscriminatorLabels(Schemas["mgef"].RecordColumns.Single(c => c.Name == "Archetype").Field);
 
         Assert.Equal("Bound", labels["MagicEffectBoundArchetype"]);
     }
