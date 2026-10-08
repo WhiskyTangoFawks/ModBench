@@ -2264,7 +2264,7 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
     const rows = buildLoadOrderRows(
       [{ name: 'FOO.esp', enabled: true }],
       { files, filesByMod: new Map([['SomeMod', [modFile('Foo.esp'), modFile('foo.esp')]]]), foldersByMod: new Map() },
-      [], { kind: 'found', root: '/game', dataFolder: '/game/Data' },
+      [], { kind: 'found', root: '/game', dataFolder: '/game/Data' }, { kind: 'unresolved' },
     );
     const h = makeTree(rows);
     await reconcile(h, [], [
