@@ -115,9 +115,18 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         Assert.Contains("not present in the original", result.Message);
     }
 
+    private static int MiscGroupOffset(byte[] plugin)
+    {
+        var tes4Size = BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(4));
+        var group = HeaderLength + (int)tes4Size;
+        Assert.Equal("GRUP"u8.ToArray(), plugin[group..(group + 4)]);
+        Assert.Equal("MISC"u8.ToArray(), plugin[(group + 8)..(group + 12)]);
+        return group;
+    }
+
     private static ushort ZlibHeaderOfFirstMisc(byte[] plugin)
     {
-        var group = plugin.AsSpan().IndexOf("GRUPMISC"u8);
+        var group = MiscGroupOffset(plugin);
         return BinaryPrimitives.ReadUInt16BigEndian(plugin.AsSpan(group + HeaderLength + HeaderLength + InflatedLengthSize));
     }
 

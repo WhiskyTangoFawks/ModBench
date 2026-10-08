@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
@@ -6,12 +7,7 @@ namespace MEditService.TestSupport;
 
 public sealed record StaleHeaderPlugin(string FileName, byte[] Bytes, uint StoredNextObjectId, uint StoredNumRecords)
 {
-    public string WriteInto(string directory)
-    {
-        var path = Path.Combine(directory, FileName);
-        File.WriteAllBytes(path, Bytes);
-        return path;
-    }
+    public void WriteInto(string directory) => File.WriteAllBytes(Path.Combine(directory, FileName), Bytes);
 }
 
 /// <summary>Plugins whose stored HEDR disagrees with their content, three shapes a rewrite must carry through.</summary>
@@ -26,11 +22,8 @@ public static class StaleHeaderPlugins
     private static readonly byte[] Padding = Encoding.ASCII.GetBytes(
         string.Concat(Enumerable.Range(0, 400).Select(i => (i * 7919 % 97).ToString(CultureInfo.InvariantCulture))) + "\0");
 
-    public static IReadOnlyList<StaleHeaderPlugin> All => [Settings, Sierra, Hitech];
+        public static StaleHeaderPlugin Named(string fileName) => new[] { Settings, Sierra, Hitech }.Single(p => p.FileName == fileName);
 
-    public static StaleHeaderPlugin Named(string fileName) => All.Single(p => p.FileName == fileName);
-
-    /// <summary>Several masters and a few plain records.</summary>
     public static StaleHeaderPlugin Settings
     {
         get
@@ -41,7 +34,6 @@ public static class StaleHeaderPlugins
         }
     }
 
-    /// <summary>A light plugin whose next object id lies beyond the light range, with records deflated at a level Mutagen does not write.</summary>
     public static StaleHeaderPlugin Sierra
     {
         get
@@ -52,7 +44,6 @@ public static class StaleHeaderPlugins
         }
     }
 
-    /// <summary>Records deflated at a level Mutagen does not write, and a worldspace and an interior cell each under their group hierarchy.</summary>
     public static StaleHeaderPlugin Hitech
     {
         get
@@ -65,7 +56,7 @@ public static class StaleHeaderPlugins
                     RawPlugin.Group("MISC", deflated),
                     RawPlugin.Group("WRLD",
                         RawPlugin.Record("WRLD", world, EditorId("BinWorld")),
-                        RawPlugin.Group(BitConverter.GetBytes(world), 1,
+                        RawPlugin.Group(WorldLabel(world), 1,
                             RawPlugin.Record("CELL", Id(masters, 0x811), EditorId("BinWorldCell")))),
                     RawPlugin.Group("CELL",
                         RawPlugin.Group(new byte[4], 2,
@@ -81,6 +72,13 @@ public static class StaleHeaderPlugins
 
     private static byte[][] DeflatedMiscs(string[] masters, string editorIdPrefix) =>
         [.. Enumerable.Range(0, 3).Select(i => DeflatedMisc(masters, 0x800 + (uint)i, $"{editorIdPrefix}{i}"))];
+
+    private static byte[] WorldLabel(uint world)
+    {
+        var label = new byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(label, world);
+        return label;
+    }
 
     private static uint Id(string[] masters, uint objectId) => ((uint)masters.Length << 24) | objectId;
 
