@@ -253,8 +253,6 @@ public sealed class MalformedPluginScanTests
         Assert.Empty(Scan(record));
     }
 
-    private static byte[] Concat(params byte[][] records) => records.SelectMany(r => r).ToArray();
-
     private static byte[] RaceWithNames(uint formId, string editorId, int nameCount)
     {
         var subs = new List<byte[]> { Subrecord("EDID", Encoding.UTF8.GetBytes(editorId + "\0")) };

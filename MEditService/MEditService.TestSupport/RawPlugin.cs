@@ -1,17 +1,15 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using MEditService.Codec.Schema;
 
 namespace MEditService.TestSupport;
 
 /// <summary>Plugin bytes laid out by hand, so a fixture can carry a shape Mutagen would never write.</summary>
 public static class RawPlugin
 {
-    public const uint MasterFlag = 0x1;
-    public const uint LightFlag = 0x200;
-    public const uint CompressedFlag = 0x40000;
-    public const ushort Fallout4FormVersion = 131;
-
+    private const uint LightFlag = 0x200;
+    private const ushort Fallout4FormVersion = 131;
     private const int HeaderLength = 24;
 
     public static byte[] Subrecord(string signature, byte[] payload)
@@ -27,17 +25,19 @@ public static class RawPlugin
         Record(type, formId, 0, Fallout4FormVersion, subrecords);
 
     public static byte[] Record(string type, uint formId, uint flags, ushort formVersion, params byte[][] subrecords) =>
-        RecordOf(type, formId, flags, formVersion, Concat(subrecords));
+        RecordAroundPayload(type, formId, flags, formVersion, Concat(subrecords));
 
     public static byte[] DeflatedRecord(
         string type, uint formId, CompressionLevel level, params byte[][] subrecords)
     {
-        var data = Concat(subrecords);
+        var subrecordBytes = Concat(subrecords);
+        var inflatedLength = new byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(inflatedLength, (uint)subrecordBytes.Length);
         using var payload = new MemoryStream();
-        payload.Write(BitConverter.GetBytes((uint)data.Length));
+        payload.Write(inflatedLength);
         using (var zlib = new ZLibStream(payload, level, leaveOpen: true))
-            zlib.Write(data);
-        return RecordOf(type, formId, CompressedFlag, Fallout4FormVersion, payload.ToArray());
+            zlib.Write(subrecordBytes);
+        return RecordAroundPayload(type, formId, (uint)CompressedFlag.Bit, Fallout4FormVersion, payload.ToArray());
     }
 
     public static byte[] Group(string recordType, params byte[][] contents) =>
@@ -68,22 +68,22 @@ public static class RawPlugin
             subrecords.Add(Subrecord("MAST", Encoding.UTF8.GetBytes(master + "\0")));
             subrecords.Add(Subrecord("DATA", new byte[8]));
         }
-        return Record("TES4", 0, MasterFlag | (light ? LightFlag : 0), Fallout4FormVersion, [.. subrecords]);
+        return Record("TES4", 0, light ? LightFlag : 0, Fallout4FormVersion, [.. subrecords]);
     }
 
     public static byte[] Plugin(byte[] tes4, params byte[][] groups) => Concat([tes4, .. groups]);
 
-    private static byte[] RecordOf(string type, uint formId, uint flags, ushort formVersion, byte[] data)
+    public static byte[] Concat(params byte[][] parts) => parts.SelectMany(p => p).ToArray();
+
+    private static byte[] RecordAroundPayload(string type, uint formId, uint flags, ushort formVersion, byte[] payload)
     {
-        var bytes = new byte[HeaderLength + data.Length];
+        var bytes = new byte[HeaderLength + payload.Length];
         Encoding.ASCII.GetBytes(type).CopyTo(bytes, 0);
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), (uint)data.Length);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), (uint)payload.Length);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), flags);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(12), formId);
         BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(20), formVersion);
-        data.CopyTo(bytes, HeaderLength);
+        payload.CopyTo(bytes, HeaderLength);
         return bytes;
     }
-
-    private static byte[] Concat(byte[][] parts) => parts.SelectMany(p => p).ToArray();
 }

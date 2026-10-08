@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
@@ -40,7 +41,7 @@ public class RawPluginTests
 
         var bytes = RawPlugin.DeflatedRecord("MISC", 1, level, subrecord);
 
-        Assert.Equal(RawPlugin.CompressedFlag, BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(8)));
+        Assert.Equal((uint)CompressedFlag.Bit, BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(8)));
         Assert.Equal((uint)subrecord.Length, BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(24)));
         using var inflated = new ZLibStream(new MemoryStream(bytes, 28, bytes.Length - 28), CompressionMode.Decompress);
         using var result = new MemoryStream();
@@ -99,6 +100,16 @@ public class RawPluginTests
         Assert.True(mod.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Small));
         Assert.Equal(0x801u, mod.ModHeader.Stats.NextFormID);
         Assert.Equal("RawMisc", Assert.Single(mod.MiscItems).EditorID);
+    }
+
+    [Theory]
+    [InlineData(false, 0u)]
+    [InlineData(true, 0x200u)]
+    public void Tes4_FlagsAreTheLightFlagAloneAndNeverTheMasterFlag(bool light, uint expected)
+    {
+        var bytes = RawPlugin.Tes4(light: light);
+
+        Assert.Equal(expected, BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(8)));
     }
 
     [Fact]
