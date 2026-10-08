@@ -352,6 +352,58 @@ describe('RecordPanel — a file whose plugin is disabled, or in a disabled mod'
   });
 });
 
+describe('RecordPanel — a file whose plugin another mod\'s file overrides', () => {
+  const overridden: CompareResult = compareResultFixture({
+    conflictAll: 'NoConflict',
+    overrides: [
+      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'File Name' }] }),
+      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Other.esp', origin: 'ModC', isWinner: true, editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Other Name' }] }),
+    ],
+    diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp|ModA': 'File Name', 'Other.esp|ModC': 'Other Name' }, winnerColumn: 'Other.esp|ModC' })],
+  });
+  const opts: PanelOpts = {
+    plugins: [{ name: 'MyMod.esp', origin: 'ModA', isTracked: true }, { name: 'Other.esp', origin: 'ModC', isTracked: true }],
+    fileColumn: 'MyMod.esp|ModA', fileOverriddenBy: 'ModB',
+  };
+
+  beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reads (overridden) in its dimmed header, and dims every cell of its column, not the others\'', async () => {
+    renderPanel(overridden, opts);
+    await waitFor(() => expect(screen.getByText('(overridden)')).toBeInTheDocument());
+
+    expect(required(screen.getByText('MyMod.esp').closest('th'), 'its header')).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+    expect(required(screen.getByText('Other.esp').closest('th'), 'the other header')).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+    const cells = required(screen.getByText('Name').closest('tr'), 'the Name row').querySelectorAll('td');
+    expect(cells[1]).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+    expect(cells[2]).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+  });
+
+  it('edits its column, and says nothing of a plugin not active', async () => {
+    renderPanel(overridden, opts);
+    await waitFor(() => expect(screen.getByText('File Name')).toBeInTheDocument());
+
+    fireEvent.doubleClick(screen.getByText('File Name'));
+
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+    expect(screen.queryByText('This file\'s plugin is not active: no other copy is compared.')).not.toBeInTheDocument();
+  });
+
+  it('still says the comparison is incomplete while mEdit indexes', async () => {
+    renderPanel(overridden, { ...opts, conflictsComputed: false });
+
+    await waitFor(() => expect(screen.getByText(required(recordPanelIncompleteMessage(false), 'the incomplete message'))).toBeInTheDocument());
+  });
+
+  it('is no (overridden) column when nothing overrides its plugin', async () => {
+    renderPanel(overridden, { ...opts, fileOverriddenBy: null });
+    await waitFor(() => expect(screen.getByText('File Name')).toBeInTheDocument());
+
+    expect(screen.queryByText('(overridden)')).not.toBeInTheDocument();
+  });
+});
+
 describe('RecordPanel — the file\'s column', () => {
   const twoTracked: CompareResult = compareResultFixture({
     overrides: [
