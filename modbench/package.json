@@ -713,11 +713,11 @@
         },
         {
           "command": "modbench.plugin.enable",
-          "when": "modbench.folder == instance"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.holdsDisabledPlugin"
         },
         {
           "command": "modbench.plugin.disable",
-          "when": "modbench.folder == instance"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.holdsEnabledPlugin"
         },
         {
           "command": "modbench.mod.track",
