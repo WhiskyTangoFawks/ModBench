@@ -28,11 +28,13 @@ public sealed class CompilePluginFormIdUnmappableTests : TestInstance
     }
 
     [Fact]
-    public async Task Compile_OfASourceLinkingAMasterOnlyAStructListPropertyNames_IsRefusedNamingTheRecordAndTheMaster_LeavingNoTempDirectory()
+    public async Task Compile_OfASourceLinkingAMasterOnlyAStructListPropertyNames_IsRefusedNamingTheRecordAndTheMaster_LeavingTheModFolderHoldingTheSameFiles()
     {
         SourceEdits.Rewrite<Quest>(
             RepositoryOf(_plugin).Require(), _plugin, new RecordIdentity(_quest.ToString(), "qust", QuestEditorId),
             GameRelease.Fallout4, quest => quest.VirtualMachineAdapter = LinkingAdapter());
+
+        var before = ModFolderFiles();
 
         var answer = await CompileHandler.CompileAsync([_plugin]);
 
@@ -40,8 +42,11 @@ public sealed class CompilePluginFormIdUnmappableTests : TestInstance
         Assert.Equal(CompileRefusal.FormIdUnmappable, refused.Refusal);
         Assert.Contains(QuestEditorId, refused.Message, StringComparison.Ordinal);
         Assert.Contains(MasterName, refused.Message, StringComparison.Ordinal);
-        Assert.Empty(Directory.GetDirectories(FolderOf(Origin), ".medit_tmp_*"));
+        Assert.Equal(before, ModFolderFiles());
     }
+
+    private string[] ModFolderFiles() =>
+        [.. Directory.EnumerateFileSystemEntries(FolderOf(Origin)).Order(StringComparer.Ordinal)];
 
     private static QuestAdapter LinkingAdapter()
     {

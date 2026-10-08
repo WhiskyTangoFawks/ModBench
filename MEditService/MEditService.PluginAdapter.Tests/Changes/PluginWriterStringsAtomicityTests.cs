@@ -32,7 +32,8 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
         _pluginPath,
         loadOrder: null,
         ("The Original Title", "The New Title"),
-        ("The original description.", "The new description."));
+        ("The original description.", "The new description."),
+        ("TestBook", "RenamedBook"));
 
     private static bool IsTheZeroEntryStubTheWriterEmitsForEveryLanguage(string fileName) =>
         fileName.EndsWith(".ILSTRINGS", StringComparison.OrdinalIgnoreCase);
@@ -41,9 +42,10 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
         Directory.GetFiles(_stringsDir).ToDictionary(f => Path.GetFileName(f), File.ReadAllBytes);
 
     [Fact]
-    public async Task PrepareSaveAsync_LocalizedMod_LeavesFinalStringsFilesUntouchedBeforeCommit_AndNoTempDirectoryOnceDisposedUncommitted()
+    public async Task PrepareSaveAsync_LocalizedMod_LeavesFinalStringsFilesUntouchedBeforeCommit_AndTheDataFolderAsItWasOnceDisposedUncommitted()
     {
         var originalFiles = ReadStringsFiles();
+        var entriesBefore = FolderEntries.Of(_dataFolder);
         Assert.True(originalFiles.Count >= 2, "fixture should produce at least Normal + DL strings files");
 
         using (var prep = await PrepareModifiedAsync())
@@ -54,13 +56,14 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
                 Assert.True(bytes.AsSpan().SequenceEqual(afterPrepare[name]), $"{name} was modified before Commit()");
         }
 
-        Assert.Empty(Directory.GetDirectories(_dataFolder, ".medit_tmp_*"));
+        Assert.Equal(entriesBefore, FolderEntries.Of(_dataFolder));
     }
 
     [Fact]
     public async Task Commit_LocalizedMod_CommitsNewStringsContentAtomically()
     {
         var originalFiles = ReadStringsFiles();
+        var entriesBefore = FolderEntries.Of(_dataFolder);
 
         using (var prep = await PrepareModifiedAsync())
             prep.Commit();
@@ -71,7 +74,7 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
         foreach (var (name, bytes) in originalFiles.Where(f => !IsTheZeroEntryStubTheWriterEmitsForEveryLanguage(f.Key)))
             Assert.False(bytes.AsSpan().SequenceEqual(afterCommit[name]), $"{name} should differ after Commit() rewrote it");
 
-        Assert.Empty(Directory.GetDirectories(_dataFolder, ".medit_tmp_*"));
+        Assert.Equal(entriesBefore, FolderEntries.Of(_dataFolder));
     }
 
     [Fact]
@@ -79,10 +82,12 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
     {
         var before = File.ReadAllBytes(_pluginPath);
 
+        var entriesBefore = FolderEntries.Of(_dataFolder);
+
         using (var prep = await PrepareModifiedAsync())
         {
-            var tempDir = Assert.Single(Directory.GetDirectories(_dataFolder, ".medit_tmp_*"));
-            File.Delete(Directory.GetFiles(Path.Combine(tempDir, "Strings"))[0]);
+            var added = FolderEntries.TheOneAddedTo(_dataFolder, entriesBefore);
+            File.Delete(Directory.GetFiles(Path.Combine(added, "Strings"))[0]);
 
             Assert.ThrowsAny<IOException>(prep.Commit);
         }
