@@ -3,6 +3,7 @@
 import * as vscode from 'vscode';
 import type { InstanceValue, InstanceView, OriginFile } from '../instanceLoader/instance';
 import { modOrigin, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { groupModlist } from './modlistTree';
 import type { WorkspaceSettings } from './workspaceSettings';
 
 /** Each indicator in the order mods.md's table lists them, with its name there.
@@ -14,7 +15,7 @@ export const MOD_INDICATORS = [
   { id: 'containsExcludedFiles', name: 'Contains excluded files', badge: '\u2298', colour: 'modbench.modContainsExcludedFiles' },
 ] as const;
 
-export type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
+type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 
 type IndicatorsValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod'>;
 
@@ -51,10 +52,30 @@ function modIndicators(value: IndicatorsValue): ReadonlyMap<string, readonly Mod
   return carriers;
 }
 
+interface Carriers {
+  readonly mods: ReadonlyMap<string, readonly ModIndicator[]>;
+  /** Each separator that holds a mod, with the indicators of the mods it holds. */
+  readonly separators: ReadonlyMap<string, readonly ModIndicator[]>;
+}
+
+function carriersOf(value: IndicatorsValue): Carriers {
+  const byName = modIndicators(value);
+  const separators = new Map<string, readonly ModIndicator[]>();
+  for (const { separator, mods } of groupModlist([...value.mods]).groups) {
+    if (mods.length === 0) continue;
+    const held = mods.flatMap((own) => byName.get(own.name) ?? []);
+    separators.set(separatorRowUri(separator.name).toString(), MOD_INDICATORS.map(({ id }) => id).filter((id) => held.includes(id)));
+  }
+  return { mods: new Map([...byName].map(([name, held]) => [modRowUri(name).toString(), held])), separators };
+}
+
 // Not `file:`: a decoration on a `file:` URI shows on the mod's folder in the Explorer too.
 const MOD_ROW_SCHEME = 'modbench-mod';
+const SEPARATOR_ROW_SCHEME = 'modbench-separator';
 
 export const modRowUri = (name: string): vscode.Uri => vscode.Uri.from({ scheme: MOD_ROW_SCHEME, path: `/${name}` });
+
+export const separatorRowUri = (name: string): vscode.Uri => vscode.Uri.from({ scheme: SEPARATOR_ROW_SCHEME, path: `/${name}` });
 
 /** @public Read by packageJson.test, which holds package.json to it. */
 export const indicatorSetting = (id: ModIndicator, part: 'badge' | 'colour'): string => `modbench.mods.indicators.${id}.${part}`;
@@ -97,24 +118,40 @@ class IndicatorDecorationProvider implements vscode.FileDecorationProvider, vsco
   }
 }
 
-/** A provider per indicator: VS Code takes one decoration from each, and joins their badges. It
- *  never re-queries a provider, so each fires on every new instance value (ADR-0003) and every
- *  change to its settings. */
+/** VS Code takes one decoration from each provider and joins their badges, and never re-queries one,
+ *  so each fires on every new instance value (ADR-0003), setting change, and separator opened or closed. */
 export class ModIndicatorDecorations implements vscode.Disposable {
   readonly providers: readonly IndicatorDecorationProvider[];
-  private carriers: ReadonlyMap<string, readonly ModIndicator[]> | undefined;
+  private carriers: Carriers | undefined;
+  private readonly expanded = new Set<string>();
   private readonly subscription: vscode.Disposable;
 
   constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, settings: WorkspaceSettings) {
     const carried = (uri: vscode.Uri) => {
-      this.carriers ??= new Map([...modIndicators(instance.value)].map(([name, held]) => [modRowUri(name).toString(), held]));
-      return this.carriers.get(uri.toString());
+      this.carriers ??= carriersOf(instance.value);
+      const key = uri.toString();
+      return this.carriers.mods.get(key) ?? (this.expanded.has(key) ? undefined : this.carriers.separators.get(key));
     };
     this.providers = MOD_INDICATORS.map((indicator) => new IndicatorDecorationProvider(indicator, carried, settings));
-    this.subscription = instance.subscribe(() => {
-      this.carriers = undefined;
-      for (const provider of this.providers) provider.refresh();
+    this.subscription = instance.subscribe((value) => {
+      this.carriers = carriersOf(value);
+      for (const key of this.expanded) if (!this.carriers.separators.has(key)) this.expanded.delete(key);
+      this.refresh();
     });
+  }
+
+  expandedRow(uri: vscode.Uri): void {
+    this.expanded.add(uri.toString());
+    this.refresh();
+  }
+
+  collapsedRow(uri: vscode.Uri): void {
+    this.expanded.delete(uri.toString());
+    this.refresh();
+  }
+
+  private refresh(): void {
+    for (const provider of this.providers) provider.refresh();
   }
 
   dispose(): void {

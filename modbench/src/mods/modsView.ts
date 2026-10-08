@@ -89,7 +89,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     provider.onDidChangeTreeData(expand),
     view.onDidChangeVisibility(expand),
     view.onDidChangeCheckboxState(onModCheckboxChanged),
-    ...registerModDecorations(instance, vscode.workspace),
+    ...registerModDecorations(instance, vscode.workspace, view),
     ...registerModContextCommands({
       adapter, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
       log,
