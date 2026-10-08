@@ -73,7 +73,7 @@ public sealed class SourceTransactionOverATrackedTreeTests : IDisposable
         var left = TransactionRollback.After(repository, transaction =>
         {
             transaction.Put(repository, plugin, cell);
-            Assert.Equal(cell.Body, repository.Get(plugin, cell.Identity)?.Body);
+            Assert.Equal(cell.Body, repository.RecordOf(plugin, cell.Identity)?.Body);
         });
 
         Assert.Null(left);

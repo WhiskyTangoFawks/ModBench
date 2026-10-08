@@ -97,7 +97,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     {
         HandEditDroppedMemberBeside(CellPath, "\"PersistRef\"");
 
-        var body = Repository.Get(Plugin, Identity(_persistentRef, "refr"))?.Body;
+        var body = Repository.RecordOf(Plugin, Identity(_persistentRef, "refr"))?.Body;
 
         Assert.NotNull(body);
         Assert.Equal(_persistentRef.FormKey.ToString(), RootFormKeyOf(body));

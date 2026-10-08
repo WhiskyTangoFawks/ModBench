@@ -3,8 +3,8 @@ using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -18,23 +18,18 @@ public sealed class FailedReadStateTests : IDisposable
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("failed-read-state")
         .WithPlugin(PluginName, mod => mod.Npcs.AddNew(NpcEditorId), origin: "PlainMod")
         .BuildScattered();
-    private readonly List<LogEntry> _log = [];
-    private (Func<LogEntry, bool> When, Action Act)? _armed;
-    private readonly ILoggerFactory _loggerFactory;
+    private (TreeMoment When, Action Act)? _armed;
+    private int _treeReads;
+    private readonly HookedSource _source;
 
-    public FailedReadStateTests() =>
-        _loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(_log, FireIfArmed)));
+    public FailedReadStateTests() => _source = new HookedSource(FireIfArmed);
 
-    public void Dispose()
-    {
-        _loggerFactory.Dispose();
-        _fixture.Dispose();
-    }
+    public void Dispose() => _fixture.Dispose();
 
     private LoadOrderEntry Plugin => _fixture.Plugins.Single();
 
     private OpenedIndex Reconciled(IPluginAdapter? adapter = null) =>
-        Indexes.Reconciled(_fixture, _fixture.InstanceRoot, adapter, _loggerFactory);
+        Indexes.Reconciled(_fixture, _fixture.InstanceRoot, adapter, source: _source);
 
     private RecordSummary TheNpc(OpenedIndex index) =>
         index.ListedIn(Plugin.KeyOf()).Single(row => row.EditorId == NpcEditorId);
@@ -57,21 +52,18 @@ public sealed class FailedReadStateTests : IDisposable
             Directory.Delete(backup, recursive: true);
     }
 
-    private void Arm(Func<LogEntry, bool> when, Action act) => _armed = (when, act);
+    private void Arm(TreeMoment when, Action act) => _armed = (when, act);
 
-    private void ArmOn(string logged, Action act) => Arm(e => e.Message.StartsWith(logged, StringComparison.Ordinal), act);
-
-    private void FireIfArmed(LogEntry entry)
+    private void FireIfArmed(TreeMoment moment, PluginAddress plugin)
     {
-        if (_armed is not { } armed || !armed.When(entry)) return;
+        if (!PluginAddress.Comparer.Equals(plugin, Plugin.KeyOf())) return;
+        if (moment == TreeMoment.ReadBegins) Interlocked.Increment(ref _treeReads);
+        if (_armed is not { } armed || armed.When != moment) return;
         _armed = null;
         armed.Act();
     }
 
-    private int TreeReads()
-    {
-        lock (_log) return _log.Count(e => e.Message == $"Ingesting {PluginName} from its source tree");
-    }
+    private int TreeReads() => Volatile.Read(ref _treeReads);
 
     private static bool Failed(OpenedIndex index) => index.Status.Failures.Any(f => f.Name == PluginName);
 
@@ -207,7 +199,7 @@ public sealed class FailedReadStateTests : IDisposable
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         ClaimedTwice();
-        ArmOn($"Could not ingest {PluginName} from its source tree", Mend);
+        Arm(TreeMoment.ReadEnds, Mend);
 
         using var index = Reconciled();
 
@@ -222,7 +214,7 @@ public sealed class FailedReadStateTests : IDisposable
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         using var index = Reconciled();
         ClaimedTwice();
-        ArmOn($"Could not ingest {PluginName} from its source tree", Mend);
+        Arm(TreeMoment.ReadEnds, Mend);
         index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
         Assert.Null(_armed);
 
@@ -308,7 +300,7 @@ public sealed class FailedReadStateTests : IDisposable
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         using var index = Reconciled();
         var untyped = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(NpcDocument)).Require(), "Untyped")).FullName;
-        ArmOn($"Reconciling {PluginName}:", () => File.WriteAllText(StrayDocument, "{}"));
+        Arm(TreeMoment.StampsTaken, () => File.WriteAllText(StrayDocument, "{}"));
         File.WriteAllText(Path.Combine(untyped, "Gained.json"), $$"""{"FormKey":"000ABC:{{PluginName}}"}""");
         index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
         Assert.Null(_armed);
@@ -347,15 +339,15 @@ public sealed class FailedReadStateTests : IDisposable
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         var document = NpcDocument;
-        ArmOn($"Ingesting {PluginName} from its source tree", () =>
+        Arm(TreeMoment.ReadBegins, () =>
         {
             var hold = File.Open(document, FileMode.Open, FileAccess.Read, FileShare.None);
-            Arm(e => e.Level == LogLevel.Warning, hold.Dispose);
+            Arm(TreeMoment.ReadEnds, hold.Dispose);
         });
 
         using var index = Reconciled();
 
-        Assert.Null(_armed);
+        Assert.Equal(2, TreeReads());
         Assert.False(Failed(index));
         Assert.True(ReadFromSource(index));
     }
@@ -415,10 +407,11 @@ public sealed class FailedReadStateTests : IDisposable
         var document = NpcDocument;
         File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{NpcEditorId}\"", "\"EditedNpc\"", StringComparison.Ordinal));
 
-        ArmOn("Validate found", () => throw new TimeoutException("the tree could not be compared"));
+        Arm(TreeMoment.RecordRead, () => throw new TimeoutException("the tree could not be compared"));
 
         using var index = Reconciled();
 
+        Assert.Null(_armed);
         Assert.False(Failed(index));
         Assert.Contains(index.ListedIn(Plugin.KeyOf()), row => row.EditorId == "EditedNpc");
     }
@@ -451,6 +444,79 @@ public sealed class FailedReadStateTests : IDisposable
             beforeFailing?.Invoke();
             Threw = true;
             throw failure;
+        }
+    }
+
+    private enum TreeMoment { StampsTaken, ReadBegins, ReadEnds, RecordRead }
+
+    private sealed class HookedSource(Action<TreeMoment, PluginAddress> at) : ISourceAdapter
+    {
+        private readonly GitSourceAdapter _inner = new();
+
+        public bool SourceReads(RegisteredPlugin plugin) => _inner.SourceReads(plugin);
+
+        public bool IsTracked(RegisteredPlugin plugin) => _inner.IsTracked(plugin);
+
+        public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) =>
+            _inner.Over(plugin, release) is { } reads ? new HookedRepository(reads, at) : null;
+
+        public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => _inner.RecordOfFile(loadOrder, path);
+
+        public string FileNameOf(RecordIdentity identity) => _inner.FileNameOf(identity);
+    }
+
+    private sealed class HookedRepository(ISourceRepositoryReads inner, Action<TreeMoment, PluginAddress> at) : ISourceRepositoryReads
+    {
+        public RecordStamps StampsOf(PluginAddress plugin)
+        {
+            var stamps = inner.StampsOf(plugin);
+            at(TreeMoment.StampsTaken, plugin);
+            return stamps;
+        }
+
+        public IPluginDocuments OpenDocuments(PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        {
+            at(TreeMoment.ReadBegins, plugin);
+            return new ReleasedDocuments(inner.OpenDocuments(plugin, schemas), () => at(TreeMoment.ReadEnds, plugin));
+        }
+
+        public SourceDocument? RecordOf(PluginAddress plugin, RecordIdentity identity)
+        {
+            at(TreeMoment.RecordRead, plugin);
+            return inner.RecordOf(plugin, identity);
+        }
+
+        public IReadOnlyDictionary<string, RecordChange> ChangedSinceLastCommit(
+            PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+            inner.ChangedSinceLastCommit(plugin, schemas);
+
+        public void RefuseUnreadable(
+            PluginAddress plugin, RecordIdentity identity, string body, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+            inner.RefuseUnreadable(plugin, identity, body, schemas);
+
+        public SourceDocument? RecordFromText(
+            PluginAddress plugin, string formKey, string text, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+            inner.RecordFromText(plugin, formKey, text, schemas);
+
+        public DocumentFile? DocumentOf(PluginAddress plugin, RecordIdentity identity) => inner.DocumentOf(plugin, identity);
+
+        public string? RelativePathOf(PluginAddress plugin, RecordIdentity identity) => inner.RelativePathOf(plugin, identity);
+
+        public string? FileNameOf(PluginAddress plugin, RecordIdentity identity) => inner.FileNameOf(plugin, identity);
+    }
+
+    private sealed class ReleasedDocuments(IPluginDocuments inner, Action released) : IPluginDocuments
+    {
+        public PluginDocument Header => inner.Header;
+
+        public IEnumerable<PluginDocument> Records => inner.Records;
+
+        public IReadOnlyList<RecordTypeFailure> Failures => inner.Failures;
+
+        public void Dispose()
+        {
+            inner.Dispose();
+            released();
         }
     }
 }

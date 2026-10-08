@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda.Plugins;
 
@@ -14,6 +15,7 @@ namespace MEditService.Index;
 internal sealed class Reconciler(
     LoadOrderHolder holder,
     IPluginAdapter adapter,
+    ISourceAdapter source,
     DuckDbRecordIndexFactory indexFactory,
     FilterInForce filter,
     ILogger logger,
@@ -312,7 +314,7 @@ internal sealed class Reconciler(
             fresh = indexFactory.Create(
                 snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins, out heldElsewhere);
             if (fresh is null) return null;
-            scope = new OpenScope(held, fresh, new Projector(fresh, held.Find, logger), new FailedReads(fresh));
+            scope = new OpenScope(held, fresh, new Projector(fresh, held.Find, source, logger), new FailedReads(fresh, source));
             fresh = null;
         }
         finally
@@ -451,7 +453,7 @@ internal sealed class Reconciler(
     // A plugin whose last read failed is the validation's to read again, once what it reads from changes.
     // A plugin with no rows has no truth to move from.
     private static bool TruthMoved(OpenScope scope, RegisteredPlugin plugin, IReadOnlyDictionary<PluginAddress, DerivedFrom> derivations) =>
-        derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom != Projector.TruthOf(plugin)
+        derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom != scope.Projector.TruthOf(plugin)
         && !scope.Failed.Holds(plugin.Key);
 
     // A plugin whose folder gained or lost its repository or its tree since it was indexed. Nothing here
@@ -467,7 +469,7 @@ internal sealed class Reconciler(
             {
                 logger.LogInformation(
                     "{Plugin} ({Origin}) now reads as {Truth}; re-deriving it", plugin.Name, plugin.Origin,
-                    Projector.TruthOf(plugin));
+                    scope.Projector.TruthOf(plugin));
             }
             ReadOne(scope, plugin, state => IndexOnePlugin(scope, metadata, state, token));
         }
@@ -534,7 +536,7 @@ internal sealed class Reconciler(
         // A binary was already hashed against its stored claim when the index file opened
         // (Store.ValidateAgainstDisk), so a second hash of every binary here would pay that whole cost
         // twice for no new answer.
-        var truth = Projector.TruthOf(plugin.Registered);
+        var truth = scope.Projector.TruthOf(plugin.Registered);
         if (truth != DerivedFrom.SourceTree) return scope.Index.DerivationOf(plugin.Key) == truth;
 
         try
@@ -607,7 +609,7 @@ internal sealed class Reconciler(
     // in for it, and answers what stopped it. Only the binary's own failure throws.
     private ReadOutcome IndexOnePluginRows(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
-        var truth = Projector.TruthOf(plugin.Registered);
+        var truth = scope.Projector.TruthOf(plugin.Registered);
         if (truth != DerivedFrom.SourceTree)
         {
             IndexFromBinary(scope, plugin, truth);
@@ -674,7 +676,7 @@ internal sealed class Reconciler(
     {
         var (held, index) = (scope.Held, scope.Index);
         var key = plugin.Key;
-        var holdsTree = Projector.TruthOf(plugin.Registered) == DerivedFrom.SourceTree;
+        var holdsTree = scope.Projector.TruthOf(plugin.Registered) == DerivedFrom.SourceTree;
         try
         {
             if (!holdsTree && !File.Exists(plugin.Path))
