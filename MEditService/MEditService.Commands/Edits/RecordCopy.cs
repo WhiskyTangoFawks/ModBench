@@ -10,10 +10,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The container half of both copy modes: a child lands inside its container's document,
-/// the container copied in as a Partial Form where the game lets it be one, else as an override with
-/// its own fields, when the destination lacks it. One write path with
-/// the write side (ADR-0007).</summary>
+/// <summary>The container half of both copy modes: a child lands inside its container's document, the
+/// container copied in when absent, as a Partial Form where the game allows (ADR-0007).</summary>
 internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger, RecordTextCodec codec)
 {
     /// <summary>The tracked plugin a copy lands in: its repository and its key. No folder — every
