@@ -96,12 +96,11 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
         var worldspace = Parsed(document.Body, move.Worldspace);
         Step<JsonObject> cell = worldspace[PlacedCell.WorldspacePersistentCellMember] is JsonObject held
             ? new Step<JsonObject>.Done(held)
-            : MastersOf(move)
-                .Then(masters => CopiedOrNew(
+            : CopiedOrNew(
                     move,
-                    masters.NearestCopy(move.Worldspace, copy => copy[PlacedCell.WorldspacePersistentCellMember] is JsonObject),
+                    MastersWalkOf(move).NearestCopy(move.Worldspace, copy => copy[PlacedCell.WorldspacePersistentCellMember] is JsonObject),
                     copy => Parsed(copy, move.Worldspace)[PlacedCell.WorldspacePersistentCellMember],
-                    PersistentFlag.Bit, (0, 0)))
+                    PersistentFlag.Bit, (0, 0))
                 .Then<JsonObject>(copied =>
                 {
                     worldspace[PlacedCell.WorldspacePersistentCellMember] = copied;
@@ -149,12 +148,8 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
     }
 
     // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile; ADR-0018).
-    private Step<LoadOrderResolution.MastersWalk> MastersOf(Move move) =>
-        resolution.WalkAmongMastersOf(
-            move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release), move.Spelled,
-            $"the cell {move.Moved.FormKey} moves into", out var masters) is { } unreadable
-            ? new Step<LoadOrderResolution.MastersWalk>.Refused(unreadable)
-            : new Step<LoadOrderResolution.MastersWalk>.Done(masters);
+    private LoadOrderResolution.MastersWalk MastersWalkOf(Move move) =>
+        resolution.WalkAmongMastersOf(move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release));
 
     // The own fields of the nearest master's copy, as an override, or else a new cell native to the plugin.
     private Step<JsonObject> CopiedOrNew(Move move, LeftCopy left, Func<string, JsonNode?> cellIn, long flags, (int X, int Y) grid)

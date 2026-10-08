@@ -245,7 +245,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
-    public void ClearingDeleted_WhenAnotherDocumentOfItsSourceTreeCannotBeRead_IsRefusedAsRecordParseFailed_NamingTheMaster_AndAnswersNoChanges()
+    public void ClearingDeleted_WhenAnotherDocumentOfItsSourceTreeCannotBeRead_IsRefusedAsRecordParseFailed_NamingTheTreeAndWhatItNeeds_AndAnswersNoChanges()
     {
         var other = new FormKey(ModKey.FromFileName("Override.esp"), 0x951);
         Load(
@@ -261,7 +261,9 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         var result = WriteFlags(TheNpc, 0);
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        Assert.Contains($"the copy of {TheNpc} read to its left comes only from a master of Override.esp", result.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            $"{TheNpc}'s own fields come from its nearest copy to the left that is not Deleted, and the source tree that names Override.esp's masters cannot be read",
+            result.Message, StringComparison.Ordinal);
         Assert.Equal(before, _plugins.Text(Edited, TheNpc));
     }
 
@@ -459,6 +461,19 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
                 cell.Grid = new CellGrid { Point = new P2Int(1, 2) };
             })), false),
             (Plugin("Override.esp", mod => mod.Cells.Records.Add(BlockOf(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" }))), true));
+
+        var result = WriteFlags(TheCell, PartialForm);
+
+        Assert.True(result.Applied, result.Message);
+    }
+
+    [Fact]
+    public void SettingPartialForm_OnACellThatSaysNotWhereItSits_PassesOverANearerMastersCopyThatSaysNeither()
+    {
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
+            (Plugin("Middle.esp", CellCopy(PartialForm, "Middle", also: cell => cell.Flags = 0)), false),
+            (Plugin("Override.esp", Mastering("Middle.esp", mod => mod.Cells.Records.Add(BlockOf(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" })))), true));
 
         var result = WriteFlags(TheCell, PartialForm);
 
