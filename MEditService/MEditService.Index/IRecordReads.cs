@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Index;
 
@@ -52,10 +53,10 @@ internal interface IRecordReads
     IReadOnlyList<ReferenceRow> GetReferencedByInActiveOrTrackedPlugins(string targetFormKey);
 
     /// <summary>Every link an active plugin's record carries to a FormKey no active plugin holds
-    /// (engine-defined FormIds exempt), with its referrer's file in the mod folder
-    /// <paramref name="modOf"/> names.</summary>
+    /// (engine-defined FormIds exempt), with its referrer's file in the source
+    /// <paramref name="sourceOf"/> answers.</summary>
     IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(
-        Func<PluginAddress, PluginProvider.FromMod?> modOf);
+        Func<PluginAddress, ISourceRepositoryReads?> sourceOf);
 
     /// <summary>Every plugin at least one filtered record matches, restricted to
     /// <paramref name="tableNames"/> (plugins.md). Empty when no filter is active: every plugin

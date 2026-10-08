@@ -3,6 +3,7 @@ using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ public static class RecordIndexServices
             var index = new Indexer(
                 sp.GetRequiredService<LoadOrderHolder>(),
                 sp.GetRequiredService<IPluginAdapter>(),
+                sp.GetRequiredService<ISourceAdapter>(),
                 sp.GetRequiredService<SchemaReflector>(),
                 sp.GetRequiredService<ILoggerFactory>(),
                 sp.GetService<INotificationPublisher>(),
@@ -35,7 +37,7 @@ public static class RecordIndexServices
             sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>()));
         services.AddSingleton<PluginExtensionsQueryService>();
         services.AddSingleton(sp => new PluginProblemQueryService(
-            sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>()));
+            sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<ISourceAdapter>()));
         services.AddSingleton(sp => new ContainerChildQueryService(
             sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>()));
         services.AddSingleton(sp => new ChildRecordQueryService(sp.GetRequiredService<IQueryIndex>()));

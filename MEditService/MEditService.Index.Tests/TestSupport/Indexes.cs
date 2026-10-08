@@ -1,6 +1,7 @@
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -21,12 +22,14 @@ internal static class Indexes
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ISourceAdapter? source = null)
     {
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         var services = new ServiceCollection();
         services.AddSingleton(holder);
         services.AddSingleton(adapter ?? TestAdapters.Mutagen());
+        services.AddSingleton(source ?? new GitSourceAdapter());
         services.AddSingleton(SharedSchemaReflector.Instance);
         services.AddSingleton(loggerFactory ?? NullLoggerFactory.Instance);
         services.AddSingleton(timeProvider ?? TimeProvider.System);
@@ -41,24 +44,27 @@ internal static class Indexes
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        TimeProvider? timeProvider = null) =>
-        new(Container(holder, adapter, loggerFactory, notifications, timeProvider), holder);
+        TimeProvider? timeProvider = null,
+        ISourceAdapter? source = null) =>
+        new(Container(holder, adapter, loggerFactory, notifications, timeProvider, source), holder);
 
     internal static OpenedIndex Reconciled(
         PluginFixtureData fixture,
         string? instanceRoot = null,
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
-        INotificationPublisher? notifications = null) =>
-        Reconciled(fixture.DataFolder, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications);
+        INotificationPublisher? notifications = null,
+        ISourceAdapter? source = null) =>
+        Reconciled(fixture.DataFolder, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications, source);
 
     internal static OpenedIndex Reconciled(
         ScatteredFixtureData fixture,
         string? instanceRoot = null,
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
-        INotificationPublisher? notifications = null) =>
-        Reconciled(fixture.GameDirectory, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications);
+        INotificationPublisher? notifications = null,
+        ISourceAdapter? source = null) =>
+        Reconciled(fixture.GameDirectory, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications, source);
 
     internal static OpenedIndex Reconciled(
         string gameDirectory,
@@ -66,10 +72,11 @@ internal static class Indexes
         string? instanceRoot = null,
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
-        INotificationPublisher? notifications = null)
+        INotificationPublisher? notifications = null,
+        ISourceAdapter? source = null)
     {
         var holder = new LoadOrderHolder();
-        var index = Open(holder, adapter, loggerFactory, notifications);
+        var index = Open(holder, adapter, loggerFactory, notifications, source: source);
         index.Reconcile(holder, gameDirectory, plugins, GameRelease.Fallout4, instanceRoot);
         // The door turns a refusal into status; a fixture built over one is not the fixture asked for.
         if (index.Status.State is LoadOrderState.HeldElsewhere or LoadOrderState.Failed)

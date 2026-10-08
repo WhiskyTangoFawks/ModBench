@@ -38,7 +38,7 @@ internal sealed class FormKeyAllocator
     }
 
     internal static FormKeyAllocator Over(SourceRepository repository, PluginAddress plugin, GameRelease release) =>
-        new(repository, plugin, release, repository.Get(plugin, PluginHeader.IdentityOf(plugin.Name)));
+        new(repository, plugin, release, repository.RecordOf(plugin, PluginHeader.IdentityOf(plugin.Name)));
 
     /// <summary>The first FormKey at or above the Next Object ID that no record uses. Non-null is the
     /// refusal, and <paramref name="formKey"/> is "" then.</summary>

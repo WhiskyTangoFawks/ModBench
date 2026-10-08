@@ -17,7 +17,7 @@ public static class SourceEdits
         SourceRepository repository, PluginAddress plugin, RecordIdentity identity, GameRelease release, Action<T> change)
         where T : class, IMajorRecord
     {
-        var located = repository.Get(plugin, identity).Require();
+        var located = repository.RecordOf(plugin, identity).Require();
         var record = (T)TreeOf(repository, plugin, release).EnumerateMajorRecords()
             .Single(candidate => candidate.FormKey.ToString() == located.FormKey);
         change(record);
