@@ -8,7 +8,7 @@ public static class CallerText
     /// <summary>The body a copy is read from when the caller's text yields none.</summary>
     public const string NoBody = "{}";
 
-    public static (string Body, string? EditorId, string? ParseDiagnosis) Read(string text)
+    internal static (string Body, string? EditorId, string? ParseDiagnosis) Read(string text)
     {
         try
         {

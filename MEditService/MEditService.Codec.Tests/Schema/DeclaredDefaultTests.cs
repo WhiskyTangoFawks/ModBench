@@ -43,9 +43,9 @@ public sealed class DeclaredDefaultTests
             ?? throw new InvalidOperationException("Expected 'Scripts' to have an array element type.");
         var property = Member(scriptsElement, "Properties").ElementType
             ?? throw new InvalidOperationException("Expected 'Properties' to have an array element type.");
-        var conditionsElementSpec = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec
-            ?? throw new InvalidOperationException("Expected 'Conditions' to have an array element spec.");
-        var data = Member(conditionsElementSpec.ToFieldMetadata(), "Data");
+        var conditionsElement = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").ToFieldMetadata().ElementType
+            ?? throw new InvalidOperationException("Expected 'Conditions' to have an array element type.");
+        var data = Member(conditionsElement, "Data");
 
         Assert.Equal("Edited", Member(property, "Flags").Default);
         Assert.Equal("Subject", Member(data, "RunOnType").Default);

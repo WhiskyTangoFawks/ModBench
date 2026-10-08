@@ -121,12 +121,12 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();
-        Assert.NotNull(reads.Resolve(_raceA));
+        Assert.NotNull(reads.LinkResolver(_raceA)(_raceA));
 
         index.Delete(_base, reads.DocumentOf(_raceA, _baseKey));
 
-        Assert.Null(reads.Resolve(_raceA));
-        Assert.NotNull(reads.Resolve(_raceB));
+        Assert.Null(reads.LinkResolver(_raceA)(_raceA));
+        Assert.NotNull(reads.LinkResolver(_raceB)(_raceB));
     }
 
     [Fact]

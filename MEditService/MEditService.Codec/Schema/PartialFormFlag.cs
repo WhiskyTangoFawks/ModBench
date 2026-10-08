@@ -22,7 +22,7 @@ public static class PartialFormFlag
 
     /// <summary>The same bit read off a stored document, whose header flags travel as
     /// <c>MajorRecordFlagsRaw</c> (omitted when zero).</summary>
-    public static bool IsSet(JsonElement document, Type recordType) =>
+    internal static bool IsSet(JsonElement document, Type recordType) =>
         IsPartialFormable(recordType)
         && document.TryGetProperty(RecordHeaderFlags.Member, out var flags)
         && flags.ValueKind == JsonValueKind.Number

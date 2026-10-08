@@ -143,7 +143,7 @@ public class RegistrationScopingTests
         Assert.DoesNotContain(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
         Assert.Empty(reads.GetRecordTypeCounts(BetaKey));
 
-        Assert.Null(reads.Resolve(fx.BetaNpcFk));
+        Assert.Null(reads.LinkResolver(fx.BetaNpcFk)(fx.BetaNpcFk));
         Assert.Empty(reads.GetReferencedBy(fx.BetaRaceFk));
         Assert.Empty(reads.GetWorldspaceCells(BetaKey, fx.BetaWorldspaceFk));
         Assert.Empty(reads.GetInteriorCells(BetaKey));
@@ -185,7 +185,7 @@ public class RegistrationScopingTests
         Assert.Equal(AlphaKey, shared.Plugin);
         Assert.DoesNotContain(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
         Assert.Empty(reads.GetRecordTypeCounts(BetaKey));
-        Assert.Null(reads.Resolve(fx.BetaNpcFk));
+        Assert.Null(reads.LinkResolver(fx.BetaNpcFk)(fx.BetaNpcFk));
         Assert.Empty(reads.GetReferencedBy(fx.BetaRaceFk));
         Assert.Empty(reads.GetInteriorCells(BetaKey));
         Assert.Null(reads.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
@@ -236,7 +236,7 @@ public class RegistrationScopingTests
         var sharedAfterReregister = reads.GetDocument(fx.SharedNpcFk);
         Assert.NotNull(sharedAfterReregister);
         Assert.Equal(BetaKey.Name, sharedAfterReregister.Plugin.Name);
-        Assert.NotNull(reads.Resolve(fx.BetaNpcFk));
+        Assert.NotNull(reads.LinkResolver(fx.BetaNpcFk)(fx.BetaNpcFk));
         Assert.NotNull(reads.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
         Assert.NotEmpty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
     }

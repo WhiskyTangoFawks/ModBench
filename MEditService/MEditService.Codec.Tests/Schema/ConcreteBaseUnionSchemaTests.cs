@@ -19,9 +19,6 @@ public sealed class ConcreteBaseUnionSchemaTests
     private static IReadOnlyList<SubFieldSpec> RequireSubFields(SubFieldSpec field) =>
         field.SubFields ?? throw new InvalidOperationException($"Expected '{field.Name}' to have sub-fields.");
 
-    private static SubFieldSpec RequireElementSpec(SubFieldSpec field) =>
-        field.ElementSpec ?? throw new InvalidOperationException($"Expected '{field.Name}' to have an element spec.");
-
     private static IReadOnlyList<FieldMetadata> RequireFields(FieldMetadata meta) =>
         meta.Fields ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have fields.");
 
@@ -39,9 +36,9 @@ public sealed class ConcreteBaseUnionSchemaTests
 
     private static FieldMetadata ScriptPropertyElement(ColumnSpec adapter)
     {
-        var scripts = RequireSubFields(adapter.Field).Single(f => f.Name == "Scripts");
-        var properties = RequireSubFields(RequireElementSpec(scripts)).Single(f => f.Name == "Properties");
-        return RequireElementSpec(properties).ToFieldMetadata();
+        var scripts = RequireFields(adapter.ToFieldMetadata()).Single(f => f.Name == "Scripts");
+        var properties = RequireFields(RequireElementType(scripts)).Single(f => f.Name == "Properties");
+        return RequireElementType(properties);
     }
 
     [Fact]

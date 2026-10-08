@@ -91,6 +91,6 @@ public class PluginParticipationTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        Assert.Null(index.RequireReads().Resolve(npcKey.ToString()));
+        Assert.Null(index.RequireReads().LinkResolver(npcKey.ToString())(npcKey.ToString()));
     }
 }

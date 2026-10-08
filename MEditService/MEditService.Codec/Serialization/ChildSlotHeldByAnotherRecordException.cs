@@ -4,20 +4,20 @@ namespace MEditService.Codec.Serialization;
 /// one that would take it.</summary>
 public sealed class ChildSlotHeldByAnotherRecordException : InvalidOperationException
 {
-    public ChildSlotHeldByAnotherRecordException(string parentType, string slotName, string heldFormKey, string incomingFormKey)
+    internal ChildSlotHeldByAnotherRecordException(string parentType, string slotName, string heldFormKey, string incomingFormKey)
         : base($"{parentType}.{slotName} already holds {heldFormKey}, so {incomingFormKey} cannot take its place.")
     {
     }
 
-    public ChildSlotHeldByAnotherRecordException() : base("A child slot is held by another record.")
+    internal ChildSlotHeldByAnotherRecordException() : base("A child slot is held by another record.")
     {
     }
 
-    public ChildSlotHeldByAnotherRecordException(string message) : base(message)
+    internal ChildSlotHeldByAnotherRecordException(string message) : base(message)
     {
     }
 
-    public ChildSlotHeldByAnotherRecordException(string message, Exception innerException) : base(message, innerException)
+    internal ChildSlotHeldByAnotherRecordException(string message, Exception innerException) : base(message, innerException)
     {
     }
 }

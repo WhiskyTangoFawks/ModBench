@@ -6,7 +6,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
 namespace MEditService.Codec.Tests.Serialization;
@@ -17,8 +16,9 @@ public sealed class RecordTextCodecEmbedTests
 
     private static RecordTextCodec Codec() => new(NullLogger<RecordTextCodec>.Instance);
 
-    private static string RequireEditorID(IMajorRecordGetter record) =>
-        record.EditorID ?? throw new InvalidOperationException($"Expected '{record.FormKey}' to have an EditorID.");
+    private static string[] EditorIds(JsonElement slot) =>
+        [.. slot.EnumerateArray().Select(e => e.GetProperty("EditorID").GetString()
+            ?? throw new InvalidOperationException("Expected a placed child to carry its EditorID."))];
 
     private static Cell MakePopulatedCell()
     {
@@ -55,16 +55,15 @@ public sealed class RecordTextCodecEmbedTests
     {
         var codec = Codec();
 
-        var roundTripped = ReadBack.Of<Cell>(codec, MakePopulatedCell(), GameRelease.Fallout4, "cell");
+        var roundTripped = ReadBack.Of(codec, MakePopulatedCell(), GameRelease.Fallout4, "cell");
 
-        Assert.Equal(["PersistentRef"], roundTripped.Persistent.Select(RequireEditorID).ToArray());
-        Assert.Equal(["TemporaryRef"], roundTripped.Temporary.Select(RequireEditorID).ToArray());
-        Assert.Equal(["CellNavmesh"], roundTripped.NavigationMeshes.Select(RequireEditorID).ToArray());
-        Assert.Equal("CellLandscape", roundTripped.Landscape?.EditorID);
+        Assert.Equal(["PersistentRef"], EditorIds(roundTripped.GetProperty("Persistent")));
+        Assert.Equal(["TemporaryRef"], EditorIds(roundTripped.GetProperty("Temporary")));
+        Assert.Equal(["CellNavmesh"], EditorIds(roundTripped.GetProperty("NavigationMeshes")));
+        Assert.Equal("CellLandscape", roundTripped.GetProperty("Landscape").GetProperty("EditorID").GetString());
 
-        Assert.Equal("EmbedCell", roundTripped.EditorID);
-        var grid = roundTripped.Grid ?? throw new InvalidOperationException("Expected the round-tripped cell to keep its grid.");
-        Assert.Equal(new P2Int(1, 2), grid.Point);
+        Assert.Equal("EmbedCell", roundTripped.GetProperty("EditorID").GetString());
+        Assert.Equal("1, 2", roundTripped.GetProperty("Grid").GetProperty("Point").GetString());
     }
 
     [Fact]

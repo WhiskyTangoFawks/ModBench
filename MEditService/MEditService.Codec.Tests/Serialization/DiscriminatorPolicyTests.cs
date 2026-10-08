@@ -35,10 +35,10 @@ public sealed class DiscriminatorPolicyTests
     [Fact]
     public void RoundTrip_ForAWeaponDocument_ReconstitutesFromRecordType_BecauseAConcreteElementTypeWritesNoDiscriminatorAndItsIdentityIsTheIndexsRecordType()
     {
-        var weapon = ReadBack.Of<Weapon>(Codec(), MakeWeapon(), GameRelease.Fallout4, "weap");
+        var weapon = ReadBack.Of(Codec(), MakeWeapon(), GameRelease.Fallout4, "weap");
 
-        Assert.Equal("PolicyWeapon", weapon.EditorID);
-        Assert.Equal(7u, weapon.BaseDamage);
+        Assert.Equal("PolicyWeapon", weapon.GetProperty("EditorID").GetString());
+        Assert.Equal(7u, weapon.GetProperty("BaseDamage").GetUInt32());
     }
 
     [Fact]

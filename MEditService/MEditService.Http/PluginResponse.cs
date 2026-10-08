@@ -2,7 +2,7 @@ using MEditService.Queries;
 
 namespace MEditService.Http;
 
-public record PluginResponse(
+internal sealed record PluginResponse(
     string Name,
     string Path,
     // The load index (ADR-0013), null when the plugin is not active; record-level

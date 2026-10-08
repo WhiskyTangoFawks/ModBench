@@ -6,7 +6,7 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
-public static class PluginEndpoints
+internal static class PluginEndpoints
 {
     private const string Tag = "Plugins";
 
@@ -347,48 +347,48 @@ public static class PluginEndpoints
 
 /// <summary>The origin and the file name are the plugin (ADR-0012); the folder is where
 /// the instance holds that origin's files.</summary>
-public record CreatePluginRequest(string Origin, string Name, string Folder);
+internal sealed record CreatePluginRequest(string Origin, string Name, string Folder);
 
 /// <summary>The plugins that list the plugin as a master, and those whose masters could not be read.</summary>
-public record PluginDependantsResponse(IReadOnlyList<PluginAddress> Dependants, IReadOnlyList<PluginAddress> Unreadable);
+internal sealed record PluginDependantsResponse(IReadOnlyList<PluginAddress> Dependants, IReadOnlyList<PluginAddress> Unreadable);
 
 /// <summary>The plugin the create gesture wrote. Not a plugin row: the Index has not seen
 /// it, and nothing registers it.</summary>
-public record PluginCreatedResponse(string Name, string Origin);
+internal sealed record PluginCreatedResponse(string Name, string Origin);
 
 /// <summary>The plugin by its origin and file name (ADR-0012), and the file name its source takes.</summary>
-public record RenameSourceRequest(string Origin, string Name, string NewName);
+internal sealed record RenameSourceRequest(string Origin, string Name, string NewName);
 
 /// <summary>The mods by name; the load order says each one's plugins and folder.</summary>
-public record TrackRequest(IReadOnlyList<string> Mods);
+internal sealed record TrackRequest(IReadOnlyList<string> Mods);
 
 /// <summary>A mod of the selection that tracked: the plugins whose source landed.</summary>
-public record TrackedModResponse(string Mod, IReadOnlyList<PluginAddress> Tracked);
+internal sealed record TrackedModResponse(string Mod, IReadOnlyList<PluginAddress> Tracked);
 
 /// <summary>A mod of the selection that wrote nothing: the typed refusal, and the message naming the
 /// way out.</summary>
-public record ModTrackRefusal(string Item, TrackRefusal Refusal, string Message);
+internal sealed record ModTrackRefusal(string Item, TrackRefusal Refusal, string Message);
 
 /// <summary>Applied or refusal, per mod (ADR-0019), never the status of the call.</summary>
-public record TrackResponse(IReadOnlyList<TrackedModResponse> Applied, IReadOnlyList<ModTrackRefusal> Refused);
+internal sealed record TrackResponse(IReadOnlyList<TrackedModResponse> Applied, IReadOnlyList<ModTrackRefusal> Refused);
 
-public record DecompileRequest(IReadOnlyList<PluginAddress> Plugins);
+internal sealed record DecompileRequest(IReadOnlyList<PluginAddress> Plugins);
 
 /// <summary>Applied or refusal, per plugin (ADR-0019), never the status of the call.</summary>
-public record DecompileResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginDecompileRefusal> Refused);
+internal sealed record DecompileResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginDecompileRefusal> Refused);
 
 /// <summary>A plugin of the selection that wrote nothing, with the typed refusal and the message naming
 /// the way out.</summary>
-public record PluginDecompileRefusal(PluginAddress Item, DecompileRefusal Refusal, string Message);
+internal sealed record PluginDecompileRefusal(PluginAddress Item, DecompileRefusal Refusal, string Message);
 
-public record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
+internal sealed record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 
 /// <summary>Applied or refusal, per plugin (ADR-0019), never the status of the call.</summary>
-public record CompileResponse(IReadOnlyList<CompiledPlugin> Applied, IReadOnlyList<PluginCompileRefusal> Refused);
+internal sealed record CompileResponse(IReadOnlyList<CompiledPlugin> Applied, IReadOnlyList<PluginCompileRefusal> Refused);
 
 /// <summary>A plugin of the selection whose binary was written, with its diagnostics (ADR-0007).</summary>
-public record CompiledPlugin(string Name, string Origin, IReadOnlyList<CompileDiagnostic> Diagnostics);
+internal sealed record CompiledPlugin(string Name, string Origin, IReadOnlyList<CompileDiagnostic> Diagnostics);
 
 /// <summary>A plugin of the selection that wrote nothing, with the typed refusal and the message naming
 /// the way out.</summary>
-public record PluginCompileRefusal(PluginAddress Item, CompileRefusal Refusal, string Message);
+internal sealed record PluginCompileRefusal(PluginAddress Item, CompileRefusal Refusal, string Message);

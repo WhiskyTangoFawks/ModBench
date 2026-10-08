@@ -14,5 +14,5 @@ public static class PersistentFlag
 
     public const string TemporaryGroup = "Temporary";
 
-    public static bool IsSet(JsonElement document) => RecordHeaderFlags.Carry(document, Bit);
+    internal static bool IsSet(JsonElement document) => RecordHeaderFlags.Carry(document, Bit);
 }

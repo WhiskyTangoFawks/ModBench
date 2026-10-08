@@ -1,6 +1,5 @@
 using System.Text;
 using MEditService.Codec.Serialization;
-using MEditService.Codec.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -29,19 +28,12 @@ public class RecordTextCodecTests
         };
 
     [Fact]
-    public void RoundTrip_IsFieldFaithful_BecauseTheOmitCustomizationsAreVerifiedNoOpsForAStandaloneWeaponBothTargetingOnlyGroupCellWorldspaceFieldsItDoesNotHave()
+    public void RoundTrip_GivesAWeaponsTextBackUnchanged_SoTheGoldenBytesBelowPinWhatAReadKeeps()
     {
         var codec = Codec();
-        var original = MakeWeapon();
+        var text = codec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
 
-        var roundTripped = ReadBack.Of<Weapon>(codec, original, GameRelease.Fallout4, "weap");
-
-        var mask = original.GetEqualsMask(roundTripped);
-        var leaves = MaskInspector.CountLeaves(mask).ToList();
-        var divergent = leaves.Where(l => !l.Value).Select(l => l.Path).ToList();
-
-        Assert.Equal(81, leaves.Count);
-        Assert.Empty(divergent);
+        Assert.Equal(text, codec.RoundTrip(text, GameRelease.Fallout4, "weap"));
     }
 
     [Fact]

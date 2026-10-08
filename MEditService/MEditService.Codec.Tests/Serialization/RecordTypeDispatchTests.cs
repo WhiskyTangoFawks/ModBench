@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.Codec.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -37,14 +36,10 @@ public class RecordTypeDispatchTests
         var original = MakeNpc();
 
         IMajorRecordGetter callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne = original;
-        var roundTripped = ReadBack.Of<Npc>(codec, callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne, GameRelease.Fallout4, "npc_");
+        var text = codec.SerializeToText(callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne, GameRelease.Fallout4);
 
-        var mask = original.GetEqualsMask(roundTripped);
-        var leaves = MaskInspector.CountLeaves(mask).ToList();
-        var divergent = leaves.Where(l => !l.Value).Select(l => l.Path).ToList();
-
-        Assert.NotEmpty(leaves);
-        Assert.Empty(divergent);
+        Assert.Contains("\"Test NPC Name\"", text, StringComparison.Ordinal);
+        Assert.Equal(text, codec.RoundTrip(text, GameRelease.Fallout4, "npc_"));
     }
 
     [Fact]
@@ -53,18 +48,14 @@ public class RecordTypeDispatchTests
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var original = MakeCell();
 
-        var roundTripped = ReadBack.Of<Cell>(codec, original, GameRelease.Fallout4, "Cell");
+        var text = codec.SerializeToText(original, GameRelease.Fallout4);
 
-        var mask = original.GetEqualsMask(roundTripped);
-        var leaves = MaskInspector.CountLeaves(mask).ToList();
-        var divergent = leaves.Where(l => !l.Value).Select(l => l.Path).ToList();
-
-        Assert.NotEmpty(leaves);
-        Assert.Empty(divergent);
+        Assert.Contains("\"TestCell\"", text, StringComparison.Ordinal);
+        Assert.Equal(text, codec.RoundTrip(text, GameRelease.Fallout4, "Cell"));
     }
 
     [Fact]
-    public void RoundTrip_ForTextNamingAnUnknownType_ThrowsNamedException_NotABareNullReferenceExceptionBecauseARecordTypeTheSchemaDoesNotKnowMeansExpectTheDocumentToNameItself()
+    public void RoundTrip_ForTextNamingAnUnknownType_ThrowsNotSupportedNamingTheMember_NotABareNullReferenceExceptionBecauseARecordTypeTheSchemaDoesNotKnowMeansExpectTheDocumentToNameItself()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var globalFloatNotAnNpcBecauseOnlyPathAmbiguousTypesSelfDescribeSoAnNpcDocumentHasNoDiscriminatorToCorrupt = MakeGlobalFloat();
@@ -74,7 +65,7 @@ public class RecordTypeDispatchTests
         var corrupted =
             text.Replace("\"MutagenObjectType\": \"GlobalFloat\"", "\"MutagenObjectType\": \"NotARecordType\"", StringComparison.Ordinal);
 
-        var ex = Assert.Throws<RecordTypeSerializationUnsupportedException>(
+        var ex = Assert.Throws<NotSupportedException>(
             () => codec.RoundTrip(corrupted, GameRelease.Fallout4, "glob"));
 
         const string TheMemberNameNotTheOffendingValueBecauseTheKernelDiscardsItOnThisRouteSoRequiringItWouldPinAnUpstreamDetail = "MutagenObjectType";

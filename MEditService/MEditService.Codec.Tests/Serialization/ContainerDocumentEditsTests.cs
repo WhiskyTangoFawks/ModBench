@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
@@ -17,13 +18,22 @@ public sealed class ContainerDocumentEditsTests
 
     private static string Text(IMajorRecordGetter record) => Codec.SerializeToText(record, GameRelease.Fallout4);
 
-    private static IMajorRecord Read(string text, string recordType) =>
-        (IMajorRecord)RecordTextCodec.DeserializeText(RecordTypeDispatch.For(GameRelease.Fallout4).ConcreteFor(recordType).Require(), text, GameRelease.Fallout4);
+    private static JsonElement Read(string text)
+    {
+        using var document = JsonDocument.Parse(text);
+        return document.RootElement.Clone();
+    }
+
+    private static string EditorIdOf(JsonElement record) =>
+        record.GetProperty("EditorID").GetString() ?? throw new InvalidOperationException("Expected a record to carry its EditorID.");
+
+    private static string[] EditorIdsIn(JsonElement owner, string slot) =>
+        owner.TryGetProperty(slot, out var held) ? [.. held.EnumerateArray().Select(EditorIdOf)] : [];
 
     private static string? Appended(Worldspace worldspace, Cell cell) =>
         ContainerDocumentEdits.WithChildAppended(
-            Codec, Text(worldspace), GameRelease.Fallout4, RecordTableName.Of(worldspace, Schemas),
-            worldspace.FormKey.ToString(), "TopCell", Text(cell), RecordTableName.Of(cell, Schemas));
+            Codec, Text(worldspace), GameRelease.Fallout4, RecordTableName.Of(worldspace.GetType(), Schemas),
+            worldspace.FormKey.ToString(), "TopCell", Text(cell), RecordTableName.Of(cell.GetType(), Schemas));
 
     [Fact]
     public void AppendingToAWorldspacesPersistentCell_WhenItHoldsNone_SetsIt()
@@ -63,14 +73,13 @@ public sealed class ContainerDocumentEditsTests
         var source = new DialogTopic(destination.FormKey, Fallout4Release.Fallout4) { EditorID = "SourceTopic" };
         source.Responses.Add(overwriting);
         source.Responses.Add(added);
-        var type = RecordTableName.Of(source, Schemas);
+        var type = RecordTableName.Of(source.GetType(), Schemas);
 
-        var merged = (DialogTopic)Read(
-            ContainerDocumentEdits.WithChildRecordsMerged(Codec, Text(destination), type, Text(source), type, GameRelease.Fallout4),
-            type);
+        var merged = Read(
+            ContainerDocumentEdits.WithChildRecordsMerged(Codec, Text(destination), type, Text(source), type, GameRelease.Fallout4));
 
-        Assert.Equal("DestinationTopic", merged.EditorID);
-        Assert.Equal(["SourceHeld", "DestinationOnly", "SourceAdded"], merged.Responses.Select(response => response.EditorID));
+        Assert.Equal("DestinationTopic", EditorIdOf(merged));
+        Assert.Equal(["SourceHeld", "DestinationOnly", "SourceAdded"], EditorIdsIn(merged, "Responses"));
     }
 
     [Fact]
@@ -89,15 +98,14 @@ public sealed class ContainerDocumentEditsTests
         sourceTopic.Responses.Add(addedResponse);
         var source = new Quest(destination.FormKey, Fallout4Release.Fallout4) { EditorID = "SourceQuest" };
         source.DialogTopics.Add(sourceTopic);
-        var type = RecordTableName.Of(source, Schemas);
+        var type = RecordTableName.Of(source.GetType(), Schemas);
 
-        var merged = (Quest)Read(
-            ContainerDocumentEdits.WithChildRecordsMerged(Codec, Text(destination), type, Text(source), type, GameRelease.Fallout4),
-            type);
+        var merged = Read(
+            ContainerDocumentEdits.WithChildRecordsMerged(Codec, Text(destination), type, Text(source), type, GameRelease.Fallout4));
 
-        var topic = Assert.Single(merged.DialogTopics);
-        Assert.Equal("SourceTopic", topic.EditorID);
-        Assert.Equal(["SourceOverwrite", "SourceResponse"], topic.Responses.Select(response => response.EditorID));
+        var topic = Assert.Single(merged.GetProperty("DialogTopics").EnumerateArray());
+        Assert.Equal("SourceTopic", EditorIdOf(topic));
+        Assert.Equal(["SourceOverwrite", "SourceResponse"], EditorIdsIn(topic, "Responses"));
     }
 
     [Fact]
@@ -108,14 +116,13 @@ public sealed class ContainerDocumentEditsTests
         destination.Responses.Add(new DialogResponses(mod) { EditorID = "DestinationOnly" });
         var source = new DialogTopic(destination.FormKey, Fallout4Release.Fallout4) { EditorID = "SourceTopic" };
         source.Responses.Add(new DialogResponses(mod) { EditorID = "SourceAdded" });
-        var type = RecordTableName.Of(source, Schemas);
+        var type = RecordTableName.Of(source.GetType(), Schemas);
 
         var overwritten = ContainerDocumentEdits.WithRecordOverwritten(
             Codec, Text(destination), type, Text(source), type, GameRelease.Fallout4);
 
         Assert.Equal("SourceTopic", overwritten.EditorId);
-        var topic = (DialogTopic)Read(overwritten.Text, type);
-        Assert.Equal(["DestinationOnly", "SourceAdded"], topic.Responses.Select(response => response.EditorID));
+        Assert.Equal(["DestinationOnly", "SourceAdded"], EditorIdsIn(Read(overwritten.Text), "Responses"));
     }
 
     [Fact]
@@ -126,7 +133,7 @@ public sealed class ContainerDocumentEditsTests
         var destination = new Worldspace(mod) { EditorID = "World", TopCell = held };
         var incoming = new Cell(mod) { EditorID = "Incoming" };
         var source = new Worldspace(mod) { EditorID = "World", TopCell = incoming };
-        var type = RecordTableName.Of(source, Schemas);
+        var type = RecordTableName.Of(source.GetType(), Schemas);
 
         var refusal = Assert.Throws<ChildSlotHeldByAnotherRecordException>(() => ContainerDocumentEdits.WithChildRecordsMerged(
             Codec, Text(destination), type, Text(source), type, GameRelease.Fallout4));
@@ -144,14 +151,13 @@ public sealed class ContainerDocumentEditsTests
         destination.Persistent.Add(held);
         var source = new Cell(destination.FormKey, Fallout4Release.Fallout4) { EditorID = "Cell" };
         source.Temporary.Add(new PlacedObject(held.FormKey, Fallout4Release.Fallout4) { EditorID = "SourceRef" });
-        var type = RecordTableName.Of(source, Schemas);
+        var type = RecordTableName.Of(source.GetType(), Schemas);
 
-        var merged = (Cell)Read(
-            ContainerDocumentEdits.WithChildRecordsMerged(Codec, Text(destination), type, Text(source), type, GameRelease.Fallout4),
-            type);
+        var merged = Read(
+            ContainerDocumentEdits.WithChildRecordsMerged(Codec, Text(destination), type, Text(source), type, GameRelease.Fallout4));
 
-        Assert.Empty(merged.Persistent);
-        Assert.Equal(["SourceRef"], merged.Temporary.Select(placed => placed.EditorID));
+        Assert.Empty(EditorIdsIn(merged, "Persistent"));
+        Assert.Equal(["SourceRef"], EditorIdsIn(merged, "Temporary"));
     }
 
     [Fact]
@@ -163,14 +169,13 @@ public sealed class ContainerDocumentEditsTests
         var destination = new Worldspace(mod) { EditorID = "World", TopCell = heldCell };
         var incomingCell = new Cell(heldCell.FormKey, Fallout4Release.Fallout4) { EditorID = "SourceCell" };
         var source = new Worldspace(mod) { EditorID = "World", TopCell = incomingCell };
-        var type = RecordTableName.Of(source, Schemas);
+        var type = RecordTableName.Of(source.GetType(), Schemas);
 
-        var merged = (Worldspace)Read(
-            ContainerDocumentEdits.WithChildRecordsMerged(Codec, Text(destination), type, Text(source), type, GameRelease.Fallout4),
-            type);
+        var topCell = Read(
+            ContainerDocumentEdits.WithChildRecordsMerged(Codec, Text(destination), type, Text(source), type, GameRelease.Fallout4))
+            .GetProperty("TopCell");
 
-        var topCell = merged.TopCell.Require();
-        Assert.Equal("SourceCell", topCell.EditorID);
-        Assert.Equal(["DestinationRef"], topCell.Temporary.Select(placed => placed.EditorID));
+        Assert.Equal("SourceCell", EditorIdOf(topCell));
+        Assert.Equal(["DestinationRef"], EditorIdsIn(topCell, "Temporary"));
     }
 }

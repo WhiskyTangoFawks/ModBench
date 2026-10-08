@@ -18,7 +18,7 @@ public enum FormKeyResolutionState
 
 public sealed record FormKeyResolution(FormKeyResolutionState State, string? RecordType, string? EditorId)
 {
-    public static readonly FormKeyResolution Unresolved = new(FormKeyResolutionState.Unresolved, null, null);
+    internal static readonly FormKeyResolution Unresolved = new(FormKeyResolutionState.Unresolved, null, null);
 
     // A lookup miss is not always a broken link: form_lookup never carries an engine-hardcoded
     // FormID (Player 00000007), because no plugin defines one. xEdit gates the same way, on

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -66,7 +67,7 @@ public sealed class RealInstallSmokeTests
             });
             Assert.Equal(HttpStatusCode.OK, load.StatusCode);
 
-            var plugins = await client.GetFromJsonAsync<List<PluginResponse>>("/plugins");
+            var plugins = await client.GetFromJsonAsync<List<JsonElement>>("/plugins");
             Assert.NotNull(plugins);
             Assert.NotEmpty(plugins);
             tested++;

@@ -17,19 +17,19 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         inner.OpenDocuments(modPath, gameRelease, schemas, strings);
 
     public virtual IPluginRecordLookup OpenRecordLookup(
-        ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        inner.OpenRecordLookup(modPath, gameRelease, schemas);
+        RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        inner.OpenRecordLookup(plugin, gameRelease, schemas);
 
     public virtual (PluginContent Content, Exception? Unreachable) ReadContent(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
         inner.ReadContent(modPath, gameRelease, strings);
 
-    public virtual bool CanRead(ModPath modPath) => inner.CanRead(modPath);
+    public virtual bool CanRead(RegisteredPlugin plugin) => inner.CanRead(plugin);
 
     public virtual LinkAnswers LinkTargets(
-        IReadOnlyList<ModPath> loadOrder, GameRelease gameRelease,
+        LoadOrderSnapshot loadOrder, RegisteredPlugin compiled,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, IReadOnlyCollection<string> formKeys) =>
-        inner.LinkTargets(loadOrder, gameRelease, schemas, formKeys);
+        inner.LinkTargets(loadOrder, compiled, schemas, formKeys);
 
     public virtual Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files, RecordTextCodec codec, GameRelease gameRelease, CancellationToken cancel = default) =>
@@ -40,12 +40,13 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         CancellationToken cancel = default) =>
         inner.WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
 
-    public virtual Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceAsync(
-        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
-        inner.ReadSourceAsync(modPath, registeredName, gameRelease, strings, cancel);
+    public virtual Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceOfAsync(
+        RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
+        inner.ReadSourceOfAsync(plugin, gameRelease, strings, cancel);
 
-    public virtual string? DivergenceBetween(ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
-        inner.DivergenceBetween(modPath, recompiledPath, gameRelease, strings);
+    public virtual string? DivergenceFrom(
+        string pluginFileName, string pluginFilePath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
+        inner.DivergenceFrom(pluginFileName, pluginFilePath, recompiledPath, gameRelease, strings);
 
     public virtual Task<PluginByteComparison> CompareBytesAsync(string originalPath, string recompiledPath, CancellationToken cancel = default) =>
         inner.CompareBytesAsync(originalPath, recompiledPath, cancel);

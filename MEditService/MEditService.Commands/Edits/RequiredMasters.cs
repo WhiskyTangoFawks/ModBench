@@ -35,7 +35,7 @@ internal sealed class RequiredMasters(PluginAddress plugin)
         Require(document.FormKey);
 
         using var parsed = JsonDocument.Parse(document.Text);
-        foreach (var target in FormReferences.Collect(parsed.RootElement, schema).Select(reference => reference.TargetFormKey))
+        foreach (var target in FormReferences.Collect(parsed.RootElement, schema.RecordColumns).Select(reference => reference.TargetFormKey))
         {
             _links.Add(target);
             Require(target);

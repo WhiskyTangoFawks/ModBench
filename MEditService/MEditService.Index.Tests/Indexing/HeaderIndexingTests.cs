@@ -158,7 +158,7 @@ public class HeaderIndexingTests
         var masters = Reflector.GetSchemas(GameRelease.Fallout4)[PluginHeader.RecordType]
             .RecordColumns.Single(c => c.Name == "MasterReferences");
 
-        Assert.False(string.IsNullOrWhiteSpace(masters.ReadOnlyReason));
+        Assert.False(string.IsNullOrWhiteSpace(masters.Field.ReadOnlyReason));
     }
 
     [Fact]
@@ -199,9 +199,10 @@ public class HeaderIndexingTests
 
         var documents = reads.DocumentsOf(key);
         Assert.True(documents.Count > 1, $"expected the header and at least one record; got {documents.Count}");
-        Assert.All(documents, d => Assert.NotNull(reads.Resolve(d.FormKey)));
+        Assert.All(documents, d => Assert.NotNull(reads.LinkResolver(d.FormKey)(d.FormKey)));
 
-        var resolved = reads.Resolve(PluginHeader.FormKeyFor(ModKey.FromFileName("LookupHeader.esp")));
+        var headerKey = PluginHeader.FormKeyFor(ModKey.FromFileName("LookupHeader.esp"));
+        var resolved = reads.LinkResolver(headerKey)(headerKey);
         Assert.NotNull(resolved);
         Assert.Equal("header", resolved.Value.RecordType);
         Assert.Null(resolved.Value.EditorId);

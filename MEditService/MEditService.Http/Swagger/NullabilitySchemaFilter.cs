@@ -8,7 +8,7 @@ namespace MEditService.Http.Swagger;
 // Swashbuckle ignores nullable-reference annotations, so every DTO property would be optional and
 // nullable. Non-nullable properties become `required`; a nullable $ref is wrapped in allOf, since
 // OpenAPI 3.0 forbids `nullable` beside a bare $ref.
-public sealed class NullabilitySchemaFilter : ISchemaFilter
+internal sealed class NullabilitySchemaFilter : ISchemaFilter
 {
     private static readonly NullabilityInfoContext NullabilityContext = new();
 

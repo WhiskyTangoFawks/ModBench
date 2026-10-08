@@ -4,6 +4,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
@@ -36,11 +37,11 @@ public sealed class RecordRemovedMidEditTests : IDisposable
         internal IReadOnlyList<string> TreeAsRemoved { get; private set; } = [];
 
         public override IPluginRecordLookup OpenRecordLookup(
-            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+            RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas)
         {
             File.Delete(document);
             TreeAsRemoved = TreeSnapshot.Of(modFolder);
-            return base.OpenRecordLookup(modPath, gameRelease, schemas);
+            return base.OpenRecordLookup(plugin, gameRelease, schemas);
         }
     }
 

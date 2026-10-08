@@ -45,14 +45,14 @@ public sealed class CreatePluginHandlerTests : IDisposable
     {
         var folder = ModFolder("QuietMod");
         var before = _holder.Current;
-        var version = _holder.Version;
+        var version = _holder.Held?.Version;
         var changes = 0;
         _holder.Arrived += (_, _) => changes++;
 
         await Create("NewPlugin.esp", folder, "QuietMod");
 
         Assert.Same(before, _holder.Current);
-        Assert.Equal(version, _holder.Version);
+        Assert.Equal(version, _holder.Held?.Version);
         Assert.Equal(0, changes);
         Assert.False(SourceRepository.IsTracked(folder));
         Assert.Equal(["NewPlugin.esp"], Directory.EnumerateFileSystemEntries(folder).Select(Path.GetFileName));
@@ -182,8 +182,8 @@ public sealed class CreatePluginHandlerTests : IDisposable
         public Action? Before { get; init; }
         public Exception? TakeBackFailure { get; init; }
 
-        public override Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceAsync(
-            ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default)
+        public override Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceOfAsync(
+            RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default)
         {
             Before?.Invoke();
             throw new IOException("unreadable");

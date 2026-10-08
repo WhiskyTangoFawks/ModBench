@@ -10,10 +10,6 @@ public sealed class LoadOrderHolder
 
     public LoadOrderSnapshot Current => Volatile.Read(ref _held).Snapshot;
 
-    /// <summary>The version of the last Apply, for a caller waiting until nothing is still
-    /// reconciling — a status poll needs this to know which arrival is the latest.</summary>
-    public long Version => Volatile.Read(ref _held).Version;
-
     /// <summary>The snapshot held and the version it arrived as, read together; null before any
     /// snapshot has arrived.</summary>
     public (LoadOrderSnapshot Snapshot, long Version)? Held =>

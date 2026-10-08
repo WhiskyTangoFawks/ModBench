@@ -25,7 +25,7 @@ public sealed class ContainmentReadOnlySchemaTests
         Assert.Contains(slots, s => s.Schema.TableName == "wrld" && s.Column.Name == "SubCells");
 
         var writable = slots
-            .Where(s => s.Column.ReadOnlyReason?.Contains("not by editing the slot", StringComparison.Ordinal) != true)
+            .Where(s => s.Column.Field.ReadOnlyReason?.Contains("not by editing the slot", StringComparison.Ordinal) != true)
             .Select(s => $"{s.Schema.TableName}.{s.Column.Name}");
         Assert.Empty(writable);
     }
@@ -35,7 +35,7 @@ public sealed class ContainmentReadOnlySchemaTests
     {
         Assert.Contains(
             "it decides the block and sub-block directories that hold the cell's source",
-            Column("cell", "Grid").ReadOnlyReason, StringComparison.Ordinal);
+            Column("cell", "Grid").Field.ReadOnlyReason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -43,11 +43,11 @@ public sealed class ContainmentReadOnlySchemaTests
     {
         Assert.Contains("refr", PlacedRecordTables.Names);
         var writable = PlacedRecordTables.Fallout4
-            .Where(schema => schema.RecordColumns.Single(c => c.Name == "Position").ReadOnlyReason?
+            .Where(schema => schema.RecordColumns.Single(c => c.Name == "Position").Field.ReadOnlyReason?
                 .Contains("which cell holds", StringComparison.Ordinal) != true)
             .Select(schema => schema.TableName);
         Assert.Empty(writable);
 
-        Assert.Null(Column("trns", "Position").ReadOnlyReason);
+        Assert.Null(Column("trns", "Position").Field.ReadOnlyReason);
     }
 }

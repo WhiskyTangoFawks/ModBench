@@ -53,7 +53,7 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
         if (!_disposed && _client is not null)
         {
             var holder = Services.GetRequiredService<LoadOrderHolder>();
-            await _client.AwaitTerminalLoadOrderStatus(holder.Version, TimeSpan.FromSeconds(10));
+            await _client.AwaitTerminalLoadOrderStatus(holder.Held?.Version ?? 0, TimeSpan.FromSeconds(10));
         }
         Dispose();
     }

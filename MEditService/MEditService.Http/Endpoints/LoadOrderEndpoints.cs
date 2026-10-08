@@ -3,7 +3,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Http.Endpoints;
 
-public static class LoadOrderEndpoints
+internal static class LoadOrderEndpoints
 {
     private const string Tag = "LoadOrder";
 

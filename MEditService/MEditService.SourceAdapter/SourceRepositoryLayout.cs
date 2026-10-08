@@ -522,15 +522,15 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 /// refusal, every other read in Core propagates it unhandled.</summary>
 public sealed class AmbiguousSourceUnitException : InvalidOperationException
 {
-    public AmbiguousSourceUnitException() : base("More than one source unit claims one FormKey.")
+    internal AmbiguousSourceUnitException() : base("More than one source unit claims one FormKey.")
     {
     }
 
-    public AmbiguousSourceUnitException(string message) : base(message)
+    internal AmbiguousSourceUnitException(string message) : base(message)
     {
     }
 
-    public AmbiguousSourceUnitException(string message, Exception innerException) : base(message, innerException)
+    internal AmbiguousSourceUnitException(string message, Exception innerException) : base(message, innerException)
     {
     }
 

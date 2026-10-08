@@ -95,7 +95,7 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
     [MemberData(nameof(Variants))]
     public void AVariant_ResolvesUnderItsOwnSignature(string table)
     {
-        Assert.Equal(new RecordLookupEntry(table, Of(table).EditorId), built.Reads.Resolve(Of(table).FormKey.ToString()));
+        Assert.Equal(new RecordLookupEntry(table, Of(table).EditorId), built.Reads.LinkResolver(Of(table).FormKey.ToString())(Of(table).FormKey.ToString()));
     }
 
     [Theory]

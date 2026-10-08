@@ -21,7 +21,7 @@ public sealed class RecordTableNameTests
         using var read = Fallout4Mod.CreateFromBinaryOverlay(new ModPath(mod.ModKey, path), Fallout4Release.Fallout4);
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-        Assert.All(read.GameSettings, setting => Assert.Equal("gmst", RecordTableName.Of(setting, schemas)));
+        Assert.All(read.GameSettings, setting => Assert.Equal("gmst", RecordTableName.Of(setting.GetType(), schemas)));
     }
 
     [Fact]

@@ -209,7 +209,7 @@ internal sealed class RelationReads(
         return types;
     }
 
-    public RecordLookupEntry? Resolve(string formKey)
+    private RecordLookupEntry? Resolve(string formKey)
     {
         using var connection = store.OpenReadConnection();
         return LinkResolution.Resolve(connection, formKey);

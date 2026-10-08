@@ -11,9 +11,8 @@ public sealed class ConditionSchemaTests
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     private static FieldMetadata ConditionElement(string table = "cobj") =>
-        (Schemas[table].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec
-            ?? throw new InvalidOperationException($"Expected '{table}.Conditions' to have an element spec."))
-            .ToFieldMetadata();
+        Schemas[table].RecordColumns.Single(c => c.Name == "Conditions").ToFieldMetadata().ElementType
+            ?? throw new InvalidOperationException($"Expected '{table}.Conditions' to have an element type.");
 
     private static FieldMetadata Member(FieldMetadata owner, string name) =>
         (owner.Fields ?? throw new InvalidOperationException($"Expected fields to look up member '{name}'."))

@@ -64,7 +64,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
                 var key = new PluginAddress(name, origin);
                 var masters = written.ModHeader.MasterReferences.Select(m => m.Master.FileName.String).ToList();
                 var records = written.EnumerateMajorRecords()
-                    .Select(r => (Record: r, RecordType: RecordTableName.Of(r, schemas)))
+                    .Select(r => (Record: r, RecordType: RecordTableName.Of(r.GetType(), schemas)))
                     .Where(t => t.RecordType.Length > 0)
                     .ToList();
 

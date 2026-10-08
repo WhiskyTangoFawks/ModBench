@@ -16,7 +16,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
     [Fact]
     public async Task Compile_BeforeAnyLoadOrderHasArrived_ThrowsNoLoadOrder() =>
         await Assert.ThrowsAsync<NoLoadOrderException>(
-            () => CompileServices.Over(LoadOrderSnapshot.Empty).CompileAsync([_mod.Plugin]));
+            () => CompileServices.Over(new LoadOrderSnapshot(string.Empty, null, default, [], [], [])).CompileAsync([_mod.Plugin]));
 
     [Fact]
     public async Task Compile_WithTwoDocumentsClaimingTheSameFormKey_RefusesNamingTheFormKey()

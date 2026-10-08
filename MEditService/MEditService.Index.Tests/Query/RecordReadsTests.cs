@@ -383,7 +383,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void AKnownFormKey_ResolvesToItsRecordTypeAndEditorId()
     {
         using var index = LoadedIndex();
-        var entry = index.RequireReads().Resolve(_fixture.Npc1FormKey.ToString());
+        var entry = index.RequireReads().LinkResolver(_fixture.Npc1FormKey.ToString())(_fixture.Npc1FormKey.ToString());
         Assert.NotNull(entry);
         Assert.Equal("npc_", entry.Value.RecordType);
         Assert.Equal("TestNPC01", entry.Value.EditorId);
@@ -393,7 +393,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void AnUnknownFormKey_ResolvesToNothing()
     {
         using var index = LoadedIndex();
-        var entry = index.RequireReads().Resolve("FFFFFF:Unknown.esp");
+        var entry = index.RequireReads().LinkResolver("FFFFFF:Unknown.esp")("FFFFFF:Unknown.esp");
         Assert.Null(entry);
     }
 
