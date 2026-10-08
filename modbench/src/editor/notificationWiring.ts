@@ -22,7 +22,7 @@ export function subscribeRecordTabsToNotifications(
   return () => { unsubscribeRows(); unsubscribeReconnect(); };
 }
 
-/** A completed reconcile or a landed Track: every record tab reads its comparison again. */
+/** A reconcile settled: every record tab reads its comparison again. */
 export function announceConflictsComputed(tabs: Iterable<RecordTab>): void {
   for (const tab of tabs) tab.refresh();
 }
