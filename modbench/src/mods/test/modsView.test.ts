@@ -23,6 +23,8 @@ const h = vi.hoisted(() => ({
   selectionListeners: [] as ((e: { selection: readonly unknown[] }) => void)[],
   revealRefusal: { value: undefined as Error | undefined },
   decorationProviders: [] as vscode.FileDecorationProvider[],
+  expandListeners: [] as ((e: { element: unknown }) => void)[],
+  collapseListeners: [] as ((e: { element: unknown }) => void)[],
 }));
 
 vi.mock('vscode', () => ({
@@ -50,6 +52,14 @@ vi.mock('vscode', () => ({
           return { dispose: () => undefined };
         },
         onDidChangeCheckboxState: () => ({ dispose: () => undefined }),
+        onDidExpandElement: (listener: (e: { element: unknown }) => void) => {
+          h.expandListeners.push(listener);
+          return { dispose: () => undefined };
+        },
+        onDidCollapseElement: (listener: (e: { element: unknown }) => void) => {
+          h.collapseListeners.push(listener);
+          return { dispose: () => undefined };
+        },
         reveal: (element: { label: unknown }, revealOptions: unknown) => {
           if (h.revealRefusal.value) return Promise.reject(h.revealRefusal.value);
           h.reveals.push({ label: element.label, options: revealOptions });
@@ -125,6 +135,8 @@ beforeEach(() => {
   h.state.contextKeys.clear();
   h.revealRefusal.value = undefined;
   h.decorationProviders.length = 0;
+  h.expandListeners.length = 0;
+  h.collapseListeners.length = 0;
 });
 
 describe('the Mods filter follows a row change with no keystroke', () => {
@@ -387,5 +399,22 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
     await waitForMessage(view, (m) => m === 'No matches for "overwrite".', 'the no-match message');
 
     expect(revealed()).toEqual([]);
+  });
+});
+
+describe('the Mods view tells the indicator decorations when a separator opens or closes', () => {
+  it('asks VS Code to decorate again on the separator\'s expand and on its collapse', async () => {
+    createModsView({
+      ...otherDeps(), instance: new FakeInstance(listing([mod('A'), separator('Section')])), log: () => undefined, ...noSync(),
+    });
+    const fired = vi.fn();
+    for (const provider of h.decorationProviders.slice(1)) provider.onDidChangeFileDecorations?.(fired);
+    const row = present((await shownRows()).find((node) => node instanceof SeparatorNode), 'the separator row');
+
+    h.expandListeners.forEach((listener) => { listener({ element: row }); });
+    const afterExpand = fired.mock.calls.length;
+    h.collapseListeners.forEach((listener) => { listener({ element: row }); });
+
+    expect([afterExpand, fired.mock.calls.length]).toEqual([4, 8]);
   });
 });
