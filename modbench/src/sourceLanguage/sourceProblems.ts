@@ -48,20 +48,24 @@ function tellingOnce(say: (message: string, why: string) => void): (standing: To
 }
 
 type OnFiles = Map<string, ProblemOnFile[]>;
+/** A plugin's problems by file: the links it holds to missing records, and the files whose read stopped. */
+interface Contribution { links: OnFiles; stops: OnFiles }
 interface Unplaced extends Told { plugin: string }
-interface Placed { ofPlugin: Map<string, OnFiles>; unplaced: Unplaced[]; unread: Told[] }
+interface Placed { ofPlugin: Map<string, Contribution | undefined>; unplaced: Unplaced[]; unread: Told[] }
+
+const nameOf = ({ name, origin }: { name: string; origin: string }) => `"${name}" (${origin})`;
+const isLink = (problem: SourceProblem) => problem.fieldPath != null;
 
 async function placed(answer: PluginProblems[], { originFiles, readText }: SourceProblemsDeps): Promise<Placed> {
   const unplaced: Unplaced[] = [];
   const unread: Told[] = [];
-  const cannotShow = (name: string) => `The Problems panel cannot show "${name}"'s problems.`;
   const ofPlugin = new Map(await Promise.all(answer.map(async ({ plugin, problems, failure }) => {
     const files = originFiles(plugin.origin);
     const key = pluginAddressKey(plugin);
     const why = files === undefined ? `The instance holds no folder for ${plugin.origin}.` : failure;
-    if (why != null) unplaced.push({ key, message: cannotShow(plugin.name), why, plugin: plugin.name });
-    const onFiles: OnFiles = new Map();
-    if (files === undefined) return [key, onFiles] as const;
+    if (why != null) unplaced.push({ key, message: `The Problems panel keeps the last problems of ${nameOf(plugin)}.`, why, plugin: nameOf(plugin) });
+    if (files === undefined) return [key, undefined] as const;
+    const contribution: Contribution = { links: new Map(), stops: new Map() };
     const byPath = new Map<string, SourceProblem[]>();
     for (const problem of problems) {
       const path = files.file(problem.sourceRelativePath);
@@ -72,28 +76,35 @@ async function placed(answer: PluginProblems[], { originFiles, readText }: Sourc
         unread.push({ key: path, message: `The Problems panel shows the problems of "${path}" on its first line.`, why: errorMessage(error) });
         return '';
       });
-      onFiles.set(path, onPath.map((problem) => onText(text, problem)));
+      contribution.links.set(path, onPath.filter(isLink).map((problem) => onText(text, problem)));
+      contribution.stops.set(path, onPath.filter((problem) => !isLink(problem)).map((problem) => onText(text, problem)));
     }));
-    return [key, onFiles] as const;
+    return [key, contribution] as const;
   })));
   return { ofPlugin, unplaced, unread };
 }
 
+function onEveryFile(contributions: Contribution[]): ProblemsByFile {
+  const byFile: OnFiles = new Map();
+  for (const { links, stops } of contributions) for (const onFiles of [stops, links]) {
+    for (const [path, onFile] of onFiles) if (onFile.length > 0) byFile.set(path, [...byFile.get(path) ?? [], ...onFile]);
+  }
+  return byFile;
+}
+
 /** Publishes what mEdit answers is wrong in each tracked active plugin's source. A plugin mEdit
- *  cannot answer for keeps its last problems, and the language status says why. */
+ *  cannot answer for keeps the links it last had and takes the stops it now answers, and the
+ *  language status says why. */
 export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const { client, reporter, publish, languageStatus } = deps;
-  const tellUnplaced = tellingOnce((message, why) => { reporter.shownOnSurface('warning', message, why); });
-  const tellUnread = tellingOnce((message, why) => { reporter.shownOnSurface('warning', message, why); });
+  const tellingOnSurface = () => tellingOnce((message, why) => { reporter.shownOnSurface('warning', message, why); });
+  const tellUnplaced = tellingOnSurface();
+  const tellUnread = tellingOnSurface();
   const lastRead = (why: string) => `Showing the last good read: ${why}`;
-  let held = new Map<string, OnFiles>();
-  let unanswered: string | undefined;
-  const keepLastAnswer = (error: unknown) => {
-    const why = errorMessage(error);
-    if (why !== unanswered) reporter.shownOnSurface('warning', 'The Problems panel shows mEdit\'s last answer.', why);
-    unanswered = why;
-    languageStatus(lastRead(why));
-  };
+  let held = new Map<string, Contribution>();
+  let unplacedStatus: string | undefined;
+  let failed: { ask: number; why: string } | undefined;
+  const showStatus = () => { languageStatus(failed ? lastRead(failed.why) : unplacedStatus); };
   // Unknown until a load-order-status says, or mEdit answers the ask made at subscribe.
   let ready: boolean | undefined;
   let latest = 0;
@@ -105,15 +116,24 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
       if (atSubscribe) ready ??= true;
       if (mine < shown) return;
       shown = mine;
-      unanswered = undefined;
-      const kept = new Set(unplaced.map(({ key }) => key));
-      held = new Map([...ofPlugin].map(([key, onFiles]) => [key, kept.has(key) ? new Map([...held.get(key) ?? [], ...onFiles]) : onFiles]));
-      publish(new Map([...held.values()].flatMap((onFiles) => [...onFiles])));
-      languageStatus(unplaced.length > 0 ? lastRead(unplaced.map(({ plugin, why }) => `"${plugin}": ${why}`).join('; ')) : undefined);
+      if (failed && failed.ask < mine) failed = undefined;
+      const unplacedKeys = new Set(unplaced.map(({ key }) => key));
+      held = new Map([...ofPlugin].flatMap(([key, fresh]) => {
+        const before = held.get(key);
+        const now = unplacedKeys.has(key) && fresh ? { links: before?.links ?? new Map(), stops: fresh.stops } : fresh ?? before;
+        return now ? [[key, now] as const] : [];
+      }));
+      publish(onEveryFile([...held.values()]));
+      unplacedStatus = unplaced.length > 0 ? lastRead(unplaced.map(({ plugin, why }) => `${plugin}: ${why}`).join('; ')) : undefined;
+      showStatus();
       tellUnplaced(unplaced);
       tellUnread(unread);
     } catch (error) {
-      if (mine === latest && !atSubscribe) keepLastAnswer(error);
+      if (mine !== latest || atSubscribe) return;
+      const why = errorMessage(error);
+      if (why !== failed?.why) reporter.shownOnSurface('warning', 'The Problems panel shows mEdit\'s last answer.', why);
+      failed = { ask: mine, why };
+      showStatus();
     }
   };
   const reask = () => { void ask(); };

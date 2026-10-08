@@ -204,8 +204,8 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     await answered(failed('Refers.esp is tracked but no mod folder provides it.'));
 
     expect(reporter.shownOnSurface.mock.calls).toEqual([
-      ['warning', 'The Problems panel cannot show "Refers.esp"\'s problems.', 'Refers.esp\'s source holds no file for 000800:Refers.esp.'],
-      ['warning', 'The Problems panel cannot show "Refers.esp"\'s problems.', 'Refers.esp is tracked but no mod folder provides it.'],
+      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'Refers.esp\'s source holds no file for 000800:Refers.esp.'],
+      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'Refers.esp is tracked but no mod folder provides it.'],
     ]);
   });
 
@@ -217,7 +217,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
 
     expect([...shown.keys()]).toEqual(['/mods/ReferringMod/Refers.esp/Stray.json']);
     expect(reporter.shownOnSurface.mock.calls).toEqual([
-      ['warning', 'The Problems panel cannot show "Refers.esp"\'s problems.', 'Refers.esp\'s source could not place 000800:Refers.esp.'],
+      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'Refers.esp\'s source could not place 000800:Refers.esp.'],
     ]);
   });
 
@@ -227,7 +227,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
     expect(reporter.shownOnSurface.mock.calls).toEqual([
-      ['warning', 'The Problems panel cannot show "Refers.esp"\'s problems.', 'The instance holds no folder for ReferringMod.'],
+      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'The instance holds no folder for ReferringMod.'],
     ]);
   });
 
@@ -313,7 +313,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     ]);
 
     expect([...shown.keys()].sort()).toEqual(['/mods/OtherMod/Other.esp/Npc.json', '/mods/ReferringMod/Refers.esp/Npc.json']);
-    expect(status.at(-1)).toBe(`Showing the last good read: "Refers.esp": ${why}`);
+    expect(status.at(-1)).toBe(`Showing the last good read: "Refers.esp" (ReferringMod): ${why}`);
   });
 
   it('drops the kept problems of a plugin once mEdit places it again', async () => {
@@ -333,6 +333,49 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
 
     await answered([{ plugin: PLUGIN, problems: [], failure: 'one' }, { plugin: other, problems: [], failure: 'two' }]);
 
-    expect(status.at(-1)).toBe('Showing the last good read: "Refers.esp": one; "Other.esp": two');
+    expect(status.at(-1)).toBe('Showing the last good read: "Refers.esp" (ReferringMod): one; "Other.esp" (OtherMod): two');
+  });
+
+  describe('for a plugin mEdit cannot place', () => {
+    const FILE = '/mods/ReferringMod/Refers.esp/Npc.json';
+    const stop = (message: string) => problem({ formKey: null, targetFormKey: null, fieldPath: null, message });
+    const unplaced = (...problems: PluginProblems['problems']): PluginProblems[] => [{ plugin: PLUGIN, problems, failure: 'unplaced' }];
+    const messagesOn = (shown: ProblemsByFile) => shown.get(FILE)?.map(({ message }) => message);
+
+    it('keeps the links of a file that now stops a read, beside the stop', async () => {
+      const { answered } = feed({ [FILE]: `"${MISSING}"` });
+      await answered([{ plugin: PLUGIN, problems: [problem({ message: 'link' })] }]);
+
+      const shown = await answered(unplaced(stop('stopped')));
+
+      expect(messagesOn(shown)).toEqual(['stopped', 'link']);
+    });
+
+    it('drops a stop that was fixed', async () => {
+      const { answered } = feed({ [FILE]: `"${MISSING}"` });
+      await answered(unplaced(stop('stopped')));
+
+      const shown = await answered(unplaced());
+
+      expect([...shown]).toEqual([]);
+    });
+  });
+
+  it('keeps the status of a failed ask when an older, slower answer arrives after it', async () => {
+    const { client, answered, status } = feed({});
+    let older!: (answer: PluginProblems[]) => void;
+    client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { older = resolve; }));
+    client.setQueryFailureOnce('getPluginProblems', new Error('timed out'));
+    client.emit(ready);
+    client.emit(ready);
+    await vi.waitFor(() => { expect(status.at(-1)).toBe('Showing the last good read: timed out'); });
+
+    older([]);
+    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3); });
+    await new Promise((settled) => { setTimeout(settled, 10); });
+
+    expect(status.at(-1)).toBe('Showing the last good read: timed out');
+    await answered([]);
+    expect(status.at(-1)).toBeUndefined();
   });
 });

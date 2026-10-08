@@ -152,7 +152,7 @@ export const SETTINGS_WATCH_GLOB = SETTINGS_FILE_NAME;
 /** Downloads' own base is the resolved folder itself, so this glob is everything under it. */
 export const DOWNLOADS_WATCH_GLOB = '**';
 
-// A glob matches case, and a plugin's extension is any case, so each letter is a class.
+// A glob matches case, and a plugin's extension and its source folder are any case, so each letter is a class.
 const anyCase = (text: string): string => text.replace(/./g, (c) => `[${c.toLowerCase()}${c.toUpperCase()}]`);
 
 /** Every file inside a folder that is plugin source, as `isPluginSourcePath` takes it. */

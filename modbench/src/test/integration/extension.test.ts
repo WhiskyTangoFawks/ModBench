@@ -442,10 +442,15 @@ describe('Modbench output channel', () => {
 
 describe('the Problems language status selector', () => {
   const matches = async (...segments: string[]): Promise<number> => {
-    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'status-selector-')), ...segments);
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, '{}');
-    return vscode.languages.match({ language: 'json', pattern: PLUGIN_SOURCE_GLOB }, await vscode.workspace.openTextDocument(file));
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'status-selector-'));
+    try {
+      const file = path.join(folder, ...segments);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, '{}');
+      return vscode.languages.match({ language: 'json', pattern: PLUGIN_SOURCE_GLOB }, await vscode.workspace.openTextDocument(file));
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
   };
 
   it('matches a JSON document under plugin source, whatever the folder\'s case', async () => {
