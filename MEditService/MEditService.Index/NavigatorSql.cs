@@ -8,8 +8,6 @@ internal static class NavigatorSql
     /// response in its topic, a placed reference in its cell, an exterior cell in its worldspace.</summary>
     internal static readonly string Held = HeldIn("");
 
-    /// <summary>Held over the tables in <paramref name="schema"/> (a dotted prefix), the mirror's
-    /// for a read that reaches a plugin that is not active.</summary>
     internal static string HeldIn(string schema) => $"""
         SELECT plugin, origin, parent_form_key AS parent, child_form_key AS child,
                CAST(NULL AS VARCHAR) AS placement_group FROM {schema}container_child
@@ -29,11 +27,11 @@ internal static class NavigatorSql
 
     /// <summary>Two CTEs for a <c>WITH RECURSIVE</c>: <c>held</c>, the holdings <paramref name="where"/>
     /// keeps, and <c>above_failure</c>, every record holding an unreadable one at any depth.</summary>
-    internal static string AboveAFailure(string records, string where, string held) => $"""
-        held AS (SELECT plugin, origin, parent, child FROM ({held}) h {where}),
+    internal static string AboveAFailure(RecordScope scope, string where) => $"""
+        held AS (SELECT plugin, origin, parent, child FROM ({scope.Held}) h {where}),
         above_failure(plugin, origin, form_key) AS (
             SELECT held.plugin, held.origin, held.parent FROM held
-            JOIN {records} f ON f.form_key = held.child AND f.plugin = held.plugin AND f.origin = held.origin
+            JOIN {scope.Records} f ON f.form_key = held.child AND f.plugin = held.plugin AND f.origin = held.origin
             WHERE f.parse_diagnosis IS NOT NULL
             UNION
             SELECT held.plugin, held.origin, held.parent FROM held

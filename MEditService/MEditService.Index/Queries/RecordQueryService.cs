@@ -258,8 +258,7 @@ internal sealed class RecordQueryService(
     // copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
     public RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey)
     {
-        if (RequireReads().GetDocument(formKey, plugin) is not { Body: { } body } copy) return null;
-        var identity = new RecordIdentity(formKey, copy.RecordType, copy.EditorId);
+        if (RequireReads().GetCopyText(formKey, plugin) is not var (identity, body)) return null;
         var snapshot = _loadOrder.Require();
         var tree = snapshot.Plugin(plugin) is { Provider: PluginProvider.FromMod mod } registered && SourceRepository.IsTracked(registered)
             ? SourceRepository.Over(mod, snapshot.GameRelease)
@@ -270,7 +269,7 @@ internal sealed class RecordQueryService(
     // A tracked plugin's truth is its tree (ADR-0006), so a copy whose file is gone has no answer.
     public RecordFile? GetRecordFile(PluginAddress plugin, string formKey)
     {
-        if (RequireReads().GetIdentity(formKey, plugin) is not { } identity) return null;
+        if (RequireReads().GetCopyText(formKey, plugin) is not var (identity, _)) return null;
         var snapshot = _loadOrder.Require();
         if (snapshot.Plugin(plugin) is not { Provider: PluginProvider.FromMod mod } registered || !SourceRepository.SourceReads(registered))
             return new RecordFile(null);

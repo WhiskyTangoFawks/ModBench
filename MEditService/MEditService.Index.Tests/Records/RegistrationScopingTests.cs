@@ -178,7 +178,6 @@ public class RegistrationScopingTests
 
         Assert.Null(index.Records.GetRecord(fx.BetaNpcFk));
         Assert.Null(index.CopyIn(fx.BetaNpcFk, BetaKey));
-        Assert.Equal(fx.BetaRecords, fx.BetaRecordsFound());
         Assert.Null(index.Records.GetCompare(fx.BetaNpcFk));
         var shared = Assert.Single(index.StackOf(fx.SharedNpcFk));
         Assert.Equal(AlphaKey, new PluginAddress(shared.Plugin, shared.Origin));

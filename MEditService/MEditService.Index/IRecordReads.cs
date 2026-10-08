@@ -3,8 +3,9 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Index;
 
-/// <summary>Every read the index answers. A record read sees only the active plugins (ADR-0012),
-/// except a search scoped to one plugin, GetIdentity and DocumentFromText, which reach it whatever its state.</summary>
+/// <summary>Every read the index answers. A record read sees only the active plugins (ADR-0012)
+/// unless it names one plugin and returns that plugin's own copy, which it reaches whatever the plugin's
+/// state; a plugin's own facts answer while the snapshot names it.</summary>
 internal interface IRecordReads
 {
     /// <summary>What the Index read out of each plugin it has open, keyed by identity. A plugin it has
@@ -25,9 +26,9 @@ internal interface IRecordReads
     /// a copy with a <c>ParseDiagnosis</c>.</summary>
     RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text);
 
-    /// <summary>What <paramref name="plugin"/> holds <paramref name="formKey"/> as, active or not. Null
-    /// if that plugin never indexed it.</summary>
-    RecordIdentity? GetIdentity(string formKey, PluginAddress plugin);
+    /// <summary>What <paramref name="plugin"/> holds <paramref name="formKey"/> as, and its document as
+    /// the index stores it, active or not. Null if that plugin never indexed it.</summary>
+    (RecordIdentity Identity, string Body)? GetCopyText(string formKey, PluginAddress plugin);
 
     /// <summary>Every plugin's copy of <paramref name="formKey"/>, in load order. Null if the
     /// FormKey isn't indexed anywhere.</summary>
