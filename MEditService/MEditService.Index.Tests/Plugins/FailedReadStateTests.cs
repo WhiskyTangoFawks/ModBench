@@ -457,6 +457,8 @@ public sealed class FailedReadStateTests : IDisposable
 
         public ISourceRepositoryReads Over(PluginProvider.FromMod provider, GameRelease release) =>
             new HookedRepository(_inner.Over(provider, release), at);
+
+        public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => _inner.RecordOfFile(loadOrder, path);
     }
 
     private sealed class HookedRepository(ISourceRepositoryReads inner, Action<TreeMoment> at) : ISourceRepositoryReads
@@ -488,9 +490,15 @@ public sealed class FailedReadStateTests : IDisposable
             PluginAddress plugin, RecordIdentity identity, string body, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
             inner.RefuseUnreadable(plugin, identity, body, schemas);
 
+        public SourceDocument? RecordFromText(
+            PluginAddress plugin, string formKey, string text, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+            inner.RecordFromText(plugin, formKey, text, schemas);
+
         public DocumentFile? DocumentOf(PluginAddress plugin, RecordIdentity identity) => inner.DocumentOf(plugin, identity);
 
         public string? RelativePathOf(PluginAddress plugin, RecordIdentity identity) => inner.RelativePathOf(plugin, identity);
+
+        public string? FileNameOf(PluginAddress plugin, RecordIdentity identity) => inner.FileNameOf(plugin, identity);
     }
 
     private sealed class ReleasedDocuments(IPluginDocuments inner, Action released) : IPluginDocuments

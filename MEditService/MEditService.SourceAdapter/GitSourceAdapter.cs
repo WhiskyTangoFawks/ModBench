@@ -10,4 +10,6 @@ public sealed class GitSourceAdapter : ISourceAdapter
     public bool IsTracked(RegisteredPlugin plugin) => SourceRepository.IsTracked(plugin);
 
     public ISourceRepositoryReads Over(PluginProvider.FromMod provider, GameRelease release) => SourceRepository.Over(provider, release);
+
+    public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => SourceRepository.RecordOfFile(loadOrder, path);
 }

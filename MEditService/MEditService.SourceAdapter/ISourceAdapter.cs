@@ -15,4 +15,6 @@ public interface ISourceAdapter
     /// <summary>The reads over <paramref name="provider"/>'s folder. One serves a batch, so what it learns of
     /// the tree is learned once.</summary>
     ISourceRepositoryReads Over(PluginProvider.FromMod provider, GameRelease release);
+
+    RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path);
 }

@@ -20,7 +20,12 @@ public interface ISourceRepositoryReads
     void RefuseUnreadable(
         PluginAddress plugin, RecordIdentity identity, string body, IReadOnlyDictionary<string, RecordTableSchema> schemas);
 
+    SourceDocument? RecordFromText(
+        PluginAddress plugin, string formKey, string text, IReadOnlyDictionary<string, RecordTableSchema> schemas);
+
     DocumentFile? DocumentOf(PluginAddress plugin, RecordIdentity identity);
 
     string? RelativePathOf(PluginAddress plugin, RecordIdentity identity);
+
+    string? FileNameOf(PluginAddress plugin, RecordIdentity identity);
 }
