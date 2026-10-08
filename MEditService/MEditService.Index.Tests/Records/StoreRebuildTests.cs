@@ -244,7 +244,7 @@ public sealed class StoreRebuildTests : IDisposable
         ex is ObjectDisposedException or InvalidOperationException or NoLoadOrderException;
 
     [Fact]
-    public async Task ARebuildWithReadsInFlight_Completes_WhereDisposingTheStoreUnderAReadWouldCrashNatively()
+    public async Task ARebuildWithReadsInFlight_Completes_AndReadsThePluginAgain()
     {
         Reconcile(_fixture.InstanceRoot);
         using var rebuilding = new CancellationTokenSource();

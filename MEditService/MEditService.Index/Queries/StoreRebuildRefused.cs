@@ -5,6 +5,7 @@ public enum StoreRebuildRefusal
 {
     InstanceRootNotFound,
     HeldByAnotherWindow,
+    StillServingReads,
 }
 
 public sealed record StoreRebuildRefused(StoreRebuildRefusal Refusal, string Message);

@@ -334,9 +334,7 @@ internal sealed class RecordQueryService(
     {
         if (SourceRepository.InstanceRootNotFound(instanceRoot) is { } notFound)
             return new(StoreRebuildRefusal.InstanceRootNotFound, notFound);
-        return _index.RebuildStore(gameRelease, instanceRoot) is { } heldElsewhere
-            ? new(StoreRebuildRefusal.HeldByAnotherWindow, heldElsewhere)
-            : null;
+        return _index.RebuildStore(gameRelease, instanceRoot);
     }
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>

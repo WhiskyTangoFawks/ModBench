@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using Mutagen.Bethesda;
@@ -43,5 +44,5 @@ internal interface IQueryIndex
 
     void ClearFilter();
 
-    string? RebuildStore(GameRelease gameRelease, string instanceRoot);
+    StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot);
 }
