@@ -197,6 +197,14 @@ As a user, I want:
 4. One confirmation when a plugin in the instance lists it as a master, naming each one and saying it keeps the old name and will show Master issues. Nothing asked otherwise. This is an exception to Confirm what destroys: the rename breaks those plugins' master.
 5. The plugin source renamed first, as working-tree changes I can review. Then the file, the files named for it and its lines, in one write. A rename that failed on that write to say so, naming the plugin. Git shows the source rename, and reverting it is the recovery. The file reads as a plugin whose plugin source is unreadable until then. This is an exception to A failed gesture writes nothing.
 
+### Move
+
+As a user, I want:
+
+1. From the palette, the selected plugins to move as one block to a place I pick: directly above a plugin row outside the selection, in the order the view shows them, or "Bottom of the view". The block lands as a drop there lands. Source: catalog `move`, target Option; Drag and drop, story 2
+2. A pick the masters rule refuses for a drop refused the same way. Source: Drag and drop, story 3
+3. Esc to move nothing. Source: Esc changes nothing
+
 ### Create record
 
 As a user, I want:
