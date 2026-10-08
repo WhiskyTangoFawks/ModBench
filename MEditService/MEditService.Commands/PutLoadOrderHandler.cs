@@ -4,7 +4,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands;
 
-/// <summary>Validates the folders and the game release, applies the snapshot to Load order state as Mod Management
+/// <summary>Validates the game release, applies the snapshot to Load order state as Mod Management
 /// sent it (ADR-0013) and checks it for external changes (ADR-0003). The
 /// Index reconciles on its own subscription.</summary>
 public sealed class PutLoadOrderHandler
@@ -22,11 +22,6 @@ public sealed class PutLoadOrderHandler
         string dataFolder, string? instanceRoot, GameRelease gameRelease,
         IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine)
     {
-        if (!Directory.Exists(dataFolder))
-            return PutLoadOrderResult.Refused(PutLoadOrderRefusal.GameDirectoryNotFound, $"Game directory not found: {dataFolder}");
-        if (!Directory.Exists(instanceRoot))
-            return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InstanceRootNotFound, $"Instance root not found: {instanceRoot}");
-
         // Discovered here, synchronously, never inside a reconcile the caller cannot see — the
         // schema this warms is what the reconcile that follows Apply needs anyway.
         try

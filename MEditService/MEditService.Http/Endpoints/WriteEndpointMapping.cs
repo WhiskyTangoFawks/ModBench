@@ -102,8 +102,8 @@ internal static class WriteEndpointMapping
         },
         extensions: new Dictionary<string, object?> { ["refusal"] = refusal.ToString() });
 
-    /// <summary>Put load order's own refusal: a bad request, since each one this handler answers is found
-    /// in the request itself, never by touching the Index.</summary>
+    /// <summary>Put load order's own refusal: a bad request, since the only one this handler
+    /// answers is discovered by validating the release, never by touching the Index.</summary>
     internal static IResult Refusal(PutLoadOrderResult result) => Results.Problem(
         detail: result.Message,
         statusCode: 400,

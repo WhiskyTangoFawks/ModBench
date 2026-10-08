@@ -35,6 +35,12 @@ internal static class LoadOrderEndpoints
         {
             logger.LogInformation("Received PutLoadOrder for {InstanceRoot} ({Count} plugins)", req.InstanceRoot, req.Plugins?.Count ?? 0);
         }
+        if (!Directory.Exists(req.GameDirectory))
+            return Results.Problem($"Game directory not found: {req.GameDirectory}", statusCode: 400);
+        // No instance root, nowhere to keep the rows (ADR-0010).
+        if (!Directory.Exists(req.InstanceRoot))
+            return Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400);
+
         if (WriteEndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
         if (RegisteredPluginsOf(req.Plugins) is not { } registered)

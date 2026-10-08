@@ -5,12 +5,6 @@ public enum PutLoadOrderRefusal
 {
     None,
 
-    /// <summary>The game folder the snapshot names is not on disk.</summary>
-    GameDirectoryNotFound,
-
-    /// <summary>No instance root, nowhere to keep the rows (ADR-0010).</summary>
-    InstanceRootNotFound,
-
     /// <summary>A release this build has no Mutagen assembly for.</summary>
     UnsupportedGameRelease,
 

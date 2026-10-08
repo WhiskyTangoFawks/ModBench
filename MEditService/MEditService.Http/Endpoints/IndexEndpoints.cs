@@ -130,15 +130,14 @@ internal static class IndexEndpoints
         {
             logger.LogInformation("Received PostRebuildIndex for {InstanceRoot}", req.InstanceRoot);
         }
+        if (!Directory.Exists(req.InstanceRoot))
+            return Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400);
         if (WriteEndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
         // Answered once the store is empty again; the refill reports through the index status.
-        // A held index is 423 Locked (ADR-0010).
-        if (svc.RebuildStore(gameRelease, req.InstanceRoot) is not { } refusal) return Results.NoContent();
-        return Results.Problem(refusal.Message, statusCode: refusal.Refusal switch
-        {
-            StoreRebuildRefusal.InstanceRootNotFound => 400,
-            _ => 423,
-        });
+        // A refusal is 423 Locked (ADR-0010).
+        return svc.RebuildStore(gameRelease, req.InstanceRoot) is { } refusal
+            ? Results.Problem(refusal, statusCode: 423)
+            : Results.NoContent();
     }
 }

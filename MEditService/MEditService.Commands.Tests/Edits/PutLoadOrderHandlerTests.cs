@@ -7,8 +7,9 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class PutLoadOrderHandlerTests : IDisposable
 {
+    private const string InstanceRoot = "C:\\Instance";
+
     private readonly ScratchDirectory _dataFolder = new("medit-put-load-order-");
-    private readonly ScratchDirectory _instanceRoot = new("medit-put-load-order-instance-");
     private readonly LoadOrderHolder _holder = new();
 
     private PutLoadOrderHandler Handler => TestEditService.PutLoadOrderHandler(_holder);
@@ -16,13 +17,9 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     private static RegisteredPlugin Plugin(string name) => new(name, "ModA", $"C:\\Instance\\mods\\ModA\\{name}", new PluginProvider.FromMod("ModA", "C:\\Instance\\mods\\ModA"));
 
     private PutLoadOrderResult Put(GameRelease release, RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
-        Handler.Put(_dataFolder, _instanceRoot, release, plugins, [.. active.Select(p => p.Key)], []);
+        Handler.Put(_dataFolder, InstanceRoot, release, plugins, [.. active.Select(p => p.Key)], []);
 
-    public void Dispose()
-    {
-        _dataFolder.Dispose();
-        _instanceRoot.Dispose();
-    }
+    public void Dispose() => _dataFolder.Dispose();
 
     [Fact]
     public void Put_WithASupportedRelease_AppliesTheSnapshotToLoadOrderState()
@@ -34,7 +31,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
 
         Assert.True(result.Applied);
         Assert.Equal(_dataFolder.Path, _holder.Current.DataFolderPath);
-        Assert.Equal(_instanceRoot.Path, _holder.Current.InstanceRoot);
+        Assert.Equal(InstanceRoot, _holder.Current.InstanceRoot);
         Assert.Equal(GameRelease.Fallout4, _holder.Current.GameRelease);
         Assert.Equal([a, b], _holder.Current.Plugins);
         Assert.Equal([b], _holder.Current.Active);
@@ -61,31 +58,6 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(PutLoadOrderRefusal.UnsupportedGameRelease, result.Refusal);
         Assert.Contains("SkyrimSE", result.Message, StringComparison.Ordinal);
-        Assert.Null(_holder.Held);
-    }
-
-    [Fact]
-    public void Put_AGameDirectoryThatIsNotThere_RefusesWithoutApplying()
-    {
-        var gone = Path.Combine(_dataFolder, "no-such-data");
-
-        var result = Handler.Put(gone, _instanceRoot, GameRelease.Fallout4, [Plugin("A.esp")], [], []);
-
-        Assert.Equal(PutLoadOrderRefusal.GameDirectoryNotFound, result.Refusal);
-        Assert.Contains(gone, result.Message, StringComparison.Ordinal);
-        Assert.Null(_holder.Held);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Put_AnInstanceRootThatIsNotThere_RefusesWithoutApplying(bool named)
-    {
-        var gone = Path.Combine(_instanceRoot, "no-such-instance");
-
-        var result = Handler.Put(_dataFolder, named ? gone : null, GameRelease.Fallout4, [Plugin("A.esp")], [], []);
-
-        Assert.Equal(PutLoadOrderRefusal.InstanceRootNotFound, result.Refusal);
         Assert.Null(_holder.Held);
     }
 }

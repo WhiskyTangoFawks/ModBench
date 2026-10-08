@@ -1,4 +1,3 @@
-using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
@@ -233,8 +232,7 @@ public sealed class StoreRebuildTests : IDisposable
 
         var refusal = _index.Records.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
 
-        Assert.Equal(StoreRebuildRefusal.HeldByAnotherWindow, refusal?.Refusal);
-        Assert.Contains(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex, refusal?.Message);
+        Assert.Contains(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex, refusal);
 
         Assert.True(File.Exists(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex), "the file must still exist — a refusal must never delete it");
         Assert.Equal(bytesBeforeHold, File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex));
