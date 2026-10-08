@@ -738,6 +738,14 @@ class HttpMEditClient implements MEditClient {
   }
 }
 
+let latest: Pick<MEditClient, 'stop'> = { stop: () => Promise.resolve() };
+
 export function createMEditClient(deps: HttpMEditClientDeps): MEditClient {
-  return new HttpMEditClient(deps);
+  const client = new HttpMEditClient(deps);
+  latest = client;
+  return client;
 }
+
+/** Stops the client `createMEditClient` last made, for `deactivate()`, which receives nothing
+ *  `activate()` built. */
+export const stopMEditClient = (): Promise<void> => latest.stop();
