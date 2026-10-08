@@ -1,11 +1,10 @@
-using System.Text;
 using MEditService.Codec.Serialization;
-using MEditService.Index;
-using MEditService.LoadOrder;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
-using MEditService.SourceAdapter;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -15,73 +14,80 @@ namespace MEditService.Index.Tests.Query;
 
 public sealed class CompareFromContainerTextTests : IDisposable
 {
-    private static readonly GameRelease Release = GameRelease.Fallout4;
+    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
     private static readonly PluginAddress Plugin = new("Tree.esp", "TreeMod");
 
-    private readonly ScratchDirectory _modFolder = new("medit-compare-container-text-");
-    private readonly Fallout4Mod _mod = new(ModKey.FromFileName(Plugin.Name), Fallout4Release.Fallout4);
+    private readonly ScatteredFixtureData _fixture;
+    private readonly OpenedIndex _index;
     private readonly Cell _room;
     private readonly PlacedObject _placed;
     private readonly Worldspace _world;
     private readonly PlacedObject _topCellRef;
-    private readonly IRecordQueryService _service;
     private readonly List<LogEntry> _log = [];
     private readonly ILoggerFactory _loggerFactory;
 
     public CompareFromContainerTextTests()
     {
-        _placed = new PlacedObject(_mod) { EditorID = "Placed", Scale = 1f };
-        _room = new Cell(_mod) { EditorID = "Room" };
-        _room.Temporary.Add(_placed);
-        _topCellRef = new PlacedObject(_mod) { EditorID = "TopCellRef", Scale = 1f };
-        var topCell = new Cell(_mod) { EditorID = "TopCell" };
-        topCell.Temporary.Add(_topCellRef);
-        _world = new Worldspace(_mod) { EditorID = "World", TopCell = topCell };
-
-        var root = PluginSourceRoot.For(Plugin.Name);
-        SourceRepository.Track(_modFolder, [(
-            [
-                new TreeFile(PluginSourceRoot.ContainerDocument(Path.Combine(root, "Cells", "0", "0", Leaf(_room))), Bytes(_room)),
-                new TreeFile(PluginSourceRoot.ContainerDocument(Path.Combine(root, "Worldspaces", Leaf(_world))), Bytes(_world)),
-            ],
-            new DecompiledPlugin(Plugin.Name, null))]);
-
-        var rows = new[]
-        {
-            Row(_room), Row(_placed), Row(_world), Row(topCell), Row(_topCellRef),
-        };
+        Cell? room = null;
+        PlacedObject? placed = null;
+        Worldspace? world = null;
+        PlacedObject? topCellRef = null;
+        _fixture = new PluginFixtureBuilder("medit-compare-container-text")
+            .WithPlugin(Plugin.Name, mod =>
+            {
+                placed = new PlacedObject(mod) { EditorID = "Placed", Scale = 1f };
+                room = new Cell(mod) { EditorID = "Room" };
+                room.Temporary.Add(placed);
+                mod.AddInteriorCells(room);
+                topCellRef = new PlacedObject(mod) { EditorID = "TopCellRef", Scale = 1f };
+                var topCell = new Cell(mod) { EditorID = "TopCell" };
+                topCell.Temporary.Add(topCellRef);
+                world = new Worldspace(mod) { EditorID = "World", TopCell = topCell };
+                mod.Worldspaces.Add(world);
+            }, origin: Plugin.Origin)
+            .BuildScattered()
+            .Tracked();
+        (_room, _placed, _world, _topCellRef) = (room.Require(), placed.Require(), world.Require(), topCellRef.Require());
         _loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(_log)));
-        _service = QueryHost.Records(
-            new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), rows)),
-            FakeLoadOrder.Of(Release,
-                new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, 0, Enabled: true, Winning: true)),
-            _loggerFactory);
+        _index = Indexes.Reconciled(_fixture, loggerFactory: _loggerFactory);
     }
 
     public void Dispose()
     {
+        _index.Dispose();
         _loggerFactory.Dispose();
-        _modFolder.Dispose();
+        _fixture.Dispose();
     }
 
     private static string Leaf(IMajorRecordGetter record) =>
         $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
 
-    private static byte[] Bytes(IMajorRecordGetter record) => Encoding.UTF8.GetBytes(RealDocuments.BodyOf(record, Release));
+    private static string TextOf(IMajorRecordGetter record) => Codec.SerializeToText(record, GameRelease.Fallout4);
 
-    private static FakeRow Row(IMajorRecordGetter record) =>
-        new(RealDocuments.Of(record, Plugin, 0, Release));
+    private string RoomDocument =>
+        _index.Records.GetRecordFile(Plugin, _room.FormKey.ToString())?.Path
+            ?? throw new InvalidOperationException("Expected the room's document in the tree.");
 
     private CompareOverride ColumnReadFrom(IMajorRecordGetter record, string text) =>
-        (_service.GetCompare(record.FormKey.ToString(), new CopyText(Plugin, text))
+        (_index.Records.GetCompare(record.FormKey.ToString(), new CopyText(Plugin, text))
             ?? throw new InvalidOperationException("Expected the record to compare.")).Overrides.Single();
+
+    private void AnotherRoomCarryingThePlacedObject()
+    {
+        var otherRoom = new Cell(new FormKey(_room.FormKey.ModKey, 0xA00), Fallout4Release.Fallout4) { EditorID = "OtherRoom" };
+        otherRoom.Temporary.Add(_placed);
+        var block = Path.GetDirectoryName(Path.GetDirectoryName(RoomDocument)).Require();
+        var otherDocument = PluginSourceRoot.ContainerDocument(Path.Combine(block, Leaf(otherRoom)));
+        Directory.CreateDirectory(Path.GetDirectoryName(otherDocument).Require());
+        File.WriteAllText(otherDocument, TextOf(otherRoom));
+    }
 
     [Fact]
     public void ARecordsColumn_IsReadFromItsOwnText()
     {
         _room.EditorID = "EditedRoom";
 
-        var column = ColumnReadFrom(_room, RealDocuments.BodyOf(_room, Release));
+        var column = ColumnReadFrom(_room, TextOf(_room));
 
         Assert.Equal(("EditedRoom", null), (column.EditorId, column.ParseDiagnosis));
     }
@@ -92,11 +98,11 @@ public sealed class CompareFromContainerTextTests : IDisposable
         _placed.EditorID = "Edited";
         _placed.Scale = 2.5f;
 
-        var compare = _service.GetCompare(_placed.FormKey.ToString(), new CopyText(Plugin, RealDocuments.BodyOf(_room, Release)))
+        var compare = _index.Records.GetCompare(_placed.FormKey.ToString(), new CopyText(Plugin, TextOf(_room)))
             ?? throw new InvalidOperationException("Expected the child to compare.");
 
         Assert.Equal(("Edited", null), (compare.Overrides.Single().EditorId, compare.Overrides.Single().ParseDiagnosis));
-        Assert.Equal("2.5", compare.Diffs.Single(d => d.FieldName == "Scale").Values[ColumnKey.Of(Plugin.Name, Plugin.Origin)]?.ToString());
+        Assert.Equal("2.5", compare.Diffs.Single(d => d.FieldName == "Scale").Values["Tree.esp|TreeMod"]?.ToString());
     }
 
     [Fact]
@@ -104,7 +110,7 @@ public sealed class CompareFromContainerTextTests : IDisposable
     {
         _topCellRef.EditorID = "EditedTopCellRef";
 
-        var column = ColumnReadFrom(_topCellRef, RealDocuments.BodyOf(_world, Release));
+        var column = ColumnReadFrom(_topCellRef, TextOf(_world));
 
         Assert.Equal(("EditedTopCellRef", null), (column.EditorId, column.ParseDiagnosis));
     }
@@ -113,7 +119,7 @@ public sealed class CompareFromContainerTextTests : IDisposable
     public void AChildIsReadFromItsContainersText_WhoseFormKeyTheTextChangedToOneNothingHolds()
     {
         _placed.EditorID = "Edited";
-        var text = RealDocuments.BodyOf(_room, Release).Replace(_room.FormKey.ToString(), "000FFF:Tree.esp", StringComparison.Ordinal);
+        var text = TextOf(_room).Replace(_room.FormKey.ToString(), "000FFF:Tree.esp", StringComparison.Ordinal);
 
         var column = ColumnReadFrom(_placed, text);
 
@@ -125,7 +131,7 @@ public sealed class CompareFromContainerTextTests : IDisposable
     {
         _room.Temporary.Clear();
 
-        var column = ColumnReadFrom(_placed, RealDocuments.BodyOf(_room, Release));
+        var column = ColumnReadFrom(_placed, TextOf(_room));
 
         Assert.Equal((_placed.FormKey.ToString(), (string?)null), (column.FormKey, column.EditorId));
         Assert.Contains($"does not carry {_placed.FormKey}", column.ParseDiagnosis, StringComparison.Ordinal);
@@ -134,10 +140,9 @@ public sealed class CompareFromContainerTextTests : IDisposable
     [Fact]
     public void AChildNoDocumentInTheTreeCarries_IsAColumnSayingSo_NotItsContainerReadAsIt()
     {
-        File.Delete(Path.Combine(
-            _modFolder, PluginSourceRoot.ContainerDocument(Path.Combine(PluginSourceRoot.For(Plugin.Name), "Cells", "0", "0", Leaf(_room)))));
+        File.Delete(RoomDocument);
 
-        var column = ColumnReadFrom(_placed, RealDocuments.BodyOf(_room, Release));
+        var column = ColumnReadFrom(_placed, TextOf(_room));
 
         Assert.Equal((_placed.FormKey.ToString(), (string?)null), (column.FormKey, column.EditorId));
         Assert.Contains(_placed.FormKey.ToString(), column.ParseDiagnosis, StringComparison.Ordinal);
@@ -146,31 +151,23 @@ public sealed class CompareFromContainerTextTests : IDisposable
     [Fact]
     public void AChildTwoDocumentsCarry_IsAColumnWithTheEditsRefusal()
     {
-        var otherRoom = new Cell(_mod) { EditorID = "OtherRoom" };
-        otherRoom.Temporary.Add(_placed);
-        var otherDocument = Path.Combine(
-            _modFolder, PluginSourceRoot.ContainerDocument(Path.Combine(PluginSourceRoot.For(Plugin.Name), "Cells", "0", "0", Leaf(otherRoom))));
-        Directory.CreateDirectory(Path.GetDirectoryName(otherDocument).Require());
-        File.WriteAllBytes(otherDocument, Bytes(otherRoom));
+        AnotherRoomCarryingThePlacedObject();
 
-        var column = ColumnReadFrom(_placed, RealDocuments.BodyOf(_room, Release));
+        var column = ColumnReadFrom(_placed, TextOf(_room));
 
-        Assert.Contains(Leaf(otherRoom), column.ParseDiagnosis, StringComparison.Ordinal);
+        Assert.Contains("OtherRoom - 000A00_Tree.esp", column.ParseDiagnosis, StringComparison.Ordinal);
     }
 
     [Fact]
     public void AChildTwoDocumentsCarry_IsNamedOnTheOutputWithItsCause()
     {
-        var otherRoom = new Cell(_mod) { EditorID = "OtherRoom" };
-        otherRoom.Temporary.Add(_placed);
-        var otherDocument = Path.Combine(
-            _modFolder, PluginSourceRoot.ContainerDocument(Path.Combine(PluginSourceRoot.For(Plugin.Name), "Cells", "0", "0", Leaf(otherRoom))));
-        Directory.CreateDirectory(Path.GetDirectoryName(otherDocument).Require());
-        File.WriteAllBytes(otherDocument, Bytes(otherRoom));
+        AnotherRoomCarryingThePlacedObject();
+        lock (_log) _log.Clear();
 
-        var column = ColumnReadFrom(_placed, RealDocuments.BodyOf(_room, Release));
+        var column = ColumnReadFrom(_placed, TextOf(_room));
 
-        var warning = Assert.Single(_log, e => e.Level == LogLevel.Warning);
+        LogEntry warning;
+        lock (_log) warning = Assert.Single(_log, e => e.Level == LogLevel.Warning);
         Assert.Contains(_placed.FormKey.ToString(), warning.Message, StringComparison.Ordinal);
         Assert.Contains(column.ParseDiagnosis.Require(), warning.Message, StringComparison.Ordinal);
     }

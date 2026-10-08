@@ -1,21 +1,43 @@
-using MEditService.LoadOrder;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Fallout4 = Mutagen.Bethesda.Fallout4;
 using NpcProperty = Mutagen.Bethesda.Fallout4.Npc.Property;
 
 namespace MEditService.Index.Tests.Query;
 
-public sealed class Fallout4KeyedArrayCompareTests
+public sealed class Fallout4KeyedArrayCopies : IDisposable
 {
-    private static readonly GameRelease Release = GameRelease.Fallout4;
-    private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
-    private static readonly PluginAddress TopPlugin = new("Top.esp", PluginOrigin.DataDirectory);
+    private readonly PluginFixtureData _fixture;
 
-    private static readonly ModKey Base = ModKey.FromFileName(BasePlugin.Name);
+    public Fallout4KeyedArrayCopies()
+    {
+        _fixture = new PluginFixtureBuilder("medit-keyed-array-compare")
+            .WithPlugin(Fallout4KeyedArrayCompareTests.BasePlugin, mod => Fallout4KeyedArrayCompareTests.Hold(mod, reversed: false))
+            .WithPlugin(Fallout4KeyedArrayCompareTests.TopPlugin, mod => Fallout4KeyedArrayCompareTests.Hold(mod, reversed: true))
+            .Build();
+        Index = Indexes.Reconciled(_fixture);
+    }
+
+    internal OpenedIndex Index { get; }
+
+    public void Dispose()
+    {
+        Index.Dispose();
+        _fixture.Dispose();
+    }
+}
+
+public sealed class Fallout4KeyedArrayCompareTests(Fallout4KeyedArrayCopies copies) : IClassFixture<Fallout4KeyedArrayCopies>
+{
+    internal const string BasePlugin = "Base.esm";
+    internal const string TopPlugin = "Top.esp";
+
+    private static readonly ModKey Base = ModKey.FromFileName(BasePlugin);
     private static readonly FormKey NpcKey = new(Base, 0x800);
     private static readonly FormKey FactionKey = new(Base, 0x801);
     private static readonly FormKey LeveledItemKey = new(Base, 0x802);
@@ -41,7 +63,7 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static readonly FormKey B = new(Base, 0x901);
     private static readonly FormKey Cell = new(Base, 0x902);
 
-    private static readonly (FormKey Key, string[] Fields, Func<bool, IMajorRecordGetter> Build)[] Records =
+    private static readonly (FormKey Key, string[] Fields, Func<bool, Fallout4MajorRecord> Build)[] Records =
     [
         (NpcKey, ["Factions", "Perks", "Items", "Attacks", "Sounds", "FaceMorphs", "FaceTintingLayers", "Properties", "ObjectTemplates"], Npc),
         (FactionKey, ["Relations", "Ranks"], Faction),
@@ -68,27 +90,20 @@ public sealed class Fallout4KeyedArrayCompareTests
         (LandscapeKey, ["Layers"], Landscape),
     ];
 
-    private readonly IRecordQueryService _service;
-
-    public Fallout4KeyedArrayCompareTests()
+    internal static void Hold(Fallout4Mod mod, bool reversed)
     {
-        var rows = Records.SelectMany(r => new[]
+        var cell = new Fallout4.Cell(Cell, Fallout4Release.Fallout4);
+        foreach (var record in Records.Select(r => r.Build(reversed)))
         {
-            Row(r.Build(false), BasePlugin, 0),
-            Row(r.Build(true), TopPlugin, 1),
-        }).ToArray();
-        var opened = new Dictionary<PluginAddress, PluginContent>
-        {
-            [BasePlugin] = new(IsLight: false, IsMaster: true, IsBlueprint: false, Masters: [], RecordCount: Records.Length, IsMedium: false),
-            [TopPlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [BasePlugin.Name], RecordCount: Records.Length, IsMedium: false),
-        };
-        var plugins = new[]
-        {
-            new LoadOrderEntry(BasePlugin.Name, BasePlugin.Name, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
-            new LoadOrderEntry(TopPlugin.Name, TopPlugin.Name, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
-        };
-        _service = QueryHost.Records(
-            new FakeIndex(new FakeReads(opened, rows)), FakeLoadOrder.Of(Release, plugins));
+            switch (record)
+            {
+                case IPlaced placed: cell.Temporary.Add(placed); break;
+                case NavigationMesh navmesh: cell.NavigationMeshes.Add(navmesh); break;
+                case Fallout4.Landscape landscape: cell.Landscape = landscape; break;
+                default: ((IMod)mod).GetTopLevelGroup(record.GetType()).AddUntyped(record); break;
+            }
+        }
+        mod.AddInteriorCells(cell);
     }
 
     private static IEnumerable<T> InOrder<T>(bool reversed, params T[] items) => reversed ? items.Reverse() : items;
@@ -369,9 +384,6 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static LayerHeader Layer(Quadrant quadrant, ushort number) =>
         new() { Texture = new FormLink<ILandscapeTextureGetter>(A), Quadrant = quadrant, LayerNumber = number };
 
-    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex) =>
-        new(RealDocuments.Of(record, plugin, loadOrderIndex, Release));
-
     private void AssertTopCopyIsIdenticalToMaster(FormKey record)
     {
         var diffs = AssertTopCopyIs(ConflictThis.IdenticalToMaster, record);
@@ -383,13 +395,13 @@ public sealed class Fallout4KeyedArrayCompareTests
 
     private IReadOnlyList<FieldDiff> AssertTopCopyIs(ConflictThis expected, FormKey record)
     {
-        var compare = _service.GetCompare(record.ToString())
+        var compare = copies.Index.Records.GetCompare(record.ToString())
             ?? throw new InvalidOperationException($"Expected {record} to resolve to a compare result.");
 
         var keyedArrays = Records.Single(r => r.Key == record).Fields;
         var diffs = compare.Diffs.Where(d => keyedArrays.Contains(d.FieldName)).ToList();
         Assert.Equal(keyedArrays.Order(), diffs.Select(d => d.FieldName).Order());
-        Assert.All(diffs, d => Assert.Equal(expected, d.CellStates[TopPlugin.Name]));
+        Assert.All(diffs, d => Assert.Equal(expected, d.CellStates[TopPlugin]));
         return diffs;
     }
 

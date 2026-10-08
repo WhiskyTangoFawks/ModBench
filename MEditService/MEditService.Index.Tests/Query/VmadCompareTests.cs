@@ -1,69 +1,61 @@
-using MEditService.LoadOrder;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Query;
 
-public sealed class VmadCompareTests
+public sealed class VmadCompareTests : IDisposable
 {
-    private static readonly GameRelease Release = GameRelease.Fallout4;
-    private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
-    private static readonly PluginAddress TopPlugin = new("Top.esp", PluginOrigin.DataDirectory);
     private const string Field = "VirtualMachineAdapter";
 
-    private readonly FormKey _scriptedNpc;
-    private readonly FormKey _scriptedQuest;
-    private readonly IRecordQueryService _service;
+    private readonly PluginFixtureData _fixture;
+    private readonly OpenedIndex _index;
+    private readonly string _scriptedNpc;
+    private readonly string _scriptedQuest;
 
     public VmadCompareTests()
     {
-        var baseMod = new Fallout4Mod(ModKey.FromFileName("Base.esm"), Fallout4Release.Fallout4);
-        var baseNpc = baseMod.Npcs.AddNew("ScriptedNPC");
-        var baseAdapter = new VirtualMachineAdapter { Version = 6, ObjectFormat = 2 };
-        baseAdapter.Scripts.Add(NamedScript("Ambush", "Radius", 10));
-        baseAdapter.Scripts.Add(NamedScript("Guard", "Radius", 20));
-        baseNpc.VirtualMachineAdapter = baseAdapter;
-        _scriptedNpc = baseNpc.FormKey;
+        string? scriptedNpc = null;
+        string? scriptedQuest = null;
+        _fixture = new PluginFixtureBuilder("medit-vmad-compare")
+            .WithPlugin("Base.esm", mod =>
+            {
+                var npc = mod.Npcs.AddNew("ScriptedNPC");
+                var adapter = new VirtualMachineAdapter { Version = 6, ObjectFormat = 2 };
+                adapter.Scripts.Add(NamedScript("Ambush", "Radius", 10));
+                adapter.Scripts.Add(NamedScript("Guard", "Radius", 20));
+                npc.VirtualMachineAdapter = adapter;
+                scriptedNpc = npc.FormKey.ToString();
 
-        var baseQuest = baseMod.Quests.AddNew("ScriptedQuest");
-        baseQuest.VirtualMachineAdapter = QuestAdapterWith(aliasLevel: 1);
-        _scriptedQuest = baseQuest.FormKey;
+                var quest = mod.Quests.AddNew("ScriptedQuest");
+                quest.VirtualMachineAdapter = QuestAdapterWith(aliasLevel: 1);
+                scriptedQuest = quest.FormKey.ToString();
+            })
+            .WithPlugin("Top.esp", (mod, built) =>
+            {
+                var npcKeepingOnlyGuardMastersAmbushAbsentNotRenamed = built[0].Npcs.First().DeepCopy();
+                var adapter = new VirtualMachineAdapter { Version = 6, ObjectFormat = 2 };
+                adapter.Scripts.Add(NamedScript("Guard", "Radius", 20));
+                npcKeepingOnlyGuardMastersAmbushAbsentNotRenamed.VirtualMachineAdapter = adapter;
+                mod.Npcs.Set(npcKeepingOnlyGuardMastersAmbushAbsentNotRenamed);
 
-        var topNpcKeepingOnlyGuardMastersAmbushAbsentNotRenamed = baseNpc.DeepCopy();
-        var topAdapter = new VirtualMachineAdapter { Version = 6, ObjectFormat = 2 };
-        topAdapter.Scripts.Add(NamedScript("Guard", "Radius", 20));
-        topNpcKeepingOnlyGuardMastersAmbushAbsentNotRenamed.VirtualMachineAdapter = topAdapter;
-
-        var topQuestDisagreeingOnlyInAnAliasScriptsOwnProperty = baseQuest.DeepCopy();
-        topQuestDisagreeingOnlyInAnAliasScriptsOwnProperty.VirtualMachineAdapter = QuestAdapterWith(aliasLevel: 2);
-
-        var rows = new[]
-        {
-            Row(baseNpc, BasePlugin, 0),
-            Row(topNpcKeepingOnlyGuardMastersAmbushAbsentNotRenamed, TopPlugin, 1),
-            Row(baseQuest, BasePlugin, 0),
-            Row(topQuestDisagreeingOnlyInAnAliasScriptsOwnProperty, TopPlugin, 1),
-        };
-        var opened = new Dictionary<PluginAddress, PluginContent>
-        {
-            [BasePlugin] = new(IsLight: false, IsMaster: true, IsBlueprint: false, Masters: [], RecordCount: 2, IsMedium: false),
-            [TopPlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: ["Base.esm"], RecordCount: 2, IsMedium: false),
-        };
-        var plugins = new[]
-        {
-            new LoadOrderEntry("Base.esm", "Base.esm", PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
-            new LoadOrderEntry("Top.esp", "Top.esp", PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
-        };
-        var holder = FakeLoadOrder.Of(Release, plugins);
-        _service = QueryHost.Records(new FakeIndex(new FakeReads(opened, rows)), holder);
+                var questDisagreeingOnlyInAnAliasScriptsOwnProperty = built[0].Quests.First().DeepCopy();
+                questDisagreeingOnlyInAnAliasScriptsOwnProperty.VirtualMachineAdapter = QuestAdapterWith(aliasLevel: 2);
+                mod.Quests.Set(questDisagreeingOnlyInAnAliasScriptsOwnProperty);
+            })
+            .Build();
+        _index = Indexes.Reconciled(_fixture);
+        (_scriptedNpc, _scriptedQuest) = (scriptedNpc.Require(), scriptedQuest.Require());
     }
 
-    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex) =>
-        new(RealDocuments.Of(record, plugin, loadOrderIndex, Release));
+    public void Dispose()
+    {
+        _index.Dispose();
+        _fixture.Dispose();
+    }
 
     private static ScriptEntry NamedScript(string name, string property, int value)
     {
@@ -88,9 +80,9 @@ public sealed class VmadCompareTests
     private static FieldDiff Child(FieldDiff diff, string name) =>
         Children(diff).Single(c => c.FieldName == name);
 
-    private FieldDiff Adapter(FormKey record)
+    private FieldDiff Adapter(string record)
     {
-        var compare = _service.GetCompare(record.ToString())
+        var compare = _index.Records.GetCompare(record)
             ?? throw new InvalidOperationException($"Expected {record} to resolve to a compare result.");
         return compare.Diffs.Single(d => d.FieldName == Field);
     }
