@@ -202,7 +202,7 @@ As a user, I want:
 As a user, I want:
 
 1. From the palette, the selected plugins to move as one block to a place I pick: directly above a plugin row outside the selection, in the order the view shows them, or "Bottom of the view". The block lands as a drop there lands. Source: catalog `move`, target Option; Drag and drop, story 2
-2. A pick the masters rule refuses for a drop refused the same way. Source: Drag and drop, story 3
+2. A pick that a drop there would refuse refused the same way. Source: Drag and drop, story 3
 3. Esc to move nothing. Source: Esc changes nothing
 
 ### Create record
