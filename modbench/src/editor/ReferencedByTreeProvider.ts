@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress, ReferenceResult } from '../client';
 import { errorMessage } from '../ports/errorMessage';
-import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import { ErrorNode } from '../drivingLib/errorNode';
 import type { RecordArgument } from '../drivingLib/recordArgument';
 import { isKeyArgs } from '../drivingLib/copyValue';
@@ -122,7 +121,7 @@ function referrerNode(target: string, copies: readonly ReferenceResult[]): Refer
 }
 
 type ReferencedByClient =
-  Pick<MEditClient, 'getReferences' | 'getComparison' | 'onNotification' | 'onStatusChanged' | 'onReconnected'>;
+  Pick<MEditClient, 'getReferences' | 'getComparison' | 'onNotification' | 'onLoadOrderStatusChanged' | 'loadOrderStatus' | 'onReconnected'>;
 
 function messageLine(...parts: (string | undefined)[]): string | undefined {
   return parts.filter(part => part !== undefined).join(' ') || undefined;
@@ -149,23 +148,21 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
   private generation = 0;
   private term = '';
   private direction: ReferrerDirection = 'ascending';
-  private readonly indexed: ReturnType<typeof trackLoadOrderStatus>;
   private readonly unsubscribe: (() => void)[];
 
   constructor(
     private readonly client: ReferencedByClient,
     private readonly log: (msg: string) => void = () => {},
   ) {
-    this.indexed = trackLoadOrderStatus(client, undefined, () => this.reread());
     this.unsubscribe = [
       client.onNotification('rows-changed', () => this.reread()),
       client.onNotification('plugin-changed', () => this.reread()),
       client.onReconnected(() => this.reread()),
+      client.onLoadOrderStatusChanged(() => this.reread()),
     ];
   }
 
   dispose(): void {
-    this.indexed.dispose();
     for (const off of this.unsubscribe) off();
   }
 
@@ -210,7 +207,7 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
     if (this.target === undefined) return undefined;
     const lastGoodRead = this.referrers !== undefined && this.failure !== undefined
       ? `Showing the last good read: ${this.failure}` : undefined;
-    return messageLine(this.indexed.current() ? undefined : INDEXING_MESSAGE, lastGoodRead);
+    return messageLine(this.client.loadOrderStatus?.conflictsComputed ? undefined : INDEXING_MESSAGE, lastGoodRead);
   }
 
   /** False only when the term hides every referrer there is, which is when no match is the news. */

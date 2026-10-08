@@ -60,9 +60,9 @@ export interface TrackedRepositoriesDeps {
 }
 
 export interface TrackedRepositories {
-  /** A computed reconcile's notice, which a landed track gives too: tells the open record panels,
-   *  then registers each tracked mod's repository with `vscode.git`, once per notice. */
-  conflictsComputedOver: (announce: () => void) => () => Promise<void>;
+  /** A computed reconcile's notice, which a landed track gives too: registers each tracked mod's
+   *  repository with `vscode.git`, once per notice. */
+  conflictsComputed: () => Promise<void>;
   /** `Repository.status()`, the same effect the SCM panel's Refresh button has, fired from the
    *  edit rather than waiting on the native watcher. A plugin with no handle is a silent no-op; a
    *  rejected `status()` is logged, never surfaced. */
@@ -97,10 +97,7 @@ export function trackedRepositoriesOver(deps: TrackedRepositoriesDeps): TrackedR
   }
 
   return {
-    conflictsComputedOver: (announce) => async () => {
-      announce();
-      await registerHeld();
-    },
+    conflictsComputed: registerHeld,
     refreshSourceControlFor: (plugin) => {
       const repo = byPlugin.get(pluginAddressKey(plugin));
       if (!repo) return;

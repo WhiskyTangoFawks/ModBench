@@ -259,6 +259,13 @@ export interface MEditClient {
    *  reaches no listener. */
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void;
 
+  /** The latest load-order status; undefined before the first, and again once mEdit has gone or
+   *  the stream has reopened onto a process that may be another. */
+  readonly loadOrderStatus: LoadOrderStatus | undefined;
+  /** Each time the status's conflictsComputed or failures differ from the last one held, and when
+   *  the status resets; handed the new status. */
+  onLoadOrderStatusChanged(listener: (status: LoadOrderStatus | undefined) => void): () => void;
+
   /** Launches mEdit when it is not running. One snapshot is put at a time, and the newest lands. */
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
   /** The newest snapshot's outcome, following a superseding one. Undefined when none was sent. */

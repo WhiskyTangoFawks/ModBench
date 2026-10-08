@@ -13,7 +13,7 @@ export interface ProblemOnFile { message: string; start: Position; end: Position
 export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 
 export interface SourceProblemsDeps {
-  client: Pick<MEditClient, 'getPluginProblems' | 'onNotification' | 'onReconnected'>;
+  client: Pick<MEditClient, 'getPluginProblems' | 'onNotification' | 'onReconnected' | 'loadOrderStatus' | 'onLoadOrderStatusChanged'>;
   originFiles: OriginFilesOf;
   readText: (path: string) => Promise<string>;
   reporter: Pick<Reporter, 'shownOnSurface'>;
@@ -114,7 +114,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   let failed: { ask: number; why: string } | undefined;
   const showStatus = () => { languageStatus(failed ? lastRead(failed.why) : unplacedStatus); };
   // Unknown until a load-order-status says, or mEdit answers the ask made at subscribe.
-  let ready: boolean | undefined;
+  let answeredAtSubscribe = false;
   let latest = 0;
   let shown = 0;
   const settle = (mine: number, { ofPlugin, unplaced, unread }: Placed) => {
@@ -138,16 +138,17 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     const mine = ++latest;
     try {
       const answer = await placed(await client.getPluginProblems(), deps);
-      if (atSubscribe) ready ??= true;
+      if (atSubscribe) answeredAtSubscribe = true;
       settle(mine, answer);
     } catch (error) {
       if (mine === latest && !atSubscribe) keepLastAnswer(mine, error);
     }
   };
   const reask = () => { void ask(); };
-  const reaskWhenReady = () => { if (ready) reask(); };
+  const ready = () => client.loadOrderStatus?.conflictsComputed ?? answeredAtSubscribe;
+  const reaskWhenReady = () => { if (ready()) reask(); };
   const unsubscribe = [
-    client.onNotification('load-order-status', (status) => { ready = status.conflictsComputed; reaskWhenReady(); }),
+    client.onLoadOrderStatusChanged((status) => { if (status?.conflictsComputed) reask(); }),
     client.onNotification('rows-changed', reaskWhenReady),
     client.onNotification('plugin-changed', reaskWhenReady),
     client.onReconnected(reask),

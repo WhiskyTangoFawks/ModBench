@@ -9,6 +9,7 @@ import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } 
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
+import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
@@ -81,6 +82,7 @@ class HttpMEditClient implements MEditClient {
   private readonly lifecycle: BackendLifecycle;
   private readonly notifications: SseNotificationSubscriber;
   private readonly loadOrder: LoadOrderSender;
+  private readonly loadOrderStatusKept: LoadOrderStatusKeeper;
   constructor(deps: HttpMEditClientDeps) {
     this.log = deps.log ?? (() => {});
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
@@ -97,6 +99,7 @@ class HttpMEditClient implements MEditClient {
       if (status === 'running') this.notifications.start();
       else this.notifications.stop();
     });
+    this.loadOrderStatusKept = keepLoadOrderStatus(this);
     this.loadOrder = createLoadOrderSender({
       status: () => this.lifecycle.status,
       starting: () => this.lifecycle.starting,
@@ -128,6 +131,11 @@ class HttpMEditClient implements MEditClient {
   async start(): Promise<void> { await this.loadOrder.launch(); }
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void { return this.loadOrder.onLaunch(listener); }
   stop(): Promise<void> { return this.loadOrder.stop(); }
+
+  get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
+  onLoadOrderStatusChanged(listener: (status: LoadOrderStatus | undefined) => void): () => void {
+    return this.loadOrderStatusKept.onChanged(listener);
+  }
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.loadOrder.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.loadOrder.latest(); }

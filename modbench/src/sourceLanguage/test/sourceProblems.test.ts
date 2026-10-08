@@ -18,6 +18,10 @@ const loadOrderStatus = (conflictsComputed: boolean): NotificationEvent => ({
   loadOrderStatus: { state: conflictsComputed ? 'Ready' : 'Reconciling', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed, failures: [], version: 1 },
 });
 const ready = loadOrderStatus(true);
+const reconciledAgain = (client: InMemoryMEditClient) => {
+  client.emit(loadOrderStatus(false));
+  client.emit(ready);
+};
 
 const modFolders: OriginFilesOf = (origin) => ({ file: (relativePath) => `/mods/${origin}/${relativePath}` });
 
@@ -35,10 +39,10 @@ function feed(files: Record<string, string>, originFiles = modFolders, answeredA
     publish: (problems) => published.push(problems),
     languageStatus: (text) => status.push(text),
   });
-  const answered = async (answer: PluginProblems[], event: NotificationEvent = ready): Promise<ProblemsByFile> => {
+  const answered = async (answer: PluginProblems[], event?: NotificationEvent): Promise<ProblemsByFile> => {
     const before = published.length;
     client.setQueryAnswer('getPluginProblems', answer);
-    client.emit(event);
+    if (event) client.emit(event); else reconciledAgain(client);
     await vi.waitFor(() => { expect(published.length).toBeGreaterThan(before); });
     return published[published.length - 1] ?? new Map();
   };
@@ -237,8 +241,8 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     client.setQueryFailureOnce('getPluginProblems', new Error('getPluginProblems timed out after 30000ms'));
     client.setQueryFailureOnce('getPluginProblems', new Error('getPluginProblems timed out after 30000ms'));
 
-    client.emit(ready);
-    client.emit(ready);
+    reconciledAgain(client);
+    reconciledAgain(client);
     await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(4); });
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
@@ -252,7 +256,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     const { client, answered, published } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
     let overtaken!: (answer: PluginProblems[]) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { overtaken = resolve; }));
-    client.emit(ready);
+    reconciledAgain(client);
 
     await answered([]);
     overtaken([{ plugin: PLUGIN, problems: [problem()] }]);
@@ -265,7 +269,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     const { client, answered, reporter } = feed({});
     let overtaken!: (error: Error) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((_, reject) => { overtaken = reject; }));
-    client.emit(ready);
+    reconciledAgain(client);
 
     await answered([]);
     overtaken(new Error('getPluginProblems timed out after 30000ms'));
@@ -279,8 +283,8 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     let older!: (answer: PluginProblems[]) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { older = resolve; }));
     client.setQueryFailureOnce('getPluginProblems', new Error('getPluginProblems timed out after 30000ms'));
-    client.emit(ready);
-    client.emit(ready);
+    reconciledAgain(client);
+    reconciledAgain(client);
     await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3); });
 
     older([{ plugin: PLUGIN, problems: [problem()] }]);
@@ -292,7 +296,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     const { client, answered, status } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
     client.setQueryFailureOnce('getPluginProblems', new Error('getPluginProblems timed out after 30000ms'));
-    client.emit(ready);
+    reconciledAgain(client);
     await vi.waitFor(() => { expect(status.at(-1)).toBe('Showing the last good read: getPluginProblems timed out after 30000ms'); });
 
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
@@ -366,8 +370,8 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     let older!: (answer: PluginProblems[]) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { older = resolve; }));
     client.setQueryFailureOnce('getPluginProblems', new Error('timed out'));
-    client.emit(ready);
-    client.emit(ready);
+    reconciledAgain(client);
+    reconciledAgain(client);
     await vi.waitFor(() => { expect(status.at(-1)).toBe('Showing the last good read: timed out'); });
 
     older([]);
