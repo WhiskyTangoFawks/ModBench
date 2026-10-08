@@ -17,7 +17,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private string? StoredBody(string formKey) =>
-        fixture.Reads.GetDocument(formKey, CutDownPluginFixture.Plugin)?.Body;
+        fixture.Index.Records.GetRenderedDocument(CutDownPluginFixture.Plugin, formKey)?.Text;
 
     private static IModDisposeGetter OpenPlugin() => ModFactory.ImportGetter(
         new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),

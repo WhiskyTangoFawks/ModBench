@@ -40,9 +40,9 @@ function followed() {
   client.setQueryAnswer('getActiveFilter', null);
   const deps = {
     client,
-    tree: {
-      applyIndexed: vi.fn(), applyRefused: vi.fn(), applyBackendUnreachable: vi.fn(),
-      applyReconciled: vi.fn().mockResolvedValue(0), refreshFacts: vi.fn().mockResolvedValue(undefined),
+    facts: {
+      indexed: vi.fn(), refused: vi.fn(), unreachable: vi.fn(),
+      reconciled: vi.fn().mockResolvedValue(0), refresh: vi.fn().mockResolvedValue(undefined),
     },
     recordBrowser: { refresh: vi.fn() },
     progress: { while: vi.fn((work: () => Promise<void>) => work()), say: vi.fn() },
@@ -64,13 +64,13 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
     client.emit(statusEvent({ totalPlugins: 5, activePlugins: 2 }));
     await flushed();
 
-    expect(deps.tree.applyReconciled).toHaveBeenCalledOnce();
+    expect(deps.facts.reconciled).toHaveBeenCalledOnce();
     expect(statusBarText()).toBe('$(check) mEdit: Ready (2 plugins)');
   });
 
   it('logs how many plugins the tree holds next to the failures and the snapshot\'s total', async () => {
     const { client, deps } = followed();
-    deps.tree.applyReconciled.mockResolvedValue(3);
+    deps.facts.reconciled.mockResolvedValue(3);
 
     client.emit(statusEvent({ activePlugins: 2 }));
     await flushed();
@@ -80,7 +80,7 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
 
   it('logs the error and warns that rows will not expand when the tree could not read the plugin list', async () => {
     const { client, deps } = followed();
-    deps.tree.applyReconciled.mockResolvedValue(undefined);
+    deps.facts.reconciled.mockResolvedValue(undefined);
 
     client.emit(statusEvent({ activePlugins: 2 }));
     await flushed();
@@ -116,7 +116,7 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
     client.emit(statusEvent({ state, conflictsComputed: false, message, version: 2 }));
     await flushed();
 
-    expect(deps.tree.applyRefused).toHaveBeenCalledWith({ kind, message });
+    expect(deps.facts.refused).toHaveBeenCalledWith({ kind, message });
     expect(statusBarText()).toBe('$(plug) mEdit: Running');
   });
 
@@ -143,8 +143,8 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
 
     client.setStatus(status);
 
-    expect(deps.tree.applyBackendUnreachable).toHaveBeenCalledWith(reason);
-    expect(deps.tree.refreshFacts).toHaveBeenCalledOnce();
+    expect(deps.facts.unreachable).toHaveBeenCalledWith(reason);
+    expect(deps.facts.refresh).toHaveBeenCalledOnce();
   });
 
   it.each(['starting', 'running'] as const)('leaves the tree to the reconcile while mEdit is %s', (status) => {
@@ -152,8 +152,8 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
 
     client.setStatus(status);
 
-    expect(deps.tree.applyBackendUnreachable).not.toHaveBeenCalled();
-    expect(deps.tree.refreshFacts).not.toHaveBeenCalled();
+    expect(deps.facts.unreachable).not.toHaveBeenCalled();
+    expect(deps.facts.refresh).not.toHaveBeenCalled();
   });
 
   it('hears nothing once disposed', async () => {
@@ -164,8 +164,8 @@ describe('the Plugins view following the index status and mEdit\'s own', () => {
     client.setStatus('disconnected');
     await flushed();
 
-    expect(deps.tree.applyReconciled).not.toHaveBeenCalled();
-    expect(deps.tree.applyBackendUnreachable).not.toHaveBeenCalled();
+    expect(deps.facts.reconciled).not.toHaveBeenCalled();
+    expect(deps.facts.unreachable).not.toHaveBeenCalled();
   });
 });
 
@@ -207,14 +207,14 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
     client.setQueryAnswer('getActiveFilter', { sql: 'SELECT form_key FROM "npc_"', source: 'npcs.sql' });
     const order: string[] = [];
     deps.showRecordFilter.mockImplementation(() => { order.push('showRecordFilter'); });
-    deps.tree.applyReconciled.mockImplementation(() => { order.push('applyReconciled'); return Promise.resolve(1); });
+    deps.facts.reconciled.mockImplementation(() => { order.push('applyReconciled'); return Promise.resolve(1); });
 
     client.emit(statusEvent({ totalPlugins: 42, failures: [badFailure] }));
     await flushed();
 
     expect(order).toEqual(['showRecordFilter', 'applyReconciled']);
     expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: 'SELECT form_key FROM "npc_"', source: 'npcs.sql' });
-    expect(deps.tree.applyReconciled).toHaveBeenCalledWith([badFailure]);
+    expect(deps.facts.reconciled).toHaveBeenCalledWith([badFailure]);
     expect(deps.log).toHaveBeenCalledWith('info', expect.stringContaining('1 failed, of 42 plugins'));
   });
 
@@ -239,6 +239,6 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
     expect(deps.reporter.reports[0]?.message).toBe(
       "Could not read the record filter — the Plugins view shows it as it last was. boom");
     expect(deps.showRecordFilter).not.toHaveBeenCalled();
-    expect(deps.tree.applyReconciled).toHaveBeenCalledOnce();
+    expect(deps.facts.reconciled).toHaveBeenCalledOnce();
   });
 });

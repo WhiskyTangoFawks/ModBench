@@ -9,7 +9,7 @@ import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
-import { createEditor, type Editor } from './editor';
+import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage } from './sourceLanguage';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
@@ -21,14 +21,13 @@ import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance
 import { createStatusBar, type StatusBar } from './plugins/statusBar';
 import { meditConfig, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
-import { trackedRepositoriesOver } from './plugins/trackedRepositories';
 import { recordWriteOver } from './plugins/recordWrite';
 import { createPluginsView, type PluginsViewDeps } from './plugins/pluginsView';
 import { editingView } from './plugins/editingView';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
 import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
-import { downloadsCopyValueText } from './downloads/keyContext';
+import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
@@ -129,17 +128,18 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     log: (level, msg) => outputChannel[level](msg),
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
-  const { view: downloadsView, nameFilter: downloadsFilter, installDownloaded } = own(createDownloadsView({
+  const { view: downloadsView, nameFilter: downloadsFilter } = own(createDownloadsView({
     access, instance, reporter: reporterFor('downloadList'), ask, trash,
-    install: {
-      warnIfFomod: fomodWarning,
-      log: (line) => outputChannel.warn(`[downloads] ${line}`),
-    },
+    log: (line) => outputChannel.warn(`[downloads] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
   const mods = own(createModsView({
     instance, access, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
-    extensionUri: deps.extensionUri, warnIfFomod: fomodWarning, installDownloaded,
+    extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
+    downloadInstall: {
+      reporter: reporterFor('downloadList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),
+      progressViewId: DOWNLOADS_KEY_ARGS.view,
+    },
     nexusRow: nexusRowInFocusedView(own, deps.focusedView, ['modbench.modList', 'modbench.downloads'], 'modbench.mod.nexusRowIn'),
   }));
   const view = editingView({

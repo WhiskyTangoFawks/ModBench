@@ -88,23 +88,22 @@ public sealed class ProjectionSequenceTests : IDisposable
     public void ValidatingTwoChangedDocuments_AdvancesTheSequenceOnce()
     {
         Reconcile(_fixture.Plugins);
-        var reads = _index.RequireReads();
         var formKey1 = _npc1.ToString();
         var formKey2 = _npc2.ToString();
-        var document1 = reads.DocumentOf(formKey1, _baseKey);
-        var document2 = reads.DocumentOf(formKey2, _baseKey);
+        var document1 = _index.DocumentOf(formKey1, _baseKey);
+        var document2 = _index.DocumentOf(formKey2, _baseKey);
         var repository = TrackedMods.RepositoryOf(_base);
         repository.Put(_baseKey, new SourceAdapter.SourceDocument(
-            formKey1, document1.RecordType, document1.EditorId, document1.BodyOf().Replace("First", "FirstEdited", StringComparison.Ordinal)));
+            formKey1, document1.RecordType, document1.EditorId, _index.BodyOf(formKey1, _baseKey).Replace("First", "FirstEdited", StringComparison.Ordinal)));
         repository.Put(_baseKey, new SourceAdapter.SourceDocument(
-            formKey2, document2.RecordType, document2.EditorId, document2.BodyOf().Replace("Second", "SecondEdited", StringComparison.Ordinal)));
+            formKey2, document2.RecordType, document2.EditorId, _index.BodyOf(formKey2, _baseKey).Replace("Second", "SecondEdited", StringComparison.Ordinal)));
 
         var before = _index.Sequence;
         _index.NextSnapshot();
 
         Assert.Equal(before + 1, _index.Sequence);
-        Assert.Equal("FirstEdited", reads.DocumentOf(formKey1, _baseKey).EditorId);
-        Assert.Equal("SecondEdited", reads.DocumentOf(formKey2, _baseKey).EditorId);
+        Assert.Equal("FirstEdited", _index.DocumentOf(formKey1, _baseKey).EditorId);
+        Assert.Equal("SecondEdited", _index.DocumentOf(formKey2, _baseKey).EditorId);
     }
 
     [Fact]
@@ -112,7 +111,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     {
         Reconcile(_fixture.Plugins);
 
-        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index.RequireReads()));
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
 
         Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
         Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc1.ToString()));

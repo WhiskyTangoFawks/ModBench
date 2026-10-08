@@ -34,15 +34,13 @@ public sealed class ProgressiveIndexingTests
         var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        var reads = index.RequireReads();
-        Assert.Equal(1, reads.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
-        Assert.Equal(0, reads.CountOf(new PluginAddress("B.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, index.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(0, index.CountOf(new PluginAddress("B.esp", PluginOrigin.DataDirectory), "npc_"));
 
         gate.Release();
         await load;
 
-        var readsAfterLoad = index.RequireReads();
-        Assert.Equal(1, readsAfterLoad.CountOf(new PluginAddress("B.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, index.CountOf(new PluginAddress("B.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
@@ -124,36 +122,6 @@ public sealed class ProgressiveIndexingTests
         Assert.All(index.Status.IndexedPlugins, p => Assert.False(string.IsNullOrWhiteSpace(p.Origin)));
     }
 
-    [Fact]
-    public async Task MidLoad_EnumeratingThePluginList_SurvivesTheLoadAppendingToIt()
-    {
-        var holder = new LoadOrderHolder();
-        using var fx = new PluginFixtureBuilder("sm-progressive-enumeration")
-            .WithPlugin("Master.esm")
-            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
-            .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
-            .WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC"))
-            .BuildScattered();
-        var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
-        using var _ = index;
-        using var __ = gate;
-
-        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
-        await gate.WaitUntilParkedAsync();
-
-        var reads = index.RequireReads();
-        var opened = reads.OpenedPlugins;
-        using var enumerator = opened.GetEnumerator();
-        Assert.True(enumerator.MoveNext());
-
-        gate.Release();
-        await load;
-
-        var rest = 1;
-        while (enumerator.MoveNext()) rest++;
-        Assert.True(rest >= 1);
-    }
-
     private static ScatteredFixtureData FourPlugins(string prefix) =>
         new PluginFixtureBuilder(prefix)
             .WithPlugin("Master.esm")
@@ -189,7 +157,7 @@ public sealed class ProgressiveIndexingTests
         await unload;
 
         Assert.Equal(["gate-released", "unload-done"], order);
-        Assert.Throws<NoLoadOrderException>(() => index.RequireReads());
+        Assert.Throws<NoLoadOrderException>(() => index.Records.GetPlugins());
         Assert.Equal(LoadOrderState.None, index.Status.State);
         Assert.DoesNotContain("C.esp", gate.Opened);
     }
@@ -206,7 +174,6 @@ public sealed class ProgressiveIndexingTests
 
         var first = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
-        var readsWhileParked = index.RequireReads();
 
         using var secondAttempting = new ManualResetEventSlim();
         var second = Task.Run(() =>
@@ -223,12 +190,11 @@ public sealed class ProgressiveIndexingTests
         await second;
 
         Assert.Equal(["gate-released", "second-done"], order);
-        Assert.Same(readsWhileParked, index.RequireReads());
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp"], index.Status.IndexedPlugins.Select(p => p.Name));
         Assert.True(index.Status.ConflictsComputed);
         Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp"], gate.Opened);
-        Assert.Equal(1, index.RequireReads().CountOf(new PluginAddress("C.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, index.CountOf(new PluginAddress("C.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
@@ -249,28 +215,26 @@ public sealed class ProgressiveIndexingTests
 
         var first = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, beforeTheCreate, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
-        var readsWhileParked = index.RequireReads();
 
         var second = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         Assert.True(
             await Waits.Until(() => holder.Current.Plugins.Count == 5),
             "the arriving snapshot never reached the holder");
         Assert.Equal(LoadOrderState.Reconciling, index.Status.State);
-        Assert.Equal(0, readsWhileParked.CountOf(new PluginAddress("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(0, index.CountOf(new PluginAddress("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
 
         gate.Release();
         await first;
         await second;
 
-        Assert.Same(readsWhileParked, index.RequireReads());
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.True(index.Status.ConflictsComputed);
         Assert.Equal(
             ["Master.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"],
             index.Status.IndexedPlugins.Select(p => p.Name));
         Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"], gate.Opened);
-        Assert.Equal(1, index.RequireReads().CountOf(new PluginAddress("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
-        Assert.Equal(1, index.RequireReads().CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, index.CountOf(new PluginAddress("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, index.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
@@ -294,8 +258,8 @@ public sealed class ProgressiveIndexingTests
         var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        var listed = index.RequireReads().Search(
-            new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["acti"], Plugin: "Patch.esp", Limit: 10, GroupOnly: true)).Items.Select(r => r.EditorId);
+        var patch = fx.Plugins.Single(p => p.Name == "Patch.esp").KeyOf();
+        var listed = index.Records.GetRecords(["acti"], patch, search: null, limit: 10, offset: 0).Items.Select(r => r.EditorId);
 
         Assert.Equal(["CZuluLever", "BBetaLever", "AAlphaLever"], listed);
 
@@ -315,7 +279,7 @@ public sealed class ProgressiveIndexingTests
         var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        var read = Task.Run(() => index.RequireReads().CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
+        var read = Task.Run(() => index.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
         var finished = await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(5)));
 
         Assert.Same(read, finished);

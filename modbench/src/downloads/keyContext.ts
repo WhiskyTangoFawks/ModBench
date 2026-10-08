@@ -16,10 +16,10 @@ export function downloadsKeyContext(selection: readonly DownloadsTreeNode[]): Do
   const single = singularArgument(entry, 'download');
   return {
     singleFile: single !== undefined,
-    singleFileWithMeta: single?.row.hasMeta === true,
+    singleFileWithMeta: single?.argument.row.hasMeta === true,
     holdsFile: files.length > 0,
-    holdsIncluded: files.some((file) => !file.row.excluded),
-    holdsExcluded: files.some((file) => file.row.excluded),
+    holdsIncluded: files.some((file) => !file.argument.row.excluded),
+    holdsExcluded: files.some((file) => file.argument.row.excluded),
   };
 }
 
@@ -30,4 +30,4 @@ export const DOWNLOADS_KEY_ARGS = { view: 'modbench.downloads' } as const;
 /** Downloads' own text for the catalog's one copy value id: each file's file name, or `undefined`
  *  unless the invocation is a download row or the Downloads key's args. */
 export const downloadsCopyValueText = (viewSelection: () => readonly DownloadsTreeNode[]) =>
-  viewCopyValueText<DownloadsTreeNode, 'download'>(DOWNLOADS_KEY_ARGS.view, ['download'], (row) => row.row.name, viewSelection);
+  viewCopyValueText<DownloadsTreeNode, 'download'>(DOWNLOADS_KEY_ARGS.view, ['download'], (node) => node.argument.row.name, viewSelection);

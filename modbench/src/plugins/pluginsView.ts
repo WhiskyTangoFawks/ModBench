@@ -10,7 +10,8 @@ import { originFiles } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import { reportSyncFailures, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
 import type { PluginSync } from './pluginSync';
-import { PluginsTreeProvider, type PluginFactsClient, type PluginsInstance, type PluginsTreeNode } from './PluginsTreeProvider';
+import { PluginsTreeProvider, type PluginsInstance, type PluginsTreeNode } from './PluginsTreeProvider';
+import type { PluginFactsClient } from './pluginFactsFeed';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 import { publishPluginWarnings } from './loadDiagnostics';
 import { pluginsKeyContext } from './gestureEntry';
@@ -48,7 +49,7 @@ export interface PluginsViewDeps {
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the index
    *  status. */
   client: PluginFactsClient & RenamePluginDeps['client'] & TrackDeps['client'] & DecompileDeps['client'] & CompileDeps['client']
-    & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onReconnected' | 'setFilter' | 'clearFilter' | 'createPlugin'>;
+    & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onReconnected' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin'>;
   statusBar: StatusBar;
   /** A reconcile reached Ready, or a track landed: what the views outside this box refetch. */
   conflictsComputed: () => Promise<void>;
@@ -110,7 +111,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     for (const [name, value] of Object.entries(pluginsKeyContext(selected.rows(), (row) => tree.isEnabled(row)))) {
       void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
     }
-    void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', tree.anyCompilable());
+    void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', tree.facts.rows.anyCompilable());
   };
   showKeyContext();
   const keyContextSubscriptions = [view.onDidChangeSelection(showKeyContext), tree.onDidChangeTreeData(showKeyContext)];
@@ -119,12 +120,12 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const showRecordFilter = makeShowRecordFilter(lens, { pluginsNameFilter: nameFilter, pluginsTree: tree });
   const progress = pluginsViewProgress(view, nameFilter);
   const indexStatus = followIndexStatus({
-    client, tree, recordBrowser, progress, statusBar, showRecordFilter, notifyConflictsComputed, log,
+    client, facts: tree.facts, recordBrowser, progress, statusBar, showRecordFilter, notifyConflictsComputed, log,
     reporter: reporterFor('loadOrder'),
   });
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   const compileProblems = new CompileProblems(compileDiagnostics);
-  const unsubscribe = subscribeTreeToNotifications(client, recordBrowser, () => { void tree.refreshFacts(); });
+  const unsubscribe = subscribeTreeToNotifications(client, recordBrowser, () => { void tree.facts.refresh(); });
   // Disposed in order: what reads the tree and the view goes before them.
   const recordDecorations = new RecordDecorationProvider(recordBrowser);
   const disposable = vscode.Disposable.from(
@@ -138,7 +139,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     ...registerPluginGestures(deps, { tree, view, progress, selection: selected.rows, compileProblems }),
     registerPluginMoveCommand(access, client, instance, selected.rows, reporterFor('pluginListTree.move')),
     ...registerFilterCommands({
-      client, treeProvider: recordBrowser, refreshMatchingPlugins: () => { void tree.refreshFacts(); },
+      client, treeProvider: recordBrowser, refreshMatchingPlugins: () => { void tree.facts.refresh(); },
       showRecordFilter, reporter: reporterFor('recordFilter'),
     }),
     ...registerPluginSortCommands(tree),

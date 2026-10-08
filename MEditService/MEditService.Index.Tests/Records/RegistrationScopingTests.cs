@@ -1,3 +1,5 @@
+using MEditService.Codec.Schema;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -27,7 +29,7 @@ public class RegistrationScopingTests
                     betaKeys = Populate(mod, "B");
                     var alpha = built[0];
                     mod.ModHeader.MasterReferences.Add(new MasterReference { Master = alpha.ModKey });
-                    mod.Npcs.Set(alpha.Npcs.Single().DeepCopy());
+                    mod.Npcs.Set(alpha.Npcs.Single(n => n.FormKey.ToString() == sharedNpcFk).DeepCopy());
                 }, origin: BetaKey.Origin)
                 .BuildScattered();
             (BetaRaceFk, BetaNpcFk, BetaWorldspaceFk, BetaCellFk, BetaPlacedFk, BetaQuestFk, BetaTopicFk) = betaKeys;
@@ -40,8 +42,7 @@ public class RegistrationScopingTests
 
             using var beta = Fallout4Mod.CreateFromBinaryOverlay(
                 Plugins.Plugins.Single(p => p.Name == BetaKey.Name).Path, Fallout4Release.Fallout4);
-            const int theHeaderDocumentEnumerateMajorRecordsCannotCountBecauseItIsNotAMajorRecordGetter = 1;
-            BetaRowCount = beta.EnumerateMajorRecords().Count() + theHeaderDocumentEnumerateMajorRecordsCannotCountBecauseItIsNotAMajorRecordGetter;
+            BetaRecords = [.. beta.EnumerateMajorRecords().Select(r => r.FormKey.ToString())];
         }
 
         public ScatteredFixtureData Plugins { get; }
@@ -56,9 +57,15 @@ public class RegistrationScopingTests
         public string BetaPlacedFk { get; }
         public string BetaQuestFk { get; }
         public string BetaTopicFk { get; }
-        public int BetaRowCount { get; }
+        public IReadOnlyList<string> BetaRecords { get; }
 
-        public IRecordReads Reads => Index.RequireReads();
+        public IEnumerable<string> BetaRecordsFound() => BetaRecords.Where(formKey => Index.RowOf(formKey, BetaKey) is not null);
+
+        public IReadOnlyList<RecordSummary> EveryListedRecord() =>
+            Index.Records.GetRecords(types: null, plugin: null, search: null, limit: 1000, offset: 0).Items;
+
+        public FormKeyResolutionState ResolutionOfBetasNpc() =>
+            Index.ResolutionOf(SharedNpcFk, AlphaKey, BetaNpcFk).State;
 
         public void Reconcile(IReadOnlyList<LoadOrderEntry> snapshot) =>
             Index.Reconcile(Holder, Plugins.GameDirectory, snapshot, GameRelease.Fallout4);
@@ -114,82 +121,75 @@ public class RegistrationScopingTests
     public void APluginAbsentFromTheSnapshot_AnswersNoRead_WhileTheOtherProviderStillAnswers()
     {
         using var fx = Build("registration-unregister");
-        var reads = fx.Reads;
+        var index = fx.Index;
 
-        Assert.Equal(fx.BetaRowCount, reads.DocumentsOf(BetaKey).Count);
-        var initialSharedStack = reads.GetOverrideStack(fx.SharedNpcFk);
-        Assert.NotNull(initialSharedStack);
-        Assert.Equal(2, initialSharedStack.Entries.Count);
-        Assert.NotEmpty(reads.GetReferencedBy(fx.BetaRaceFk));
-        Assert.NotNull(reads.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
-        Assert.NotEmpty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
+        Assert.Equal(fx.BetaRecords, fx.BetaRecordsFound());
+        Assert.Equal(2, index.StackOf(fx.SharedNpcFk).Count);
+        Assert.NotEmpty(index.Records.GetReferences(fx.BetaRaceFk));
+        Assert.NotNull(index.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
+        Assert.NotEmpty(index.Containers.GetChildren(BetaKey, fx.BetaQuestFk));
 
         fx.Reconcile(fx.WithoutBeta);
 
-        Assert.Null(reads.GetDocument(fx.BetaNpcFk));
-        Assert.Null(reads.GetDocument(fx.BetaNpcFk, BetaKey));
-        Assert.Empty(reads.DocumentsOf(BetaKey));
-        Assert.Null(reads.GetOverrideStack(fx.BetaNpcFk));
-        var shared = reads.GetOverrideStack(fx.SharedNpcFk);
-        Assert.NotNull(shared);
-        var only = Assert.Single(shared.Entries);
-        Assert.Equal(AlphaKey.Name, only.Plugin.Name);
+        Assert.Null(index.Records.GetRecord(fx.BetaNpcFk));
+        Assert.Null(index.CopyIn(fx.BetaNpcFk, BetaKey));
+        Assert.Empty(fx.BetaRecordsFound());
+        Assert.Null(index.Records.GetCompare(fx.BetaNpcFk));
+        var only = Assert.Single(index.StackOf(fx.SharedNpcFk));
+        Assert.Equal(AlphaKey.Name, only.Plugin);
         Assert.True(only.IsWinner);
-        var sharedDocument = reads.GetDocument(fx.SharedNpcFk);
-        Assert.NotNull(sharedDocument);
-        Assert.Equal(AlphaKey.Name, sharedDocument.Plugin.Name);
+        Assert.Equal(AlphaKey.Name, index.Records.GetRecord(fx.SharedNpcFk)?.Plugin);
 
-        Assert.Empty(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: BetaKey.Name, Origin: BetaKey.Origin, Limit: 1000)).Items);
-        Assert.DoesNotContain(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
-        Assert.Empty(reads.GetRecordTypeCounts(BetaKey));
+        Assert.DoesNotContain(fx.EveryListedRecord(), r => r.Plugin == BetaKey.Name);
+        Assert.Empty(index.Records.GetPluginRecordTypes(BetaKey));
 
-        Assert.Null(reads.LinkResolver(fx.BetaNpcFk)(fx.BetaNpcFk));
-        Assert.Empty(reads.GetReferencedBy(fx.BetaRaceFk));
-        Assert.Empty(reads.GetWorldspaceCells(BetaKey, fx.BetaWorldspaceFk));
-        Assert.Empty(reads.GetInteriorCells(BetaKey));
-        var cellRefs = reads.GetCellChildRecords(BetaKey, fx.BetaCellFk);
+        Assert.Equal(FormKeyResolutionState.Unresolved, fx.ResolutionOfBetasNpc());
+        Assert.Empty(index.Records.GetReferences(fx.BetaRaceFk));
+        var cells = index.Worldspaces.GetWorldspaceBlocks(BetaKey, fx.BetaWorldspaceFk);
+        Assert.Empty(cells.Blocks);
+        Assert.Empty(cells.TopCells);
+        Assert.Empty(index.Worldspaces.GetInteriorCells(BetaKey));
+        var cellRefs = index.Worldspaces.GetCellChildRecords(BetaKey, fx.BetaCellFk);
         Assert.Empty(cellRefs.Persistent);
         Assert.Empty(cellRefs.Temporary);
-        Assert.Null(reads.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
-        Assert.Null(reads.GetCellLocation(BetaKey, fx.BetaCellFk));
-        Assert.Empty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
+        Assert.Empty(index.Containers.GetChildren(BetaKey, fx.BetaQuestFk));
 
         var filterNamingBetaWhereTheSharedNpcFormKeySitsInBothPluginsSoALeakedRowWouldSurfaceAlphasCopy =
             $"SELECT form_key FROM npc_ WHERE plugin = '{BetaKey.Name}' AND origin = '{BetaKey.Origin}'";
-        fx.Index.SetFilter(filterNamingBetaWhereTheSharedNpcFormKeySitsInBothPluginsSoALeakedRowWouldSurfaceAlphasCopy, "filter.sql");
-        Assert.Empty(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Limit: 1000)).Items);
-        Assert.Empty(reads.GetPluginsWithMatchingRecords(["npc_"]));
-        fx.Index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{AlphaKey.Name}' AND origin = '{AlphaKey.Origin}'", "filter.sql");
-        Assert.Contains(AlphaKey, reads.GetPluginsWithMatchingRecords(["npc_"]));
-        Assert.Contains(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Limit: 1000)).Items, r => r.FormKey == fx.SharedNpcFk);
-        fx.Index.ClearFilter();
+        index.SetFilter(filterNamingBetaWhereTheSharedNpcFormKeySitsInBothPluginsSoALeakedRowWouldSurfaceAlphasCopy, "filter.sql");
+        Assert.Empty(fx.EveryListedRecord());
+        Assert.DoesNotContain(index.Records.GetPlugins(), p => p.HasMatchingRecords);
+        index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{AlphaKey.Name}' AND origin = '{AlphaKey.Origin}'", "filter.sql");
+        Assert.True(index.PluginRowOf(AlphaKey)?.HasMatchingRecords);
+        Assert.Contains(fx.EveryListedRecord(), r => r.FormKey == fx.SharedNpcFk);
+        index.ClearFilter();
 
-        Assert.NotEmpty(reads.DocumentsOf(AlphaKey));
-        Assert.NotEmpty(reads.GetRecordTypeCounts(AlphaKey));
+        Assert.NotEmpty(index.ListedIn(AlphaKey));
+        Assert.NotEmpty(index.Records.GetPluginRecordTypes(AlphaKey));
     }
 
     [Fact]
     public void APluginThatIsNotActive_AnswersNoReadOfARecord()
     {
         using var fx = Build("registration-inactive-reads");
-        var reads = fx.Reads;
-        Assert.Equal(fx.BetaRowCount, reads.DocumentsOf(BetaKey).Count);
+        var index = fx.Index;
+        Assert.Equal(fx.BetaRecords, fx.BetaRecordsFound());
 
         fx.Reconcile(fx.WithBetaDisabled);
 
-        Assert.Null(reads.GetDocument(fx.BetaNpcFk));
-        Assert.Null(reads.GetDocument(fx.BetaNpcFk, BetaKey));
-        Assert.Empty(reads.DocumentsOf(BetaKey));
-        Assert.Null(reads.GetOverrideStack(fx.BetaNpcFk));
-        var shared = Assert.Single(reads.GetOverrideStack(fx.SharedNpcFk)?.Entries ?? []);
-        Assert.Equal(AlphaKey, shared.Plugin);
-        Assert.DoesNotContain(reads.Search(new RecordQuery(RecordQueryScope.Navigator, Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
-        Assert.Empty(reads.GetRecordTypeCounts(BetaKey));
-        Assert.Null(reads.LinkResolver(fx.BetaNpcFk)(fx.BetaNpcFk));
-        Assert.Empty(reads.GetReferencedBy(fx.BetaRaceFk));
-        Assert.Empty(reads.GetInteriorCells(BetaKey));
-        Assert.Null(reads.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
-        Assert.Empty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
+        Assert.Null(index.Records.GetRecord(fx.BetaNpcFk));
+        Assert.Null(index.CopyIn(fx.BetaNpcFk, BetaKey));
+        Assert.Empty(fx.BetaRecordsFound());
+        Assert.Null(index.Records.GetCompare(fx.BetaNpcFk));
+        var shared = Assert.Single(index.StackOf(fx.SharedNpcFk));
+        Assert.Equal(AlphaKey, new PluginAddress(shared.Plugin, shared.Origin));
+        Assert.DoesNotContain(fx.EveryListedRecord(), r => r.Plugin == BetaKey.Name);
+        Assert.Empty(index.Records.GetPluginRecordTypes(BetaKey));
+        Assert.Equal(FormKeyResolutionState.Unresolved, fx.ResolutionOfBetasNpc());
+        Assert.Empty(index.Records.GetReferences(fx.BetaRaceFk));
+        Assert.Empty(index.Worldspaces.GetInteriorCells(BetaKey));
+        Assert.Null(index.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
+        Assert.Empty(index.Containers.GetChildren(BetaKey, fx.BetaQuestFk));
     }
 
     [Fact]
@@ -219,26 +219,22 @@ public class RegistrationScopingTests
     public void APluginAbsentThenRestored_AnswersAgainWithoutReindex()
     {
         using var fx = Build("registration-reregister");
-        var reads = fx.Reads;
+        var index = fx.Index;
         fx.Reconcile(fx.WithoutBeta);
-        Assert.Empty(reads.DocumentsOf(BetaKey));
+        Assert.Empty(fx.BetaRecordsFound());
         var opened = fx.Opens.OpenedTotal;
 
         fx.Reconcile(fx.Plugins.Plugins);
 
         Assert.Equal(opened, fx.Opens.OpenedTotal);
-        Assert.Equal(fx.BetaRowCount, reads.DocumentsOf(BetaKey).Count);
-        var stackResult = reads.GetOverrideStack(fx.SharedNpcFk);
-        Assert.NotNull(stackResult);
-        var stack = stackResult.Entries;
+        Assert.Equal(fx.BetaRecords, fx.BetaRecordsFound());
+        var stack = index.StackOf(fx.SharedNpcFk);
         Assert.Equal(2, stack.Count);
-        Assert.True(stack.Single(e => e.Plugin.Name == BetaKey.Name).IsWinner);
-        var sharedAfterReregister = reads.GetDocument(fx.SharedNpcFk);
-        Assert.NotNull(sharedAfterReregister);
-        Assert.Equal(BetaKey.Name, sharedAfterReregister.Plugin.Name);
-        Assert.NotNull(reads.LinkResolver(fx.BetaNpcFk)(fx.BetaNpcFk));
-        Assert.NotNull(reads.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
-        Assert.NotEmpty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
+        Assert.True(stack.Single(e => e.Plugin == BetaKey.Name).IsWinner);
+        Assert.Equal(BetaKey.Name, index.Records.GetRecord(fx.SharedNpcFk)?.Plugin);
+        Assert.NotEqual(FormKeyResolutionState.Unresolved, fx.ResolutionOfBetasNpc());
+        Assert.NotNull(index.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
+        Assert.NotEmpty(index.Containers.GetChildren(BetaKey, fx.BetaQuestFk));
     }
 
     [Fact]
@@ -251,7 +247,7 @@ public class RegistrationScopingTests
         File.Delete(betaPath);
         fx.Index.NextSnapshot();
 
-        Assert.Empty(fx.Reads.DocumentsOf(BetaKey));
+        Assert.Empty(fx.Index.ListedIn(BetaKey));
 
         var beta = new Fallout4Mod(ModKey.FromFileName(BetaKey.Name), Fallout4Release.Fallout4);
         beta.Npcs.AddNew("NpcBAgain");
@@ -260,6 +256,6 @@ public class RegistrationScopingTests
         fx.Reconcile(fx.Plugins.Plugins);
 
         Assert.Equal(opened + 1, fx.Opens.OpenedTotal);
-        Assert.NotEmpty(fx.Reads.DocumentsOf(BetaKey));
+        Assert.NotEmpty(fx.Index.ListedIn(BetaKey));
     }
 }

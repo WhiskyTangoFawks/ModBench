@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
@@ -34,22 +35,18 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var index = OpenIndex(holder);
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        var reads = index.RequireReads();
-        Assert.Equal(TestPluginFixture.PluginName, Assert.Single(reads.OpenedPlugins).Key.Name);
+        Assert.Equal(TestPluginFixture.PluginName, Assert.Single(index.Records.GetPlugins()).Plugin.Name);
     }
 
     [Fact]
-    public void Dispose_LeavesNoLoadOrder_AndClosesTheReadsHandedOutBefore()
+    public void Dispose_LeavesNoLoadOrder()
     {
         var holder = new LoadOrderHolder();
         using var index = OpenIndex(holder);
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        var oldReads = index.RequireReads();
         index.Dispose();
 
-        Assert.Throws<NoLoadOrderException>(() => index.RequireReads());
-        Assert.Throws<ObjectDisposedException>(() =>
-            oldReads.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, PluginOrigin.DataDirectory)));
+        Assert.Throws<NoLoadOrderException>(() => index.Records.GetPlugins());
     }
 
     [Fact]
@@ -68,8 +65,9 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var index = OpenIndex(holder);
 
         index.ClearFilter();
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        Assert.Null(index.ActiveFilter);
+        Assert.Null(index.Records.GetFilter());
     }
 
     [Fact]
@@ -78,7 +76,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         var holder = new LoadOrderHolder();
         using var index = ReconciledIndex(holder);
         index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
-        Assert.Equal("SELECT form_key FROM \"NPC_\"", index.ActiveFilter?.Sql);
+        Assert.Equal("SELECT form_key FROM \"NPC_\"", index.Records.GetFilter()?.Sql);
     }
 
     [Fact]
@@ -88,7 +86,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var index = ReconciledIndex(holder);
         index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
         index.ClearFilter();
-        Assert.Null(index.ActiveFilter);
+        Assert.Null(index.Records.GetFilter());
     }
 
     [Fact]
@@ -101,7 +99,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
 
-        Assert.Null(index.ActiveFilter);
+        Assert.Null(index.Records.GetFilter());
     }
 
     [Fact]
@@ -112,8 +110,9 @@ public class IndexScopeTests(TestPluginFixture fixture)
         index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
 
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.SkyrimSE);
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        Assert.Null(index.ActiveFilter);
+        Assert.Null(index.Records.GetFilter());
     }
 
     [Fact]
@@ -126,7 +125,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
         index.Reconcile(holder, other.DataFolder, other.Plugins, GameRelease.Fallout4);
 
-        Assert.Null(index.ActiveFilter);
+        Assert.Null(index.Records.GetFilter());
     }
 
     [Fact]
@@ -141,16 +140,15 @@ public class IndexScopeTests(TestPluginFixture fixture)
         {
             using var index = OpenIndex(holder);
             index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var reads = index.RequireReads();
 
             index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NowMatches'", "filter.sql");
-            Assert.Equal(0, reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+            Assert.Equal(0, NpcsListed(index).Total);
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NowMatches");
 
             index.NextSnapshot();
 
-            var result = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            var result = NpcsListed(index);
             Assert.Equal(1, result.Total);
             Assert.Equal(npcKey.ToString(), result.Items[0].FormKey);
         }
@@ -168,16 +166,15 @@ public class IndexScopeTests(TestPluginFixture fixture)
         {
             using var index = OpenIndex(holder);
             index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var reads = index.RequireReads();
 
             index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'StillMatches'", "filter.sql");
-            Assert.Equal(1, reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+            Assert.Equal(1, NpcsListed(index).Total);
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NoLongerMatches");
 
             index.NextSnapshot();
 
-            var result = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            var result = NpcsListed(index);
             Assert.Equal(0, result.Total);
         }
     }
@@ -207,13 +204,13 @@ public class IndexScopeTests(TestPluginFixture fixture)
             index.NextSnapshot();
 
             Assert.Contains(
-                index.RequireReads().DocumentsOf(new PluginAddress("Plugin.esp", PluginOrigin.DataDirectory)),
-                d => d.EditorId == "NotANumber");
-            Assert.Null(index.ActiveFilter);
+                index.ListedIn(new PluginAddress("Plugin.esp", PluginOrigin.DataDirectory)),
+                row => row.EditorId == "NotANumber");
+            Assert.Null(index.Records.GetFilter());
             var cleared = Assert.Single(notifications.Notifications.OfType<RecordFilterClearedNotification>());
             Assert.Equal("filter.sql", cleared.Source);
             Assert.Contains("NotANumber", cleared.Reason, StringComparison.Ordinal);
-            var listing = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            var listing = NpcsListed(index);
             Assert.Equal(2, listing.Total);
         }
     }
@@ -227,20 +224,22 @@ public class IndexScopeTests(TestPluginFixture fixture)
         onDisk.WriteToBinary(pluginPath);
     }
 
-    [Fact]
-    public void Reconcile_ForADifferentInstance_ClosesTheReadsHandedOutBefore()
+    [ForeignIndexHolderFact]
+    public void Reconcile_ForADifferentInstance_ReleasesTheFirstInstancesIndex()
     {
+        using var first = new ScratchDirectory("medit-first-instance-");
+        using var second = new ScratchDirectory("medit-second-instance-");
         var holder = new LoadOrderHolder();
         using var index = OpenIndex(holder);
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        var oldReads = index.RequireReads();
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, first);
 
-        var otherInstance = Directory.CreateDirectory(Path.Combine(_fixture.InstanceRoot, "other-instance")).FullName;
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, second);
 
-        Assert.Throws<ObjectDisposedException>(() =>
-            oldReads.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, PluginOrigin.DataDirectory)));
+        Assert.Null(Record.Exception(() => ForeignIndexHolder.Hold(IndexFiles.In(first)).Dispose()));
     }
+
+    private static PagedResult<RecordSummary> NpcsListed(OpenedIndex index) =>
+        index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0);
 
     private OpenedIndex ReconciledIndex(LoadOrderHolder holder)
     {

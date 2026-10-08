@@ -1,4 +1,6 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.Records;
@@ -11,6 +13,15 @@ public sealed class SourceIngestContainerTests : IDisposable
 
     private OpenedIndex Reloaded() => Indexes.Reconciled(_fixture.GameDirectory, [_fixture.Entry]);
 
+    private SourceProblem TheOneSourceProblemOf(OpenedIndex index)
+    {
+        var problems = index.Problems.GetProblems() ?? throw new InvalidOperationException("Expected the index to be ready.");
+        return Assert.Single(Assert.Single(problems, p => PluginAddress.Comparer.Equals(p.Plugin, _fixture.Plugin)).Problems);
+    }
+
+    private bool ReadFromItsBinaryInPlaceOfItsSource(OpenedIndex index) =>
+        index.PluginRowOf(_fixture.Plugin) is { IsTracked: true, PluginSourceUnreadable: true };
+
     [Fact]
     public void AnExternallyEditedContainer_ServesItsEdit_ThroughStructuralDiff()
     {
@@ -22,9 +33,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         using var reloaded = Reloaded();
 
         Assert.Empty(reloaded.Status.Failures);
-        var effective = reloaded.RequireReads().GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin);
-        Assert.NotNull(effective);
-        Assert.Equal("RenamedCell", effective.EditorId);
+        Assert.Equal("RenamedCell", reloaded.DocumentOf(_fixture.EmbedCell.ToString(), _fixture.Plugin).EditorId);
     }
 
     [Fact]
@@ -37,9 +46,7 @@ public sealed class SourceIngestContainerTests : IDisposable
 
         using var reloaded = Reloaded();
 
-        var effective = reloaded.RequireReads().GetDocument(_fixture.Npc.ToString(), _fixture.Plugin);
-        Assert.NotNull(effective);
-        Assert.Equal("RenamedNpc", effective.EditorId);
+        Assert.Equal("RenamedNpc", reloaded.DocumentOf(_fixture.Npc.ToString(), _fixture.Plugin).EditorId);
     }
 
     [Fact]
@@ -55,9 +62,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         using var reloaded = Reloaded();
 
         Assert.Empty(reloaded.Status.Failures);
-        var effective = reloaded.RequireReads().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
-        Assert.NotNull(effective);
-        Assert.Equal("RenamedTempRef", effective.EditorId);
+        Assert.Equal("RenamedTempRef", reloaded.DocumentOf(_fixture.TemporaryRef.ToString(), _fixture.Plugin).EditorId);
     }
 
     [Fact]
@@ -79,10 +84,8 @@ public sealed class SourceIngestContainerTests : IDisposable
         using var reloaded = Reloaded();
 
         Assert.Empty(reloaded.Status.Failures);
-        var effective = reloaded.RequireReads().GetDocument(newFormKey, _fixture.Plugin);
-        Assert.NotNull(effective);
-        Assert.Equal("BrandNewRef", effective.EditorId);
-        Assert.True(reloaded.RequireReads().StackEntry(newFormKey, _fixture.Plugin).Require().HasWorkingTreeChange);
+        Assert.Equal("BrandNewRef", reloaded.DocumentOf(newFormKey, _fixture.Plugin).EditorId);
+        Assert.Equal(WorkingTreeState.Added, reloaded.RowOf(newFormKey, _fixture.Plugin)?.WorkingTreeState);
     }
 
     [Fact]
@@ -98,8 +101,8 @@ public sealed class SourceIngestContainerTests : IDisposable
         using var reloaded = Reloaded();
 
         Assert.Empty(reloaded.Status.Failures);
-        Assert.Null(reloaded.RequireReads().GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
-        Assert.NotNull(reloaded.RequireReads().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
+        Assert.Null(reloaded.CopyIn(_fixture.PersistentRef.ToString(), _fixture.Plugin));
+        Assert.NotNull(reloaded.CopyIn(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
     }
 
     [Theory]
@@ -113,14 +116,13 @@ public sealed class SourceIngestContainerTests : IDisposable
 
         using var reloaded = Reloaded();
 
-        var reads = reloaded.RequireReads();
         var child = _fixture.TemporaryRef.ToString();
-        Assert.NotNull(reads.GetDocument(child, _fixture.Plugin));
-        Assert.NotNull(reads.StackEntry(child, _fixture.Plugin));
-        Assert.NotNull(reads.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell.ToString(), child));
-        Assert.Equal(DerivedFrom.BinaryForUnreadableSource, reads.DerivationOf(_fixture.Plugin));
+        Assert.NotNull(reloaded.CopyIn(child, _fixture.Plugin));
+        Assert.NotNull(reloaded.RowOf(child, _fixture.Plugin));
+        Assert.NotNull(reloaded.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell.ToString(), child));
+        Assert.True(ReadFromItsBinaryInPlaceOfItsSource(reloaded));
         Assert.Empty(reloaded.Status.Failures);
-        var failure = Assert.Single(reloaded.SourceFileFailures);
+        var failure = TheOneSourceProblemOf(reloaded);
         Assert.Equal(Path.GetRelativePath(_fixture.Entry.ModFolderOf(), file), failure.SourceRelativePath);
         Assert.Contains(child, failure.Message, StringComparison.Ordinal);
         Assert.Contains(why, failure.Message, StringComparison.Ordinal);
@@ -134,16 +136,16 @@ public sealed class SourceIngestContainerTests : IDisposable
         File.WriteAllText(file, WithTemporaryRefMisspelt(File.ReadAllText(file)));
 
         index.NextSnapshotUntil(
-            () => index.RequireReads().DerivationOf(_fixture.Plugin) == DerivedFrom.BinaryForUnreadableSource,
+            () => ReadFromItsBinaryInPlaceOfItsSource(index),
             "the plugin file read in place of its source");
 
         Assert.Empty(index.Status.Failures);
-        var failure = Assert.Single(index.SourceFileFailures);
+        var failure = TheOneSourceProblemOf(index);
         Assert.Equal(_fixture.TemporaryRef.ToString(), failure.FormKey);
         Assert.Contains("a 'PlacedObjekt'", failure.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "PlacedObjekt",
-            index.RequireReads().DocumentOf(_fixture.EmbedCell.ToString(), _fixture.Plugin).BodyOf(),
+            index.BodyOf(_fixture.EmbedCell.ToString(), _fixture.Plugin),
             StringComparison.Ordinal);
     }
 
@@ -160,7 +162,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         using var reloaded = Reloaded();
 
         Assert.Empty(reloaded.Status.Failures);
-        Assert.NotNull(reloaded.RequireReads().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
+        Assert.NotNull(reloaded.CopyIn(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
     }
 
     private static string WithTemporaryRefMisspelt(string cellDocument) =>

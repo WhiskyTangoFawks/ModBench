@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -34,7 +35,7 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = new Scratch(Fixture);
 
-        var counts = scratch.Reads.GetRecordTypeCounts(scratch.Plugin);
+        var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin);
 
         Assert.True(counts.Sum(c => c.Count) > 1,
             "the plugin's readable records must still index; a single unreadable record is not a plugin-wide failure");
@@ -62,8 +63,7 @@ public sealed class ParseFailedRecordTests
             .Where(kv => kv.Key != PluginHeader.RecordType)
             .Sum(kv => overlay.EnumerateMajorRecords(kv.Value.RecordType, throwIfUnknown: false).Count());
 
-        var listed = scratch.Reads.GetRecordTypeCounts(scratch.Plugin)
-            .Where(c => c.Type != PluginHeader.RecordType).Sum(c => c.Count);
+        var listed = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin).Sum(c => c.Count);
 
         Assert.Equal(inThePlugin, listed);
     }
@@ -73,7 +73,7 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = new Scratch(Fixture);
 
-        var counts = scratch.Reads.GetRecordTypeCounts(scratch.Plugin);
+        var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin);
 
         Assert.True(counts.Single(t => t.Type == "perk").HasParseFailure);
         Assert.All(counts.Where(t => t.Type != "perk"), t => Assert.False(t.HasParseFailure));
@@ -84,10 +84,10 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = new Scratch(Fixture);
 
-        var flagged = scratch.Reads.GetPluginsWithParseFailures();
+        var plugins = scratch.Index.Records.GetPlugins();
 
-        Assert.Equal([ColumnKey.Of(Fixture, Origin)], flagged.Order(StringComparer.Ordinal));
-        var stubMastersIndexedBesideItSoOnlyHasSomethingToExclude = scratch.Reads.OpenedPlugins.Count;
+        Assert.Equal([scratch.Plugin], plugins.Where(p => p.HasParseFailure).Select(p => p.Plugin.Key));
+        var stubMastersIndexedBesideItSoOnlyHasSomethingToExclude = plugins.Count;
         Assert.True(stubMastersIndexedBesideItSoOnlyHasSomethingToExclude > 1);
     }
 
@@ -96,40 +96,37 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = new Scratch(Fixture, active: false);
 
-        Assert.Contains(ColumnKey.Of(Fixture, Origin), scratch.Reads.GetPluginsWithParseFailures());
+        Assert.True(scratch.Index.PluginRowOf(scratch.Plugin)?.HasParseFailure);
     }
 
     [Fact]
-    public void TheOverrideStack_ReadsTheUnreadableRecordBackFromItsStoredBody()
+    public void TheCompare_ReadsTheUnreadableRecordBackFromItsStoredBody()
     {
         using var scratch = new Scratch(Fixture);
 
-        var stack = scratch.Reads.GetOverrideStack(PerkWhoseEntryPointParameterFlagsMutagenRefuses);
-
-        Assert.NotNull(stack);
-        var document = Assert.Single(stack.Entries).Effective;
+        var document = Assert.Single(scratch.Index.StackOf(PerkWhoseEntryPointParameterFlagsMutagenRefuses));
         Assert.Equal(PerkWhoseEntryPointParameterFlagsMutagenRefuses, document.FormKey);
         Assert.Equal("T6M_QuickReload_ReloadVATs", document.EditorId);
     }
 
     [Fact]
-    public void TheOverrideStack_CarriesTheDiagnosisOnTheUnreadableRecordsDocument()
+    public void TheCompare_CarriesTheDiagnosisOnTheUnreadableRecordsDocument()
     {
         using var scratch = new Scratch(Fixture);
 
-        var document = Assert.Single(scratch.Reads.GetOverrideStack(PerkWhoseEntryPointParameterFlagsMutagenRefuses).Require().Entries).Effective;
+        var document = Assert.Single(scratch.Index.StackOf(PerkWhoseEntryPointParameterFlagsMutagenRefuses));
 
         Assert.NotNull(document.ParseDiagnosis);
         Assert.Contains(Diagnosis, document.ParseDiagnosis);
     }
 
     [Fact]
-    public void TheOverrideStack_LeavesAReadableRecordsDocumentWithoutADiagnosis()
+    public void TheCompare_LeavesAReadableRecordsDocumentWithoutADiagnosis()
     {
         using var scratch = new Scratch(Fixture);
         var readable = Perks(scratch).First(r => r.FormKey != PerkWhoseEntryPointParameterFlagsMutagenRefuses);
 
-        var document = Assert.Single(scratch.Reads.GetOverrideStack(readable.FormKey).Require().Entries).Effective;
+        var document = Assert.Single(scratch.Index.StackOf(readable.FormKey));
 
         Assert.Null(document.ParseDiagnosis);
     }
@@ -140,7 +137,7 @@ public sealed class ParseFailedRecordTests
         using var sources = new ScratchDirectory("medit-parsefail-source-");
         using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(sources), CorruptGroupFixture.PluginName);
 
-        var counts = scratch.Reads.GetRecordTypeCounts(scratch.Plugin);
+        var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin);
 
         Assert.Equal(1, counts.Single(t => t.Type == "weap").Count);
         Assert.DoesNotContain(scratch.Index.Status.Failures, f => f.Name == CorruptGroupFixture.PluginName);
@@ -152,12 +149,11 @@ public sealed class ParseFailedRecordTests
         using var sources = new ScratchDirectory("medit-parsefail-source-");
         using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(sources), CorruptGroupFixture.PluginName);
 
-        var counts = scratch.Reads.GetRecordTypeCounts(scratch.Plugin);
+        var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin);
 
         Assert.True(counts.Single(t => t.Type == "npc_").HasParseFailure);
         Assert.False(counts.Single(t => t.Type == "weap").HasParseFailure);
-        Assert.Contains(
-            ColumnKey.Of(CorruptGroupFixture.PluginName, Origin), scratch.Reads.GetPluginsWithParseFailures());
+        Assert.True(scratch.Index.PluginRowOf(scratch.Plugin)?.HasParseFailure);
     }
 
     [Fact]
@@ -166,10 +162,10 @@ public sealed class ParseFailedRecordTests
         using var sources = new ScratchDirectory("medit-parsefail-source-");
         using var scratch = new Scratch(Scratch.DeletedNpcPlugin(sources, (path, npc) => DeletedNpcPlugin.WriteEmpty(path, npc)), DeletedNpcPluginName);
 
-        var document = Assert.Single(scratch.Reads.GetOverrideStack(DeletedNpc).Require().Entries).Effective;
+        var document = Assert.Single(scratch.Index.StackOf(DeletedNpc));
 
         Assert.Null(document.ParseDiagnosis);
-        Assert.Contains("\"MajorRecordFlagsRaw\": 32", document.Body, StringComparison.Ordinal);
+        Assert.Contains("\"MajorRecordFlagsRaw\": 32", scratch.Index.BodyOf(DeletedNpc, scratch.Plugin), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -178,7 +174,7 @@ public sealed class ParseFailedRecordTests
         using var sources = new ScratchDirectory("medit-parsefail-source-");
         using var scratch = new Scratch(Scratch.DeletedNpcPlugin(sources, (path, npc) => DeletedNpcPlugin.WriteHoldingFields(path, npc)), DeletedNpcPluginName);
 
-        var document = Assert.Single(scratch.Reads.GetOverrideStack(DeletedNpc).Require().Entries).Effective;
+        var document = Assert.Single(scratch.Index.StackOf(DeletedNpc));
 
         Assert.NotNull(document.ParseDiagnosis);
     }
@@ -192,9 +188,7 @@ public sealed class ParseFailedRecordTests
     }
 
     private static IReadOnlyList<RecordSummary> Perks(Scratch scratch) =>
-        scratch.Reads.Search(new RecordQuery(RecordQueryScope.Navigator,
-            RecordTypes: ["perk"], Plugin: scratch.Plugin.Name, Origin: scratch.Plugin.Origin,
-            Search: null, Limit: 1000, Offset: 0)).Items;
+        scratch.Index.Records.GetRecords(["perk"], scratch.Plugin, search: null, limit: 1000, offset: 0).Items;
 
     private static class CorruptGroupFixture
     {
@@ -234,7 +228,6 @@ public sealed class ParseFailedRecordTests
         private readonly ScratchDirectory _modFolder = new("medit-parsefail-mod-");
 
         public OpenedIndex Index { get; }
-        public IRecordReads Reads => Index.RequireReads();
         public PluginAddress Plugin { get; }
         public string PluginPath { get; }
 

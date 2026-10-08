@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -15,7 +16,7 @@ public class HeaderIndexingTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
 
-    private static object? FieldValueOf(RecordDocument doc, string name) =>
+    private static object? FieldValueOf(RecordDetail doc, string name) =>
         doc.Fields.Single(f => f.Metadata.Name == name).Value;
 
     private static PluginFixtureData OnePlugin(string prefix, string name, Action<Fallout4Mod>? configure = null) =>
@@ -23,12 +24,15 @@ public class HeaderIndexingTests
             .WithPlugin(name, configure)
             .Build();
 
-    private static List<string> MastersOf(RecordDocument header) =>
+    private static List<string> MastersOf(RecordDetail header) =>
         [.. Assert.IsType<JsonElement>(FieldValueOf(header, "MasterReferences")).EnumerateArray()
             .Select(e => e.GetProperty("Master").GetString() ?? "")];
 
-    private static RecordDocument Header(OpenedIndex index, string name) =>
-        index.RequireReads().DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(name)), new PluginAddress(name, PluginOrigin.DataDirectory));
+    private static RecordDetail Header(OpenedIndex index, string name) =>
+        index.DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(name)), new PluginAddress(name, PluginOrigin.DataDirectory));
+
+    private static IReadOnlyList<RecordSummary> HeaderRows(OpenedIndex index, PluginAddress? plugin = null, string? search = null) =>
+        index.Records.GetRecords([PluginHeader.RecordType], plugin, search, limit: 10, offset: 0).Items;
 
     [Fact]
     public void AFo4Plugin_HasAHeaderDocument_WithSyntheticFormKeyAndHeaderType()
@@ -41,9 +45,8 @@ public class HeaderIndexingTests
         Assert.Equal("000000:HeaderTest.esp", header.FormKey);
         Assert.Equal("header", header.RecordType);
         Assert.Null(header.EditorId);
-        var entry = index.RequireReads().StackEntry(header.FormKey, header.Plugin);
-        Assert.NotNull(entry);
-        Assert.False(entry.HasWorkingTreeChange);
+        var row = Assert.Single(HeaderRows(index, new PluginAddress(header.Plugin, header.Origin), header.FormKey));
+        Assert.Equal(WorkingTreeState.None, row.WorkingTreeState);
     }
 
     [Fact]
@@ -52,7 +55,7 @@ public class HeaderIndexingTests
         using var fixture = OnePlugin("header-body", "BodyTest.esp", mod => mod.ModHeader.Author = "Vault Dweller");
         using var index = Indexes.Reconciled(fixture);
 
-        var body = Header(index, "BodyTest.esp").BodyOf();
+        var body = index.BodyOf("000000:BodyTest.esp", new PluginAddress("BodyTest.esp", PluginOrigin.DataDirectory));
 
         Assert.Contains("\"ModKey\": \"BodyTest.esp\"", body, StringComparison.Ordinal);
         Assert.Contains("\"GameRelease\": \"Fallout4\"", body, StringComparison.Ordinal);
@@ -60,9 +63,9 @@ public class HeaderIndexingTests
         Assert.Contains("\"Author\": \"Vault Dweller\"", body, StringComparison.Ordinal);
 
         index.SetFilter("SELECT form_key FROM header WHERE \"Author\" = 'Vault Dweller'", "filter.sql");
-        Assert.Single(index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [PluginHeader.RecordType], Limit: 10)).Items);
+        Assert.Single(HeaderRows(index));
         index.SetFilter("SELECT form_key FROM records WHERE record_type = 'header' AND json_extract_string(body, '$.Author') = 'Vault Dweller'", "filter.sql");
-        Assert.Empty(index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [PluginHeader.RecordType], Limit: 10)).Items);
+        Assert.Empty(HeaderRows(index));
     }
 
     [Fact]
@@ -143,13 +146,12 @@ public class HeaderIndexingTests
         using var index = Indexes.Reconciled(fixture);
         var plugin = fixture.Plugins.Single(p => p.Name == "MastersTest.esp");
         var header = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
-        var reads = index.RequireReads();
-        Assert.Equal(["Kept.esm", "Dropped.esm"], MastersOf(reads.DocumentOf(header, plugin.KeyOf())));
+        Assert.Equal(["Kept.esm", "Dropped.esm"], MastersOf(index.DocumentOf(header, plugin.KeyOf())));
 
-        var droppedOverride = reads.DocumentsOf(plugin.KeyOf()).Single(d => d.EditorId == "DroppedNpc");
-        index.Delete(plugin, droppedOverride);
+        var droppedOverride = index.ListedIn(plugin.KeyOf()).Single(d => d.EditorId == "DroppedNpc");
+        index.Delete(plugin, index.DocumentOf(droppedOverride.FormKey, plugin.KeyOf()));
 
-        Assert.Equal(["Kept.esm"], MastersOf(reads.DocumentOf(header, plugin.KeyOf())));
+        Assert.Equal(["Kept.esm"], MastersOf(index.DocumentOf(header, plugin.KeyOf())));
     }
 
     [Fact]
@@ -183,29 +185,8 @@ public class HeaderIndexingTests
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
         index.NextSnapshot();
 
-        var stack = index.RequireReads().GetOverrideStack("000000:ReindexHeader.esp");
-        Assert.NotNull(stack);
-        Assert.Single(stack.Entries);
-        Assert.Single(index.RequireReads().DocumentsOf(key), d => d.RecordType == PluginHeader.RecordType);
-    }
-
-    [Fact]
-    public void TheHeader_Resolves_LikeEveryOtherRecord()
-    {
-        using var fixture = OnePlugin("header-lookup", "LookupHeader.esp", mod => mod.Npcs.AddNew().EditorID = "SomeNpc");
-        using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
-        var key = new PluginAddress("LookupHeader.esp", PluginOrigin.DataDirectory);
-
-        var documents = reads.DocumentsOf(key);
-        Assert.True(documents.Count > 1, $"expected the header and at least one record; got {documents.Count}");
-        Assert.All(documents, d => Assert.NotNull(reads.LinkResolver(d.FormKey)(d.FormKey)));
-
-        var headerKey = PluginHeader.FormKeyFor(ModKey.FromFileName("LookupHeader.esp"));
-        var resolved = reads.LinkResolver(headerKey)(headerKey);
-        Assert.NotNull(resolved);
-        Assert.Equal("header", resolved.Value.RecordType);
-        Assert.Null(resolved.Value.EditorId);
+        Assert.Single(index.StackOf("000000:ReindexHeader.esp"));
+        Assert.Single(HeaderRows(index, key));
     }
 
     [Fact]
@@ -216,17 +197,9 @@ public class HeaderIndexingTests
             .WithPlugin("PluginB.esp")
             .Build();
         using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
 
-        var overrideStackA = reads.GetOverrideStack("000000:PluginA.esp")
-            ?? throw new InvalidOperationException("Expected an override stack for PluginA.esp's header.");
-        var overrideStackB = reads.GetOverrideStack("000000:PluginB.esp")
-            ?? throw new InvalidOperationException("Expected an override stack for PluginB.esp's header.");
-
-        Assert.Single(overrideStackA.Entries);
-        Assert.Single(overrideStackB.Entries);
-        Assert.Equal("PluginA.esp", overrideStackA.Entries[0].Plugin.Name);
-        Assert.Equal("PluginB.esp", overrideStackB.Entries[0].Plugin.Name);
+        Assert.Equal("PluginA.esp", Assert.Single(index.StackOf("000000:PluginA.esp")).Plugin);
+        Assert.Equal("PluginB.esp", Assert.Single(index.StackOf("000000:PluginB.esp")).Plugin);
     }
 
     [Fact]
@@ -241,10 +214,10 @@ public class HeaderIndexingTests
 
         foreach (var (origin, author) in new[] { ("ModA", "Author A"), ("ModB", "Author B") })
         {
-            var header = Assert.Single(index.ReadsWithWinner(holder, fixture.GameDirectory, fixture.Plugins, origin)
-                .GetOverrideStack("000000:Shared.esp")?.Entries ?? []);
-            Assert.Equal(origin, header.Plugin.Origin);
-            Assert.Equal(author, Assert.IsType<JsonElement>(FieldValueOf(header.Effective, "Author")).GetString());
+            var header = Assert.Single(index.WithWinner(holder, fixture.GameDirectory, fixture.Plugins, origin)
+                .StackOf("000000:Shared.esp"));
+            Assert.Equal(origin, header.Origin);
+            Assert.Equal(author, Assert.IsType<JsonElement>(FieldValueOf(header, "Author")).GetString());
         }
     }
 }

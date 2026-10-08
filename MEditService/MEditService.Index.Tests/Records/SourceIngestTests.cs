@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
@@ -55,7 +56,14 @@ public sealed class SourceIngestTests : IDisposable
     private OpenedIndex LaunchedFreshOverTheSameTrackedTreeAndToldNothing() => Indexes.Reconciled(_fixture.GameDirectory, _fixture.Plugins);
 
     private string NpcSourceFile(OpenedIndex index) =>
-        _entry.SourceFileOf(index.RequireReads().DocumentOf(_npc, Plugin));
+        _entry.SourceFileOf(index.DocumentOf(_npc, Plugin));
+
+    private bool ReadFromItsBinaryInPlaceOfItsSource(OpenedIndex index) =>
+        index.PluginRowOf(Plugin) is { IsTracked: true, PluginSourceUnreadable: true };
+
+    private IEnumerable<string> SourceFilesTheReadStoppedAt(OpenedIndex index) =>
+        (index.Problems.GetProblems() ?? throw new InvalidOperationException("Expected the index to be ready."))
+            .Single(p => PluginAddress.Comparer.Equals(p.Plugin, Plugin)).Problems.Select(p => p.SourceRelativePath);
 
     private string RootDocument => Path.Combine(ModFolder, PluginSourceRoot.HeaderDocument(PluginName));
 
@@ -63,11 +71,11 @@ public sealed class SourceIngestTests : IDisposable
     public void AnExternalEditToASourceFile_IsAtEffectiveAfterReload_WithNoPointRead()
     {
         using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
-            _entry.HandEdit(live.RequireReads().DocumentOf(_npc, Plugin), NpcEditorId, "ExternallyRenamed");
+            _entry.HandEdit(live.DocumentOf(_npc, Plugin), NpcEditorId, "ExternallyRenamed");
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        Assert.Equal("ExternallyRenamed", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+        Assert.Equal("ExternallyRenamed", reloaded.DocumentOf(_npc, Plugin).EditorId);
     }
 
     [Fact]
@@ -86,7 +94,7 @@ public sealed class SourceIngestTests : IDisposable
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        Assert.Equal(editOnlyAReadOfTheTreeCanAnswerBecauseTheBinaryHoldsNoSuchName, reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+        Assert.Equal(editOnlyAReadOfTheTreeCanAnswerBecauseTheBinaryHoldsNoSuchName, reloaded.DocumentOf(_npc, Plugin).EditorId);
     }
 
     [Fact]
@@ -96,8 +104,8 @@ public sealed class SourceIngestTests : IDisposable
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        Assert.Null(reloaded.RequireReads().GetDocument(_npc, Plugin));
-        var siblingProvingTheLoadReallyIndexedThePlugin = reloaded.RequireReads().GetDocument(_otherNpc, Plugin);
+        Assert.Null(reloaded.CopyIn(_npc, Plugin));
+        var siblingProvingTheLoadReallyIndexedThePlugin = reloaded.CopyIn(_otherNpc, Plugin);
         Assert.NotNull(siblingProvingTheLoadReallyIndexedThePlugin);
     }
 
@@ -105,11 +113,11 @@ public sealed class SourceIngestTests : IDisposable
     public void AnUncommittedEdit_IsServedFromTheWorkingTree()
     {
         using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
-            _entry.HandEdit(live.RequireReads().DocumentOf(_npc, Plugin), NpcEditorId, "ExternallyRenamed");
+            _entry.HandEdit(live.DocumentOf(_npc, Plugin), NpcEditorId, "ExternallyRenamed");
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        Assert.Equal("ExternallyRenamed", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+        Assert.Equal("ExternallyRenamed", reloaded.DocumentOf(_npc, Plugin).EditorId);
     }
 
     [Fact]
@@ -123,37 +131,32 @@ public sealed class SourceIngestTests : IDisposable
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        var effective = reloaded.RequireReads().GetDocument(headerFormKey, Plugin);
-
-        Assert.NotNull(effective);
-        Assert.NotNull(effective.Body);
-        Assert.Contains("RenamedByHand", effective.Body, StringComparison.Ordinal);
+        Assert.Contains("RenamedByHand", reloaded.BodyOf(headerFormKey, Plugin), StringComparison.Ordinal);
     }
 
     [Fact]
     public void AnEditCommittedOutsideModbench_IsNotPermanentlyDirty()
     {
         using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
-            _entry.HandEdit(live.RequireReads().DocumentOf(_npc, Plugin), NpcEditorId, "CommittedRename");
+            _entry.HandEdit(live.DocumentOf(_npc, Plugin), NpcEditorId, "CommittedRename");
         _entry.Git("add", "-A");
         _entry.Git("commit", "-q", "-m", "external rename");
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        Assert.Equal("CommittedRename", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
-        Assert.False(reloaded.RequireReads().StackEntry(_npc, Plugin).Require().HasWorkingTreeChange);
+        Assert.Equal("CommittedRename", reloaded.DocumentOf(_npc, Plugin).EditorId);
+        Assert.Equal(WorkingTreeState.None, reloaded.RowOf(_npc, Plugin)?.WorkingTreeState);
     }
 
     [Fact]
     public void ReconcilingOneEditedRecord_LeavesItsUntouchedSiblingClean()
     {
         using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
-            _entry.HandEdit(live.RequireReads().DocumentOf(_npc, Plugin), NpcEditorId, "ExternallyRenamed");
+            _entry.HandEdit(live.DocumentOf(_npc, Plugin), NpcEditorId, "ExternallyRenamed");
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        var byFormKey = reloaded.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: PluginName, Limit: 100))
-            .Items.ToDictionary(r => r.FormKey, StringComparer.Ordinal);
+        var byFormKey = reloaded.ListedIn(Plugin).ToDictionary(r => r.FormKey, StringComparer.Ordinal);
 
         Assert.Equal(WorkingTreeState.Modified, byFormKey[_npc].WorkingTreeState);
         Assert.Equal(WorkingTreeState.None, byFormKey[_otherNpc].WorkingTreeState);
@@ -165,7 +168,7 @@ public sealed class SourceIngestTests : IDisposable
     {
         using var index = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        var before = index.RequireReads().DocumentOf(_npc, Plugin);
+        var before = index.DocumentOf(_npc, Plugin);
         Assert.Equal(NpcEditorId, before.EditorId);
 
         _entry.HandEdit(before, NpcEditorId, "ExternallyRenamed");
@@ -173,7 +176,7 @@ public sealed class SourceIngestTests : IDisposable
         PluginBinaries.Touch(_entry.Path);
         index.NextSnapshot();
 
-        Assert.Equal("ExternallyRenamed", index.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+        Assert.Equal("ExternallyRenamed", index.DocumentOf(_npc, Plugin).EditorId);
     }
 
     [Fact]
@@ -184,8 +187,8 @@ public sealed class SourceIngestTests : IDisposable
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        Assert.NotNull(reloaded.RequireReads().GetDocument(_npc, Plugin));
-        Assert.Equal(DerivedFrom.BinaryForUnreadableSource, reloaded.RequireReads().DerivationOf(Plugin));
+        Assert.NotNull(reloaded.CopyIn(_npc, Plugin));
+        Assert.True(ReadFromItsBinaryInPlaceOfItsSource(reloaded));
         Assert.Empty(reloaded.Status.Failures);
     }
 
@@ -193,21 +196,21 @@ public sealed class SourceIngestTests : IDisposable
     public void AnUnreadableSourceDocument_AtValidation_ReadsTheBinaryInPlaceOfTheSourceDerivedRows()
     {
         using var index = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
-        var document = index.RequireReads().DocumentOf(_npc, Plugin);
-        index.Edit(_entry, document, document.BodyOf().Replace("\"HeightMax\": 0.5", "\"HeightMax\": 0.75", StringComparison.Ordinal));
+        var document = index.DocumentOf(_npc, Plugin);
+        index.Edit(_entry, document, index.BodyOf(_npc, Plugin).Replace("\"HeightMax\": 0.5", "\"HeightMax\": 0.75", StringComparison.Ordinal));
         const float editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt = 0.75f;
-        Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.RequireReads().DocumentOf(_npc, Plugin)));
+        Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.DocumentOf(_npc, Plugin)));
 
         File.WriteAllText(RootDocument, "{ this is not json");
 
         index.NextSnapshotUntil(
-            () => index.RequireReads().DerivationOf(Plugin) == DerivedFrom.BinaryForUnreadableSource, "the binary read in the tree's place");
+            () => ReadFromItsBinaryInPlaceOfItsSource(index), "the binary read in the tree's place");
 
-        Assert.Equal(BaselineHeightMax, HeightMaxOf(index.RequireReads().DocumentOf(_npc, Plugin)));
+        Assert.Equal(BaselineHeightMax, HeightMaxOf(index.DocumentOf(_npc, Plugin)));
         Assert.Empty(index.Status.Failures);
     }
 
-    private static float HeightMaxOf(RecordDocument document) =>
+    private static float HeightMaxOf(RecordDetail document) =>
         Assert.IsType<JsonElement>(document.Fields.Single(f => f.Metadata.Name == "HeightMax").Value).GetSingle();
 
     [Fact]
@@ -219,8 +222,8 @@ public sealed class SourceIngestTests : IDisposable
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        Assert.Equal(DerivedFrom.BinaryForUnreadableSource, reloaded.RequireReads().DerivationOf(Plugin));
-        Assert.Equal(Path.GetRelativePath(ModFolder, document), Assert.Single(reloaded.SourceFileFailures).SourceRelativePath);
+        Assert.True(ReadFromItsBinaryInPlaceOfItsSource(reloaded));
+        Assert.Equal(Path.GetRelativePath(ModFolder, document), Assert.Single(SourceFilesTheReadStoppedAt(reloaded)));
     }
 
     [Fact]
@@ -233,10 +236,10 @@ public sealed class SourceIngestTests : IDisposable
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        Assert.Equal(NpcEditorId, reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+        Assert.Equal(NpcEditorId, reloaded.DocumentOf(_npc, Plugin).EditorId);
         Assert.Equivalent(
             new[] { Path.GetRelativePath(ModFolder, document), Path.GetRelativePath(ModFolder, backup) },
-            reloaded.SourceFileFailures.Select(f => f.SourceRelativePath), strict: true);
+            SourceFilesTheReadStoppedAt(reloaded), strict: true);
     }
 
     [Fact]
@@ -264,7 +267,7 @@ public sealed class SourceIngestTests : IDisposable
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        Assert.Equal("RenamedAcrossReload", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+        Assert.Equal("RenamedAcrossReload", reloaded.DocumentOf(_npc, Plugin).EditorId);
     }
 
     [Fact]
@@ -274,17 +277,15 @@ public sealed class SourceIngestTests : IDisposable
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        var stack = reloaded.RequireReads().GetOverrideStack(_npc);
-        Assert.NotNull(stack);
-        Assert.Single(stack.Entries);
+        Assert.Single(reloaded.StackOf(_npc));
     }
 
     private void RenameTheNpc(string newEditorId)
     {
         using var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
-        var document = live.RequireReads().DocumentOf(_npc, Plugin);
+        var document = live.DocumentOf(_npc, Plugin);
         live.Rename(
             _entry, document, newEditorId,
-            document.BodyOf().Replace($"\"{NpcEditorId}\"", $"\"{newEditorId}\"", StringComparison.Ordinal));
+            live.BodyOf(_npc, Plugin).Replace($"\"{NpcEditorId}\"", $"\"{newEditorId}\"", StringComparison.Ordinal));
     }
 }

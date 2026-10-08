@@ -10,7 +10,6 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
-using MEditService.Queries.Composition;
 using Serilog;
 using Serilog.Events;
 
@@ -71,7 +70,6 @@ try
     // One Index for the whole process (ADR-0014). Which file it opens comes from the
     // load request (ADR-0010), not from here.
     builder.Services.AddRecordIndex();
-    builder.Services.AddQueries();
     builder.Services.AddSingleton<RecordTextCodec>();
     // The handlers (ADR-0014) are registered where the module they share is visible,
     // and resolved by the route that names the gesture.

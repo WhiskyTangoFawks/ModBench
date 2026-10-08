@@ -12,7 +12,7 @@ public class ConditionReferenceTests
     private static List<string> ConditionRefPaths(PluginFixtureData fixture, FormKey source, FormKey target)
     {
         using var index = Indexes.Reconciled(fixture);
-        return [.. index.RequireReads().GetReferencedBy(target.ToString())
+        return [.. index.Records.GetReferences(target.ToString())
             .Where(r => r.FormKey == source.ToString())
             .Select(r => r.FieldPath)
             .Order(StringComparer.Ordinal)];
@@ -63,7 +63,7 @@ public class ConditionReferenceTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var document = index.RequireReads().DocumentOf(cobj.ToString(), new PluginAddress("CondCheck.esp", PluginOrigin.DataDirectory));
+        var document = index.DocumentOf(cobj.ToString(), new PluginAddress("CondCheck.esp", PluginOrigin.DataDirectory));
         var conditions = document.Fields.Single(f => f.Metadata.Name == "Conditions");
 
         Assert.Null(conditions.CheckError);

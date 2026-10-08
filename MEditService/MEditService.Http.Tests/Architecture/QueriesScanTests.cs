@@ -5,7 +5,7 @@ namespace MEditService.Http.Tests.Architecture;
 
 public sealed class QueriesScanTests
 {
-    private const string QueriesRoot = "MEditService.Queries";
+    private const string QueriesRoot = "MEditService.Index/Queries";
 
     private static readonly (string Label, string Pattern)[] FileSystemNeedlesWhoseStaticsAreAnchoredAgainstAMemberAccessOfTheSameName =
     [

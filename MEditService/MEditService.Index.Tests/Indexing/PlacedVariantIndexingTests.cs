@@ -21,17 +21,17 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
     public sealed class Built : IDisposable
     {
         private readonly PluginFixtureData _fixture;
-        private readonly OpenedIndex _index;
 
         public Built()
         {
             var placed = new Dictionary<string, Placed>(StringComparer.Ordinal);
-            FormKey cell = default;
+            FormKey cell = default, linker = default;
             _fixture = new PluginFixtureBuilder("placed-variants")
                 .WithPlugin(Key.Name, mod =>
                 {
                     var projectile = mod.Projectiles.AddNew("VariantProjectile");
                     var hazard = mod.Hazards.AddNew("VariantHazard");
+                    linker = mod.Npcs.AddNew("Linker").FormKey;
                     var interior = new Cell(mod) { EditorID = "VariantCell" };
                     foreach (var (table, index) in VariantTables.Select((table, index) => (table, index)))
                     {
@@ -51,17 +51,18 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
                     cell = interior.FormKey;
                 })
                 .Build();
-            _index = Indexes.Reconciled(_fixture);
-            (Cell, PlacedByTable) = (cell, placed);
+            Index = Indexes.Reconciled(_fixture);
+            (Cell, Linker, PlacedByTable) = (cell, linker.ToString(), placed);
         }
 
         public FormKey Cell { get; }
+        public string Linker { get; }
         internal IReadOnlyDictionary<string, Placed> PlacedByTable { get; }
-        public IRecordReads Reads => _index.RequireReads();
+        internal OpenedIndex Index { get; }
 
         public void Dispose()
         {
-            _index.Dispose();
+            Index.Dispose();
             _fixture.Dispose();
         }
 
@@ -95,14 +96,16 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
     [MemberData(nameof(Variants))]
     public void AVariant_ResolvesUnderItsOwnSignature(string table)
     {
-        Assert.Equal(new RecordLookupEntry(table, Of(table).EditorId), built.Reads.LinkResolver(Of(table).FormKey.ToString())(Of(table).FormKey.ToString()));
+        var resolution = built.Index.ResolutionOf(built.Linker, Key, Of(table).FormKey.ToString());
+
+        Assert.Equal((table, Of(table).EditorId), (resolution.RecordType, resolution.EditorId));
     }
 
     [Theory]
     [MemberData(nameof(Variants))]
     public void AVariant_IsAChildOfItsCell_InItsPlacementGroup(string table)
     {
-        var children = built.Reads.GetCellChildRecords(Key, built.Cell.ToString());
+        var children = built.Index.Worldspaces.GetCellChildRecords(Key, built.Cell.ToString());
         var group = Of(table).Group == "persistent" ? children.Persistent : children.Temporary;
 
         var child = Assert.Single(group, c => c.FormKey == Of(table).FormKey.ToString());
@@ -114,7 +117,7 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
     public void AVariant_ReferencesTheRecordItPlaces(string table)
     {
         Assert.Contains(
-            built.Reads.GetReferencedBy(Of(table).Base.ToString()),
+            built.Index.Records.GetReferences(Of(table).Base.ToString()),
             r => r.FormKey == Of(table).FormKey.ToString() && r.RecordType == table);
     }
 }

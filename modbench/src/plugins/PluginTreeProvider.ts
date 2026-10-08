@@ -270,7 +270,20 @@ export type PluginTreeNode =
 export const CELL_RECORD_TYPE = 'cell';
 const WORLDSPACE_RECORD_TYPE = 'wrld';
 
-type PageCache = Map<string, RecordPage>;
+interface Listings {
+  records: RecordPage;
+  interior: InteriorCellBlock[];
+  cellRefs: CellChildRecords;
+  containerChildren: ContainerChildSummary[];
+}
+type Listing = Listings[keyof Listings];
+
+type RowRead = Pick<RecordSummary, 'formKey' | 'workingTreeState'> & { readonly plugin: PluginAddress };
+
+// The one key of everything cached: a plugin's address (ADR-0012), what is cached of it, and which.
+function cacheKey(plugin: PluginAddress, scope: keyof Listings | 'row', id = ''): string {
+  return `${pluginAddressKey(plugin)}::${scope}::${id}`;
+}
 
 type RecordBrowserClient = Pick<
   MEditClient,
@@ -285,13 +298,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   /** The record rows a read from mEdit just answered, by resource URI. */
   readonly onDidReadRecords = this._onDidReadRecords.event;
 
-  private readonly pageCache: PageCache = new Map();
+  private readonly listings = new Map<string, Listing>();
+  private readonly rowStates = new Map<string, RecordSummary['workingTreeState']>();
   // Bumped by each refresh, so a read answered before mEdit's rows changed caches nothing.
   private generation = 0;
-  private readonly interiorCache = new Map<string, InteriorCellBlock[]>();
-  private readonly refCache = new Map<string, CellChildRecords>();
-  private readonly containerChildCache = new Map<string, ContainerChildSummary[]>();
-  private readonly spatialStates = new Map<string, RecordSummary['workingTreeState']>();
   private readonly log: (msg: string) => void;
 
   constructor(private readonly repository: RecordBrowserClient, log?: (msg: string) => void) {
@@ -300,35 +310,16 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   refresh(): void {
     this.generation++;
-    this.pageCache.clear();
-    this.interiorCache.clear();
-    this.refCache.clear();
-    this.containerChildCache.clear();
-    this.spatialStates.clear();
+    this.listings.clear();
+    this.rowStates.clear();
     this._onDidChangeTreeData.fire(undefined);
-  }
-
-  private cachedRecord(plugin: PluginAddress, formKey: string): Pick<RecordSummary, 'workingTreeState'> | undefined {
-    const spatial = this.spatialStates.get(`${pluginAddressKey(plugin)}::${formKey}`);
-    if (spatial) return { workingTreeState: spatial };
-    const prefix = `${pluginAddressKey(plugin)}::`;
-    const listings = [
-      ...[...this.pageCache].map(([key, page]) => [key, page.items] as const),
-      ...this.containerChildCache,
-    ];
-    for (const [key, rows] of listings) {
-      if (!key.startsWith(prefix)) continue;
-      const row = rows.find(r => r.formKey === formKey);
-      if (row) return row;
-    }
-    return undefined;
   }
 
   /** Undefined for a URI that is not a record row's, and for a record nothing has cached yet, which
    *  the decoration provider reads the same as 'None': nothing to badge. */
   workingTreeStateOf(uri: vscode.Uri): RecordSummary['workingTreeState'] | undefined {
     const identity = parseRecordResourceUri(uri);
-    return identity && this.cachedRecord(identity.plugin, identity.formKey)?.workingTreeState;
+    return identity && this.rowStates.get(cacheKey(identity.plugin, 'row', identity.formKey));
   }
 
   getTreeItem(element: PluginTreeNode): vscode.TreeItem {
@@ -369,10 +360,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return [];
   }
 
-  private cacheKey(node: RecordTypeNode): string {
-    return `${pluginAddressKey(pluginAddressOf(node))}::${node.recordType}`;
-  }
-
   private err(e: unknown): string {
     return errorMessage(e);
   }
@@ -391,12 +378,16 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   // A failed load caches nothing, so the next expand retries. `load`, never `fetch`: this has
   // nothing to do with the backend seam the client folder owns.
-  private async getOrLoad<T>(map: Map<string, T>, key: string, load: () => Promise<T>): Promise<T> {
-    const cached = map.get(key);
+  private getOrLoad<S extends keyof Listings>(
+    scope: S, plugin: PluginAddress, id: string, load: () => Promise<Listings[S]>,
+  ): Promise<Listings[S]>;
+  private async getOrLoad(scope: keyof Listings, plugin: PluginAddress, id: string, load: () => Promise<Listing>): Promise<Listing> {
+    const key = cacheKey(plugin, scope, id);
+    const cached = this.listings.get(key);
     if (cached !== undefined) return cached;
     const generation = this.generation;
     const value = await load();
-    if (generation === this.generation) map.set(key, value);
+    if (generation === this.generation) this.listings.set(key, value);
     return value;
   }
 
@@ -420,7 +411,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return this.orErrorNode(`fetchWorldspaces(${node.plugin})`, async () => {
       const generation = this.generation;
       const worldspaces = await this.repository.getWorldspaces(pluginAddressOf(node));
-      this.readSpatial(generation, pluginAddressOf(node), worldspaces);
+      this.readRows(generation, worldspaces.map(w => ({ ...w, plugin: pluginAddressOf(node) })));
       return worldspaces.map(w => new WorldspaceNode(node.plugin, w, node.origin, node.conditions));
     });
   }
@@ -430,7 +421,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       const generation = this.generation;
       const data = await this.repository.getWorldspaceBlocks(pluginAddressOf(node), node.worldspace.formKey);
       const cells = [...data.topCells, ...data.blocks.flatMap(b => b.subBlocks.flatMap(s => s.cells))];
-      this.readSpatial(generation, pluginAddressOf(node), cells);
+      this.readRows(generation, cells.map(c => ({ ...c, plugin: pluginAddressOf(node) })));
       const nodes: PluginTreeNode[] = data.topCells.map(c => new CellNode(node.plugin, c, node.origin, node.conditions));
       nodes.push(...data.blocks.map(b => new BlockNode(node.plugin, b, node.origin, node.conditions)));
       return nodes;
@@ -439,11 +430,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   private fetchCellGroups(node: CellNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchCellGroups(${node.cell.formKey})`, async () => {
-      const cacheKey = `${pluginAddressKey(pluginAddressOf(node))}::${node.cell.formKey}`;
       const generation = this.generation;
-      const refs = await this.getOrLoad(this.refCache, cacheKey,
+      const refs = await this.getOrLoad('cellRefs', pluginAddressOf(node), node.cell.formKey,
         () => this.repository.getCellChildRecords(pluginAddressOf(node), node.cell.formKey));
-      this.readSpatial(generation, pluginAddressOf(node), [...refs.persistent, ...refs.temporary]);
+      this.readRows(generation, [...refs.persistent, ...refs.temporary].map(r => ({ ...r, plugin: pluginAddressOf(node) })));
       const groups: ChildRecordGroupNode[] = [];
       if (refs.persistent.length) groups.push(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent, node.origin, node.conditions));
       if (refs.temporary.length) groups.push(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'temporary', refs.temporary, node.origin, node.conditions));
@@ -453,14 +443,14 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   private fetchContainerChildren(node: RecordNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchContainerChildren(${node.record.formKey})`, async () => {
-      const cacheKey = `${pluginAddressKey({ name: node.record.plugin, origin: node.origin })}::${node.record.formKey}`;
-      const wasCached = this.containerChildCache.has(cacheKey);
-      const children = await this.getOrLoad(this.containerChildCache, cacheKey,
-        () => this.repository.getContainerChildren({ name: node.record.plugin, origin: node.origin }, node.record.formKey));
-      const read = !wasCached && this.containerChildCache.get(cacheKey) === children;
-      const rows = children.map(c => new RecordNode(c, node.origin, node.conditions, c.isContainer, c.hasContainerChildren));
-      if (read) this.fireRead(rows);
-      return rows;
+      const owner = { name: node.record.plugin, origin: node.origin };
+      const generation = this.generation;
+      const children = await this.getOrLoad('containerChildren', owner, node.record.formKey, async () => {
+        const loaded = await this.repository.getContainerChildren(owner, node.record.formKey);
+        this.readRecords(generation, node.origin, loaded);
+        return loaded;
+      });
+      return children.map(c => new RecordNode(c, node.origin, node.conditions, c.isContainer, c.hasContainerChildren));
     });
   }
 
@@ -468,35 +458,32 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private fetchInteriorCells(node: RecordTypeNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchInteriorCells(${node.plugin})`, async () => {
       const generation = this.generation;
-      const blocks = await this.getOrLoad(this.interiorCache, pluginAddressKey(pluginAddressOf(node)),
+      const blocks = await this.getOrLoad('interior', pluginAddressOf(node), '',
         () => this.repository.getInteriorCells(pluginAddressOf(node)));
-      this.readSpatial(generation, pluginAddressOf(node), blocks.flatMap(b => b.subBlocks.flatMap(s => s.cells)));
+      this.readRows(generation, blocks.flatMap(b => b.subBlocks.flatMap(s => s.cells)).map(c => ({ ...c, plugin: pluginAddressOf(node) })));
       return blocks.map(b => new InteriorBlockNode(node.plugin, b, node.origin, node.conditions));
     });
   }
 
   private fetchRecords(node: RecordTypeNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchRecords(${node.plugin}, ${node.recordType})`, async () => {
-      const key = this.cacheKey(node);
-      const wasCached = this.pageCache.has(key);
-      const cached = await this.getOrLoad(this.pageCache, key,
-        () => this.repository.getRecords(pluginAddressOf(node), node.recordType, 0, UNLIMITED_RECORDS));
-      const read = !wasCached && this.pageCache.get(key) === cached;
-      const rows = cached.items.map(r => new RecordNode(r, node.origin, node.conditions, node.isContainer, r.hasContainerChildren));
-      if (read) this.fireRead(rows);
-      return rows;
+      const generation = this.generation;
+      const page = await this.getOrLoad('records', pluginAddressOf(node), node.recordType, async () => {
+        const loaded = await this.repository.getRecords(pluginAddressOf(node), node.recordType, 0, UNLIMITED_RECORDS);
+        this.readRecords(generation, node.origin, loaded.items);
+        return loaded;
+      });
+      return page.items.map(r => new RecordNode(r, node.origin, node.conditions, node.isContainer, r.hasContainerChildren));
     });
   }
 
-  private readSpatial(
-    generation: number, plugin: PluginAddress, rows: readonly Pick<RecordSummary, 'formKey' | 'workingTreeState'>[],
-  ): void {
-    if (generation !== this.generation) return;
-    for (const row of rows) this.spatialStates.set(`${pluginAddressKey(plugin)}::${row.formKey}`, row.workingTreeState);
-    this._onDidReadRecords.fire(rows.map(row => recordResourceUri(plugin, row.formKey)));
+  private readRecords(generation: number, origin: string, rows: readonly RecordSummary[]): void {
+    this.readRows(generation, rows.map(r => ({ ...r, plugin: { name: r.plugin, origin } })));
   }
 
-  private fireRead(rows: readonly RecordNode[]): void {
-    this._onDidReadRecords.fire(rows.map((row) => recordResourceUri({ name: row.record.plugin, origin: row.origin }, row.record.formKey)));
+  private readRows(generation: number, rows: readonly RowRead[]): void {
+    if (generation !== this.generation) return;
+    for (const row of rows) this.rowStates.set(cacheKey(row.plugin, 'row', row.formKey), row.workingTreeState);
+    this._onDidReadRecords.fire(rows.map(row => recordResourceUri(row.plugin, row.formKey)));
   }
 }

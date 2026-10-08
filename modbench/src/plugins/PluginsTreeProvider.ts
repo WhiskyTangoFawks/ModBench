@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
-import type {
-  PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress, NotificationPayloads,
-} from '../client';
+import type { PluginDiagnosisReport, PluginAddress } from '../client';
 import { lastGoodReadMessage, type Instance, type InstanceValue, type InstanceView, type PluginEntry } from '../instanceLoader/instance';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
@@ -11,12 +9,12 @@ import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
-import { PluginFacts, placeOf, type PluginWarning } from './pluginFacts';
+import { placeOf, type PluginWarning } from './pluginFacts';
+import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { headerFormKeyOf } from '../wire/headerFormKey';
 import type { PluginArgument } from '../drivingLib/argument';
-import { errorMessage } from '../ports/errorMessage';
 import { DATA_DIRECTORY_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
 export type PluginsInstance = InstanceView & Pick<Instance, 'refresh'>;
@@ -42,11 +40,6 @@ function isDropPayload(value: unknown): value is { plugins: PluginAddress[] } {
   return typeof value === 'object' && value !== null && 'plugins' in value && Array.isArray(value.plugins)
     && value.plugins.every(isAddress);
 }
-
-/** The mEdit reads every plugin-keyed fact comes from — the port narrowed to what this tree
- *  calls. Pulled once per reconcile, never per rendered row; and its attaching, which makes the
- *  locked plugins askable. */
-export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onStatusChanged' | 'onNotification' | 'getRecordHolders'>;
 
 /** The record browser a row's children are delegated to (ADR-0017). `PluginTreeProvider`
  *  satisfies it. */
@@ -178,13 +171,9 @@ export class PluginsTreeProvider
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginsTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private readonly log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   private readonly dataFolderFile: (name: string) => string | undefined;
   private readonly instance: PluginsInstance;
   private readonly records: RecordBrowser;
-  private readonly client: PluginFactsClient;
-  private readonly publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
-  private readonly publishChangedOutside: (warnings: readonly PluginWarning[]) => void;
   private instanceValue: InstanceValue;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
@@ -200,13 +189,16 @@ export class PluginsTreeProvider
   private lastLockedRowUris: ReadonlySet<string> = new Set();
 
   constructor(options: PluginsTreeProviderOptions) {
-    this.log = options.log;
     this.dataFolderFile = options.dataFolderFile;
     this.instance = options.instance;
     this.records = options.records;
-    this.client = options.client;
-    this.publishDiagnoses = options.publishDiagnoses;
-    this.publishChangedOutside = options.publishChangedOutside;
+    this.facts = new PluginFactsFeed({
+      client: options.client,
+      shownPlugins: () => this.builtRows().map(addressOfRow),
+      publishDiagnoses: options.publishDiagnoses,
+      publishChangedOutside: options.publishChangedOutside,
+      log: options.log,
+    });
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);
     this.subscriptions.push(this.firstRead, options.instance.subscribe((value) => {
@@ -214,15 +206,11 @@ export class PluginsTreeProvider
       this.cache = undefined;
       this._onDidChangeTreeData.fire(undefined);
     }), options.instance.onReadFailure(() => this.render()));
-    this.subscriptions.push(options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)));
-    const unsubscribeChanges = options.client.onNotification('external-change', (change) => this.applyExternalChange(change));
-    this.subscriptions.push({ dispose: unsubscribeChanges });
-  }
-
-  private applyExternalChange(event: NotificationPayloads['external-change']): void {
-    this.facts.externalChange(event);
-    this.publishChangedOutside(this.facts.problems().changedOutside);
-    this._onDidChangeTreeData.fire(undefined);
+    this.subscriptions.push(
+      options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)),
+      this.facts,
+      this.facts.onDidChange(() => this._onDidChangeTreeData.fire(undefined)),
+    );
   }
 
   dispose(): void {
@@ -245,15 +233,16 @@ export class PluginsTreeProvider
     return lastGoodReadMessage(this.instance);
   }
 
+  // The game folder not found (common.md, States 5), a failed index (plugins.md, States 6), no rows
+  // (States 1), a record filter matching nothing (States 5): the first that holds.
   private firstHeldMessage(): string | undefined {
     const { gameFolder } = this.instanceValue;
-    return this.facts.heldMessage({
-      gameFolderMessage: this.instance.sequence !== 0 && gameFolder.kind !== 'found'
-        ? `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`
-        : undefined,
-      noRowsMessage: this.lastBuildHadNoRows ? NO_PLUGINS_MESSAGE : undefined,
-      recordFilterSource: this.recordFilterSource,
-    });
+    if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {
+      return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
+    }
+    return this.facts.rows.indexFailureMessage()
+      ?? (this.lastBuildHadNoRows ? NO_PLUGINS_MESSAGE : undefined)
+      ?? (this.recordFilterSource === undefined ? undefined : this.facts.rows.noRecordMatchMessage(this.recordFilterSource));
   }
 
   /** The source of the record filter in force, which the no-match message names; undefined while
@@ -372,10 +361,10 @@ export class PluginsTreeProvider
 
   private async expandPluginRow(element: PluginListNode): Promise<PluginsTreeNode[]> {
     const address = addressOfRow(element);
-    const expansion = this.facts.expansion(address);
+    const expansion = this.facts.rows.expansion(address);
     if (expansion.kind === 'error') return [new ErrorNode(expansion.message)];
     if (expansion.kind === 'indexing') return [new IndexingNode()];
-    return this.records.getPluginChildren(address, this.facts.conditions(address));
+    return this.records.getPluginChildren(address, this.facts.rows.conditions(address));
   }
 
   private async rows(): Promise<(PluginListNode | ErrorNode)[]> {
@@ -477,12 +466,12 @@ export class PluginsTreeProvider
   // plugins.md, A row: description and icon stay unset when no status applies.
   private decoratePlugin(row: PluginNode): void {
     const address = addressOfRow(row);
-    const icon = this.facts.icon(address);
+    const icon = this.facts.rows.icon(address);
     if (icon !== undefined) {
       row.iconPath = icon === 'warning' ? warningIcon() : failurePrefixIcon();
-      row.description = this.facts.description(address);
+      row.description = this.facts.rows.description(address);
     }
-    row.tooltip = this.facts.tooltipLines(address).join('\n');
+    row.tooltip = this.facts.rows.tooltipLines(address).join('\n');
     row.contextValue = this.contextValueOf(row, address);
   }
 
@@ -490,107 +479,15 @@ export class PluginsTreeProvider
   // whether its line is enabled are the instance value's; tracked and editable wait on mEdit.
   private contextValueOf(row: PluginNode, address: PluginAddress): string {
     const place = placeOf(row.origin, { modDirs: this.instanceValue.paths.modDirs, trackedMods: this.instanceValue.trackedMods });
-    return ['plugin', row.plugin.enabled ? 'enabled' : 'disabled', ...(place === undefined ? [] : [place]), ...this.facts.contextFlags(address)]
+    return ['plugin', row.plugin.enabled ? 'enabled' : 'disabled', ...(place === undefined ? [] : [place]), ...this.facts.rows.contextFlags(address)]
       .join(' ');
   }
 
-  /** Whether compile applies to any plugin, which compile's palette entry reads. */
-  anyCompilable(): boolean {
-    return this.facts.anyCompilable();
-  }
-
-  // ── the load order and its facts ──────────────────────────────────────────
-
-  private readonly facts = new PluginFacts();
-  // Bumped by each reconcile step (a tick, a refusal, unreachable, the hand-off), so a slow read
-  // answering after a newer step cannot resurrect a stale answer.
-  private generation = 0;
-  // `refreshFacts`' own order, apart from `generation` so a fact re-read never discards a hand-off.
-  private factsRead = 0;
-
-  /** A progressive reconcile's tick: a row's children resolve as its plugin lands. Row status
-   *  stays as the last reconcile left it until `applyReconciled` lands; expansion tracks only
-   *  this reload's own ticks. */
-  applyIndexed(indexedPlugins: PluginAddress[], failures: PluginLoadFailure[]): void {
-    this.generation++;
-    this.facts.indexed(indexedPlugins, failures);
-    this._onDidChangeTreeData.fire(undefined);
-  }
-
-  /** The load order's own refusal (ADR-0010; plugins.md, States, stories 4 and 6). */
-  applyRefused(refusal: LoadOrderRefusal): void {
-    this.generation++;
-    this.facts.refused(refusal);
-    this._onDidChangeTreeData.fire(undefined);
-  }
-
-  /** mEdit confirmed unreachable (ADR-0002; plugins.md, States, story 3), as the status
-   *  bar's Disconnected or Stopped says. Named on a row not yet held; never downgrades an
-   *  `everyRow` refusal already in force. */
-  applyBackendUnreachable(reason: string): void {
-    this.generation++;
-    this.facts.unreachable(reason);
-    this._onDidChangeTreeData.fire(undefined);
-  }
-
-  /** The completed reconcile's whole hand-off, in one read: which files the backend holds, and
-   *  every fact it answers about each plugin. Returns how many plugins it holds;
-   *  `undefined` when the read failed. */
-  async applyReconciled(failures: PluginLoadFailure[]): Promise<number | undefined> {
-    const generation = ++this.generation;
-    const plugins = await this.readPlugins();
-    if (plugins === undefined || generation !== this.generation) return undefined;
-    this.facts.reconciled(plugins, failures);
-    // Diagnoses stay as the last scan left them (no blink) until `scanDiagnoses` below lands a
-    // fresh answer; a failed scan leaves them alone too.
-    this._onDidChangeTreeData.fire(undefined);
-    // Fire-and-forget: the tree hand-off must not wait on a whole-load-order scan. A failed scan is
-    // ADR-0019's background tier, and retries at the next reconcile.
-    void this.scanDiagnoses(generation);
-    return plugins.length;
-  }
-
-  /** Re-reads the facts alone, leaving the held load order as it is. A later re-read wins, and
-   *  none supersedes a reconcile's hand-off. */
-  async refreshFacts(): Promise<void> {
-    const generation = this.generation;
-    const factsRead = ++this.factsRead;
-    const plugins = await this.readPlugins();
-    if (plugins === undefined || generation !== this.generation || factsRead !== this.factsRead) return;
-    this.facts.refreshed(plugins);
-    this._onDidChangeTreeData.fire(undefined);
-  }
-
-  // The plugins of the rows the tree shows, joined by (origin, filename). A failed read is never
-  // swallowed into an empty list, which would read as "nothing held".
-  private async readPlugins(): Promise<PluginMetadata[] | undefined> {
-    try {
-      const shown = new Set(this.builtRows().map((row) => pluginAddressKey(addressOfRow(row))));
-      return (await this.client.getPlugins()).filter((p) => shown.has(pluginAddressKey(p)));
-    } catch (err) {
-      const message = errorMessage(err);
-      this.log('error', `[PluginsTreeProvider] reading the backend's plugin list failed: ${message}`);
-      this.facts.unreachable(message);
-      this._onDidChangeTreeData.fire(undefined);
-      return undefined;
-    }
-  }
-
-  private async scanDiagnoses(generation: number): Promise<void> {
-    try {
-      const reports = await this.client.getDiagnoses();
-      if (generation !== this.generation) return;
-      // One derivation, two surfaces — the tree badge and the Problems panel cannot disagree.
-      this.facts.diagnosed(reports);
-      this.publishDiagnoses(this.facts.problems().malformed);
-      this._onDidChangeTreeData.fire(undefined);
-    } catch (err) {
-      this.log('warn', `[PluginsTreeProvider] the malformed-plugin scan could not be read: ${errorMessage(err)}`);
-    }
-  }
+  /** The reconcile narrator's events go in here. */
+  readonly facts: PluginFactsFeed;
 
   private isHiddenByFilter(row: PluginListNode): boolean {
-    return this.facts.hiddenByRecordFilter(addressOfRow(row));
+    return this.facts.rows.hiddenByRecordFilter(addressOfRow(row));
   }
 
   // ── drag and drop ─────────────────────────────────────────────────────────
