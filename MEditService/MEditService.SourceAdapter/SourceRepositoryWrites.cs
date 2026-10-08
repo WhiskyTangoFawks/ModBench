@@ -53,7 +53,7 @@ internal sealed class SourceRepositoryWrites(
 
             return SourceRemoval.Removed;
         }
-        catch (Exception cause) when (WriteJournal.IsAFailedWrite(cause))
+        catch (Exception cause) when (cause is not OutOfMemoryException)
         {
             if (journal.Report(cause, journal.UndoSince(0)) is { } report) throw report;
             throw;
@@ -182,7 +182,7 @@ internal sealed class SourceRepositoryWrites(
                 _modFolder);
             git.ParkDecompiled(pluginFileName, binarySha256);
         }
-        catch (Exception cause) when (WriteJournal.IsAFailedWrite(cause))
+        catch (Exception cause) when (cause is not OutOfMemoryException)
         {
             if (journal.Report(cause, journal.UndoSince(0)) is { } report) throw report;
             throw;
@@ -207,13 +207,13 @@ internal sealed class SourceRepositoryWrites(
         var journal = new WriteJournal(_modFolder);
         try
         {
-            journal.RecordUndo($"what Modbench last wrote for {from}", git.LastWrittenPutBack(from, to));
+            journal.RecordUndo(git.LastWrittenPutBack(from, to), description: $"what Modbench last wrote for {from}");
             journal.WriteAll(renamed, _modFolder);
             git.MoveLastWritten(from, to);
             foreach (var file in held) journal.DeleteIfHolds(file.Path, file.Bytes);
             journal.DeleteEmptyDirectories(fromRoot);
         }
-        catch (Exception cause) when (WriteJournal.IsAFailedWrite(cause))
+        catch (Exception cause) when (cause is not OutOfMemoryException)
         {
             if (journal.Report(cause, journal.UndoSince(0)) is { } report) throw report;
             throw;

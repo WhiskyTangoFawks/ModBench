@@ -20,7 +20,7 @@ internal static class TransactionRollback
         {
             return null;
         }
-        catch (IOException report) when (report.InnerException is BatchFailed)
+        catch (AggregateException report) when (report.InnerException is BatchFailed)
         {
             return report.Message;
         }

@@ -27,9 +27,10 @@ internal static class GitTracking
 
         var git = new SourceRepositoryGit(modFolder);
         var gitignorePath = Path.Combine(modFolder, ".gitignore");
-        var repositoryExisted = git.Exists;
         try
         {
+            if (!git.Exists)
+                journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: Path.Combine(modFolder, ".git"));
             CreateRepository(git);
             journal.Write(gitignorePath, System.Text.Encoding.UTF8.GetBytes(GitignoreContent));
             git.Run("add", "-A");
@@ -41,7 +42,6 @@ internal static class GitTracking
         }
         catch (Exception ex)
         {
-            if (!repositoryExisted && git.Exists) git.Delete();
             if (journal.Report(ex, journal.UndoSince(0)) is { } report) throw report;
             throw;
         }

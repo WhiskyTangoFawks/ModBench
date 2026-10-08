@@ -114,7 +114,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var failure = TrackWhoseCommitHookRuns($"echo theirs > '{theirs}'");
 
         Assert.Equal("theirs", File.ReadAllText(theirs).Trim());
-        Assert.Contains("plugin-source/A.esp — hold something this change did not write", failure.Message.Replace('\\', '/'));
+        Assert.Contains("plugin-source/A.esp — holds something this change did not write", failure.Message.Replace('\\', '/'));
         Assert.False(File.Exists(Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json")));
     }
 
@@ -208,6 +208,38 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
     }
 
+    [Fact]
+    public void Track_WhenADefectStopsAPluginsWrite_NamesWhatAnotherProgramPutInADirectoryItMade_AndIsNotARefusal()
+    {
+        var theirs = Path.Combine(_modFolder, "plugin-source", "A.esp", "theirs.txt");
+        var files = new FilesThatFailMidway(
+            new TreeFile("plugin-source/A.esp/npc_/A.esp/000001.json", "{}"u8.ToArray()),
+            () => File.WriteAllText(theirs, "theirs"));
+
+        var failure = Assert.Throws<AggregateException>(
+            () => SourceRepository.Track(_modFolder, [(files, new DecompiledPlugin("A.esp", null))]));
+
+        Assert.IsType<InvalidCastException>(failure.InnerException);
+        Assert.Contains("plugin-source/A.esp \u2014 holds something this change did not write", failure.Message.Replace('\\', '/'));
+        Assert.Equal("theirs", File.ReadAllText(theirs));
+    }
+
+    private sealed class FilesThatFailMidway(TreeFile first, Action beforeFailing) : IReadOnlyList<TreeFile>
+    {
+        public int Count => 2;
+
+        public TreeFile this[int index] => index == 0 ? first : throw new InvalidCastException("defect");
+
+        public IEnumerator<TreeFile> GetEnumerator()
+        {
+            yield return first;
+            beforeFailing();
+            throw new InvalidCastException("defect");
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
     [PosixFact]
     public void Track_IntoTheHalfMadeRepositoryOfACrashedTrack_Recovers()
     {
@@ -229,7 +261,9 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var gitDir = Path.Combine(_modFolder, ".git");
         try
         {
-            Assert.ThrowsAny<UnauthorizedAccessException>(() => SourceRepository.Track(_modFolder, [Baseline("Crashed.esp")]));
+            var failure = Assert.Throws<IOException>(() => SourceRepository.Track(_modFolder, [Baseline("Crashed.esp")]));
+            Assert.Contains(".git \u2014 could not be restored: ", failure.Message);
+            Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
         }
         finally
         {

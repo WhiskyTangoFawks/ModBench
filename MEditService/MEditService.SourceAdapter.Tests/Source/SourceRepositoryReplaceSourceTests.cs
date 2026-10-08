@@ -55,7 +55,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var failure = FailAfterWritingWhile($"echo theirs > '{theirs}'", [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{}")]);
 
         Assert.Equal("theirs", System.IO.File.ReadAllText(theirs).Trim());
-        Assert.Contains("armo — hold something this change did not write", failure.Message.Replace('\\', '/'));
+        Assert.Contains("armo — holds something this change did not write", failure.Message.Replace('\\', '/'));
         Assert.False(System.IO.File.Exists(Path.Combine(Root, "armo", "A.esp", "000003.json")));
     }
 

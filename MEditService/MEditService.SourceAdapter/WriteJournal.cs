@@ -21,16 +21,18 @@ internal enum UnrestoredReason
     OccupiedByAnother,
 
     /// <summary>A directory this action made now holds something else's.</summary>
-    HoldsAnothers,
+    HoldsSomethingElse,
 
     /// <summary>The restore was attempted and the filesystem refused it. The only value here that
     /// reports damage rather than deference.</summary>
     RestoreFailed,
 }
 
-/// <summary>One path a rollback left standing, relative to the mod folder as the Source Control panel
-/// lists it (ADR-0019).</summary>
-internal sealed record UnrestoredPath(string RelativePath, UnrestoredReason Reason);
+/// <summary>One thing a rollback left standing (ADR-0019): a path relative to the mod folder as the Source
+/// Control panel lists it, or a <paramref name="Description"/> of a change outside the file tree. The
+/// <paramref name="Detail"/> is the operating system's reason when a restore was refused.</summary>
+internal sealed record Unrestored(
+    UnrestoredReason Reason, string? RelativePath = null, string? Description = null, string? Detail = null);
 
 /// <summary>Everything a Source adapter act creates, replaces, moves and mints under one mod folder. One
 /// rollback restores exactly that, leaves what another program wrote (ADR-0003) and answers what it
@@ -43,7 +45,6 @@ internal sealed class WriteJournal(string modFolder)
 
     private sealed record RemovedDirectory(string Path) : IEntry;
 
-    // Before/After null means no file; After is what is on disk once the act was attempted, success or throw.
     private sealed record FileState(string Path, byte[]? Before, byte[]? After) : IEntry;
 
     private sealed record DeletedFile(string Path, byte[] Original) : IEntry;
@@ -52,7 +53,9 @@ internal sealed class WriteJournal(string modFolder)
 
     private sealed record EntryMove(string From, string To) : IEntry;
 
-    private sealed record PutBack(string Label, Action Undo) : IEntry;
+    private sealed record TempFile(string Path) : IEntry;
+
+    private sealed record PutBack(Action Undo, string? Path, string? Description) : IEntry;
 
     // Distinct from absent (null) and any real content; compared by reference, never by value.
     private static readonly byte[] Unreadable = [];
@@ -74,9 +77,11 @@ internal sealed class WriteJournal(string modFolder)
     {
         CreateDirectory(PathShape.DirectoryOf(path));
         var before = Snapshot(path);
+        var temp = TempPathFor(path);
+        _entries.Add(new TempFile(temp));
         try
         {
-            WriteAtomic(path, content);
+            WriteAtomic(path, content, temp);
             _entries.Add(new FileState(path, before, content));
         }
         catch
@@ -98,7 +103,6 @@ internal sealed class WriteJournal(string modFolder)
     {
         var original = Snapshot(path);
         if (original == null) return;
-        if (ReferenceEquals(original, Unreadable)) throw new IOException($"{path} could not be read, so it was not removed.");
         _entries.Add(new DeletedFile(path, original));
         File.Delete(path);
     }
@@ -137,47 +141,56 @@ internal sealed class WriteJournal(string modFolder)
         _entries.Add(new EntryMove(from, to));
     }
 
-    /// <summary>Records a change outside the file tree, such as a git ref, that <paramref name="undo"/> puts
-    /// back; <paramref name="label"/> names it when it cannot.</summary>
-    internal void RecordUndo(string label, Action undo) => _entries.Add(new PutBack(label, undo));
+    /// <summary>Records a change that <paramref name="undo"/> puts back, such as a git ref or a repository
+    /// directory; the rollback names <paramref name="path"/> or <paramref name="description"/> when it cannot.</summary>
+    internal void RecordUndo(Action undo, string? path = null, string? description = null) =>
+        _entries.Add(new PutBack(undo, path, description));
 
-    internal List<UnrestoredPath> UndoSince(int mark)
+    internal List<Unrestored> UndoSince(int mark)
     {
-        var unrestored = new List<UnrestoredPath>();
+        var unrestored = new List<Unrestored>();
         for (var i = _entries.Count - 1; i >= mark; i--) Undo(_entries[i], i, unrestored);
         _entries.RemoveRange(mark, _entries.Count - mark);
         return unrestored;
     }
 
-    /// <summary>An <see cref="IOException"/> naming what the rollback left, with the cause inside; none when
-    /// it left nothing and the cause stands as it is.</summary>
-    internal IOException? Report(Exception cause, List<UnrestoredPath> unrestored) =>
-        unrestored.Count == 0 ? null : new IOException(Describe(cause.Message, unrestored), cause);
+    /// <summary>The failure to throw once a rollback has run: none when it left nothing and the cause stands
+    /// as it is. A failed write with leftovers is an <see cref="IOException"/> naming them. Any other cause
+    /// is a defect and must not read as a refusal, so it travels inside an <see cref="AggregateException"/>
+    /// that names them.</summary>
+    internal Exception? Report(Exception cause, List<Unrestored> unrestored)
+    {
+        if (unrestored.Count == 0) return null;
+        var message = Describe(cause.Message, unrestored);
+        return IsAFailedWrite(cause) ? new IOException(message, cause) : new AggregateException(message, cause);
+    }
 
-    internal string Describe(string message, List<UnrestoredPath> unrestored)
+    internal string Describe(string message, List<Unrestored> unrestored)
     {
         if (unrestored.Count == 0) return message;
-        var named = new (UnrestoredReason Reason, string Phrase)[]
+        var sentences = unrestored.Select(Sentence);
+        return $"{message} Not put back: {string.Join(" ", sentences)}".Replace(
+            modFolder + Path.DirectorySeparatorChar, "", StringComparison.Ordinal);
+    }
+
+    private static string Sentence(Unrestored left)
+    {
+        var phrase = left.Reason switch
         {
-            (UnrestoredReason.ChangedByAnother, "changed by something else after this change wrote them, so their current content was kept"),
-            (UnrestoredReason.RemovedByAnother, "removed by something else after this change wrote them, so they were not put back"),
-            (UnrestoredReason.WrittenByAnother, "written by something else after this change removed them, so their current content was kept"),
-            (UnrestoredReason.OccupiedByAnother, "occupied by something else, so what this change moved away was not moved back"),
-            (UnrestoredReason.HoldsAnothers, "hold something this change did not write, so they were left"),
-            (UnrestoredReason.RestoreFailed, "could not be restored"),
+            UnrestoredReason.ChangedByAnother => "changed by something else after this change wrote it, so its current content was kept",
+            UnrestoredReason.RemovedByAnother => "removed by something else after this change wrote it, so it was not put back",
+            UnrestoredReason.WrittenByAnother => "written by something else after this change removed it, so its current content was kept",
+            UnrestoredReason.OccupiedByAnother => "occupied by something else, so what this change moved away was not moved back",
+            UnrestoredReason.HoldsSomethingElse => "holds something this change did not write, so it was left",
+            _ => "could not be restored",
         };
-        var sentences = named
-            .Select(n => (n.Phrase, Paths: unrestored.Where(u => u.Reason == n.Reason).Select(u => u.RelativePath).ToList()))
-            .Where(n => n.Paths.Count > 0)
-            .Select(n => $"{string.Join(", ", n.Paths)} — {n.Phrase}.");
-        var relativeMessage = message.Replace(modFolder + Path.DirectorySeparatorChar, "", StringComparison.Ordinal);
-        return $"{relativeMessage} Not put back: {string.Join(" ", sentences)}";
+        return $"{left.RelativePath ?? left.Description} — {phrase}{(left.Detail is null ? "" : $": {left.Detail}")}.";
     }
 
     internal static bool IsAFailedWrite(Exception cause) =>
         cause is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception;
 
-    private void Undo(IEntry entry, int index, List<UnrestoredPath> unrestored)
+    private void Undo(IEntry entry, int index, List<Unrestored> unrestored)
     {
         switch (entry)
         {
@@ -201,6 +214,9 @@ internal sealed class WriteJournal(string modFolder)
             case EntryMove move:
                 RestoreMove(move, unrestored);
                 break;
+            case TempFile temp:
+                Attempt(temp.Path, () => { if (File.Exists(temp.Path)) File.Delete(temp.Path); }, unrestored);
+                break;
             case PutBack putBack:
                 try
                 {
@@ -208,29 +224,33 @@ internal sealed class WriteJournal(string modFolder)
                 }
                 catch (Exception ex) when (IsAFailedWrite(ex))
                 {
-                    unrestored.Add(new UnrestoredPath(putBack.Label, UnrestoredReason.RestoreFailed));
+                    unrestored.Add(new Unrestored(
+                        UnrestoredReason.RestoreFailed,
+                        putBack.Path is null ? null : Path.GetRelativePath(modFolder, putBack.Path),
+                        putBack.Description,
+                        ex.Message));
                 }
 
                 break;
         }
     }
 
-    private void UndoMint(MintedDirectory minted, int index, List<UnrestoredPath> unrestored)
+    private void UndoMint(MintedDirectory minted, int index, List<Unrestored> unrestored)
     {
         if (!Directory.Exists(minted.Path)) return;
         try
         {
             if (!Directory.EnumerateFileSystemEntries(minted.Path).Any()) Directory.Delete(minted.Path);
             else if (!_entries.Take(index).Any(earlier => earlier is RemovedDirectory removed && removed.Path == minted.Path))
-                unrestored.Add(Named(minted.Path, UnrestoredReason.HoldsAnothers));
+                unrestored.Add(Named(minted.Path, UnrestoredReason.HoldsSomethingElse));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            unrestored.Add(Named(minted.Path, UnrestoredReason.RestoreFailed));
+            unrestored.Add(Named(minted.Path, UnrestoredReason.RestoreFailed, ex.Message));
         }
     }
 
-    private void RestoreFile(FileState file, List<UnrestoredPath> unrestored)
+    private void RestoreFile(FileState file, List<Unrestored> unrestored)
     {
         // "Absent" and "unreadable" must not collapse into one null: a pre-image that read as absent because
         // the read failed would have the rollback delete a file it never created.
@@ -260,15 +280,17 @@ internal sealed class WriteJournal(string modFolder)
         }, unrestored);
     }
 
-    private void RestoreDeleted(DeletedFile deleted, List<UnrestoredPath> unrestored)
+    private void RestoreDeleted(DeletedFile deleted, List<Unrestored> unrestored)
     {
         var current = Snapshot(deleted.Path);
         if (ReferenceEquals(current, Unreadable)) unrestored.Add(Named(deleted.Path, UnrestoredReason.RestoreFailed));
+        else if (current == null && ReferenceEquals(deleted.Original, Unreadable))
+            unrestored.Add(Named(deleted.Path, UnrestoredReason.RestoreFailed, "its content could not be read before it was removed"));
         else if (current == null) Attempt(deleted.Path, () => WriteAtomic(deleted.Path, deleted.Original), unrestored);
         else if (!SameBytes(current, deleted.Original)) unrestored.Add(Named(deleted.Path, UnrestoredReason.WrittenByAnother));
     }
 
-    private void RestoreMove(EntryMove move, List<UnrestoredPath> unrestored)
+    private void RestoreMove(EntryMove move, List<Unrestored> unrestored)
     {
         if (!Exists(move.To))
         {
@@ -289,7 +311,7 @@ internal sealed class WriteJournal(string modFolder)
         }, unrestored);
     }
 
-    private void Attempt(string path, Action restore, List<UnrestoredPath> unrestored)
+    private void Attempt(string path, Action restore, List<Unrestored> unrestored)
     {
         try
         {
@@ -297,19 +319,21 @@ internal sealed class WriteJournal(string modFolder)
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            unrestored.Add(Named(path, UnrestoredReason.RestoreFailed));
+            unrestored.Add(Named(path, UnrestoredReason.RestoreFailed, ex.Message));
         }
     }
 
-    private UnrestoredPath Named(string path, UnrestoredReason reason) => new(Path.GetRelativePath(modFolder, path), reason);
+    private Unrestored Named(string path, UnrestoredReason reason, string? detail = null) =>
+        new(reason, Path.GetRelativePath(modFolder, path), Detail: detail);
 
     private static bool Exists(string path) => File.Exists(path) || Directory.Exists(path);
 
-    // The codec's own write-then-rename: an interrupted direct write leaves a partial file that dirty
-    // detection reads as an edit.
-    private static void WriteAtomic(string path, byte[] content)
+    private static string TempPathFor(string path) =>
+        Path.Combine(PathShape.DirectoryOf(path), ".medit_tmp_" + Path.GetFileName(path) + ".tmp");
+
+    private static void WriteAtomic(string path, byte[] content, string? tempPath = null)
     {
-        var tempPath = path + ".tmp";
+        tempPath ??= TempPathFor(path);
         try
         {
             File.WriteAllBytes(tempPath, content);
