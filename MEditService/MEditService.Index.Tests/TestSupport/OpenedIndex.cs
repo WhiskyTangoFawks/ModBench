@@ -34,10 +34,20 @@ internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder hol
     internal void ClearFilter() => Records.ClearFilter();
 
     /// <summary>Returns once a write in flight has finished: setting the filter again passes the write
-    /// gate every write passes, and a validation announces inside its hold.</summary>
+    /// gate every write passes, and a validation announces inside its hold. With no store open, no
+    /// write is in flight.</summary>
     internal void Settled()
     {
-        if (Records.GetFilter() is var (sql, source)) SetFilter(sql, source);
+        (string Sql, string Source)? filter;
+        try
+        {
+            filter = Records.GetFilter();
+        }
+        catch (NoLoadOrderException)
+        {
+            return;
+        }
+        if (filter is var (sql, source)) SetFilter(sql, source);
         else ClearFilter();
     }
 
