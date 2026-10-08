@@ -32,19 +32,19 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
-import { accessTo } from '../../test/mo2/adapterOver';
+import { adapterOver } from '../../test/mo2/adapterOver';
 import type { RefreshResult } from '../../instanceCommands/loadOrder';
 
 const value = instanceValueFixture({ activeProfile: 'Default', profiles: ['Default', 'Modding', 'Survival'] });
 
-const access = accessTo('/instance');
+const adapter = adapterOver('/instance');
 
 type ToolboxCommandDeps = Parameters<typeof registerToolboxCommands>[0];
 
 function register(over: Partial<ToolboxCommandDeps> = {}) {
   const reporter = recordingReporter();
   registerToolboxCommands({
-    access,
+    adapter,
     instance: { value, refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
     extensionId: 'publisher.modbench',
     reporterFor: () => reporter,
@@ -111,7 +111,7 @@ describe('Switch profile', () => {
 
     await switchProfileChoosing('Modding');
 
-    expect(switchProfile).toHaveBeenCalledWith(access, 'Modding', ['Default', 'Modding', 'Survival']);
+    expect(switchProfile).toHaveBeenCalledWith(adapter, 'Modding', ['Default', 'Modding', 'Survival']);
   });
 
   it('writes the switch under the Toolbox\'s progress, which closes once the Instance loader has read again', async () => {

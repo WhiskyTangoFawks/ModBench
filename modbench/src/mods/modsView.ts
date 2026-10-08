@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import type { Instance, InstanceValue, InstanceView } from '../instanceLoader/instance';
 import type { InstallAccess } from '../install/install';
-import type { ModlistAccess } from '../modlist/modlist';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
@@ -26,7 +25,7 @@ import {
 
 interface ModsViewDeps {
   instance: InstanceView & Pick<Instance, 'refresh' | 'sameCopies'>;
-  access: ModlistAccess & InstallAccess;
+  access: InstallAccess;
   log: (line: string) => void;
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
@@ -91,15 +90,15 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     view.onDidChangeCheckboxState(onModCheckboxChanged),
     ...registerModDecorations(instance, vscode.workspace),
     ...registerModContextCommands({
-      access, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
+      adapter: access.adapter, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
       log,
     }),
-    ...registerModEnableCommands(access, instance, () => view.selection, reporterFor('mod.enableDisable')),
-    ...registerFileExclusionCommands(access, instance, () => view.selection, reporterFor('mod.excludeFile')),
+    ...registerModEnableCommands(access.adapter, instance, () => view.selection, reporterFor('mod.enableDisable')),
+    ...registerFileExclusionCommands(access.adapter, instance, () => view.selection, reporterFor('mod.excludeFile')),
     registerModMoveCommand(
-      access, instance, { selection: () => view.selection, direction: () => provider.viewDirection() }, reporterFor('mod.move')),
-    ...registerSeparatorCommands(access, instance, reporterFor('separator'), ask, trash, () => view.selection),
-    registerCreateEmptyModCommand(access, instance, reporterFor('mod.createEmpty')),
+      access.adapter, instance, { selection: () => view.selection, direction: () => provider.viewDirection() }, reporterFor('mod.move')),
+    ...registerSeparatorCommands(access.adapter, instance, reporterFor('separator'), ask, trash, () => view.selection),
+    registerCreateEmptyModCommand(access.adapter, instance, reporterFor('mod.createEmpty')),
     registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => view.selection),
     registerGoToModCommand(instance, reporterFor('mod.goToMod'), {
       selection: () => view.selection,

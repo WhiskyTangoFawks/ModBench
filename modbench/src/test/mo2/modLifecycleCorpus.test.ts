@@ -9,7 +9,7 @@ import { renameMod, uninstallMods } from '../../modlist/modlist';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree,
 } from './corpusFixture';
-import { accessTo, readModlistEntries } from './adapterOver';
+import { adapterOver, readModlistEntries } from './adapterOver';
 
 const PROFILE = 'Default';
 
@@ -28,7 +28,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
   it('uninstallMods trashes the folder, removes the modlist line, and marks its download uninstalled — nothing else', async () => {
     const downloadMeta = `downloads/${ARCHIVE}.meta`;
     const before = await snapshotTree(dir);
-    await uninstallMods(accessTo(dir), PROFILE, [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
+    await uninstallMods(adapterOver(dir), PROFILE, [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST, downloadMeta]));
@@ -42,7 +42,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
   it('uninstallMods marks no download when none is handed in, though the mod\'s meta.ini names one', async () => {
     const downloadMeta = `downloads/${ARCHIVE}.meta`;
     const before = await snapshotTree(dir);
-    await uninstallMods(accessTo(dir), PROFILE, [{ name: 'Unofficial Fallout 4 Patch' }], trash);
+    await uninstallMods(adapterOver(dir), PROFILE, [{ name: 'Unofficial Fallout 4 Patch' }], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST]));
@@ -51,7 +51,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
 
   it('uninstallMods on a mod with no linked download touches only its own folder and modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await uninstallMods(accessTo(dir), PROFILE, [{ name: 'Harder VATS' }], trash);
+    await uninstallMods(adapterOver(dir), PROFILE, [{ name: 'Harder VATS' }], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Harder VATS/meta.ini', MODLIST]));
@@ -66,7 +66,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
     await writeFile(join(folder('Harder VATS'), 'plugin-source', 'a.psc'), 'Scriptname a\n');
     const before = await snapshotTree(dir);
 
-    await renameMod(accessTo(dir), PROFILE, [PROFILE, 'Secondary'], 'Harder VATS', 'Harder VATS 2');
+    await renameMod(adapterOver(dir), PROFILE, [PROFILE, 'Secondary'], 'Harder VATS', 'Harder VATS 2');
     const after = await snapshotTree(dir);
 
     const moved = [...before.keys()].filter((path) => path.startsWith('mods/Harder VATS/'));

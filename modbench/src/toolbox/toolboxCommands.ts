@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
-import { switchProfile, type ProfileAccess } from '../instanceCommands/profile';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { switchProfile } from '../instanceCommands/profile';
 import type { RefreshResult } from '../instanceCommands/loadOrder';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { runWritingGesture } from '../drivingLib/writingGesture';
@@ -9,7 +10,7 @@ import type { Reporter } from '../ports/reporter';
 const TOOLBOX_VIEW = 'modbench.toolbox';
 
 interface ToolboxCommandDeps {
-  access: ProfileAccess;
+  adapter: InstanceAdapter;
   /** The profiles and the active one, from the instance value (ADR-0015); `refresh` ends each gesture. */
   instance: Pick<Instance, 'value' | 'refresh'>;
   /** Modbench's own extension ID, which scopes the Settings editor to its settings. */
@@ -20,7 +21,7 @@ interface ToolboxCommandDeps {
 // The instance-wide gestures the Toolbox view owns (toolbox.md), registered
 // for the box that draws them.
 export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Disposable[] {
-  const { access, instance, extensionId, reporterFor } = deps;
+  const { adapter, instance, extensionId, reporterFor } = deps;
   const profileReporter = reporterFor('switchProfile');
   return [
     vscode.commands.registerCommand('modbench.profile.switch', async () => {
@@ -29,7 +30,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
       const picked = await pickWithMarked(items, items.find((i) => i.label === active), 'Switch profile');
       if (!picked || picked.label === active) return;
       await runWritingGesture(TOOLBOX_VIEW, instance, async () => {
-        const outcome = await switchProfile(access, picked.label, profiles);
+        const outcome = await switchProfile(adapter, picked.label, profiles);
         if (!outcome.applied) profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
       });
     }),

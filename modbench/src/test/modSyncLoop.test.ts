@@ -14,7 +14,7 @@ import { modSyncOver, type ModSyncResult } from '../modlist/modlist';
 import { type PluginSyncResult } from '../pluginsCommands/plugins';
 import type { ModFolder } from '../instanceAdapter/instanceAdapter';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './mo2/corpusFixture';
-import { accessTo, adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
+import { adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
 
 const noPluginSync = () => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] });
 
@@ -58,7 +58,7 @@ async function settledWiredInstance(): Promise<{
     instance, channel, syncPlugins: noPluginSync,
     syncMods: (args) => {
       handed.push(args.modFolders);
-      const run = modSyncOver(accessTo(root))(args);
+      const run = modSyncOver(adapterOver(root))(args);
       syncs.push(run);
       return run;
     },
