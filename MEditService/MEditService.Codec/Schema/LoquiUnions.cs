@@ -142,12 +142,12 @@ public static class LoquiUnions
                     Variants = m.Variants?.ToDictionary(v => v.Key, v => v.Value.Field, StringComparer.Ordinal),
                 },
                 // A column the record classes shape differently, or one only some of them declare,
-                // has no default a view could put back for the rest.
-                ViewDefaultLiteral = m.Variants == null ? m.First.ViewDefaultLiteral : null,
+                // has no default to put back for the rest.
+                AbsentIsNull = m.Variants != null || m.First.AbsentIsNull,
             }));
 
         var discriminator = BuildUnionDiscriminatorField(union);
-        columns.Insert(0, new ColumnSpec(discriminator, discriminator.Name, "VARCHAR"));
+        columns.Insert(0, new ColumnSpec(discriminator, discriminator.Name));
         return columns;
     }
 

@@ -4,11 +4,9 @@ namespace MEditService.Codec.Schema;
 // The facts a leaf carries whether it becomes a column or a sub-field.
 public sealed record LeafSpec(
     string ApiType,
-    string DuckDbType,
     string[] ValidFormKeyTypes,
     IReadOnlyList<EnumMember> EnumMembers,
     bool AllowsNull = false,
-    string? ViewDefaultLiteral = null,
     // See FieldMetadata.Default.
     object? Default = null,
     // See FieldMetadata.HoldsAlpha.
