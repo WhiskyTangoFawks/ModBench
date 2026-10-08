@@ -35,7 +35,7 @@ export interface EditorCommandDeps {
     | 'getEditChanges' | 'searchRecords'
     | 'deleteRecords' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders'
-    | 'getComparison' | 'getRecordsComparison' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderStatusChanged' | 'onReconnected' | 'getRecordOwner'
+    | 'getComparison' | 'getRecordsComparison' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onReconnected' | 'getRecordOwner'
     | 'getRecordFile' | 'getRecordOfFile' | 'getRenderedDocument'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
@@ -88,7 +88,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     extendedFields,
     new RenderedDocuments(meditClient),
     new ChildRecordDocuments(meditClient),
-    { dispose: meditClient.onLoadOrderStatusChanged(() => { announceConflictsComputed(tabs); }) },
+    { dispose: meditClient.onLoadOrderSettled(() => { announceConflictsComputed(tabs); }) },
     vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, keepsItsPlace),
     { dispose: meditClient.onNotification('load-order-status', () => { recordEditorProvider.readAgain(); }) },
     // A report names the records that changed, and a move of any of them can move a child's carrier.

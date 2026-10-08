@@ -41,7 +41,7 @@ describe('trackedRepositoriesOver', () => {
   it('registers the tracked repository once per notice', async () => {
     const { tracked, outputChannel } = setup();
 
-    await tracked.conflictsComputed();
+    await tracked.registerRepositories();
 
     expect(openRepository).toHaveBeenCalledOnce();
     expect(outputChannel.error).not.toHaveBeenCalled();
@@ -50,7 +50,7 @@ describe('trackedRepositoriesOver', () => {
   it('refreshes the repository a registration held for the plugin, and no other', async () => {
     const status = vi.fn(() => Promise.resolve());
     const { tracked } = setup(status);
-    await tracked.conflictsComputed();
+    await tracked.registerRepositories();
 
     tracked.refreshSourceControlFor({ name: 'Other.esp', origin: 'ModB' });
     tracked.refreshSourceControlFor({ name: 'Other.esp', origin: 'ModC' });
@@ -69,7 +69,7 @@ describe('trackedRepositoriesOver', () => {
 
   it('logs a rejected status and does not surface it', async () => {
     const { tracked, outputChannel } = setup(() => Promise.reject(new Error('boom')));
-    await tracked.conflictsComputed();
+    await tracked.registerRepositories();
 
     tracked.refreshSourceControlFor({ name: 'Other.esp', origin: 'ModB' });
     await vi.waitFor(() => { expect(outputChannel.error).toHaveBeenCalledOnce(); });
@@ -79,7 +79,7 @@ describe('trackedRepositoriesOver', () => {
     const { tracked, outputChannel } = setup();
     getExtension.mockReturnValue(undefined);
 
-    await tracked.conflictsComputed();
+    await tracked.registerRepositories();
 
     expect(outputChannel.warn).toHaveBeenCalledOnce();
     expect(openRepository).not.toHaveBeenCalled();
@@ -91,7 +91,7 @@ describe('trackedRepositoriesOver', () => {
       trackedMods: ['TrackedMod'], modDirs: { TrackedMod: '/mods/TrackedMod', UntrackedMod: '/mods/UntrackedMod' },
     });
 
-    await tracked.conflictsComputed();
+    await tracked.registerRepositories();
 
     expect(openRepository.mock.calls).toEqual([[{ fsPath: '/mods/TrackedMod' }]]);
   });
@@ -102,7 +102,7 @@ describe('trackedRepositoriesOver', () => {
       plugins: [{ name: 'A.esp', origin: 'SharedMod' }, { name: 'B.esp', origin: 'SharedMod' }],
       trackedMods: ['SharedMod'], modDirs: { SharedMod: '/mods/SharedMod' },
     });
-    await tracked.conflictsComputed();
+    await tracked.registerRepositories();
 
     tracked.refreshSourceControlFor({ name: 'A.esp', origin: 'SharedMod' });
     tracked.refreshSourceControlFor({ name: 'B.esp', origin: 'SharedMod' });
@@ -119,7 +119,7 @@ describe('trackedRepositoriesOver', () => {
       trackedMods: ['ModA', 'ModB'], modDirs: { ModA: '/mods/ModA', ModB: '/mods/ModB' },
       open: ({ fsPath }) => Promise.resolve({ status: fsPath === '/mods/ModA' ? statusA : statusB }),
     });
-    await tracked.conflictsComputed();
+    await tracked.registerRepositories();
 
     tracked.refreshSourceControlFor({ name: 'Shared.esp', origin: 'ModA' });
 
@@ -130,7 +130,7 @@ describe('trackedRepositoriesOver', () => {
   it('refreshes nothing for a plugin whose folder vscode.git declined to open', async () => {
     const status = vi.fn(() => Promise.resolve());
     const { tracked, outputChannel } = setup(status, { open: () => Promise.resolve(null) });
-    await tracked.conflictsComputed();
+    await tracked.registerRepositories();
 
     tracked.refreshSourceControlFor({ name: 'Other.esp', origin: 'ModB' });
 

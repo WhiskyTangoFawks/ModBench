@@ -98,7 +98,7 @@ describe('HttpMEditClient — the load-order status', () => {
     const { response, push } = pushableStreamResponse();
     const client = makeClient(routedFetch([['/notifications/stream', () => Promise.resolve(response)]]));
     const changes: (boolean | undefined)[] = [];
-    client.onLoadOrderStatusChanged((status) => changes.push(status?.conflictsComputed));
+    client.onLoadOrderStatus((status) => changes.push(status?.conflictsComputed));
     await client.start();
 
     push(readyTickThatSettlesPutLoadOrder());

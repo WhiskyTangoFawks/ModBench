@@ -259,12 +259,15 @@ export interface MEditClient {
    *  reaches no listener. */
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void;
 
-  /** The latest load-order status; undefined before the first, and again once mEdit has gone or
-   *  the stream has reopened onto a process that may be another. */
+  /** The latest load-order status; undefined before the first, and again when a held status
+   *  resets: mEdit has gone, or the stream has reopened onto a process that may be another. */
   readonly loadOrderStatus: LoadOrderStatus | undefined;
-  /** Each time the status's conflictsComputed or failures differ from the last one held, and when
-   *  the status resets; handed the new status. */
-  onLoadOrderStatusChanged(listener: (status: LoadOrderStatus | undefined) => void): () => void;
+  /** Each status as it arrives, and undefined when a held status resets. */
+  onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void;
+  /** A reconcile settled: a ready status newer than the last settled one, even when its picture
+   *  repeats the last, and a status whose failures differ from those held. A reset starts the
+   *  versions over and tells nothing. */
+  onLoadOrderSettled(listener: (status: LoadOrderStatus) => void): () => void;
 
   /** Launches mEdit when it is not running. One snapshot is put at a time, and the newest lands. */
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;

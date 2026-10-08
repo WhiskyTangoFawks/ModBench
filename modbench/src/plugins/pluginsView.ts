@@ -49,9 +49,9 @@ export interface PluginsViewDeps {
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the index
    *  status. */
   client: PluginFactsClient & RenamePluginDeps['client'] & TrackDeps['client'] & DecompileDeps['client'] & CompileDeps['client']
-    & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onReconnected' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin'>;
+    & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onLoadOrderStatus' | 'onReconnected' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin'>;
   statusBar: StatusBar;
-  /** A reconcile reached Ready, or a track landed: what the views outside this box refetch. */
+  /** A reconcile reached Ready, or a track landed: the repositories the views outside this box register. */
   conflictsComputed: () => Promise<void>;
   ask: AskQuestion;
   recordWrite: RecordWrite;

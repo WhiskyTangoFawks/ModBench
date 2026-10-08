@@ -6,7 +6,7 @@ import type { PluginsViewProgress } from './pluginRowCommands';
 import type { PluginFactsFeed } from './pluginFactsFeed';
 import type { RecordBrowser } from './RecordBrowser';
 import { reportSkippedPlugins } from './pluginFailures';
-import { createReconcileNarrator, subscribeNarratorToLoadOrderStatus, type ReconcileNarrator } from './reconcileNarrator';
+import { createReconcileNarrator, type ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
 
 interface ReconciledDeps {
@@ -59,7 +59,7 @@ const UNREACHABLE_REASON = {
 };
 
 interface IndexStatusDeps {
-  client: Pick<MEditClient, 'onNotification' | 'onStatusChanged' | 'onReconnected' | 'getActiveFilter'>;
+  client: Pick<MEditClient, 'onLoadOrderStatus' | 'onStatusChanged' | 'getActiveFilter'>;
   facts: Pick<PluginFactsFeed, 'indexed' | 'refused' | 'reconciled' | 'unreachable' | 'refresh'>;
   /** The record browser a reconciled load order refreshes. */
   recordBrowser: Pick<RecordBrowser, 'refresh'>;
@@ -97,15 +97,13 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileN
     log: (m) => log('error', `[loadOrder] ${m}`),
   });
   const unsubscribes = [
-    subscribeNarratorToLoadOrderStatus(client, narrator),
+    client.onLoadOrderStatus((status) => { if (status) narrator.hear(status); else narrator.detached(); }),
     client.onStatusChanged((status) => {
       if (!isMEditGone(status)) return;
-      narrator.detached();
       // ADR-0002: the rows stay, and expand into the error row.
       void facts.refresh();
       facts.unreachable(UNREACHABLE_REASON[status]);
     }),
-    client.onReconnected(() => narrator.detached()),
   ];
   return { narrator, dispose: () => { for (const unsubscribe of unsubscribes) unsubscribe(); } };
 }

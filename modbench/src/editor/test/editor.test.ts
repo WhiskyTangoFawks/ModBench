@@ -426,12 +426,38 @@ describe('the Referenced By selection', () => {
   });
 });
 
-const conflictsComputedTick: NotificationEvent = {
+const statusTick = (conflictsComputed: boolean, version: number): NotificationEvent => ({
   kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-  loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1 },
-};
+  loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed, failures: [], version },
+});
+const conflictsComputedTick = statusTick(true, 1);
 
 describe('conflicts computed', () => {
+  const reads = (tab: { webview: { postMessage: { mock: { calls: unknown[][] } } } }) => tab.webview.postMessage.mock.calls.length;
+
+  it('has the tabs read again for each settled reconcile, even one whose picture is the last\'s', () => {
+    const client = new InMemoryMEditClient();
+    const { open } = makeEditor(client);
+    const tab = open('000801:A.esp');
+
+    client.emit(statusTick(true, 1));
+    client.emit(statusTick(true, 2));
+
+    expect(reads(tab)).toBe(2);
+  });
+
+  it('has the tabs read nothing again as a reconcile starts, or when mEdit goes', () => {
+    const client = new InMemoryMEditClient();
+    const { open } = makeEditor(client);
+    client.emit(statusTick(true, 1));
+    const tab = open('000801:A.esp');
+
+    client.emit(statusTick(false, 2));
+    client.setStatus('disconnected');
+
+    expect(reads(tab)).toBe(0);
+  });
+
   it('has every open record tab read its record again', () => {
     const client = new InMemoryMEditClient();
     const { open } = makeEditor(client);

@@ -13,7 +13,7 @@ export interface ProblemOnFile { message: string; start: Position; end: Position
 export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 
 export interface SourceProblemsDeps {
-  client: Pick<MEditClient, 'getPluginProblems' | 'onNotification' | 'onReconnected' | 'loadOrderStatus' | 'onLoadOrderStatusChanged'>;
+  client: Pick<MEditClient, 'getPluginProblems' | 'onNotification' | 'onReconnected' | 'loadOrderStatus' | 'onLoadOrderSettled'>;
   originFiles: OriginFilesOf;
   readText: (path: string) => Promise<string>;
   reporter: Pick<Reporter, 'shownOnSurface'>;
@@ -113,7 +113,6 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   let unplacedStatus: string | undefined;
   let failed: { ask: number; why: string } | undefined;
   const showStatus = () => { languageStatus(failed ? lastRead(failed.why) : unplacedStatus); };
-  // Unknown until a load-order-status says, or mEdit answers the ask made at subscribe.
   let answeredAtSubscribe = false;
   let latest = 0;
   let shown = 0;
@@ -148,7 +147,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const ready = () => client.loadOrderStatus?.conflictsComputed ?? answeredAtSubscribe;
   const reaskWhenReady = () => { if (ready()) reask(); };
   const unsubscribe = [
-    client.onLoadOrderStatusChanged((status) => { if (status?.conflictsComputed) reask(); }),
+    client.onLoadOrderSettled(reask),
     client.onNotification('rows-changed', reaskWhenReady),
     client.onNotification('plugin-changed', reaskWhenReady),
     client.onReconnected(reask),

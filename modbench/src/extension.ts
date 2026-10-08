@@ -237,7 +237,6 @@ export function activate(context: vscode.ExtensionContext): void {
     refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
     modFacts,
   });
-  const conflictsComputed = trackedRepositories.conflictsComputed;
   const views = buildViews({
     outputChannel, client: meditClient,
     reporterFor: (tag) => makeReporter(outputChannel, tag),
@@ -246,7 +245,7 @@ export function activate(context: vscode.ExtensionContext): void {
     recordBrowser: treeProvider,
     pluginFacts: meditClient,
     statusBar,
-    conflictsComputed,
+    conflictsComputed: trackedRepositories.registerRepositories,
     recordWrite,
     extensionId: context.extension.id,
     extensionUri: context.extensionUri,

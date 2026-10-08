@@ -13,14 +13,15 @@ const problem = (over: Partial<PluginProblems['problems'][number]> = {}): Plugin
   formKey: REFERRER, targetFormKey: MISSING, fieldPath: 'Race', sourceRelativePath: 'Refers.esp/Npc.json', message: `Race: [${MISSING}] <Error: Could not be resolved>`, ...over,
 });
 
+let version = 0;
 const loadOrderStatus = (conflictsComputed: boolean): NotificationEvent => ({
   kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-  loadOrderStatus: { state: conflictsComputed ? 'Ready' : 'Reconciling', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed, failures: [], version: 1 },
+  loadOrderStatus: { state: conflictsComputed ? 'Ready' : 'Reconciling', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed, failures: [], version },
 });
-const ready = loadOrderStatus(true);
 const reconciledAgain = (client: InMemoryMEditClient) => {
   client.emit(loadOrderStatus(false));
-  client.emit(ready);
+  version += 1;
+  client.emit(loadOrderStatus(true));
 };
 
 const modFolders: OriginFilesOf = (origin) => ({ file: (relativePath) => `/mods/${origin}/${relativePath}` });

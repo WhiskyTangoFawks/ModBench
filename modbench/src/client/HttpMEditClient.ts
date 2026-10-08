@@ -133,8 +133,11 @@ class HttpMEditClient implements MEditClient {
   stop(): Promise<void> { return this.loadOrder.stop(); }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
-  onLoadOrderStatusChanged(listener: (status: LoadOrderStatus | undefined) => void): () => void {
-    return this.loadOrderStatusKept.onChanged(listener);
+  onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void {
+    return this.loadOrderStatusKept.onStatus(listener);
+  }
+  onLoadOrderSettled(listener: (status: LoadOrderStatus) => void): () => void {
+    return this.loadOrderStatusKept.onSettled(listener);
   }
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.loadOrder.send(snapshot); }

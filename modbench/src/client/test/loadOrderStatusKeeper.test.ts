@@ -3,11 +3,11 @@ import type { NotificationEvent } from '../apiClient';
 import type { PluginLoadFailure } from '../MEditClient';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
 
-function tick(conflictsComputed: boolean, failures: PluginLoadFailure[] = []): NotificationEvent {
+function tick(conflictsComputed: boolean, failures: PluginLoadFailure[] = [], version = 1): NotificationEvent {
   return {
     kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
     loadOrderStatus: {
-      state: 'Ready', totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed, failures, version: 1,
+      state: 'Ready', totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed, failures, version,
     },
   };
 }
@@ -49,38 +49,78 @@ describe('the client\'s load-order status', () => {
     expect(client.loadOrderStatus).toBeUndefined();
   });
 
-  it('tells a listener, with the new status already readable, when conflictsComputed or the failures change, and when it resets', () => {
+  it('tells the status listener every tick, and a reset with undefined, held or not', () => {
     const client = new InMemoryMEditClient();
-    const seen: unknown[] = [];
-    client.onLoadOrderStatusChanged(() => seen.push(client.loadOrderStatus?.failures.length ?? 'reset'));
-
-    client.emit(tick(false, [bad]));
-    client.emit(tick(true, [bad]));
-    client.emit(tick(true));
-    client.setStatus('disconnected');
-
-    expect(seen).toEqual([1, 1, 0, 'reset']);
-  });
-
-  it('tells a listener nothing when a tick repeats the picture held, or when it resets with nothing held', () => {
-    const client = new InMemoryMEditClient();
-    const changed = vi.fn();
-    client.onLoadOrderStatusChanged(changed);
+    const seen: (boolean | undefined)[] = [];
+    client.onLoadOrderStatus((status) => seen.push(status?.conflictsComputed));
 
     client.setStatus('disconnected');
-    client.emit(tick(true, [bad]));
-    client.emit(tick(true, [{ ...bad }]));
+    client.emit(tick(false));
+    client.emit(tick(false));
+    client.emit(tick(true));
+    client.reconnected();
 
-    expect(changed).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual([undefined, false, false, true, undefined]);
   });
 
-  it('stops telling a listener once it unsubscribes', () => {
-    const client = new InMemoryMEditClient();
-    const changed = vi.fn();
-    client.onLoadOrderStatusChanged(changed)();
+  describe('a reconcile settled', () => {
+    it('is told for each ready status newer than the last settled one, even when its picture is the last\'s', () => {
+      const client = new InMemoryMEditClient();
+      const settled = vi.fn();
+      client.onLoadOrderSettled(settled);
 
-    client.emit(tick(true));
+      client.emit(tick(true, [], 1));
+      client.emit(tick(true, [], 1));
+      client.emit(tick(true, [], 2));
 
-    expect(changed).not.toHaveBeenCalled();
+      expect(settled).toHaveBeenCalledTimes(2);
+    });
+
+    it('is not told when a reconcile starts, or while it runs', () => {
+      const client = new InMemoryMEditClient();
+      client.emit(tick(true, [], 1));
+      const settled = vi.fn();
+      client.onLoadOrderSettled(settled);
+
+      client.emit(tick(false, [], 2));
+      client.emit(tick(false, [], 2));
+
+      expect(settled).not.toHaveBeenCalled();
+    });
+
+    it('is told, with the new failures already readable, when the failures differ, and not when they repeat', () => {
+      const client = new InMemoryMEditClient();
+      const seen: unknown[] = [];
+      client.onLoadOrderSettled(() => seen.push(client.loadOrderStatus?.failures.length));
+
+      client.emit(tick(false, [bad]));
+      client.emit(tick(false, [{ ...bad }]));
+      client.emit(tick(false));
+
+      expect(seen).toEqual([1, 0]);
+    });
+
+    it('is not told of a reset, and the next process\'s versions start over', () => {
+      const client = new InMemoryMEditClient();
+      client.emit(tick(true, [], 5));
+      const settled = vi.fn();
+      client.onLoadOrderSettled(settled);
+
+      client.setStatus('disconnected');
+      expect(settled).not.toHaveBeenCalled();
+
+      client.emit(tick(true, [], 1));
+      expect(settled).toHaveBeenCalledOnce();
+    });
+
+    it('stops telling a listener once it unsubscribes', () => {
+      const client = new InMemoryMEditClient();
+      const settled = vi.fn();
+      client.onLoadOrderSettled(settled)();
+
+      client.emit(tick(true));
+
+      expect(settled).not.toHaveBeenCalled();
+    });
   });
 });
