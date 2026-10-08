@@ -51,31 +51,20 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
     refreshMatchingPlugins();
   };
 
-  let applying: string | undefined;
-  const clearedWhileApplying = new Set<string>();
+  let requested: string | undefined;
 
   const apply = async (filter: RecordFilter): Promise<void> => {
-    applying = filter.source;
-    clearedWhileApplying.delete(filter.source);
+    requested = filter.source;
     const error = await client.setFilter(filter);
-    applying = undefined;
     if (error !== null) {
       reporter.report('error', `Filter failed — ${error}`);
       return;
     }
-    if (!clearedWhileApplying.has(filter.source)) show(filter);
+    await showHeld(() => undefined);
   };
 
-  // The clearing can outrun the reply to the set that it clears, so what mEdit holds decides what shows.
-  const onCleared = async ({ source, reason }: { source: string; reason: string }): Promise<void> => {
-    const shownBefore = showRecordFilter.shownSource();
-    const wasApplying = applying === source;
-    if (wasApplying) clearedWhileApplying.add(source);
-    const message = `The record filter ${source} was cleared`;
-    const say = (viewChanged: boolean): void => {
-      if (viewChanged || wasApplying || shownBefore === source) reporter.report('warning', message, reason);
-      else reporter.shownOnSurface('warning', message, reason);
-    };
+  // Replies and clearings can arrive in any order, so what mEdit holds decides what shows.
+  const showHeld = async (say: (viewChanged: boolean) => void, shownBefore = showRecordFilter.shownSource()): Promise<void> => {
     try {
       show(await client.getActiveFilter());
       say(showRecordFilter.shownSource() !== shownBefore);
@@ -83,6 +72,15 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
       say(false);
       reporter.report('error', 'Could not read the record filter', errorMessage(e));
     }
+  };
+
+  const onCleared = async ({ source, reason }: { source: string; reason: string }): Promise<void> => {
+    const shownBefore = showRecordFilter.shownSource();
+    const message = `The record filter ${source} was cleared`;
+    await showHeld((viewChanged) => {
+      if (viewChanged || requested === source || shownBefore === source) reporter.report('warning', message, reason);
+      else reporter.shownOnSurface('warning', message, reason);
+    }, shownBefore);
   };
 
   // catalog `filter`, Option "query source": a document the caller names, or the input box.
