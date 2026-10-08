@@ -6,13 +6,13 @@ namespace MEditService.TestSupport;
 public static class MismatchedFnamPlugin
 {
     public const string FileName = "Break Room Clipboards.esp";
-    public const string FirstFnam = "materials";
-    public const string SecondFnam = "";
+    private const string FirstFnam = "materials";
+    private const string SecondFnam = "";
 
     private const ushort FormVersionBeforeTreeFolder = 100;
 
     public static GeneratedPlugin Plugin => new(FileName,
-        RawPlugin.Plugin(RawPlugin.Tes4(0x801, 1),
+        RawPlugin.Plugin(RawPlugin.Tes4(0x801, 2),
             RawPlugin.Group("MSWP",
                 RawPlugin.Record("MSWP", 0x00000800, 0, FormVersionBeforeTreeFolder,
                     RawPlugin.EditorId("BreakRoomClipboardSwap"),
