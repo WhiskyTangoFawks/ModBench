@@ -414,113 +414,122 @@
   },
   "InteriorCells": [
     {
-      "BlockX": 0,
-      "BlockY": null,
-      "CellX": null,
-      "CellY": null,
-      "EditorId": "CroupManor01",
-      "FormKey": "03C0F0:Fallout4.esm",
-      "FullName": null,
-      "HasChildren": true,
       "HasParseFailure": false,
-      "ParseDiagnosis": null,
-      "SubX": 0,
-      "SubY": null,
-      "WorkingTreeState": "None"
-    },
-    {
-      "BlockX": 0,
-      "BlockY": null,
-      "CellX": null,
-      "CellY": null,
-      "EditorId": "MinutemenHoldingCell",
-      "FormKey": "0782A8:Fallout4.esm",
-      "FullName": null,
-      "HasChildren": true,
-      "HasParseFailure": false,
-      "ParseDiagnosis": null,
-      "SubX": 0,
-      "SubY": null,
-      "WorkingTreeState": "None"
-    },
-    {
-      "BlockX": 0,
-      "BlockY": null,
-      "CellX": null,
-      "CellY": null,
-      "EditorId": "PackInSpotlight_Swivel_OffNEWStorageCell",
-      "FormKey": "092A18:Fallout4.esm",
-      "FullName": null,
-      "HasChildren": true,
-      "HasParseFailure": false,
-      "ParseDiagnosis": null,
-      "SubX": 0,
-      "SubY": null,
-      "WorkingTreeState": "None"
+      "Number": 0,
+      "SubBlocks": [
+        {
+          "Cells": [
+            {
+              "CellX": null,
+              "CellY": null,
+              "EditorId": "CroupManor01",
+              "FormKey": "03C0F0:Fallout4.esm",
+              "FullName": null,
+              "HasChildren": true,
+              "HasParseFailure": false,
+              "IsPersistentWorldspaceCell": false,
+              "ParseDiagnosis": null,
+              "WorkingTreeState": "None"
+            },
+            {
+              "CellX": null,
+              "CellY": null,
+              "EditorId": "MinutemenHoldingCell",
+              "FormKey": "0782A8:Fallout4.esm",
+              "FullName": null,
+              "HasChildren": true,
+              "HasParseFailure": false,
+              "IsPersistentWorldspaceCell": false,
+              "ParseDiagnosis": null,
+              "WorkingTreeState": "None"
+            },
+            {
+              "CellX": null,
+              "CellY": null,
+              "EditorId": "PackInSpotlight_Swivel_OffNEWStorageCell",
+              "FormKey": "092A18:Fallout4.esm",
+              "FullName": null,
+              "HasChildren": true,
+              "HasParseFailure": false,
+              "IsPersistentWorldspaceCell": false,
+              "ParseDiagnosis": null,
+              "WorkingTreeState": "None"
+            }
+          ],
+          "HasParseFailure": false,
+          "Number": 0
+        }
+      ]
     }
   ],
-  "WorldspaceCells": {
-    "000800:mEditTestSubset.esm": [
-      {
-        "BlockX": 0,
-        "BlockY": 0,
-        "CellX": 7,
-        "CellY": 7,
-        "EditorId": null,
-        "FormKey": "00DB41:Fallout4.esm",
-        "FullName": null,
-        "HasChildren": true,
-        "HasParseFailure": false,
-        "ParseDiagnosis": null,
-        "SubX": 0,
-        "SubY": 0,
-        "WorkingTreeState": "None"
-      },
-      {
-        "BlockX": 0,
-        "BlockY": 0,
-        "CellX": 6,
-        "CellY": 7,
-        "EditorId": null,
-        "FormKey": "00DB42:Fallout4.esm",
-        "FullName": null,
-        "HasChildren": true,
-        "HasParseFailure": false,
-        "ParseDiagnosis": null,
-        "SubX": 0,
-        "SubY": 0,
-        "WorkingTreeState": "None"
-      },
-      {
-        "BlockX": 0,
-        "BlockY": 0,
-        "CellX": 5,
-        "CellY": 7,
-        "EditorId": null,
-        "FormKey": "00DB43:Fallout4.esm",
-        "FullName": null,
-        "HasChildren": true,
-        "HasParseFailure": false,
-        "ParseDiagnosis": null,
-        "SubX": 0,
-        "SubY": 0,
-        "WorkingTreeState": "None"
-      },
-      {
-        "BlockX": null,
-        "BlockY": null,
-        "CellX": 0,
-        "CellY": 0,
-        "EditorId": null,
-        "FormKey": "018AA2:Fallout4.esm",
-        "FullName": null,
-        "HasChildren": true,
-        "HasParseFailure": false,
-        "ParseDiagnosis": null,
-        "SubX": null,
-        "SubY": null,
-        "WorkingTreeState": "None"
-      }
-    ]
+  "WorldspaceBlocks": {
+    "000800:mEditTestSubset.esm": {
+      "Blocks": [
+        {
+          "HasParseFailure": false,
+          "SubBlocks": [
+            {
+              "Cells": [
+                {
+                  "CellX": 7,
+                  "CellY": 7,
+                  "EditorId": null,
+                  "FormKey": "00DB41:Fallout4.esm",
+                  "FullName": null,
+                  "HasChildren": true,
+                  "HasParseFailure": false,
+                  "IsPersistentWorldspaceCell": false,
+                  "ParseDiagnosis": null,
+                  "WorkingTreeState": "None"
+                },
+                {
+                  "CellX": 6,
+                  "CellY": 7,
+                  "EditorId": null,
+                  "FormKey": "00DB42:Fallout4.esm",
+                  "FullName": null,
+                  "HasChildren": true,
+                  "HasParseFailure": false,
+                  "IsPersistentWorldspaceCell": false,
+                  "ParseDiagnosis": null,
+                  "WorkingTreeState": "None"
+                },
+                {
+                  "CellX": 5,
+                  "CellY": 7,
+                  "EditorId": null,
+                  "FormKey": "00DB43:Fallout4.esm",
+                  "FullName": null,
+                  "HasChildren": true,
+                  "HasParseFailure": false,
+                  "IsPersistentWorldspaceCell": false,
+                  "ParseDiagnosis": null,
+                  "WorkingTreeState": "None"
+                }
+              ],
+              "HasParseFailure": false,
+              "X": 0,
+              "Y": 0
+            }
+          ],
+          "X": 0,
+          "Y": 0
+        }
+      ],
+      "TopCells": [
+        {
+          "CellX": 0,
+          "CellY": 0,
+          "EditorId": null,
+          "FormKey": "018AA2:Fallout4.esm",
+          "FullName": null,
+          "HasChildren": true,
+          "HasParseFailure": false,
+          "IsPersistentWorldspaceCell": true,
+          "ParseDiagnosis": null,
+          "WorkingTreeState": "None"
+        }
+      ]
+    }
   }
 }

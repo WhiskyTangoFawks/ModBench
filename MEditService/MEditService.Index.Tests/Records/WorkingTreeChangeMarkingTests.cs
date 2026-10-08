@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -47,11 +48,10 @@ public sealed class WorkingTreeChangeMarkingTests : IDisposable
     public void AnActiveFilter_NarrowsTheListingToTheFormKeysItNames()
     {
         using var index = Indexes.Reconciled(_fixture);
-        var reads = index.RequireReads();
         var filterNarrowingToKeepMesTwoOverrideRowsOfTheFixturesThree = $"SELECT '{_keptNpc}' AS form_key";
         index.SetFilter(filterNarrowingToKeepMesTwoOverrideRowsOfTheFixturesThree, "filter.sql");
 
-        var listing = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var listing = index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0);
 
         Assert.Equal(2, listing.Total);
         Assert.All(listing.Items, i => Assert.Equal(_keptNpc, i.FormKey));
@@ -61,20 +61,11 @@ public sealed class WorkingTreeChangeMarkingTests : IDisposable
     public void AWorkingTreeChange_MarksOnlyTheEditedRecord()
     {
         using var index = Indexes.Reconciled(_fixture);
-        var reads = index.RequireReads();
-        var before = reads.DocumentOf(_keptNpc, _baseKey);
-        index.Edit(_base, before, before.BodyOf().Replace("KeepMe", "RenamedInWorkingTree", StringComparison.Ordinal));
+        var before = index.DocumentOf(_keptNpc, _baseKey);
+        index.Edit(_base, before, index.BodyOf(_keptNpc, _baseKey).Replace("KeepMe", "RenamedInWorkingTree", StringComparison.Ordinal));
 
-        var stack = reads.GetOverrideStack(_keptNpc);
-        Assert.NotNull(stack);
-        var baseEntry = stack.Entries.Single(e => e.Plugin.Equals(_baseKey));
-        Assert.True(baseEntry.HasWorkingTreeChange);
-
-        var winnerEntry = stack.Entries.Single(e => e.Plugin.Equals(_winnerKey));
-        Assert.False(winnerEntry.HasWorkingTreeChange);
-
-        var untouched = reads.StackEntry(_soleSourcedNpcWhoseOneEntryIsItsOwnWinner, _baseKey);
-        Assert.NotNull(untouched);
-        Assert.False(untouched.HasWorkingTreeChange);
+        Assert.Equal(WorkingTreeState.Modified, index.RowOf(_keptNpc, _baseKey)?.WorkingTreeState);
+        Assert.Equal(WorkingTreeState.None, index.RowOf(_keptNpc, _winnerKey)?.WorkingTreeState);
+        Assert.Equal(WorkingTreeState.None, index.RowOf(_soleSourcedNpcWhoseOneEntryIsItsOwnWinner, _baseKey)?.WorkingTreeState);
     }
 }
