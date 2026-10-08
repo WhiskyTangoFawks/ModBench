@@ -199,4 +199,30 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.Empty(compiledQuest.DialogBranches);
         Assert.Empty(compiledQuest.Scenes);
     }
+
+    [Fact]
+    public void CopyAsNewRecord_OfAResponseWhoseChainItCopiesIn_MovesTheDestinationsNextObjectIdPastIt()
+    {
+        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+
+        Assert.Equal(FormKey.Factory(result.OnlyLanded().Require()).ID + 1, _fixture.NextObjectId(_fixture.DestinationPlugin));
+    }
+
+    [Fact]
+    public void CopyAsNewRecord_OfAResponseIntoATopicTheDestinationHolds_MovesTheDestinationsNextObjectIdPastIt()
+    {
+        _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false).OnlyLanded();
+
+        var second = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response2.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+
+        Assert.Equal(FormKey.Factory(second.OnlyLanded().Require()).ID + 1, _fixture.NextObjectId(_fixture.DestinationPlugin));
+    }
+
+    [Fact]
+    public void CopyAsNewRecord_OfAReferenceInAnExteriorCellTheDestinationLacks_MovesTheDestinationsNextObjectIdPastIt()
+    {
+        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorPersistentRef.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+
+        Assert.Equal(FormKey.Factory(result.OnlyLanded().Require()).ID + 1, _fixture.NextObjectId(_fixture.DestinationPlugin));
+    }
 }

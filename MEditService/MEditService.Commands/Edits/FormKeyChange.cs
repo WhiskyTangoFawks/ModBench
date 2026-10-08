@@ -8,8 +8,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>An edit of a record's FormID changes its FormKey and nothing else: the records that
-/// reference it, itself included, are left as they are, and updating them is a script.</summary>
+/// <summary>An edit of a record's FormID changes its FormKey, and moves the Next Object ID past it. The records
+/// that reference it, itself included, are left as they are, and updating them is a script.</summary>
 internal sealed class FormKeyChange(RecordTextCodec codec, ILogger logger)
 {
     /// <summary>The document member a record's FormID is, which the edit's path names.</summary>
@@ -53,8 +53,8 @@ internal sealed class FormKeyChange(RecordTextCodec codec, ILogger logger)
                 $"Change its FormID in {originatingPlugin}, where the record is native.");
         }
 
-        if (FormKeyAllocator.Over(repository, plugin, release).Claim(requestedFormKey, out var targetFormKey)
-            is { } refusedTarget) return refusedTarget with { Path = Member };
+        var allocator = FormKeyAllocator.Over(repository, plugin, release);
+        if (allocator.Claim(requestedFormKey, out var targetFormKey) is { } refusedTarget) return refusedTarget with { Path = Member };
 
         var failed = $"Changing the FormID of {formKey} to {targetFormKey} failed";
         return WriteFailure.Refused<RecordEditChanges>(() => new RecordEditChanges(
@@ -62,7 +62,8 @@ internal sealed class FormKeyChange(RecordTextCodec codec, ILogger logger)
             repository.ChangesToRekey(plugin, carrying, identity, targetFormKey, new DocumentRekey(
                 (document, newKey) => Read(() => RecordDocumentEdits.WithFormKey(codec, document.Body, release, document.RecordType, newKey)),
                 (owner, oldKey, newKey) => Read(() => RecordDocumentEdits.WithEmbeddedChildFormKey(
-                    codec, owner.Body, release, owner.RecordType, oldKey, newKey))))), refused => refused, failed, logger);
+                    codec, owner.Body, release, owner.RecordType, oldKey, newKey)))).Then(allocator.CounterChanges())),
+            refused => refused, failed, logger);
     }
 
     // The codec is the one reader that sees why a text it is given is no record, as it is for an edit's patch.

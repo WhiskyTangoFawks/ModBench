@@ -71,7 +71,6 @@ public sealed class ResponseEditTests : IDisposable
         Assert.Equal([_fixture.DocumentFile(_fixture.Quest.ToString()).Require()], _fixture.ChangedDocumentFiles());
 
         Assert.Null(_fixture.Document(_fixture.Response.ToString()));
-        Assert.True(_fixture.Uses(_fixture.Response.ToString()));
         Assert.Equal([_fixture.Response2.ToString()], ResponseFormKeys());
 
         Assert.Equal([ContainerModFixture.Response2EditorId], await CompiledResponseEditorIds());
@@ -87,7 +86,7 @@ public sealed class ResponseEditTests : IDisposable
         var after = QuestText;
         Assert.Contains(result.NewFormKey.Require(), after, StringComparison.Ordinal);
         Assert.DoesNotContain(_fixture.Response.ToString(), after, StringComparison.Ordinal);
-        Assert.Equal([_fixture.DocumentFile(_fixture.Quest.ToString()).Require()], _fixture.ChangedDocumentFiles());
+        Assert.Equal([_fixture.HeaderDocumentFile(), _fixture.DocumentFile(_fixture.Quest.ToString()).Require()], _fixture.ChangedDocumentFiles());
 
         Assert.Equal([result.NewFormKey.Require(), _fixture.Response2.ToString()], ResponseFormKeys());
 

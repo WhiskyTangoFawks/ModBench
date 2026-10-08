@@ -209,4 +209,12 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
 
     private List<string> Files =>
         [.. Directory.GetFiles(_plugins.FolderOf(_edited), "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)];
+
+    [Fact]
+    public void ACellCreatedOnAWorldspace_MovesTheNextObjectIdPastItsFormKey()
+    {
+        var result = CreateCellAt(7, 7);
+
+        Assert.Equal(FormKey.Factory(result.NewFormKey.Require()).ID + 1, TrackedTree.NextObjectId(_plugins.FolderOf(_edited), Edited));
+    }
 }

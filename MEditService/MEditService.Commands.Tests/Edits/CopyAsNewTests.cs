@@ -3,6 +3,7 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -123,6 +124,7 @@ public sealed class CopyAsNewTests
     public void CopyRecordAsNewRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
         using var mod = CopyFixture.Create();
+        TrackedTree.SetNextObjectId(mod.ModFolderOf(mod.DestinationPlugin), mod.DestinationPlugin, 0xFFFFFF);
         TrackedTree.Seed(mod.ModFolderOf(mod.DestinationPlugin), mod.DestinationPlugin, "FFFFFF:Destination.esp");
 
         var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
@@ -175,5 +177,15 @@ public sealed class CopyAsNewTests
         var refused = result.OnlyRefused();
 
         Assert.Equal(RecordEditRefusal.RecordNotFound, refused.Refusal);
+    }
+
+    [Fact]
+    public void CopyRecordAsNewRecord_MovesTheDestinationsNextObjectIdPastTheCopysFormKey()
+    {
+        using var mod = CopyFixture.Create();
+
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
+
+        Assert.Equal(FormKey.Factory(result.OnlyLanded().Require()).ID + 1, mod.NextObjectId(mod.DestinationPlugin));
     }
 }

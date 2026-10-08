@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -25,9 +26,6 @@ internal static class TrackedTree
     internal static string Body(string modFolder, PluginAddress plugin, string formKey) =>
         Document(modFolder, plugin, formKey)?.Body
             ?? throw new InvalidOperationException($"Expected '{formKey}' to have a tracked document in '{modFolder}'.");
-
-    internal static bool Uses(string modFolder, PluginAddress plugin, string formKey) =>
-        Repository(modFolder).FormKeysUsed(plugin).Contains(formKey);
 
     internal static bool IsPartialForm(this SourceDocument document)
     {
@@ -96,6 +94,24 @@ internal static class TrackedTree
         Repository(modFolder).Put(plugin, new SourceDocument(formKey, "npc_", null, body));
     }
 
+    internal static uint NextObjectId(string modFolder, PluginAddress plugin) =>
+        HeaderDocument.NextObjectId(Encoding.UTF8.GetBytes(
+            Document(modFolder, plugin, PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name))).Require().Body));
+
+    internal static string HeaderDocumentFile(string modFolder, PluginAddress plugin) =>
+        DocumentFile(modFolder, plugin, PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name))).Require();
+
+    /// <summary>The header's Next Object ID set to <paramref name="nextObjectId"/>, as an edit of the header would.</summary>
+    internal static void SetNextObjectId(string modFolder, PluginAddress plugin, uint nextObjectId)
+    {
+        var repository = Repository(modFolder);
+        var header = repository.Get(
+                plugin, new RecordIdentity(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), PluginHeader.RecordType, null))
+            ?? throw new InvalidOperationException($"Expected {plugin.Name}'s tree to hold its header document.");
+        var moved = HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), nextObjectId);
+        repository.Put(plugin, header with { Body = Encoding.UTF8.GetString(moved) });
+    }
+
     internal static void Remove(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
         Repository(modFolder).Remove(plugin, identity);
 
@@ -124,9 +140,6 @@ public static class TrackedPluginTree
     public static SourceDocument? Document(this ITrackedPlugin tracked, string formKey) =>
         TrackedTree.Document(tracked.ModFolder, tracked.Plugin, formKey);
 
-    public static bool Uses(this ITrackedPlugin tracked, string formKey) =>
-        TrackedTree.Uses(tracked.ModFolder, tracked.Plugin, formKey);
-
     public static SourceDocument DocumentCarrying(this ITrackedPlugin tracked, string editorId) =>
         TrackedTree.DocumentCarrying(tracked.ModFolder, tracked.Plugin, editorId);
 
@@ -139,6 +152,11 @@ public static class TrackedPluginTree
 
     public static string? DocumentFile(this ITrackedPlugin tracked, string formKey) =>
         TrackedTree.DocumentFile(tracked.ModFolder, tracked.Plugin, formKey);
+
+    public static uint NextObjectId(this ITrackedPlugin tracked) => TrackedTree.NextObjectId(tracked.ModFolder, tracked.Plugin);
+
+    public static string HeaderDocumentFile(this ITrackedPlugin tracked) =>
+        TrackedTree.HeaderDocumentFile(tracked.ModFolder, tracked.Plugin);
 
     public static void Overwrite(this ITrackedPlugin tracked, SourceDocument document) =>
         TrackedTree.Overwrite(tracked.ModFolder, tracked.Plugin, document);
@@ -166,6 +184,9 @@ public static class TrackedPluginsTree
 
     public static SourceDocument DocumentCarrying(this ITrackedPlugins tracked, PluginAddress plugin, string editorId) =>
         TrackedTree.DocumentCarrying(tracked.ModFolderOf(plugin), plugin, editorId);
+
+    public static uint NextObjectId(this ITrackedPlugins tracked, PluginAddress plugin) =>
+        TrackedTree.NextObjectId(tracked.ModFolderOf(plugin), plugin);
 
     public static IReadOnlyList<string> ChangedFormKeys(this ITrackedPlugins tracked, PluginAddress plugin) =>
         TrackedTree.ChangedFormKeys(tracked.ModFolderOf(plugin), plugin);

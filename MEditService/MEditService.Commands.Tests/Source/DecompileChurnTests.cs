@@ -55,16 +55,17 @@ public sealed class DecompileChurnTests : IDisposable
     }
 
     [Fact]
-    public async Task CreateRecord_Compile_Decompile_LeavesAStatusNamingOnlyTheNewRecordsFile()
+    public async Task CreateRecord_Compile_Decompile_LeavesAStatusNamingOnlyTheNewRecordsFileAndTheHeader()
     {
         var created = TestEditService.CreateHandler(_holder).CreateRecord(Plugin, "npc_");
         Assert.True(created.Applied, created.Message);
         var newFile = TrackedTree.DocumentFile(_modFolder, Plugin, created.NewFormKey.Require()).Require();
+        var headerFile = TrackedTree.HeaderDocumentFile(_modFolder, Plugin);
 
         await Compile();
         await Decompile();
 
-        Assert.Equal([$"?? {ToGitPath(newFile)}"], SourceStatus());
+        Assert.Equal([$" M {ToGitPath(headerFile)}", $"?? {ToGitPath(newFile)}"], SourceStatus());
     }
 
     [Fact]

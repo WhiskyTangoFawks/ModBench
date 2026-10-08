@@ -48,9 +48,9 @@ internal sealed class NewRecordCopy
 
         return CopyUnderNextFormKey(
             copy, destinationPlugin,
-            duplicate =>
+            (duplicate, counter) =>
             {
-                destination.Repository.Put(destinationPlugin, duplicate);
+                destination.Repository.Put(destinationPlugin, duplicate, counter);
                 return RecordEditResult.Success();
             },
             "new working-tree source document");
@@ -60,20 +60,21 @@ internal sealed class NewRecordCopy
         WriteTargets.CopyTarget copy, DocumentContainment container, PluginAddress destinationPlugin) =>
         CopyUnderNextFormKey(
             copy, destinationPlugin,
-            duplicate => _recordCopy.AppendEmbeddedChild(copy.Source, container, duplicate, copy.Destination, copy.Release),
+            (duplicate, counter) => _recordCopy.AppendEmbeddedChild(copy.Source, container, duplicate, copy.Destination, copy.Release, counter),
             $"inside {container.ParentFormKey}'s {container.SlotName} slot");
 
     private RecordEditResult CopyUnderNextFormKey(
-        WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, Func<SourceDocument, RecordEditResult> land, string landedAt)
+        WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, Func<SourceDocument, SourceChanges, RecordEditResult> land,
+        string landedAt)
     {
         var (source, identity, destination, release, body) = copy;
-        if (FormKeyAllocator.Over(destination.Repository, destinationPlugin, release).Next(out var targetFormKey)
-            is { } refusedTarget) return refusedTarget;
+        var allocator = FormKeyAllocator.Over(destination.Repository, destinationPlugin, release);
+        if (allocator.Next(out var targetFormKey) is { } refusedTarget) return refusedTarget;
 
         var named = RecordDocumentEdits.DuplicatedWithoutChildren(
             _codec, body, release, identity.RecordType, targetFormKey,
             EditorIdDeriver(destination.Repository.EditorIdsHeld(destinationPlugin)));
-        var landed = land(new SourceDocument(targetFormKey, identity.RecordType, named.EditorId, named.Text));
+        var landed = land(new SourceDocument(targetFormKey, identity.RecordType, named.EditorId, named.Text), allocator.CounterChanges());
         if (!landed.Applied) return landed;
 
         if (_logger.IsEnabled(LogLevel.Information))

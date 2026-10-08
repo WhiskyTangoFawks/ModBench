@@ -106,7 +106,7 @@ internal sealed class OverrideCopy
                 new SourceDocument(
                     formKey, identity.RecordType, identity.EditorId,
                     StripEmbeddedChildren(body, identity.RecordType, release)),
-                destination, release);
+                destination, release, SourceChanges.None);
             if (placed.Applied && _logger.IsEnabled(LogLevel.Information))
             {
                 _logger.LogInformation(

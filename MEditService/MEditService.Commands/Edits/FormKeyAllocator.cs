@@ -11,43 +11,52 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands.Edits;
 
 /// <summary>The one place a new FormKey is drawn (plugins.md, Create record, stories 2 and 3). One gesture
-/// draws all its keys from one allocator, so none is drawn twice.</summary>
+/// draws all its keys from one allocator and writes <see cref="CounterChanges"/> with them.</summary>
 internal sealed class FormKeyAllocator
 {
+    private readonly SourceRepository _repository;
     private readonly PluginAddress _plugin;
     private readonly GameRelease _release;
+    private readonly SourceDocument? _header;
     private readonly bool _isLight;
     private readonly bool _eslFlagIsRemovable;
     private readonly IReadOnlySet<string> _used;
-    private readonly HashSet<string> _drawn = new(StringComparer.Ordinal);
+    private readonly uint _counterHeld;
+    private uint _counter;
 
-    private FormKeyAllocator(
-        PluginAddress plugin, GameRelease release, bool eslFlagIsRemovable, IReadOnlySet<string> used)
+    private FormKeyAllocator(SourceRepository repository, PluginAddress plugin, GameRelease release, SourceDocument? header)
     {
-        _plugin = plugin;
-        _release = release;
-        _eslFlagIsRemovable = eslFlagIsRemovable;
-        _isLight = eslFlagIsRemovable || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
-        _used = used;
+        (_repository, _plugin, _release, _header) = (repository, plugin, release, header);
+        var headerBody = header is null ? null : Encoding.UTF8.GetBytes(header.Body);
+        _counterHeld = _counter = headerBody is null ? 0 : HeaderDocument.NextObjectId(headerBody);
+        // The working tree's header document decides (ADR-0007), so a flag flipped this session caps
+        // minting immediately.
+        _eslFlagIsRemovable = headerBody is not null && HeaderDocument.IsLight(headerBody);
+        _isLight = _eslFlagIsRemovable || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
+        _used = repository.FormKeysUsed(plugin);
     }
 
     internal static FormKeyAllocator Over(SourceRepository repository, PluginAddress plugin, GameRelease release) =>
-        new(plugin, release, IsLightByRemovableFlag(repository, plugin), repository.FormKeysUsed(plugin));
+        new(repository, plugin, release, repository.Get(
+            plugin, new RecordIdentity(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), PluginHeader.RecordType, null)));
 
-    /// <summary>The next free FormKey. Non-null is the refusal, and <paramref name="formKey"/> is "" then.</summary>
+    /// <summary>The first FormKey at or above the Next Object ID that no record uses. Non-null is the
+    /// refusal, and <paramref name="formKey"/> is "" then.</summary>
     internal RecordEditResult? Next(out string formKey)
     {
-        if (NextFreeNativeFormId(_isLight) is { } allocated)
+        formKey = "";
+        if (RefuseWithoutHeader() is { } headerless) return headerless;
+        var free = FirstFreeId();
+        if (free > Cap(_isLight))
         {
-            formKey = allocated;
-            _drawn.Add(formKey);
-            return null;
+            var freeAboveTheLightCap = _isLight && _eslFlagIsRemovable && free <= Cap(isLight: false);
+            return RecordEditResult.Refused(
+                RecordEditRefusal.FormKeySpaceExhausted, ExhaustedMessage(freeAboveTheLightCap));
         }
 
-        formKey = "";
-        var freeAboveTheLightCap = _isLight && _eslFlagIsRemovable && NextFreeNativeFormId(isLight: false) != null;
-        return RecordEditResult.Refused(
-            RecordEditRefusal.FormKeySpaceExhausted, ExhaustedMessage(freeAboveTheLightCap));
+        formKey = KeyOf(free);
+        _counter = free + 1;
+        return null;
     }
 
     /// <summary>A FormKey the user asked for, which must be native, in range and free. Non-null is the
@@ -55,26 +64,49 @@ internal sealed class FormKeyAllocator
     internal RecordEditResult? Claim(string requestedFormKey, out string formKey)
     {
         formKey = "";
+        if (RefuseWithoutHeader() is { } headerless) return headerless;
         if (RefuseIfNotNativeTarget(requestedFormKey) is { } notNative) return notNative;
         if (_used.Contains(requestedFormKey))
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.FormKeyCollision,
-                $"{requestedFormKey} is already held by a record in {_plugin.Name} at some ref.");
+                $"{requestedFormKey} is already held by a record in {_plugin.Name}.");
         }
 
         formKey = requestedFormKey;
+        _counter = Math.Max(_counter, FormKey.Factory(requestedFormKey).ID + 1);
         return null;
     }
 
-    // The working tree's header document decides (ADR-0007), so a flag flipped this
-    // session caps minting immediately.
-    private static bool IsLightByRemovableFlag(SourceRepository repository, PluginAddress plugin)
+    /// <summary>The header document's rewrite that moves its Next Object ID past every FormKey drawn or
+    /// claimed, written nowhere. None when nothing passed it.</summary>
+    internal SourceChanges CounterChanges() =>
+        _header is { } header && _counter > _counterHeld
+            ? _repository.ChangesToRewrite(_plugin, header with
+            {
+                Body = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), _counter)),
+            })
+            : SourceChanges.None;
+
+    private RecordEditResult? RefuseWithoutHeader() =>
+        _header is null
+            ? RecordEditResult.Refused(
+                RecordEditRefusal.PluginSourceUnreadable,
+                $"{_plugin.Name} ({_plugin.Origin}) has no header document, so its Next Object ID is unknown. " +
+                "Check the Source Control panel.")
+            : null;
+
+    private uint FirstFreeId()
     {
-        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
-        var header = repository.Get(plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, null));
-        return header?.Body is { } body && HeaderDocument.IsLight(Encoding.UTF8.GetBytes(body));
+        var id = Math.Max(_counter, PluginFlagPredicates.HighRangeFormIdFloor(_release));
+        var taken = _used.Where(IsNative).Select(LocalId).Where(used => used >= id).ToHashSet();
+        while (taken.Contains(id)) id++;
+        return id;
     }
+
+    private static uint Cap(bool isLight) => isLight ? PluginFlagPredicates.LightLocalFormIdCap : FormID.FullIdMask;
+
+    private string KeyOf(uint id) => $"{id:X6}:{_plugin.Name}";
 
     private bool IsNative(string formKey) =>
         FormKey.TryFactory(formKey, out var parsed)
@@ -106,36 +138,21 @@ internal sealed class FormKeyAllocator
         return null;
     }
 
-    // Null means exhausted.
-    private string? NextFreeNativeFormId(bool isLight)
-    {
-        var floor = PluginFlagPredicates.HighRangeFormIdFloor(_release);
-        var highest = _used
-            .Where(IsNative)
-            .Concat(_drawn)
-            .Select(LocalId)
-            .DefaultIfEmpty(0u)
-            .Max();
-        var next = Math.Max(floor, highest + 1);
-        var cap = isLight ? PluginFlagPredicates.LightLocalFormIdCap : FormID.FullIdMask;
-        return next > cap ? null : $"{next:X6}:{_plugin.Name}";
-    }
-
     // Every branch names both remedies, even where one is moot for this plugin.
     private string ExhaustedMessage(bool freeAboveTheLightCap)
     {
         const string remedies = "Clear the light flag in the header, or change a record's FormID.";
+        const string noneInTheLightRange =
+            "no local FormID from its Next Object ID up to 0xFFF (a light-flagged plugin's addressable range) is free";
         if (freeAboveTheLightCap)
         {
-            return $"{_plugin.Name} has exhausted its ESL FormKey space — every local FormID up to 0xFFF is " +
-                "already in use (a light-flagged plugin's addressable range) — but native space remains " +
-                $"free above it. {remedies}";
+            return $"{_plugin.Name} has exhausted its ESL FormKey space — {noneInTheLightRange} — but native space " +
+                $"remains free above it. {remedies}";
         }
         return _isLight
-            ? $"{_plugin.Name} has exhausted its ESL FormKey space — every local FormID up to 0xFFF is " +
-              $"already in use (a light-flagged plugin's addressable range). {remedies}"
-            : $"{_plugin.Name} has exhausted its FormKey space — every local FormID up to 0xFFFFFF is " +
-              $"already in use. {remedies}";
+            ? $"{_plugin.Name} has exhausted its ESL FormKey space — {noneInTheLightRange}. {remedies}"
+            : $"{_plugin.Name} has exhausted its FormKey space — no local FormID from its Next Object ID up to " +
+              $"0xFFFFFF is free. {remedies}";
     }
 
     private static uint LocalId(string formKey) =>

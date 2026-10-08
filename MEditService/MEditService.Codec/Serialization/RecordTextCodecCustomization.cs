@@ -22,13 +22,11 @@ internal sealed class ModHeaderMastersCustomization : ICustomize<IFallout4ModHea
     }
 }
 
-/// <summary>Every write derives the next FormID and the record count from content, so the source holds
-/// neither.</summary>
+/// <summary>Every write derives the record count from content, so the source holds none.</summary>
 internal sealed class ModStatsCustomization : ICustomize<IModStatsGetter>
 {
     public void CustomizeFor(ICustomizationBuilder<IModStatsGetter> builder)
     {
-        builder.Omit(x => x.NextFormID)
-            .Omit(x => x.NumRecords);
+        builder.Omit(x => x.NumRecords);
     }
 }

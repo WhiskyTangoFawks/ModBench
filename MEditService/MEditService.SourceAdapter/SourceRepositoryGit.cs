@@ -107,33 +107,6 @@ internal sealed class SourceRepositoryGit(string modFolder)
         return entries;
     }
 
-    // The plugin's committed subtree, path and text, from one ls-tree plus one cat-file per blob.
-    // Empty, never null: "nothing at that ref" is an answer here.
-    internal IEnumerable<(string RelativePath, string Text)> BlobsAtRef(string pluginName, string gitRef)
-    {
-        if (!IsTracked(_modFolder)) yield break;
-
-        var sourcePrefix = ToGitPath(SourceRepositoryLayout.RootFor(pluginName));
-        if (!TryRun(out var listing, "ls-tree", "-r", "-z", gitRef, "--", $"{sourcePrefix}/"))
-            yield break;
-
-        // -z so a path carrying a space or non-ASCII survives verbatim; every source path segment
-        // comes from a plugin filename or an EditorID.
-        foreach (var entry in listing.Split('\0', StringSplitOptions.RemoveEmptyEntries))
-        {
-            // "<mode> SP <type> SP <object> TAB <file>"
-            var tab = entry.IndexOf('\t', StringComparison.Ordinal);
-            if (tab < 0) continue;
-            var fields = entry[..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (fields.Length < 3 || fields[1] != "blob") continue;
-            var gitPath = entry[(tab + 1)..];
-
-            // cat-file -p, not show: for a missing glob-shaped path show exits 0 with empty output.
-            if (!TryRun(out var text, "cat-file", "-p", $"{gitRef}:{gitPath}")) continue;
-            yield return (gitPath.Replace('/', Path.DirectorySeparatorChar), text);
-        }
-    }
-
     internal IReadOnlyList<string> LastWrittenBinarySha256s(string pluginFileName)
     {
         if (!IsTracked(_modFolder)) return [];

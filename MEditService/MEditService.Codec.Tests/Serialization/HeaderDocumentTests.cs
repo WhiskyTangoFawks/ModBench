@@ -19,7 +19,6 @@ public sealed class HeaderDocumentTests
         const string NonAsciiBecauseTheByteComparisonsAreTheOnlyPlaceAnEncodingDifferenceBetweenTheTwoProducersCouldShow = "Cut-down slice — ünïcode, em—dash";
         mod.ModHeader.Description = NonAsciiBecauseTheByteComparisonsAreTheOnlyPlaceAnEncodingDifferenceBetweenTheTwoProducersCouldShow;
         mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Master | Fallout4ModHeader.HeaderFlag.Localized;
-        mod.ModHeader.Stats.NextFormID = 0x900;
         mod.ModHeader.Stats.NumRecords = 5;
         mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Fallout4.esm") });
         mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Other.esm") });
@@ -32,6 +31,7 @@ public sealed class HeaderDocumentTests
         topic.Responses.Add(new DialogResponses(mod) { EditorID = "SomeResponse" });
         quest.DialogTopics.Add(topic);
         mod.Quests.Add(quest);
+        mod.ModHeader.Stats.NextFormID = 0x900;
         return mod;
     }
 
@@ -66,16 +66,35 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public void Write_HoldsNoMastersNextFormIdOrRecordCount_BecauseEveryWriteDerivesThemFromContent()
+    public void Write_HoldsNoMastersOrRecordCount_BecauseEveryWriteDerivesThemFromContent()
     {
         var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
 
         using var document = JsonDocument.Parse(body);
         var header = document.RootElement.GetProperty("ModHeader");
         Assert.False(header.TryGetProperty("MasterReferences", out _));
-        var stats = header.GetProperty("Stats");
-        Assert.False(stats.TryGetProperty("NextFormID", out _));
-        Assert.False(stats.TryGetProperty("NumRecords", out _));
+        Assert.False(header.GetProperty("Stats").TryGetProperty("NumRecords", out _));
+    }
+
+    [Fact]
+    public void NextObjectId_IsTheOneTheModHeld()
+    {
+        var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
+
+        Assert.Equal(0x900u, HeaderDocument.NextObjectId(body));
+    }
+
+    [Fact]
+    public void WithNextObjectId_ChangesTheCounterAndNothingElse()
+    {
+        var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
+
+        var moved = HeaderDocument.WithNextObjectId(body, 0xA42);
+
+        Assert.Equal(0xA42u, HeaderDocument.NextObjectId(moved));
+        Assert.Equal(
+            Encoding.UTF8.GetString(body).Replace("2304", "2626", StringComparison.Ordinal),
+            Encoding.UTF8.GetString(moved));
     }
 
     [Fact]
