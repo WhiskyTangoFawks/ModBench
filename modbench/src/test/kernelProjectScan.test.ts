@@ -111,8 +111,7 @@ function importedBoxes(file: string): Map<string, string> {
   return imported;
 }
 
-// tsc accepts an import of any project the box reaches through its references, so a direct list is only held here.
-describe('a box imports only the boxes its own tsconfig references', () => {
+describe('a box imports only the boxes its own tsconfig lists, since tsc also accepts the ones its references reach', () => {
   it.each(BOXES)('%s', (box) => {
     const allowed = new Set([box, ...referencePaths(boxProject(box)).map((p) => p.replace(/^src\//, ''))]);
     const unreferenced = fileNames(boxProject(box)).flatMap((file) =>
