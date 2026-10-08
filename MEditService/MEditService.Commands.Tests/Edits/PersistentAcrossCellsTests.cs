@@ -194,7 +194,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
             public string? TextOf(string formKey) => inner.TextOf(formKey);
             public DocumentContainment? ContainmentOf(string formKey) => inner.ContainmentOf(formKey);
             public CellStructure? CellStructureOf(string formKey) => inner.CellStructureOf(formKey);
-            public IReadOnlyList<string> CellsIn(string worldspace) => inner.CellsIn(worldspace);
 
             public string? CellAt(string worldspace, int x, int y)
             {

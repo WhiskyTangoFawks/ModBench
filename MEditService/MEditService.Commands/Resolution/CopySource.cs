@@ -83,6 +83,31 @@ internal sealed class CopySource(
     internal string? WorldspaceOf(RecordIdentity identity) =>
         _tree != null ? _tree.WorldspaceOf(plugin, identity) : Loaded()?.CellStructureOf(identity.FormKey)?.ParentWorldspace;
 
+    /// <summary>How many records sit above this one: its containers, and a numbered cell's worldspace.
+    /// An unreadable record ends the count where it stood; its own copy refuses it, naming why.</summary>
+    internal int ContainmentDepth(string formKey)
+    {
+        var depth = 0;
+        try
+        {
+            var identity = Identity(formKey);
+            while (identity is { } held && ParentOf(held) is { } parent)
+            {
+                depth++;
+                identity = Identity(parent);
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return depth;
+        }
+        return depth;
+    }
+
+    private string? ParentOf(RecordIdentity identity) =>
+        ContainerOf(identity)?.ParentFormKey
+        ?? (RecordTypeDispatch.For(_release).IsCell(identity.RecordType) ? WorldspaceOf(identity) : null);
+
     /// <summary>The exterior cell this plugin holds at grid (<paramref name="x"/>, <paramref name="y"/>)
     /// of <paramref name="worldspace"/>, or null when it holds none there.</summary>
     internal RecordIdentity? CellAt(string worldspace, int x, int y)
@@ -90,11 +115,6 @@ internal sealed class CopySource(
         if (_tree != null) return _tree.GetCellAt(plugin, worldspace, x, y, _schemas)?.Identity;
         return Loaded()?.CellAt(worldspace, x, y) is { } formKey ? Loaded()?.IdentityOf(formKey) : null;
     }
-
-    /// <summary>The FormKey of every cell <paramref name="worldspace"/> holds in this plugin, its
-    /// persistent cell and each numbered cell.</summary>
-    internal IReadOnlyList<string> CellsIn(string worldspace) =>
-        _tree != null ? _tree.CellsIn(plugin, worldspace, _schemas) : Loaded()?.CellsIn(worldspace) ?? [];
 
     public void Dispose() => _loaded?.Dispose();
 

@@ -84,7 +84,6 @@ public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture
     [Theory]
     [InlineData("Override")]
     [InlineData("New")]
-    [InlineData("DeepOverride")]
     public async Task CopyingToAnUnwritableDestinationRefusesTheItemInsteadOfFailingTheRequest(string mode)
     {
         using var fx = BuildSourceAndDestination();

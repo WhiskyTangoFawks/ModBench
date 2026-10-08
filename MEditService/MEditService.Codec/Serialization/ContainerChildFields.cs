@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Serialization;
@@ -61,8 +60,7 @@ public static class ContainerChildFields
     }
 
     /// <summary><see cref="Child"/> is the real object hanging off Parent, not a copy: mutating it and
-    /// reserializing the document's root is how an embedded child is written. Parent is the direct
-    /// container, which a slot replace needs.</summary>
+    /// reserializing the document's root is how an embedded child is written.</summary>
     internal readonly record struct EmbeddedChild(IMajorRecordGetter Parent, string SlotName, int SlotIndex, IMajorRecord Child);
 
     /// <summary>The child through Mutagen's own object model, not a JSON pointer, so existing writers
@@ -123,65 +121,6 @@ public static class ContainerChildFields
         if (property.GetValue(parent) is IMajorRecordGetter held)
             throw new ChildSlotHeldByAnotherRecordException(parent.GetType().Name, slotName, held.FormKey.ToString(), child.FormKey.ToString());
         property.SetValue(parent, child);
-    }
-
-    /// <summary>Each incoming child overwrites the one held under its FormKey in <paramref name="root"/>
-    /// or <paramref name="carried"/>, landing in <paramref name="target"/>'s slot, else is added. What
-    /// only the held one holds stays.</summary>
-    internal static void MergeChildren(
-        IMajorRecordGetter root, IMajorRecordGetter target, IReadOnlyList<(string SlotName, IMajorRecordGetter Child)> incoming,
-        IReadOnlyDictionary<FormKey, IMajorRecordGetter> carried)
-    {
-        foreach (var (slotName, source) in incoming)
-        {
-            var child = (IMajorRecord)source;
-            var childrenToMerge = EnumerateChildren(child).Select(c => (c.SlotName, c.Child)).ToList();
-            ClearAllChildSlots(child);
-
-            if (FindEmbeddedChild(root, child.FormKey.ToString()) is not { } held)
-            {
-                if (carried.TryGetValue(child.FormKey, out var carriedHeld)) TransplantChildSlots(carriedHeld, child);
-                AddChildToSlot(target, slotName, child);
-            }
-            else
-            {
-                TransplantChildSlots(held.Child, child);
-                if (ReferenceEquals(held.Parent, target) && held.SlotName == slotName) ReplaceInSlot(held, child);
-                else
-                {
-                    RemoveFromSlot(held);
-                    AddChildToSlot(target, slotName, child);
-                }
-            }
-            MergeChildren(root, child, childrenToMerge, carried);
-        }
-    }
-
-    /// <summary>The incoming record's own fields over the held record's children, the incoming
-    /// children merged in.</summary>
-    internal static IMajorRecord Overwritten(IMajorRecordGetter held, IMajorRecordGetter incoming)
-    {
-        var incomingChildren = EnumerateChildren(incoming).Select(c => (c.SlotName, c.Child)).ToList();
-        ClearAllChildSlots(incoming);
-        TransplantChildSlots(held, incoming);
-        MergeChildren(incoming, incoming, incomingChildren, new Dictionary<FormKey, IMajorRecordGetter>());
-        return (IMajorRecord)incoming;
-    }
-
-    private static void ReplaceInSlot(EmbeddedChild held, IMajorRecord replacement)
-    {
-        var property = SlotProperty(held.Parent.GetType(), held.SlotName, "replace a child in");
-        if (property.GetValue(held.Parent) is System.Collections.IEnumerable and not string and var list)
-            ((dynamic)list)[held.SlotIndex] = (dynamic)replacement;
-        else property.SetValue(held.Parent, replacement);
-    }
-
-    private static void RemoveFromSlot(EmbeddedChild held)
-    {
-        var property = SlotProperty(held.Parent.GetType(), held.SlotName, "remove a child from");
-        if (property.GetValue(held.Parent) is System.Collections.IEnumerable and not string and var list)
-            ((dynamic)list).RemoveAt(held.SlotIndex);
-        else property.SetValue(held.Parent, null);
     }
 
     private static PropertyInfo SlotProperty(Type recordType, string slotName, string purpose) =>
