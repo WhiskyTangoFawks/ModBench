@@ -237,11 +237,16 @@ internal sealed class RelationReads(
     {
         using var connection = store.OpenReadConnection();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
+        cmd.CommandText = $"""
             SELECT fr.source_plugin, fr.source_origin, fr.source_form_key, fr.record_type, fr.editor_id,
                    fr.target_form_key, fr.field_path
-            FROM form_references fr
+            FROM {TableDdlBuilder.MirrorSchema}.form_references fr
+            {TableDdlBuilder.RegisteredJoin("fr", "source_plugin", "source_origin")}
             WHERE NOT EXISTS (SELECT 1 FROM form_lookup l WHERE l.form_key = fr.target_form_key)
+              AND NOT EXISTS (
+                  SELECT 1 FROM {TableDdlBuilder.MirrorSchema}.form_lookup own
+                  WHERE own.form_key = fr.target_form_key
+                    AND own.plugin = fr.source_plugin AND own.origin = fr.source_origin)
             ORDER BY fr.source_plugin, fr.source_origin, fr.source_form_key, fr.field_path
             """;
 
