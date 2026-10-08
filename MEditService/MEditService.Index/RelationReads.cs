@@ -87,7 +87,9 @@ internal sealed class RelationReads(
     {
         using var connection = store.OpenReadConnection();
         var filter = query.Scope == RecordQueryScope.Navigator ? store.Filter : null;
-        var records = query is { Scope: RecordQueryScope.Search, Plugin: not null } ? TableDdlBuilder.PluginRecordsView : "records";
+        var reachesAnyState = query is { Scope: RecordQueryScope.Search, Plugin: not null };
+        var records = reachesAnyState ? TableDdlBuilder.PluginRecordsView : "records";
+        var sideTables = reachesAnyState ? $"{TableDdlBuilder.MirrorSchema}." : "";
         var (where, paramValues) = BuildWhere(
             query.Plugin?.Name, query.Search, filter?.Listing, query.Origin, query.RecordTypes,
             query.GroupOnly ? NavigatorSql.NotHeld("r") : null, query.SearchFormKey);
@@ -96,7 +98,7 @@ internal sealed class RelationReads(
         var cols = $"""
             form_key, plugin, load_order_idx, is_winner, editor_id, origin, r.working_tree_state,
             EXISTS (
-                SELECT 1 FROM container_child cc
+                SELECT 1 FROM {sideTables}container_child cc
                 WHERE cc.parent_form_key = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
                   {filter?.AlsoKeeps("cc", "child_form_key")}
             ) AS has_container_children,
@@ -118,7 +120,7 @@ internal sealed class RelationReads(
         var order = query.GroupOnly ? NavigatorSql.FormIdOrder("form_key") : "editor_id, form_key";
         using var dataCmd = connection.CreateCommand();
         dataCmd.CommandText = $"""
-            WITH RECURSIVE {NavigatorSql.AboveAFailure(records, holdings)}
+            WITH RECURSIVE {NavigatorSql.AboveAFailure(records, holdings, NavigatorSql.HeldIn(sideTables))}
             SELECT {cols} FROM {records} r{where}
             ORDER BY {order}, plugin, origin
             LIMIT {query.Limit} OFFSET {query.Offset}
@@ -194,7 +196,7 @@ internal sealed class RelationReads(
     {
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"""
-            WITH RECURSIVE {NavigatorSql.AboveAFailure("records", "WHERE h.plugin = $1 AND h.origin = $2")}
+            WITH RECURSIVE {NavigatorSql.AboveAFailure("records", "WHERE h.plugin = $1 AND h.origin = $2", NavigatorSql.Held)}
             SELECT DISTINCT r.record_type FROM records r
             JOIN above_failure a ON a.form_key = r.form_key AND a.plugin = r.plugin AND a.origin = r.origin
             WHERE r.plugin = $1 AND r.origin = $2 AND {NavigatorSql.NotHeld("r")}
@@ -377,7 +379,7 @@ internal sealed class RelationReads(
         using var connection = store.OpenReadConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"""
-            WITH RECURSIVE {NavigatorSql.AboveAFailure("records", "WHERE h.plugin = $1 AND h.origin = $2")}
+            WITH RECURSIVE {NavigatorSql.AboveAFailure("records", "WHERE h.plugin = $1 AND h.origin = $2", NavigatorSql.Held)}
             SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y,
                    {FullNameOf("c")}, c.parse_diagnosis,
                    c.parse_diagnosis IS NOT NULL OR EXISTS (
