@@ -8,7 +8,7 @@ namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>A reload landing mid-gesture: the first plugin opened for reading replaces the held load
 /// order with one that lacks <paramref name="dropped"/>.</summary>
-internal sealed class DroppingAPluginOnTheFirstRead(LoadOrderHolder holder, string dropped)
+internal sealed class DroppingAPluginOnTheFirstRead(LoadOrderHolder holder, PluginAddress dropped)
     : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {
     private bool _dropped;
@@ -22,9 +22,9 @@ internal sealed class DroppingAPluginOnTheFirstRead(LoadOrderHolder holder, stri
             var held = holder.Current;
             holder.Apply(new LoadOrderSnapshot(
                 held.DataFolderPath, held.InstanceRoot, held.GameRelease,
-                [.. held.Plugins.Where(p => p.Name != dropped)],
-                [.. held.Active.Where(p => p.Name != dropped).Select(p => p.Key)],
-                [.. held.LoadedWithNoLine.Where(p => p.Name != dropped).Select(p => p.Key)]));
+                [.. held.Plugins.Where(p => !p.Key.Equals(dropped))],
+                [.. held.Active.Select(p => p.Key).Where(a => !a.Equals(dropped))],
+                [.. held.LoadedWithNoLine.Select(p => p.Key).Where(a => !a.Equals(dropped))]));
         }
         return base.OpenRecordLookup(plugin, gameRelease, schemas);
     }

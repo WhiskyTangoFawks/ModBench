@@ -45,12 +45,9 @@ internal sealed record CellGroupMove(IReadOnlyList<PathHop> Prefix, string Desti
         {
             // A cell that says nothing of where it sits takes its nearest copy to the left's word, as xEdit
             // reads the highest override visible to the file.
-            var cellCopyOnTheLeft = PlacedCell.Says(cell) || cell[RecordMembers.FormKey]?.GetValue<string>() is not { } cellKey
-                ? null
-                : masters.NearestCopy(cellKey, PlacedCell.Says);
-            if (PlacedCell.SaidBy(cell, cellCopyOnTheLeft?.FoundText) is not { } said)
+            if (masters.WhereItSits(cell, out var unreadable) is not { } said)
             {
-                if (cellCopyOnTheLeft is LeftCopy.Unreadable unreadable)
+                if (unreadable is not null)
                     return unreadable.Refusal(spelled, $"which cell xEdit would move {formKey} into depends on where its cell sits, which only that cell's nearest copy to the left says");
                 return Unknown(
                     spelled, formKey,
