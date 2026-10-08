@@ -520,6 +520,8 @@ function renderedText(formKey: string): string {
 describe('modbench.record.open', () => {
   const hasRenderedTab = (formKey: string) => openTabs().some(t => t.label === renderedName(formKey));
 
+  afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
+
   it('opens the winning copy\'s document, titled with its file\'s name', async () => {
     await openRecord({ formKey: 'Fallout4.esm:000001' });
 
@@ -527,6 +529,8 @@ describe('modbench.record.open', () => {
   });
 
   it('a second click replaces the preview tab instead of adding one', async () => {
+    await openRecord({ formKey: 'Fallout4.esm:000001' });
+    await waitFor('the first record\'s tab', () => hasRenderedTab('Fallout4.esm:000001') || undefined);
     const tabsBefore = openTabs().length;
 
     await openRecord({ formKey: 'Fallout4.esm:000002' });
@@ -544,6 +548,7 @@ describe('modbench.record.open', () => {
     await openRecord({ formKey: 'Fallout4.esm:000010' });
 
     assert.strictEqual(openTabs().length, tabsBefore);
+    assert.strictEqual(openTabs().filter(t => t.label === renderedName('Fallout4.esm:000010')).length, 1);
   });
 
   it('opens several records at once as one grid: the first record\'s document, which reads the others beside it in the order given', async () => {
