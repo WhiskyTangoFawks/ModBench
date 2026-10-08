@@ -148,10 +148,6 @@ internal sealed record SchemaAnnotations(
         "the cell's source, so moving it restructures the tree rather than rewriting one file. That is a structural " +
         "gesture, not a field edit");
 
-    private const string PlacedPositionReason =
-        "it decides which cell holds a temporary reference in a worldspace, so moving it can move the reference " +
-        "into another cell's document. That is a structural gesture, not a field edit";
-
     private static readonly string[] EmptySubSchemaTypesInEveryGame =
     [
         "IPlacedGetter",                     // abstract placed-record base, no members of its own
@@ -282,7 +278,7 @@ internal sealed record SchemaAnnotations(
             ExteriorCellWidth: 4096f,
             PartialFormCellsDefinedIn: "Fallout4.esm",
             PluginHeaderMembers: PluginHeaderMembersOf("IFallout4ModHeaderGetter"),
-            ContainmentMembers: [CellGridInEveryGame, new("IPlacedGetter", PlacedCell.PositionMember, PlacedPositionReason)]),
+            ContainmentMembers: [CellGridInEveryGame]),
 
         [GameCategory.Skyrim] = new(
             ExcludedColumns: [.. GrupTimestampColumns],
@@ -318,8 +314,6 @@ internal sealed record SchemaAnnotations(
             ExteriorCellWidth: 4096f,
             PartialFormCellsDefinedIn: null,
             PluginHeaderMembers: PluginHeaderMembersOf("ISkyrimModHeaderGetter"),
-            // Skyrim's placed records hold their position inside Placement, a struct, which a row keyed
-            // on a record's own member does not reach.
             ContainmentMembers: [CellGridInEveryGame]),
 
         [GameCategory.Starfield] = new(
@@ -369,7 +363,7 @@ internal sealed record SchemaAnnotations(
             ExteriorCellWidth: null,
             PartialFormCellsDefinedIn: null,
             PluginHeaderMembers: PluginHeaderMembersOf("IStarfieldModHeaderGetter"),
-            ContainmentMembers: [CellGridInEveryGame, new("IPlacedGetter", PlacedCell.PositionMember, PlacedPositionReason)]),
+            ContainmentMembers: [CellGridInEveryGame]),
     };
 
     /// <summary>A game with no table is a game nobody has written the facts for — loud, not empty.</summary>

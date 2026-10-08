@@ -4,6 +4,7 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Noggog;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -38,6 +39,10 @@ public sealed class ContainerModFixture : TestInstance, ITrackedPlugin
     public FormKey TopCell { get; }
 
     public FormKey TopCellRef { get; }
+
+    public FormKey ExteriorCell { get; }
+
+    public FormKey ExteriorRef { get; }
 
     public const string QuestEditorId = "EmbedQuest";
     public FormKey Quest { get; }
@@ -79,6 +84,11 @@ public sealed class ContainerModFixture : TestInstance, ITrackedPlugin
         var npc = mod.Npcs.AddNew(NpcEditorId);
         var containerKeys = ContainerModPlugin.AddTo(mod);
 
+        var exteriorCell = new Cell(mod) { EditorID = "ExteriorCell", Grid = new CellGrid() };
+        var exteriorRef = new PlacedObject(mod) { EditorID = "ExteriorRef", Position = new P3Float(100f, 100f, 0f), Scale = 1f };
+        exteriorCell.Temporary.Add(exteriorRef);
+        mod.Worldspaces.AddNew("ExteriorWorld").SubCells.Add(CellBlocks.Exterior(exteriorCell));
+
         var quest = new Quest(mod) { EditorID = QuestEditorId };
         var dialogTopic = new DialogTopic(mod) { EditorID = DialogTopicEditorId };
         var response = new DialogResponses(mod) { EditorID = ResponseEditorId };
@@ -104,6 +114,7 @@ public sealed class ContainerModFixture : TestInstance, ITrackedPlugin
         (EmbedCell, TemporaryRef, PersistentRef) = (containerKeys.EmbedCell, containerKeys.TemporaryRef, containerKeys.PersistentRef);
         (Navmesh, Landscape) = (containerKeys.Navmesh, containerKeys.Landscape);
         (Worldspace, TopCell, TopCellRef) = (containerKeys.Worldspace, containerKeys.TopCell, containerKeys.TopCellRef);
+        (ExteriorCell, ExteriorRef) = (exteriorCell.FormKey, exteriorRef.FormKey);
         (Quest, DialogTopic) = (quest.FormKey, dialogTopic.FormKey);
         (Response, Response2) = (response.FormKey, response2.FormKey);
         (DialogTopic2, DialogTopic3) = (dialogTopic2.FormKey, dialogTopic3.FormKey);
