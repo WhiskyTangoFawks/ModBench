@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 
@@ -7,14 +8,16 @@ namespace MEditService.SourceAdapter;
 /// stands now: a mod manager can replace it wholesale.</summary>
 public interface ISourceAdapter
 {
-    /// <summary>Whether the plugin's mod is tracked and holds the plugin's tree.</summary>
     bool SourceReads(RegisteredPlugin plugin);
 
     bool IsTracked(RegisteredPlugin plugin);
 
-    /// <summary>The reads over <paramref name="provider"/>'s folder. One serves a batch, so what it learns of
-    /// the tree is learned once.</summary>
-    ISourceRepositoryReads Over(PluginProvider.FromMod provider, GameRelease release);
+    /// <summary>The reads over the folder of the mod providing <paramref name="plugin"/>, tree or not; null
+    /// when no mod provides it. One serves a batch, so what it learns of the tree is learned once.</summary>
+    ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release);
 
     RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path);
+
+    /// <summary>The name of the file of a record's own document where no tree has renamed it.</summary>
+    string FileNameOf(RecordIdentity identity);
 }

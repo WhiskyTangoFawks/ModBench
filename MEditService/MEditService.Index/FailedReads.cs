@@ -84,8 +84,6 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
     private ReadState ReadStateOf(RegisteredPlugin plugin)
     {
         var binary = index.FileContentHash(plugin.Path);
-        return plugin.Provider is PluginProvider.FromMod mod && source.SourceReads(plugin)
-            ? new ReadState(binary, source.Over(mod, index.Release).StampsOf(plugin.Key))
-            : new ReadState(binary, null);
+        return new ReadState(binary, source.TreeOf(plugin, index.Release)?.StampsOf(plugin.Key));
     }
 }

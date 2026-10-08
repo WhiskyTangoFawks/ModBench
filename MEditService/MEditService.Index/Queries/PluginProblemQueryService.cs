@@ -40,8 +40,8 @@ public sealed class PluginProblemQueryService
         var stopped = _index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
         var held = snapshot.Plugins.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         var missing = reads
-            .GetReferencesToMissingRecordsOnFiles(plugin => held.GetValueOrDefault(plugin)?.Provider is PluginProvider.FromMod mod
-                ? _source.Over(mod, snapshot.GameRelease)
+            .GetReferencesToMissingRecordsOnFiles(plugin => held.GetValueOrDefault(plugin) is { } registered
+                ? _source.Over(registered, snapshot.GameRelease)
                 : null)
             .ToLookup(row => row.Reference.Plugin, PluginAddress.Comparer);
         return

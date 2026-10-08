@@ -187,7 +187,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     }
 
     /// <summary>The name the layout gives the file of the record's own document.</summary>
-    public static string FileNameOf(RecordIdentity identity) =>
+    internal static string FileNameOf(RecordIdentity identity) =>
         SourceRepositoryLayout.FileNameFor(FormKey.Factory(identity.FormKey), identity.EditorId);
 
     /// <summary>The name of the file in this tree holding <paramref name="identity"/>, whatever it was renamed to; null

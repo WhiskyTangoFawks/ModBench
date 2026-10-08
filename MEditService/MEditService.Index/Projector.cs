@@ -20,8 +20,8 @@ internal sealed class Projector(
         return source.IsTracked(plugin) ? DerivedFrom.BinaryForUnreadableSource : DerivedFrom.Binary;
     }
 
-    private static PluginProvider.FromMod ModOf(RegisteredPlugin plugin) =>
-        plugin.Provider as PluginProvider.FromMod
+    private ISourceRepositoryReads Over(RegisteredPlugin plugin) =>
+        source.Over(plugin, index.Release)
         ?? throw new InvalidOperationException($"'{plugin.Name}' from '{plugin.Origin}' reads a source tree, so a mod provides it.");
 
     /// <summary>Indexes the whole tree as the plugin. Throws whatever the tree throws: "quietly served
@@ -29,11 +29,10 @@ internal sealed class Projector(
     internal void Ingest(PluginMetadata plugin, CancellationToken cancel = default)
     {
         cancel.ThrowIfCancellationRequested();
-        var mod = ModOf(plugin.Registered);
 
         // Over rather than Open: the documents read the same either way, and a repository verb over an
         // untracked folder answers empty instead of throwing.
-        var repository = source.Over(mod, index.Release);
+        var repository = Over(plugin.Registered);
 
         var timer = Stopwatch.StartNew();
         using (var documents = repository.OpenDocuments(plugin.Key, index.Schemas))
@@ -55,8 +54,8 @@ internal sealed class Projector(
     /// to announce.</summary>
     internal IReadOnlyList<string> LearnWorkingTreeStates(RegisteredPlugin plugin)
     {
-        var (key, mod) = (plugin.Key, ModOf(plugin));
-        var changes = source.Over(mod, index.Release).ChangedSinceLastCommit(key, index.Schemas);
+        var key = plugin.Key;
+        var changes = Over(plugin).ChangedSinceLastCommit(key, index.Schemas);
 
         var learned = changes.ToDictionary(
             change => change.Key,
@@ -82,7 +81,7 @@ internal sealed class Projector(
     /// idempotent by content. A key the index does not hold re-derives the whole plugin.</summary>
     internal void RefreshByKeys(RegisteredPlugin plugin, IReadOnlyList<string> formKeys) => index.Commit(projection =>
     {
-        var (key, mod) = (plugin.Key, ModOf(plugin));
+        var key = plugin.Key;
 
         // The tree is what these rows are re-derived from, so it is what the plugin is derived from
         // (ADR-0007), bytes moved or not: a plugin tracked after indexing arrives here
@@ -100,7 +99,7 @@ internal sealed class Projector(
 
         // One repository for the batch, so its listing memo and embedded-owner map are built once
         // rather than once per key.
-        var repository = source.Over(mod, index.Release);
+        var repository = Over(plugin);
         var touched = new List<string>();
         foreach (var formKey in formKeys)
             touched.AddRange(RefreshOneKey(repository, key, formKey));

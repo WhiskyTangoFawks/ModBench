@@ -54,8 +54,9 @@ public sealed class FailedReadStateTests : IDisposable
 
     private void Arm(TreeMoment when, Action act) => _armed = (when, act);
 
-    private void FireIfArmed(TreeMoment moment)
+    private void FireIfArmed(TreeMoment moment, PluginAddress plugin)
     {
+        if (!PluginAddress.Comparer.Equals(plugin, Plugin.KeyOf())) return;
         if (moment == TreeMoment.ReadBegins) Interlocked.Increment(ref _treeReads);
         if (_armed is not { } armed || armed.When != moment) return;
         _armed = null;
@@ -346,7 +347,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         using var index = Reconciled();
 
-        Assert.Null(_armed);
+        Assert.Equal(2, TreeReads());
         Assert.False(Failed(index));
         Assert.True(ReadFromSource(index));
     }
@@ -410,6 +411,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         using var index = Reconciled();
 
+        Assert.Null(_armed);
         Assert.False(Failed(index));
         Assert.Contains(index.ListedIn(Plugin.KeyOf()), row => row.EditorId == "EditedNpc");
     }
@@ -447,7 +449,7 @@ public sealed class FailedReadStateTests : IDisposable
 
     private enum TreeMoment { StampsTaken, ReadBegins, ReadEnds, RecordRead }
 
-    private sealed class HookedSource(Action<TreeMoment> at) : ISourceAdapter
+    private sealed class HookedSource(Action<TreeMoment, PluginAddress> at) : ISourceAdapter
     {
         private readonly GitSourceAdapter _inner = new();
 
@@ -455,30 +457,32 @@ public sealed class FailedReadStateTests : IDisposable
 
         public bool IsTracked(RegisteredPlugin plugin) => _inner.IsTracked(plugin);
 
-        public ISourceRepositoryReads Over(PluginProvider.FromMod provider, GameRelease release) =>
-            new HookedRepository(_inner.Over(provider, release), at);
+        public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) =>
+            _inner.Over(plugin, release) is { } reads ? new HookedRepository(reads, at) : null;
 
         public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => _inner.RecordOfFile(loadOrder, path);
+
+        public string FileNameOf(RecordIdentity identity) => _inner.FileNameOf(identity);
     }
 
-    private sealed class HookedRepository(ISourceRepositoryReads inner, Action<TreeMoment> at) : ISourceRepositoryReads
+    private sealed class HookedRepository(ISourceRepositoryReads inner, Action<TreeMoment, PluginAddress> at) : ISourceRepositoryReads
     {
         public RecordStamps StampsOf(PluginAddress plugin)
         {
             var stamps = inner.StampsOf(plugin);
-            at(TreeMoment.StampsTaken);
+            at(TreeMoment.StampsTaken, plugin);
             return stamps;
         }
 
         public IPluginDocuments OpenDocuments(PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas)
         {
-            at(TreeMoment.ReadBegins);
-            return new ReleasedDocuments(inner.OpenDocuments(plugin, schemas), () => at(TreeMoment.ReadEnds));
+            at(TreeMoment.ReadBegins, plugin);
+            return new ReleasedDocuments(inner.OpenDocuments(plugin, schemas), () => at(TreeMoment.ReadEnds, plugin));
         }
 
         public SourceDocument? RecordOf(PluginAddress plugin, RecordIdentity identity)
         {
-            at(TreeMoment.RecordRead);
+            at(TreeMoment.RecordRead, plugin);
             return inner.RecordOf(plugin, identity);
         }
 
