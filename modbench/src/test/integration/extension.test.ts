@@ -254,12 +254,18 @@ function createMockBackend(): http.Server {
       res.end(loadOrderHeld ? JSON.stringify(MOCK_RECORD_TYPES) : 'No load order has been received.');
       return;
     }
-    const copyFile = /^\/plugins\/([^/?]+)\/records\/([^/?]+)\/file\?/.exec(url);
+    const copyFile = /^\/plugins\/([^/?]+)\/records\/([^/?]+)\/document\?/.exec(url);
     if (copyFile) {
       const [, plugin = '', formKey = ''] = copyFile;
       const tracked = decodeURIComponent(plugin) === TRACKED_PLUGIN && new URL(url, 'http://x').searchParams.get('origin') === TRACKED_ORIGIN;
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ path: tracked ? carriedIn.get(decodeURIComponent(formKey)) ?? TRACKED_FILE : null }));
+      const decoded = decodeURIComponent(formKey);
+      const path = carriedIn.get(decoded) ?? TRACKED_FILE;
+      const fsPath = vscode.Uri.file(path).fsPath;
+      const ownerOfFile = fsPath === TRACKED_FS_PATH ? TRACKED_FORM_KEY : heldIn.get(fsPath);
+      res.end(JSON.stringify(tracked
+        ? { path, isContainersDocument: ownerOfFile !== decoded }
+        : { path: null, isContainersDocument: false, renderedFileName: decoded === UNTRACKED_FORM_KEY ? UNTRACKED_FILE_NAME : renderedName(decoded) }));
       return;
     }
     const rendered = /^\/plugins\/[^/?]+\/records\/([^/?]+)\/rendered-document\?/.exec(url)?.[1];
