@@ -135,7 +135,7 @@ As a user, I want:
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's Argument in the catalog says. Source: catalog Argument
 2. A click on a record to open it in the record panel, and a click on an enabled plugin row to open its header, which is a record. A click on a disabled plugin row only selects it. Source: catalog `open`
 3. Enable or disable over a mixed selection to behave as in Mods (Menus and keys, story 2). Source: mods.md
-4. The gestures that edit a plugin's records absent on an untracked plugin, on a plugin whose plugin source is unreadable, and on a plugin that is not active: create record and delete, and the plugin as a copy destination. Track or decompile is on its row. Source: No dead entries
+4. The gestures that edit a plugin's records absent on an untracked plugin and on a plugin whose plugin source is unreadable: create record and delete, and the plugin as a copy destination. Track or decompile is on its row. Source: No dead entries
 5. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its file name. Source: catalog `copy value`; [editor-fields.md](editor-fields.md)
 
 ## Drag and drop

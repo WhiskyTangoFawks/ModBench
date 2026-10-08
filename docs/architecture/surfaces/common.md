@@ -18,6 +18,7 @@ As a user, I want:
 8. Ctrl+C, or the menu's copy value, to copy the selection as text, one item to a line, each as its surface says it copies. Source: catalog `copy value`
 9. A copy of a record to open as one document, whichever view or VS Code feature opens it: one tab for one copy, and a tab restored after a restart opens the same copy again. Source: VS Code's interaction; ADR-0012
 10. The record panel and the conflict table to be pages that take VS Code's theme, so they look as the rest of VS Code does. Source: VS Code's interaction
+11. A collapsed row to carry the badges of the rows beneath it, and an expanded row only its own, so each change shows once, on the row I can see.
 
 ## The name filter
 
@@ -70,5 +71,6 @@ ADR-0019 decides the tier; this table is how each tier looks on a surface.
 | A gesture landed, but part of it failed, so a view would show something untrue | a notification naming the part that failed, and a line in the Output. The gesture is not reported as failed. |
 | A gesture over a selection landed for some items and failed for others | one notification naming each item that failed and why, and a line in the Output. The items that landed are not reported as failed. |
 | Something Modbench does on its own, such as a sync, fails | the view's message line, and a line in the Output, once, and again only when the reason changes |
+| Something Modbench does on its own fails, and a view now shows something untrue, such as a record filter it cleared | a notification naming what changed and why, and a line in the Output |
 | A failure inside a dialog I am answering | a line in the Output. The dialog says it; a second notification on top of it does not. |
 
