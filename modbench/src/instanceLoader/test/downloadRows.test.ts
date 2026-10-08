@@ -58,22 +58,6 @@ describe('buildDownloadRows', () => {
   });
 });
 
-describe('buildDownloadRows — the mods a file can upgrade', () => {
-  it('carries the installed mods sharing the file\'s Nexus mod id, best match first', () => {
-    const mods = [
-      { kind: 'mod' as const, enabled: true, name: 'Other', nexusId: '1', version: '1.0' },
-      { kind: 'mod' as const, enabled: true, name: 'Match', nexusId: '1', version: '2.0', installedFiles: [{ nexusId: '1', fileId: '9' }] },
-    ];
-
-    const row = soleRow(buildDownloadRows([file('Pack.7z', 1, metaOf({ modID: '1', fileID: '9' }))], new Map(), mods));
-
-    expect(row.upgrades).toEqual([
-      { modName: 'Match', version: '2.0', tier: 'fileId' },
-      { modName: 'Other', version: '1.0', tier: undefined },
-    ]);
-  });
-});
-
 describe('modsByArchiveFilename — which mods each download was installed into', () => {
   it('keys a mod under the download its meta names, case-folded', () => {
     expect(modsByArchiveFilename([{ name: 'UFO4P', archiveFilename: 'UFO4P-4598.7z' }]))

@@ -1,5 +1,5 @@
 // A downloaded file's row: its status is the mods' answer, and its metadata's claim only where no
-// mod names it.
+// mod names it. It also carries the installed mods the file can upgrade.
 
 import type { DownloadedFile, DownloadStatus, Mod, ModlistEntry } from '../instanceAdapter/instanceAdapter';
 
@@ -51,7 +51,7 @@ const isFileIdMatch = (mod: Mod, fileID: string | undefined): boolean =>
 const isArchiveFilenameMatch = (mod: Mod, downloadName: string): boolean =>
   mod.archiveFilename !== undefined && archiveKey(mod.archiveFilename) === archiveKey(downloadName);
 
-const TIER_RANK: Record<'fileId' | 'archiveFilename' | 'none', number> = { fileId: 0, archiveFilename: 1, none: 2 };
+const TIER_RANK: Record<UpgradeTier | 'none', number> = { fileId: 0, archiveFilename: 1, none: 2 };
 
 function upgradeCandidates(
   mods: readonly ModlistEntry[],

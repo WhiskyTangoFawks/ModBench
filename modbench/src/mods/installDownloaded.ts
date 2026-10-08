@@ -17,14 +17,14 @@ export interface DownloadInstallDeps {
 export async function installDownloadedFile(
   argument: DownloadArgument, access: InstallAccess, instance: Pick<Instance, 'value' | 'refresh'>, deps: DownloadInstallDeps,
 ): Promise<boolean> {
-  const { row } = argument;
   let installed = false;
   let downloadRefusal: string | undefined;
-  await reportFailure(deps.reporter, `Failed to install "${row.name}".`, async () => {
+  await reportFailure(deps.reporter, `Failed to install "${argument.row.name}".`, async () => {
     const { downloads } = instance.value;
-    const upgrades = downloads.kind === 'listed' ? downloads.rows.find((listed) => listed.name === row.name)?.upgrades ?? [] : [];
+    const row = downloads.kind === 'listed' ? downloads.rows.find((listed) => listed.name === argument.row.name) : undefined;
+    if (!row) throw new Error(`"${argument.row.name}" is gone from Downloads.`);
     const target = await chooseInstallTarget(
-      { ...row, upgrades }, (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)));
+      row, (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)));
     if (!target) return;
     const outcome = await runWritingGesture(deps.progressViewId, instance, () => installFromArchive(access, target, row.path, {
       gameName: instance.value.gameName, modID: row.modID, fileID: row.fileID, version: row.version,
@@ -37,7 +37,7 @@ export async function installDownloadedFile(
   // downloads.md, Reporting story 1: the install landed, so it is not reported as failed — the
   // row still shows Installed, straight off meta.ini, and the failed mark is one Output line.
   if (downloadRefusal !== undefined) {
-    deps.log(`"${row.name}" was installed, but its Downloads status could not be updated: ${downloadRefusal}`);
+    deps.log(`"${argument.row.name}" was installed, but its Downloads status could not be updated: ${downloadRefusal}`);
   }
   return installed;
 }

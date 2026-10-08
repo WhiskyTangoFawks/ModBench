@@ -28,7 +28,7 @@ import { recordingReporter } from './surfacingDoubles';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 
 describe('the Downloads-Mods seam: modbench.mod.install given a Downloads row', () => {
-  it('offers the upgrades the real DownloadNode carries', async () => {
+  it('offers the upgrades the Instance value lists for the file of a real DownloadNode', async () => {
     const row = downloadRowFixture('foo.7z', { upgrades: [{ modName: 'Harder VATS', version: '1.0', tier: 'fileId' }] });
     const instance = { value: instanceValueFixture({ downloads: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() };
     const { qp, escape } = fakeQuickPick<{ label: string }>();

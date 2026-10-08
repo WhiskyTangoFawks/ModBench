@@ -40,7 +40,6 @@ export function rowLabelOf(carrier: unknown): string | undefined {
 /** What names a row in a refusal. */
 export const rowNameOf = (carrier: unknown): string => rowLabelOf(carrier) ?? 'a selected row';
 
-/** A downloaded file. */
 export interface DownloadArgument {
   readonly kind: 'download';
   readonly row: DownloadFile;

@@ -17,8 +17,11 @@ const download = (over: { modID?: string; fileID?: string; name?: string }): Dow
   };
 };
 
-const offered = (mods: InstanceValue['mods'], file: DownloadedFile) =>
-  (buildDownloadRows([file], new Map(), mods)[0]?.upgrades ?? []).map((c) => [c.modName, c.tier]);
+const offered = (mods: InstanceValue['mods'], file: DownloadedFile) => {
+  const rows = buildDownloadRows([file], new Map(), mods);
+  expect(rows).toHaveLength(1);
+  return rows.flatMap((row) => row.upgrades).map((c) => [c.modName, c.tier]);
+};
 
 describe('the upgrade candidates of a download', () => {
   it('is empty when the download carries no mod id', () => {

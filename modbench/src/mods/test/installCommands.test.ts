@@ -61,7 +61,7 @@ type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
     access: ACCESS,
-    instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE }), refresh: () => Promise.resolve() },
+    instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE, downloads: { kind: 'listed', rows: [downloadRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
     warnIfFomod: vi.fn(),
     downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },

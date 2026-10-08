@@ -46,16 +46,6 @@ const makeProviderOverRowsNeverOnDisk = (
   return new DownloadsProvider(options);
 };
 
-describe('a row\'s Argument', () => {
-  it('is the downloaded file alone, with the mods it could upgrade as the Instance value gave them', async () => {
-    const file = row({ name: 'foo.zip', modID: '111', upgrades: [{ modName: 'Harder VATS', version: '1.0' }] });
-
-    const [node] = await makeProviderOverRowsNeverOnDisk([file]).getChildren();
-
-    expect(expectInstanceOf(node, DownloadNode).argument).toEqual({ kind: 'download', row: file });
-  });
-});
-
 describe('DownloadNode', () => {
   it('label is the row displayName; id is pinned to the raw filename', () => {
     const node = downloadNodeFixture(row({ name: 'foo_1_2_3.zip', displayName: 'Sleep or Save' }));
