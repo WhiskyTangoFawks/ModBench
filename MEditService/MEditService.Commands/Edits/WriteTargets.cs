@@ -12,7 +12,6 @@ namespace MEditService.Commands.Edits;
 /// An internal seam, tested through the gestures.</summary>
 internal sealed class WriteTargets(
     LoadOrderHolder loadOrder,
-    LoadOrderResolution resolution,
     SchemaReflector schemaReflector)
 {
     internal readonly record struct EditTarget(GameRelease Release, RecordIdentity Identity, SourceRepository Repository);
@@ -115,7 +114,7 @@ internal sealed class WriteTargets(
     // its own record. The text is read before anything is written, because a record the codec cannot
     // read would land as a stub.
     internal RecordEditResult? ResolveCopySource(
-        PluginAddress destinationPlugin, PluginAddress sourcePlugin, string formKey, out CopyTarget target)
+        PluginAddress destinationPlugin, CopySource source, string formKey, out CopyTarget target)
     {
         target = default;
 
@@ -124,31 +123,23 @@ internal sealed class WriteTargets(
         var destinationRepository = openedDestinationRepository
             ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
 
-        var release = loadOrder.Current.GameRelease;
-        var source = resolution.SourceOf(sourcePlugin);
-        CopySource? owned = source;
         try
         {
             if (source.Identity(formKey) is not { } identity)
             {
                 return RecordEditResult.Refused(
-                    RecordEditRefusal.RecordNotFound, $"{sourcePlugin.Name} does not hold record {formKey}.");
+                    RecordEditRefusal.RecordNotFound, $"{source.Plugin.Name} does not hold record {formKey}.");
             }
 
             target = new CopyTarget(
                 source, identity,
                 new RecordCopy.Destination(destinationRepository, destinationPlugin),
-                release, source.Body(identity));
-            owned = null;
+                loadOrder.Current.GameRelease, source.Body(identity));
             return null;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return RefuseUnreadableCopySource(formKey, source.Diagnose(ex));
-        }
-        finally
-        {
-            owned?.Dispose();
         }
     }
 

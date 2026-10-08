@@ -46,7 +46,7 @@ public static class RecordDocumentEdits
         var owner = codec.Deserialize(ownerText, release, ownerRecordType);
         if (ContainerChildFields.FindEmbeddedChild(owner, oldFormKey) is not { } found) return null;
 
-        ((IMajorRecordInternal)found.Child).FormKey = FormKey.Factory(newFormKey);
+        ((IMajorRecordInternal)found).FormKey = FormKey.Factory(newFormKey);
         return codec.SerializeToText(owner, release);
     }
 

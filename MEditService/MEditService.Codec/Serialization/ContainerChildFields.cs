@@ -59,25 +59,20 @@ public static class ContainerChildFields
             : name;
     }
 
-    /// <summary><see cref="Child"/> is the real object hanging off Parent, not a copy: mutating it and
-    /// reserializing the document's root is how an embedded child is written. Parent is the direct
-    /// container, which a slot replace needs.</summary>
-    internal readonly record struct EmbeddedChild(IMajorRecordGetter Parent, string SlotName, int SlotIndex, IMajorRecord Child);
-
     /// <summary>The child through Mutagen's own object model, not a JSON pointer, so existing writers
     /// apply unchanged. Descends only through <see cref="EmbeddedSlotsFor(Type)"/>: a worldspace's
     /// blocks have directories.</summary>
-    internal static EmbeddedChild? FindEmbeddedChild(IMajorRecordGetter parent, string formKey)
+    internal static IMajorRecord? FindEmbeddedChild(IMajorRecordGetter parent, string formKey)
     {
         var parentType = NormalizedTypeName(parent.GetType());
         var embeddedSlots = EmbeddedSlotsFor(parent.GetType());
 
-        foreach (var (slotName, slotIndex, child) in EnumerateChildren(parent))
+        foreach (var (slotName, _, child) in EnumerateChildren(parent))
         {
             if (child.FormKey.ToString().Equals(formKey, StringComparison.Ordinal))
             {
                 // Guarded rather than cast so a read-only graph (a binary overlay) declines instead of throwing.
-                return child is IMajorRecord settable ? new EmbeddedChild(parent, slotName, slotIndex, settable) : null;
+                return child as IMajorRecord;
             }
 
             if (!embeddedSlots.Contains((parentType, slotName))) continue;

@@ -171,7 +171,7 @@ internal static class RecordEndpoints
             "New: a duplicate without its child records under the destination's next free FormID, with an EditorID derived from the source's, " +
             "and a self-reference follows the copy. A cell or a worldspace is refused as New. In every " +
             "mode, a container the destination lacks is copied in as an override. Replace applies to Override only. " +
-            "A destination that already holds the record is refused unless replace is given, and " +
+            "Under Override, a destination that already holds the record is refused unless replace is given, and " +
             "a replacement changes the record's own fields only, keeping the children the destination's " +
             "copy carries. Each record and destination is applied or refused on its own, and the " +
             "answer names both.")

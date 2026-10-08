@@ -14,8 +14,6 @@ const NEW_ITEM: CopyModeItem = {
 };
 export const copyModeItems: readonly CopyModeItem[] = [OVERRIDE_ITEM, NEW_ITEM];
 
-export const isOverride = (mode: CopyMode): boolean => mode === 'Override';
-
 export interface CopyDestinationItem extends vscode.QuickPickItem {
   readonly plugin: PluginAddress;
 }
@@ -28,7 +26,7 @@ export function copyDestinationItems(
   const livesInEveryRecord = (p: PluginMetadata) => records.every((r) => samePluginAddress(pluginAddressOf(r), p));
   return plugins
     .filter((p) => p.isTracked && !p.pluginSourceUnreadable && !p.isImmutable)
-    .filter((p) => !isOverride(mode) || !livesInEveryRecord(p))
+    .filter((p) => mode !== 'Override' || !livesInEveryRecord(p))
     .map((p) => ({
       label: p.name,
       description: p.loadOrderIndex === null || p.loadOrderIndex === undefined ? undefined : `[${p.loadOrderIndex}]`,
@@ -42,7 +40,7 @@ const intoItsOwnPlugin = ({ record, destination }: CopyItem): boolean => samePlu
 /** The landed items that wrote a copy: mEdit writes nothing for an override into the record's own
  *  plugin, and nothing is said of it (commands.md, Doing nothing is not an error). */
 export function copiesWritten(landed: readonly CopyItem[], mode: CopyMode): CopyItem[] {
-  return isOverride(mode) ? landed.filter((item) => !intoItsOwnPlugin(item)) : [...landed];
+  return mode === 'Override' ? landed.filter((item) => !intoItsOwnPlugin(item)) : [...landed];
 }
 
 /** Each record and picked destination where the destination already holds a copy of the record:

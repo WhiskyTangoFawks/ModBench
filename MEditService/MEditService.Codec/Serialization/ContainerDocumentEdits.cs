@@ -51,5 +51,5 @@ public static class ContainerDocumentEdits
     private static IMajorRecordGetter? ContainerIn(IMajorRecord owner, string containerFormKey) =>
         owner.FormKey.ToString().Equals(containerFormKey, StringComparison.Ordinal)
             ? owner
-            : ContainerChildFields.FindEmbeddedChild(owner, containerFormKey)?.Child;
+            : ContainerChildFields.FindEmbeddedChild(owner, containerFormKey);
 }

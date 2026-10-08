@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress } from '../client';
-import { copyModeItems, copiesWritten, copyDestinationItems, heldCopies, isOverride, type CopyDestinationItem } from './copyPicks';
+import { copyModeItems, copiesWritten, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { AskQuestion } from '../ports/dialog';
@@ -164,16 +164,16 @@ function askToReplace(
 async function confirmReplacement(
   client: RecordCopyClient, records: readonly RecordAddress[], destinations: readonly PluginAddress[],
   labels: ReadonlyMap<string, string | undefined>, ask: AskQuestion, reporter: Reporter,
-): Promise<boolean | undefined> {
+): Promise<{ readonly replace: boolean } | 'cancelled'> {
   let held: CopyItem[];
   try {
     held = await copiesAnOverrideReplaces(client, records, destinations);
   } catch (error) {
     reporter.report('error', 'Could not check which plugins already hold a copy.', errorMessage(error));
-    return undefined;
+    return 'cancelled';
   }
-  if (held.length === 0) return false;
-  return await askToReplace(held, labels, ask) === 'Replace' ? true : undefined;
+  if (held.length === 0) return { replace: false };
+  return await askToReplace(held, labels, ask) === 'Replace' ? { replace: true } : 'cancelled';
 }
 
 function landedMessage(landed: readonly CopyItem[], labels: ReadonlyMap<string, string | undefined>): string {
@@ -205,11 +205,11 @@ export function registerRecordCopyCommands(
       const destinations = await pickCopyDestinations(client, mode, records, reporter);
       if (!destinations) return;
 
-      const replace = isOverride(mode) ? await confirmReplacement(client, records, destinations, labels, ask, reporter) : false;
-      if (replace === undefined) return;
+      const confirmed = mode === 'Override' ? await confirmReplacement(client, records, destinations, labels, ask, reporter) : { replace: false };
+      if (confirmed === 'cancelled') return;
 
       await write(async () => {
-        const answer = await client.copyRecords(records, mode, destinations, replace);
+        const answer = await client.copyRecords(records, mode, destinations, confirmed.replace);
         if (isRefused(answer)) { reporter.report('error', answer.message); return; }
         const written = copiesWritten(answer.landed, mode);
         if (written.length > 0) reporter.landed(landedMessage(written, labels));

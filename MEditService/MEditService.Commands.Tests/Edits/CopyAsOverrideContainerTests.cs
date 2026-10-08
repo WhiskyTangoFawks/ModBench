@@ -1,14 +1,51 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
 public sealed class CopyAsOverrideContainerTests
 {
+    [Fact]
+    public void CopyRecordAsOverride_OfAPersistentCellIntoAWorldspaceWhosePersistentCellIsAnother_IsRefusedAsASlotHeldByAnotherRecordAndWritesNothing()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Worldspace.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false).OnlyLanded();
+        SourceEdits.Rewrite<Worldspace>(
+            TrackedTree.Repository(fixture.DestinationModFolder), fixture.DestinationPlugin,
+            new RecordIdentity(fixture.Worldspace.ToString(), "wrld", ContainerCopyFixture.WorldspaceEditorId),
+            GameRelease.Fallout4,
+            worldspace => worldspace.TopCell = new Cell(FormKey.Factory($"0ABCDE:{ContainerCopyFixture.DestinationPluginName}"), Fallout4Release.Fallout4));
+        var before = TreeSnapshot.Of(fixture.DestinationModFolder);
+
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.TopCell.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
+
+        Assert.Equal(RecordEditRefusal.ChildSlotHeldByAnotherRecord, result.OnlyRefused().Refusal);
+        Assert.Equal(before, TreeSnapshot.Of(fixture.DestinationModFolder));
+    }
+
+    [Fact]
+    public void CopyRecordAsOverride_OfAnExteriorCellSelectedBeforeItsWorldspace_LandsBoth_WorldspaceFirst()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+
+        var result = fixture.CopyHandler.CopySync(
+            [new RecordAt(fixture.SourcePlugin, fixture.ExteriorCell.ToString()), new RecordAt(fixture.SourcePlugin, fixture.Worldspace.ToString())],
+            CopyMode.Override, [fixture.DestinationPlugin], replace: false);
+
+        Assert.Empty(result.Refused);
+        Assert.Equal(2, result.Landed.Count);
+        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()));
+        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell.ToString()));
+    }
+
     [Fact]
     public void CopyRecordAsOverride_OfAChildSelectedBeforeItsContainer_LandsBoth_ContainerFirst()
     {

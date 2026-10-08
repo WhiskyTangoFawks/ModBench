@@ -30,12 +30,11 @@ internal sealed class OverrideCopy
     /// <summary>An unreadable source record refuses rather than landing as a stub.
     /// <paramref name="replace"/> lets it take a held record's place.</summary>
     internal RecordEditResult Copy(
-        PluginAddress sourcePlugin, string formKey, PluginAddress destinationPlugin, bool replace)
+        CopySource source, string formKey, PluginAddress destinationPlugin, bool replace)
     {
-        if (_targets.ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
-        using var source = copy.Source;
+        if (_targets.ResolveCopySource(destinationPlugin, source, formKey, out var copy) is { } blocked) return blocked;
         // commands.md, Doing nothing is not an error: the record's own plugin already is this copy.
-        if (PluginAddress.Comparer.Equals(sourcePlugin, destinationPlugin)) return RecordEditResult.Success();
+        if (PluginAddress.Comparer.Equals(source.Plugin, destinationPlugin)) return RecordEditResult.Success();
         try
         {
             return CopyAsOverride(copy, destinationPlugin, replace);
@@ -47,28 +46,6 @@ internal sealed class OverrideCopy
         catch (ChildSlotHeldByAnotherRecordException ex)
         {
             return RefuseSlotHeldByAnotherRecord(destinationPlugin, ex);
-        }
-    }
-
-    /// <summary>How many containers the record sits in. A record the source cannot read answers 0:
-    /// its own copy refuses it.</summary>
-    internal int ContainerDepth(PluginAddress sourcePlugin, string formKey)
-    {
-        try
-        {
-            using var source = _resolution.SourceOf(sourcePlugin);
-            var depth = 0;
-            var identity = source.Identity(formKey);
-            while (identity is { } held && source.ContainerOf(held) is { } container)
-            {
-                depth++;
-                identity = source.Identity(container.ParentFormKey);
-            }
-            return depth;
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            return 0;
         }
     }
 

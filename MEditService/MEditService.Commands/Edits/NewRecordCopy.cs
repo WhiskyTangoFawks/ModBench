@@ -1,3 +1,4 @@
+using MEditService.Commands.Resolution;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
@@ -21,10 +22,9 @@ internal sealed class NewRecordCopy
 
     /// <summary>The fresh FormKey comes from the same allocator create draws on. A self-link is
     /// remapped onto it, as xEdit does.</summary>
-    internal RecordEditResult Copy(PluginAddress sourcePlugin, string formKey, PluginAddress destinationPlugin)
+    internal RecordEditResult Copy(CopySource source, string formKey, PluginAddress destinationPlugin)
     {
-        if (_targets.ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
-        using var source = copy.Source;
+        if (_targets.ResolveCopySource(destinationPlugin, source, formKey, out var copy) is { } blocked) return blocked;
         try
         {
             return CopyAsNewRecord(copy, destinationPlugin);

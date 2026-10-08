@@ -83,6 +83,33 @@ internal sealed class CopySource(
     internal string? WorldspaceOf(RecordIdentity identity) =>
         _tree != null ? _tree.WorldspaceOf(plugin, identity) : Loaded()?.CellStructureOf(identity.FormKey)?.ParentWorldspace;
 
+    /// <summary>How many records sit above this one: the containers whose documents carry it, and a
+    /// numbered cell's worldspace. A container copied in before its children is copied once, not
+    /// refused as held when its own turn comes. A record that cannot be read stops the count where it
+    /// stood: its own copy refuses it, naming why.</summary>
+    internal int ContainmentDepth(string formKey)
+    {
+        var depth = 0;
+        try
+        {
+            var identity = Identity(formKey);
+            while (identity is { } held && ParentOf(held) is { } parent)
+            {
+                depth++;
+                identity = Identity(parent);
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return depth;
+        }
+        return depth;
+    }
+
+    private string? ParentOf(RecordIdentity identity) =>
+        ContainerOf(identity)?.ParentFormKey
+        ?? (RecordTypeDispatch.For(_release).IsCell(identity.RecordType) ? WorldspaceOf(identity) : null);
+
     /// <summary>The exterior cell this plugin holds at grid (<paramref name="x"/>, <paramref name="y"/>)
     /// of <paramref name="worldspace"/>, or null when it holds none there.</summary>
     internal RecordIdentity? CellAt(string worldspace, int x, int y)

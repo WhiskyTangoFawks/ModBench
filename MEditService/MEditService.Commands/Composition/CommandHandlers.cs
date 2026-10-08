@@ -25,7 +25,6 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new WriteTargets(
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<LoadOrderResolution>(),
             sp.GetRequiredService<SchemaReflector>()));
 
         services.AddSingleton(sp => new EditRecordChangesHandler(
@@ -69,6 +68,7 @@ public static class CommandHandlers
                 sp.GetRequiredService<RecordTextCodec>(),
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(NewRecordCopy))),
             sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<LoadOrderResolution>(),
             sp.GetRequiredService<ILogger<CopyRecordHandler>>()));
 
         services.AddSingleton(sp => new TrackHandler(
