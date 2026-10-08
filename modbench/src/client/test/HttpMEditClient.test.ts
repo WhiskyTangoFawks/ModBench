@@ -420,7 +420,7 @@ describe('HttpMEditClient — getComparison', () => {
   it('posts the plugin\'s document text and returns the comparison untransformed', async () => {
     const comparison = { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Weapon' };
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, comparison)));
-    const text = { plugin: { name: 'Patch.esp', origin: 'PatchMod' }, documentText: '{}' };
+    const text = { plugin: { name: 'Patch.esp', origin: 'PatchMod' }, documentText: '{}', alone: false };
 
     expect(await makeClient(fetch).getComparison('000801:MyPatch.esp', text)).toEqual(comparison);
     const request = fetch.mock.calls[0]?.[0];

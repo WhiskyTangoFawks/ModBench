@@ -10,6 +10,7 @@ import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
+import type { PluginAddress } from './wire/pluginAddress';
 import { createSourceLanguage } from './sourceLanguage';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
@@ -223,7 +224,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const focusedView = createFocusedView();
 
   const modFacts = {
-    trackedMods: () => views.facts.trackedMods(), modDirs: () => views.facts.modDirs(), onChange: (listener: () => void) => views.facts.onChange(listener),
+    trackedMods: () => views.facts.trackedMods(), modDirs: () => views.facts.modDirs(),
+    isDisabledOrInDisabledMod: (plugin: PluginAddress) => views.facts.isDisabledOrInDisabledMod(plugin),
+    onChange: (listener: () => void) => views.facts.onChange(listener),
   };
   const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...modFacts });
   const instance = { refresh: () => views.facts.refresh() };

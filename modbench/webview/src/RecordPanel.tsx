@@ -64,6 +64,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [conflictsComputed, setConflictsComputed] = useState(true);
   const [loadFailures, setLoadFailures] = useState<PluginLoadFailure[]>([]);
   const [fileColumn, setFileColumn] = useState<ColumnKey | undefined>(undefined);
+  const [fileCopyAlone, setFileCopyAlone] = useState(false);
   const [error, setError] = useState<string | null>(mEditWindow.mEditLoadError ?? null);
   const [given] = useState(placeGiven);
   const [collapsedRows, setCollapsedRows] = useState<Set<string>>(() => new Set(given.collapsedRows));
@@ -152,6 +153,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       setConflictsComputed(loaded.conflictsComputed);
       setLoadFailures(loaded.loadFailures);
       setFileColumn(loaded.fileColumn);
+      setFileCopyAlone(loaded.fileCopyAlone);
     } catch (e) {
       if (read === latestRead.current) setError(e instanceof Error ? e.message : String(e));
     }
@@ -288,9 +290,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const { overrides } = result;
 
   const title = recordLabel(overrides, formKey);
-  // Several records compared carry no colours to be final (editor.md, Columns, story 7).
+  // Several records compared, or a file alone, carry no colours to be final (editor.md, Columns, story 7; States, story 7).
   const severalRecords = overrides.some(o => o.column != null);
-  const incompleteMessage = severalRecords ? undefined : recordPanelIncompleteMessage(conflictsComputed);
+  const incompleteMessage = severalRecords || fileCopyAlone ? undefined : recordPanelIncompleteMessage(conflictsComputed);
 
   function openColumn(opened: CompareOverride) {
     const copyOf = (o: CompareOverride): ColumnCopy => ({ formKey: o.formKey, plugin: pluginAddressOf(o) });
@@ -346,6 +348,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           lands a settled `conflictsComputed`. */}
       {loadFailureMessage && <div style={messageStyle}>{loadFailureMessage}</div>}
       {incompleteMessage && <div style={messageStyle}>{incompleteMessage}</div>}
+      {fileCopyAlone && <div style={messageStyle}>This file's plugin is not active: no other copy is compared.</div>}
       {/* flex:1 + minHeight:0 lets this wrapper shrink to the remaining viewport space (the
           flex-item default of min-height:auto would defeat that). overflow:auto then keeps the
           horizontal scrollbar reachable at any scroll position. */}
@@ -366,6 +369,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                   <PluginHeader
                     key={col.key}
                     override={col.override}
+                    notActive={fileCopyAlone && col.key === fileColumn}
                     isImmutable={isImmutable}
                     isTracked={tracked}
                     sourceUnreadable={sourceUnreadable}
