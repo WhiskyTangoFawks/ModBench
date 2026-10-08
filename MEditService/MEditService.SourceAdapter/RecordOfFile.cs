@@ -11,7 +11,12 @@ public abstract record RecordOfFile
 
     public sealed record Holds(RecordAt Record) : RecordOfFile;
 
-    public sealed record HoldsNone : RecordOfFile;
+    public sealed record HoldsNone : RecordOfFile
+    {
+        internal HoldsNone()
+        {
+        }
+    }
 
     public sealed record Refused(string Why) : RecordOfFile;
 }
