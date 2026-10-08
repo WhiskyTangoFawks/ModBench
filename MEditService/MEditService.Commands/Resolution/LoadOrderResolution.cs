@@ -29,10 +29,8 @@ internal sealed class LoadOrderResolution(
         IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         new(this, snapshot, plugin, new Lazy<IReadOnlySet<string>>(() => RequiredMasters.InTheTree(repository, plugin, schemas)));
 
-    /// <summary>The first master a copy of <paramref name="identity"/> needs that <paramref name="destination"/>
-    /// loads before, so the copy there would be an underride: its origin, then each plugin holding a record
-    /// <paramref name="body"/> references (ADR-0008; xEdit's required masters). Null when it loads after
-    /// every one it judges.</summary>
+    /// <summary>The first master the copy needs that <paramref name="destination"/> loads before, an underride:
+    /// its origin, then each plugin holding a record <paramref name="body"/> references (ADR-0008; xEdit).</summary>
     internal string? MasterLoadingAfter(RecordIdentity identity, string body, PluginAddress destination)
     {
         var current = loadOrder.Current;
