@@ -342,7 +342,7 @@ function createMockBackend(): http.Server {
       });
       return;
     }
-    const referenced = /^\/records\/([^/?]+)\/references$/.exec(url)?.[1];
+    const referenced = /^\/records\/([^/?]+)\/(?:references|references-in-tracked-plugins)$/.exec(url)?.[1];
     if (referenced !== undefined) {
       const row = (formKey: string, plugin: string, origin: string, fieldPath: string) =>
         ({ formKey, plugin, origin, fieldPath, recordType: 'WEAP', recordTypeName: 'Weapon' });
