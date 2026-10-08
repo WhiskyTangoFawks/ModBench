@@ -3,14 +3,16 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import type {
   RecordSummary, RecordPage,
   WorldspaceSummary, CellSummary, ChildRecordSummary, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords,
-  ContainerChildSummary, MEditClient, PluginRecordTypeCount, InteriorCellBlock, InteriorCellSubBlock,
+  ContainerChildSummary, MEditClient, PluginRecordTypeCount, InteriorCellBlock, InteriorCellSubBlock, WorkingTreeStatesBeneath,
 } from '../client';
-import { parseRecordResourceUri, recordResourceUri } from './recordResourceUri';
+import { parseRecordResourceUri, parseRowResourceUri, recordResourceUri, rowResourceUri } from './recordResourceUri';
 import type { RecordArgument } from '../drivingLib/recordArgument';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { pluginAddressKey, pluginAddressOf, type PluginAddress } from '../wire/pluginAddress';
 import type { PluginConditions } from './pluginFacts';
 import { errorMessage } from '../ports/errorMessage';
+import type { SyncMessage } from '../drivingLib/nameFilter';
+import { blankIcon } from './blankIcon';
 import { UNLIMITED_RECORDS } from '../client';
 
 // "Could not be read into its document" rather than "Mutagen could not parse it": ingest's one
@@ -77,6 +79,8 @@ class RecordTypeNode extends vscode.TreeItem {
     // 4-char signature, e.g. "acti") stays the internal id — cache key, contextValue, commands.
     super(group.displayName, collapsibleWhen(group.count > 0));
     this.recordType = group.type;
+    this.resourceUri = rowResourceUri({ name: plugin, origin }, group.type);
+    this.iconPath = blankIcon();
     this.isContainer = group.isContainer;
     this.description = group.count.toLocaleString();
     this.contextValue = conditionedContextValue('recordType', conditions) + (group.isCreatable ? ' creatable' : '');
@@ -143,38 +147,41 @@ abstract class BlockLevelNode extends vscode.TreeItem {
   constructor(
     level: keyof typeof BLOCK_LEVEL_WORDS, label: string, hasParseFailure: boolean,
     public readonly plugin: string, public readonly origin: string, public readonly conditions: PluginConditions,
+    /** The row's place beneath its plugin: what its URI and its children's are built from. */
+    public readonly path: readonly string[],
   ) {
     super(`${BLOCK_LEVEL_WORDS[level]} ${label}`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = level;
+    this.iconPath = blankIcon();
     if (hasParseFailure) markFailure(this, failureNote(`This ${BLOCK_LEVEL_WORDS[level].toLowerCase()}`, null));
   }
 }
 
 class BlockNode extends BlockLevelNode {
   readonly kind = 'block' as const;
-  constructor(plugin: string, public readonly block: WorldspaceBlock, origin: string, conditions: PluginConditions = NOT_EDITABLE) {
-    super('block', `${block.x}, ${block.y}`, block.hasParseFailure, plugin, origin, conditions);
+  constructor(plugin: string, public readonly block: WorldspaceBlock, origin: string, conditions: PluginConditions, path: readonly string[]) {
+    super('block', `${block.x}, ${block.y}`, block.hasParseFailure, plugin, origin, conditions, path);
   }
 }
 
 class SubBlockNode extends BlockLevelNode {
   readonly kind = 'subBlock' as const;
-  constructor(plugin: string, public readonly subBlock: WorldspaceSubBlock, origin: string, conditions: PluginConditions = NOT_EDITABLE) {
-    super('subBlock', `${subBlock.x}, ${subBlock.y}`, subBlock.hasParseFailure, plugin, origin, conditions);
+  constructor(plugin: string, public readonly subBlock: WorldspaceSubBlock, origin: string, conditions: PluginConditions, path: readonly string[]) {
+    super('subBlock', `${subBlock.x}, ${subBlock.y}`, subBlock.hasParseFailure, plugin, origin, conditions, path);
   }
 }
 
 class InteriorBlockNode extends BlockLevelNode {
   readonly kind = 'interiorBlock' as const;
-  constructor(plugin: string, public readonly block: InteriorCellBlock, origin: string, conditions: PluginConditions = NOT_EDITABLE) {
-    super('block', String(block.number), block.hasParseFailure, plugin, origin, conditions);
+  constructor(plugin: string, public readonly block: InteriorCellBlock, origin: string, conditions: PluginConditions, path: readonly string[]) {
+    super('block', String(block.number), block.hasParseFailure, plugin, origin, conditions, path);
   }
 }
 
 class InteriorSubBlockNode extends BlockLevelNode {
   readonly kind = 'interiorSubBlock' as const;
-  constructor(plugin: string, public readonly subBlock: InteriorCellSubBlock, origin: string, conditions: PluginConditions = NOT_EDITABLE) {
-    super('subBlock', String(subBlock.number), subBlock.hasParseFailure, plugin, origin, conditions);
+  constructor(plugin: string, public readonly subBlock: InteriorCellSubBlock, origin: string, conditions: PluginConditions, path: readonly string[]) {
+    super('subBlock', String(subBlock.number), subBlock.hasParseFailure, plugin, origin, conditions, path);
   }
 }
 
@@ -209,6 +216,7 @@ class CellNode extends vscode.TreeItem {
 
 class ChildRecordGroupNode extends vscode.TreeItem {
   readonly kind = 'placedGroup' as const;
+  readonly path: readonly string[];
   constructor(
     public readonly plugin: string,
     public readonly cellFormKey: string,
@@ -218,6 +226,8 @@ class ChildRecordGroupNode extends vscode.TreeItem {
     public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
     super(group === 'persistent' ? 'Persistent' : 'Temporary', vscode.TreeItemCollapsibleState.Collapsed);
+    this.path = [cellFormKey, group];
+    this.iconPath = blankIcon();
     this.description = children.length.toLocaleString();
     this.contextValue = `placedGroup-${group}`;
     // A group node has no record of its own, so its fact is exactly its rows', read from the
@@ -278,7 +288,17 @@ interface Listings {
 }
 type Listing = Listings[keyof Listings];
 
-type RowRead = Pick<RecordSummary, 'formKey' | 'workingTreeState'> & { readonly plugin: PluginAddress };
+type FoldedRow = Pick<RecordSummary, 'formKey' | 'workingTreeState'>;
+type RowRead = FoldedRow & { readonly plugin: PluginAddress };
+type WorkingTreeState = RecordSummary['workingTreeState'];
+
+const rowKey = (uri: vscode.Uri) => `${uri.scheme}:${uri.path}`;
+
+const foldKey = (plugin: PluginAddress, path: readonly string[]) => JSON.stringify([pluginAddressKey(plugin), path]);
+
+function distinctChanges(states: readonly WorkingTreeState[]): WorkingTreeState[] {
+  return [...new Set(states.filter(state => state !== 'None'))];
+}
 
 // The one key of everything cached: a plugin's address (ADR-0012), what is cached of it, and which.
 function cacheKey(plugin: PluginAddress, scope: keyof Listings | 'row', id = ''): string {
@@ -288,7 +308,7 @@ function cacheKey(plugin: PluginAddress, scope: keyof Listings | 'row', id = '')
 type RecordBrowserClient = Pick<
   MEditClient,
   'getRecordTypes' | 'getRecords' | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords'
-  | 'getInteriorCells' | 'getContainerChildren'
+  | 'getInteriorCells' | 'getContainerChildren' | 'getWorkingTreeStatesBeneath'
 >;
 
 export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode> {
@@ -297,9 +317,21 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   private readonly _onDidReadRecords = new vscode.EventEmitter<readonly vscode.Uri[]>();
   /** The record rows a read from mEdit just answered, by resource URI. */
   readonly onDidReadRecords = this._onDidReadRecords.event;
+  private readonly _onDidReadBeneath = new vscode.EventEmitter<void>();
+  /** Every row's states beneath it may have changed. */
+  readonly onDidReadBeneath = this._onDidReadBeneath.event;
 
   private readonly listings = new Map<string, Listing>();
   private readonly rowStates = new Map<string, RecordSummary['workingTreeState']>();
+  private readonly beneath = new Map<string, { generation: number; answer: WorkingTreeStatesBeneath }>();
+  private readonly beneathLoading = new Set<string>();
+  private readonly beneathFailures = new Map<string, string>();
+  private readonly _onDidChangeBeneathFailure = new vscode.EventEmitter<void>();
+  // The rows under a block or a group, whose own states fold into its badge.
+  private readonly folds = new Map<string, readonly FoldedRow[]>();
+  private expanded = new Set<string>();
+  // Rows that were expanded before the last refresh: expanded again once the tree asks for their children.
+  private reopening = new Set<string>();
   // Bumped by each refresh, so a read answered before mEdit's rows changed caches nothing.
   private generation = 0;
   private readonly log: (msg: string) => void;
@@ -312,7 +344,13 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
     this.generation++;
     this.listings.clear();
     this.rowStates.clear();
+    this.beneathLoading.clear();
+    this.folds.clear();
+    this.reopening = new Set([...this.reopening, ...this.expanded]);
+    this.dropBeneathFailures();
+    this.expanded = new Set();
     this._onDidChangeTreeData.fire(undefined);
+    this._onDidReadBeneath.fire();
   }
 
   /** Undefined for a URI that is not a record row's, and for a record nothing has cached yet, which
@@ -320,6 +358,99 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   workingTreeStateOf(uri: vscode.Uri): RecordSummary['workingTreeState'] | undefined {
     const identity = parseRecordResourceUri(uri);
     return identity && this.rowStates.get(cacheKey(identity.plugin, 'row', identity.formKey));
+  }
+
+  /** The distinct changes strictly beneath the row, never its own. An answer older than the last refresh
+   *  is shown until its replacement lands. */
+  statesBeneathOf(uri: vscode.Uri): readonly WorkingTreeState[] {
+    const identity = parseRecordResourceUri(uri) ?? parseRowResourceUri(uri);
+    if (identity === undefined) return [];
+    const answer = this.beneathOf(identity.plugin);
+    if (answer === undefined) return [];
+    if ('formKey' in identity) return answer.records[identity.formKey] ?? [];
+    const fold = this.folds.get(foldKey(identity.plugin, identity.path));
+    if (fold !== undefined) {
+      return distinctChanges(fold.flatMap(row => [row.workingTreeState, ...(answer.records[row.formKey] ?? [])]));
+    }
+    const [recordType] = identity.path;
+    return recordType === undefined ? answer.plugin : answer.recordTypes[recordType] ?? [];
+  }
+
+  private beneathOf(plugin: PluginAddress): WorkingTreeStatesBeneath | undefined {
+    const key = pluginAddressKey(plugin);
+    const held = this.beneath.get(key);
+    if (held?.generation !== this.generation) this.loadBeneath(plugin, key);
+    return held?.answer;
+  }
+
+  // A failed read is logged once and not retried until the next refresh, so no row asks again.
+  private loadBeneath(plugin: PluginAddress, key: string): void {
+    if (this.beneathLoading.has(key)) return;
+    this.beneathLoading.add(key);
+    const generation = this.generation;
+    this.repository.getWorkingTreeStatesBeneath(plugin).then((answer) => {
+      if (generation !== this.generation) return;
+      this.beneath.set(key, { generation, answer });
+      this._onDidReadBeneath.fire();
+      if (this.beneathFailures.delete(key)) this._onDidChangeBeneathFailure.fire();
+    }, (e: unknown) => {
+      if (generation !== this.generation) return;
+      const reason = this.err(e);
+      this.log(`[RecordBrowser] getWorkingTreeStatesBeneath(${plugin.name}) failed: ${reason}`);
+      const message = this.beneath.has(key) ? `Showing the last good read: ${reason}` : `Failed to load: ${reason}`;
+      if (this.beneathFailures.get(key) !== message) {
+        this.beneathFailures.set(key, message);
+        this._onDidChangeBeneathFailure.fire();
+      }
+    });
+  }
+
+  // A failure stands until its plugin reads well; a plugin that left the tree never will, so each
+  // refresh forgets them and the rows still shown ask again.
+  private dropBeneathFailures(): void {
+    if (this.beneathFailures.size === 0) return;
+    this.beneathFailures.clear();
+    this._onDidChangeBeneathFailure.fire();
+  }
+
+  /** The message line's part when the states beneath the rows could not be read (common.md, States,
+   *  stories 2 and 6): the rows keep the last answer. */
+  readonly beneathFailure: SyncMessage = {
+    message: () => this.beneathFailures.values().next().value,
+    onMessageChanged: (listener) => this._onDidChangeBeneathFailure.event(listener),
+  };
+
+  isExpanded(uri: vscode.Uri): boolean {
+    return this.expanded.has(rowKey(uri));
+  }
+
+  expandedRow(uri: vscode.Uri): void {
+    this.expanded.add(rowKey(uri));
+    this._onDidReadRecords.fire([uri]);
+  }
+
+  collapsedRow(uri: vscode.Uri): void {
+    this.expanded.delete(rowKey(uri));
+    this.reopening.delete(rowKey(uri));
+    this._onDidReadRecords.fire([uri]);
+  }
+
+  /** VS Code asks for the children of the rows it keeps expanded across a rebuild, and of no
+   *  others: the one caller that says so is the tree answering VS Code. */
+  reopen(uri: vscode.Uri): void {
+    if (!this.reopening.delete(rowKey(uri))) return;
+    this.expanded.add(rowKey(uri));
+    this._onDidReadRecords.fire([uri]);
+  }
+
+  private folded<N extends vscode.TreeItem & { plugin: string; origin: string; path: readonly string[] }>(
+    node: N, rows: readonly FoldedRow[],
+  ): N {
+    const plugin = pluginAddressOf(node);
+    node.resourceUri = rowResourceUri(plugin, ...node.path);
+    this.folds.set(foldKey(plugin, node.path), rows);
+    this._onDidReadRecords.fire([node.resourceUri]);
+    return node;
   }
 
   getTreeItem(element: RecordBrowserNode): vscode.TreeItem {
@@ -341,7 +472,8 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   private getSpatialChildren(element: RecordBrowserNode): Promise<RecordBrowserNode[]> | RecordBrowserNode[] {
     if (element instanceof WorldspaceNode) return this.fetchWorldspaceChildren(element);
     if (element instanceof BlockNode) {
-      return element.block.subBlocks.map(s => new SubBlockNode(element.plugin, s, element.origin, element.conditions));
+      return element.block.subBlocks.map(s => this.folded(
+        new SubBlockNode(element.plugin, s, element.origin, element.conditions, [...element.path, `${s.x},${s.y}`]), s.cells));
     }
     if (element instanceof SubBlockNode) {
       return element.subBlock.cells.map(c => new CellNode(element.plugin, c, element.origin, element.conditions));
@@ -352,7 +484,8 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
         new ChildRecordNode(element.plugin, p, element.origin, element.conditions));
     }
     if (element instanceof InteriorBlockNode) {
-      return element.block.subBlocks.map(s => new InteriorSubBlockNode(element.plugin, s, element.origin, element.conditions));
+      return element.block.subBlocks.map(s => this.folded(
+        new InteriorSubBlockNode(element.plugin, s, element.origin, element.conditions, [...element.path, String(s.number)]), s.cells));
     }
     if (element instanceof InteriorSubBlockNode) {
       return element.subBlock.cells.map(c => new CellNode(element.plugin, c, element.origin, element.conditions));
@@ -423,7 +556,8 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
       const cells = [...data.topCells, ...data.blocks.flatMap(b => b.subBlocks.flatMap(s => s.cells))];
       this.readRows(generation, cells.map(c => ({ ...c, plugin: pluginAddressOf(node) })));
       const nodes: RecordBrowserNode[] = data.topCells.map(c => new CellNode(node.plugin, c, node.origin, node.conditions));
-      nodes.push(...data.blocks.map(b => new BlockNode(node.plugin, b, node.origin, node.conditions)));
+      nodes.push(...data.blocks.map(b => this.folded(
+        new BlockNode(node.plugin, b, node.origin, node.conditions, [node.formKey, `${b.x},${b.y}`]), b.subBlocks.flatMap(s => s.cells))));
       return nodes;
     });
   }
@@ -435,8 +569,8 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
         () => this.repository.getCellChildRecords(pluginAddressOf(node), node.cell.formKey));
       this.readRows(generation, [...refs.persistent, ...refs.temporary].map(r => ({ ...r, plugin: pluginAddressOf(node) })));
       const groups: ChildRecordGroupNode[] = [];
-      if (refs.persistent.length) groups.push(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent, node.origin, node.conditions));
-      if (refs.temporary.length) groups.push(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'temporary', refs.temporary, node.origin, node.conditions));
+      if (refs.persistent.length) groups.push(this.folded(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent, node.origin, node.conditions), refs.persistent));
+      if (refs.temporary.length) groups.push(this.folded(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'temporary', refs.temporary, node.origin, node.conditions), refs.temporary));
       return groups;
     });
   }
@@ -461,7 +595,8 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
       const blocks = await this.getOrLoad('interior', pluginAddressOf(node), '',
         () => this.repository.getInteriorCells(pluginAddressOf(node)));
       this.readRows(generation, blocks.flatMap(b => b.subBlocks.flatMap(s => s.cells)).map(c => ({ ...c, plugin: pluginAddressOf(node) })));
-      return blocks.map(b => new InteriorBlockNode(node.plugin, b, node.origin, node.conditions));
+      return blocks.map(b => this.folded(
+        new InteriorBlockNode(node.plugin, b, node.origin, node.conditions, [node.recordType, String(b.number)]), b.subBlocks.flatMap(s => s.cells)));
     });
   }
 

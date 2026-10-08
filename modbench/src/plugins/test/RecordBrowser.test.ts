@@ -1080,7 +1080,7 @@ describe('the failure prefix', () => {
 
     expect(expectInstanceOf(perk.iconPath, ThemeIcon).id).toBe('error');
     expect(perk.description).toBe('2');
-    expect(weap.iconPath).toBeUndefined();
+    expect(weap.iconPath).toEqual(new ThemeIcon('blank'));
   });
 
   it('marks the whole worldspace chain a failure sits under, and nothing beside it', async () => {

@@ -5,7 +5,8 @@ import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import type { PluginsDrop } from '../pluginsCommands/plugins';
 import { failurePrefixIcon } from './failurePrefixIcon';
-import { lockedRowUri } from './ImplicitMasterDecorationProvider';
+import { rowResourceUri } from './recordResourceUri';
+import { blankIcon } from './blankIcon';
 import { IndexingNode, type RecordBrowserNode, type RecordBrowser } from './RecordBrowser';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
@@ -45,7 +46,7 @@ function isDropPayload(value: unknown): value is { plugins: PluginAddress[] } {
  *  satisfies it. */
 export type RecordBrowserFacet = Pick<
   RecordBrowser,
-  'getPluginChildren' | 'getChildren' | 'getTreeItem' | 'onDidChangeTreeData'
+  'getPluginChildren' | 'getChildren' | 'getTreeItem' | 'onDidChangeTreeData' | 'reopen'
 >;
 
 interface PluginsTreeProviderOptions {
@@ -81,9 +82,6 @@ function openHeaderCommand(header: PluginAddress): vscode.Command {
   return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey: headerFormKeyOf(header), plugin: header } }] };
 }
 
-/** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so
- *  setting one would silently change every row's icon. Overridden plugins:
- *  plugins.md, The tree, story 3. */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
   readonly argument: PluginArgument;
@@ -95,6 +93,8 @@ export class PluginNode extends vscode.TreeItem {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
     this.argument = { kind: 'plugin', plugin: { name: plugin.name, origin } };
     this.id = rowIdentity(this.kind, { name: plugin.name, origin });
+    this.resourceUri = rowResourceUri({ name: plugin.name, origin });
+    this.iconPath = blankIcon();
     this.contextValue = `plugin ${plugin.enabled ? 'enabled' : 'disabled'}`;
     // xEdit parity: selecting a plugin node shows its File Header, with no separate affordance.
     // plugins.md, Menus and keys, story 2: the game loads no disabled plugin's records, so a click
@@ -111,17 +111,18 @@ export class PluginNode extends vscode.TreeItem {
 export class ImplicitMasterNode extends vscode.TreeItem {
   readonly kind = 'implicitMaster' as const;
   readonly argument: PluginArgument;
-  constructor(public readonly name: string, public readonly origin: string, path?: string) {
+  declare resourceUri: vscode.Uri;
+  constructor(public readonly name: string, public readonly origin: string) {
     super(name, vscode.TreeItemCollapsibleState.None);
     this.argument = { kind: 'plugin', plugin: { name, origin } };
     this.id = rowIdentity(this.kind, { name, origin });
+    this.resourceUri = rowResourceUri({ name, origin });
     this.contextValue = 'pluginImplicit';
     this.iconPath = new vscode.ThemeIcon('lock');
     // plugins.md, A plugin the game loads with no line: the reference tool's one sentence alone —
     // the label already shows the greyed file name, so the tooltip does not repeat it.
     this.tooltip = "This plugin can't be disabled or moved (enforced by the game).";
     this.command = openHeaderCommand({ name, origin });
-    if (path !== undefined) this.resourceUri = lockedRowUri(path);
   }
 }
 
@@ -292,6 +293,12 @@ export class PluginsTreeProvider
 
   async getChildren(element?: PluginsTreeNode): Promise<PluginsTreeNode[]> {
     if (element === undefined) return this.rows();
+    if (element.resourceUri) this.records.reopen(element.resourceUri);
+    return this.childrenOf(element);
+  }
+
+  // The children a walk reads too, which VS Code did not ask for, so no row is marked expanded.
+  private async childrenOf(element: PluginsTreeNode): Promise<PluginsTreeNode[]> {
     const children = isRow(element)
       ? await this.expandPluginRow(element)
       : await this.records.getChildren(element);
@@ -330,7 +337,7 @@ export class PluginsTreeProvider
   private async groupRow({ plugin, recordType }: RecordGroup): Promise<PluginsTreeNode | undefined> {
     const pluginRow = (await this.rows()).find((row) => row.kind === 'plugin' && samePluginAddress(addressOfRow(row), plugin));
     if (pluginRow === undefined) return undefined;
-    return (await this.getChildren(pluginRow)).find((row) => row.kind === 'recordType' && row.recordType === recordType);
+    return (await this.childrenOf(pluginRow)).find((row) => row.kind === 'recordType' && row.recordType === recordType);
   }
 
   // A row from before a rebuild still expands, but VS Code tells a row with no id from its new
@@ -343,13 +350,13 @@ export class PluginsTreeProvider
 
   private async childrenOfCurrent(row: PluginsTreeNode): Promise<PluginsTreeNode[]> {
     const current = await this.currentRow(row);
-    return current === undefined ? [] : this.getChildren(current);
+    return current === undefined ? [] : this.childrenOf(current);
   }
 
   // A group's or a container's records sit beneath it directly, or beneath rows that stand for no
   // record, as blocks do. A record row ends the walk: what it holds is its own.
   private async recordRowBeneath(parent: PluginsTreeNode, formKey: string): Promise<PluginsTreeNode | undefined> {
-    for (const row of await this.getChildren(parent)) {
+    for (const row of await this.childrenOf(parent)) {
       if (isRecordRow(row)) {
         if (recordFormKeyOf(row) === formKey) return row;
         continue;
@@ -424,8 +431,8 @@ export class PluginsTreeProvider
       shown.add(key);
       return true;
     });
-    const lockedRows = loadedWithNoLine.map(({ name, origin }) => new ImplicitMasterNode(name, origin, this.dataFolderFile(name)));
-    this.lastLockedRowUris = new Set(lockedRows.flatMap((row) => (row.resourceUri ? [row.resourceUri.toString()] : [])));
+    const lockedRows = loadedWithNoLine.map(({ name, origin }) => new ImplicitMasterNode(name, origin));
+    this.lastLockedRowUris = new Set(lockedRows.map((row) => row.resourceUri.toString()));
     return [
       ...lockedRows,
       ...dedupedOrder.map((p) => new PluginNode({

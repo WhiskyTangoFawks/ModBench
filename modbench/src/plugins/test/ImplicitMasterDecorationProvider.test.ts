@@ -9,11 +9,12 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { ImplicitMasterDecorationProvider, lockedRowUri } from '../ImplicitMasterDecorationProvider';
+import { ImplicitMasterDecorationProvider } from '../ImplicitMasterDecorationProvider';
+import { rowResourceUri } from '../recordResourceUri';
 import { present } from '../../ports/present';
 
 describe('ImplicitMasterDecorationProvider', () => {
-  const FALLOUT4 = lockedRowUri('/game/Data/Fallout4.esm');
+  const FALLOUT4 = rowResourceUri({ name: 'Fallout4.esm', origin: 'Data/' });
   const providerOver = (...rows: vscode.Uri[]) =>
     new ImplicitMasterDecorationProvider(() => new Set(rows.map((uri) => uri.toString())));
 
@@ -28,7 +29,7 @@ describe('ImplicitMasterDecorationProvider', () => {
   });
 
   it('returns undefined for a locked-row URI the tree does not render', () => {
-    expect(providerOver(FALLOUT4).provideFileDecoration(lockedRowUri('/game/Data2/Fallout4.esm'))).toBeUndefined();
+    expect(providerOver(FALLOUT4).provideFileDecoration(rowResourceUri({ name: 'Fallout4.esm', origin: 'Mod' }))).toBeUndefined();
   });
 
   it('greys nothing while the tree renders no locked row', () => {
