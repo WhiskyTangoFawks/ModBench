@@ -13,7 +13,7 @@ public sealed class MalformedPluginScanTests
         var diagnoses = Scan(ShortRdatRegionPlugin.Plugin.Bytes);
 
         var d = Assert.Single(diagnoses, d => d.DefectClass == "fixed-size-subrecord-short");
-        Assert.Equal($"REGN {ShortRdatRegionPlugin.FormId:X8} ({ShortRdatRegionPlugin.EditorId})", d.Anchor);
+        Assert.Equal(ShortRdatRegionPlugin.Anchor, d.Anchor);
         Assert.Equal("repairable (lossless)", d.Tail);
         Assert.Equal("RDAT is 6 bytes; a REGN RDAT is always 8", d.Message);
     }

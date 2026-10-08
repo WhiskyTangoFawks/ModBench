@@ -9,6 +9,7 @@ public static class ShortRdatRegionPlugin
     public const string Master = "Harbor Weather.esm";
     public const uint FormId = 0x01000800;
     public const string EditorId = "HarborRegion";
+    public static readonly string Anchor = $"REGN {FormId:X8} ({EditorId})";
 
     private const uint WeatherData = 3;
     private const uint MapData = 4;

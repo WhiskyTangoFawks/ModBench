@@ -9,8 +9,8 @@ namespace MEditService.Index.Tests.Records;
 
 public sealed class PluginDiagnosisRowTests : IDisposable
 {
-    private const string MalformedFixture = "LitR - TrueStorms.esp";
-    private const string Origin = "TrueStormsMod";
+    private const string MalformedFixture = ShortRdatRegionPlugin.FileName;
+    private const string Origin = "ShortRdatMod";
     private static readonly PluginAddress Key = new(MalformedFixture, Origin);
 
     private readonly ScratchDirectory _gameDirectory = new("medit-diagnosis-game-");
@@ -21,7 +21,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
     {
         var modFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
         _pluginPath = Path.Combine(modFolder, MalformedFixture);
-        File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", MalformedFixture), _pluginPath);
+        ShortRdatRegionPlugin.Plugin.WriteInto(modFolder);
     }
 
     public void Dispose()
@@ -66,10 +66,10 @@ public sealed class PluginDiagnosisRowTests : IDisposable
 
         Assert.Equal(Key, new PluginAddress(report.Plugin, report.Origin));
         Assert.Equal("fixed-size-subrecord-short", report.DefectClass);
-        Assert.Equal("REGN 001D2AF4 (DowntownRegion)", report.Anchor);
+        Assert.Equal(ShortRdatRegionPlugin.Anchor, report.Anchor);
         Assert.Equal("repairable (lossless)", report.Tail);
         Assert.Equal(
-            "REGN 001D2AF4 (DowntownRegion) — fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8",
+            $"{ShortRdatRegionPlugin.Anchor} — fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8",
             report.Text);
     }
 
