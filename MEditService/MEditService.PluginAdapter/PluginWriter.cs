@@ -1,4 +1,3 @@
-using MEditService.RepositoriesLib;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.PluginAdapter;
@@ -14,7 +13,8 @@ internal static class PluginWriter
         string pluginPath,
         IReadOnlyList<string>? loadOrder = null)
     {
-        var dir = PathShape.DirectoryOf(pluginPath);
+        var dir = Path.GetDirectoryName(pluginPath)
+            ?? throw new InvalidOperationException($"Expected '{pluginPath}' to have a parent directory.");
         var tmpDir = Path.Combine(dir, ".medit_tmp_" + Path.GetRandomFileName());
         var tmpPath = Path.Combine(tmpDir, Path.GetFileName(pluginPath));
         var tmpStringsDir = Path.Combine(tmpDir, "Strings");
@@ -36,7 +36,7 @@ internal static class PluginWriter
                     .ToList()
                 : [];
 
-            return new PreparedPluginSave(tmpPath, pluginPath, stringsFiles);
+            return new PreparedPluginSave(tmpDir, tmpPath, pluginPath, stringsFiles);
         }
         catch
         {
