@@ -64,6 +64,8 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         }
     }
 
+    public bool GameFolderExists(string? gameFolder) => Directory.Exists(gameFolder);
+
     // FileMode.Open, FileAccess.Read, FileShare.Read: what File.OpenRead gives, and what every
     // read below opens the same file with, so this answers for the read that follows it.
     public bool CanRead(RegisteredPlugin plugin)
