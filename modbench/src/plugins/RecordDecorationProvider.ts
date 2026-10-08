@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import type { PluginTreeProvider } from './PluginTreeProvider';
+import type { RecordBrowser } from './RecordBrowser';
 
-export type RecordBadgeSource = Pick<PluginTreeProvider, 'workingTreeStateOf' | 'onDidReadRecords'>;
+export type RecordBadgeSource = Pick<RecordBrowser, 'workingTreeStateOf' | 'onDidReadRecords'>;
 
 
 /** Record-row M/A badges in git's vocabulary; a deleted record has no row, so no D. VS Code keeps

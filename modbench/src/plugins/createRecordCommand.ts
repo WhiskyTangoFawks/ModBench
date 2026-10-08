@@ -7,7 +7,7 @@ import type { PluginsTreeNode } from './PluginsTreeProvider';
 import type { CreatedRecordWatch, RecordPlace } from './createdRecordSelection';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import { CREATE_ROW_KINDS, isContainerRow } from './gestureEntry';
-import { CELL_RECORD_TYPE } from './PluginTreeProvider';
+import { CELL_RECORD_TYPE } from './RecordBrowser';
 import { pluginAddressOf } from '../wire/pluginAddress';
 
 export interface RecordCreateDeps {

@@ -261,7 +261,7 @@ export class IndexingNode extends vscode.TreeItem {
   }
 }
 
-export type PluginTreeNode =
+export type RecordBrowserNode =
   | RecordTypeNode | RecordNode
   | WorldspaceNode | BlockNode | SubBlockNode | CellNode
   | ChildRecordGroupNode | ChildRecordNode | InteriorBlockNode | InteriorSubBlockNode
@@ -291,8 +291,8 @@ type RecordBrowserClient = Pick<
   | 'getInteriorCells' | 'getContainerChildren'
 >;
 
-export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNode> {
-  private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginTreeNode | undefined | null>();
+export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode> {
+  private readonly _onDidChangeTreeData = new vscode.EventEmitter<RecordBrowserNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   private readonly _onDidReadRecords = new vscode.EventEmitter<readonly vscode.Uri[]>();
   /** The record rows a read from mEdit just answered, by resource URI. */
@@ -322,11 +322,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return identity && this.rowStates.get(cacheKey(identity.plugin, 'row', identity.formKey));
   }
 
-  getTreeItem(element: PluginTreeNode): vscode.TreeItem {
+  getTreeItem(element: RecordBrowserNode): vscode.TreeItem {
     return element;
   }
 
-  async getChildren(element?: PluginTreeNode): Promise<PluginTreeNode[]> {
+  async getChildren(element?: RecordBrowserNode): Promise<RecordBrowserNode[]> {
     // `element` is never actually undefined here — `PluginsTreeProvider` calls this only with a
     // defined element, and it owns the root rows. This case stays only to satisfy
     // vscode.TreeDataProvider<T>'s own optional-parameter contract.
@@ -338,7 +338,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   // Dispatch for the worldspace / cell / block spatial hierarchy, split out of getChildren
   // so neither dispatch ladder exceeds the complexity budget.
-  private getSpatialChildren(element: PluginTreeNode): Promise<PluginTreeNode[]> | PluginTreeNode[] {
+  private getSpatialChildren(element: RecordBrowserNode): Promise<RecordBrowserNode[]> | RecordBrowserNode[] {
     if (element instanceof WorldspaceNode) return this.fetchWorldspaceChildren(element);
     if (element instanceof BlockNode) {
       return element.block.subBlocks.map(s => new SubBlockNode(element.plugin, s, element.origin, element.conditions));
@@ -366,12 +366,12 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   // A failed fetch renders as the error row in place of the children (plugins.md, Rows that stand
   // in for records).
-  private async orErrorNode(op: string, build: () => Promise<PluginTreeNode[]>): Promise<PluginTreeNode[]> {
+  private async orErrorNode(op: string, build: () => Promise<RecordBrowserNode[]>): Promise<RecordBrowserNode[]> {
     try {
       return await build();
     } catch (e) {
       const message = this.err(e);
-      this.log(`[PluginTreeProvider] ${op} failed: ${message}`);
+      this.log(`[RecordBrowser] ${op} failed: ${message}`);
       return [new ErrorNode(message)];
     }
   }
@@ -394,20 +394,20 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   /** Keyed by the plugin rather than by a node this provider built: `PluginsTreeProvider` expands
    *  its own rows, whose whole knowledge of this side is the plugin and the
    *  conditions that row states. */
-  async getPluginChildren(plugin: PluginAddress, conditions: PluginConditions = NOT_EDITABLE): Promise<PluginTreeNode[]> {
+  async getPluginChildren(plugin: PluginAddress, conditions: PluginConditions = NOT_EDITABLE): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(`getPluginChildren(${plugin.name})`, async () => {
       const types = await this.repository.getRecordTypes(plugin);
       return types.map(t => new RecordTypeNode(plugin.name, t, plugin.origin, conditions));
     });
   }
 
-  private fetchGroup(node: RecordTypeNode): Promise<PluginTreeNode[]> {
+  private fetchGroup(node: RecordTypeNode): Promise<RecordBrowserNode[]> {
     if (node.recordType === WORLDSPACE_RECORD_TYPE) return this.fetchWorldspaces(node);
     if (node.recordType === CELL_RECORD_TYPE) return this.fetchInteriorCells(node);
     return this.fetchRecords(node);
   }
 
-  private fetchWorldspaces(node: RecordTypeNode): Promise<PluginTreeNode[]> {
+  private fetchWorldspaces(node: RecordTypeNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(`fetchWorldspaces(${node.plugin})`, async () => {
       const generation = this.generation;
       const worldspaces = await this.repository.getWorldspaces(pluginAddressOf(node));
@@ -416,19 +416,19 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     });
   }
 
-  private fetchWorldspaceChildren(node: WorldspaceNode): Promise<PluginTreeNode[]> {
+  private fetchWorldspaceChildren(node: WorldspaceNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(`fetchWorldspaceChildren(${node.worldspace.formKey})`, async () => {
       const generation = this.generation;
       const data = await this.repository.getWorldspaceBlocks(pluginAddressOf(node), node.worldspace.formKey);
       const cells = [...data.topCells, ...data.blocks.flatMap(b => b.subBlocks.flatMap(s => s.cells))];
       this.readRows(generation, cells.map(c => ({ ...c, plugin: pluginAddressOf(node) })));
-      const nodes: PluginTreeNode[] = data.topCells.map(c => new CellNode(node.plugin, c, node.origin, node.conditions));
+      const nodes: RecordBrowserNode[] = data.topCells.map(c => new CellNode(node.plugin, c, node.origin, node.conditions));
       nodes.push(...data.blocks.map(b => new BlockNode(node.plugin, b, node.origin, node.conditions)));
       return nodes;
     });
   }
 
-  private fetchCellGroups(node: CellNode): Promise<PluginTreeNode[]> {
+  private fetchCellGroups(node: CellNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(`fetchCellGroups(${node.cell.formKey})`, async () => {
       const generation = this.generation;
       const refs = await this.getOrLoad('cellRefs', pluginAddressOf(node), node.cell.formKey,
@@ -441,7 +441,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     });
   }
 
-  private fetchContainerChildren(node: RecordNode): Promise<PluginTreeNode[]> {
+  private fetchContainerChildren(node: RecordNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(`fetchContainerChildren(${node.record.formKey})`, async () => {
       const owner = { name: node.record.plugin, origin: node.origin };
       const generation = this.generation;
@@ -455,7 +455,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   }
 
   // Every interior cell in one call (plugins.md, The tree, story 8).
-  private fetchInteriorCells(node: RecordTypeNode): Promise<PluginTreeNode[]> {
+  private fetchInteriorCells(node: RecordTypeNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(`fetchInteriorCells(${node.plugin})`, async () => {
       const generation = this.generation;
       const blocks = await this.getOrLoad('interior', pluginAddressOf(node), '',
@@ -465,7 +465,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     });
   }
 
-  private fetchRecords(node: RecordTypeNode): Promise<PluginTreeNode[]> {
+  private fetchRecords(node: RecordTypeNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(`fetchRecords(${node.plugin}, ${node.recordType})`, async () => {
       const generation = this.generation;
       const page = await this.getOrLoad('records', pluginAddressOf(node), node.recordType, async () => {

@@ -101,7 +101,7 @@ import { createFocusedView } from '../../drivingLib/focusedView';
 import { createPluginsView } from '../pluginsView';
 import { createPluginSync, type PluginSync } from '../pluginSync';
 import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
-import { PluginTreeProvider, type PluginTreeNode } from '../PluginTreeProvider';
+import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import type { PluginMetadata, RecordSummary } from '../../client';
 import { recordTypeCountFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -153,7 +153,7 @@ function pluginsView(
   { instance = new FakeInstance(value), client = new InMemoryMEditClient(), pluginSync = syncRefusing().pluginSync }:
     { instance?: FakeInstance; client?: InMemoryMEditClient; pluginSync?: PluginSync } = {},
 ) {
-  const recordBrowser = new PluginTreeProvider(client);
+  const recordBrowser = new RecordBrowser(client);
   const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
     instance, access: accessTo('/instance'), recordBrowser, client,
@@ -360,7 +360,7 @@ describe('a record row\'s badge, from mEdit\'s stream', () => {
     workingTreeState, hasContainerChildren: false, hasParseFailure: false,
   });
   type BadgeSource = (typeof h.decorations)[number] & { onDidChangeFileDecorations: (listener: (changed: unknown) => void) => unknown };
-  const asVsCodeReReadsAnExpandedGroupOnTreeChange = (tree: PluginTreeProvider, group: PluginTreeNode) => tree.getChildren(group);
+  const asVsCodeReReadsAnExpandedGroupOnTreeChange = (tree: RecordBrowser, group: RecordBrowserNode) => tree.getChildren(group);
 
   it('arrives as an M, and a change notice for the row, when mEdit reports the row changed', async () => {
     const { client, recordBrowser } = pluginsView();
