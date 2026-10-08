@@ -50,7 +50,7 @@ async function listGameFolderPlugins(gameFolder: GameFolder): Promise<DataFolder
   if (dataFolder === undefined) return { kind: 'unresolved' };
   try {
     const dirents = await listDir(dataFolder);
-    return { kind: 'listed', names: new Set(dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => d.name.toLowerCase())) };
+    return { kind: 'listed', names: new Set(dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => d.name)) };
   } catch (err) {
     return { kind: 'unreadable', reason: errorMessage(err) };
   }

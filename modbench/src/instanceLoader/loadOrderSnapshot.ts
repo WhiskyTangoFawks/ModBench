@@ -97,25 +97,31 @@ export function providedPluginsOf(files: FileWinners): Map<string, string> {
 }
 
 /** The plugins the game loads with no line (ADR-0013), in load order: its masters,
- *  then its Creation Club plugins, each from the mod providing it, else the game folder, at the
- *  spelling of the plugin it is among `plugins`. */
+ *  then its Creation Club plugins, each from the mod providing it, else the game folder, at its
+ *  file's own spelling. */
 export function pluginsLoadedWithNoLineOf(
   gameMasters: readonly string[], creationClub: readonly string[], inData: DataFolderPlugins,
   plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[],
 ): PluginAddress[] | undefined {
   if (inData.kind !== 'listed') return undefined;
-  const winnerOf = new Map(plugins.filter((p) => p.path !== undefined && p.winning).map((p) => [foldPath(p.name), p] as const));
+  const providedBy = new Map(plugins.filter((p) => p.path !== undefined && p.winning && p.origin !== DATA_DIRECTORY_ORIGIN).map((p) => [foldPath(p.name), p] as const));
   const seen = new Set<string>();
   return [...gameMasters, ...creationClub].flatMap((name) => {
-    const folded = foldPath(name);
-    const winner = winnerOf.get(folded);
-    const provided = winner?.origin === DATA_DIRECTORY_ORIGIN ? undefined : winner;
-    const plugin = provided ?? (inData.names.has(folded) ? { name: winner?.name ?? name, origin: DATA_DIRECTORY_ORIGIN } : undefined);
-    if (seen.has(folded) || plugin === undefined) return [];
-    seen.add(folded);
-    return [{ name: plugin.name, origin: plugin.origin }];
+    const provided = providedBy.get(foldPath(name));
+    const found = provided === undefined ? dataSpellings(inData, name).map((spelled) => ({ name: spelled, origin: DATA_DIRECTORY_ORIGIN })) : [provided];
+    return found.flatMap(({ name: spelled, origin }) => {
+      const key = exactPluginAddressKey({ name: spelled, origin });
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [{ name: spelled, origin }];
+    });
   });
 }
+
+// The game joins a name to its file without regard to case, so a name finds every Data folder
+// file that differs from it only in case.
+const dataSpellings = (inData: DataFolderPlugins, name: string): string[] =>
+  inData.kind === 'listed' ? [...inData.names].filter((spelled) => foldPath(spelled) === foldPath(name)) : [];
 
 type PluginFile = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'>;
 
@@ -138,25 +144,25 @@ export function buildLoadOrderRows(
   index: FileConflictIndex,
   runtimeOutput: readonly OriginFile[],
   gameFolder: GameFolder,
+  inData: DataFolderPlugins,
 ): (LoadOrderPlugin | LoadOrderPluginLine)[] {
   const winners = winningPlugins(index.files);
   // The game matches a line to a file without case, so a case difference must not read as
   // "disabled".
   const enabledNames = new Set(pluginOrder.filter((line) => line.enabled).map((line) => foldPath(line.name)));
   const lineByName = new Map<string, number>();
-  const firstSpelling = new Map<string, string>();
-  pluginOrder.forEach(({ name }, line) => {
-    lineByName.set(foldPath(name), line);
-    if (!firstSpelling.has(foldPath(name))) firstSpelling.set(foldPath(name), name);
-  });
+  pluginOrder.forEach(({ name }, line) => lineByName.set(foldPath(name), line));
 
-  const listed = pluginOrder.map(({ name }, line) => {
+  const listed = pluginOrder.flatMap(({ name }, line) => {
     const folded = foldPath(name);
-    // The Data folder's files are listed without their spelling, so its plugin takes the first
-    // line's.
-    const dataName = firstSpelling.get(folded) ?? name;
-    const plugin = winners.get(folded) ?? { name: dataName, path: dataFolderFile(gameFolder, dataName), origin: DATA_DIRECTORY_ORIGIN };
-    return { ...plugin, line, enabled: enabledNames.has(folded), winning: true };
+    const provided = winners.get(folded);
+    // The line finds its file without case; the row takes the file's spelling and path. A line
+    // spelled as one of two files that differ only in case is the one it names.
+    const spellings = dataSpellings(inData, name).sort((a, b) => Number(b === name) - Number(a === name));
+    const plugins = provided !== undefined ? [provided] : spellings.length > 0
+      ? spellings.map((spelled) => ({ name: spelled, path: dataFolderFile(gameFolder, spelled), origin: DATA_DIRECTORY_ORIGIN }))
+      : [{ name, path: dataFolderFile(gameFolder, name), origin: DATA_DIRECTORY_ORIGIN }];
+    return plugins.map((plugin, i) => ({ ...plugin, line, enabled: enabledNames.has(folded), winning: i === 0 }));
   });
 
   const isWinning = ({ name, origin }: PluginFile) => {

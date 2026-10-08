@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import type { GameFolder, ModFolders, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
+import type { DataFolderPlugins, GameFolder, ModFolders, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { buildFileConflictIndex, FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
 import {
@@ -28,6 +28,8 @@ function index(
   return { files: lookup, filesByMod: new Map(Object.entries(filesByMod)), foldersByMod: new Map() };
 }
 
+const inDataFolder = (...names: string[]): DataFolderPlugins => ({ kind: 'listed', names: new Set(names) });
+const NO_DATA_PLUGINS = inDataFolder();
 const DATA_FOLDER = join('/game', 'Data');
 const GAME_FOLDER: GameFolder = { kind: 'found', root: '/game', dataFolder: DATA_FOLDER };
 const OVERWRITE = join('/instance', 'overwrite');
@@ -61,13 +63,13 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   it('a mod-provided listed plugin is the winning plugin at its plugins.txt line, with that mod as origin', () => {
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
-    const result = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [], GAME_FOLDER);
+    const result = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', line: 0, enabled: true, winning: true }]);
   });
 
   it('a vanilla/DLC/CC plugin no mod provides records the reserved Data-directory origin', () => {
-    const result = buildLoadOrderRows(lines(['Fallout4.esm']), index({}), [], GAME_FOLDER);
+    const result = buildLoadOrderRows(lines(['Fallout4.esm']), index({}), [], GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([{ name: 'Fallout4.esm', path: join(DATA_FOLDER, 'Fallout4.esm'), origin: 'Data/', line: 0, enabled: true, winning: true }]);
   });
@@ -78,7 +80,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
       'O.esp': { winner: '/mods/overwrite/O.esp', winnerMod: 'overwrite' },
     });
 
-    const result = buildLoadOrderRows(lines(['D.esp', 'O.esp', 'V.esm']), fakeIndex, [], GAME_FOLDER);
+    const result = buildLoadOrderRows(lines(['D.esp', 'O.esp', 'V.esm']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result.map((p) => p.origin)).toEqual(['Data', 'overwrite', 'Data/']);
   });
@@ -86,7 +88,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   it('sends every plugins.txt line in line order, the `*` prefix as enabled, matched case-insensitively', () => {
     const fakeIndex = index({ 'On.esp': { winner: '/mods/A/On.esp', winnerMod: 'A' } });
 
-    const result = buildLoadOrderRows(lines(['On.esp', 'Off.esp', 'Mixed.ESP'], ['On.esp', 'Mixed.ESP']), fakeIndex, [], GAME_FOLDER);
+    const result = buildLoadOrderRows(lines(['On.esp', 'Off.esp', 'Mixed.ESP'], ['On.esp', 'Mixed.ESP']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
       { name: 'On.esp', path: '/mods/A/On.esp', origin: 'A', line: 0, enabled: true, winning: true },
@@ -104,7 +106,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
       },
     );
 
-    const result = buildLoadOrderRows(lines(['Other.esp', 'Shared.esp']), fakeIndex, [], GAME_FOLDER);
+    const result = buildLoadOrderRows(lines(['Other.esp', 'Shared.esp']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toContainEqual({ name: 'Shared.esp', path: '/mods/A/Shared.esp', origin: 'A', line: 1, enabled: true, winning: true });
     expect(result).toContainEqual({ name: 'Shared.esp', path: '/mods/B/Shared.esp', origin: 'B', line: 1, enabled: true, winning: false });
@@ -116,7 +118,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
       { C: [{ relativePath: 'Stray.esp', path: '/mods/C/Stray.esp', sourcePath: '/mods/C/Stray.esp', excluded: false, excludedByName: false }, { relativePath: 'textures/x.dds', path: '/mods/C/textures/x.dds', sourcePath: '/mods/C/textures/x.dds', excluded: false, excludedByName: false }] },
     );
 
-    const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER);
+    const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
       { name: 'Listed.esp', path: join(DATA_FOLDER, 'Listed.esp'), origin: 'Data/', line: 0, enabled: true, winning: true },
@@ -127,7 +129,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   it('a plugin resolved from overwrite/ wins path and origin over a mod-provided plugin, which is then sent as overridden', async () => {
     const overwrite = [runtimeOutput('Foo.esp')];
 
-    const result = buildLoadOrderRows(lines(['Foo.esp']), await builtIndex({ A: [modFile('A', 'Foo.esp')] }, overwrite), overwrite, GAME_FOLDER);
+    const result = buildLoadOrderRows(lines(['Foo.esp']), await builtIndex({ A: [modFile('A', 'Foo.esp')] }, overwrite), overwrite, GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
       { name: 'Foo.esp', path: join(OVERWRITE, 'Foo.esp'), origin: 'overwrite/', line: 0, enabled: true, winning: true },
@@ -139,8 +141,8 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
     const excludedFile = { ...runtimeOutput('Foo.esp'), excluded: true };
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
-    const listed = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [excludedFile], GAME_FOLDER);
-    const unlisted = buildLoadOrderRows(lines([]), index({}), [excludedFile], GAME_FOLDER);
+    const listed = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [excludedFile], GAME_FOLDER, NO_DATA_PLUGINS);
+    const unlisted = buildLoadOrderRows(lines([]), index({}), [excludedFile], GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(listed).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', line: 0, enabled: true, winning: true }]);
     expect(unlisted).toEqual([]);
@@ -149,7 +151,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   it('an unlisted plugin sitting in overwrite/ is sent with no line, winning-most', async () => {
     const overwrite = [runtimeOutput('New.esp'), runtimeOutput('notes.txt')];
 
-    const result = buildLoadOrderRows(lines([]), await builtIndex({}, overwrite), overwrite, GAME_FOLDER);
+    const result = buildLoadOrderRows(lines([]), await builtIndex({}, overwrite), overwrite, GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
       { name: 'New.esp', path: join(OVERWRITE, 'New.esp'), origin: 'overwrite/', line: null, enabled: false, winning: true },
@@ -160,7 +162,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
     const result = buildLoadOrderRows(
-      lines(['Foo.esp']), fakeIndex, [runtimeOutput('Sub/Foo.esp'), runtimeOutput('Sub/Stray.esp')], GAME_FOLDER,
+      lines(['Foo.esp']), fakeIndex, [runtimeOutput('Sub/Foo.esp'), runtimeOutput('Sub/Stray.esp')], GAME_FOLDER, NO_DATA_PLUGINS,
     );
 
     expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', line: 0, enabled: true, winning: true }]);
@@ -173,7 +175,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
       'textures/Foo.esp': { winner: '/mods/C/textures/Foo.esp', winnerMod: 'C' },
     });
 
-    const result = buildLoadOrderRows(lines(['Foo.esp', 'Bar.esp', 'Fallout4.esm']), fakeIndex, [], GAME_FOLDER);
+    const result = buildLoadOrderRows(lines(['Foo.esp', 'Bar.esp', 'Fallout4.esm']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
       { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', line: 0, enabled: true, winning: true },
@@ -185,7 +187,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   it('a disabled mod\'s own plugin is sent with no line, not enabled, not winning', () => {
     const fakeIndex = index({}, { Disabled: [{ relativePath: 'Off.esp', path: '/mods/Disabled/Off.esp', sourcePath: '/mods/Disabled/Off.esp', excluded: false, excludedByName: false }] });
 
-    const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER);
+    const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toContainEqual(
       { name: 'Off.esp', path: '/mods/Disabled/Off.esp', origin: 'Disabled', line: null, enabled: false, winning: false },
@@ -197,7 +199,7 @@ describe('buildLoadOrderRows, plugins whose names or origins differ only in case
   it('sends both files of one mod, the line naming the one the Mod override order resolves the name to, at that file\'s spelling', () => {
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } }, { A: [modFile('A', 'Foo.esp'), modFile('A', 'foo.esp')] });
 
-    const result = buildLoadOrderRows(lines(['FOO.esp']), fakeIndex, [], GAME_FOLDER);
+    const result = buildLoadOrderRows(lines(['FOO.esp']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
       { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', line: 0, enabled: true, winning: true },
@@ -211,7 +213,7 @@ describe('buildLoadOrderRows, plugins whose names or origins differ only in case
       { A: [modFile('A', 'Foo.esp')], a: [modFile('a', 'Foo.esp')] },
     );
 
-    const result = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [], GAME_FOLDER);
+    const result = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
       { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', line: 0, enabled: true, winning: true },
@@ -222,7 +224,7 @@ describe('buildLoadOrderRows, plugins whose names or origins differ only in case
   it('sends both of overwrite/\'s files, the one the Mod override order resolves the name to winning', async () => {
     const files = [runtimeOutput('New.esp'), runtimeOutput('new.esp')];
 
-    const result = buildLoadOrderRows(lines([]), await builtIndex({}, files), files, GAME_FOLDER);
+    const result = buildLoadOrderRows(lines([]), await builtIndex({}, files), files, GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
       { name: 'New.esp', path: join(OVERWRITE, 'New.esp'), origin: 'overwrite/', line: null, enabled: false, winning: true },
@@ -230,10 +232,22 @@ describe('buildLoadOrderRows, plugins whose names or origins differ only in case
     ]);
   });
 
-  it('names a Data folder plugin two lines name in different case by its first line\'s spelling, one plugin', () => {
-    const result = buildLoadOrderRows(lines(['Fallout4.esm', 'FALLOUT4.ESM']), index({}), [], GAME_FOLDER);
+  it('names a Data folder plugin a line names in other case by the file\'s spelling, at the path of that file', () => {
+    const result = buildLoadOrderRows(lines(['foo.esp']), index({}), [], GAME_FOLDER, inDataFolder('Foo.esp'));
+
+    expect(result).toEqual([{ name: 'Foo.esp', path: join(DATA_FOLDER, 'Foo.esp'), origin: 'Data/', line: 0, enabled: true, winning: true }]);
+  });
+
+  it('names a Data folder plugin two lines name in different case once per line, by the file\'s spelling', () => {
+    const result = buildLoadOrderRows(lines(['FALLOUT4.ESM', 'fallout4.esm']), index({}), [], GAME_FOLDER, inDataFolder('Fallout4.esm'));
 
     expect(result.map((p) => [p.name, p.origin, p.line])).toEqual([['Fallout4.esm', 'Data/', 0], ['Fallout4.esm', 'Data/', 1]]);
+  });
+
+  it('sends both Data folder files a line names, the one spelled as the line winning', () => {
+    const result = buildLoadOrderRows(lines(['foo.esp']), index({}), [], GAME_FOLDER, inDataFolder('Foo.esp', 'foo.esp'));
+
+    expect(result.map((p) => [p.name, p.line, p.winning])).toEqual([['foo.esp', 0, true], ['Foo.esp', 0, false]]);
   });
 });
 
@@ -241,14 +255,24 @@ describe('pluginsLoadedWithNoLineOf', () => {
   it('names a game master a line names in the game folder at that line\'s plugin\'s spelling', () => {
     const lined = { name: 'master.esm', path: join(DATA_FOLDER, 'master.esm'), origin: 'Data/', line: 0, enabled: true, winning: true };
 
-    expect(pluginsLoadedWithNoLineOf(['Master.esm'], [], { kind: 'listed', names: new Set(['master.esm']) }, [lined]))
+    expect(pluginsLoadedWithNoLineOf(['Master.esm'], [], inDataFolder('master.esm'), [lined]))
       .toEqual([{ name: 'master.esm', origin: 'Data/' }]);
+  });
+
+  it('names a game master the Data folder spells otherwise by the folder\'s spelling', () => {
+    expect(pluginsLoadedWithNoLineOf(['Master.esm'], [], inDataFolder('MASTER.ESM'), []))
+      .toEqual([{ name: 'MASTER.ESM', origin: 'Data/' }]);
+  });
+
+  it('names each of two Data folder files that differ only in case', () => {
+    expect(pluginsLoadedWithNoLineOf(['Master.esm'], [], inDataFolder('Master.esm', 'master.esm'), []))
+      .toEqual([{ name: 'Master.esm', origin: 'Data/' }, { name: 'master.esm', origin: 'Data/' }]);
   });
 });
 
 describe('buildLoadOrderRows, a name neither a mod winner nor a game folder found can resolve', () => {
   it('has no path', () => {
-    const [row] = buildLoadOrderRows(lines(['Fallout4.esm']), index({}), [], GAME_FOLDER_NOT_FOUND);
+    const [row] = buildLoadOrderRows(lines(['Fallout4.esm']), index({}), [], GAME_FOLDER_NOT_FOUND, NO_DATA_PLUGINS);
 
     expect(row?.path).toBeUndefined();
   });
