@@ -5,14 +5,16 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Index.Tests.Query;
 
-public class PluginRowImmutabilityTests
+public sealed class PluginRowImmutabilityTests
 {
-    private static bool ImmutableWhenProvidedBy(PluginProvider provider)
+    private static bool IsImmutable(string origin, bool enabled, bool gameProvided)
     {
         using var fixture = new PluginFixtureBuilder("medit-immutable")
-            .WithPlugin("A.esp", mod => mod.Npcs.Add(new Npc(mod.GetNextFormKey(), Fallout4Release.Fallout4) { EditorID = "FromA" }), origin: "ModA")
+            .WithPlugin("A.esp", mod => mod.Npcs.Add(new Npc(mod.GetNextFormKey(), Fallout4Release.Fallout4) { EditorID = "FromA" }), enabled: enabled, origin: origin)
             .BuildScattered();
-        var plugins = fixture.Plugins.Select(p => p with { NamedProvider = provider }).ToList();
+        var plugins = gameProvided
+            ? fixture.Plugins.Select(p => p with { NamedProvider = PluginProvider.Game }).ToList()
+            : fixture.Plugins;
         using var index = Indexes.Reconciled(fixture.GameDirectory, plugins);
 
         return index.Records.GetPlugins().Single().IsImmutable;
@@ -20,13 +22,17 @@ public class PluginRowImmutabilityTests
 
     [Fact]
     public void GetPlugins_APluginTheGameProvides_IsImmutable() =>
-        Assert.True(ImmutableWhenProvidedBy(PluginProvider.Game));
+        Assert.True(IsImmutable("ModA", enabled: true, gameProvided: true));
 
     [Fact]
     public void GetPlugins_APluginAModProvides_IsEditable() =>
-        Assert.False(ImmutableWhenProvidedBy(new PluginProvider.FromMod("ModA", "/mods/ModA")));
+        Assert.False(IsImmutable("ModA", enabled: true, gameProvided: false));
+
+    [Fact]
+    public void GetPlugins_ADisabledPluginAModProvides_IsEditable() =>
+        Assert.False(IsImmutable("ModA", enabled: false, gameProvided: false));
 
     [Fact]
     public void GetPlugins_APluginNoModProvides_IsEditable() =>
-        Assert.False(ImmutableWhenProvidedBy(PluginProvider.NoMod));
+        Assert.False(IsImmutable(PluginOrigin.Overwrite, enabled: true, gameProvided: false));
 }
