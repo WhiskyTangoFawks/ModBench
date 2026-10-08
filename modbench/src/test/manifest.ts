@@ -1,4 +1,4 @@
-import { FOLDER_KEY } from '../drivingLib/folderContext';
+import { FOLDER_KEY } from '../toolbox/instanceCheck';
 
 export const IN_AN_INSTANCE = `${FOLDER_KEY} == instance`;
 

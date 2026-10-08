@@ -7,8 +7,7 @@ vi.mock('vscode', () => ({
   workspace: { get workspaceFolders() { return h.folders; } },
 }));
 
-import { openedFolder } from '../instanceCheck';
-import { FOLDER_KEY } from '../folderContext';
+import { FOLDER_KEY, openedFolder } from '../instanceCheck';
 
 const writesOfTheKey = () => executeCommand.mock.calls.filter(([command, key]) => command === 'setContext' && key === FOLDER_KEY);
 

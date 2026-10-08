@@ -32,7 +32,7 @@ import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyConte
 import { createDownloadsView } from './downloads/downloadsView';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
-import { openedFolder, whenOpened } from './drivingLib/instanceCheck';
+import { openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { pluginSyncOver } from './pluginsCommands/plugins';
 import { modSyncOver } from './modlist/modlist';
