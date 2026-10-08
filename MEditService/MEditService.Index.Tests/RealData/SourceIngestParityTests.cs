@@ -45,8 +45,8 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     [Fact]
     public void TheSameRecordsExist_TrackedAndUntracked()
     {
-        var binary = AllFormKeysInOneUnpagedQuery(fixture.FromBinary).ToHashSet(StringComparer.Ordinal);
-        var source = AllFormKeysInOneUnpagedQuery(fixture.FromSource).ToHashSet(StringComparer.Ordinal);
+        var binary = AllFormKeysInOneUnpagedQuery(fixture.BinaryInstanceRoot).ToHashSet(StringComparer.Ordinal);
+        var source = AllFormKeysInOneUnpagedQuery(fixture.SourceInstanceRoot).ToHashSet(StringComparer.Ordinal);
 
         Assert.True(binary.Count > 2000, $"fixture looks wrong: only {binary.Count} records");
         Assert.Equal(binary.Count, source.Count);
@@ -59,14 +59,14 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     {
         foreach (var type in (string[])["navm", "land", "cell", .. PlacedRecordTables.Names])
         {
-            var binary = CountOf(fixture.FromBinary, type);
+            var binary = CountOf(fixture.BinaryInstanceRoot, type);
             if (binary == 0) continue;
 
-            Assert.Equal(binary, CountOf(fixture.FromSource, type));
+            Assert.Equal(binary, CountOf(fixture.SourceInstanceRoot, type));
         }
 
-        Assert.True(CountOf(fixture.FromBinary, "refr") > 0, "fixture holds no placed references");
-        Assert.True(CountOf(fixture.FromBinary, "cell") > 0, "fixture holds no cells");
+        Assert.True(CountOf(fixture.BinaryInstanceRoot, "refr") > 0, "fixture holds no placed references");
+        Assert.True(CountOf(fixture.BinaryInstanceRoot, "cell") > 0, "fixture holds no cells");
     }
 
     [Fact]
@@ -101,22 +101,18 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     {
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(RealDataPlugin.PluginFileName));
 
-        var binary = fixture.FromBinary.RequireReads().GetDocument(headerFormKey, fixture.Plugin);
-        var source = fixture.FromSource.RequireReads().GetDocument(headerFormKey, fixture.Plugin);
+        Assert.Equal(PluginHeader.RecordType, fixture.FromBinary.DocumentOf(headerFormKey, fixture.Plugin).RecordType);
+        Assert.Equal(PluginHeader.RecordType, fixture.FromSource.DocumentOf(headerFormKey, fixture.Plugin).RecordType);
 
-        Assert.NotNull(binary);
-        Assert.NotNull(source);
-        Assert.Equal(PluginHeader.RecordType, binary.RecordType);
-        Assert.Equal(PluginHeader.RecordType, source.RecordType);
+        var binaryBody = fixture.FromBinary.BodyOf(headerFormKey, fixture.Plugin);
+        var sourceBody = fixture.FromSource.BodyOf(headerFormKey, fixture.Plugin);
+        Assert.Contains("\"ModHeader\"", binaryBody, StringComparison.Ordinal);
 
-        Assert.NotNull(binary.Body);
-        Assert.Contains("\"ModHeader\"", binary.Body, StringComparison.Ordinal);
-
-        Assert.Equal(binary.Body, source.Body);
+        Assert.Equal(binaryBody, sourceBody);
 
         var headerFile = Path.Combine(fixture.ModFolder, PluginSourceRoot.HeaderDocument(RealDataPlugin.PluginFileName));
         Assert.True(File.Exists(headerFile), $"expected the tracked tree to hold {headerFile}");
-        Assert.Equal(File.ReadAllBytes(headerFile), Encoding.UTF8.GetBytes(source.BodyOf()));
+        Assert.Equal(File.ReadAllBytes(headerFile), Encoding.UTF8.GetBytes(sourceBody));
     }
 
     [Theory]
@@ -139,14 +135,11 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
             $"\nOnly untracked:\n{string.Join('\n', onlyBinary.Take(20))}\nOnly tracked:\n{string.Join('\n', onlySource.Take(20))}");
     }
 
-    private List<string> AllFormKeysInOneUnpagedQuery(OpenedIndex index) =>
-        [.. index.RequireReads()
-            .Search(new RecordQuery(RecordQueryScope.Navigator, Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: int.MaxValue))
-            .Items.Select(i => i.FormKey)];
+    private static IEnumerable<string> AllFormKeysInOneUnpagedQuery(string instanceRoot) =>
+        IndexFiles.Rows(instanceRoot, "SELECT form_key FROM records").Select(row => row[0]);
 
-    private int CountOf(OpenedIndex index, string recordType) =>
-        index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator,
-            RecordTypes: [recordType], Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: 0)).Total;
+    private static int CountOf(string instanceRoot, string recordType) =>
+        IndexFiles.Rows(instanceRoot, $"SELECT form_key FROM records WHERE record_type = '{recordType}'").Count;
 
     private static Dictionary<string, (string RecordType, string Body)> DocumentsByFormKey(string instanceRoot) =>
         IndexFiles.Rows(instanceRoot, "SELECT form_key, record_type, body FROM records")

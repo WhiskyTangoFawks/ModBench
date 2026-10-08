@@ -24,46 +24,45 @@ public sealed class PluginAddressComparisonTests : IDisposable
     private static readonly PluginAddress OtherCase = new("CASED.ESP", "casedmod");
 
     [Fact]
-    public void TheOpenedPlugins_AnswerTheSamePlugin_WhateverTheCase()
+    public void ThePluginsRecordTypes_AnswerUnderAnotherCase()
     {
-        Assert.True(_index.RequireReads().OpenedPlugins.ContainsKey(OtherCase));
+        Assert.Equal(1, _index.CountOf(OtherCase, "NPC_"));
     }
 
     [Fact]
-    public void AReadUnderAnotherCase_AnswersThePluginsRows()
+    public void AListingUnderAnotherCase_AnswersThePluginsRows()
     {
-        var reads = _index.RequireReads();
-
         Assert.Equal(
-            reads.DocumentsOf(_fixture.Plugins.Single().KeyOf()).Select(d => d.FormKey).Order(),
-            reads.DocumentsOf(OtherCase).Select(d => d.FormKey).Order());
+            _index.ListedIn(_fixture.Plugins.Single().KeyOf()).Select(row => row.FormKey),
+            _index.ListedIn(OtherCase).Select(row => row.FormKey));
     }
 
     private string UnderAnotherCase(string editorId) =>
-        _index.RequireReads().DocumentsOf(_fixture.Plugins.Single().KeyOf())
-            .Single(d => d.EditorId == editorId).FormKey.ToUpperInvariant();
+        _index.ListedIn(_fixture.Plugins.Single().KeyOf())
+            .Single(row => row.EditorId == editorId).FormKey.ToUpperInvariant();
 
     [Fact]
     public void APointReadUnderAnotherCase_AnswersTheRecord()
     {
-        Assert.Equal("FromCased", _index.RequireReads().GetDocument(UnderAnotherCase("FromCased"))?.EditorId);
+        Assert.Equal("FromCased", _index.Records.GetRecord(UnderAnotherCase("FromCased"))?.EditorId);
+    }
+
+    [Fact]
+    public void ACopyReadUnderAnotherCase_AnswersThePluginsCopy()
+    {
+        Assert.Equal("FromCased", _index.CopyIn(UnderAnotherCase("FromCased"), OtherCase)?.EditorId);
     }
 
     [Fact]
     public void AnOverrideStackUnderAnotherCase_HoldsThePluginsCopy()
     {
-        var stack = _index.RequireReads().GetOverrideStack(UnderAnotherCase("FromCased"));
-
-        Assert.NotNull(stack);
-        Assert.Single(stack.Entries);
+        Assert.Single(_index.StackOf(UnderAnotherCase("FromCased")));
     }
 
     [Fact]
-    public void ASearchFilteredUnderAnotherCase_FindsThePluginsRecords()
+    public void ASearchUnderAnotherCase_FindsThePluginsRecords()
     {
-        var query = new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: new PluginName(OtherCase.Name), Origin: OtherCase.Origin);
-
-        Assert.Equal(1, _index.RequireReads().Search(query).Total);
+        Assert.Equal(1, _index.Records.GetRecords(["npc_"], OtherCase, search: "FromCased", limit: 10, offset: 0).Total);
     }
 
     [Fact]
@@ -81,6 +80,6 @@ public sealed class PluginAddressComparisonTests : IDisposable
         using var reopened = Indexes.Reconciled(_fixture.GameDirectory,
             [entry with { Name = OtherCase.Name, Origin = OtherCase.Origin }], _fixture.InstanceRoot);
 
-        Assert.Equal(1, reopened.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"])).Total);
+        Assert.Equal(1, reopened.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Total);
     }
 }

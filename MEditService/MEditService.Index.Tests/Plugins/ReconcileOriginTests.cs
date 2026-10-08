@@ -21,9 +21,8 @@ public sealed class ReconcileOriginTests
         using var index = OpenIndex(holder);
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
-        var reads = index.RequireReads();
-        var opened = reads.OpenedPlugins.Keys.Single(k => k.Name == "A.esp");
-        Assert.Equal("SomeMod", opened.Origin);
+        var opened = index.Records.GetPlugins().Single(row => row.Plugin.Name == "A.esp");
+        Assert.Equal("SomeMod", opened.Plugin.Origin);
     }
 
     [Fact]
@@ -38,8 +37,7 @@ public sealed class ReconcileOriginTests
         using var index = OpenIndex(holder);
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
-        var reads = index.RequireReads();
-        var result = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: "A.esp", Limit: 10, Offset: 0));
+        var result = index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0);
 
         var row = Assert.Single(result.Items);
         Assert.Equal("SomeMod", row.Origin);

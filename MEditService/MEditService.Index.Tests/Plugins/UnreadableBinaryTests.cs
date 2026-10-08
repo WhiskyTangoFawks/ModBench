@@ -73,8 +73,8 @@ public sealed class UnreadableBinaryTests : IDisposable
 
         Assert.Equal(LoadOrderState.Ready, _index.Status.State);
         Assert.Contains(_index.Status.Failures, f => f.Name == PluginName && f.Origin == Origin);
-        Assert.Contains(_index.RequireReads().DocumentsOf(new PluginAddress("Other.esp", PluginOrigin.DataDirectory)),
-            d => d.EditorId == "OtherNpc");
+        Assert.Contains(_index.ListedIn(new PluginAddress("Other.esp", PluginOrigin.DataDirectory)),
+            row => row.EditorId == "OtherNpc");
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public sealed class UnreadableBinaryTests : IDisposable
         _index.NextSnapshotUntil(() => _index.Status.Failures.All(f => f.Name != PluginName), "the status without the plugin's failure");
 
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == PluginName);
-        Assert.Contains(_index.RequireReads().DocumentsOf(_key), d => d.EditorId == "FreshlyAppearedNpc");
+        Assert.Contains(_index.ListedIn(_key), row => row.EditorId == "FreshlyAppearedNpc");
     }
 
     [Fact]

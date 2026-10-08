@@ -1,6 +1,8 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -58,10 +60,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
         var expected = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
             .SerializeToText(record, GameRelease.Fallout4);
 
-        var document = fixture.Reads.GetDocument(record.FormKey.ToString(), CutDownPluginFixture.Plugin);
-
-        Assert.NotNull(document);
-        Assert.Equal(expected, document.Body);
+        Assert.Equal(expected, fixture.Index.BodyOf(record.FormKey.ToString(), CutDownPluginFixture.Plugin));
     }
 
     [Fact]
@@ -70,16 +69,14 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
         using var overlay = OpenPlugin();
         var record = ((IFallout4ModGetter)overlay).Npcs.First(n => n.EditorID != null);
 
-        var document = fixture.Reads.GetDocument(record.FormKey.ToString(), CutDownPluginFixture.Plugin);
+        var document = fixture.Index.DocumentOf(record.FormKey.ToString(), CutDownPluginFixture.Plugin);
 
-        Assert.NotNull(document);
-        Assert.Equal(CutDownPluginFixture.Plugin, document.Plugin);
+        Assert.Equal(CutDownPluginFixture.Plugin, new PluginAddress(document.Plugin, document.Origin));
         Assert.Equal("npc_", document.RecordType);
         Assert.Equal(record.EditorID, document.EditorId);
         Assert.Equal(0, document.LoadOrderIndex);
         Assert.True(document.IsWinner, "The only plugin indexed should win its own records.");
-        var entry = fixture.Reads.StackEntry(record.FormKey.ToString(), CutDownPluginFixture.Plugin);
-        Assert.NotNull(entry);
-        Assert.False(entry.HasWorkingTreeChange, "An untracked plugin's document is the committed one.");
+        var row = fixture.Index.RowOf(record.FormKey.ToString(), CutDownPluginFixture.Plugin);
+        Assert.Equal(WorkingTreeState.None, row?.WorkingTreeState);
     }
 }

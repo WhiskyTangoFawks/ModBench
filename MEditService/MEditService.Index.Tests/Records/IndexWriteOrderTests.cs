@@ -44,7 +44,7 @@ public sealed class IndexWriteOrderTests : IDisposable
         Assert.NotSame(filter, await Task.WhenAny(filter, Task.Delay(TimeSpan.FromMilliseconds(500))));
         _adapter.Release();
         await Task.WhenAll(revalidation, filter).WaitAsync(Waits.Patience);
-        Assert.Equal("filter.sql", _index.ActiveFilter?.Source);
+        Assert.Equal("filter.sql", _index.Records.GetFilter()?.Source);
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class IndexWriteOrderTests : IDisposable
     {
         var revalidation = await ARevalidationParkedMidWrite();
 
-        var listing = Task.Run(() => _index.RequireReads().DocumentsOf(Plugin.KeyOf()));
+        var listing = Task.Run(() => _index.ListedIn(Plugin.KeyOf()));
 
         Assert.NotEmpty(await listing.WaitAsync(Waits.Patience));
         _adapter.Release();

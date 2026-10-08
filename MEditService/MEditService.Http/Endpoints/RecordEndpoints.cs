@@ -1,7 +1,7 @@
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
-using MEditService.Queries;
 
 namespace MEditService.Http.Endpoints;
 

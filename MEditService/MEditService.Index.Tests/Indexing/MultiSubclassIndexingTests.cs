@@ -13,13 +13,12 @@ public class MultiSubclassIndexingTests
 {
     private const ushort LastFormVersionTheParserReadsADmgtAsIndexed = 77;
 
-    private static Dictionary<string, object?> FieldByEditorId(IRecordReads reads, string table, string field)
+    private static Dictionary<string, object?> FieldByEditorId(OpenedIndex index, string table, string field)
     {
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
-        foreach (var summary in reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [table], Limit: 100, Offset: 0)).Items)
+        foreach (var summary in index.Records.GetRecords([table], plugin: null, search: null, limit: 100, offset: 0).Items)
         {
-            var detail = reads.GetDocument(summary.FormKey, new PluginAddress(summary.Plugin, summary.Origin));
-            Assert.NotNull(detail);
+            var detail = index.DocumentOf(summary.FormKey, new PluginAddress(summary.Plugin, summary.Origin));
             var value = detail.Fields.FirstOrDefault(f => f.Metadata.Name == field);
             Assert.NotNull(value);
             var editorId = summary.EditorId
@@ -29,8 +28,8 @@ public class MultiSubclassIndexingTests
         return result;
     }
 
-    private static Dictionary<string, JsonElement> JsonFieldByEditorId(IRecordReads reads, string table, string field) =>
-        FieldByEditorId(reads, table, field).ToDictionary(
+    private static Dictionary<string, JsonElement> JsonFieldByEditorId(OpenedIndex index, string table, string field) =>
+        FieldByEditorId(index, table, field).ToDictionary(
             kv => kv.Key,
             kv => (JsonElement)(kv.Value ?? throw new InvalidOperationException($"Expected a value for '{kv.Key}'.")));
 
@@ -48,7 +47,7 @@ public class MultiSubclassIndexingTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var byEdid = JsonFieldByEditorId(index.RequireReads(), "gmst", "Data");
+        var byEdid = JsonFieldByEditorId(index, "gmst", "Data");
         Assert.Equal(4, byEdid.Count);
         Assert.Equal(42, byEdid["iTest"].GetInt32());
         Assert.Equal(3.5f, byEdid["fTest"].GetSingle());
@@ -70,7 +69,7 @@ public class MultiSubclassIndexingTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var byEdid = FieldByEditorId(index.RequireReads(), "glob", "Data");
+        var byEdid = FieldByEditorId(index, "glob", "Data");
         Assert.Equal(4, byEdid.Count);
         Assert.Equal(7, Assert.IsType<JsonElement>(byEdid["TestGlobInt"]).GetInt32());
         Assert.Equal(1.25f, Assert.IsType<JsonElement>(byEdid["TestGlobFloat"]).GetSingle());
@@ -107,7 +106,7 @@ public class MultiSubclassIndexingTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var byEdid = FieldByEditorId(index.RequireReads(), "omod", "Properties").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
+        var byEdid = FieldByEditorId(index, "omod", "Properties").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
         Assert.Equal(5, byEdid.Count);
         Assert.Contains("BodyPart", byEdid["ArmorMod"]);
         Assert.Contains("ForcedInventory", byEdid["NpcMod"]);
@@ -134,10 +133,9 @@ public class MultiSubclassIndexingTests
             })
             .Build();
         using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
 
-        var values = JsonFieldByEditorId(reads, "dmgt", "DamageTypes");
-        var classes = JsonFieldByEditorId(reads, "dmgt", "MutagenObjectType");
+        var values = JsonFieldByEditorId(index, "dmgt", "DamageTypes");
+        var classes = JsonFieldByEditorId(index, "dmgt", "MutagenObjectType");
         Assert.Equal(2, values.Count);
 
         Assert.Equal(nameof(DamageType), classes["PlainDmgt339"].GetString());

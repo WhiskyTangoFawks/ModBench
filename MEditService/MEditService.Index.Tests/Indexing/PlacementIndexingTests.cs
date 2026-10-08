@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -75,7 +76,6 @@ public class PlacementIndexingTests
 
         public PluginFixtureData Fixture { get; }
         public OpenedIndex Index { get; }
-        public IRecordReads Reads => Index.RequireReads();
         public string WorldspaceFk { get; }
         public string TopCellFk { get; }
         public string ExtCellFk { get; }
@@ -92,6 +92,21 @@ public class PlacementIndexingTests
             Fixture.Dispose();
         }
     }
+
+    private sealed record CellAt(int? BlockX, int? BlockY, int? SubX, int? SubY, CellSummary Cell);
+
+    private static List<CellAt> WorldspaceCells(OpenedIndex index, PluginAddress plugin, string worldspace)
+    {
+        var blocks = index.Worldspaces.GetWorldspaceBlocks(plugin, worldspace);
+        return
+        [
+            .. blocks.TopCells.Select(c => new CellAt(null, null, null, null, c)),
+            .. blocks.Blocks.SelectMany(b => b.SubBlocks.SelectMany(s => s.Cells.Select(c => new CellAt(b.X, b.Y, s.X, s.Y, c)))),
+        ];
+    }
+
+    private static List<CellSummary> InteriorCells(OpenedIndex index, PluginAddress plugin) =>
+        [.. index.Worldspaces.GetInteriorCells(plugin).SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells)];
 
     private static PluginFixtureData OneWorldspaceCell(string prefix, string plugin, out FormKey cellKey, out FormKey placedKey, out FormKey worldspaceKey)
     {
@@ -116,22 +131,18 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public void ABinaryPlugin_HasPlacementAndCellLocation()
+    public void ABinaryPlugin_PlacesItsRefInItsCell_AndItsCellInItsWorldspace()
     {
         using var fixture = OneWorldspaceCell("placement-overlay", "OverlayWorld.esp", out var cell, out var placed, out var wrld);
         using var index = Indexes.Reconciled(fixture);
         var key = new PluginAddress("OverlayWorld.esp", PluginOrigin.DataDirectory);
-        var reads = index.RequireReads();
 
-        Assert.Equal("persistent", reads.PlacementGroupIn(key, cell.ToString(), placed.ToString()));
-
-        var location = reads.GetCellLocation(key, cell.ToString());
-        Assert.NotNull(location);
-        Assert.Equal(wrld.ToString(), location.Value.ParentWorldspace);
+        Assert.Equal("persistent", index.PlacementGroupIn(key, cell.ToString(), placed.ToString()));
+        Assert.Contains(WorldspaceCells(index, key, wrld.ToString()), c => c.Cell.FormKey == cell.ToString());
     }
 
     [Fact]
-    public void ReindexingAPlugin_ReplacesPlacementAndCellLocationRatherThanDuplicating()
+    public void ReindexingAPlugin_ReplacesItsCellsAndPlacementsRatherThanDuplicating()
     {
         using var fixture = OneWorldspaceCell("placement-reindex", "ReindexPlacement.esp", out var cell, out var placed, out var wrld);
         using var index = Indexes.Reconciled(fixture);
@@ -140,70 +151,66 @@ public class PlacementIndexingTests
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
         index.NextSnapshot();
 
-        var reads = index.RequireReads();
-        Assert.Single(reads.GetWorldspaceCells(key, wrld.ToString()), c => c.FormKey == cell.ToString());
-        Assert.Single(reads.GetCellChildRecords(key, cell.ToString()).Persistent, p => p.FormKey == placed.ToString());
-        Assert.NotNull(reads.PlacementGroupIn(key, cell.ToString(), placed.ToString()));
+        Assert.Single(WorldspaceCells(index, key, wrld.ToString()), c => c.Cell.FormKey == cell.ToString());
+        Assert.Single(index.Worldspaces.GetCellChildRecords(key, cell.ToString()).Persistent, p => p.FormKey == placed.ToString());
     }
 
     [Fact]
     public void ATemporaryPlacedObject_HasATemporaryPlacementRow()
     {
         using var b = new Built();
-        Assert.Equal("temporary", b.Reads.PlacementGroupIn(Key, b.ExtCellFk, b.RaiderFk));
+        Assert.Equal("temporary", b.Index.PlacementGroupIn(Key, b.ExtCellFk, b.RaiderFk));
     }
 
     [Fact]
-    public void AnExteriorCell_HasCellLocationWithWorldspaceBlockAndGrid()
+    public void AnExteriorCell_IsListedInItsWorldspacesBlock_WithItsGrid()
     {
         using var b = new Built();
-        var location = b.Reads.GetCellLocation(Key, b.ExtCellFk);
-        Assert.NotNull(location);
-        Assert.Equal(b.WorldspaceFk, location.Value.ParentWorldspace);
-        Assert.Equal(0, location.Value.BlockX);
-        Assert.Equal(0, location.Value.BlockY);
-        Assert.Equal(12, location.Value.GridX);
-        Assert.Equal(-5, location.Value.GridY);
-        Assert.False(location.Value.IsInterior);
+
+        var ext = Assert.Single(WorldspaceCells(b.Index, Key, b.WorldspaceFk), c => c.Cell.FormKey == b.ExtCellFk);
+
+        Assert.Equal<(int?, int?, int?, int?)>((0, 0, 12, -5), (ext.BlockX, ext.BlockY, ext.Cell.CellX, ext.Cell.CellY));
+        Assert.DoesNotContain(InteriorCells(b.Index, Key), c => c.FormKey == b.ExtCellFk);
     }
 
     [Fact]
-    public void AWorldspaceTopCell_HasCellLocationWithWorldspaceButNoBlock()
+    public void AWorldspaceTopCell_IsListedInItsWorldspace_OutsideEveryBlock()
     {
         using var b = new Built();
-        var location = b.Reads.GetCellLocation(Key, b.TopCellFk);
-        Assert.NotNull(location);
-        Assert.Equal(b.WorldspaceFk, location.Value.ParentWorldspace);
-        Assert.Null(location.Value.BlockX);
-        Assert.Null(location.Value.SubX);
-        Assert.Null(location.Value.GridX);
-        Assert.Null(location.Value.GridY);
-        Assert.False(location.Value.IsInterior);
+
+        var top = Assert.Single(b.Index.Worldspaces.GetWorldspaceBlocks(Key, b.WorldspaceFk).TopCells);
+
+        Assert.Equal(b.TopCellFk, top.FormKey);
+        Assert.True(top.IsPersistentWorldspaceCell);
+        Assert.Null(top.CellX);
+        Assert.Null(top.CellY);
+        Assert.DoesNotContain(InteriorCells(b.Index, Key), c => c.FormKey == b.TopCellFk);
     }
 
     [Fact]
-    public void AnInteriorCell_HasCellLocationWithNullWorldspaceAndInteriorFlag()
+    public void AnInteriorCell_IsListedAmongTheInteriorCells_AndInNoWorldspace()
     {
         using var b = new Built();
-        var location = b.Reads.GetCellLocation(Key, b.IntCellFk);
-        Assert.NotNull(location);
-        Assert.Null(location.Value.ParentWorldspace);
-        Assert.True(location.Value.IsInterior);
+
+        Assert.Contains(InteriorCells(b.Index, Key), c => c.FormKey == b.IntCellFk);
+        Assert.DoesNotContain(WorldspaceCells(b.Index, Key, b.WorldspaceFk), c => c.Cell.FormKey == b.IntCellFk);
     }
 
     [Fact]
     public void PlacedObjects_AreAlsoIndexedAsRefrRecords()
     {
         using var b = new Built();
-        var result = b.Reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["refr"], Plugin: Key.Name, Limit: 100, Offset: 0));
-        Assert.Equal(3, result.Total);
+
+        Assert.All(
+            [b.BarrelFk, b.NullRefFk, b.RaiderFk],
+            placed => Assert.Single(b.Index.Records.GetRecords(["refr"], Key, search: placed, limit: 10, offset: 0).Items));
     }
 
     [Fact]
     public void ACellsChildren_SplitIntoPersistentAndTemporary()
     {
         using var b = new Built();
-        var refs = b.Reads.GetCellChildRecords(Key, b.ExtCellFk);
+        var refs = b.Index.Worldspaces.GetCellChildRecords(Key, b.ExtCellFk);
 
         Assert.Equal(2, refs.Persistent.Count);
         Assert.Single(refs.Temporary);
@@ -223,28 +230,28 @@ public class PlacementIndexingTests
     public void AWorldspacesCells_CarryBlockGridAndNullVariants()
     {
         using var b = new Built();
-        var cells = b.Reads.GetWorldspaceCells(Key, b.WorldspaceFk);
+        var cells = WorldspaceCells(b.Index, Key, b.WorldspaceFk);
         Assert.Equal(3, cells.Count);
 
-        var ext = cells.Single(c => c.FormKey == b.ExtCellFk);
-        Assert.Equal("ExtCell", ext.EditorId);
+        var ext = cells.Single(c => c.Cell.FormKey == b.ExtCellFk);
+        Assert.Equal("ExtCell", ext.Cell.EditorId);
         Assert.Equal(0, ext.BlockX);
         Assert.Equal(0, ext.BlockY);
         Assert.Equal(0, ext.SubX);
-        Assert.Equal(12, ext.CellX);
-        Assert.Equal(-5, ext.CellY);
+        Assert.Equal(12, ext.Cell.CellX);
+        Assert.Equal(-5, ext.Cell.CellY);
 
-        var top = cells.Single(c => c.FormKey == b.TopCellFk);
+        var top = cells.Single(c => c.Cell.FormKey == b.TopCellFk);
         Assert.Null(top.BlockX);
-        Assert.Null(top.CellX);
-        Assert.Null(top.CellY);
+        Assert.Null(top.Cell.CellX);
+        Assert.Null(top.Cell.CellY);
 
-        var bare = cells.Single(c => c.FormKey == b.BareCellFk);
-        Assert.Null(bare.EditorId);
+        var bare = cells.Single(c => c.Cell.FormKey == b.BareCellFk);
+        Assert.Null(bare.Cell.EditorId);
         Assert.Equal(1, bare.BlockX);
         Assert.Equal(1, bare.SubY);
-        Assert.Null(bare.CellX);
-        Assert.Null(bare.CellY);
+        Assert.Null(bare.Cell.CellX);
+        Assert.Null(bare.Cell.CellY);
     }
 
     [Fact]
@@ -252,7 +259,7 @@ public class PlacementIndexingTests
     {
         using var b = new Built();
 
-        Assert.Equal("persistent", b.Reads.PlacementGroupIn(Key, b.ExtCellFk, b.BarrelFk));
+        Assert.Equal("persistent", b.Index.PlacementGroupIn(Key, b.ExtCellFk, b.BarrelFk));
     }
 
     [Fact]
@@ -260,8 +267,8 @@ public class PlacementIndexingTests
     {
         using var b = new Built();
 
-        Assert.Null(b.Reads.PlacementGroupIn(Key, b.ExtCellFk, b.ExtCellFk));
-        Assert.Null(b.Reads.PlacementGroupIn(Key, b.ExtCellFk, "FFFFFF:TestWorld.esp"));
+        Assert.Null(b.Index.PlacementGroupIn(Key, b.ExtCellFk, b.ExtCellFk));
+        Assert.Null(b.Index.PlacementGroupIn(Key, b.ExtCellFk, "FFFFFF:TestWorld.esp"));
     }
 
     [Fact]
@@ -288,10 +295,10 @@ public class PlacementIndexingTests
         var cellKey = placedCell.ToString();
         foreach (var (winner, other) in new[] { ("ModA", "ModB"), ("ModB", "ModA") })
         {
-            var reads = index.ReadsWithWinner(holder, fixture.GameDirectory, fixture.Plugins, winner);
-            Assert.NotNull(reads.PlacementGroupIn(new PluginAddress("Placed.esp", winner), cellKey, formKey));
-            Assert.Null(reads.PlacementGroupIn(new PluginAddress("Placed.esp", other), cellKey, formKey));
-            Assert.Null(reads.PlacementGroupIn(new PluginAddress("Placed.esp", "ModC"), cellKey, formKey));
+            index.WithWinner(holder, fixture.GameDirectory, fixture.Plugins, winner);
+            Assert.NotNull(index.PlacementGroupIn(new PluginAddress("Placed.esp", winner), cellKey, formKey));
+            Assert.Null(index.PlacementGroupIn(new PluginAddress("Placed.esp", other), cellKey, formKey));
+            Assert.Null(index.PlacementGroupIn(new PluginAddress("Placed.esp", "ModC"), cellKey, formKey));
         }
     }
 
@@ -333,8 +340,8 @@ public class PlacementIndexingTests
         public ScatteredFixtureData Fixture { get; }
         public OpenedIndex Index { get; }
 
-        public IRecordReads ReadsWithWinner(PluginAddress winner) =>
-            Index.ReadsWithWinner(_holder, Fixture.GameDirectory, Fixture.Plugins, winner.Origin);
+        public OpenedIndex WithWinner(PluginAddress winner) =>
+            Index.WithWinner(_holder, Fixture.GameDirectory, Fixture.Plugins, winner.Origin);
         public string WorldspaceFk { get; }
         public string ExtCellFk { get; }
         public string PlacedFk { get; }
@@ -360,10 +367,10 @@ public class PlacementIndexingTests
 
         foreach (var (winner, other) in WinnerAndOther)
         {
-            var reads = f.ReadsWithWinner(winner);
-            Assert.Single(reads.GetWorldspaceCells(winner, f.WorldspaceFk));
-            Assert.Empty(reads.GetWorldspaceCells(other, f.WorldspaceFk));
-            Assert.Empty(reads.GetWorldspaceCells(SharedC, f.WorldspaceFk));
+            var index = f.WithWinner(winner);
+            Assert.Single(WorldspaceCells(index, winner, f.WorldspaceFk));
+            Assert.Empty(WorldspaceCells(index, other, f.WorldspaceFk));
+            Assert.Empty(WorldspaceCells(index, SharedC, f.WorldspaceFk));
         }
     }
 
@@ -374,10 +381,10 @@ public class PlacementIndexingTests
 
         foreach (var (winner, other) in WinnerAndOther)
         {
-            var reads = f.ReadsWithWinner(winner);
-            Assert.Single(reads.GetInteriorCells(winner));
-            Assert.Empty(reads.GetInteriorCells(other));
-            Assert.Empty(reads.GetInteriorCells(SharedC));
+            var index = f.WithWinner(winner);
+            Assert.Single(InteriorCells(index, winner));
+            Assert.Empty(InteriorCells(index, other));
+            Assert.Empty(InteriorCells(index, SharedC));
         }
     }
 
@@ -388,10 +395,10 @@ public class PlacementIndexingTests
 
         foreach (var (winner, other) in WinnerAndOther)
         {
-            var reads = f.ReadsWithWinner(winner);
-            Assert.Single(reads.GetCellChildRecords(winner, f.ExtCellFk).Persistent);
-            Assert.Empty(reads.GetCellChildRecords(other, f.ExtCellFk).Persistent);
-            Assert.Empty(reads.GetCellChildRecords(SharedC, f.ExtCellFk).Persistent);
+            var index = f.WithWinner(winner);
+            Assert.Single(index.Worldspaces.GetCellChildRecords(winner, f.ExtCellFk).Persistent);
+            Assert.Empty(index.Worldspaces.GetCellChildRecords(other, f.ExtCellFk).Persistent);
+            Assert.Empty(index.Worldspaces.GetCellChildRecords(SharedC, f.ExtCellFk).Persistent);
         }
     }
 
@@ -399,7 +406,7 @@ public class PlacementIndexingTests
     public void InteriorCells_CarryNullVariants()
     {
         using var b = new Built();
-        var cells = b.Reads.GetInteriorCells(Key);
+        var cells = InteriorCells(b.Index, Key);
         Assert.Equal(2, cells.Count);
 
         var named = cells.Single(c => c.FormKey == b.IntCellFk);

@@ -5,7 +5,7 @@ namespace MEditService.Index;
 
 /// <summary>A <see cref="MissingReference"/> with its referring record's file, relative to the mod
 /// folder. <paramref name="Failure"/> says why the tree names none: a file changed outside Modbench.</summary>
-public record MissingReferenceOnFile(MissingReference Reference, string? SourceRelativePath, string? Failure);
+internal sealed record MissingReferenceOnFile(MissingReference Reference, string? SourceRelativePath, string? Failure);
 
 internal static class SourceFilePlacement
 {

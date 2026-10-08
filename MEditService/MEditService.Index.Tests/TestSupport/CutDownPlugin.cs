@@ -16,8 +16,6 @@ public sealed class CutDownPluginFixture : IDisposable
 
     internal OpenedIndex Index { get; }
 
-    public IRecordReads Reads => Index.RequireReads();
-
     public CutDownPluginFixture()
     {
         var gameDirectory = Directory.CreateDirectory(Path.Combine(InstanceRoot, "GameDir")).FullName;
