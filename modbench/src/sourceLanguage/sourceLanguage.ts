@@ -12,8 +12,8 @@ import { workspaceSymbolsOf, type RecordSymbol } from './workspaceSymbols';
 import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'originFiles'> {
-  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferences' | 'getPlugins'> & RecordDocumentClient & SourceProblemsDeps['client'];
+  reporter: Pick<Reporter, 'shownOnSurface'>;
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrTrackedPlugins' | 'getPlugins'> & RecordDocumentClient & SourceProblemsDeps['client'];
 }
 
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };
@@ -53,7 +53,7 @@ export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposabl
   const hover = vscode.languages.registerHoverProvider(pluginSource, {
     async provideHover(document, position) {
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
-      const found = await hoverAt(client, document.getText(), document.offsetAt(position));
+      const found = await hoverAt(deps, document.getText(), document.offsetAt(position));
       if (found === undefined) return undefined;
       const range = new vscode.Range(document.positionAt(found.start), document.positionAt(found.end));
       return new vscode.Hover(new vscode.MarkdownString(found.markdown), range);
@@ -62,7 +62,7 @@ export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposabl
   const completion = vscode.languages.registerCompletionItemProvider(pluginSource, {
     async provideCompletionItems(document, position) {
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
-      const found = await completionsAt(client, document.getText(), document.offsetAt(position));
+      const found = await completionsAt(deps, document.getText(), document.offsetAt(position));
       if (found === undefined) return undefined;
       const range = new vscode.Range(document.positionAt(found.start), document.positionAt(found.end));
       const items = found.items.map(({ label, detail, insertText }) => {

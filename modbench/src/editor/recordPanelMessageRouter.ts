@@ -12,7 +12,6 @@ import type { RecordTabs } from './recordTabs';
 import type { FocusedCellContext } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
 import type { TitledColumn } from './recordTitle';
-import type { TabPlace } from './recordOpenPlan';
 import { modsByOrigin, type ModFacts } from './modsByOrigin';
 
 type TitleFromRead = (formKey: string, columns: readonly TitledColumn[] | undefined) => void;
@@ -37,8 +36,6 @@ export interface RouteRecordPanelMessageDeps {
   // column reads from; undefined reads mEdit's copy.
   plugin: PluginAddress;
   documentText: (pluginActive: boolean) => Promise<string | undefined>;
-  // Where the panel's tab stands now; undefined while VS Code shows it nowhere.
-  tabPlace: () => TabPlace | undefined;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
   readAnswered: (formKey: string, columns: readonly ColumnCopy[]) => void;
   // The grid's place, which the tab an edit's move of the file opens shows again.
@@ -53,7 +50,7 @@ export interface RouteRecordPanelMessageDeps {
 
 /** What every panel's messages share: the rest is the panel's own. */
 export type SharedRecordPanelDeps = Omit<
-  RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'keepViewState' | 'readAnswered' | 'tabPlace' | 'originsShown'>;
+  RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'keepViewState' | 'readAnswered' | 'originsShown'>;
 
 /** What a tab's document gives its panel's messages. */
 export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'plugin' | 'documentText'>;
@@ -76,7 +73,6 @@ export function routerDepsForTab(
     titleFromRead: (formKey, columns) => { if (tab.isOpen) document.titleFromRead(formKey, columns); },
     keepViewState: (state) => { tab.keepPlace(state); },
     readAnswered: (formKey, columns) => { tab.answered(formKey, columns); },
-    tabPlace: () => (tab.panel.viewColumn === undefined ? undefined : { document: tab.document.toString(), viewColumn: tab.panel.viewColumn }),
   };
 }
 
@@ -99,9 +95,8 @@ const HANDLERS: {
   [WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER]: (deps, m) => replyFormKeyPicked(deps.formKeyPicker, m),
   [WEBVIEW_TO_EXTENSION.FOCUS_CELL]: (deps, m) => { deps.focusCell(m.context ?? undefined, m.entered); },
   [WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD]: answerRecordLoad,
-  [WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE]: async (deps, m) => {
-    const placement = deps.tabPlace();
-    if (placement) await vscode.commands.executeCommand('modbench.record.open', m.records.map((record) => ({ argument: { kind: 'record', ...record }, placement })));
+  [WEBVIEW_TO_EXTENSION.OPEN_COLUMNS]: async (_deps, m) => {
+    await vscode.commands.executeCommand('modbench.record.open', m.records.map((record) => ({ argument: { kind: 'record', ...record } })));
   },
   [WEBVIEW_TO_EXTENSION.VIEW_STATE]: (deps, m) => { deps.keepViewState(m.state); },
 };
@@ -115,7 +110,7 @@ function dispatch(deps: RouteRecordPanelMessageDeps, m: WebviewToExtension): Pro
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return HANDLERS[m.type](deps, m);
-    case WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE: return HANDLERS[m.type](deps, m);
+    case WEBVIEW_TO_EXTENSION.OPEN_COLUMNS: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.VIEW_STATE: return HANDLERS[m.type](deps, m);
     default: {
       const unreachable: never = m;

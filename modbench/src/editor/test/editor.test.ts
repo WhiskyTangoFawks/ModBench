@@ -954,16 +954,6 @@ describe('what a record tab\'s webview posts', () => {
     });
   });
 
-  it('opens nothing for a click on a column\'s header in a tab VS Code has not shown', () => {
-    const { open } = makeEditor(client());
-    const tab = open(GUN);
-    tab.viewColumn = undefined;
-
-    tab.receive({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: [{ formKey: '000803:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } }] });
-
-    expect(h.executed.filter(([id]) => id === 'modbench.record.open')).toEqual([]);
-  });
-
   it('answers a request for a FormKey the picker was dismissed on with null, correlated by requestId', async () => {
     const { open } = makeEditor(client());
     const tab = open(GUN);
@@ -1082,18 +1072,16 @@ describe('what a record tab\'s webview posts', () => {
 });
 
 describe('a click on a column\'s header', () => {
-  it('opens the records it names in the place of the tab it was clicked in, as that tab stood when the click arrived', async () => {
+  it('opens the records it names through the open command, with no placement', async () => {
     const gun = { formKey: '000801:A.esp', plugin: COPY_PLUGIN };
     const { openDocument } = makeEditor();
-    const uri = renderedUri(gun.formKey, 'Gun.json');
-    const tab = await openDocument(uri);
+    const tab = await openDocument(renderedUri(gun.formKey, 'Gun.json'));
     const knife = { formKey: '000803:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
 
-    tab.receive({ type: 'openInPlace', records: [knife] });
-    tab.viewColumn = 3;
+    tab.receive({ type: 'openColumns', records: [knife] });
 
     expect(h.executed.filter(([id]) => id === 'modbench.record.open'))
-      .toEqual([['modbench.record.open', [{ argument: { kind: 'record', ...knife }, placement: { document: String(uri), viewColumn: 2 } }]]]);
+      .toEqual([['modbench.record.open', [{ argument: { kind: 'record', ...knife } }]]]);
   });
 });
 
@@ -1221,14 +1209,14 @@ describe('several records opened at once', () => {
     return client;
   }
 
-  it('open one grid, pinned: the first record\'s document, with the others as its columns in the order given, each without a plugin its winning copy', async () => {
+  it('open one grid, a preview: the first record\'s document, with the others as its columns in the order given, each without a plugin its winning copy', async () => {
     const { vsCodeOpensTabs } = makeEditor(severalClient());
     const tabOn = vsCodeOpensTabs();
 
     await openSeveral();
 
     expect(h.executed.filter(([id]) => id === 'vscode.openWith'))
-      .toEqual([['vscode.openWith', gunDocument, 'modbench.record', { viewColumn: -1, preview: false }]]);
+      .toEqual([['vscode.openWith', gunDocument, 'modbench.record', { viewColumn: -1, preview: true }]]);
     const tab = tabOn(gunDocument);
     expect(pageGlobal(tab ?? fakePanel(), 'mEditColumns'))
       .toEqual([{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }]);
