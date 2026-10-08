@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { DownloadFile, Instance, InstanceValue, InstanceView } from '../instanceLoader/instance';
+import type { Instance, InstanceValue, InstanceView } from '../instanceLoader/instance';
 import type { InstallAccess } from '../install/install';
 import type { ModlistAccess } from '../modlist/modlist';
 import type { Reporter } from '../ports/reporter';
@@ -33,8 +33,7 @@ interface ModsViewDeps {
   trash: MoveToTrash;
   extensionUri: vscode.Uri;
   warnIfFomod: (name: string, isFomod: boolean) => void;
-  /** The Downloads view's flow for a downloaded file. */
-  installDownloaded: (file: DownloadFile) => Promise<boolean>;
+  downloadsView: string;
   /** The one selected mod row with a Nexus id in the focused Mods or Downloads view, for the palette. */
   nexusRow: () => NexusModRow | undefined;
   /** Mod sync, whose failure the view's message line says. */
@@ -111,7 +110,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     ...registerConflictTable(instance, deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     vscode.commands.registerCommand('modbench.mod.sync', (value: InstanceValue) => modSync.run(value.modSyncArguments)),
     ...registerModInstallCommands({
-      access, instance, reporterFor, warnIfFomod: deps.warnIfFomod, installDownloaded: deps.installDownloaded,
+      access, instance, reporterFor, warnIfFomod: deps.warnIfFomod, log, downloadsView: deps.downloadsView,
     }),
     registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), deps.nexusRow),
     ...registerSortDirectionToggle('mod', provider),

@@ -63,8 +63,9 @@ function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
     access: ACCESS,
     instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
-    installDownloaded: vi.fn(),
     warnIfFomod: vi.fn(),
+    log: vi.fn(),
+    downloadsView: 'modbench.downloads',
     ...over,
   };
 }
@@ -207,28 +208,28 @@ describe('modbench.mod.install: a failed install', () => {
 describe('modbench.mod.install: a downloaded file is its source', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('hands the downloaded file to the Downloads flow and asks nothing itself', async () => {
-    const installDownloaded = vi.fn().mockResolvedValueOnce(true);
+  it('installs the downloaded file the Argument carries, and asks no source', async () => {
+    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
+    showInputBox.mockResolvedValueOnce('Foo');
     const row = downloadRowFixture('foo.7z');
 
-    registerModInstallCommands(deps({ installDownloaded }));
+    registerModInstallCommands(deps());
     const outcome = await invoke('modbench.mod.install', { kind: 'download', row });
 
-    expect(installDownloaded).toHaveBeenCalledWith(row);
+    expect(installFromArchive).toHaveBeenCalledWith(ACCESS, { kind: 'new', name: 'Foo' }, row.path, expect.objectContaining({ modID: row.modID }));
     expect(showQuickPick).not.toHaveBeenCalled();
     expect(showOpenDialog).not.toHaveBeenCalled();
     expect(outcome).toEqual({ installed: true });
   });
 
   it('a mod row as Argument is no source, so it asks archive or folder', async () => {
-    const installDownloaded = vi.fn();
     showQuickPick.mockResolvedValueOnce(undefined);
 
-    registerModInstallCommands(deps({ installDownloaded }));
+    registerModInstallCommands(deps());
     await invoke('modbench.mod.install', { kind: 'mod', mod: { name: 'Some Mod' } });
 
     expect(showQuickPick).toHaveBeenCalled();
-    expect(installDownloaded).not.toHaveBeenCalled();
+    expect(installFromArchive).not.toHaveBeenCalled();
   });
 });
 

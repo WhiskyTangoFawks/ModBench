@@ -67,7 +67,7 @@ type DownloadsViewDeps = Parameters<typeof createDownloadsView>[0];
 const downloadsViewDeps = (instanceRoot: string, instance: InstanceView & Pick<Instance, 'refresh'>): DownloadsViewDeps => ({
   access: accessTo(instanceRoot), instance, reporter: recordingReporter(),
   ask: () => Promise.resolve(undefined), trash: () => Promise.resolve(),
-  install: { warnIfFomod: () => undefined, log: () => undefined },
+  log: () => undefined,
   logUnresolved: () => undefined,
 });
 const command = commandInvoker(h.state);

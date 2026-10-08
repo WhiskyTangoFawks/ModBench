@@ -10,6 +10,7 @@ import { promptModName } from '../drivingLib/promptModName';
 import { reportFailure } from '../drivingLib/reportFailure';
 import type { Reporter } from '../ports/reporter';
 import { runModsWriting } from './gestureEntry';
+import { installDownloadedFile } from './installDownloaded';
 
 interface InstallOutcome {
   installed: boolean;
@@ -21,9 +22,9 @@ interface ModInstallDeps {
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporterFor: (tag: string) => Reporter;
   warnIfFomod: (name: string, isFomod: boolean) => void;
-  /** The Downloads view's flow for a downloaded file: the target pick, the name and the installed mark.
-   *  Answers whether a mod landed. */
-  installDownloaded: (file: DownloadFile) => Promise<boolean>;
+  log: (line: string) => void;
+  /** The view a downloaded file's install runs its progress bar under. */
+  downloadsView: string;
 }
 
 interface DownloadedFileSource {
@@ -42,7 +43,7 @@ interface SourceKindItem extends vscode.QuickPickItem {
 // modbench.mod.install: with no source, as from the Mods menu, it asks archive-or-folder first,
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
-  const { access, instance, reporterFor, warnIfFomod, installDownloaded } = deps;
+  const { access, instance, reporterFor, warnIfFomod, log, downloadsView } = deps;
   const validateName = (name: string) => installNameRefusal(access, name);
   const installArchive = async (archivePath: string): Promise<InstallOutcome> => {
     const name = await promptModName(defaultModName(archivePath), validateName);
@@ -70,7 +71,11 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
   };
   return [
     vscode.commands.registerCommand('modbench.mod.install', async (source?: unknown): Promise<InstallOutcome> => {
-      if (isDownloadedFile(source)) return { installed: await installDownloaded(source.row) };
+      if (isDownloadedFile(source)) {
+        const installed = await installDownloadedFile(
+          source.row, access, instance, reporterFor('installFromArchive'), { warnIfFomod, log, progressView: downloadsView });
+        return { installed };
+      }
       const picked = await vscode.window.showQuickPick<SourceKindItem>(
         [
           { label: 'Archive…', description: 'A .zip, .7z or .rar file', sourceKind: 'archive' },
