@@ -2187,7 +2187,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
 });
 
 describe('PluginsTreeProvider — master-issue decoration', () => {
-  const withIssues = (h: Harness, issues: string[] | null) => reconcile(h, [held('A.esp', { masterIssues: issues })]);
+  const withIssues = (h: Harness, issues: string[]) => reconcile(h, [held('A.esp', { masterIssues: issues })]);
 
   it('flags a row with a master that is not active, in the Problems panel\'s red', async () => {
     const h = makeTree([A_ROW()]);
