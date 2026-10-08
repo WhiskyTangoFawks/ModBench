@@ -11,7 +11,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
     [Fact]
     public async Task TrackAsync_OfPlasmaAutocannonFixture_NamesThePerkRecordClassUnknown()
     {
-        using var scratch = new RealFixtureScratch("SKI_PlasmaAutocannon.esp");
+        using var scratch = new RealFixtureScratch(new GeneratedPlugin("SKI_PlasmaAutocannon.esp", File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "TestData", "SKI_PlasmaAutocannon.esp"))));
 
         var result = await scratch.TrackAsync();
 
@@ -26,9 +26,9 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     [Fact]
-    public async Task TrackAsync_OfClipboardsFixture_NamesOnlyThePluginWhenMutagenReportsNoRecordIdentity()
+    public async Task TrackAsync_OfAMismatchedFnamPlugin_NamesOnlyThePluginWhenMutagenReportsNoRecordIdentity()
     {
-        using var scratch = new RealFixtureScratch("Clipboards to the BOS.esp");
+        using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
 
         var result = await scratch.TrackAsync();
 
@@ -41,9 +41,9 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     [Fact]
-    public async Task TrackAsync_OfClipboardsFixture_NamesTheUpstreamMutagenIssueInstead()
+    public async Task TrackAsync_OfAMismatchedFnamPlugin_NamesTheUpstreamMutagenIssueInstead()
     {
-        using var scratch = new RealFixtureScratch("Clipboards to the BOS.esp");
+        using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
 
         var result = await scratch.TrackAsync();
 
@@ -62,11 +62,10 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
         public ScratchDirectory ModFolder { get; } = new("medit-diagnosis-mod-");
 
-        public RealFixtureScratch(string fixtureFileName)
+        public RealFixtureScratch(GeneratedPlugin plugin)
         {
-            var fixturePath = Path.Combine(AppContext.BaseDirectory, "TestData", fixtureFileName);
-            var pluginPath = Path.Combine(ModFolder, fixtureFileName);
-            File.Copy(fixturePath, pluginPath);
+            plugin.WriteInto(ModFolder);
+            var pluginPath = Path.Combine(ModFolder, plugin.FileName);
 
             _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, Origin, _gameDirectory);
         }
