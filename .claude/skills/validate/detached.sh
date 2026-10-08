@@ -2,6 +2,7 @@
 # A Bash tool call ends after 10 minutes, and a subagent that ends its turn to wait has reported
 # instead.
 set -u
+source "${BASH_SOURCE[0]%/*}/stop-group.sh"
 DIR=/tmp/medit-detached
 mkdir -p "$DIR"
 mode=${1:-}
@@ -22,14 +23,18 @@ running() {
 
 case $mode in
   start)
+    # A name is one worktree's run, so a start replaces that run.
     if running; then
-      echo "$name already running (pid $(head -n 1 "$PID")); log $LOG"
-      exit 1
+      stop_group "$(head -n 1 "$PID")" 10
+      echo "replaced the earlier run of $name"
     fi
-    nohup bash -c '"$@"; s=$?; echo; echo "EXIT=$s"' _ "$@" >"$LOG" 2>&1 &
+    # A process left from an earlier run whose wrapper was killed still writes at its own offset,
+    # past this run's verdict line. A new file leaves it writing to the old one.
+    rm -f "$LOG"
+    setsid nohup bash -c '"$@"; s=$?; echo; echo "EXIT=$s"' _ "$@" >"$LOG" 2>&1 &
     pid=$!
     printf '%s\n%s\n' "$pid" "$(ps -o lstart= -p "$pid")" >"$PID"
-    echo "detached $name (pid $pid); log $LOG"
+    echo "detached $name; log $LOG"
     ;;
   wait)
     seconds=${1:-540}

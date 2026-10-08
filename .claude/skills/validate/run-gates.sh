@@ -48,20 +48,10 @@ if [[ ${#GATE_ARGS[@]} -eq 0 ]]; then
   exec bash "$0" ${flags:---comments}
 fi
 
-# Runs a command in one of a machine-wide count of slots. -o keeps the lock out of child
-# processes, so a lingering build server cannot hold it. A waiter queues on the first slot rather
-# than whichever frees first, which costs a wait, never correctness.
-in_slot() {
-  local kind=$1 slots=$2 slot status
-  shift 2
-  for slot in $(seq 1 "$slots"); do
-    flock -n -E 99 -o "/tmp/medit-$kind-gate.$slot.lock" "$@"
-    status=$?
-    [[ $status -ne 99 ]] && return $status
-  done
-  echo "=== Waiting for a $kind gate slot ==="
-  flock -o "/tmp/medit-$kind-gate.1.lock" "$@"
-}
+source "$ROOT/.claude/skills/validate/slot.sh"
+# MSBuild lends a run's worker nodes to any build of the same user, so a gate run its slot owner
+# stops would take another worktree's build down with it.
+export MSBUILDDISABLENODEREUSE=1
 
 # Two backend gate runs per machine, measured: a third leaves no memory headroom. api-drift
 # builds and boots a backend, and docs builds the backend tests, so each takes a slot too.
