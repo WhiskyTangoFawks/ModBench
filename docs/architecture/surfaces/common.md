@@ -70,7 +70,7 @@ ADR-0019 decides the tier; this table is how each tier looks on a surface.
 | A gesture I started failed, or was refused | a notification saying why, and a line in the Output |
 | A gesture landed, but part of it failed, so a view would show something untrue | a notification naming the part that failed, and a line in the Output. The gesture is not reported as failed. |
 | A gesture over a selection landed for some items and failed for others | one notification naming each item that failed and why, and a line in the Output. The items that landed are not reported as failed. |
-| Something Modbench does on its own, such as a sync, fails | the view's message line, and a line in the Output, once, and again only when the reason changes |
+| Something Modbench does on its own, such as a sync, fails, and every view stays true | the view's message line, and a line in the Output, once, and again only when the reason changes |
 | Something Modbench does on its own fails, and a view now shows something untrue, such as a record filter it cleared | a notification naming what changed and why, and a line in the Output |
 | A failure inside a dialog I am answering | a line in the Output. The dialog says it; a second notification on top of it does not. |
 
