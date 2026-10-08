@@ -9,11 +9,6 @@ namespace MEditService.Commands.Tests.RealData;
 
 public sealed class MasterPruningRoundTripGateTests
 {
-    private const string SpaDiaAmrFixtureFileName = "SpaDia_AMR.esp";
-
-    private static string PathTo(string fixtureFileName) =>
-        Path.Combine(AppContext.BaseDirectory, "TestData", fixtureFileName);
-
     [Theory]
     [InlineData(UnusedMasterPlugins.RecordlessFileName)]
     [InlineData(UnusedMasterPlugins.OverridesFileName)]
@@ -29,17 +24,18 @@ public sealed class MasterPruningRoundTripGateTests
     }
 
     [Fact]
-    public async Task TrackAsync_OfTheRealSpaDiaAMRFixture_RefusesNamingTheQuestAndThePrunedMaster()
+    public async Task TrackAsync_OfAGeneratedStructListLink_RefusesNamingTheQuestAndThePrunedMaster()
     {
-        using var scratch = new PrunedMasterScratch(new GeneratedPlugin(SpaDiaAmrFixtureFileName, File.ReadAllBytes(PathTo(SpaDiaAmrFixtureFileName))), "SpaDiaAMRMod");
+        using var scratch = new PrunedMasterScratch(StructListLinkPlugin.Plugin, "StructListLinkMod");
+        Assert.Equal([StructListLinkPlugin.Master], scratch.DeclaredMasters());
 
         var result = await scratch.TrackAsync();
 
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
 
-        Assert.Contains("DiaQ_LLInjector_SpadeyAMR", result.Message);
-        Assert.Contains("DLCNukaWorld.esm", result.Message);
+        Assert.Contains(StructListLinkPlugin.QuestEditorId, result.Message);
+        Assert.Contains(StructListLinkPlugin.Master, result.Message);
         Assert.Contains("Mutagen #688", result.Message);
         Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
     }

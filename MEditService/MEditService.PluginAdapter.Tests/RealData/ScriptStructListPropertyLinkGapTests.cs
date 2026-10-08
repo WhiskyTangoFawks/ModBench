@@ -8,39 +8,38 @@ namespace MEditService.PluginAdapter.Tests.RealData;
 
 public sealed class ScriptStructListPropertyLinkGapTests
 {
-    private static readonly string FixturePath =
-        Path.Combine(AppContext.BaseDirectory, "TestData", "SpaDia_AMR.esp");
-
-    private static IScriptStructListPropertyGetter LoadLeveledListDataProperty()
+    private static IScriptStructListPropertyGetter LoadRoutesProperty()
     {
-        var modKey = ModKey.FromFileName("SpaDia_AMR.esp");
-        var modPath = new ModPath(modKey, FixturePath);
-        var mod = ModFactory.ImportSetter(modPath, GameRelease.Fallout4, FixtureReadParameters.For(new PluginStrings(null, Path.GetDirectoryName(FixturePath) ?? throw new InvalidOperationException($"Expected '{FixturePath}' to have a parent directory."))));
+        using var scratch = new ScratchDirectory("medit-structlist-");
+        var plugin = StructListLinkPlugin.Plugin;
+        plugin.WriteInto(scratch);
+        var modPath = new ModPath(ModKey.FromFileName(plugin.FileName), Path.Combine(scratch, plugin.FileName));
+        var mod = ModFactory.ImportSetter(modPath, GameRelease.Fallout4, FixtureReadParameters.For(new PluginStrings(null, scratch)));
 
         var quest = mod.EnumerateMajorRecords().OfType<IQuestGetter>()
-            .Single(q => q.EditorID == "DiaQ_LLInjector_SpadeyAMR");
+            .Single(q => q.EditorID == StructListLinkPlugin.QuestEditorId);
 
         var adapter = quest.VirtualMachineAdapter
-            ?? throw new InvalidOperationException("Expected DiaQ_LLInjector_SpadeyAMR to carry a VirtualMachineAdapter.");
-        var script = adapter.Scripts.Single(s => s.Name == "DLC04:DLCLegendaryLLManagerScript");
-        var property = script.Properties.Single(p => p.Name == "LeveledListData");
+            ?? throw new InvalidOperationException($"Expected {StructListLinkPlugin.QuestEditorId} to carry a VirtualMachineAdapter.");
+        var script = adapter.Scripts.Single(s => s.Name == StructListLinkPlugin.ScriptName);
+        var property = script.Properties.Single(p => p.Name == StructListLinkPlugin.PropertyName);
         return Assert.IsAssignableFrom<IScriptStructListPropertyGetter>(property);
     }
 
     [Fact]
-    public void StructListProperty_OfTheRealSpaDiaAMRFixture_HoldsRealFormLinksThatMutagen688KeepsEnumerateFormLinksFromYielding()
+    public void StructListProperty_OfAGeneratedPlugin_HoldsRealFormLinksThatMutagen688KeepsEnumerateFormLinksFromYielding()
     {
-        var structList = LoadLeveledListDataProperty();
+        var structList = LoadRoutesProperty();
 
         Assert.NotEmpty(structList.Structs);
 
-        var nukaWorldFormKey = FormKey.Factory("03F98D:DLCNukaWorld.esm");
+        var masterFormKey = FormKey.Factory($"000A01:{StructListLinkPlugin.Master}");
         var memberFormLinks = structList.Structs
             .SelectMany(s => s.Members)
             .OfType<IScriptObjectPropertyGetter>()
             .Select(p => p.Object.FormKey)
             .ToList();
-        Assert.Contains(nukaWorldFormKey, memberFormLinks);
+        Assert.Contains(masterFormKey, memberFormLinks);
 
         Assert.Empty(structList.EnumerateFormLinks());
     }
