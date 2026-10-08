@@ -5,7 +5,7 @@ import type { Reporter, Severity } from '../ports/reporter';
 import { pluginAddressOf } from '../wire/pluginAddress';
 import type { RecordCopy } from '../drivingLib/recordDocument';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
-import { formKeyMember, recordLabel } from './recordText';
+import { formKeyMember, recordLabel } from './sourceText';
 
 interface WorkspaceSymbolDeps<Document> extends RecordLocationDeps<Document> {
   client: RecordLocationDeps<Document>['client'] & Pick<MEditClient, 'getPlugins' | 'searchRecords'>;

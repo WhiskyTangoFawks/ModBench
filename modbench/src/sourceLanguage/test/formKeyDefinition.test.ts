@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
 
 import type * as vscode from 'vscode';
 import { definitionsOf } from '../formKeyDefinition';
-import { formKeyMember } from '../recordText';
+import { formKeyMember } from '../sourceText';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
