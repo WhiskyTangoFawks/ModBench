@@ -237,8 +237,9 @@ export interface MEditClient {
   getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null>;
   /** Null: the plugin holds no such record. No path: the plugin is untracked, so its copy has no file. */
   getRecordFile(plugin: PluginAddress, formKey: string): Promise<RecordFile | null>;
-  /** The record whose own document the file at the absolute `path` is. Rejects with mEdit's reason when it is none. */
-  getRecordOfFile(path: string): Promise<RecordAddress>;
+  /** The record whose own document the file at the absolute `path` is; null when mEdit answers the file holds
+   *  no record. Rejects with mEdit's reason when it cannot read the file. */
+  getRecordOfFile(path: string): Promise<RecordAddress | null>;
   /** `text` is the current text of the document carrying the record; mEdit writes nothing. */
   getEditChanges(
     formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope, text: string,

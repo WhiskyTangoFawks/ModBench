@@ -35,7 +35,7 @@ export interface EditorCommandDeps {
   meditClient: Pick<MEditClient,
     | 'getEditChanges' | 'searchRecords'
     | 'deleteRecords' | 'copyRecords'
-    | 'getPlugins' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations'
+    | 'getPlugins' | 'getRecordHolders'
     | 'getComparison' | 'getRecordsComparison' | 'onNotification' | 'onStatusChanged' | 'onReconnected' | 'getRecordOwner'
     | 'getRecordFile' | 'getRecordOfFile' | 'getRenderedDocument'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.

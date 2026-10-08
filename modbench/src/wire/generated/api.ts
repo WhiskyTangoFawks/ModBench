@@ -480,7 +480,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The record whose own document the file at an absolute path is, read from the file's text: its plugin and FormKey. A file that is no record's own document refuses, saying why. */
+        /** @description The record whose own document the file at an absolute path is, read from the file's text: its plugin and FormKey. No content when the file holds no record. A file that cannot be read as a record's own document refuses, saying why. */
         get: operations["GetRecordOfFile"];
         put?: never;
         post?: never;
@@ -557,7 +557,7 @@ export interface paths {
         put?: never;
         /**
          * Copy records into destination plugins, each record into each destination on its own.
-         * @description Override: the source record's own text lands verbatim in the destination under the same FormKey, without its child records; the master dependency is derived at compile (ADR-0008). DeepOverride: the same for a record with child records, and every child record at any depth lands with it; a record with none copies as Override. New: a duplicate without its child records under the destination's next free FormID, with an EditorID derived from the source's, and a self-reference follows the copy. A cell or a worldspace is refused as New. In every mode, a container the destination lacks is copied in as an override. Replace applies to Override and DeepOverride only. Under Override, a destination that already holds the record is refused unless replace is given, and a replacement changes the record's own fields only, keeping the children the destination's copy carries. Under DeepOverride, replace overwrites each child record the destination holds and keeps its copy of the record itself; a child record the destination holds and the source lacks stays. Each record and destination is applied or refused on its own, and the answer names both.
+         * @description Override: the source record's own text lands verbatim in the destination under the same FormKey, without its child records; the master dependency is derived at compile (ADR-0008). New: a duplicate without its child records under the destination's next free FormID, with an EditorID derived from the source's, and a self-reference follows the copy. A cell or a worldspace is refused as New. In every mode, a container the destination lacks is copied in as an override. Replace applies to Override only. Under Override, a destination that already holds the record is refused unless replace is given, and a replacement changes the record's own fields only, keeping the children the destination's copy carries. Each record and destination is applied or refused on its own, and the answer names both.
          */
         post: operations["CopyRecord"];
         delete?: never;
@@ -785,7 +785,7 @@ export interface components {
             isContainer: boolean;
         };
         /** @enum {string} */
-        CopyMode: "New" | "Override" | "DeepOverride";
+        CopyMode: "New" | "Override";
         CopyText: {
             plugin: components["schemas"]["PluginAddress"];
             documentText: string;
@@ -2598,6 +2598,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RecordAddress"];
                 };
+            };
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {

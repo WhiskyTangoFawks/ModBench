@@ -1181,8 +1181,15 @@ describe('HttpMEditClient — the record a file holds', () => {
     expect(url.searchParams.get('path')).toBe(path);
   });
 
-  it('rejects with mEdit\'s reason when the file holds no record', async () => {
-    const detail = 'plugin-source/Shared.esp/Cells/GroupRecordData.json is a group\'s metadata file, which holds no record.';
+  it('answers null when mEdit answers the file holds no record', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 204 })));
+    const client = makeClient(fetch);
+
+    await expect(client.getRecordOfFile(path)).resolves.toBeNull();
+  });
+
+  it('rejects with mEdit\'s reason when it cannot read the file', async () => {
+    const detail = `${path} declares no FormKey, so it is no record's document.`;
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { detail })));
     const client = makeClient(fetch);
 

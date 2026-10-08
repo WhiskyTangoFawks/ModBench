@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -130,13 +129,6 @@ public sealed class SourceRepository
         documents.RefuseUnreadable(identity.RecordType, identity.FormKey, body, unit.FullPath);
     }
 
-    /// <summary>The document carrying <paramref name="identity"/>: its own, else its container's. Null
-    /// when no document holds it. Throws <see cref="UnreadableSourceDocumentException"/> when the
-    /// document carrying it names no record.</summary>
-    public SourceDocument? ContainerDocument(
-        PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        Locator.ContainerDocument(plugin, identity, schemas);
-
     /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>:
     /// the tree only says which document that is. Null when nothing holds it; text naming no record throws
     /// <see cref="UnreadableSourceDocumentException"/>.</summary>
@@ -174,25 +166,17 @@ public sealed class SourceRepository
     public string? FullPathOf(PluginAddress plugin, RecordIdentity identity) =>
         Locator.Locate(plugin, identity) is { } unit && File.Exists(unit.FullPath) ? unit.FullPath : null;
 
-    /// <summary>The record whose own document the file at <paramref name="path"/> is, read from its text as the index
-    /// reads it; otherwise why the file holds none.</summary>
-    public static bool TryRecordOfFile(
-        LoadOrderSnapshot loadOrder, string path, [NotNullWhen(true)] out RecordAt? record, [NotNullWhen(false)] out string? whyNone)
+    /// <summary>What the file at <paramref name="path"/> holds, read from its text as the index reads it.</summary>
+    public static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path)
     {
-        record = null;
         var fullPath = Path.GetFullPath(path);
+        if (SourceRepositoryLayout.CarriesNoRecord(fullPath)) return new RecordOfFileAnswer.HoldsNone();
         if (loadOrder.Plugins.FirstOrDefault(plugin => plugin.Provider is PluginProvider.FromMod mod
                 && SourceRepositoryLocator.IsUnder(Path.GetFullPath(SourceRepositoryLayout.RootIn(mod.Folder, plugin.Name)), fullPath)
                 && SourceReads(plugin)) is not { Provider: PluginProvider.FromMod source } holder)
-        {
-            whyNone = $"{fullPath} is under no tracked plugin's source.";
-            return false;
-        }
+            return new RecordOfFileAnswer.Refused($"{fullPath} is under no tracked plugin's source.");
 
-        if (!Over(source, loadOrder.GameRelease).Locator.TryFormKeyOfFile(holder.Name, fullPath, out var formKey, out whyNone))
-            return false;
-        record = new RecordAt(holder.Key, formKey);
-        return true;
+        return Over(source, loadOrder.GameRelease).Locator.RecordOfFile(holder.Key, fullPath);
     }
 
     /// <summary>The name the layout gives the file of the record's own document.</summary>
@@ -224,17 +208,6 @@ public sealed class SourceRepository
     public SourceDocument? GetCellAt(
         PluginAddress plugin, string worldspace, int x, int y, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         Locator.CellFormKeyAt(plugin, worldspace, x, y) is { } formKey ? Get(plugin, formKey, schemas) : null;
-
-    /// <summary>The FormKey of every cell <paramref name="worldspace"/> holds in this plugin's tree, its
-    /// persistent cell and each numbered cell.</summary>
-    public IReadOnlyList<string> CellsIn(
-        PluginAddress plugin, string worldspace, IReadOnlyDictionary<string, RecordTableSchema> schemas)
-    {
-        using var documents = OpenDocuments(plugin, schemas);
-        return [.. documents.Records
-            .Where(document => document.Cell is { IsInterior: false } cell && cell.ParentWorldspace == worldspace)
-            .Select(document => document.FormKey)];
-    }
 
     /// <summary>Every EditorID the plugin's tree holds now, a record with a document of its own and
     /// an embedded child alike — what a derived EditorID is checked against to stay unique in the
