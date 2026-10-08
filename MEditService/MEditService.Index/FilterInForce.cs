@@ -63,8 +63,8 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
         }
     }
 
-    /// <summary>Materializes the filter again after rows moved. One that cannot apply again is cleared and
-    /// published, never left answering from the old rows.</summary>
+    /// <summary>Materializes the filter in force again after rows moved, or none: a store opened while a
+    /// clear waited still holds the cleared one. One that cannot apply again is cleared and published.</summary>
     public void Reapply(DuckDbRecordIndex index)
     {
         if (ReapplyOrClear(index) is { } cleared) notifications?.Publish(cleared);
@@ -74,7 +74,11 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
     {
         lock (_lock)
         {
-            if (_current is not { } filter) return null;
+            if (_current is not { } filter)
+            {
+                index.SetFilter(null);
+                return null;
+            }
             try
             {
                 index.SetFilter(filter.Sql);

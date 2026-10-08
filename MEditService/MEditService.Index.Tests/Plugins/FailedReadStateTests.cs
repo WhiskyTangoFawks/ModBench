@@ -4,7 +4,6 @@ using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.Ports;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -417,21 +416,12 @@ public sealed class FailedReadStateTests : IDisposable
         var document = NpcDocument;
         File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{NpcEditorId}\"", "\"EditedNpc\"", StringComparison.Ordinal));
 
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, loggerFactory: _loggerFactory, notifications: new RowsChangedFaultsOnce());
+        ArmOn("Validate found", () => throw new TimeoutException("the tree could not be compared"));
+
+        using var index = Reconciled();
 
         Assert.False(Failed(index));
         Assert.Contains(index.ListedIn(Plugin.KeyOf()), row => row.EditorId == "EditedNpc");
-    }
-
-    private sealed class RowsChangedFaultsOnce : INotificationPublisher
-    {
-        private int _faulted;
-
-        public void Publish(INotification notification)
-        {
-            if (notification is RowsChangedNotification && Interlocked.Exchange(ref _faulted, 1) == 0)
-                throw new TimeoutException("the stream could not take the push");
-        }
     }
 
     private sealed class HeldAtFirstRead : DelegatingPluginAdapter
