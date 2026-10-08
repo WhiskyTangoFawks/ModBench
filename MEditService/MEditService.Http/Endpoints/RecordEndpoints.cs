@@ -96,9 +96,8 @@ internal static class RecordEndpoints
             "A copy's DocumentText, when given, is the document carrying that column's record, read whether or not " +
             "its plugin is active; the copy is otherwise the one its plugin holds.")
         .WithTags("Records")
-        .Produces<CompareResult>()
+        .Produces<CompareRecordsResponse>()
         .ProducesProblem(400)
-        .ProducesProblem(404)
         .ProducesProblem(503);
 
         app.MapGet("/plugin-source/record", (string? path, IRecordQueryService svc) =>
@@ -337,6 +336,9 @@ internal static class RecordEndpoints
     private static RecordAddress Addressed(RecordAt record) =>
         new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);
 
+    private static CopyMissing Wire(MissingCopy missing) =>
+        new(missing.Copy.FormKey, missing.Copy.Plugin, missing.Reason, missing.Message);
+
     internal static IResult CompareRecords(IReadOnlyList<RecordCopy> copies, IRecordQueryService svc)
     {
         if (copies.Count == 0)
@@ -346,11 +348,11 @@ internal static class RecordEndpoints
             return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
         try
         {
-            return Results.Ok(svc.GetCompareRecords(copies));
+            return Results.Ok(new CompareRecordsResponse(svc.GetCompareRecords(copies), []));
         }
-        catch (RecordCopiesMissingException missing)
+        catch (RecordCopiesMissingException refusal)
         {
-            return Results.Problem(missing.Message, statusCode: 404);
+            return Results.Ok(new CompareRecordsResponse(null, [.. refusal.Missing.Select(Wire)]));
         }
     }
 
