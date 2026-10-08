@@ -28,6 +28,7 @@ const h = vi.hoisted(() => ({
   opened: [] as unknown[],
   shown: [] as unknown[],
   selectRows: (_rows: unknown[]): void => undefined,
+  toggle: { expand: (_row: unknown): void => undefined, collapse: (_row: unknown): void => undefined },
 }));
 
 vi.mock('vscode', () => {
@@ -44,8 +45,16 @@ vi.mock('vscode', () => {
       ...filterBoxWindowMock(state),
       createTreeView: (_id: string, options: { treeDataProvider: vscode.TreeDataProvider<unknown> }) => {
         const selectionListeners: ((event: { selection: unknown[] }) => unknown)[] = [];
+        const expandListeners: ((event: { element: unknown }) => unknown)[] = [];
+        const collapseListeners: ((event: { element: unknown }) => unknown)[] = [];
+        h.toggle = {
+          expand: (element) => { expandListeners.forEach((listener) => listener({ element })); },
+          collapse: (element) => { collapseListeners.forEach((listener) => listener({ element })); },
+        };
         const view: { description?: string; message?: string } & Record<string, unknown> = {
           selection: [], onDidChangeCheckboxState: disposable, dispose: () => undefined,
+          onDidExpandElement: (listener: (event: { element: unknown }) => unknown) => { expandListeners.push(listener); return disposable(); },
+          onDidCollapseElement: (listener: (event: { element: unknown }) => unknown) => { collapseListeners.push(listener); return disposable(); },
           onDidChangeSelection: (listener: (event: { selection: unknown[] }) => unknown) => { selectionListeners.push(listener); return disposable(); },
         };
         h.selectRows = (rows) => { view.selection = rows; selectionListeners.forEach((listener) => listener({ selection: rows })); };
@@ -100,7 +109,8 @@ vi.mock('vscode', () => {
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { createPluginsView } from '../pluginsView';
 import { createPluginSync, type PluginSync } from '../pluginSync';
-import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
+import { NO_PLUGINS_MESSAGE, PluginNode } from '../PluginsTreeProvider';
+import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import type { PluginMetadata, RecordSummary } from '../../client';
 import { recordTypeCountFixture } from '../../client/test/fixtures';
@@ -113,6 +123,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
+import { settled } from '../../test/settled';
 
 const FOUND = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
 const ARMOR_SQL = 'SELECT form_key FROM "armo"';
@@ -376,7 +387,7 @@ describe('a record row\'s badge, from mEdit\'s stream', () => {
     client.emit({ ...rowsChanged, keys: [FORM_KEY] });
     await asVsCodeReReadsAnExpandedGroupOnTreeChange(recordBrowser, group);
 
-    expect(badgeChanges).toEqual([[uri]]);
+    expect(badgeChanges).toEqual([undefined, [uri]]);
     expect(badges.provideFileDecoration(uri)?.badge).toBe('M');
   });
 });
@@ -991,5 +1002,42 @@ describe('the Plugins view\'s message line and name filter', () => {
       plugins.progress.say(undefined);
       await messageIs(NO_PLUGINS_MESSAGE, 'the empty-list message returning');
     });
+  });
+});
+
+describe('a collapsed row\'s badge, from the states beneath it', () => {
+  it('is a dot on a plugin row with changes beneath it, only while the row is collapsed', async () => {
+    const { client, rows } = pluginsView(instanceValueFixture({
+      plugins: [{ name: 'A.esp', path: '/fixture/A.esp', origin: 'SomeMod', slot: 0, enabled: true, winning: true }],
+      gameFolder: FOUND,
+    }));
+    client.setQueryAnswer('getWorkingTreeStatesBeneath', { plugin: ['Modified'], recordTypes: {}, records: {} });
+    const row = expectInstanceOf((await rows())[0], PluginNode);
+    const uri = present(row.resourceUri, 'the row\'s resourceUri');
+    const badges = present(h.decorations.find((provider) => 'onDidChangeFileDecorations' in provider), 'the record badge provider');
+
+    badges.provideFileDecoration(uri);
+    await settled();
+    const collapsed = badges.provideFileDecoration(uri)?.badge;
+    h.toggle.expand(row);
+    const expanded = badges.provideFileDecoration(uri)?.badge;
+    h.toggle.collapse(row);
+
+    expect([collapsed, expanded, badges.provideFileDecoration(uri)?.badge]).toEqual(['•', undefined, '•']);
+  });
+
+  it('puts a failed read of the states beneath on the view\'s message line', async () => {
+    const { client, rows, view } = pluginsView(instanceValueFixture({
+      plugins: [{ name: 'A.esp', path: '/fixture/A.esp', origin: 'SomeMod', slot: 0, enabled: true, winning: true }],
+      gameFolder: FOUND,
+    }));
+    client.setQueryFailure('getWorkingTreeStatesBeneath', new Error('boom'));
+    const row = expectInstanceOf((await rows())[0], PluginNode);
+    const badges = present(h.decorations.find((provider) => 'onDidChangeFileDecorations' in provider), 'the record badge provider');
+
+    badges.provideFileDecoration(present(row.resourceUri, 'the row\'s resourceUri'));
+    await settled();
+
+    expect(view().message).toContain('Failed to load: boom');
   });
 });

@@ -21,7 +21,7 @@ const {
 
 import {
   TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
-  Diagnostic, DiagnosticSeverity, Range, uriFile,
+  Diagnostic, DiagnosticSeverity, Range, uriFile, uriFrom,
 } from '../../test/vscodeMock';
 
 vi.mock('vscode', async () => {
@@ -31,7 +31,7 @@ vi.mock('vscode', async () => {
     window: { showQuickPick, createQuickPick, withProgress: recordedWithProgress },
     TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
     Diagnostic, DiagnosticSeverity, Range,
-    Uri: { file: uriFile },
+    Uri: { file: uriFile, from: uriFrom },
   };
 });
 

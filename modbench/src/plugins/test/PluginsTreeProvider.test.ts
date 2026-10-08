@@ -45,6 +45,7 @@ import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { present } from '../../ports/present';
+import { parseRowResourceUri } from '../recordResourceUri';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { CONTAINER_TYPES, listsForThePluginAsked } from '../../client/test/fixtures';
 
@@ -206,15 +207,14 @@ describe('ImplicitMasterNode — leading slot', () => {
     expect(node.tooltip).toBe("This plugin can't be disabled or moved (enforced by the game).");
   });
 
-  it('keys resourceUri on the given path, for the label-graying decoration provider', () => {
-    const node = new ImplicitMasterNode('Fallout4.esm', 'Data/', '/game/Data/Fallout4.esm');
-    expect(node.resourceUri?.path).toBe('/game/Data/Fallout4.esm');
+  it('keys resourceUri on the plugin\'s address, for the label-graying decoration provider', () => {
+    const node = new ImplicitMasterNode('Fallout4.esm', 'Data/');
+    expect(parseRowResourceUri(node.resourceUri)).toEqual({ plugin: { name: 'Fallout4.esm', origin: 'Data/' }, path: [] });
   });
 
-  it('gives the locked row a resourceUri outside the file: scheme, where its plugin\'s diagnostics are published, so no Problems badge reaches it', () => {
-    const node = new ImplicitMasterNode('Fallout4.esm', 'Data/', '/game/Data/Fallout4.esm');
-    expect(node.resourceUri?.scheme).toEqual(expect.any(String));
-    expect(node.resourceUri?.scheme).not.toBe('file');
+  it('keys a plugin row on the same address, so the states beneath it can be asked', () => {
+    const node = new PluginNode({ name: 'Mod.esp', enabled: true }, 'ModA');
+    expect(parseRowResourceUri(present(node.resourceUri, 'the plugin row\'s URI'))).toEqual({ plugin: { name: 'Mod.esp', origin: 'ModA' }, path: [] });
   });
 
 });
@@ -253,7 +253,7 @@ describe('a plugin row carries its plugin as its Argument', () => {
 describe('PluginNode', () => {
   it('renders a plain row — no icon, no description', () => {
     const node = new PluginNode({ name: 'A.esp', enabled: true }, 'SomeMod');
-    expect(node.iconPath).toBeUndefined();
+    expect(node.iconPath).toEqual(new ThemeIcon('blank'));
     expect(node.description).toBeUndefined();
   });
 
@@ -779,14 +779,11 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
 });
 
 describe('PluginsTreeProvider — implicit master rows', () => {
-  const ADAPTER_ANSWER = (name: string) => `/adapter/Data/${name}`;
   const ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT = null;
   const treeFor = (
     plugins: (LoadOrderPlugin | LoadOrderPluginLine)[],
     implicit: readonly string[] | typeof ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT = [],
-    dataFolderFile: ((name: string) => string | undefined) | typeof ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT = ADAPTER_ANSWER,
   ) => makeTree(plugins, {
-    dataFolderFile: dataFolderFile ?? (() => undefined),
     ...(implicit === ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT ? {} : { loadedWithNoLine: implicit }),
   }).tree;
 
@@ -801,11 +798,6 @@ describe('PluginsTreeProvider — implicit master rows', () => {
     expect(expectInstanceOf(rows[0], ImplicitMasterNode).contextValue).toBe('pluginImplicit');
     expect(expectInstanceOf(rows[0], ImplicitMasterNode).checkboxState).toBeUndefined();
     expect(rows[2]).toBeInstanceOf(PluginNode);
-  });
-
-  it('takes each implicit row file from the Instance adapter, for the graying decoration to key on', async () => {
-    const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm']).getChildren();
-    expect(expectInstanceOf(rows[0], ImplicitMasterNode).resourceUri?.path).toBe('/adapter/Data/Fallout4.esm');
   });
 
   it('a name the backend calls implicit which plugins.txt also lists renders exactly once, as the implicit row (an .esl the game loads on its own)', async () => {
@@ -847,11 +839,6 @@ describe('PluginsTreeProvider — implicit master rows', () => {
   it('renders only implicit rows when plugins.txt is empty, rather than the empty state', async () => {
     const rows = await treeFor([], ['Fallout4.esm']).getChildren();
     expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm']);
-  });
-
-  it('leaves an implicit row without a resourceUri when the Data folder is unresolved', async () => {
-    const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm'], ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT).getChildren();
-    expect(expectInstanceOf(rows[0], ImplicitMasterNode).resourceUri).toBeUndefined();
   });
 
   it('handleDrag still filters to only PluginNode rows, excluding implicit rows for free', async () => {
@@ -2174,7 +2161,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
     const item = await rowItem(h);
 
     expect(item.tooltip).toContain('read-only');
-    expect(item.iconPath).toBeUndefined();
+    expect(item.iconPath).toEqual(new ThemeIcon('blank'));
     expect(item.description).toBeUndefined();
   });
 
@@ -2231,7 +2218,7 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
 
     const item = await rowItem(h);
     expect(item.tooltip).toBe('A.esp\nSomeMod');
-    expect(item.iconPath).toBeUndefined();
+    expect(item.iconPath).toEqual(new ThemeIcon('blank'));
     expect(item.description).toBeUndefined();
   });
 
@@ -2308,7 +2295,7 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
 
     const item = await rowItem(h, 1);
     expect(item.tooltip).toBe('B.esp\nSomeMod');
-    expect(item.iconPath).toBeUndefined();
+    expect(item.iconPath).toEqual(new ThemeIcon('blank'));
   });
 });
 
@@ -2467,7 +2454,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
       held('Shared.esp', { origin: 'ModB', hasParseFailure: true }),
     ]);
 
-    expect((await rowItem(h)).iconPath).toBeUndefined();
+    expect((await rowItem(h)).iconPath).toEqual(new ThemeIcon('blank'));
   });
 
   it('reads the record filter answer from its own plugin, not the other plugin', async () => {
@@ -2499,7 +2486,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     const rows = await h.tree.getChildren();
     expect(rows).toHaveLength(1);
     const item = h.tree.getTreeItem(present(rows[0], 'the sole row'));
-    expect(item.iconPath).toBeUndefined();
+    expect(item.iconPath).toEqual(new ThemeIcon('blank'));
     expect(item.description).toBeUndefined();
     expect(item.tooltip).toBe('Shared.esp\nModA');
   });
@@ -2645,6 +2632,20 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
     const row = present(await tree.recordRow(NPCS, NEW_NPC), 'the new record\'s row');
 
     expect(row.description).toBe('000900:A.esp');
+  });
+
+  it('does not count a row it walks past as expanded, though it reads its children', async () => {
+    const h = await heldWith(listing('000900:A.esp'));
+    const group = present(h.tree.getParent(present(await h.tree.recordRow(NPCS, NEW_NPC), 'the new record\'s row')), 'the group row');
+    const groupUri = present(group.resourceUri, 'the group row\'s URI');
+    h.records.expandedRow(groupUri);
+    h.records.refresh();
+
+    await h.tree.recordRow(NPCS, NEW_NPC);
+    const walked = h.records.isExpanded(groupUri);
+    await h.tree.getChildren(group);
+
+    expect([walked, h.records.isExpanded(groupUri)]).toEqual([false, true]);
   });
 
   it('walks from the record\'s row up through its group to its plugin row, and no further', async () => {
