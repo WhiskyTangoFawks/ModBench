@@ -120,8 +120,21 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     private static string ActiveJoin(string alias, string pluginColumn, string originColumn) =>
         $"{RegisteredJoin(alias, pluginColumn, originColumn)} AND p.load_order_idx IS NOT NULL";
 
+    /// <summary>The records view without the active filter: every registered plugin's rows, a
+    /// plugin that is not active with a null load index and no winning copy. For the reads that
+    /// reach one plugin whatever its state (ADR-0012).</summary>
+    internal const string PluginRecordsView = "plugin_records";
+
     private static void CreatePublicViews(DuckDBConnection connection)
     {
+        Execute(connection, $"""
+            CREATE OR REPLACE VIEW {PluginRecordsView} AS
+            SELECT t.*, p.load_order_idx, (w.form_key IS NOT NULL) AS is_winner
+            FROM {MirrorSchema}.records t
+            {RegisteredJoin("t", "plugin", "origin")}
+            {WinnerJoin("t", "plugin", "origin")}
+            """);
+
         foreach (var relation in PublicViews)
         {
             var scope = relation.HoldsRecords

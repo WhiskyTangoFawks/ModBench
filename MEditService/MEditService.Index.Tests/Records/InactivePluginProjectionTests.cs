@@ -78,6 +78,26 @@ public sealed class InactivePluginProjectionTests : IDisposable
     }
 
     [Fact]
+    public void ASearchOfOnePlugin_FindsARecordOfAPluginThatIsNotActive()
+    {
+        Reconcile(active: false);
+
+        var found = _index.Records.GetRecords(types: null, _mod.KeyOf(), search: "FixtureNpc", limit: 100, offset: 0);
+
+        Assert.Equal(_npc, Assert.Single(found.Items).FormKey);
+    }
+
+    [Fact]
+    public void ASearchAcrossPlugins_LeavesOutAPluginThatIsNotActive()
+    {
+        Reconcile(active: false);
+
+        var found = _index.Records.GetRecords(types: null, plugin: null, search: "FixtureNpc", limit: 100, offset: 0);
+
+        Assert.Empty(found.Items);
+    }
+
+    [Fact]
     public void ATrackedPluginThatIsNotActive_IsStillReadAsTracked()
     {
         Reconcile(active: false);

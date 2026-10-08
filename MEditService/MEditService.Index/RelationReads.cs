@@ -43,6 +43,17 @@ internal sealed class RelationReads(
             store.Schemas[tableName], LinkResolution.ForLinksOf(connection, formKey, Resolve), parseDiagnosis);
     }
 
+    public RecordIdentity? GetIdentity(string formKey, PluginAddress plugin)
+    {
+        using var connection = store.OpenReadConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"SELECT record_type, editor_id FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1 AND plugin = $2 AND origin = $3 LIMIT 1";
+        DuckDbSql.AddParams(cmd, [formKey, plugin.Name, plugin.Origin]);
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read()) return null;
+        return new RecordIdentity(formKey, reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1));
+    }
+
     public OverrideStack? GetOverrideStack(string formKey)
     {
         using var connection = store.OpenReadConnection();
@@ -76,6 +87,7 @@ internal sealed class RelationReads(
     {
         using var connection = store.OpenReadConnection();
         var filter = query.Scope == RecordQueryScope.Navigator ? store.Filter : null;
+        var records = query is { Scope: RecordQueryScope.Search, Plugin: not null } ? TableDdlBuilder.PluginRecordsView : "records";
         var (where, paramValues) = BuildWhere(
             query.Plugin?.Name, query.Search, filter?.Listing, query.Origin, query.RecordTypes,
             query.GroupOnly ? NavigatorSql.NotHeld("r") : null, query.SearchFormKey);
@@ -97,7 +109,7 @@ internal sealed class RelationReads(
             """;
 
         using var countCmd = connection.CreateCommand();
-        countCmd.CommandText = $"SELECT COUNT(*) FROM records r{where}";
+        countCmd.CommandText = $"SELECT COUNT(*) FROM {records} r{where}";
         DuckDbSql.AddParams(countCmd, paramValues);
         var total = ExecuteCount(countCmd);
 
@@ -106,8 +118,8 @@ internal sealed class RelationReads(
         var order = query.GroupOnly ? NavigatorSql.FormIdOrder("form_key") : "editor_id, form_key";
         using var dataCmd = connection.CreateCommand();
         dataCmd.CommandText = $"""
-            WITH RECURSIVE {NavigatorSql.AboveAFailure("records", holdings)}
-            SELECT {cols} FROM records r{where}
+            WITH RECURSIVE {NavigatorSql.AboveAFailure(records, holdings)}
+            SELECT {cols} FROM {records} r{where}
             ORDER BY {order}, plugin, origin
             LIMIT {query.Limit} OFFSET {query.Offset}
             """;

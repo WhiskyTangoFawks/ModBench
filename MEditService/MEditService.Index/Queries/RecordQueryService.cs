@@ -270,11 +270,11 @@ internal sealed class RecordQueryService(
     // A tracked plugin's truth is its tree (ADR-0006), so a copy whose file is gone has no answer.
     public RecordFile? GetRecordFile(PluginAddress plugin, string formKey)
     {
-        if (RequireReads().GetDocument(formKey, plugin) is not { } copy) return null;
+        if (RequireReads().GetIdentity(formKey, plugin) is not { } identity) return null;
         var snapshot = _loadOrder.Require();
         if (snapshot.Plugin(plugin) is not { Provider: PluginProvider.FromMod mod } registered || !SourceRepository.SourceReads(registered))
             return new RecordFile(null);
-        return SourceRepository.Over(mod, snapshot.GameRelease).FullPathOf(plugin, new RecordIdentity(formKey, copy.RecordType, copy.EditorId))
+        return SourceRepository.Over(mod, snapshot.GameRelease).FullPathOf(plugin, identity)
             is { } path
             ? new RecordFile(path)
             : null;
