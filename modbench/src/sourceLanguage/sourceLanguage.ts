@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
+import type { Reporter } from '../ports/reporter';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 import type { RecordDocumentClient } from '../drivingLib/recordDocument';
 import { hoverAt } from './formKeyHover';
@@ -10,7 +11,8 @@ import { completionsAt } from './completion';
 import { workspaceSymbolsOf, type RecordSymbol } from './workspaceSymbols';
 import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
 
-interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'originFiles' | 'reporter'> {
+interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'originFiles'> {
+  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
   client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferences' | 'getPlugins'> & RecordDocumentClient & SourceProblemsDeps['client'];
 }
 

@@ -19,7 +19,7 @@ export interface SourceProblemsDeps {
   reporter: Pick<Reporter, 'shownOnSurface'>;
   /** Replaces every problem published before. */
   publish: (problems: ProblemsByFile) => void;
-  /** Says why the Problems panel shows the last good read, and undefined once it no longer does. */
+  /** Says why the Problems panel shows the last good read; undefined when it shows the latest. */
   languageStatus: (text: string | undefined) => void;
 }
 
@@ -79,9 +79,8 @@ async function placed(answer: PluginProblems[], { originFiles, readText }: Sourc
   return { ofPlugin, unplaced, unread };
 }
 
-/** Publishes what mEdit answers is wrong in each tracked active plugin's source whenever a save,
- *  a re-read plugin or a new active set can change it. A plugin mEdit cannot answer for keeps the
- *  problems it last had, and the language status says why (plugin-source.md, In the text editor, story 6). */
+/** Publishes what mEdit answers is wrong in each tracked active plugin's source. A plugin mEdit
+ *  cannot answer for keeps its last problems, and the language status says why. */
 export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const { client, reporter, publish, languageStatus } = deps;
   const tellUnplaced = tellingOnce((message, why) => { reporter.shownOnSurface('warning', message, why); });
