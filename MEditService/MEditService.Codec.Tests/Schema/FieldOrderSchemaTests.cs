@@ -28,10 +28,10 @@ public sealed class FieldOrderSchemaTests
             .Select(pair => $"{where}: {pair.First} before {pair.Second}");
     }
 
-    private static IEnumerable<SubFieldSpec> Walk(SubFieldSpec spec) =>
+    private static IEnumerable<FieldMetadata> Walk(FieldMetadata spec) =>
         new[] { spec }
-            .Concat((spec.SubFields ?? []).SelectMany(Walk))
-            .Concat(new[] { spec.ElementSpec }.OfType<SubFieldSpec>().SelectMany(Walk))
+            .Concat((spec.Fields ?? []).SelectMany(Walk))
+            .Concat(new[] { spec.ElementType }.OfType<FieldMetadata>().SelectMany(Walk))
             .Concat((spec.Variants?.Values ?? []).SelectMany(Walk));
 
     [Theory]
@@ -64,9 +64,9 @@ public sealed class FieldOrderSchemaTests
         var module = typeof(Weapon).Assembly;
         var structs = Schemas.Values
             .SelectMany(schema => schema.RecordColumns.SelectMany(c => Walk(c.Field)).Select(spec => (schema.TableName, Spec: spec)))
-            .Where(x => x.Spec.SubFields is { Count: > 1 })
+            .Where(x => x.Spec.Fields is { Count: > 1 })
             .SelectMany(x => new[] { module.GetType($"{typeof(Weapon).Namespace}.{x.Spec.LeafTypeName}") }.OfType<Type>()
-                .Select(loquiClass => (Where: $"{x.TableName} {loquiClass.Name}", Members: x.Spec.SubFields ?? [], Class: loquiClass)))
+                .Select(loquiClass => (Where: $"{x.TableName} {loquiClass.Name}", Members: x.Spec.Fields ?? [], Class: loquiClass)))
             .ToList();
 
         var offenders = structs

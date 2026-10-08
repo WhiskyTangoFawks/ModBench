@@ -43,13 +43,13 @@ internal static class ModHeaderSchema
 
             // A member the builder declines has already said so through SchemaRefusals.
             if (ColumnReflection.BuildColumn(prop, pathPrefix + prop.Name, game, logger) is not { } column) continue;
+            var field = readOnlyReason == null ? column.Field : column.Field.WithReadOnlyReason(readOnlyReason);
             columns.Add(column with
             {
-                Field = column.Field with
+                Field = field with
                 {
-                    DisplayLabel = headerLabel ?? column.Field.DisplayLabel,
+                    DisplayLabel = headerLabel ?? field.DisplayLabel,
                     IsRecordHeaderMember = headerLabel != null,
-                    ReadOnlyReason = readOnlyReason ?? column.Field.ReadOnlyReason,
                     IsRecordFormKey = isRecordFormKey,
                     IsVersionControlInfo1 = isVersionControlInfo1,
                 },

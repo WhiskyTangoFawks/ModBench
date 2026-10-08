@@ -63,17 +63,17 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
 
             var column = schema.RecordColumns.SingleOrDefault(c => c.PropertyName == property);
             AssertCovered(regressed, $"{owner}.{property}",
-                column == null ? null : column.Field.ElementSpec?.SubFields ?? column.Field.SubFields);
+                column == null ? null : column.Field.ElementType?.Fields ?? column.Field.Fields);
         }
 
         foreach (var (owner, property) in CoveredNestedAbstractUnionsOfSubrecordsEmbeddedInsideOtherRecordTypes)
         {
-            IReadOnlyList<SubFieldSpec>? found = null;
+            IReadOnlyList<FieldMetadata>? found = null;
             foreach (var schema in schemas.Values)
             {
                 foreach (var column in schema.RecordColumns)
                 {
-                    var nestedFields = column.Field.ElementSpec?.SubFields ?? column.Field.SubFields;
+                    var nestedFields = column.Field.ElementType?.Fields ?? column.Field.Fields;
                     if (nestedFields == null) continue;
                     var match = nestedFields.SingleOrDefault(f => f.Name == property);
                     if (match == null) continue;
@@ -81,7 +81,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
                         .FirstOrDefault(p => p.Name == column.PropertyName);
                     if (ownPropWhoseNestedTypeIsReDerivedToExcludeASameNamedPropertyOnAnUnrelatedStruct == null
                         || NestedGetterType(ownPropWhoseNestedTypeIsReDerivedToExcludeASameNamedPropertyOnAnUnrelatedStruct.PropertyType)?.Name != owner) continue;
-                    found = match.SubFields;
+                    found = match.Fields;
                     break;
                 }
                 if (found != null) break;
@@ -96,7 +96,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             "longer reaches it, or it was never actually covered and this list is wrong — " +
             "investigate, don't just remove it.");
 
-        static void AssertCovered(List<string> regressed, string label, IReadOnlyList<SubFieldSpec>? fields)
+        static void AssertCovered(List<string> regressed, string label, IReadOnlyList<FieldMetadata>? fields)
         {
             if (fields == null || fields.Count == 0)
             {
@@ -161,9 +161,9 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     private static bool HasNoClrGetterTypeBecauseModHeaderIsNeverAnIMajorRecordGetter(RecordTableSchema schema) => schema.IsHeader;
 
     private static void DescendEveryMemberBelowOneColumnStoppingOnReenteringATypeWhichIsThisTestsOwnCycleRule(
-        List<string> gaps, string path, Type propertyType, SubFieldSpec field, ImmutableHashSet<Type> visited)
+        List<string> gaps, string path, Type propertyType, FieldMetadata field, ImmutableHashSet<Type> visited)
     {
-        var aMemberAKnownDefectLeftOpaqueIsNamedAndDeliberatelyNotExpanded = field is { ReadOnlyReason: not null, SubFields: [] };
+        var aMemberAKnownDefectLeftOpaqueIsNamedAndDeliberatelyNotExpanded = field is { ReadOnlyReason: not null, Fields: [] };
         if (aMemberAKnownDefectLeftOpaqueIsNamedAndDeliberatelyNotExpanded) return;
         if (NestedGetterType(propertyType) is not { } nestedType) return;
         var aVectorIsOneTextLeafTheCodecSpellsItselfSoHasNoMembersToReach = IsVectorStructType(nestedType);
@@ -184,10 +184,10 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         }
     }
 
-    private static IReadOnlyList<SubFieldSpec> SubFieldsOfItsOwnItsElementAndEachLeafVariantSinceAMemberTheLeavesShapeDifferentlyHasNoSingleList(SubFieldSpec field)
+    private static IReadOnlyList<FieldMetadata> SubFieldsOfItsOwnItsElementAndEachLeafVariantSinceAMemberTheLeavesShapeDifferentlyHasNoSingleList(FieldMetadata field)
     {
         var shapes = field.Variants?.Values.Prepend(field) ?? [field];
-        return [.. shapes.SelectMany(s => s.SubFields ?? s.ElementSpec?.SubFields ?? [])];
+        return [.. shapes.SelectMany(s => s.Fields ?? s.ElementType?.Fields ?? [])];
     }
 
     private static readonly ILookup<string, Type> EveryGetterInterfaceUnderOneGrupSignatureBecauseATablesColumnsAreTheUnionOfItsSiblingsSoADiscoveryWinnerSweepMissesTheRest =

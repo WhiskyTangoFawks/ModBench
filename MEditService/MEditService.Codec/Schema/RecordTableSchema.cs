@@ -11,7 +11,7 @@ public sealed record SyntheticBit(string BackingPath, string FlagName);
 /// needs. A column refuses writes only by naming ReadOnlyReason; the codec
 /// decides the rest.</summary>
 public sealed record ColumnSpec(
-    SubFieldSpec Field,
+    FieldMetadata Field,
     // The JSON path from the document root, dotted where the document nests the member (the
     // header's "ModHeader.Author"); the same as Name for every record column.
     string PropertyName,
@@ -29,16 +29,16 @@ public sealed record ColumnSpec(
     public string Name => Field.Name;
 
     /// <summary>The wire's own name for the leaf kind, which decides how a view projects it.</summary>
-    public string ApiType => Field.ApiType;
+    public string ApiType => Field.Type;
 
     /// <summary>Scalar leaves with one DuckDB type only: arrays and structs have no scalar rendering,
     /// a column varying by record class no single type, a synthetic member no document node. "No
     /// column" beats "a column with broken semantics".</summary>
     public bool IsViewable =>
-        !Field.IsArray && Field.SubFields == null && Synthetic == null
-        && (Field.Variants == null || Field.Variants.Values.Select(v => v.ApiType).Distinct(StringComparer.Ordinal).Count() == 1);
+        !Field.IsArray && Field.Fields == null && Synthetic == null
+        && (Field.Variants == null || Field.Variants.Values.Select(v => v.Type).Distinct(StringComparer.Ordinal).Count() == 1);
 
-    public FieldMetadata ToFieldMetadata() => Field.ToFieldMetadata();
+    public FieldMetadata ToFieldMetadata() => Field;
 }
 
 public sealed class RecordTableSchema

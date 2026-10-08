@@ -31,7 +31,7 @@ public class SchemaReflectorAtomicValueTests
         var color = Column("ligh", "Color");
 
         Assert.Equal("color", color.ApiType);
-        Assert.Null(color.Field.SubFields);
+        Assert.Null(color.Field.Fields);
         Assert.True(color.IsViewable);
     }
 
@@ -39,12 +39,12 @@ public class SchemaReflectorAtomicValueTests
     public void Color_NestedInsideAStruct_IsAColorLeaf_ReachedBelowAColumnNotOnlyAtTheTopLevel()
     {
         var lighting = Column("cell", "Lighting");
-        var subFields = lighting.Field.SubFields
+        var subFields = lighting.Field.Fields
             ?? throw new InvalidOperationException("Expected 'cell.Lighting' to have sub-fields.");
         var ambient = subFields.Single(f => f.Name == "AmbientColor");
 
-        Assert.Equal("color", ambient.ApiType);
-        Assert.Null(ambient.SubFields);
+        Assert.Equal("color", ambient.Type);
+        Assert.Null(ambient.Fields);
     }
 
     [Theory]
