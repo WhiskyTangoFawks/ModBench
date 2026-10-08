@@ -1,12 +1,20 @@
 using Mutagen.Bethesda;
+// Where a judgement sees a plugin. One that is not active sits just before the active plugin with as
+// many active plugins before it, as false orders before true.
+using Place = (int ActivePluginsBefore, bool IsActive);
 
 namespace MEditService.LoadOrder;
 
-/// <summary>One plugin file in the instance (ADR-0013).</summary>
-public sealed record RegisteredPlugin(string Name, string Origin, string Path, PluginProvider Provider)
+/// <summary>One plugin file in the instance (ADR-0013). <paramref name="Line"/>: the <c>plugins.txt</c> line
+/// naming its filename, null when no line names it.</summary>
+public sealed record RegisteredPlugin(string Name, string Origin, string Path, PluginProvider Provider, PluginLine? Line)
 {
     public PluginAddress Key => new(Name, Origin);
 }
+
+/// <summary>A <c>plugins.txt</c> line's place, and whether it names this copy of its filename: the copy Mod
+/// Management resolves the name to (ADR-0013).</summary>
+public readonly record struct PluginLine(int Place, bool NamesIt);
 
 /// <summary>ADR-0013's snapshot. Immutable: nothing here opens, holds or disposes a
 /// plugin file.</summary>
@@ -16,6 +24,8 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     internal static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], [], []);
 
     private readonly Dictionary<PluginAddress, int> _loadOrderIndex;
+
+    private readonly Dictionary<PluginAddress, Place> _places;
 
     public string DataFolderPath { get; }
 
@@ -59,6 +69,21 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
             .ToDictionary(a => a.address, a => a.index, PluginAddress.Comparer);
         Active = [.. active.Select(PluginRefusalOfVouchesFor)];
         LoadedWithNoLine = [.. loadedWithNoLine.Where(a => !colliding.Contains(a)).Select(PluginRefusalOfVouchesFor)];
+        _places = PlacesOf(Plugins, Active, LoadedWithNoLine);
+    }
+
+    // A plugin with no line that is not active has no place.
+    private static Dictionary<PluginAddress, Place> PlacesOf(
+        IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<RegisteredPlugin> active, IReadOnlyList<RegisteredPlugin> loadedWithNoLine)
+    {
+        var places = active.Select((plugin, index) => (plugin.Key, Place: (index, true)))
+            .ToDictionary(a => a.Key, a => (Place)a.Place, PluginAddress.Comparer);
+        var activeLines = active.Select(plugin => loadedWithNoLine.Contains(plugin) ? int.MinValue : plugin.Line?.Place ?? int.MaxValue).ToList();
+        foreach (var plugin in plugins)
+        {
+            if (plugin.Line is { Place: var line }) places.TryAdd(plugin.Key, (activeLines.Count(activeLine => activeLine <= line), false));
+        }
+        return places;
     }
 
     private RegisteredPlugin PluginRefusalOfVouchesFor(PluginAddress address) => Plugin(address)
@@ -85,17 +110,30 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
               $"{string.Join(", ", contested.Select(a => a.Origin))}. The game loads one file per name.";
     }
 
-    public bool IsActive(PluginAddress address) => _loadOrderIndex.ContainsKey(address);
-
     /// <summary>The plugin's place among the active plugins, or null when it is not active.</summary>
     public int? LoadOrderIndex(PluginAddress address) =>
         _loadOrderIndex.TryGetValue(address, out var index) ? index : null;
 
     public Registration RegistrationOf(PluginAddress address) => new(LoadOrderIndex(address));
 
-    /// <summary>Records that cannot be edited: a plugin the game does not load (ADR-0012)
-    /// and one the game provides (editor.md's read-only status).</summary>
-    public bool IsImmutable(PluginAddress address) => !IsActive(address) || ProviderOf(address) == PluginProvider.Game;
+    /// <summary>Records that cannot be edited: a plugin the game provides (editor.md's read-only
+    /// status). A tracked plugin is its files, active or not (commands.md § Principles).</summary>
+    public bool IsImmutable(PluginAddress address) => ProviderOf(address) == PluginProvider.Game;
+
+    /// <summary>Whether <paramref name="plugin"/> loads before <paramref name="other"/>. A plugin that is
+    /// not active is judged at its <c>plugins.txt</c> line; with none, null (commands.md § Principles).</summary>
+    public bool? LoadsBefore(PluginAddress plugin, PluginAddress other) =>
+        _places.TryGetValue(plugin, out var place) && _places.TryGetValue(other, out var otherPlace) ? place.CompareTo(otherPlace) < 0 : null;
+
+    /// <summary>The copy of each filename a judgement reads, the active one or the one its line names, in the
+    /// order <see cref="InJudgedOrder"/> gives.</summary>
+    public IEnumerable<RegisteredPlugin> JudgedCopies() =>
+        InJudgedOrder().Where(plugin => _loadOrderIndex.ContainsKey(plugin.Key) || plugin.Line is { NamesIt: true });
+
+    /// <summary>Every plugin in the order <see cref="LoadsBefore"/> judges, those it does not judge last.</summary>
+    public IEnumerable<RegisteredPlugin> InJudgedOrder() =>
+        Plugins.Where(plugin => _places.ContainsKey(plugin.Key)).OrderBy(plugin => _places[plugin.Key])
+            .Concat(Plugins.Where(plugin => !_places.ContainsKey(plugin.Key)));
 
     /// <summary>What provides the plugin, or null for a plugin none registered here names.</summary>
     public PluginProvider? ProviderOf(PluginAddress plugin) => Plugin(plugin)?.Provider;

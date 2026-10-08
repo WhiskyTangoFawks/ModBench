@@ -361,8 +361,8 @@ describe('ModListProvider', () => {
       mods: [mod('Patch'), mod('Textures'), mod('Tracked')],
       trackedMods: new Set(['Tracked']),
       plugins: [
-        { name: 'Patch.esp', origin: 'Patch', path: '/instance/mods/Patch/Patch.esp', slot: 0, enabled: true, winning: true },
-        { name: 'Tracked.esp', origin: 'Tracked', path: '/instance/mods/Tracked/Tracked.esp', slot: 1, enabled: true, winning: true },
+        { name: 'Patch.esp', origin: 'Patch', path: '/instance/mods/Patch/Patch.esp', line: 0, enabled: true, winning: true },
+        { name: 'Tracked.esp', origin: 'Tracked', path: '/instance/mods/Tracked/Tracked.esp', line: 1, enabled: true, winning: true },
       ],
     });
     const rows = (await makeProvider([], { instance: new FakeInstance(value) }).getChildren())

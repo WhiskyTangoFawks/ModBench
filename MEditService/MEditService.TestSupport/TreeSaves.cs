@@ -22,7 +22,7 @@ public static class TreeSaves
         var adapter = TestAdapters.Mutagen();
         var name = Path.GetFileName(pluginPath);
         var (files, missingStrings) = await adapter.ReadSourceOfAsync(
-            new RegisteredPlugin(name, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game), GameRelease.Fallout4, new PluginStrings(null, Path.GetDirectoryName(pluginPath) ?? throw new ArgumentException("No folder.", nameof(pluginPath))));
+            new RegisteredPlugin(name, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null), GameRelease.Fallout4, new PluginStrings(null, Path.GetDirectoryName(pluginPath) ?? throw new ArgumentException("No folder.", nameof(pluginPath))));
         if (missingStrings is not null) throw new InvalidOperationException($"{name} declares {missingStrings}, which the disk lacks.");
 
         var edited = files.Select(file => new TreeFile(

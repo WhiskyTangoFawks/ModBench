@@ -113,6 +113,16 @@ public abstract class TestInstance : IDisposable
 
     private LoadOrderSnapshot Snapshot() => SnapshotPlugins.Snapshot(GameDirectory, _root, GameRelease.Fallout4, _entries);
 
+    /// <summary>Hands the handlers the load order again with <paramref name="plugin"/>'s entry changed, as
+    /// Mod Management does after its line changes.</summary>
+    public void Relist(PluginAddress plugin, Func<LoadOrderEntry, LoadOrderEntry> change)
+    {
+        var at = Entries.ToList().FindIndex(entry => entry.Key == plugin);
+        _entries[at] = change(_entries[at]);
+        _loadOrder = Snapshot();
+        Holder.Apply(_loadOrder);
+    }
+
     /// <summary>Fixes the load order: a fixture whose tests read a tracked tree before any handler runs
     /// seals at the end of its construction.</summary>
     protected LoadOrderSnapshot Seal() => _loadOrder ??= Snapshot();

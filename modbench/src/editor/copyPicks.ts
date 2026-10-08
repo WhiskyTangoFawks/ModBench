@@ -18,7 +18,7 @@ export interface CopyDestinationItem extends vscode.QuickPickItem {
   readonly plugin: PluginAddress;
 }
 
-/** The plugins I can edit, each with its load position (plugins.md, Pickers, Copy). An override
+/** The plugins I can edit, each with its load position or `(not active)` (plugins.md, Pickers, Copy). An override
  *  is not offered the one plugin every record already lives in: it is that copy. */
 export function copyDestinationItems(
   plugins: readonly PluginMetadata[], mode: CopyMode, records: readonly RecordAddress[],
@@ -29,7 +29,8 @@ export function copyDestinationItems(
     .filter((p) => mode !== 'Override' || !livesInEveryRecord(p))
     .map((p) => ({
       label: p.name,
-      description: p.loadOrderIndex === null || p.loadOrderIndex === undefined ? undefined : `[${p.loadOrderIndex}]`,
+      description: p.loadOrderIndex === null || p.loadOrderIndex === undefined ? '(not active)' : `[${p.loadOrderIndex}]`,
+      detail: p.origin,
       plugin: { name: p.name, origin: p.origin },
     }));
 }

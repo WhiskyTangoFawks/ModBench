@@ -174,17 +174,8 @@ internal sealed class WriteTargets(
         if (!SourceRepository.SourceReads(registered)) return RefuseSourceUnreadable(plugin);
 
         repository = SourceRepository.Over(mod, loadOrder.Current.GameRelease);
-        return RefuseIfNotLoaded(plugin);
+        return null;
     }
-
-    // Tracking is per mod folder and implies neither that the plugin is active nor that it is not.
-    private RecordEditResult? RefuseIfNotLoaded(PluginAddress plugin) =>
-        loadOrder.Current.IsActive(plugin)
-            ? null
-            : RecordEditResult.Refused(
-                RecordEditRefusal.PluginNotActive,
-                $"{plugin.Name} ({plugin.Origin}) is not active, so the game does not load it and it is " +
-                "read-only. Enabling its line, or moving its mod toward the winning end, makes it active.");
 
     // Two refusals, because there are two different ways out and a message that named neither
     // would be silent dead UI.
