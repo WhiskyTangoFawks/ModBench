@@ -3,8 +3,8 @@ using System.Diagnostics;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.Index.Queries;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -21,6 +21,10 @@ internal sealed class DuckDbRecordIndex : IDisposable
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private readonly Store _store;
+    private readonly IndexWriteGate _gate;
+    private readonly FilterInForce _filter;
+    private readonly INotificationPublisher? _notifications;
+    private readonly Projection _projection;
     private readonly PluginIngest _pluginIngest;
     private readonly WorkingTreeOverlay _workingTreeOverlay;
 
@@ -28,19 +32,81 @@ internal sealed class DuckDbRecordIndex : IDisposable
     private DuckDBConnection OpenRead() => _store.OpenReadConnection();
 
     /// <summary>Over a store whose tables <see cref="Store.Initialize"/> has created. Unindexes
-    /// what the file holds that disagrees with the disk (ADR-0003), which is this class's
-    /// cross-cutting verb: registration plus every ingest-owned table.</summary>
-    public DuckDbRecordIndex(Store store, ILogger logger)
+    /// what the file holds that disagrees with the disk (ADR-0003). The gate and the filter outlive
+    /// the store: a rebuild swaps the store beneath them.</summary>
+    public DuckDbRecordIndex(
+        Store store, IndexWriteGate gate, FilterInForce filter, INotificationPublisher? notifications, ILogger logger)
     {
         _store = store;
+        _gate = gate;
+        _filter = filter;
+        _notifications = notifications;
         _logger = logger;
+        _projection = new Projection(this);
 
         var containers = new ContainerDocuments(store.Release, store.Schemas);
         _pluginIngest = new PluginIngest(Connection, logger, containers);
         _workingTreeOverlay = new WorkingTreeOverlay(Connection, logger, _codec, containers, store.Schemas, store.Release);
 
-        foreach (var key in store.ValidateAgainstDisk())
-            Unindex(key);
+        Commit(_ =>
+        {
+            foreach (var key in store.ValidateAgainstDisk())
+                Unindex(key);
+        });
+    }
+
+    /// <summary>The one way the rows change (ADR-0015). Once the outermost commit's writes are in,
+    /// thrown or not, a sweep included: the winner sweep they owe, the filter again, one advance,
+    /// then their announcements.</summary>
+    public T Commit<T>(Func<Projection, T> write)
+    {
+        using var held = _gate.Enter();
+        using var scope = _store.BeginProjection();
+        try
+        {
+            return write(_projection);
+        }
+        finally
+        {
+            if (scope.Parent is null) Land(scope.SweepOwed);
+        }
+    }
+
+    public void Commit(Action<Projection> write) => Commit(projection =>
+    {
+        write(projection);
+        return true;
+    });
+
+    private void Land(bool sweepOwed)
+    {
+        try
+        {
+            if (sweepOwed) SweepWinners();
+        }
+        finally
+        {
+            _filter.Reapply(this);
+        }
+    }
+
+    /// <summary>What one commit owes beyond its rows.</summary>
+    internal sealed class Projection(DuckDbRecordIndex index)
+    {
+        /// <summary>Owed by rows that moved which record wins a FormKey; the outermost commit sweeps
+        /// once for all of them.</summary>
+        public void OweWinnerSweep() => index._store.OweWinnerSweep();
+
+        public void Announce(Func<long, INotification> announcement) =>
+            index._store.Announce(() => index._notifications?.Publish(announcement(index.Sequence)));
+
+        /// <summary>ADR-0015: a whole plugin re-derived or removed has too many rows to name, and can
+        /// move the winner of every FormKey it holds.</summary>
+        public void PluginChanged(PluginAddress key)
+        {
+            OweWinnerSweep();
+            Announce(sequence => new PluginChangedNotification(key, sequence));
+        }
     }
 
     public GameRelease Release => _store.Release;
@@ -61,14 +127,6 @@ internal sealed class DuckDbRecordIndex : IDisposable
     /// <summary>ADR-0015: one monotonic counter, advanced in the same transaction as any row change.
     /// Zero until the first change lands.</summary>
     public long Sequence => _store.CurrentSequence();
-
-    /// <summary>ADR-0015: everything projected inside the scope advances <see cref="Sequence"/> once,
-    /// when the outermost scope closes. Nested scopes count.</summary>
-    public IDisposable BeginProjection() => _store.BeginProjection();
-
-    /// <summary>Runs <paramref name="publish"/> once the projection it was raised in has landed:
-    /// immediately outside a scope, after that scope's advance inside one.</summary>
-    public void Announce(Action publish) => _store.Announce(publish);
 
     /// <summary>Indexes one plugin's documents, replacing whatever the key held. Stamps the file's
     /// hash and diagnosis (ADR-0003); a null path claims no file backs the rows (ADR-0012).</summary>
@@ -104,14 +162,18 @@ internal sealed class DuckDbRecordIndex : IDisposable
         }
     }
 
-    /// <summary>Removes every trace of <paramref name="key"/>, rows and registration alike. ADR-0012's
-    /// file-gone verb, never the meaning of a plugin leaving the load order, which is
-    /// <see cref="Unregister"/>.</summary>
-    public void Unindex(PluginAddress key) => Unindex(key.Name, key.Origin);
+    /// <summary>ADR-0012's file-gone verb: every trace of <paramref name="key"/> removed, rows and
+    /// registration alike, the winners they held swept and the plugin announced. Leaving the load
+    /// order is <see cref="Unregister"/>.</summary>
+    public void Unindex(PluginAddress key) => Commit(projection =>
+    {
+        DeleteEveryTraceOf(key.Name, key.Origin);
+        projection.PluginChanged(key);
+    });
 
     // The `registrations` row is dropped last: while it exists this (origin, plugin) is still a
     // known member of the read model, so no read can meet rows that have already gone.
-    private void Unindex(string plugin, string origin)
+    private void DeleteEveryTraceOf(string plugin, string origin)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -208,12 +270,17 @@ internal sealed class DuckDbRecordIndex : IDisposable
 
     // The same sweep for a projection that moved rows without moving the load order: which plugins
     // are active cannot change here, so the set the last sweep was handed still holds.
-    public void ResweepWinners()
+    private void SweepWinners()
     {
-        using var tx = Connection.BeginTransaction();
-        UpdateWinnersCore();
-        _store.BumpSequence();
-        tx.Commit();
+        var timer = Stopwatch.StartNew();
+        using (var tx = Connection.BeginTransaction())
+        {
+            UpdateWinnersCore();
+            _store.BumpSequence();
+            tx.Commit();
+        }
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Swept winners in {ElapsedMs} ms", timer.ElapsedMilliseconds);
     }
 
     // Replaced whole, never diffed (ADR-0013).
@@ -262,20 +329,15 @@ internal sealed class DuckDbRecordIndex : IDisposable
     {
         if (deltas.Count == 0) return [];
 
-        List<string> touched;
-        using (var tx = Connection.BeginTransaction())
-        {
-            // Only a delta that added or removed a row can move winner status. Re-swept for the whole
-            // load order rather than per FormKey because UpdateWinners is the one definition of winning
-            // (measured at 18 ms over 48k records).
-            var projected = _workingTreeOverlay.ProjectDocuments(key, deltas);
-            if (projected.Structural) UpdateWinnersCore();
-            touched = projected.Touched;
-            _store.BumpSequence();
-            tx.Commit();
-        }
-
-        return touched;
+        using var tx = Connection.BeginTransaction();
+        var projected = _workingTreeOverlay.ProjectDocuments(key, deltas);
+        _store.BumpSequence();
+        tx.Commit();
+        // Only a delta that added or removed a row can move winner status. Re-swept for the whole
+        // load order rather than per FormKey because UpdateWinners is the one definition of winning
+        // (measured at 18 ms over 48k records).
+        if (projected.Structural) _projection.OweWinnerSweep();
+        return projected.Touched;
     }
 
     /// <summary>Sets each listed row to the state it is now in (ADR-0007), in one advance.</summary>

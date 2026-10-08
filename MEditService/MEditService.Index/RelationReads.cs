@@ -2,7 +2,6 @@ using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
@@ -251,18 +250,18 @@ internal sealed class RelationReads(
     public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(
         Func<PluginAddress, PluginProvider.FromMod?> modOf)
     {
-        var repositories = new Dictionary<PluginAddress, SourceRepository?>(PluginAddress.Comparer);
+        var repositories = new Dictionary<PluginAddress, SourceRepository>(PluginAddress.Comparer);
         return
         [
             .. GetReferencesToMissingRecords().Select(reference =>
             {
-                var mod = modOf(reference.Plugin);
+                if (modOf(reference.Plugin) is not { } mod) return SourceFilePlacement.Unprovided(reference);
                 if (!repositories.TryGetValue(reference.Plugin, out var repository))
                 {
-                    repository = mod is null ? null : SourceRepository.Over(mod, store.Release);
+                    repository = SourceRepository.Over(mod, store.Release);
                     repositories[reference.Plugin] = repository;
                 }
-                return SourceFilePlacement.Place(reference, repository, mod?.Folder ?? "");
+                return SourceFilePlacement.Place(reference, repository);
             }),
         ];
     }

@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -12,6 +13,9 @@ namespace MEditService.Index;
 internal sealed class DuckDbRecordIndexFactory(
     SchemaReflector schemaReflector,
     TableDdlBuilder ddlBuilder,
+    IndexWriteGate gate,
+    FilterInForce filter,
+    INotificationPublisher? notifications,
     ILogger<DuckDbRecordIndexFactory>? logger = null,
     TimeProvider? timeProvider = null)
 {
@@ -22,16 +26,33 @@ internal sealed class DuckDbRecordIndexFactory(
     /// <see cref="IRecordReads.OpenedPlugins"/> with.</summary>
     public DuckDbRecordIndex? Create(
         GameRelease gameRelease, string? instanceRoot,
-        Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, out string? refusal) =>
-        Open(gameRelease, instanceRoot, openedPlugins, atLeastSequence: null, out refusal);
+        Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, out string? refusal)
+    {
+        var store = Open(gameRelease, instanceRoot, openedPlugins, atLeastSequence: null, out refusal);
+        try
+        {
+            if (store is null) return null;
+            var index = new DuckDbRecordIndex(store, gate, filter, notifications, _logger);
+            store = null;
+            return index;
+        }
+        finally
+        {
+            store?.Dispose();
+        }
+    }
 
-    /// <summary>The reopened sequence is floored at <paramref name="atLeastSequence"/>: this process
-    /// may already have answered a caller with a higher value, and Sequence must never regress.</summary>
-    public DuckDbRecordIndex? Rebuild(
-        GameRelease gameRelease, string instanceRoot, long atLeastSequence, out string? refusal) =>
-        Open(gameRelease, instanceRoot, () => new Dictionary<PluginAddress, PluginContent>(), atLeastSequence, out refusal);
+    /// <summary>The refusal, or null once the file is rebuilt and released. The reopened sequence is floored at
+    /// <paramref name="atLeastSequence"/>: this process may already have answered a caller with a
+    /// higher value, and Sequence must never regress.</summary>
+    public string? Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence)
+    {
+        using var store = Open(
+            gameRelease, instanceRoot, () => new Dictionary<PluginAddress, PluginContent>(), atLeastSequence, out var refusal);
+        return refusal;
+    }
 
-    private DuckDbRecordIndex? Open(
+    private Store? Open(
         GameRelease gameRelease, string? instanceRoot,
         Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins,
         long? atLeastSequence, out string? refusal)
@@ -51,6 +72,6 @@ internal sealed class DuckDbRecordIndexFactory(
         if (atLeastSequence is not null) store.RebuildFile();
         store.Initialize(gameRelease);
         if (atLeastSequence is { } floor) store.SeedSequence(floor);
-        return new DuckDbRecordIndex(store, _logger);
+        return store;
     }
 }

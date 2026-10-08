@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
-using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
@@ -12,8 +11,7 @@ namespace MEditService.Index;
 /// <summary>Reads a system of record (a tracked plugin's source tree, or its binary's hash) and writes
 /// what differs into the Store (ADR-0015).</summary>
 internal sealed class Projector(
-    DuckDbRecordIndex index, Func<PluginAddress, PluginMetadata?> held, INotificationPublisher? notifications,
-    ILogger logger)
+    DuckDbRecordIndex index, Func<PluginAddress, PluginMetadata?> held, ILogger logger)
 {
     /// <summary>The mod of the tree this plugin ingests from, or null when it reads its binary.
     /// Re-derived every call: a mod manager can replace the folder wholesale.</summary>
@@ -85,14 +83,11 @@ internal sealed class Projector(
             .Where(formKey => !EqualityComparer<T>.Default.Equals(
                 before.GetValueOrDefault(formKey), after.GetValueOrDefault(formKey)));
 
-    /// <summary>ADR-0015: the one projection verb. Re-derives <paramref name="formKeys"/>' rows from the
-    /// Source repository, idempotent by content. A key the index does not hold re-derives the whole
-    /// plugin.</summary>
-    internal void RefreshByKeys(RegisteredPlugin plugin, IReadOnlyList<string> formKeys)
+    /// <summary>ADR-0015: re-derives <paramref name="formKeys"/>' rows from the Source repository,
+    /// idempotent by content. A key the index does not hold re-derives the whole plugin.</summary>
+    internal void RefreshByKeys(RegisteredPlugin plugin, IReadOnlyList<string> formKeys) => index.Commit(projection =>
     {
         var (key, mod) = (plugin.Key, ModOf(plugin));
-        // One signal, one advance, however many documents it moves.
-        using var projection = index.BeginProjection();
 
         // The tree is what these rows are re-derived from, so it is what the plugin is derived from
         // (ADR-0007), bytes moved or not: a plugin tracked after indexing arrives here
@@ -104,7 +99,7 @@ internal sealed class Projector(
         // says where the tree puts it: a new exterior cell's block is a directory, not a field.
         if (formKeys.Any(formKey => index.StoredRow(key, formKey) == null))
         {
-            RederiveWholePluginFromSource(plugin, formKeys);
+            RederiveWholePluginFromSource(projection, plugin, formKeys);
             return;
         }
 
@@ -116,11 +111,10 @@ internal sealed class Projector(
             touched.AddRange(RefreshOneKey(repository, key, formKey));
         touched.AddRange(LearnWorkingTreeStates(plugin));
 
-        // ADR-0015: after the commit, so a subscriber re-reading on receipt sees the rows this names.
         // Embedded children are named, since a record panel open on a placed ref inside a refreshed
         // cell has no other signal.
-        if (touched.Count > 0) PublishRowsChanged(key, [.. touched.Distinct(StringComparer.Ordinal)]);
-    }
+        if (touched.Count > 0) AnnounceRows(projection, key, [.. touched.Distinct(StringComparer.Ordinal)]);
+    });
 
     // Re-derives one key's rows. Called again with the same bytes, nothing below fires.
     private List<string> RefreshOneKey(SourceRepository repository, PluginAddress key, string formKey)
@@ -162,7 +156,8 @@ internal sealed class Projector(
 
     // The whole tree, read as one mod: where a record sits is a fact about the tree, not about one
     // document. Idempotent by construction, being the ingest Track and a re-index run.
-    private void RederiveWholePluginFromSource(RegisteredPlugin registered, IReadOnlyList<string> formKeys)
+    private void RederiveWholePluginFromSource(
+        DuckDbRecordIndex.Projection projection, RegisteredPlugin registered, IReadOnlyList<string> formKeys)
     {
         var key = registered.Key;
         // Nothing to re-derive from: the tree went away between the signal and this line, or the
@@ -175,26 +170,21 @@ internal sealed class Projector(
             return;
         }
 
-        // Ingest and winner sweep are one whole-plugin projection, so they are one
-        // advance and the notification below carries the number a subscriber can await.
         var before = index.EffectiveContentHashes(key);
         var statesBefore = index.HeldWorkingTreeStates(key);
-        using (index.BeginProjection())
-        {
-            Ingest(plugin);
-            index.ResweepWinners();
-        }
+        Ingest(plugin);
+        projection.OweWinnerSweep();
         var after = index.EffectiveContentHashes(key);
         var statesAfter = index.HeldWorkingTreeStates(key);
 
         // ADR-0015: the keys asked about, and every row the tree read again moved, gone
-        // or gained, at the sequence it landed on.
+        // or gained.
         var moved = KeysDiffering(before, after).Union(KeysDiffering(statesBefore, statesAfter), StringComparer.Ordinal);
-        PublishRowsChanged(key, [.. formKeys.Union(moved, StringComparer.Ordinal)]);
+        AnnounceRows(projection, key, [.. formKeys.Union(moved, StringComparer.Ordinal)]);
     }
 
-    internal void PublishRowsChanged(PluginAddress key, IReadOnlyList<string> formKeys) =>
-        index.Announce(() => notifications?.Publish(new RowsChangedNotification(key, formKeys, index.Sequence)));
+    private static void AnnounceRows(DuckDbRecordIndex.Projection projection, PluginAddress key, IReadOnlyList<string> formKeys) =>
+        projection.Announce(sequence => new RowsChangedNotification(key, formKeys, sequence));
 
     /// <summary>ADR-0015: compares <paramref name="plugin"/>'s rows against the system of record they
     /// came from, the tree <paramref name="state"/> stamps or else the binary, and refreshes what
@@ -215,28 +205,16 @@ internal sealed class Projector(
     // rebuild the caller owns.
     private ValidationReport ValidateAgainstBinary(RegisteredPlugin plugin)
     {
-        var key = plugin.Key;
         // Nothing vouches for these rows (an in-memory mod, or a tracked plugin whose folder went
         // away), so there is nothing to compare them against.
-        if (index.IndexedFile(key) is not { } claim) return ValidationReport.Clean;
-
-        if (!File.Exists(claim.FilePath))
-        {
-            if (logger.IsEnabled(LogLevel.Information))
-            {
-                logger.LogInformation(
-                    "{Plugin} ({Origin}) is absent from disk at {Path}; removing its rows",
-                    key.Name, key.Origin, claim.FilePath);
-            }
-            index.Unindex(key);
-            return ValidationReport.Clean;
-        }
+        if (index.IndexedFile(plugin.Key) is not { } claim) return ValidationReport.Clean;
 
         // Rows stamped from another truth came from a repository or tree that went away outside
         // Modbench (ADR-0007), or arrived, which the caller re-derives.
-        if (index.DerivationOf(key) != TruthOf(plugin))
+        if (index.DerivationOf(plugin.Key) != TruthOf(plugin))
             return new ValidationReport([], NeedsRebuild: true, []);
 
+        // A file gone hashes as none, so the caller reads the plugin whole from where it is now.
         return index.FileContentHash(claim.FilePath) == claim.ContentHash
             ? ValidationReport.Clean
             : new ValidationReport([], NeedsRebuild: true, []);
@@ -279,9 +257,12 @@ internal sealed class Projector(
         {
             RefreshByKeys(plugin, stale);
         }
-        else if (LearnWorkingTreeStates(plugin) is { Count: > 0 } moved)
+        else
         {
-            PublishRowsChanged(key, moved);
+            index.Commit(projection =>
+            {
+                if (LearnWorkingTreeStates(plugin) is { Count: > 0 } moved) AnnounceRows(projection, key, moved);
+            });
         }
 
         return ValidationReport.Clean;

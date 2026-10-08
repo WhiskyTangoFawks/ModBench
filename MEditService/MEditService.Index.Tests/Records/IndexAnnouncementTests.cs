@@ -86,6 +86,22 @@ public sealed class IndexAnnouncementTests : IDisposable
     }
 
     [Fact]
+    public void ABinaryGoneWhileTheIndexWasClosed_IsAnnouncedAsChanged_WhenTheIndexReopens()
+    {
+        WriteValidPlugin(_pluginPath);
+        ReconcileHeld();
+        _index.Dispose();
+        File.Delete(_pluginPath);
+        var notifications = new InMemoryNotificationPublisher();
+        var holder = new LoadOrderHolder();
+        using var reopened = Indexes.Open(holder, notifications: notifications);
+
+        reopened.Reconcile(holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
+
+        Assert.Contains(notifications.Notifications.OfType<PluginChangedNotification>(), changed => changed.Plugin.Equals(Key));
+    }
+
+    [Fact]
     public async Task IdenticalBytesSettlingAgain_AnnounceNothing()
     {
         WriteValidPlugin(_pluginPath);

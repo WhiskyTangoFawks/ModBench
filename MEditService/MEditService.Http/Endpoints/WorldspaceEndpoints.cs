@@ -1,3 +1,4 @@
+using MEditService.Index;
 using MEditService.Index.Queries;
 
 namespace MEditService.Http.Endpoints;

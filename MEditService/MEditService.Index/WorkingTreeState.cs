@@ -1,6 +1,11 @@
-using MEditService.Index.Queries;
+using System.Text.Json.Serialization;
 
 namespace MEditService.Index;
+
+// A tri-state rather than two booleans: the states are mutually exclusive. Deleted is absent
+// because a working-tree-deleted record has no row to describe.
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum WorkingTreeState { None, Modified, Added }
 
 internal static class WorkingTreeStates
 {

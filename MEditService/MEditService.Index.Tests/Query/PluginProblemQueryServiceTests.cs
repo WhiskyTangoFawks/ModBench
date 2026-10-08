@@ -2,6 +2,7 @@ using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -207,6 +208,31 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
         Assert.Empty(failed.Problems);
         Assert.Contains(gone.Referrer, failed.Failure, StringComparison.Ordinal);
         Assert.Single(Assert.Single(answer, p => p.Plugin == Entry(intact).KeyOf()).Problems);
+    }
+
+    [Fact]
+    public void GetProblems_AskedBeforeASnapshotNoModProvidesATrackedPluginIn_IsReconciled_AnswersThatPluginWithAFailure()
+    {
+        var plugin = new Plugin("Unprovided.esp");
+        Build(plugin);
+        var holder = new LoadOrderHolder();
+        OpenedIndex? reconciled = null;
+        IReadOnlyList<PluginProblems>? answered = null;
+        using var loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider([], entry =>
+        {
+            if (reconciled is { } ready && entry.Message.StartsWith("Reconciling load order", StringComparison.Ordinal))
+                answered ??= ready.Problems.GetProblems();
+        })));
+        using var index = Indexes.Open(holder, loggerFactory: loggers);
+        index.Reconcile(holder, Fixture.GameDirectory, Fixture.Plugins, GameRelease.Fallout4);
+        reconciled = index;
+
+        index.Reconcile(
+            holder, Fixture.GameDirectory, [Entry(plugin) with { NamedProvider = PluginProvider.NoMod }], GameRelease.Fallout4);
+
+        var unprovided = Assert.Single(answered ?? throw new InvalidOperationException("The index was ready."));
+        Assert.Empty(unprovided.Problems);
+        Assert.Contains("no mod folder provides it", unprovided.Failure, StringComparison.Ordinal);
     }
 
     [Fact]

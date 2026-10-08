@@ -1,7 +1,6 @@
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.Index.Queries;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Index;

@@ -1,4 +1,3 @@
-using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 
 namespace MEditService.Index;

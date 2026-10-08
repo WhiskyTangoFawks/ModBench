@@ -15,6 +15,9 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     private readonly LoadOrderHolder _holder;
     private readonly DuckDbRecordIndexFactory _indexFactory;
     private readonly FilterInForce _filter;
+    // One per Indexer, never replaced: a reconcile swaps the store beneath it, which is when the
+    // ordering matters most.
+    private readonly IndexWriteGate _gate = new();
     private readonly Reconciler _reconciler;
 
     /// <summary>The registration's door: the Index opens its own store (ADR-0014).</summary>
@@ -28,10 +31,10 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     {
         _holder = holder;
         var logger = loggerFactory?.CreateLogger<Indexer>() ?? NullLogger<Indexer>.Instance;
-        _indexFactory = new DuckDbRecordIndexFactory(
-            schemaReflector, new TableDdlBuilder(schemaReflector),
-            loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>(), timeProvider);
         _filter = new FilterInForce(logger, notifications);
+        _indexFactory = new DuckDbRecordIndexFactory(
+            schemaReflector, new TableDdlBuilder(schemaReflector), _gate, _filter, notifications,
+            loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>(), timeProvider);
         _reconciler = new Reconciler(
             holder, adapter, _indexFactory, _filter, logger, notifications, timeProvider ?? TimeProvider.System);
     }
@@ -62,7 +65,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     {
         // Materializing the filter is an index write, and the filter box is live while an edit runs, so
         // racing an in-flight edit is the ordinary case: gated like every write.
-        using var _ = _reconciler.WriteGate.Enter();
+        using var _ = _gate.Enter();
 
         if (_reconciler.UnderScope((index, scope) => _filter.Set(index, scope, filter))) return;
 
@@ -78,12 +81,8 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     {
         var previousSequence = Sequence;
         _reconciler.Close();
-        // Released before the reconcile below opens the same file for its own scope.
-        using (var rebuilt = _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence, out var refusal))
-        {
-            if (rebuilt is null) return refusal;
-        }
-        _ = _reconciler.StartReconcile();
+        if (_indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence) is { } refusal) return refusal;
+        _reconciler.StartReconcile();
         return null;
     }
 

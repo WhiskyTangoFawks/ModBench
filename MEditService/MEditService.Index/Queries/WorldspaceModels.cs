@@ -15,8 +15,6 @@ public record WorldspaceSubBlockDto(
 public record WorldspaceBlockDto(
     int X, int Y, IReadOnlyList<WorldspaceSubBlockDto> SubBlocks, bool HasParseFailure = false);
 
-// TopCells is a list: a worldspace should have one block-less cell row, but every one found is
-// surfaced rather than silently discarded. Only the first carries IsPersistentWorldspaceCell.
 public record WorldspaceBlocks(IReadOnlyList<WorldspaceBlockDto> Blocks, IReadOnlyList<CellSummary> TopCells);
 
 // xEdit numbers an interior cell's block and sub-block with one number each.

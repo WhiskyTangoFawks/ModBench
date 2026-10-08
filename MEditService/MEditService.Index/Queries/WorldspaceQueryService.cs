@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using Microsoft.Extensions.Logging;
 
 namespace MEditService.Index.Queries;
 
@@ -13,13 +12,11 @@ public interface IWorldspaceQueryService
 
 /// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin
 /// winner.</summary>
-internal sealed class WorldspaceQueryService(IQueryIndex index, ILogger<WorldspaceQueryService> logger)
-    : IWorldspaceQueryService
+internal sealed class WorldspaceQueryService(IQueryIndex index) : IWorldspaceQueryService
 {
     private const int WorldspaceListLimit = 5000;
 
     private readonly IQueryIndex _index = index;
-    private readonly ILogger _logger = logger;
 
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(PluginAddress plugin)
     {
@@ -38,19 +35,10 @@ internal sealed class WorldspaceQueryService(IQueryIndex index, ILogger<Worldspa
     {
         var cells = _index.RequireReads().GetWorldspaceCells(plugin, worldspaceFormKey);
 
-        // A TopCell has no block coordinates. Every block-less row is surfaced, but the data can't
-        // say which of several is the real TopCell, so the first (deterministic order) is treated
-        // as persistent and the rest are anomalous.
-        var topCellRows = cells.Where(c => c.BlockX == null).ToList();
-        if (topCellRows.Count > 1)
-        {
-            _logger.LogWarning(
-                "Worldspace {WorldspaceFormKey} in {Plugin} ({Origin}) has {Count} block-less cell rows; " +
-                "expected at most one TopCell. Surfacing all, but only the first is treated as the persistent cell.",
-                worldspaceFormKey, plugin.Name, plugin.Origin, topCellRows.Count);
-        }
-        var topCells = topCellRows
-            .Select((c, i) => CellOf(c) with { IsPersistentWorldspaceCell = i == 0 })
+        // A TopCell has no block coordinates.
+        var topCells = cells
+            .Where(c => c.BlockX == null)
+            .Select(c => CellOf(c) with { IsPersistentWorldspaceCell = true })
             .ToList();
 
         // A block and a sub-block are grouping nodes with no record of their own, so their failure

@@ -334,10 +334,16 @@ internal sealed class Store : IDisposable
     /// <summary>Restates which truth <paramref name="key"/>'s rows read as, leaving the file claim
     /// beside it: a refresh re-derives the rows in place, and the binary they were stamped against
     /// is still the file on disk.</summary>
-    internal void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom) =>
-        DuckDbSql.ExecuteFor(Connection,
-            $"UPDATE {PluginDerivationRelation} SET derived_from = $1 WHERE plugin = $2 AND origin = $3",
-            derivedFrom.ToString(), key.Name, key.Origin);
+    internal void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom)
+    {
+        using var tx = Connection.BeginTransaction();
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText =
+            $"UPDATE {PluginDerivationRelation} SET derived_from = $1 WHERE plugin = $2 AND origin = $3 AND derived_from <> $1";
+        DuckDbSql.AddParams(cmd, [derivedFrom.ToString(), key.Name, key.Origin]);
+        if (cmd.ExecuteNonQuery() > 0) BumpSequence();
+        tx.Commit();
+    }
 
     /// <summary>The hash of the file <paramref name="key"/>'s rows were built from, or null when none.</summary>
     public string? IndexedContentHash(PluginAddress key)
@@ -412,42 +418,38 @@ internal sealed class Store : IDisposable
     // in-between state.
     private readonly Lock _projectionLock = new();
 
-    // Per projection, never store-wide: a source batch and a reconcile hold different gates, so a
-    // shared counter would let one swallow the other's advance. Flow-local, so nesting is seen and
-    // concurrency is not.
+    // Flow-local, so nesting is seen and concurrency is not.
     private readonly AsyncLocal<ProjectionScope?> _openProjection = new();
 
-    internal IDisposable BeginProjection()
+    internal ProjectionScope BeginProjection()
     {
         var scope = new ProjectionScope(EndProjection, _openProjection.Value);
         _openProjection.Value = scope;
         return scope;
     }
 
-    // Outside a scope this joins whichever transaction is active on Connection, so the caller's
-    // commit or rollback decides the counter's fate with the rows. Inside one the advance is
-    // deferred instead, landing after the last of those commits.
+    private ProjectionScope OpenProjection =>
+        _openProjection.Value
+        ?? throw new InvalidOperationException("A row change outside DuckDbRecordIndex.Commit skips the filter and the announcement.");
+
     public void BumpSequence()
     {
-        if (_openProjection.Value is { } scope)
-        {
-            lock (_projectionLock) scope.BumpOwed = true;
-            return;
-        }
-        Advance();
+        var scope = OpenProjection;
+        lock (_projectionLock) scope.BumpOwed = true;
     }
 
-    /// <summary>Runs <paramref name="publish"/> once the projection has landed: immediately outside
-    /// a scope, after the advance inside one. A subscriber is never told about rows at a sequence
-    /// the store has not reached.</summary>
+    internal void OweWinnerSweep()
+    {
+        var scope = OpenProjection;
+        lock (_projectionLock) scope.SweepOwed = true;
+    }
+
+    /// <summary>Runs <paramref name="publish"/> after the outermost projection's advance: a
+    /// subscriber is never told about rows at a sequence the store has not reached.</summary>
     internal void Announce(Action publish)
     {
-        if (_openProjection.Value is { } scope)
-        {
-            lock (_projectionLock) scope.Announcements.Add(publish);
-            return;
-        }
-        publish();
+        var scope = OpenProjection;
+        lock (_projectionLock) scope.Announcements.Add(publish);
     }
 
     private void Advance() =>
@@ -466,11 +468,12 @@ internal sealed class Store : IDisposable
         // reaches N only once N's announcements are out, so a caller that awaited it finds them.
         lock (_projectionLock)
         {
-            // Nested: the debt and the announcements are the enclosing projection's, so a batch
-            // stays one advance however many whole-plugin projections it contains.
+            // Nested: the debts and the announcements are the enclosing projection's, so a batch
+            // stays one sweep and one advance however many whole-plugin projections it contains.
             if (scope.Parent is { } parent)
             {
                 parent.BumpOwed |= scope.BumpOwed;
+                parent.SweepOwed |= scope.SweepOwed;
                 parent.Announcements.AddRange(scope.Announcements);
                 scope.Announcements.Clear();
                 return;
@@ -489,10 +492,11 @@ internal sealed class Store : IDisposable
 
     // Calls back into the store to end the scope rather than holding the store itself: the scope
     // does not own the store's lifetime, so a disposable-typed field here would claim it does.
-    private sealed class ProjectionScope(Action<ProjectionScope> endProjection, ProjectionScope? parent) : IDisposable
+    internal sealed class ProjectionScope(Action<ProjectionScope> endProjection, ProjectionScope? parent) : IDisposable
     {
         internal ProjectionScope? Parent { get; } = parent;
         internal bool BumpOwed { get; set; }
+        internal bool SweepOwed { get; set; }
         internal List<Action> Announcements { get; } = [];
         private Action<ProjectionScope>? _endProjection = endProjection;
 

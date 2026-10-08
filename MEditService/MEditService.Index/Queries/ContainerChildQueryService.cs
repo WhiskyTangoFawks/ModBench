@@ -1,6 +1,5 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using Microsoft.Extensions.Logging;
 
 namespace MEditService.Index.Queries;
 
@@ -13,13 +12,11 @@ public sealed class ContainerChildQueryService
 
     private readonly IQueryIndex _index;
     private readonly LoadOrderHolder _loadOrder;
-    private readonly ILogger _logger;
 
-    internal ContainerChildQueryService(IQueryIndex index, LoadOrderHolder loadOrder, ILogger<ContainerChildQueryService> logger)
+    internal ContainerChildQueryService(IQueryIndex index, LoadOrderHolder loadOrder)
     {
         _index = index;
         _loadOrder = loadOrder;
-        _logger = logger;
     }
 
     // The children xEdit nests under a quest (wbVWDAsQuestChildren: DIAL, DLBR, SCEN) and a topic
@@ -55,17 +52,9 @@ public sealed class ContainerChildQueryService
         var result = new List<ContainerChildSummary>(rows.Count);
         foreach (var row in rows)
         {
-            if (!byFormKey.TryGetValue(row.ChildFormKey, out var record))
-            {
-                // container_child named a child Search didn't return — an index inconsistency
-                // between two tables written from the same ingest pass, never expected in
-                // practice; this reader degrades by omission rather than throwing.
-                _logger.LogWarning(
-                    "Container child {ChildFormKey} of {ParentFormKey} in {Plugin} ({Origin}) is indexed in " +
-                    "container_child but Search({RecordType}) did not return it; omitting.",
-                    row.ChildFormKey, parentFormKey, plugin.Name, plugin.Origin, SlotRecordTypes[row.SlotName]);
-                continue;
-            }
+            // The two reads are two snapshots: a child a commit took between them is gone, and that
+            // commit's announcement asks for this listing again.
+            if (!byFormKey.TryGetValue(row.ChildFormKey, out var record)) continue;
             result.Add(new ContainerChildSummary(
                 record.FormKey, record.EditorId, record.Plugin, record.Origin,
                 record.LoadOrderIndex, record.IsWinner, record.WorkingTreeState, SlotRecordTypes[row.SlotName],

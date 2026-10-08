@@ -52,11 +52,6 @@ internal sealed class Reconciler(
     private CancellationTokenSource? _reconcileCancellation;
     private bool _disposed;
 
-    /// <summary>One per Reconciler, never replaced: a reconcile swaps the store underneath it, which
-    /// is when the ordering matters most. By construction the outer of the two locks: taking
-    /// _lock first and then waiting here would deadlock.</summary>
-    internal IndexWriteGate WriteGate { get; } = new();
-
     private sealed record OpenScope(HeldPlugins Held, DuckDbRecordIndex Index, Projector Projector, FailedReads Failed);
 
     // Takes the exclusive right to reconcile or tear down, waiting out any in-flight reconcile.
@@ -135,11 +130,6 @@ internal sealed class Reconciler(
 
     public long Sequence { get { lock (_lock) return _scope?.Index.Sequence ?? 0; } }
 
-    // ADR-0015: a whole plugin re-derived or removed has too many rows to name, so the
-    // announcement names the plugin and the sequence the store reached once the projection landed.
-    private void AnnouncePluginChanged(DuckDbRecordIndex index, PluginAddress key) =>
-        index.Announce(() => notifications?.Publish(new PluginChangedNotification(key, index.Sequence)));
-
     // Polling, not the notification port: this answers one caller's own bound, not every
     // subscriber, and every write already serializes through IndexWriteGate, so a short poll
     // answers within one interval of landing.
@@ -163,7 +153,7 @@ internal sealed class Reconciler(
     /// <summary>Reconciles every arrival of the load order, changed or not, on a thread of its own
     /// (ADR-0013): the snapshot held when it runs, so an overtaken arrival reconciles
     /// the newer.</summary>
-    public Task StartReconcile() =>
+    public void StartReconcile() =>
         Task.Factory.StartNew(ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
     // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
@@ -312,7 +302,7 @@ internal sealed class Reconciler(
             fresh = indexFactory.Create(
                 snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins, out heldElsewhere);
             if (fresh is null) return null;
-            scope = new OpenScope(held, fresh, new Projector(fresh, held.Find, notifications, logger), new FailedReads(fresh));
+            scope = new OpenScope(held, fresh, new Projector(fresh, held.Find, logger), new FailedReads(fresh));
             fresh = null;
         }
         finally
@@ -390,20 +380,17 @@ internal sealed class Reconciler(
         // this reconcile.
         PublishStatus();
 
+        if (leaving.Count > 0) index.Commit(_ => leaving.ForEach(index.Unregister));
         foreach (var key in leaving)
         {
-            index.Unregister(key);
             held.Remove(key);
             lock (_lock) _indexed.RemoveAll(i => PluginAddress.Comparer.Equals(new PluginAddress(i.Name, i.Origin), key));
             scope.Failed.Forget(key);
         }
         if (leaving.Count > 0) PublishStatus();
 
-        foreach (var key in moved)
-        {
-            // ADR-0012.
-            index.Register(held.Update(open[key], snapshot.RegistrationOf(key)));
-        }
+        // ADR-0012.
+        if (moved.Count > 0) index.Commit(_ => moved.ForEach(key => index.Register(held.Update(open[key], snapshot.RegistrationOf(key)))));
 
         ReDeriveMovedTruths(scope, reDerived, token);
 
@@ -428,9 +415,6 @@ internal sealed class Reconciler(
                 return metadata is not null ? RegisterOrIndex(scope, metadata, state, token) : ReadOutcome.Unread;
             });
             if (metadata is null) continue;
-            // A plugin is browsable the moment it lands, so the rows the filter matches in it must
-            // answer then too, not only after the whole set (plugins.md, Order and view state).
-            filter.Reapply(index);
             firstUsableMs ??= timer.ElapsedMilliseconds;
         }
 
@@ -438,10 +422,9 @@ internal sealed class Reconciler(
         // arrived earlier was browsable but its winner state was not yet decided (ADR-0013).
         logger.LogDebug("Computing winners");
         var winnersTimer = Stopwatch.StartNew();
-        index.UpdateWinners(snapshot.Active);
-        lock (_lock) _conflictsComputed = true;
+        index.Commit(_ => index.UpdateWinners(snapshot.Active));
         // Ready itself publishes from the reconcile door, once this version is stamped in.
-        filter.Reapply(index);
+        lock (_lock) _conflictsComputed = true;
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -536,12 +519,21 @@ internal sealed class Reconciler(
         if (scope.Held.SetFailure(key, reason)) PublishStatus();
     }
 
-    // ADR-0010: a plugin the store has seen, still matching the disk, is registered, not
-    // indexed; ADR-0015 validates a tracked plugin by content on that same warm path.
+    // Listed only once its commit has landed: Status promises a plugin listed here is wholly
+    // queryable, the filter's matches in it included, and a registered one is.
     private ReadOutcome RegisterOrIndex(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
-        var key = plugin.Key;
-        if (scope.Index.IndexedContentHash(key) != null && WarmRegister(scope, plugin, state))
+        var outcome = scope.Index.Commit(_ => RegisterWarmOrIndex(scope, plugin, state, token));
+        lock (_lock) _indexed.Add(plugin.Key);
+        PublishStatus();
+        return outcome;
+    }
+
+    // ADR-0010: a plugin the store has seen, still matching the disk, is registered, not
+    // indexed; ADR-0015 validates a tracked plugin by content on that same warm path.
+    private ReadOutcome RegisterWarmOrIndex(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
+    {
+        if (scope.Index.IndexedContentHash(plugin.Key) != null && WarmRegister(scope, plugin, state))
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -549,10 +541,6 @@ internal sealed class Reconciler(
                     "Registering {Plugin} ({RecordCount} records), already indexed and unchanged on disk",
                     plugin.Name, plugin.RecordCount);
             }
-            // Counted exactly as an indexed plugin is: Status promises a plugin listed here is
-            // wholly queryable, and a registered one is.
-            lock (_lock) _indexed.Add(new PluginAddress(plugin.Name, plugin.Origin));
-            PublishStatus();
             return ReadOutcome.Read;
         }
 
@@ -566,24 +554,19 @@ internal sealed class Reconciler(
         {
             logger.LogDebug("Indexed {Plugin} in {ElapsedMs} ms", plugin.Name, indexTimer.ElapsedMilliseconds);
         }
-
-        // Recorded only once Index() has returned: Status promises a plugin here is wholly
-        // queryable, so listing it any earlier would be the partial-visibility lie in a
-        // different form.
-        lock (_lock) _indexed.Add(new PluginAddress(plugin.Name, plugin.Origin));
-        PublishStatus();
         return outcome;
     }
 
     // ADR-0007; HeldPlugins still reads a tracked plugin's metadata off its binary.
 
+    // One commit for the whole plugin, whichever door it came through (ADR-0015).
+    private ReadOutcome IndexOnePlugin(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token) =>
+        scope.Index.Commit(_ => IndexOnePluginRows(scope, plugin, state, token));
+
     // plugins.md, A row, Plugin: a tree that fails to read leaves the binary's rows, marked as standing
     // in for it, and answers what stopped it. Only the binary's own failure throws.
-    private ReadOutcome IndexOnePlugin(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
+    private ReadOutcome IndexOnePluginRows(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
-        // One advance for the whole plugin, whichever door it came through (ADR-0015).
-        using var _ = scope.Index.BeginProjection();
-
         var truth = Projector.TruthOf(plugin.Registered);
         if (truth != DerivedFrom.SourceTree)
         {
@@ -633,21 +616,16 @@ internal sealed class Reconciler(
     // ADR-0015.
     private void ValidateIndex(CancellationToken token)
     {
-        // Outside _lock, as every mutation door here is: validate refreshes rows through the index's
-        // own verbs, and the gate is reentrant so the rebuild below can take it again.
-        using var _ = WriteGate.Enter();
-
         var scope = RequireScope();
-        // One advance for everything this validate re-derives.
-        using var projection = scope.Index.BeginProjection();
         // A plugin not held failed to open, and the reconcile opens it again once its bytes change.
-        foreach (var metadata in scope.Held.Plugins)
+        scope.Index.Commit(_ =>
         {
-            token.ThrowIfCancellationRequested();
-            ValidateOne(scope, metadata);
-        }
-
-        filter.Reapply(scope.Index);
+            foreach (var metadata in scope.Held.Plugins)
+            {
+                token.ThrowIfCancellationRequested();
+                ValidateOne(scope, metadata);
+            }
+        });
     }
 
     // plugins.md, A row, Plugin, "Failed to read": a plugin that cannot be read is flagged, and the
@@ -661,14 +639,14 @@ internal sealed class Reconciler(
         {
             if (!holdsTree && !File.Exists(plugin.Path))
             {
-                if (index.IndexedContentHash(key) is not null) UnindexGonePlugin(key);
+                if (index.IndexedContentHash(key) is not null) index.Unindex(key);
                 return;
             }
 
             // Rows a failed read left say nothing of what the plugin now reads from.
             if (held.IsHeldWithAFailure(key) || scope.Failed.Holds(key))
             {
-                if (!scope.Failed.StillFailing(plugin.Registered)) ReindexHeldPlugin(key);
+                if (!scope.Failed.StillFailing(plugin.Registered)) ReindexHeldPlugin(scope, plugin);
                 return;
             }
 
@@ -678,7 +656,7 @@ internal sealed class Reconciler(
                 readWhole = MustReadWhole(scope, plugin, holdsTree, state);
                 return ReadOutcome.Read;
             });
-            if (readWhole) ReindexHeldPlugin(key);
+            if (readWhole) ReindexHeldPlugin(scope, plugin);
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
@@ -749,82 +727,26 @@ internal sealed class Reconciler(
         }
     }
 
-    // ADR-0013, read whole rather than per plugin.
-    private IReadOnlyList<RegisteredPlugin> Active() => holder.Current.Active;
-
     // ADR-0007: the read a first index runs, so a re-read produces the same rows by construction. A
     // failed read is recorded with what it read from and rethrown, so it is not read again until that
     // changes.
-    private void ReindexHeldPlugin(PluginAddress key)
+    private void ReindexHeldPlugin(OpenScope scope, PluginMetadata plugin)
     {
-        // Taken before anything reaches _lock. IndexWriteGate is a Lock, thread-affine, so nothing
-        // under this scope may await: the thread that exits must be the one that entered.
-        using var _ = WriteGate.Enter();
-
-        var (metadata, scope) = RequireHeldPlugin(key);
-        var index = scope.Index;
-        // ADR-0015: a whole plugin re-derived is one projection, so it is one advance.
-        using var projection = index.BeginProjection();
-
-        // Outside _lock, as the reconcile's own read is: every read takes _lock, and is served meanwhile.
+        var key = plugin.Key;
         try
         {
-            scope.Failed.Read(metadata.Registered, state => IndexOnePlugin(scope, metadata, state, CancellationToken.None));
+            scope.Index.Commit(projection =>
+            {
+                scope.Failed.Read(plugin.Registered, state => IndexOnePlugin(scope, plugin, state, CancellationToken.None));
+                projection.PluginChanged(key);
+            });
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            FailRead(scope, key, ReadFailure(ex, index.DerivationOf(key)));
+            FailRead(scope, key, ReadFailure(ex, scope.Index.DerivationOf(key)));
             throw;
         }
-
-        lock (_lock)
-        {
-            index.UpdateWinners(Active());
-            filter.Reapply(index);
-        }
         if (scope.Held.ClearFailure(key)) PublishStatus();
-        AnnouncePluginChanged(index, key);
-    }
-
-    private (PluginMetadata Metadata, OpenScope Scope) RequireHeldPlugin(PluginAddress key)
-    {
-        lock (_lock)
-        {
-            var scope = RequireScope();
-            var metadata = scope.Held.Find(key)
-                ?? throw new KeyNotFoundException($"Plugin '{key.Name}' from '{key.Origin}' is not held.");
-            return (metadata, scope);
-        }
-    }
-
-    // The file is gone, so its rows go with it. A no-op while the held plugin still exists or with no
-    // load order.
-    private void UnindexGonePlugin(PluginAddress key)
-    {
-        // Gated like its sibling above. Outside _lock, never inside it.
-        using var _ = WriteGate.Enter();
-
-        DuckDbRecordIndex index;
-        lock (_lock)
-        {
-            if (_scope is not { } scope) return;
-            if (scope.Held.Find(key) is { } plugin && File.Exists(plugin.Path)) return;
-            index = scope.Index;
-
-            // Removing a plugin is one projection: its rows and the winners they moved.
-            using var projection = index.BeginProjection();
-
-            if (logger.IsEnabled(LogLevel.Information))
-            {
-                logger.LogInformation(
-                    "{Plugin} ({Origin}) is gone from disk; removing it from the index", key.Name, key.Origin);
-            }
-            index.Unindex(key);
-            // A removal moves winners for every FormKey it held, exactly as a re-index does.
-            index.UpdateWinners(Active());
-            filter.Reapply(index);
-        }
-        AnnouncePluginChanged(index, key);
     }
 
     /// <summary>Drops the scope: the plugins it has open and the store's connection. Cancels an in-flight
