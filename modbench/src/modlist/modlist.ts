@@ -7,18 +7,14 @@ import {
   type ModFolder, type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk, newModNameRefusal } from '../coreLib/commandRefusals';
+import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 
 /** What a modlist command reaches the instance through. */
 export interface ModlistAccess {
   readonly adapter: InstanceAdapter;
 }
 
-/** `wrote` is false when the gesture was already true of mod order. */
-export type ModlistCommandResult =
-  | { applied: true; wrote: boolean }
-  | { applied: false; refusal: string };
-
-async function changeModOrder(access: ModlistAccess, profile: string, decide: DecideModOrder): Promise<ModlistCommandResult> {
+async function changeModOrder(access: ModlistAccess, profile: string, decide: DecideModOrder): Promise<CommandResult> {
   try {
     const { wrote } = await access.adapter.changeModOrder(profile, decide);
     return { applied: true, wrote };
@@ -26,12 +22,6 @@ async function changeModOrder(access: ModlistAccess, profile: string, decide: De
     return refuse(err);
   }
 }
-
-/** A gesture over a selection, in one write: each item landed or refused by name, or the whole
- *  selection refused once when mod order cannot be read or written. */
-export type ModlistSelectionResult =
-  | { applied: true; outcome: SelectionOutcome<string> }
-  | { applied: false; refusal: string };
 
 type EntryKind = EntryRef['kind'];
 
@@ -44,7 +34,7 @@ const isListed = (order: readonly ModlistEntry[], entry: EntryRef): boolean =>
 async function changeSelection(
   access: ModlistAccess, profile: string, kind: EntryKind, names: readonly string[],
   changesFor: (found: readonly string[]) => readonly ModOrderChange[],
-): Promise<ModlistSelectionResult> {
+): Promise<SelectionResult<string>> {
   let outcome: SelectionOutcome<string> = { landed: [], refused: [] };
   const result = await changeModOrder(access, profile, (order) => {
     const landed = names.filter((name) => isListed(order, { kind, name }));
@@ -58,7 +48,7 @@ async function changeSelection(
 /** `modbench.mod.enable` / `modbench.mod.disable`, over the whole selection in one write. */
 export function setModsEnabled(
   access: ModlistAccess, profile: string, modNames: readonly string[], enabled: boolean,
-): Promise<ModlistSelectionResult> {
+): Promise<SelectionResult<string>> {
   return changeSelection(access, profile, 'mod', modNames, (found) =>
     found.map((mod) => ({ kind: 'enable', mod, enabled })));
 }
@@ -69,7 +59,7 @@ export type { MovePlace, OrderEnd, OriginFileMark, SeparatorsPlace } from '../in
  *  order, at the `end` of the place. A separator or mod that has gone refuses the whole move. */
 export function moveMods(
   access: ModlistAccess, profile: string, modNames: readonly string[], place: MovePlace, end: OrderEnd,
-): Promise<ModlistSelectionResult> {
+): Promise<SelectionResult<string>> {
   return changeSelection(access, profile, 'mod', modNames, (found) => [{ kind: 'moveMods', mods: found, place, end }]);
 }
 
@@ -77,7 +67,7 @@ export function moveMods(
  *  and they land on the `end` side of the place. A target that has gone refuses the whole move. */
 export function moveSeparators(
   access: ModlistAccess, profile: string, separatorNames: readonly string[], place: SeparatorsPlace, end: OrderEnd,
-): Promise<ModlistSelectionResult> {
+): Promise<SelectionResult<string>> {
   return changeSelection(access, profile, 'separator', separatorNames, (found) =>
     [{ kind: 'moveSeparators', separators: found, place, end }]);
 }
@@ -92,19 +82,16 @@ export interface OriginFileRef {
 export async function markFiles(
   access: ModlistAccess, files: readonly OriginFileRef[], mark: OriginFileMark,
 ): Promise<SelectionOutcome<OriginFileRef>> {
-  const landed: OriginFileRef[] = [];
-  const refused: ItemRefusal<OriginFileRef>[] = [];
-  for (const file of files) {
+  return selectionOutcomeOf(files, async (file): Promise<CommandResult> => {
     try {
       const marked = await access.adapter.markOriginFile(file.origin, file.relativePath, mark);
-      if (marked.gone) refused.push({ item: file, reason: goneFromDisk(file.relativePath) });
-      else if ('refusal' in marked) refused.push({ item: file, reason: marked.refusal });
-      else landed.push(file);
+      if (marked.gone) return { applied: false, refusal: goneFromDisk(file.relativePath) };
+      if ('refusal' in marked) return { applied: false, refusal: marked.refusal };
+      return { applied: true, wrote: true };
     } catch (err) {
-      refused.push({ item: file, reason: errorMessage(err) });
+      return refuse(err);
     }
-  }
-  return { landed, refused };
+  }, (file) => file);
 }
 
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
@@ -149,7 +136,7 @@ function groupStartOf(order: readonly ModlistEntry[], at: number): number {
  *  after it; on a separator, before its own group's winning-most member. */
 export function insertSeparator(
   access: ModlistAccess, profile: string, requested: string, anchor: EntryRef,
-): Promise<ModlistCommandResult> {
+): Promise<CommandResult> {
   return changeModOrder(access, profile, (order) => {
     const at = order.findIndex((e) => e.kind === anchor.kind && e.name === anchor.name);
     if (at === -1) throw new Error(`Entry not found in modlist: ${anchor.name}`);
@@ -161,7 +148,7 @@ export function insertSeparator(
 /** Rename a separator in place, and its folder with it. */
 export function renameSeparator(
   access: ModlistAccess, profile: string, oldName: string, requested: string,
-): Promise<ModlistCommandResult> {
+): Promise<CommandResult> {
   return changeModOrder(access, profile, () => [{ kind: 'renameSeparator', from: oldName, to: requested }]);
 }
 
@@ -169,10 +156,6 @@ interface TrashedEntry {
   name: string;
   lineRefusal?: string;
 }
-
-type TrashThenUnlistResult =
-  | { applied: true; outcome: SelectionOutcome<TrashedEntry> }
-  | { applied: false; refusal: string };
 
 const dropOf = (entry: EntryRef): ModOrderChange =>
   (entry.kind === 'mod' ? { kind: 'dropMod', mod: entry.name } : { kind: 'dropSeparator', separator: entry.name });
@@ -182,7 +165,7 @@ const dropOf = (entry: EntryRef): ModOrderChange =>
 // carrying the failure rather than folding it into a refusal.
 async function trashThenUnlist(
   access: ModlistAccess, profile: string, kind: EntryKind, names: readonly string[], trash: MoveToTrash,
-): Promise<TrashThenUnlistResult> {
+): Promise<SelectionResult<TrashedEntry>> {
   let order: readonly ModlistEntry[];
   try {
     order = await access.adapter.modOrder(profile);
@@ -215,14 +198,12 @@ async function trashThenUnlist(
   };
 }
 
-export type DeleteSeparatorsResult = TrashThenUnlistResult;
-
 /** `modbench.separator.delete` over the selection. The trash cannot be undone, so each folder goes
  *  before its line: a refused trash writes nothing for that separator (commands.md, *A failed
  *  gesture writes nothing*). */
 export function deleteSeparators(
   access: ModlistAccess, profile: string, names: readonly string[], trash: MoveToTrash,
-): Promise<DeleteSeparatorsResult> {
+): Promise<SelectionResult<TrashedEntry>> {
   return trashThenUnlist(access, profile, 'separator', names, trash);
 }
 
@@ -239,15 +220,11 @@ interface UninstalledMod extends TrashedEntry {
   markRefusal?: string;
 }
 
-export type UninstallModsResult =
-  | { applied: true; outcome: SelectionOutcome<UninstalledMod> }
-  | { applied: false; refusal: string };
-
 /** `modbench.mod.uninstall` over the selection: each mod's folder to the trash, then its line,
  *  then its downloaded file marked unless that file is gone (mods.md, Reporting, story 4). */
 export async function uninstallMods(
   access: ModlistAccess, profile: string, mods: readonly ModToUninstall[], trash: MoveToTrash,
-): Promise<UninstallModsResult> {
+): Promise<SelectionResult<UninstalledMod>> {
   const archiveOf = new Map(mods.map((m) => [m.name, m.archiveFilename] as const));
   const result = await trashThenUnlist(access, profile, 'mod', mods.map((m) => m.name), trash);
   if (!result.applied) return result;
