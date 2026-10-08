@@ -262,11 +262,6 @@ public sealed class SourceRepository
     public void Put(PluginAddress plugin, SourceDocument document) =>
         SourceTransaction.Atomically(this, transaction => transaction.Apply(ChangesToPut(plugin, document)));
 
-    /// <summary>The put of an exterior cell, which lands in the block its own grid falls in inside
-    /// <paramref name="worldspace"/>'s directory. A held cell is replaced where it is. A failure writes nothing.</summary>
-    public void PutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
-        SourceTransaction.Atomically(this, transaction => transaction.Apply(ChangesToPutInWorldspace(plugin, cell, worldspace)));
-
     /// <summary>What <see cref="Put"/> changes, written nowhere. A file at its path that is no document throws
     /// as unreadable.</summary>
     public SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document) => Writes.ChangesToPut(plugin, document);
@@ -275,8 +270,9 @@ public sealed class SourceRepository
     /// throws: an edit never creates.</summary>
     public SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) => Writes.ChangesToRewrite(plugin, document);
 
-    /// <summary>What <see cref="PutInWorldspace"/> changes, written nowhere. A file at its path that is no
-    /// document throws as unreadable.</summary>
+    /// <summary>What putting an exterior cell changes, written nowhere: a new cell lands in its grid's block
+    /// under <paramref name="worldspace"/>, a held one where it is. A file there that is no document throws
+    /// as unreadable.</summary>
     public SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
         Writes.ChangesToPutInWorldspace(plugin, cell, worldspace);
 
