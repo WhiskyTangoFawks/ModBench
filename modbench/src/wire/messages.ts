@@ -236,6 +236,8 @@ export type RecordLoadAnswer =
       // instance. An origin in no mod is absent.
       modsByOrigin: Record<string, ModRepository>;
       fileCopyAlone: boolean;
+      // The origin of the mod whose file overrides the tab's plugin; null when none does.
+      fileOverriddenBy: string | null;
     } & RecordRead)
   | { ok: false; error: string };
 
@@ -409,7 +411,7 @@ function parseRead(w: { compare?: unknown; gone?: unknown; copiesLacking?: unkno
 
 function parseAnswered(w: {
   compare?: unknown; gone?: unknown; copiesLacking?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; documentPlugin?: unknown;
-  modsByOrigin?: unknown; fileCopyAlone?: unknown;
+  modsByOrigin?: unknown; fileCopyAlone?: unknown; fileOverriddenBy?: unknown;
 }): RecordLoadAnswer {
   if (w.plugins !== null && !isPluginResponseArray(w.plugins)) {
     throw new Error('Expected "recordLoadAnswered" to carry a plugins array or null.');
@@ -423,9 +425,13 @@ function parseAnswered(w: {
   if (!isPluginAddress(w.documentPlugin)) throw new Error('Expected "recordLoadAnswered" to carry the document\'s plugin.');
   if (!isModsByOrigin(w.modsByOrigin)) throw new Error('Expected "recordLoadAnswered" to carry its mods by origin.');
   if (typeof w.fileCopyAlone !== 'boolean') throw new Error('Expected "recordLoadAnswered" to carry a boolean fileCopyAlone.');
+  if (w.fileOverriddenBy !== null && typeof w.fileOverriddenBy !== 'string') {
+    throw new Error('Expected "recordLoadAnswered" to carry its overriding mod or null.');
+  }
   return {
     ok: true, ...parseRead(w), plugins: w.plugins, conflictsComputed: w.conflictsComputed,
     loadFailures: w.loadFailures, documentPlugin: w.documentPlugin, modsByOrigin: w.modsByOrigin, fileCopyAlone: w.fileCopyAlone,
+    fileOverriddenBy: w.fileOverriddenBy,
   };
 }
 
@@ -438,7 +444,7 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
   const w = value as {
     type?: unknown; formKey?: unknown; requestId?: unknown;
     ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
-    documentPlugin?: unknown; text?: unknown; columns?: unknown; modsByOrigin?: unknown; fileCopyAlone?: unknown;
+    documentPlugin?: unknown; text?: unknown; columns?: unknown; modsByOrigin?: unknown; fileCopyAlone?: unknown; fileOverriddenBy?: unknown;
   };
   switch (w.type) {
     case EXTENSION_TO_WEBVIEW.LOAD_RECORD: return parseLoadRecord(w);

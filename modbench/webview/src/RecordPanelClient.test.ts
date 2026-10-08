@@ -20,7 +20,7 @@ function lastRequestId(): string {
 
 function answer(requestId: string, data: Record<string, unknown>): void {
   window.dispatchEvent(new MessageEvent('message', {
-    data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: {}, fileCopyAlone: false, ...data },
+    data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: {}, fileCopyAlone: false, fileOverriddenBy: null, ...data },
   }));
 }
 
@@ -75,6 +75,15 @@ describe('RecordPanelClient.load', () => {
     });
 
     expect(await promise).toMatchObject({ ok: true, fileCopyAlone: true });
+  });
+
+  it('says which mod overrides the file\'s plugin', async () => {
+    const promise = createRecordPanelClient().load('000001:A.esp');
+    answer(lastRequestId(), {
+      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'NoConflict' }, plugins: null, conflictsComputed: false, loadFailures: [], fileOverriddenBy: 'ModB',
+    });
+
+    expect(await promise).toMatchObject({ ok: true, fileOverriddenBy: 'ModB' });
   });
 
   it('keys immutableSet by compound identity, so two same-filename different-origin plugins stay distinct', async () => {

@@ -1,12 +1,12 @@
 import type { Subscription } from '../instanceAdapter/instanceAdapter';
 import type { Instance } from './instance';
-import { isDisabledOrInDisabledMod } from './disabledPlugin';
+import { pluginStanding, type PluginStanding } from './pluginStanding';
 import type { PluginAddress } from '../wire/pluginAddress';
 
 export interface InstanceFacts {
   trackedMods: () => ReadonlySet<string>;
   modDirs: () => ReadonlyMap<string, string>;
-  isDisabledOrInDisabledMod: (plugin: PluginAddress) => boolean;
+  standingOf: (plugin: PluginAddress) => PluginStanding;
   onChange: (listener: () => void) => Subscription;
   refresh: () => Promise<void>;
 }
@@ -14,7 +14,7 @@ export interface InstanceFacts {
 export const factsOf = (instance: Instance): InstanceFacts => ({
   trackedMods: () => instance.value.trackedMods,
   modDirs: () => instance.value.paths.modDirs,
-  isDisabledOrInDisabledMod: (plugin) => isDisabledOrInDisabledMod(instance.value, plugin),
+  standingOf: (plugin) => pluginStanding(instance.value, plugin),
   onChange: (listener) => instance.subscribe(() => { listener(); }),
   refresh: () => instance.refresh(),
 });
@@ -22,7 +22,7 @@ export const factsOf = (instance: Instance): InstanceFacts => ({
 export const NO_INSTANCE_FACTS: InstanceFacts = {
   trackedMods: () => new Set(),
   modDirs: () => new Map(),
-  isDisabledOrInDisabledMod: () => false,
+  standingOf: () => ({ kind: 'enabled' }),
   onChange: () => ({ dispose: () => undefined }),
   refresh: () => Promise.resolve(),
 };

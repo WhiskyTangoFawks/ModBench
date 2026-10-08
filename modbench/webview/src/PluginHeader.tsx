@@ -6,6 +6,7 @@ import { ExpandArrow } from './ExpandArrow';
 
 interface PluginHeaderProps {
   override: CompareOverride;
+  overriddenBy: string | null;
   notActive: boolean;
   isImmutable: boolean;
   isTracked: boolean;
@@ -23,8 +24,9 @@ interface PluginHeaderProps {
 interface Status { label: string; reason: string }
 
 // editor.md, A column's header, the Status table: the first row that applies.
-function statusOf(o: CompareOverride, notActive: boolean, isImmutable: boolean, isTracked: boolean, sourceUnreadable: boolean): Status {
+function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: boolean, isImmutable: boolean, isTracked: boolean, sourceUnreadable: boolean): Status {
   if (o.parseDiagnosis != null) return { label: '(parse failure)', reason: o.parseDiagnosis };
+  if (overriddenBy !== null) return { label: '(overridden)', reason: `The game loads ${overriddenBy}’s file instead.` };
   if (notActive) return { label: '(not active)', reason: 'The game does not load it, so no other copy is compared.' };
   if (isImmutable) return { label: '(read-only)', reason: 'The game’s plugins are not edited.' };
   if (o.isInOverwrite) {
@@ -52,9 +54,9 @@ function statusOf(o: CompareOverride, notActive: boolean, isImmutable: boolean, 
 }
 
 export function PluginHeader({
-  override: o, notActive, isImmutable, isTracked, sourceUnreadable, isFile, onOpen, collapsed, onToggleCollapse, onResize, style, vscodeContext,
+  override: o, overriddenBy, notActive, isImmutable, isTracked, sourceUnreadable, isFile, onOpen, collapsed, onToggleCollapse, onResize, style, vscodeContext,
 }: Readonly<PluginHeaderProps>) {
-  const status = statusOf(o, notActive, isImmutable, isTracked, sourceUnreadable);
+  const status = statusOf(o, overriddenBy, notActive, isImmutable, isTracked, sourceUnreadable);
 
   return (
     <th
