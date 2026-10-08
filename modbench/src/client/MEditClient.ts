@@ -6,7 +6,7 @@ import {
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellChildRecords, type CellSummary,
   type ChildRecordSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
-  type PluginLoadFailure, type CompareResult, type CompareRecordsResponse, type CopyMissing, type RecordCopy, type CopyText,
+  type PluginLoadFailure, type CompareResult, type CompareRecordsResponse, type RecordCopy, type CopyText,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress } from '../wire/pluginAddress';
@@ -306,5 +306,5 @@ export type {
   TrackStatus, PluginMetadata, PluginDiagnosisReport,
   RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, CompileDiagnostic,
-  LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsResponse, CopyMissing,
+  LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsResponse,
 };

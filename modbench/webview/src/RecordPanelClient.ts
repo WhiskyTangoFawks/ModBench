@@ -14,7 +14,7 @@ type LoadResult =
   | { ok: false; error: string };
 
 // Null is records held by no plugin at all, which `gone` names (editor.md, States, story 4).
-export type PanelRead =
+type PanelRead =
   | { result: CompareResult }
   | { result: null; gone: string[]; copiesLacking: string[] };
 
