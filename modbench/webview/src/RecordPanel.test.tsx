@@ -314,6 +314,44 @@ describe('RecordPanel', () => {
 
 });
 
+describe('RecordPanel — a file whose plugin is disabled, or in a disabled mod', () => {
+  const NOT_ACTIVE = 'This file\'s plugin is not active: no other copy is compared.';
+  const alone: CompareResult = compareResultFixture({
+    conflictAll: 'NoConflict',
+    overrides: [compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'File Name' }] })],
+    diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp|ModA': 'File Name' }, winnerColumn: 'MyMod.esp|ModA' })],
+  });
+  const opts: PanelOpts = { plugins: [{ name: 'MyMod.esp', origin: 'ModA', isTracked: true }], fileColumn: 'MyMod.esp|ModA', fileCopyAlone: true };
+
+  beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('shows its column alone, saying so above the grid and not that the comparison is incomplete, while mEdit indexes too', async () => {
+    renderPanel(alone, { ...opts, conflictsComputed: false });
+
+    await waitFor(() => expect(screen.getByText(NOT_ACTIVE)).toBeInTheDocument());
+    expect(screen.queryByText(required(recordPanelIncompleteMessage(false), 'the incomplete message'))).not.toBeInTheDocument();
+    expect(required(screen.getByText('MyMod.esp').closest('th'), 'its header')).toHaveTextContent('(not active)');
+  });
+
+  it('edits its column', async () => {
+    renderPanel(alone, opts);
+    await waitFor(() => expect(screen.getByText('File Name')).toBeInTheDocument());
+
+    fireEvent.doubleClick(screen.getByText('File Name'));
+
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
+  it('says nothing of a plugin not active when its file is in the comparison', async () => {
+    renderPanel(alone, { ...opts, fileCopyAlone: false });
+    await waitFor(() => expect(screen.getByText('File Name')).toBeInTheDocument());
+
+    expect(screen.queryByText(NOT_ACTIVE)).not.toBeInTheDocument();
+    expect(required(screen.getByText('MyMod.esp').closest('th'), 'its header')).not.toHaveTextContent('(not active)');
+  });
+});
+
 describe('RecordPanel — the file\'s column', () => {
   const twoTracked: CompareResult = compareResultFixture({
     overrides: [

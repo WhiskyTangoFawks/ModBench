@@ -120,8 +120,9 @@ public record CompareResult(
 public record RecordCopy(string FormKey, PluginAddress Plugin, string? DocumentText = null);
 
 /// <summary>The document carrying the record, its own or its container's, that a comparison reads
-/// <paramref name="Plugin"/>'s copy from in place of the copy the index holds.</summary>
-public record CopyText(PluginAddress Plugin, string DocumentText);
+/// <paramref name="Plugin"/>'s copy from in place of the copy the index holds. <paramref name="Alone"/>
+/// compares that copy with no other.</summary>
+public record CopyText(PluginAddress Plugin, string DocumentText, bool Alone = false);
 
 public record RenderedDocument(string FileName, string Text);
 

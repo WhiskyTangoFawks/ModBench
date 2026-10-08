@@ -94,7 +94,7 @@ internal sealed class RecordQueryService(
     public CompareResult? GetCompare(string formKey, CopyText? text = null)
     {
         var reads = RequireReads();
-        var stack = reads.GetOverrideStack(formKey);
+        var stack = text?.Alone == true ? null : reads.GetOverrideStack(formKey);
         if (stack == null && text == null) return null;
         var snapshot = _loadOrder.Require();
 
