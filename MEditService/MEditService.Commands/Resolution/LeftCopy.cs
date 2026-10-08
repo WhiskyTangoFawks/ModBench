@@ -3,8 +3,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands.Resolution;
 
-/// <summary>What the walk to the left found: a copy, none, or what it could not read: a plugin's copy of what
-/// was <see cref="Unreadable.Asked"/>, or the source tree naming its masters.</summary>
+/// <summary>What the walk to the left found: a copy, none, or something it could not read.</summary>
 internal abstract record LeftCopy
 {
     private LeftCopy()
@@ -15,15 +14,26 @@ internal abstract record LeftCopy
 
     internal sealed record None : LeftCopy;
 
-    internal sealed record Unreadable(PluginAddress Plugin, string? Asked, string Why) : LeftCopy
+    internal abstract record Unreadable(PluginAddress Plugin, string Why) : LeftCopy
     {
-        private string Unread => Asked is null ? $"the source tree that names {Plugin.Name}'s masters" : $"{Plugin.Name}'s copy of {Asked}";
+        protected abstract string Unread { get; }
 
         /// <summary>The refusal of a write that <paramref name="needs"/> this copy.</summary>
         internal RecordEditResult Refusal(string spelled, string needs) =>
             RecordEditResult.RefusedAt(
                 RecordEditRefusal.RecordParseFailed, spelled,
                 $"'{spelled}': {needs}, and {Unread} cannot be read: {Why.TrimEnd('.')}. Nothing was written.");
+    }
+
+    /// <summary>A plugin's copy of <paramref name="Asked"/> (a FormKey or a worldspace).</summary>
+    internal sealed record UnreadableCopy(PluginAddress Plugin, string Asked, string Why) : Unreadable(Plugin, Why)
+    {
+        protected override string Unread => $"{Plugin.Name}'s copy of {Asked}";
+    }
+
+    internal sealed record UnreadableMastersTree(PluginAddress Plugin, string Why) : Unreadable(Plugin, Why)
+    {
+        protected override string Unread => $"the source tree that names {Plugin.Name}'s masters";
     }
 
     internal string? FoundText => (this as Found)?.Text;

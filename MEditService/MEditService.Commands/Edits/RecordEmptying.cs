@@ -47,26 +47,29 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
         return unreadable.Refusal(spelled, $"{formKey}'s own fields come from its nearest copy to the left that is {neither}");
     }
 
-    /// <summary>The refusal of a Partial Form that xEdit's GetCanBePartial denies the cell.</summary>
+    /// <summary>The refusal of a Partial Form that xEdit's GetCanBePartial denies the copy.</summary>
     internal RecordEditResult? RefuseCell(
         JsonObject record, IReadOnlyList<PathHop> prefix, RecordTableSchema schema, GameRelease release,
         LoadOrderResolution.MastersWalk masters, string spelled)
     {
-        if (!MakesPartialForm || !RecordTypeDispatch.For(release).IsCell(schema.TableName)) return null;
+        if (!MakesPartialForm) return null;
         var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
-        var temporaryExterior = false;
-        if (!HeldPersistent && prefix is not [.., { Name: PlacedCell.WorldspacePersistentCellMember }])
+        bool? temporaryExterior = HeldPersistent || prefix is [.., { Name: PlacedCell.WorldspacePersistentCellMember }] ? false : null;
+        var verdict = CanBePartial.Of(schema, release, formKey, temporaryExterior);
+        if (verdict is CanBePartial.Verdict.NeedsPlacement)
         {
-            if (masters.WhereItSits(record, out var unreadable) is not { } said)
-            {
-                if (unreadable is not null)
-                    return unreadable.Refusal(spelled, $"whether {formKey} can be a Partial Form depends on where it sits, which only its nearest copy to the left says");
-                return Cannot(spelled, $"whether {formKey} can be a Partial Form is unknown: it says neither that it is " +
-                    "interior nor where it sits in its worldspace, and no copy of it to its left says either");
-            }
-            temporaryExterior = !PlacedCell.IsInterior(said);
+            if (masters.WhereItSits(
+                record, spelled,
+                $"whether {formKey} can be a Partial Form depends on where it sits, which only its nearest copy to the left says",
+                () => Cannot(
+                    spelled,
+                    $"whether {formKey} can be a Partial Form is unknown: it says neither that it is " +
+                    "interior nor where it sits in its worldspace, and no copy of it to its left says either"),
+                out var said) is { } refusal)
+                return refusal;
+            verdict = CanBePartial.Of(schema, release, formKey, !PlacedCell.IsInterior(said));
         }
-        return CanBePartial.OfCell(formKey, release, temporaryExterior) switch
+        return verdict switch
         {
             CanBePartial.Verdict.TemporaryExterior =>
                 Cannot(spelled, $"{formKey} is a temporary exterior cell, which xEdit never makes a Partial Form"),

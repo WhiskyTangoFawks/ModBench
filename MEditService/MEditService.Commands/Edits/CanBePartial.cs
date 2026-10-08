@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -10,11 +11,13 @@ internal static class CanBePartial
 {
     internal static bool TypeDeclares(Type recordType) => PartialFormFlag.IsPartialFormable(recordType);
 
-    /// <summary>The verdict on the cell <paramref name="formKey"/>, which is a temporary exterior cell
-    /// when <paramref name="temporaryExterior"/>.</summary>
-    internal static Verdict OfCell(string? formKey, GameRelease release, bool temporaryExterior)
+    /// <summary><paramref name="temporaryExterior"/> is null while a cell's placement is not yet known.</summary>
+    internal static Verdict Of(RecordTableSchema schema, GameRelease release, string? formKey, bool? temporaryExterior)
     {
-        if (temporaryExterior) return new Verdict.TemporaryExterior();
+        if (!TypeDeclares(schema.RecordType)) return new Verdict.TypeDoesNotDeclare();
+        if (!RecordTypeDispatch.For(release).IsCell(schema.TableName)) return new Verdict.Can();
+        if (temporaryExterior is not { } temporary) return new Verdict.NeedsPlacement();
+        if (temporary) return new Verdict.TemporaryExterior();
         return PartialFormFlag.CellsDefinedIn(release) is { } only && FormKey.TryFactory(formKey, out var key) && key.ModKey != only
             ? new Verdict.DefinedElsewhere(key.ModKey, only)
             : new Verdict.Can();
@@ -27,6 +30,10 @@ internal static class CanBePartial
         }
 
         internal sealed record Can : Verdict;
+
+        internal sealed record TypeDoesNotDeclare : Verdict;
+
+        internal sealed record NeedsPlacement : Verdict;
 
         internal sealed record TemporaryExterior : Verdict;
 

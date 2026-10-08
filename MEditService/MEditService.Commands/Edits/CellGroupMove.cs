@@ -43,17 +43,15 @@ internal sealed record CellGroupMove(IReadOnlyList<PathHop> Prefix, string Desti
         (int X, int Y)? grid = null;
         if (!inThePersistentCell)
         {
-            // A cell that says nothing of where it sits takes its nearest copy to the left's word, as xEdit
-            // reads the highest override visible to the file.
-            if (masters.WhereItSits(cell, out var unreadable) is not { } said)
-            {
-                if (unreadable is not null)
-                    return unreadable.Refusal(spelled, $"which cell xEdit would move {formKey} into depends on where its cell sits, which only that cell's nearest copy to the left says");
-                return Unknown(
+            if (masters.WhereItSits(
+                cell, spelled,
+                $"which cell xEdit would move {formKey} into depends on where its cell sits, which only that cell's nearest copy to the left says",
+                () => Unknown(
                     spelled, formKey,
                     $"its cell {cell[RecordMembers.FormKey]?.GetValue<string>()} says neither that it is interior nor where it " +
-                    "sits in its worldspace, and no copy of it to its left says either");
-            }
+                    "sits in its worldspace, and no copy of it to its left says either"),
+                out var said) is { } refusal)
+                return refusal;
             if (PlacedCell.IsInterior(said)) return null;
             grid = PlacedCell.Grid(said);
         }

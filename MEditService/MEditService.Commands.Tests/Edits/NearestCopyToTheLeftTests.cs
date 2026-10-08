@@ -468,6 +468,19 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
+    public void SettingPartialForm_OnACellThatSaysNotWhereItSits_PassesOverANearerMastersCopyThatSaysNeither()
+    {
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
+            (Plugin("Middle.esp", CellCopy(PartialForm, "Middle", also: cell => cell.Flags = 0)), false),
+            (Plugin("Override.esp", Mastering("Middle.esp", mod => mod.Cells.Records.Add(BlockOf(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" })))), true));
+
+        var result = WriteFlags(TheCell, PartialForm);
+
+        Assert.True(result.Applied, result.Message);
+    }
+
+    [Fact]
     public void SettingPartialForm_OnACellThatSaysNotWhereItSits_WhenItsCopyToTheLeftCannotBeRead_IsRefusedNamingItsPlugin()
     {
         var middle = Plugin("Middle.esp", CellCopy(0, "Inside", 4f));

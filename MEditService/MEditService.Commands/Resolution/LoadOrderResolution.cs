@@ -116,16 +116,18 @@ internal sealed class LoadOrderResolution(
                 return JsonNode.Parse(body) is JsonObject copy && says(copy) ? body : null;
             });
 
-        /// <summary>The copy that says where <paramref name="cell"/> sits: its own, else its nearest copy to the
-        /// left (xEdit's highest override). Null when neither says, and
-        /// <paramref name="unreadable"/> when the walk could not read.</summary>
-        internal JsonObject? WhereItSits(JsonObject cell, out LeftCopy.Unreadable? unreadable)
+        /// <summary>The copy saying where <paramref name="cell"/> sits is its own, else its nearest copy to the left
+        /// (xEdit's highest override). A refusal when the walk cannot read, <paramref name="unsaid"/> when none says.</summary>
+        internal RecordEditResult? WhereItSits(
+            JsonObject cell, string spelled, string needs, Func<RecordEditResult> unsaid, out JsonObject said)
         {
-            var copy = PlacedCell.Says(cell) || cell[RecordMembers.FormKey]?.GetValue<string>() is not { } formKey
-                ? null
-                : NearestCopy(formKey, PlacedCell.Says);
-            unreadable = copy as LeftCopy.Unreadable;
-            return PlacedCell.SaidBy(cell, copy?.FoundText);
+            said = cell;
+            if (PlacedCell.Says(cell)) return null;
+            var copy = cell[RecordMembers.FormKey]?.GetValue<string>() is { } formKey ? NearestCopy(formKey, PlacedCell.Says) : null;
+            if (copy is LeftCopy.Unreadable unreadable) return unreadable.Refusal(spelled, needs);
+            if (PlacedCell.SaidBy(cell, copy?.FoundText) is not { } found) return unsaid();
+            said = found;
+            return null;
         }
 
         /// <summary>The nearest master's copy of the exterior cell at grid (<paramref name="x"/>, <paramref name="y"/>)
@@ -144,7 +146,7 @@ internal sealed class LoadOrderResolution(
             }
             catch (UnreadableSourceDocumentException ex)
             {
-                return new LeftCopy.Unreadable(plugin, null, ex.Message);
+                return new LeftCopy.UnreadableMastersTree(plugin, ex.Message);
             }
             var index = snapshot.LoadOrderIndex(plugin) ?? snapshot.Active.Count;
             var asked = snapshot.Active.Take(index).Reverse().Select(registered => registered.Key)
@@ -158,7 +160,7 @@ internal sealed class LoadOrderResolution(
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
-                    return new LeftCopy.Unreadable(left, askedAbout, source.Diagnose(ex));
+                    return new LeftCopy.UnreadableCopy(left, askedAbout, source.Diagnose(ex));
                 }
             }
             return new LeftCopy.None();
