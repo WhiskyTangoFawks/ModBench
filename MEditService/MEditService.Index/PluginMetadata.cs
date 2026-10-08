@@ -9,7 +9,7 @@ namespace MEditService.Index;
 
 // LoadOrderIndex is the plugin's place among the active plugins, null when the snapshot does not
 // list it as active.
-public record PluginMetadata(
+internal sealed record PluginMetadata(
     string Name,
     string Path,
     int? LoadOrderIndex,
