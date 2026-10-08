@@ -56,15 +56,12 @@ public sealed class ContainmentReadOnlySchemaTests
     }
 
     [Fact]
-    public void EveryPlacedRecordsPosition_IsReadOnly_AndAPositionOnARecordNotPlacedIsNot()
+    public void EveryPlacedRecordsPosition_IsWritable_SinceItsCellComesFromStructureNotFromWhereItSits()
     {
         Assert.Contains("refr", PlacedRecordTables.Names);
-        var writable = PlacedRecordTables.Fallout4
-            .Where(schema => schema.RecordColumns.Single(c => c.Name == "Position").Field.ReadOnlyReason?
-                .Contains("which cell holds", StringComparison.Ordinal) != true)
+        var readOnly = PlacedRecordTables.Fallout4
+            .Where(schema => schema.RecordColumns.Single(c => c.Name == "Position").Field.ReadOnlyReason != null)
             .Select(schema => schema.TableName);
-        Assert.Empty(writable);
-
-        Assert.Null(Column("trns", "Position").Field.ReadOnlyReason);
+        Assert.Empty(readOnly);
     }
 }

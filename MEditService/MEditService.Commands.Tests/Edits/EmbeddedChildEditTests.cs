@@ -29,7 +29,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
         var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
 
-        Assert.True(result.Applied, result.Message);
+        Assert.True(result.Applied);
         Assert.NotEmpty(_fixture.ChangedFormKeys());
         Assert.Equal(before.Replace("\"Scale\": 1.0", "\"Scale\": 2.5", StringComparison.Ordinal), EmbedCellDocument().Body);
     }
@@ -66,18 +66,14 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void APlacedRefsPosition_IsRefused_AsItDecidesWhichCellHoldsIt()
+    public void APlacedRefsPosition_Edits_AsAnyField_AndTheRefStaysInItsCell()
     {
-        var before = _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body;
-
         var result = EditService().Set(
-            _fixture.Plugin, _fixture.TemporaryRef.ToString(), "Position", Json("""{"X": 99.0, "Y": 88.0, "Z": 77.0}"""));
+            _fixture.Plugin, _fixture.TemporaryRef.ToString(), "Position", Json("\"99, 88, 77\""));
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Contains("which cell holds", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body);
-        Assert.Empty(_fixture.ChangedFormKeys());
+        Assert.True(result.Applied);
+        Assert.Contains(_fixture.EmbedCell.ToString(), _fixture.ChangedFormKeys());
+        Assert.Contains("\"Position\": \"99, 88, 77\"", _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
