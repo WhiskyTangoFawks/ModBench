@@ -55,7 +55,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var failure = FailAfterWritingWhile($"echo theirs > '{theirs}'", [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{}")]);
 
         Assert.Equal("theirs", System.IO.File.ReadAllText(theirs).Trim());
-        Assert.Contains("armo holds something Modbench did not write", failure.Message.Replace('\\', '/'));
+        Assert.Contains("armo — holds something this change did not write", failure.Message.Replace('\\', '/'));
         Assert.False(System.IO.File.Exists(Path.Combine(Root, "armo", "A.esp", "000003.json")));
     }
 
@@ -67,7 +67,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var failure = FailAfterWritingWhile($"echo theirs > '{replaced}'", [File("npc_/A.esp/000001.json", "{\"now\":2}")]);
 
         Assert.Equal("theirs", System.IO.File.ReadAllText(replaced).Trim());
-        Assert.Contains("000001.json was changed by another program", failure.Message);
+        Assert.Contains("000001.json — changed by something else", failure.Message);
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var failure = FailAfterWritingWhile($"rm '{replaced}'", [File("npc_/A.esp/000001.json", "{\"now\":2}")]);
 
         Assert.False(System.IO.File.Exists(replaced));
-        Assert.Contains("000001.json was removed by another program", failure.Message);
+        Assert.Contains("000001.json — removed by something else", failure.Message);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var failure = FailAfterWritingWhile($"mkdir -p '{Path.GetDirectoryName(removed)}'\necho theirs > '{removed}'", [File("armo/A.esp/000003.json", "{}")]);
 
         Assert.Equal("theirs", System.IO.File.ReadAllText(removed).Trim());
-        Assert.Contains("000001.json was written by another program", failure.Message);
+        Assert.Contains("000001.json — written by something else", failure.Message);
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
 
         Assert.Equal("theirs", System.IO.File.ReadAllText(theirs).Trim());
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(Root, "npc_", "A.esp", "000001.json")));
-        Assert.DoesNotContain("Not taken back", failure.Message);
+        Assert.DoesNotContain("Not put back", failure.Message);
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var failure = FailAfterWritingWhile(
             $"mkdir -p '{second}'\necho theirs > '{second}/theirs.txt'", [File("armo/A.esp/000003.json", "{}")]);
 
-        Assert.Contains("000002.json could not be taken back", failure.Message);
+        Assert.Contains("000002.json — could not be restored", failure.Message);
         Assert.NotNull(failure.InnerException);
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(first));
     }

@@ -55,7 +55,7 @@ public sealed class SourceTransactionTests : IDisposable
             ?? throw new InvalidOperationException($"Expected '{documentPath}' to have a parent directory.");
     }
 
-    private static void BlockTheWriteThenRenameWithADirectoryAtTheDestinationsTmpName(string path) => Directory.CreateDirectory(path + ".tmp");
+    private static void BlockTheWriteThenRenameWithADirectoryAtTheDestinationsTmpName(string path) => Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(path).Require(), ".medit_tmp_" + Path.GetFileName(path) + ".tmp"));
 
     [Fact]
     public void Rollback_PutsBackADocumentMovedToTheLeafNameItsNewEditorIdGivesIt()
@@ -150,7 +150,7 @@ public sealed class SourceTransactionTests : IDisposable
     }
 
     [Fact]
-    public void Rollback_LeavesAMintedDirectoryAThirdPartyHasSinceFilled()
+    public void Rollback_LeavesAMintedDirectoryAThirdPartyHasSinceFilled_AndNamesIt()
     {
         var pluginRoot = Path.Combine(_root, "plugin-source", PluginName);
 
@@ -160,7 +160,8 @@ public sealed class SourceTransactionTests : IDisposable
             File.WriteAllText(Path.Combine(pluginRoot, "theirs.json"), "another tool's");
         });
 
-        Assert.Null(left);
+        Assert.Contains("plugin-source/Fixture.esp", left?.Replace('\\', '/'));
+        Assert.Contains("holds something this change did not write", left);
         Assert.True(File.Exists(Path.Combine(pluginRoot, "theirs.json")));
         Assert.False(Directory.Exists(Path.Combine(pluginRoot, "Npcs")));
     }
@@ -264,6 +265,55 @@ public sealed class SourceTransactionTests : IDisposable
         Assert.Contains(
             $"{Path.GetRelativePath(_root, movedFrom)} — occupied by something else", left, StringComparison.Ordinal);
         Assert.Equal(Body(Fk("000800"), "First"), File.ReadAllText(FlatFile(Fk("000800"), "npc_", "First")));
+    }
+
+    private void FailAfterAThirdPartyChangedAFile(Exception cause)
+    {
+        Seed(Fk("000800"), "npc_", "Contested");
+        var contestedFile = FlatFile(Fk("000800"), "npc_", "Contested");
+        SourceTransaction.Atomically(Repo, transaction =>
+        {
+            transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Contested", Body(Fk("000800"), "Ours")));
+            File.WriteAllText(contestedFile, "someone else's work");
+            throw cause;
+        });
+    }
+
+    [Fact]
+    public void Atomically_AFailedWriteThatLeavesAPath_ThrowsAnIOExceptionNamingItWithTheCauseInside()
+    {
+        var cause = new IOException("disk gone");
+
+        var report = Assert.Throws<IOException>(() => FailAfterAThirdPartyChangedAFile(cause));
+
+        Assert.Same(cause, report.InnerException);
+        Assert.Contains("Contested - 000800_Fixture.esp.json", report.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Atomically_ADefectThatLeavesAPath_ThrowsNothingARefusalCatches_YetNamesThePath()
+    {
+        var cause = new InvalidCastException("defect");
+
+        var report = Assert.Throws<AggregateException>(() => FailAfterAThirdPartyChangedAFile(cause));
+
+        Assert.Same(cause, report.InnerException);
+        Assert.Contains("Contested - 000800_Fixture.esp.json", report.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Atomically_ADefectThatLeavesNothing_IsRethrownAsItself()
+    {
+        Seed(Fk("000800"), "npc_", "Quiet");
+        var cause = new InvalidCastException("defect");
+
+        var thrown = Assert.Throws<InvalidCastException>(() => SourceTransaction.Atomically(Repo, transaction =>
+        {
+            transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Quiet", Body(Fk("000800"), "Ours")));
+            throw cause;
+        }));
+
+        Assert.Same(cause, thrown);
     }
 
     [Fact]

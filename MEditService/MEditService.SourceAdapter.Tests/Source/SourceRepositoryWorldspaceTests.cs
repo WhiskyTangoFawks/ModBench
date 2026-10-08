@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -72,13 +73,34 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         Assert.Equal(before, Documents());
     }
 
+    [PosixFact]
+    public void Remove_OfAContainerWhoseDirectoryCannotAllBeDeleted_PutsBackWhatWent_AndThrows()
+    {
+        InTheTree(Worldspace, "wrld");
+        Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
+        var block = Path.Combine(_modFolder, "plugin-source", PluginName, "Worldspaces", "000800_Vendor.esp", "0, -1", "1, -2");
+        var before = TreeSnapshot.Of(_modFolder);
+        FileModes.Set(block, "555");
+        try
+        {
+            Assert.ThrowsAny<IOException>(() => Repository.Remove(Plugin, new RecordIdentity(Worldspace, "wrld", null)));
+        }
+        finally
+        {
+            FileModes.Set(block, "755");
+        }
+
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+    }
+
     [Fact]
     public void PutInWorldspace_ThatFailsOnTheCellsDocument_TakesBackTheBlockLevelsItWrote()
     {
         InTheTree(Worldspace, "wrld");
         var cellDocument = PluginSourceRoot.ContainerDocument(Path.Combine(
             "plugin-source", PluginName, "Worldspaces", "000800_Vendor.esp", "0, -1", "1, -2", "000801_Vendor.esp"));
-        Directory.CreateDirectory(Path.Combine(_modFolder, cellDocument) + ".tmp");
+        Directory.CreateDirectory(Path.Combine(
+            Path.GetDirectoryName(Path.Combine(_modFolder, cellDocument)).Require(), ".medit_tmp_" + Path.GetFileName(cellDocument) + ".tmp"));
         var before = TreeSnapshot.Of(_modFolder);
 
         var fault = Record.Exception(() => Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace));

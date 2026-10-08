@@ -30,28 +30,38 @@ internal sealed class SourceRepositoryWrites(
     {
         if (locator.Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
 
-        if (unit.IsEmbedded)
+        var journal = new WriteJournal(_modFolder);
+        try
         {
-            var ownerBytes = OwnerBytes(unit);
-            if (DocumentText.EmbeddedChildIn(ownerBytes, unit, identity.FormKey, _release) is not { } span)
-                return SourceRemoval.OwnerDoesNotCarryIt;
+            if (unit.IsEmbedded)
+            {
+                var ownerBytes = OwnerBytes(unit);
+                if (DocumentText.EmbeddedChildIn(ownerBytes, unit, identity.FormKey, _release) is not { } span)
+                    return SourceRemoval.OwnerDoesNotCarryIt;
 
-            SourceRepositoryLayout.WriteTextAtomic(unit.FullPath, EmbeddedChildSplice.Cut(ownerBytes, span));
-            locator.Forget();
+                journal.WriteText(unit.FullPath, EmbeddedChildSplice.Cut(ownerBytes, span));
+            }
+            else if (unit.IsDirectoryPerRecord)
+            {
+                var directory = PathShape.DirectoryOf(unit.FullPath);
+                if (Directory.Exists(directory)) journal.DeleteTree(directory);
+            }
+            else
+            {
+                journal.Delete(unit.FullPath);
+            }
+
             return SourceRemoval.Removed;
         }
-
-        if (unit.IsDirectoryPerRecord)
+        catch (Exception cause) when (cause is not OutOfMemoryException)
         {
-            var directory = PathShape.DirectoryOf(unit.FullPath);
-            if (Directory.Exists(directory)) DeleteWholeOrNotAtAll(directory);
-            locator.Forget();
-            return SourceRemoval.Removed;
+            if (journal.Report(cause, journal.UndoSince(0)) is { } report) throw report;
+            throw;
         }
-
-        if (File.Exists(unit.FullPath)) File.Delete(unit.FullPath);
-        locator.Forget();
-        return SourceRemoval.Removed;
+        finally
+        {
+            locator.Forget();
+        }
     }
 
     /// <summary>What putting a document changes: a held one's as <see cref="ChangesToRewrite"/> says, a new one's
@@ -156,24 +166,25 @@ internal sealed class SourceRepositoryWrites(
             throw new InvalidOperationException($"'{_modFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
 
         var root = SourceRepositoryLayout.RootIn(_modFolder, pluginFileName);
-        var before = Directory.Exists(root) ? PreImageOf(root) : new PreImage([], []);
-        WriteLog log = new();
+        var journal = new WriteJournal(_modFolder);
         try
         {
             var incoming = files.ToDictionary(file => Path.GetFullPath(Path.Combine(_modFolder, file.RelativePath)));
-            var held = before.Files.ToDictionary(file => Path.GetFullPath(file.Path), file => file.Bytes);
-            foreach (var (path, bytes) in held.Where(file => !incoming.ContainsKey(file.Key))) log.DeleteIfHolds(path, bytes);
-            log.DeleteEmptyDirectories(root);
-            PristineFileWriter.WriteAll(
+            var held = Directory.Exists(root)
+                ? Directory.GetFiles(root, "*", SearchOption.AllDirectories)
+                    .ToDictionary(Path.GetFullPath, File.ReadAllBytes)
+                : [];
+            foreach (var (path, bytes) in held.Where(file => !incoming.ContainsKey(file.Key))) journal.DeleteIfHolds(path, bytes);
+            journal.DeleteEmptyDirectories(root);
+            journal.WriteAll(
                 incoming.Where(file => !held.TryGetValue(file.Key, out var bytes) || !bytes.AsSpan().SequenceEqual(file.Value.Content))
                     .Select(file => file.Value),
-                _modFolder,
-                log);
+                _modFolder);
             git.ParkDecompiled(pluginFileName, binarySha256);
         }
-        catch (Exception cause) when (WriteLog.IsAFailedWrite(cause))
+        catch (Exception cause) when (cause is not OutOfMemoryException)
         {
-            if (WriteLog.Wrapped(cause, log.UndoSince(0, _modFolder)) is { } wrapped) throw wrapped;
+            if (journal.Report(cause, journal.UndoSince(0)) is { } report) throw report;
             throw;
         }
         finally
@@ -185,98 +196,31 @@ internal sealed class SourceRepositoryWrites(
     internal void RenameSource(string from, string to)
     {
         var fromRoot = SourceRepositoryLayout.RootIn(_modFolder, from);
-        var before = PreImageOf(fromRoot);
-        var renamed = before.Files
+        var held = Directory.GetFiles(fromRoot, "*", SearchOption.AllDirectories)
+            .Order(StringComparer.Ordinal)
+            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
+            .ToList();
+        var renamed = held
             .Select(file => PluginSourceRename.Renamed(Path.GetRelativePath(_modFolder, file.Path), file.Bytes, from, to))
             .ToList();
 
-        var putBackLastWritten = git.LastWrittenPutBack(from, to);
-        WriteLog log = new();
+        var journal = new WriteJournal(_modFolder);
         try
         {
-            PristineFileWriter.WriteAll(renamed, _modFolder, log);
+            journal.RecordUndo(git.LastWrittenPutBack(from, to), description: $"what Modbench last wrote for {from}");
+            journal.WriteAll(renamed, _modFolder);
             git.MoveLastWritten(from, to);
-            foreach (var file in before.Files) log.DeleteIfHolds(file.Path, file.Bytes);
-            log.DeleteEmptyDirectories(fromRoot);
+            foreach (var file in held) journal.DeleteIfHolds(file.Path, file.Bytes);
+            journal.DeleteEmptyDirectories(fromRoot);
         }
-        catch (Exception cause) when (WriteLog.IsAFailedWrite(cause))
+        catch (Exception cause) when (cause is not OutOfMemoryException)
         {
-            var unrestored = log.UndoSince(0, _modFolder);
-            TryPutBackLastWritten(putBackLastWritten, from, unrestored);
-            if (WriteLog.Wrapped(cause, unrestored) is { } wrapped) throw wrapped;
+            if (journal.Report(cause, journal.UndoSince(0)) is { } report) throw report;
             throw;
         }
         finally
         {
             locator.Forget();
-        }
-    }
-
-    private static void TryPutBackLastWritten(Action putBack, string plugin, List<string> unrestored)
-    {
-        try
-        {
-            putBack();
-        }
-        catch (GitCommandFailedException ex)
-        {
-            unrestored.Add($"what Modbench last wrote for {plugin} could not be put back: {ex.Message}");
-        }
-    }
-
-    // A failed recursive delete goes on past the entry it could not take, so it stops partway. The
-    // pre-image puts back what went; a file still standing is left alone, as this delete never wrote it.
-    private void DeleteWholeOrNotAtAll(string directory)
-    {
-        var before = PreImageOf(directory);
-        try
-        {
-            Directory.Delete(directory, recursive: true);
-        }
-        catch (Exception cause) when (cause is IOException or UnauthorizedAccessException)
-        {
-            var unrestored = PutBack(before);
-            if (unrestored.Count == 0) throw;
-            throw new IOException(
-                $"{cause.Message} Everything it removed is back except: {string.Join(" ", unrestored)}", cause);
-        }
-    }
-
-    private sealed record PreImage(List<string> Directories, List<(string Path, byte[] Bytes)> Files);
-
-    private static PreImage PreImageOf(string directory) => new(
-        [.. Directory.GetDirectories(directory, "*", SearchOption.AllDirectories)
-            .Prepend(directory)
-            .Order(StringComparer.Ordinal)],
-        [.. Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
-            .Order(StringComparer.Ordinal)
-            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))]);
-
-    // One path that cannot be written never stops the pass, and every other one is still put back
-    // (ADR-0019).
-    private List<string> PutBack(PreImage before)
-    {
-        var unrestored = new List<string>();
-        foreach (var level in before.Directories)
-        {
-            TryPutBack(level, () => Directory.CreateDirectory(level), unrestored);
-        }
-        foreach (var (path, bytes) in before.Files.Where(file => !File.Exists(file.Path)))
-        {
-            TryPutBack(path, () => File.WriteAllBytes(path, bytes), unrestored);
-        }
-        return unrestored;
-    }
-
-    private void TryPutBack(string path, Action write, List<string> unrestored)
-    {
-        try
-        {
-            write();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            unrestored.Add($"{Path.GetRelativePath(_modFolder, path)} could not be put back: {ex.Message}");
         }
     }
 
