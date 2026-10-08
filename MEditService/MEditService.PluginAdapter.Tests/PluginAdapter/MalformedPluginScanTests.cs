@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
@@ -24,7 +23,7 @@ public sealed class MalformedPluginScanTests
     {
         var diagnoses = Scan(Record("WEAP", 0x03000860,
             Subrecord("EDID", "GaussRevolver\0"u8.ToArray()),
-            Subrecord("OBTE", Le(1)),
+            Subrecord("OBTE", U32(1)),
             Subrecord("OBTS", new byte[67]),
             Subrecord("OBTF", []), Subrecord("FULL", "Gauss Revolver\0"u8.ToArray()),
             Subrecord("STOP", [])));
@@ -57,7 +56,7 @@ public sealed class MalformedPluginScanTests
     {
         var diagnoses = Scan(Record("REFR", 0x07431EDC,
             Subrecord("EDID", "00sots_Necropolis_WorkshopRef\0"u8.ToArray()),
-            Subrecord("XWPG", Le(1)),
+            Subrecord("XWPG", U32(1)),
             Subrecord("XWPN", new byte[12]), Subrecord("XWPN", new byte[12])));
 
         var d = Assert.Single(diagnoses);
@@ -194,7 +193,7 @@ public sealed class MalformedPluginScanTests
     {
         var record = Record("REFR", 0x00000004,
             Subrecord("EDID", "BadWorkshop\0"u8.ToArray()),
-            Subrecord("XWPG", Le(1)),
+            Subrecord("XWPG", U32(1)),
             Subrecord("XWPN", new byte[12]),
             Subrecord("XWPN", new byte[12]));
 
@@ -209,7 +208,7 @@ public sealed class MalformedPluginScanTests
     public void CounterEntries_AnAgreeingPair_ReportsNothing()
     {
         var record = Record("REFR", 0x00000005,
-            Subrecord("XWPG", Le(2)), Subrecord("XWPN", new byte[12]), Subrecord("XWPN", new byte[12]));
+            Subrecord("XWPG", U32(2)), Subrecord("XWPN", new byte[12]), Subrecord("XWPN", new byte[12]));
 
         Assert.Empty(Scan(record));
     }
@@ -219,7 +218,7 @@ public sealed class MalformedPluginScanTests
     {
         var record = Record("WEAP", 0x00000006,
             Subrecord("EDID", "BadWeap\0"u8.ToArray()),
-            Subrecord("OBTE", Le(1)),
+            Subrecord("OBTE", U32(1)),
             Subrecord("OBTS", new byte[8]),
             Subrecord("OBTF", []), Subrecord("FULL", "N\0"u8.ToArray()),
             Subrecord("STOP", []));
@@ -235,7 +234,7 @@ public sealed class MalformedPluginScanTests
     public void CkOrder_ALeadingBareObtsFollowedByClosedCombinations_ReportsNothing_BecauseItIsVanillaGaussRiflesShapeTheDefaultCombinationAndCanonicalCkOutputProvenByTheMeditSmokeVanillaScan()
     {
         var record = Record("WEAP", 0x00000007,
-            Subrecord("OBTE", Le(2)),
+            Subrecord("OBTE", U32(2)),
             Subrecord("OBTS", new byte[8]),
             Subrecord("OBTF", []), Subrecord("FULL", "A\0"u8.ToArray()), Subrecord("OBTS", new byte[8]),
             Subrecord("STOP", []));
@@ -256,12 +255,5 @@ public sealed class MalformedPluginScanTests
         var subs = new List<byte[]> { Subrecord("EDID", Encoding.UTF8.GetBytes(editorId + "\0")) };
         subs.AddRange(Enumerable.Range(0, nameCount).Select(_ => Subrecord("NAME", "Slot\0"u8.ToArray())));
         return Record("RACE", formId, [.. subs]);
-    }
-
-    private static byte[] Le(uint value)
-    {
-        var b = new byte[4];
-        BinaryPrimitives.WriteUInt32LittleEndian(b, value);
-        return b;
     }
 }
