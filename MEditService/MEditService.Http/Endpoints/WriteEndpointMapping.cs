@@ -1,6 +1,6 @@
+using System.ComponentModel;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
-using System.ComponentModel;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
