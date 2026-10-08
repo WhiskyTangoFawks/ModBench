@@ -6,7 +6,7 @@ import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import type { PluginsDrop } from '../pluginsCommands/plugins';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { rowResourceUri } from './recordResourceUri';
-import { blankIcon } from './blankIcon';
+import { blankIcon } from '../drivingLib/blankIcon';
 import { IndexingNode, type RecordBrowserNode, type RecordBrowser } from './RecordBrowser';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { InstanceView } from '../instanceLoader/instance';
 import { InactiveFileDecorationProvider } from './inactiveFiles';
 import { ModIndicatorDecorations } from './modIndicators';
-import { SeparatorNode, type ModlistNode } from './ModListProvider';
+import type { ModlistNode } from './ModListProvider';
 import type { WorkspaceSettings } from './workspaceSettings';
 
 /** Registers the file decorations a mod's files carry: the grey of an inactive file and each
@@ -13,10 +13,9 @@ export function registerModDecorations(
 ): vscode.Disposable[] {
   const inactive = new InactiveFileDecorationProvider(instance, settings);
   const indicators = new ModIndicatorDecorations(instance, settings);
-  const separatorUri = ({ element }: { element: ModlistNode }) => (element instanceof SeparatorNode ? element.resourceUri : undefined);
   return [
-    view.onDidExpandElement((event) => { const uri = separatorUri(event); if (uri) indicators.expandedRow(uri); }),
-    view.onDidCollapseElement((event) => { const uri = separatorUri(event); if (uri) indicators.collapsedRow(uri); }),
+    view.onDidExpandElement(({ element }) => { if (element.resourceUri) indicators.expandedRow(element.resourceUri); }),
+    view.onDidCollapseElement(({ element }) => { if (element.resourceUri) indicators.collapsedRow(element.resourceUri); }),
     inactive, vscode.window.registerFileDecorationProvider(inactive),
     indicators, ...indicators.providers.map((provider) => vscode.window.registerFileDecorationProvider(provider)),
   ];

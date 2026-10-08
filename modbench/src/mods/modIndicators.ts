@@ -52,13 +52,21 @@ function modIndicators(value: IndicatorsValue): ReadonlyMap<string, readonly Mod
   return carriers;
 }
 
-function indicatorsBeneath(value: IndicatorsValue, carriers: ReadonlyMap<string, readonly ModIndicator[]>): ReadonlyMap<string, readonly ModIndicator[]> {
-  const beneath = new Map<string, readonly ModIndicator[]>();
+interface Carriers {
+  readonly mods: ReadonlyMap<string, readonly ModIndicator[]>;
+  /** Each separator that holds a mod, with the indicators of the mods it holds. */
+  readonly separators: ReadonlyMap<string, readonly ModIndicator[]>;
+}
+
+function carriersOf(value: IndicatorsValue): Carriers {
+  const byName = modIndicators(value);
+  const separators = new Map<string, readonly ModIndicator[]>();
   for (const { separator, mods } of groupModlist([...value.mods]).groups) {
-    const held = mods.flatMap((own) => carriers.get(own.name) ?? []);
-    beneath.set(separatorRowUri(separator.name).toString(), MOD_INDICATORS.map(({ id }) => id).filter((id) => held.includes(id)));
+    if (mods.length === 0) continue;
+    const held = mods.flatMap((own) => byName.get(own.name) ?? []);
+    separators.set(separatorRowUri(separator.name).toString(), MOD_INDICATORS.map(({ id }) => id).filter((id) => held.includes(id)));
   }
-  return beneath;
+  return { mods: new Map([...byName].map(([name, held]) => [modRowUri(name).toString(), held])), separators };
 }
 
 // Not `file:`: a decoration on a `file:` URI shows on the mod's folder in the Explorer too.
@@ -76,8 +84,6 @@ type Indicator = (typeof MOD_INDICATORS)[number];
 
 const PARTS = ['badge', 'colour'] as const;
 
-const SUMMARY_BADGE = '•';
-
 class IndicatorDecorationProvider implements vscode.FileDecorationProvider, vscode.Disposable {
   private readonly changed = new vscode.EventEmitter<undefined>();
   readonly onDidChangeFileDecorations = this.changed.event;
@@ -86,11 +92,10 @@ class IndicatorDecorationProvider implements vscode.FileDecorationProvider, vsco
   constructor(
     private readonly indicator: Indicator,
     private readonly carried: (uri: vscode.Uri) => readonly ModIndicator[] | undefined,
-    private readonly beneath: (uri: vscode.Uri) => readonly ModIndicator[] | undefined,
     private readonly settings: WorkspaceSettings,
   ) {
     this.subscription = settings.onDidChangeConfiguration((change) => {
-      if (MOD_INDICATORS.some(({ id }) => PARTS.some((part) => change.affectsConfiguration(indicatorSetting(id, part))))) this.refresh();
+      if (PARTS.some((part) => change.affectsConfiguration(indicatorSetting(indicator.id, part)))) this.refresh();
     });
   }
 
@@ -98,31 +103,13 @@ class IndicatorDecorationProvider implements vscode.FileDecorationProvider, vsco
     this.changed.fire(undefined);
   }
 
-  private partsOn(id: ModIndicator): readonly [badge: boolean, colour: boolean] {
-    const configuration = this.settings.getConfiguration();
-    return [configuration.get(indicatorSetting(id, 'badge')) === true, configuration.get(indicatorSetting(id, 'colour')) === true];
-  }
-
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
     const { id, name, badge, colour } = this.indicator;
-    if (this.carried(uri)?.includes(id)) {
-      const [badgeOn, colourOn] = this.partsOn(id);
-      if (!badgeOn && !colourOn) return undefined;
-      return { badge: badgeOn ? badge : undefined, color: colourOn ? new vscode.ThemeColor(colour) : undefined, tooltip: name };
-    }
-    return this.summaryBeneath(uri);
-  }
-
-  // One dot for the row: the first indicator beneath that shows anything speaks for the rest.
-  private summaryBeneath(uri: vscode.Uri): vscode.FileDecoration | undefined {
-    const lead = this.beneath(uri)?.find((held) => this.partsOn(held).some(Boolean));
-    if (lead !== this.indicator.id) return undefined;
-    const [badgeOn, colourOn] = this.partsOn(lead);
-    return {
-      badge: badgeOn ? SUMMARY_BADGE : undefined,
-      color: colourOn ? new vscode.ThemeColor(this.indicator.colour) : undefined,
-      tooltip: 'Contains emphasized items',
-    };
+    if (!this.carried(uri)?.includes(id)) return undefined;
+    const configuration = this.settings.getConfiguration();
+    const [badgeOn, colourOn] = PARTS.map((part) => configuration.get(indicatorSetting(id, part)) === true);
+    if (!badgeOn && !colourOn) return undefined;
+    return { badge: badgeOn ? badge : undefined, color: colourOn ? new vscode.ThemeColor(colour) : undefined, tooltip: name };
   }
 
   dispose(): void {
@@ -133,30 +120,24 @@ class IndicatorDecorationProvider implements vscode.FileDecorationProvider, vsco
 
 /** A provider per indicator: VS Code takes one decoration from each, and joins their badges. It
  *  never re-queries a provider, so each fires on every new instance value (ADR-0003), setting
- *  change, and separator opened or closed. */
+ *  change, and separator opened or closed. A collapsed separator carries the indicators of the mods
+ *  beneath it (MO2's collapsed separator). */
 export class ModIndicatorDecorations implements vscode.Disposable {
   readonly providers: readonly IndicatorDecorationProvider[];
-  private carriers: ReadonlyMap<string, readonly ModIndicator[]> | undefined;
-  private beneath: ReadonlyMap<string, readonly ModIndicator[]> | undefined;
+  private carriers: Carriers | undefined;
   private readonly expanded = new Set<string>();
   private readonly subscription: vscode.Disposable;
 
   constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, settings: WorkspaceSettings) {
     const carried = (uri: vscode.Uri) => {
-      this.carriers ??= new Map([...modIndicators(instance.value)].map(([name, held]) => [modRowUri(name).toString(), held]));
-      return this.carriers.get(uri.toString());
+      this.carriers ??= carriersOf(instance.value);
+      const key = uri.toString();
+      return this.carriers.mods.get(key) ?? (this.expanded.has(key) ? undefined : this.carriers.separators.get(key));
     };
-    const collapsedBeneath = (uri: vscode.Uri) => {
-      if (this.expanded.has(uri.toString())) return undefined;
-      this.beneath ??= indicatorsBeneath(instance.value, modIndicators(instance.value));
-      return this.beneath.get(uri.toString());
-    };
-    this.providers = MOD_INDICATORS.map((indicator) => new IndicatorDecorationProvider(indicator, carried, collapsedBeneath, settings));
+    this.providers = MOD_INDICATORS.map((indicator) => new IndicatorDecorationProvider(indicator, carried, settings));
     this.subscription = instance.subscribe((value) => {
-      this.carriers = undefined;
-      this.beneath = undefined;
-      const kept = new Set(value.mods.flatMap((entry) => (entry.kind === 'separator' ? [separatorRowUri(entry.name).toString()] : [])));
-      for (const uri of this.expanded) if (!kept.has(uri)) this.expanded.delete(uri);
+      this.carriers = carriersOf(value);
+      for (const key of this.expanded) if (!this.carriers.separators.has(key)) this.expanded.delete(key);
       this.refresh();
     });
   }

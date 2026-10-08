@@ -185,7 +185,7 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
     expect(decorationsOn(decorations, uri)).toEqual([undefined, undefined, undefined, undefined]);
   });
 
-  it('asks VS Code to decorate again, for every indicator, when any indicator setting changes, since a separator\'s dot follows them all', async () => {
+  it('asks VS Code to decorate again only for the indicator whose setting changed', async () => {
     const { settings, changed } = settingsOf(allOn);
     const decorations = new ModIndicatorDecorations(new FakeInstance(await middleOfThree()), settings);
     const fired = decorations.providers.map((provider) => {
@@ -198,7 +198,7 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
     changed.fire({ affectsConfiguration: (key) => key === 'modbench.something' });
     changed.fire({ affectsConfiguration: changing('redundant') });
 
-    expect(fired.map((listener) => listener.mock.calls.length)).toEqual([1, 1, 1, 1]);
+    expect(fired.map((listener) => listener.mock.calls.length)).toEqual([0, 0, 1, 0]);
   });
 });
 
@@ -212,58 +212,80 @@ const groupedMiddleOfThree = () => indexedValueOf([mod('High'), mod('Middle'), m
 });
 
 describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', () => {
-  const dot = (colour: string) => ({ badge: '•', color: new ThemeColor(colour), tooltip: 'Contains emphasized items' });
+  const collapsedInstance = async () => new FakeInstance(await groupedMiddleOfThree());
+  const section = separatorRowUri('Section');
+  const nothing = [undefined, undefined, undefined, undefined];
 
-  it('carries one dot for the mods beneath it, in the colour of the first indicator they hold', async () => {
-    const decorations = new ModIndicatorDecorations(new FakeInstance(await groupedMiddleOfThree()), settingsOf(allOn).settings);
+  it('carries the indicators of the mods beneath it as a mod row carries its own', async () => {
+    const decorations = new ModIndicatorDecorations(await collapsedInstance(), settingsOf(allOn).settings);
 
-    expect(decorationsOn(decorations, separatorRowUri('Section'))).toEqual([
-      dot('modbench.modOverwritesLooseFiles'), undefined, undefined, undefined,
+    expect(decorationsOn(decorations, section)).toEqual([
+      { badge: '⊕', color: new ThemeColor('modbench.modOverwritesLooseFiles'), tooltip: 'Overwrites loose files' },
+      { badge: '⊖', color: new ThemeColor('modbench.modOverwrittenLooseFiles'), tooltip: 'Overwritten loose files' },
+      { badge: '⊗', color: new ThemeColor('modbench.modRedundant'), tooltip: 'Redundant' },
+      { badge: '⊘', color: new ThemeColor('modbench.modContainsExcludedFiles'), tooltip: 'Contains excluded files' },
     ]);
+  });
+
+  it('carries only the parts its settings switch on', async () => {
+    const decorations = new ModIndicatorDecorations(await collapsedInstance(), settingsOf({
+      [indicatorSetting('overwritesLooseFiles', 'badge')]: true,
+    }).settings);
+
+    expect(decorationsOn(decorations, section)).toEqual([
+      { badge: '⊕', color: undefined, tooltip: 'Overwrites loose files' }, undefined, undefined, undefined,
+    ]);
+  });
+
+  it('carries none when no mod beneath holds one', async () => {
+    const decorations = new ModIndicatorDecorations(await collapsedInstance(), settingsOf(allOn).settings);
+
+    expect(decorationsOn(decorations, separatorRowUri('Quiet'))).toEqual(nothing);
   });
 
   it('carries none while it is expanded, and again once it collapses', async () => {
-    const decorations = new ModIndicatorDecorations(new FakeInstance(await groupedMiddleOfThree()), settingsOf(allOn).settings);
+    const decorations = new ModIndicatorDecorations(await collapsedInstance(), settingsOf(allOn).settings);
     const fired = vi.fn();
     decorations.providers[0]?.onDidChangeFileDecorations(fired);
 
-    decorations.expandedRow(separatorRowUri('Section'));
-    const expanded = decorationsOn(decorations, separatorRowUri('Section'));
-    decorations.collapsedRow(separatorRowUri('Section'));
+    decorations.expandedRow(section);
+    const expanded = decorationsOn(decorations, section);
+    decorations.collapsedRow(section);
 
-    expect(expanded).toEqual([undefined, undefined, undefined, undefined]);
-    expect(decorationsOn(decorations, separatorRowUri('Section'))[0]).toBeDefined();
+    expect(expanded).toEqual(nothing);
+    expect(decorationsOn(decorations, section)[0]).toBeDefined();
     expect(fired).toHaveBeenCalledTimes(2);
   });
 
-  it('carries none when no mod beneath holds an indicator that is switched on', async () => {
-    const value = await groupedMiddleOfThree();
-    const quiet = new ModIndicatorDecorations(new FakeInstance(value), settingsOf(allOn).settings);
-    const off = new ModIndicatorDecorations(new FakeInstance(value), settingsOf({}).settings);
+  it('leaves an open mod row its own indicators', async () => {
+    const instance = await collapsedInstance();
+    const decorations = new ModIndicatorDecorations(instance, settingsOf(allOn).settings);
 
-    expect(decorationsOn(quiet, separatorRowUri('Quiet'))).toEqual([undefined, undefined, undefined, undefined]);
-    expect(decorationsOn(off, separatorRowUri('Section'))).toEqual([undefined, undefined, undefined, undefined]);
-  });
+    decorations.expandedRow(modRowUri('Middle'));
 
-  it('speaks for the first indicator beneath that shows anything, and carries the dot without its colour when only the badge is on', async () => {
-    const decorations = new ModIndicatorDecorations(new FakeInstance(await groupedMiddleOfThree()), settingsOf({
-      [indicatorSetting('overwrittenLooseFiles', 'badge')]: true,
-    }).settings);
-
-    expect(decorationsOn(decorations, separatorRowUri('Section'))).toEqual([
-      undefined, { badge: '•', color: undefined, tooltip: 'Contains emphasized items' }, undefined, undefined,
-    ]);
+    expect(decorationsOn(decorations, modRowUri('Middle'))[0]).toBeDefined();
   });
 
   it('forgets a separator that left the list, so one added later under its name starts collapsed', async () => {
-    const instance = new FakeInstance(await groupedMiddleOfThree());
+    const instance = await collapsedInstance();
     const decorations = new ModIndicatorDecorations(instance, settingsOf(allOn).settings);
-    decorations.expandedRow(separatorRowUri('Section'));
+    decorations.expandedRow(section);
 
     instance.publish(await indexedValueOf([mod('Low')], { Low: { files: [file('Low', 'a.dds')] } }));
     instance.publish(await groupedMiddleOfThree());
 
-    expect(decorationsOn(decorations, separatorRowUri('Section'))[0]).toBeDefined();
+    expect(decorationsOn(decorations, section)[0]).toBeDefined();
+  });
+
+  it('forgets a separator emptied while open, so one refilled starts collapsed', async () => {
+    const instance = await collapsedInstance();
+    const decorations = new ModIndicatorDecorations(instance, settingsOf(allOn).settings);
+    decorations.expandedRow(section);
+
+    instance.publish(await indexedValueOf([separator('Section')], {}));
+    instance.publish(await groupedMiddleOfThree());
+
+    expect(decorationsOn(decorations, section)[0]).toBeDefined();
   });
 });
 
