@@ -10,42 +10,42 @@ public static class ContainerDocumentEdits
     /// <summary>The record's own fields alone, every child slot cleared — what an own-fields copy
     /// lands.</summary>
     public static string WithoutChildren(
-        RecordTextCodec codec, string text, GameRelease release, string? recordType)
+        string text, GameRelease release, string? recordType)
     {
-        var record = codec.Deserialize(text, release, recordType);
+        var record = RecordTextCodec.Deserialize(text, release, recordType);
         ContainerChildFields.ClearAllChildSlots(record);
-        return codec.SerializeToText(record, release);
+        return RecordTextCodec.SerializeToText(record, release);
     }
 
     /// <summary>The owner's text with <paramref name="childText"/> appended to
     /// <paramref name="slotName"/> of <paramref name="containerFormKey"/> — the owner, or a
     /// container its document carries inline. Null when the text carries neither.</summary>
     public static string? WithChildAppended(
-        RecordTextCodec codec, string ownerText, GameRelease release, string? ownerRecordType,
+        string ownerText, GameRelease release, string? ownerRecordType,
         string containerFormKey, string slotName, string childText, string? childRecordType)
     {
-        var owner = codec.Deserialize(ownerText, release, ownerRecordType);
+        var owner = RecordTextCodec.Deserialize(ownerText, release, ownerRecordType);
         if (ContainerIn(owner, containerFormKey) is not { } container) return null;
 
         ContainerChildFields.AddChildToSlot(
-            container, slotName, codec.Deserialize(childText, release, childRecordType));
-        return codec.SerializeToText(owner, release);
+            container, slotName, RecordTextCodec.Deserialize(childText, release, childRecordType));
+        return RecordTextCodec.SerializeToText(owner, release);
     }
 
     /// <summary><paramref name="destinationText"/> with its own fields replaced by
     /// <paramref name="replacementText"/>'s, keeping the children it already carries. A child with a
     /// document of its own is not one of them: it stays where it is.</summary>
     public static NamedDocument WithOwnFieldsReplaced(
-        RecordTextCodec codec, string destinationText, string? destinationRecordType,
+        string destinationText, string? destinationRecordType,
         string replacementText, string? replacementRecordType, GameRelease release)
     {
-        var replacement = codec.Deserialize(replacementText, release, replacementRecordType);
+        var replacement = RecordTextCodec.Deserialize(replacementText, release, replacementRecordType);
         ContainerChildFields.ClearAllChildSlots(replacement);
 
-        var destination = codec.Deserialize(destinationText, release, destinationRecordType);
+        var destination = RecordTextCodec.Deserialize(destinationText, release, destinationRecordType);
         ContainerChildFields.TransplantChildSlots(destination, replacement);
 
-        return new NamedDocument(codec.SerializeToText(replacement, release), replacement.EditorID);
+        return new NamedDocument(RecordTextCodec.SerializeToText(replacement, release), replacement.EditorID);
     }
 
     private static IMajorRecordGetter? ContainerIn(IMajorRecord owner, string containerFormKey) =>

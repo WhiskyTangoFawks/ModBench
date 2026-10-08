@@ -1,4 +1,3 @@
-
 using System.Text.Json;
 using Mutagen.Bethesda;
 
@@ -31,12 +30,10 @@ public sealed record ColumnSpec(
 
 public sealed class RecordTableSchema
 {
-    internal RecordTableSchema()
-    {
-    }
+    internal RecordTableSchema(Type recordType) => RecordType = recordType;
 
     public required string TableName { get; init; }
-    public required Type RecordType { get; init; }
+    internal Type RecordType { get; }
     public required IReadOnlyList<ColumnSpec> RecordColumns { get; init; }
 
     /// <summary>The xEdit display name ("Activator" for <c>acti</c>); <see cref="TableName"/> stays
@@ -70,4 +67,7 @@ public sealed class RecordTableSchema
 
     // A ModHeader cannot carry the Partial Form flag.
     public bool IsPartialForm(JsonElement document) => !IsHeader && PartialFormFlag.IsSet(document, RecordType);
+
+    /// <summary>Whether a record of this table can carry the Partial Form flag at all.</summary>
+    public bool IsPartialFormable => PartialFormFlag.IsPartialFormable(RecordType);
 }

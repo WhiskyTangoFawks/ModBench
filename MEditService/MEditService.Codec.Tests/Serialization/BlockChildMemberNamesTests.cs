@@ -9,33 +9,33 @@ public sealed class BlockChildMemberNamesTests
     [Fact]
     public void ExteriorCellBlockLevels_AreAWorldspacesTwoBlockTypes_OutermostFirst() =>
         Assert.Equal(
-            [typeof(WorldspaceBlock), typeof(WorldspaceSubBlock)],
-            RecordTypeDispatch.For(GameRelease.Fallout4).ExteriorCellBlockLevels);
+            [nameof(WorldspaceBlock), nameof(WorldspaceSubBlock)],
+            RecordTypes.For(GameRelease.Fallout4).ExteriorCellBlockLevels);
 
     [Fact]
     public void BlockNumberMembers_NameRealMembersOfBothBlockLevels()
     {
-        Assert.NotNull(typeof(WorldspaceBlock).GetProperty(RecordTypeDispatch.BlockNumberXMember));
-        Assert.NotNull(typeof(WorldspaceSubBlock).GetProperty(RecordTypeDispatch.BlockNumberYMember));
+        Assert.NotNull(typeof(WorldspaceBlock).GetProperty(RecordTypes.BlockNumberXMember));
+        Assert.NotNull(typeof(WorldspaceSubBlock).GetProperty(RecordTypes.BlockNumberYMember));
     }
 
     [Fact]
     public void InteriorCellBlockLevels_AreTheCellsGroupsTwoBlockTypes_OutermostFirst() =>
         Assert.Equal(
-            [typeof(CellBlock), typeof(CellSubBlock)],
-            RecordTypeDispatch.For(GameRelease.Fallout4).InteriorCellBlockLevels);
+            [nameof(CellBlock), nameof(CellSubBlock)],
+            RecordTypes.For(GameRelease.Fallout4).InteriorCellBlockLevels);
 
     [Fact]
     public void InteriorCellBlockGroupTypes_NameTheGroupTypesOfTheTwoInteriorLevels() =>
         Assert.Equal(
             [GroupTypeEnum.InteriorCellBlock, GroupTypeEnum.InteriorCellSubBlock],
-            RecordTypeDispatch.InteriorCellBlockGroupTypes.Select(Enum.Parse<GroupTypeEnum>));
+            RecordTypes.InteriorCellBlockGroupTypes.Select(Enum.Parse<GroupTypeEnum>));
 
     [Fact]
     public void GroupTypeMember_NamesARealMemberOfABlockLevel() =>
-        Assert.NotNull(typeof(CellBlock).GetProperty(RecordTypeDispatch.GroupTypeMember));
+        Assert.NotNull(typeof(CellBlock).GetProperty(RecordTypes.GroupTypeMember));
 
     [Fact]
     public void CellGridMember_NamesARealMemberOfACell() =>
-        Assert.NotNull(typeof(Cell).GetProperty(RecordTypeDispatch.CellGridMember));
+        Assert.NotNull(typeof(Cell).GetProperty(RecordTypes.CellGridMember));
 }

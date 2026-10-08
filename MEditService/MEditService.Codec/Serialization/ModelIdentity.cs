@@ -132,8 +132,8 @@ public static class ModelIdentity
     private static string? FirstCodecDocumentDifference(
         IMajorRecordGetter original, IMajorRecordGetter recompiled, Mutagen.Bethesda.GameRelease release)
     {
-        var originalBytes = Codec.SerializeToBytes(original, release);
-        var recompiledBytes = Codec.SerializeToBytes(recompiled, release);
+        var originalBytes = RecordTextCodec.SerializeToBytes(original, release);
+        var recompiledBytes = RecordTextCodec.SerializeToBytes(recompiled, release);
         if (originalBytes.AsSpan().SequenceEqual(recompiledBytes)) return null;
 
         // Not byte-identical: decide structurally, honouring only the two model-equal respellings a rewrite
@@ -238,8 +238,6 @@ public static class ModelIdentity
     private static string NormalizeNegativeZeros(string text) =>
         System.Text.RegularExpressions.Regex.Replace(text, @"(?<![\w.])-0(?=$|[,\s""\]}])", "0");
 
-    private static readonly RecordTextCodec Codec =
-        new(Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance);
 
     // Deep copies without the encoding a rewrite is entitled to change: group-header-derived fields
     // zeroed, and a worldspace's block levels in one canonical order (ADR-0006).

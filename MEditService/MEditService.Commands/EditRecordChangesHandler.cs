@@ -15,19 +15,18 @@ public sealed class EditRecordChangesHandler
 {
     private readonly WriteTargets _targets;
     private readonly LoadOrderResolution _resolution;
-    private readonly RecordTextCodec _codec;
     private readonly SchemaReflector _schemaReflector;
     private readonly ILogger<EditRecordChangesHandler> _logger;
     private readonly FormKeyChange _formKeyChange;
     private readonly CellLanding _cellLanding;
 
     internal EditRecordChangesHandler(
-        WriteTargets targets, LoadOrderResolution resolution, RecordTextCodec codec, SchemaReflector schemaReflector,
+        WriteTargets targets, LoadOrderResolution resolution, SchemaReflector schemaReflector,
         ILogger<EditRecordChangesHandler> logger)
     {
-        (_targets, _resolution, _codec, _schemaReflector, _logger) = (targets, resolution, codec, schemaReflector, logger);
-        _formKeyChange = new(codec, logger);
-        _cellLanding = new(resolution, codec, schemaReflector, logger);
+        (_targets, _resolution, _schemaReflector, _logger) = (targets, resolution, schemaReflector, logger);
+        _formKeyChange = new(logger);
+        _cellLanding = new(resolution, schemaReflector, logger);
     }
 
     /// <summary><paramref name="given"/> stands in for the file of the document carrying the record.</summary>
@@ -68,7 +67,7 @@ public sealed class EditRecordChangesHandler
             var relativePath = repository.RelativePathOf(plugin, identity)
                 ?? throw new InvalidOperationException($"Expected the document carrying {formKey} to have been located.");
             var found = EmbeddedChildLocator.Find(
-                Encoding.UTF8.GetBytes(text), RecordTypeDispatch.For(release).ConcreteFor(target.RecordType)?.Name, formKey, release);
+                Encoding.UTF8.GetBytes(text), target.RecordType, formKey, release);
             if (found is not { } span)
             {
                 return RecordEditResult.Refused(
@@ -79,7 +78,7 @@ public sealed class EditRecordChangesHandler
 
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
-            : patched => _codec.RoundTrip(patched, release, document.RecordType);
+            : patched => RecordTextCodec.RoundTrip(patched, release, document.RecordType);
 
         var request = new DocumentEditRequest(
             text, prefix, schema, envelope, release, roundTrip, _resolution.WalkAmongMastersOf(repository, plugin, schemas));

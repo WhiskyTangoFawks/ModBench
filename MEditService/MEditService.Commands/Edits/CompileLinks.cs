@@ -17,7 +17,7 @@ internal sealed record SourceRecord(
     string RecordType, RecordTableSchema Schema, PluginDocument Document, string? EditorId);
 
 /// <summary>The link diagnostics of a compiled plugin (ADR-0007).</summary>
-internal sealed class CompileLinks(IPluginAdapter adapter, SchemaReflector schemaReflector, ILogger logger)
+internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
 {
     // The binary is written and the snapshot parked, so the report is the only thing left to go
     // wrong: it becomes a diagnostic saying so, never a refusal of a compile that happened.
@@ -43,8 +43,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, SchemaReflector schem
         LinkCheckScope compiled, IReadOnlyList<SourceRecord> records, IReadOnlyCollection<string> links)
     {
         var (plugin, registered, loadOrder, repository) = compiled;
-        var answers = adapter.LinkTargets(
-            loadOrder, registered, schemaReflector.GetSchemas(loadOrder.GameRelease), links);
+        var answers = adapter.LinkTargets(loadOrder, registered, links);
         ResolvedFormKey? Resolve(string formKey) =>
             answers.Targets.TryGetValue(formKey, out var entry) ? entry : null;
 

@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
@@ -16,7 +15,6 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
     private const string InteriorCell = "000802:Vendor.esp";
 
     private static readonly PluginAddress Plugin = new(PluginName, "VendorMod");
-    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas = SharedSchemaReflector.Instance.GetSchemas(Release);
 
     private readonly ScratchDirectory _modFolder = new("medit-worldspace-");
 
@@ -131,7 +129,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         var cell = ACellAt("9, -9");
         Repository.PutInWorldspace(Plugin, cell, Worldspace);
 
-        Assert.Equal(cell.Body, Repository.GetCellAt(Plugin, Worldspace, 9, -9, Schemas)?.Body);
+        Assert.Equal(cell.Body, Repository.GetCellAt(Plugin, Worldspace, 9, -9)?.Body);
     }
 
     [Fact]
@@ -140,7 +138,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         InTheTree(Worldspace, "wrld");
         Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
 
-        Assert.Null(Repository.GetCellAt(Plugin, Worldspace, 10, -9, Schemas));
+        Assert.Null(Repository.GetCellAt(Plugin, Worldspace, 10, -9));
     }
 
     private static string WorldspaceDocument =>
@@ -157,7 +155,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
         File.WriteAllText(Path.Combine(_modFolder, CellDocumentAtNineMinusNine), "{");
 
-        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.GetCellAt(Plugin, Worldspace, 9, -9, Schemas));
+        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.GetCellAt(Plugin, Worldspace, 9, -9));
 
         Assert.Equal(CellDocumentAtNineMinusNine, refused.File?.SourceRelativePath);
     }

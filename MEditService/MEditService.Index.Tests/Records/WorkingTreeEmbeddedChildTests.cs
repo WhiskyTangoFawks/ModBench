@@ -1,7 +1,6 @@
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -9,7 +8,6 @@ namespace MEditService.Index.Tests.Records;
 
 public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 {
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private readonly IndexedContainerMod _fixture = new();
 
@@ -24,7 +22,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     {
         var cell = JsonNode.Parse(CellBody())?.AsObject() ?? throw new InvalidOperationException("Expected the cell's body to be an object.");
         changeTemporaryRefs(cell["Temporary"]?.AsArray() ?? throw new InvalidOperationException("Expected the cell to hold temporary refs."));
-        return Codec.RoundTrip(cell.ToJsonString(), GameRelease.Fallout4, "cell");
+        return RecordTextCodec.RoundTrip(cell.ToJsonString(), GameRelease.Fallout4, "cell");
     }
 
     [Fact]

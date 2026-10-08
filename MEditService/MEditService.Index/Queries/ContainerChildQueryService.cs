@@ -59,7 +59,7 @@ public sealed class ContainerChildQueryService
                 record.FormKey, record.EditorId, record.Plugin, record.Origin,
                 record.LoadOrderIndex, record.IsWinner, record.WorkingTreeState, SlotRecordTypes[row.SlotName],
                 record.HasContainerChildren, record.ParseDiagnosis, record.HasParseFailure, record.FullName,
-                ContainerChildFields.HasChildFields(SlotRecordTypes[row.SlotName], release)));
+                RecordTypes.For(release).HasChildSlots(SlotRecordTypes[row.SlotName])));
         }
         return result;
     }

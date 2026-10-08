@@ -1,7 +1,6 @@
 using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -31,10 +30,9 @@ public class RecordTextCodecTests
     [Fact]
     public void RoundTrip_GivesAWeaponsTextBackUnchanged_SoTheGoldenBytesBelowPinWhatAReadKeeps()
     {
-        var codec = Codec();
-        var text = codec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
+        var text = RecordTextCodec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
 
-        Assert.Equal(text, codec.RoundTrip(text, GameRelease.Fallout4, "weap"));
+        Assert.Equal(text, RecordTextCodec.RoundTrip(text, GameRelease.Fallout4, "weap"));
     }
 
     [Fact]
@@ -54,7 +52,7 @@ public class RecordTextCodecTests
     [Fact]
     public async Task SerializeToText_ForAFixedWeapon_ProducesThePinnedGoldenBytes()
     {
-        var actual = Encoding.UTF8.GetBytes(Codec().SerializeToText(MakeWeapon(), GameRelease.Fallout4));
+        var actual = Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(MakeWeapon(), GameRelease.Fallout4));
 
         var golden = await File.ReadAllBytesAsync(
             Path.Combine(AppContext.BaseDirectory, "TestData", "weapon-dispatch-golden.json"));
@@ -64,11 +62,10 @@ public class RecordTextCodecTests
     [Fact]
     public void SerializeToText_CalledTwiceOnTheSameRecordState_ProducesIdenticalText_WithNoGoldenInTheLoopBecauseAGoldenIsBlindToNonDeterminismThatReproducesTheSameWrongOutputEveryRun()
     {
-        var codec = Codec();
         var independentlyConstructedSecondWeaponSoAPerInstanceMemoizerCannotTriviallyAgreeWithItself = MakeWeapon();
 
-        var firstText = codec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
-        var secondText = codec.SerializeToText(independentlyConstructedSecondWeaponSoAPerInstanceMemoizerCannotTriviallyAgreeWithItself, GameRelease.Fallout4);
+        var firstText = RecordTextCodec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
+        var secondText = RecordTextCodec.SerializeToText(independentlyConstructedSecondWeaponSoAPerInstanceMemoizerCannotTriviallyAgreeWithItself, GameRelease.Fallout4);
 
         Assert.Equal(firstText, secondText);
     }
@@ -76,10 +73,9 @@ public class RecordTextCodecTests
     [Fact]
     public void SerializeToText_NeverEmitsACarriageReturn_BecauseTheJsonKernelIndentsFromItsPrivateInnerTextWritersNewLineWhichTheCodecCannotConfigureSoItNormalizesAfter()
     {
-        var text = Codec().SerializeToText(MakeWeapon(), GameRelease.Fallout4);
+        var text = RecordTextCodec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
 
         Assert.DoesNotContain('\r', text);
     }
 
-    private static RecordTextCodec Codec() => new(NullLogger<RecordTextCodec>.Instance);
 }

@@ -5,7 +5,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -18,7 +17,7 @@ internal static class TrackedTree
     internal static SourceDocument? Document(string modFolder, PluginAddress plugin, string formKey)
     {
         if (SourceRepository.Open(TestMod.In(modFolder), GameRelease.Fallout4) is not { } repository) return null;
-        return repository.Get(plugin, formKey, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4));
+        return repository.Get(plugin, formKey);
     }
 
     /// <summary>The document body for a record a fixture just wrote: absent here is a broken
@@ -39,7 +38,7 @@ internal static class TrackedTree
     /// included.</summary>
     internal static IReadOnlyList<string> ChangedFormKeys(string modFolder, PluginAddress plugin) =>
         [.. Repository(modFolder)
-            .ChangedSinceLastCommit(plugin, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4))
+            .ChangedSinceLastCommit(plugin)
             .Keys.Order(StringComparer.Ordinal)];
 
     /// <summary>The files holding a record the tree changed since the last commit: an embedded child
@@ -47,10 +46,9 @@ internal static class TrackedTree
     internal static IReadOnlyList<string> ChangedDocumentFiles(string modFolder, PluginAddress plugin)
     {
         var repository = Repository(modFolder);
-        var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         return
         [
-            .. repository.ChangedSinceLastCommit(plugin, schemas)
+            .. repository.ChangedSinceLastCommit(plugin)
                 .Select(change => DocumentFile(modFolder, plugin, change.Key))
                 .OfType<string>().Distinct().Order(StringComparer.Ordinal),
         ];
@@ -60,7 +58,7 @@ internal static class TrackedTree
     internal static string? DocumentFile(string modFolder, PluginAddress plugin, string formKey)
     {
         var repository = Repository(modFolder);
-        return repository.Get(plugin, formKey, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)) is { } held
+        return repository.Get(plugin, formKey) is { } held
             ? repository.RelativePathOf(plugin, held.Identity)
             : null;
     }
@@ -88,7 +86,6 @@ internal static class TrackedTree
     internal static void Seed(string modFolder, PluginAddress plugin, string formKey)
     {
         var body = RecordMint.BareDocument(
-            new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["npc_"],
             GameRelease.Fallout4, formKey, editorId: null);
         Repository(modFolder).Put(plugin, new SourceDocument(formKey, "npc_", null, body));

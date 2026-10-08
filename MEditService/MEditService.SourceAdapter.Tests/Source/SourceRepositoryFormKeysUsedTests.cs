@@ -4,7 +4,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -19,7 +18,6 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly ScratchDirectory _modFolder = new("medit-holds-");
-    private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
     public void Dispose() => _modFolder.Dispose();
 
@@ -85,7 +83,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
             $"{worldspace.EditorID} - {worldspace.FormKey.ID:X6}_{worldspace.FormKey.ModKey.FileName}"));
 
         var repository = Tracked(
-            new TreeFile(worldspacePath, Encoding.UTF8.GetBytes(_codec.SerializeToText(worldspace, Release))));
+            new TreeFile(worldspacePath, Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(worldspace, Release))));
 
         var movedInTheWorkingTreeAlone = $"00080A:{PluginName}";
         var file = Path.Combine(_modFolder, worldspacePath);

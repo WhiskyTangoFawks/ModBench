@@ -4,7 +4,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -21,7 +20,6 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly ScratchDirectory _modFolder = new("medit-splice-");
-    private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
     private readonly Cell _cell;
@@ -71,8 +69,8 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     private static string Leaf(IMajorRecordGetter record) =>
         $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
 
-    private byte[] Serialize(IMajorRecordGetter record) =>
-        Encoding.UTF8.GetBytes(_codec.SerializeToText(record, Release));
+    private static byte[] Serialize(IMajorRecordGetter record) =>
+        Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));
 
     private SourceRepository Repository =>
         SourceRepository.Open(TestMod.In(_modFolder), Release) ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
@@ -143,7 +141,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
 
     private JsonElement OwnerAsTheCodecReadsIt()
     {
-        using var owner = JsonDocument.Parse(_codec.RoundTrip(File.ReadAllText(FullPath(CellPath)), Release, "cell"));
+        using var owner = JsonDocument.Parse(RecordTextCodec.RoundTrip(File.ReadAllText(FullPath(CellPath)), Release, "cell"));
         return owner.RootElement.Clone();
     }
 
@@ -247,7 +245,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     private void AssertTheCompileGateWouldNotRespell(string relativePath, string recordType)
     {
         var text = File.ReadAllText(FullPath(relativePath));
-        Assert.Equal(_codec.RoundTrip(text, Release, recordType), text);
+        Assert.Equal(RecordTextCodec.RoundTrip(text, Release, recordType), text);
     }
 
     private static string WithoutTheBraceMatchedObjectHolding(string text, string formKey)

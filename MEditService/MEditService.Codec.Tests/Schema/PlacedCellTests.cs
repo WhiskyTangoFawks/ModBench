@@ -14,7 +14,7 @@ public sealed class PlacedCellTests
         var cell = new JsonObject
         {
             [RecordMembers.FormKey] = "000801:Holds.esm",
-            [RecordTypeDispatch.CellGridMember] = PlacedCell.GridAt(3, -2),
+            [RecordTypes.CellGridMember] = PlacedCell.GridAt(3, -2),
         };
 
         Assert.False(PlacedCell.TryAsCreatedIn(placed, PersistentFlag.TemporaryGroup, cell, GameRelease.Starfield, out var refusal));

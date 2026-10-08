@@ -18,7 +18,6 @@ public sealed class CreateRecordHandler
     private readonly WriteTargets _targets;
     private readonly LoadOrderResolution _resolution;
     private readonly LoadOrderHolder _loadOrder;
-    private readonly RecordTextCodec _codec;
     private readonly SchemaReflector _schemaReflector;
     private readonly ILogger<CreateRecordHandler> _logger;
 
@@ -28,12 +27,11 @@ public sealed class CreateRecordHandler
         WriteTargets targets,
         LoadOrderResolution resolution,
         LoadOrderHolder loadOrder,
-        RecordTextCodec codec,
         SchemaReflector schemaReflector,
         ILogger<CreateRecordHandler> logger)
     {
-        (_targets, _resolution, _loadOrder, _codec, _schemaReflector, _logger) =
-            (targets, resolution, loadOrder, codec, schemaReflector, logger);
+        (_targets, _resolution, _loadOrder, _schemaReflector, _logger) =
+            (targets, resolution, loadOrder, schemaReflector, logger);
     }
 
     public RecordEditResult CreateRecord(
@@ -72,7 +70,7 @@ public sealed class CreateRecordHandler
         }
         if (container is not null) return MintChild(repository, plugin, recordType, schema, release, container, position);
         if (position is not null) return MalformedPosition("names no container");
-        if (!CreatableRecordTypes.Includes(recordType, release))
+        if (!RecordTypes.For(release).IsCreatable(recordType))
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.HeldInAnotherRecordNotYetSupported,
@@ -82,8 +80,8 @@ public sealed class CreateRecordHandler
         var allocator = FormKeyAllocator.Over(repository, plugin, release);
         if (allocator.Next(out var targetFormKey) is { } refusedTarget) return refusedTarget;
 
-        var body = RecordMint.BareDocument(_codec, schema, release, targetFormKey, editorId: null);
-        if (RecordTypeDispatch.For(release).IsCell(recordType)) body = AsInteriorCell(body);
+        var body = RecordMint.BareDocument(schema, release, targetFormKey, editorId: null);
+        if (RecordTypes.For(release).IsCell(recordType)) body = AsInteriorCell(body);
 
         SourceTransaction.Atomically(repository, transaction =>
         {
@@ -107,15 +105,15 @@ public sealed class CreateRecordHandler
         if (!_targets.TryResolveEditTarget(plugin, container, out var target, out var containerDocument, out var unresolved))
             return unresolved;
         var containerType = target.Identity.RecordType;
-        var dispatch = RecordTypeDispatch.For(release);
-        var exteriorCell = dispatch.IsWorldspace(containerType) && dispatch.IsCell(recordType);
+        var types = RecordTypes.For(release);
+        var exteriorCell = types.IsWorldspace(containerType) && types.IsCell(recordType);
         if (position is not null && !exteriorCell) return MalformedPosition($"creates a '{recordType}' in {container}");
 
         var schemas = _schemaReflector.GetSchemas(release);
         CellPlace? place;
         try
         {
-            place = dispatch.IsCell(containerType) ? repository.CellStructureOf(plugin, target.Identity)?.Place : null;
+            place = types.IsCell(containerType) ? repository.CellStructureOf(plugin, target.Identity)?.Place : null;
         }
         catch (UnreadableSourceDocumentException ex)
         {
@@ -123,7 +121,7 @@ public sealed class CreateRecordHandler
         }
 
         using var parsed = JsonDocument.Parse(containerDocument.Body);
-        var childSlot = ChildRecordTypes.SlotFor(containerType, parsed.RootElement, place, recordType, schemas, release);
+        var childSlot = ChildRecordTypes.SlotFor(containerType, parsed.RootElement, place, recordType, release);
         var containerHoldsIt = childSlot is not ChildSlot.NotHeld;
         if (exteriorCell && containerHoldsIt)
         {
@@ -172,9 +170,9 @@ public sealed class CreateRecordHandler
         }
 
         var allocator = FormKeyAllocator.Over(repository, plugin, release);
-        if (GridCells.Mint(allocator, _codec, schemas[recordType], release, grid, out var cell) is { } exhausted) return exhausted;
+        if (GridCells.Mint(allocator, schemas[recordType], release, grid, out var cell) is { } exhausted) return exhausted;
         var formKey = GridCellHolder.FormKeyOf(cell);
-        var text = _codec.RoundTrip(cell.ToJsonString(), release, recordType);
+        var text = RecordTextCodec.RoundTrip(cell.ToJsonString(), release, recordType);
         SourceTransaction.Atomically(repository, transaction =>
         {
             transaction.Apply(repository.ChangesToPutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace));
@@ -199,11 +197,11 @@ public sealed class CreateRecordHandler
         var (container, root, slot) = landing;
         var allocator = FormKeyAllocator.Over(repository, plugin, release);
         if (allocator.Next(out var formKey) is { } refusedTarget) return refusedTarget;
-        var child = ObjectOf(RecordMint.BareDocument(_codec, schema, release, formKey, editorId: null), $"the minted {recordType}");
+        var child = ObjectOf(RecordMint.BareDocument(schema, release, formKey, editorId: null), $"the minted {recordType}");
         if (!PlacedCell.TryAsCreatedIn(child, slot, root, release, out var unplaceable))
             return RecordEditResult.Refused(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, unplaceable);
         var withChild = ContainerDocumentEdits.WithChildAppended(
-                _codec, container.Body, release, container.RecordType, container.FormKey, slot, child.ToJsonString(), recordType)
+                container.Body, release, container.RecordType, container.FormKey, slot, child.ToJsonString(), recordType)
             ?? throw new InvalidOperationException($"{container.FormKey} was found, but its own text does not carry it.");
 
         SourceTransaction.Atomically(repository, transaction =>

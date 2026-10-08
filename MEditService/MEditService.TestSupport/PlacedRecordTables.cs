@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
@@ -13,8 +14,12 @@ public static class PlacedRecordTables
 
     public static IReadOnlyList<RecordTableSchema> Fallout4 { get; } =
     [
-        .. Schemas.Values
-            .Where(schema => typeof(IPlacedGetter).IsAssignableFrom(schema.RecordType))
+        .. typeof(IPlacedGetter).Assembly.GetTypes()
+            .Where(type => type is { IsClass: true, IsAbstract: false, IsPublic: true } && typeof(IPlacedGetter).IsAssignableFrom(type))
+            .Select(type => RecordTypes.For(GameRelease.Fallout4).RecordTypeNamed(type.Name))
+            .OfType<string>()
+            .Distinct()
+            .Select(table => Schemas[table])
             .OrderBy(schema => Schemas.DisplayNameFor(schema.TableName), StringComparer.OrdinalIgnoreCase),
     ];
 

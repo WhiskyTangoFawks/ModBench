@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -56,10 +55,7 @@ public sealed class ParseFailedRecordTests
         using var scratch = Scratch.Misshaped();
         using var overlay = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName(MisshapedPerkPlugin.FileName), scratch.PluginPath), Fallout4Release.Fallout4);
-        var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
-        var inThePlugin = schemas
-            .Where(kv => kv.Key != PluginHeader.RecordType)
-            .Sum(kv => overlay.EnumerateMajorRecords(kv.Value.RecordType, throwIfUnknown: false).Count());
+        var inThePlugin = overlay.EnumerateMajorRecords().Count();
 
         var listed = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin).Sum(c => c.Count);
 

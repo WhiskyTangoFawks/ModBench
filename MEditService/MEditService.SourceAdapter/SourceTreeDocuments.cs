@@ -17,17 +17,18 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     private readonly string _pluginFileName;
     private readonly GameRelease _release;
     private readonly ContainerDocuments _containers;
+    private readonly RecordTypes _types;
     private readonly string _root;
     private readonly string _headerRelativePath;
 
     internal SourceTreeDocuments(
-        string modFolder, string pluginFileName, GameRelease release,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        string modFolder, string pluginFileName, GameRelease release)
     {
         _modFolder = modFolder;
         _pluginFileName = pluginFileName;
         _release = release;
-        _containers = new ContainerDocuments(release, schemas);
+        _containers = new ContainerDocuments(release);
+        _types = RecordTypes.For(release);
         _root = SourceRepositoryLayout.RootIn(modFolder, pluginFileName);
         _headerRelativePath = SourceRepositoryLayout.HeaderDocumentFor(pluginFileName);
     }
@@ -68,13 +69,12 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         foreach (var groupDirectory in Directory.EnumerateDirectories(_root))
         {
             var folder = Path.GetFileName(groupDirectory);
-            var directoryPerRecord = RecordTypeDispatch.For(_release)
-                .DirectoryPerRecordTypeIn(folder, nested: false);
+            var directoryPerRecord = _types.DirectoryPerRecordTypeIn(folder, nested: false);
 
             var documents = directoryPerRecord switch
             {
                 null => FlatGroup(groupDirectory, holders),
-                var type when _containers.IsCell(type) => InteriorCells(groupDirectory, holders),
+                var type when _types.IsCell(type) => InteriorCells(groupDirectory, holders),
                 _ => Worldspaces(groupDirectory, holders),
             };
             foreach (var document in documents) yield return document;
@@ -159,7 +159,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         }
 
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
-            ?? _containers.RecordTypeNamed(DocumentText.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator))
+            ?? _types.RecordTypeNamed(DocumentText.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator))
             ?? throw Unreadable(file, "neither its path nor its text names a record type", declared);
         var formKey = declared ?? throw Unreadable(file, "it declares no FormKey");
 
@@ -176,7 +176,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     // (ADR-0006).
     private IReadOnlyList<ChildRecord>? ContentsOf(string recordType, string text)
     {
-        if (!_containers.IsCell(recordType)) return null;
+        if (!_types.IsCell(recordType)) return null;
 
         using var document = JsonDocument.Parse(text);
         return [.. _containers.ChildrenOf(recordType, document.RootElement)
@@ -188,7 +188,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     internal IEnumerable<(string FormKey, string Text)> Expand(string recordType, string formKey, string text)
     {
         yield return (formKey, text);
-        var table = _containers.RecordTypeNamed(recordType) ?? recordType;
+        var table = _types.RecordTypeNamed(recordType) ?? recordType;
         foreach (var embedded in EmbeddedTexts(table, formKey, text))
             yield return (embedded.Child.FormKey, embedded.Text);
     }
@@ -228,7 +228,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         {
             var childType = RequireReadable(_modFolder, child, ownerFile);
             // The one embedded cell: a worldspace's top cell, outside every exterior block grid.
-            var cell = _containers.IsCell(childType)
+            var cell = _types.IsCell(childType)
                 ? CellPlacement.TopCellOf(directOwner).Structure
                 : (CellStructure?)null;
             yield return new PluginDocument(childType, child.FormKey, text, null, cell, ContentsOf(childType, text));
@@ -245,15 +245,14 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         using (var document = JsonDocument.Parse(ownerText))
             children = [.. _containers.ChildrenOf(ownerRecordType, document.RootElement)];
 
-        var containerType = _containers.ContainerTypeOf(ownerRecordType);
         var ownerBytes = Encoding.UTF8.GetBytes(ownerText);
         foreach (var child in children)
         {
-            if (!ContainerChildFields.EmbeddedSlotsFor(_release.ToCategory()).Contains((containerType, child.SlotName))) continue;
+            if (!_types.IsEmbeddedSlot(ownerRecordType, child.SlotName)) continue;
 
             // The index holds the file's own bytes (ADR-0005), so a hand edit the codec would respell
             // reaches it as the file spells it.
-            var text = EmbeddedChildSplice.TextOf(ownerBytes, containerType, child.FormKey, _release)
+            var text = EmbeddedChildSplice.TextOf(ownerBytes, ownerRecordType, child.FormKey, _release)
                 ?? throw new InvalidOperationException(
                     $"{ownerFormKey}'s '{child.SlotName}' names '{child.FormKey}', yet the span reader finds no text for it.");
             yield return (child, text, ownerFormKey);

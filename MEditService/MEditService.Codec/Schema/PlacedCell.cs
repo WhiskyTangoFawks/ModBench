@@ -39,7 +39,7 @@ public static class PlacedCell
     /// <summary>The cell's grid, or null when its document carries none. The codec omits a zero point.</summary>
     public static (int X, int Y)? Grid(JsonObject cell)
     {
-        if (cell[RecordTypeDispatch.CellGridMember] is not JsonObject grid) return null;
+        if (cell[RecordTypes.CellGridMember] is not JsonObject grid) return null;
         return Components(grid[GridPointMember]) is [var x, var y] ? ((int)x, (int)y) : (0, 0);
     }
 

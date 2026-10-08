@@ -15,43 +15,43 @@ public static class RecordDocumentEdits
     /// <summary>The record under <paramref name="newFormKey"/> with every child slot cleared and its
     /// EditorID replaced through <paramref name="deriveEditorId"/> — what Copy as New Record lands.</summary>
     public static NamedDocument DuplicatedWithoutChildren(
-        RecordTextCodec codec, string text, GameRelease release, string? recordType, string newFormKey,
+        string text, GameRelease release, string? recordType, string newFormKey,
         Func<string?, string?> deriveEditorId)
     {
-        var source = codec.Deserialize(text, release, recordType);
+        var source = RecordTextCodec.Deserialize(text, release, recordType);
         var duplicate = source.Duplicate(FormKey.Factory(newFormKey));
         RemapSelfLink(duplicate, source.FormKey.ToString(), newFormKey);
         duplicate.EditorID = deriveEditorId(duplicate.EditorID);
         ContainerChildFields.ClearAllChildSlots(duplicate);
-        return Named(codec, duplicate, release);
+        return Named(duplicate, release);
     }
 
     /// <summary>The record under <paramref name="newFormKey"/> and otherwise as it was: what a
     /// FormID edit writes for the record it was asked about.</summary>
     public static string WithFormKey(
-        RecordTextCodec codec, string text, GameRelease release, string? recordType, string newFormKey)
+        string text, GameRelease release, string? recordType, string newFormKey)
     {
-        var record = codec.Deserialize(text, release, recordType);
+        var record = RecordTextCodec.Deserialize(text, release, recordType);
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
-        return codec.SerializeToText(record, release);
+        return RecordTextCodec.SerializeToText(record, release);
     }
 
     /// <summary>The owner's text with the embedded child <paramref name="oldFormKey"/> under
     /// <paramref name="newFormKey"/>, and nothing else changed. Null when the text carries no such
     /// child.</summary>
     public static string? WithEmbeddedChildFormKey(
-        RecordTextCodec codec, string ownerText, GameRelease release, string? ownerRecordType,
+        string ownerText, GameRelease release, string? ownerRecordType,
         string oldFormKey, string newFormKey)
     {
-        var owner = codec.Deserialize(ownerText, release, ownerRecordType);
+        var owner = RecordTextCodec.Deserialize(ownerText, release, ownerRecordType);
         if (ContainerChildFields.FindEmbeddedChild(owner, oldFormKey) is not { } found) return null;
 
         ((IMajorRecordInternal)found.Child).FormKey = FormKey.Factory(newFormKey);
-        return codec.SerializeToText(owner, release);
+        return RecordTextCodec.SerializeToText(owner, release);
     }
 
-    private static NamedDocument Named(RecordTextCodec codec, IMajorRecordGetter record, GameRelease release) =>
-        new(codec.SerializeToText(record, release), record.EditorID);
+    private static NamedDocument Named(IMajorRecordGetter record, GameRelease release) =>
+        new(RecordTextCodec.SerializeToText(record, release), record.EditorID);
 
     // A record holding no links at all is left alone: a duplicate's self-link is optional.
     private static void RemapSelfLink(IMajorRecordGetter record, string oldFormKey, string newFormKey)

@@ -16,20 +16,17 @@ internal sealed class WorkingTreeOverlay
 {
     private readonly DuckDBConnection _connection;
     private readonly ILogger _logger;
-    private readonly RecordTextCodec _codec;
     private readonly ContainerDocuments _containers;
     private readonly IReadOnlyDictionary<string, RecordTableSchema> _schemas;
-    private readonly GameCategory _category;
+    private readonly RecordTypes _types;
 
     public WorkingTreeOverlay(
-        DuckDBConnection connection, ILogger logger, RecordTextCodec codec,
-        ContainerDocuments containers, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
+        DuckDBConnection connection, ILogger logger, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
         _connection = connection;
         _logger = logger;
-        _codec = codec;
-        _containers = containers;
-        _category = release.ToCategory();
+        _containers = new ContainerDocuments(release);
+        _types = RecordTypes.For(release);
         _schemas = schemas;
     }
 
@@ -204,15 +201,14 @@ internal sealed class WorkingTreeOverlay
 
         // placement/cell_location/container_child track Effective the same way
         // form_lookup/form_references do, rebuilt from the child documents this body carries.
-        var containerType = _containers.ContainerTypeOf(recordType);
-        var recordedBefore = ChildrenRecorded(key, formKey, embeddedIn: containerType);
-        DeriveEmbeddedChildRows(key, containerType, children, touched);
-        RederiveContainmentForRecord(key, formKey, recordType, containerType, children);
+        var recordedBefore = ChildrenRecorded(key, formKey, embeddedIn: recordType);
+        DeriveEmbeddedChildRows(key, recordType, children, touched);
+        RederiveContainmentForRecord(key, formKey, recordType, children);
 
         // A child absent from the document is gone at Effective, unless another container's document
         // holds it (a container whose FormID changed re-derives its children under the new identity first).
         var carriedNow = children
-            .Where(c => ContainerChildFields.EmbeddedSlotsFor(_category).Contains((containerType, c.SlotName)))
+            .Where(c => _types.IsEmbeddedSlot(recordType, c.SlotName))
             .Select(c => c.FormKey)
             .ToHashSet(StringComparer.Ordinal);
         foreach (var gone in recordedBefore.Where(fk => !carriedNow.Contains(fk)))
@@ -246,7 +242,7 @@ internal sealed class WorkingTreeOverlay
         while (reader.Read())
         {
             var embedded = embeddedIn == null
-                || (reader.IsDBNull(1) || ContainerChildFields.EmbeddedSlotsFor(_category).Contains((embeddedIn, reader.GetString(1))))
+                || (reader.IsDBNull(1) || _types.IsEmbeddedSlot(embeddedIn, reader.GetString(1)))
                     && reader.IsDBNull(2);
             if (embedded) recorded.Add(reader.GetString(0));
         }
@@ -269,16 +265,16 @@ internal sealed class WorkingTreeOverlay
     // An embedded child's own row is a projection of its container's document, like its placement
     // row: serialized out of the container's graph through the codec ingest uses.
     private void DeriveEmbeddedChildRows(
-        PluginAddress key, string containerType, IReadOnlyList<ContainerDocuments.ChildDocument> children,
+        PluginAddress key, string recordType, IReadOnlyList<ContainerDocuments.ChildDocument> children,
         ICollection<string> touched)
     {
         foreach (var child in children)
         {
-            if (!ContainerChildFields.EmbeddedSlotsFor(_category).Contains((containerType, child.SlotName))) continue;
+            if (!_types.IsEmbeddedSlot(recordType, child.SlotName)) continue;
             var childType = child.RecordType ?? throw new InvalidOperationException(
                 $"{child.FormKey} in {key.Name} ({key.Origin}) reached projection untyped, past the read that refuses it.");
 
-            var childBody = _containers.TextOf(_codec, child);
+            var childBody = _containers.TextOf(child);
             if (string.Equals(childBody, EffectiveBody(key, child.FormKey), StringComparison.Ordinal)) continue;
 
             touched.Add(child.FormKey);
@@ -297,19 +293,15 @@ internal sealed class WorkingTreeOverlay
     // table) is correct by construction. An embedded child that is itself a container derives its
     // own containment through its own row.
     private void RederiveContainmentForRecord(
-        PluginAddress key, string formKey, string recordType, string containerType,
-        IReadOnlyList<ContainerDocuments.ChildDocument> children)
+        PluginAddress key, string formKey, string recordType, IReadOnlyList<ContainerDocuments.ChildDocument> children)
     {
-        // Two spellings of the type: the CLR name (Cell) is what PlacementWalker.TableFor and the
-        // slot table key off; the schema table name (cell) is what a stored
-        // ContainerChildRow.ParentRecordType carries, matching ingest and downstream readers.
         var containerChildRows = new List<ContainerChildRow>();
         var placementRows = new List<PlacementRow>();
         CellLocationRow? topCellRow = null;
 
         foreach (var child in children)
         {
-            switch (PlacementWalker.TableFor(containerType, child.SlotName))
+            switch (PlacementWalker.TableFor(_types, recordType, child.SlotName))
             {
                 case ParentageTable.ContainerChild:
                     containerChildRows.Add(new ContainerChildRow(

@@ -12,7 +12,7 @@ namespace MEditService.Commands.Resolution;
 /// <summary>What a copy reads of the record it is copying (ADR-0015). One per gesture,
 /// not thread-safe.</summary>
 internal sealed class CopySource(
-    PluginAddress plugin, LoadOrderSnapshot loadOrder, IPluginAdapter adapter, RecordTextCodec codec, SchemaReflector schemaReflector)
+    PluginAddress plugin, LoadOrderSnapshot loadOrder, IPluginAdapter adapter, SchemaReflector schemaReflector)
     : IDisposable
 {
     private readonly GameRelease _release = loadOrder.GameRelease;
@@ -36,7 +36,7 @@ internal sealed class CopySource(
     /// null when it holds nothing under that key. A tracked plugin's document that is no record
     /// document refuses rather than reading as none.</summary>
     internal RecordIdentity? Identity(string formKey) =>
-        _tree != null ? _tree.Get(plugin, formKey, _schemas)?.Identity : Loaded()?.IdentityOf(formKey);
+        _tree != null ? _tree.Get(plugin, formKey)?.Identity : Loaded()?.IdentityOf(formKey);
 
     /// <summary>The record header's flags, read without the record's fields.</summary>
     internal long RecordFlags(RecordIdentity identity)
@@ -48,7 +48,7 @@ internal sealed class CopySource(
 
     /// <summary>Whether the record's header carries Partial Form, on a type that can.</summary>
     internal bool IsPartialForm(RecordIdentity identity) =>
-        ContainerChildFields.HasChildFields(identity.RecordType, _release) && (RecordFlags(identity) & PartialFormFlag.Bit) != 0;
+        RecordTypes.For(_release).HasChildSlots(identity.RecordType) && (RecordFlags(identity) & PartialFormFlag.Bit) != 0;
 
     /// <summary>The record's own text: the working tree's own bytes when tracked, otherwise the loaded
     /// plugin's record through the codec — byte for byte what Track would have written.</summary>
@@ -59,7 +59,7 @@ internal sealed class CopySource(
         var body = _tree.RecordOf(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey);
         // Read through the codec even though the verbatim bytes are what lands: a copy of text no
         // reader can make a record of would leave the destination uncompilable.
-        codec.RoundTrip(body, _release, identity.RecordType);
+        RecordTextCodec.RoundTrip(body, _release, identity.RecordType);
         return body;
     }
 
@@ -76,7 +76,7 @@ internal sealed class CopySource(
     /// <summary>The container carrying this record, or null when it has a document of its own. A
     /// worldspace's persistent cell answers its worldspace; a numbered cell has a document of its own.</summary>
     internal DocumentContainment? ContainerOf(RecordIdentity identity) =>
-        _tree != null ? _tree.ContainerOf(plugin, identity, _schemas) : Loaded()?.ContainmentOf(identity.FormKey);
+        _tree != null ? _tree.ContainerOf(plugin, identity) : Loaded()?.ContainmentOf(identity.FormKey);
 
     /// <summary>The worldspace the cell <paramref name="identity"/> names sits in, or null for an interior
     /// cell or a cell this plugin does not hold.</summary>
@@ -106,13 +106,13 @@ internal sealed class CopySource(
 
     private string? ParentOf(RecordIdentity identity) =>
         ContainerOf(identity)?.ParentFormKey
-        ?? (RecordTypeDispatch.For(_release).IsCell(identity.RecordType) ? WorldspaceOf(identity) : null);
+        ?? (RecordTypes.For(_release).IsCell(identity.RecordType) ? WorldspaceOf(identity) : null);
 
     /// <summary>The exterior cell this plugin holds at grid (<paramref name="x"/>, <paramref name="y"/>)
     /// of <paramref name="worldspace"/>, or null when it holds none there.</summary>
     internal RecordIdentity? CellAt(string worldspace, int x, int y)
     {
-        if (_tree != null) return _tree.GetCellAt(plugin, worldspace, x, y, _schemas)?.Identity;
+        if (_tree != null) return _tree.GetCellAt(plugin, worldspace, x, y)?.Identity;
         return Loaded()?.CellAt(worldspace, x, y) is { } formKey ? Loaded()?.IdentityOf(formKey) : null;
     }
 

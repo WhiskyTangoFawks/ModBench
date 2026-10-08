@@ -4,7 +4,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -45,7 +44,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         var room = new Cell(FormKey.Factory(Room.FormKey), Fallout4Release.Fallout4) { EditorID = Room.EditorId };
         room.Temporary.Add(new PlacedObject(FormKey.Factory(Placed.FormKey), Fallout4Release.Fallout4) { EditorID = Placed.EditorId });
-        return Encoding.UTF8.GetBytes(new RecordTextCodec(NullLogger<RecordTextCodec>.Instance).SerializeToText(room, Release));
+        return Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(room, Release));
     }
 
     private string NpcFile => Path.Combine(_modFolder, NpcDocument);

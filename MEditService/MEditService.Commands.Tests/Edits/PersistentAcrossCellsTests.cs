@@ -256,7 +256,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
         SetFlags("Wanderer", 0);
 
-        var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)).Require();
+        var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9).Require();
         Assert.Equal(Override.ModKey, FormKey.Factory(created.FormKey).ModKey);
         Assert.Equal(["Wanderer"], Group(Document(FormKey.Factory(created.FormKey)), "Temporary"));
         Assert.Equal(["Leaver"], Group(Document(_keys["Here"]), "Persistent"));
@@ -317,7 +317,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
         SetFlags("Wanderer", 0);
 
-        var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)).Require();
+        var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9).Require();
         Assert.Equal(Override.ModKey, FormKey.Factory(created.FormKey).ModKey);
         Assert.Equal(["Wanderer"], Group(Document(FormKey.Factory(created.FormKey)), "Temporary"));
     }
@@ -364,7 +364,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
         SetFlags("Wanderer", 0);
 
-        var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)).Require();
+        var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9).Require();
         Assert.Equal("000805:Override.esp", created.FormKey);
         Assert.Equal(0x806u, TrackedTree.NextObjectId(_plugins.FolderOf(Override), Address(Override)));
     }

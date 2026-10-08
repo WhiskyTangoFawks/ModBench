@@ -3,7 +3,6 @@ using System.Text.RegularExpressions;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -17,7 +16,6 @@ public sealed class PluginTreeReadTests
 {
     private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
 
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private const string TheAdaptersOwnScratchPrefix = "medit-readtree-";
 
@@ -27,7 +25,7 @@ public sealed class PluginTreeReadTests
         var unwritable = new TreeFile(Path.Combine("Tree.esp", new string('n', 300) + ".json"), "{}"u8.ToArray());
 
         var thrown = await Assert.ThrowsAnyAsync<IOException>(
-            () => Adapter.ReadTreeAsync([unwritable], Codec, GameRelease.Fallout4));
+            () => Adapter.ReadTreeAsync([unwritable], GameRelease.Fallout4));
 
         AssertScratchFolderGone(thrown.Message);
     }
@@ -37,7 +35,7 @@ public sealed class PluginTreeReadTests
     {
         var unreadable = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), "{ not json"u8.ToArray());
 
-        var (tree, diagnosis, _) = await Adapter.ReadTreeAsync([unreadable], Codec, GameRelease.Fallout4);
+        var (tree, diagnosis, _) = await Adapter.ReadTreeAsync([unreadable], GameRelease.Fallout4);
 
         Assert.Null(tree);
         Assert.NotNull(diagnosis);
@@ -59,7 +57,7 @@ public sealed class PluginTreeReadTests
         var corrupt = files.Select(file => new TreeFile(file.RelativePath,
             Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(file.Content).Replace(race, "NOT-A-FORMKEY", StringComparison.Ordinal))));
 
-        var (_, _, error) = await Adapter.ReadTreeAsync([.. corrupt], Codec, GameRelease.Fallout4);
+        var (_, _, error) = await Adapter.ReadTreeAsync([.. corrupt], GameRelease.Fallout4);
 
         AssertScratchFolderGone(Assert.IsType<FilePathedException>(error).Path);
     }

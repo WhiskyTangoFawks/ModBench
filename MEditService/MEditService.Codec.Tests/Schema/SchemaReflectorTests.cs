@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -10,19 +11,19 @@ public class SchemaReflectorTests
     private readonly SchemaReflector _reflector = SharedSchemaReflector.Instance;
 
     [Theory]
-    [InlineData("parw", typeof(IPlacedArrowGetter), "Placed Arrow")]
-    [InlineData("pbar", typeof(IPlacedBarrierGetter), "Placed Barrier")]
-    [InlineData("pbea", typeof(IPlacedBeamGetter), "Placed Beam")]
-    [InlineData("pcon", typeof(IPlacedConeGetter), "Placed Cone/Voice")]
-    [InlineData("pfla", typeof(IPlacedFlameGetter), "Placed Flame")]
-    [InlineData("pgre", typeof(IPlacedTrapGetter), "Placed Projectile")]
-    [InlineData("phzd", typeof(IPlacedHazardGetter), "Placed Hazard")]
-    [InlineData("pmis", typeof(IPlacedMissileGetter), "Placed Missile")]
-    public void APlacedVariant_IsATableOfItsOwnType_UnderXEditsName(string table, Type getter, string displayName)
+    [InlineData("parw", nameof(PlacedArrow), "Placed Arrow")]
+    [InlineData("pbar", nameof(PlacedBarrier), "Placed Barrier")]
+    [InlineData("pbea", nameof(PlacedBeam), "Placed Beam")]
+    [InlineData("pcon", nameof(PlacedCone), "Placed Cone/Voice")]
+    [InlineData("pfla", nameof(PlacedFlame), "Placed Flame")]
+    [InlineData("pgre", nameof(PlacedTrap), "Placed Projectile")]
+    [InlineData("phzd", nameof(PlacedHazard), "Placed Hazard")]
+    [InlineData("pmis", nameof(PlacedMissile), "Placed Missile")]
+    public void APlacedVariant_IsATableOfItsOwnType_UnderXEditsName(string table, string recordClass, string displayName)
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
 
-        Assert.Equal(getter, schemas[table].RecordType);
+        Assert.Equal(table, RecordTypes.For(GameRelease.Fallout4).RecordTypeNamed(recordClass));
         Assert.Equal(displayName, schemas.DisplayNameFor(table));
     }
 
@@ -378,14 +379,6 @@ public class SchemaReflectorTests
         var subFields = elementSpec.Fields;
         Assert.NotNull(subFields);
         Assert.Contains(subFields, f => f.Name == "Master" && f.Type == "string");
-    }
-
-    [Fact]
-    public void GetSchemas_Header_RecordType_IsHeaderGetterInterface_NotAMajorRecordType_BecauseTheEnumerateMajorRecordsLoopAssumesAnIMajorRecordGetter()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var schema = schemas["header"];
-        Assert.False(typeof(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter).IsAssignableFrom(schema.RecordType));
     }
 
     [Fact]

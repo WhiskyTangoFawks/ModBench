@@ -3,7 +3,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -44,9 +43,8 @@ public sealed class SourceTransactionOverATrackedTreeTests : IDisposable
         cell.Temporary.Add(new PlacedObject(mod) { EditorID = "ExteriorRef" });
         var worldspace = new Worldspace(mod) { EditorID = "World" };
 
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         byte[] Serialize(IMajorRecordGetter record) =>
-            Encoding.UTF8.GetBytes(codec.SerializeToText(record, Release));
+            Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));
 
         string Leaf(IMajorRecordGetter record) =>
             $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
@@ -94,7 +92,6 @@ public sealed class SourceTransactionOverATrackedTreeTests : IDisposable
             transaction.Put(repository, plugin, siblingInTheGroupFolderTrackAlreadyMade);
             transaction.Rekey(
                 repository, plugin, new RecordIdentity("000800:First.esp", "npc_", "Original"), "000901:First.esp",
-                SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
                 new DocumentRekey((document, newFormKey) => document.Body.Replace(document.FormKey, newFormKey, StringComparison.Ordinal), (_, _, _) => null));
             Assert.NotEqual(before, TreeSnapshot.Of(_firstFolder));
         });

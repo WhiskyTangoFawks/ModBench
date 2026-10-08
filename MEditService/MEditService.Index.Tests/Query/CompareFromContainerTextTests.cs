@@ -4,7 +4,6 @@ using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -14,7 +13,6 @@ namespace MEditService.Index.Tests.Query;
 
 public sealed class CompareFromContainerTextTests : IDisposable
 {
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
     private static readonly PluginAddress Plugin = new("Tree.esp", "TreeMod");
 
     private readonly ScatteredFixtureData _fixture;
@@ -62,7 +60,7 @@ public sealed class CompareFromContainerTextTests : IDisposable
     private static string Leaf(IMajorRecordGetter record) =>
         $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
 
-    private static string TextOf(IMajorRecordGetter record) => Codec.SerializeToText(record, GameRelease.Fallout4);
+    private static string TextOf(IMajorRecordGetter record) => RecordTextCodec.SerializeToText(record, GameRelease.Fallout4);
 
     private string RoomDocument =>
         _index.Records.GetCopyDocument(Plugin, _room.FormKey.ToString())?.Location

@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -32,8 +31,7 @@ public sealed class PluginDocumentReadTests
 
         using var loaded = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName(PluginName), path), Fallout4Release.Fallout4);
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var expected = codec.SerializeToText(loaded.EnumerateMajorRecords().Single(), GameRelease.Fallout4);
+        var expected = RecordTextCodec.SerializeToText(loaded.EnumerateMajorRecords().Single(), GameRelease.Fallout4);
 
         Assert.Equal(expected, npc.Text);
         Assert.Equal(loaded.EnumerateMajorRecords().Single().FormKey.ToString(), npc.FormKey);

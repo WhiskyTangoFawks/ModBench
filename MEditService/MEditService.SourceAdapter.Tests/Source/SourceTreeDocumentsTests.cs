@@ -3,7 +3,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -19,7 +18,6 @@ public sealed class SourceTreeDocumentsTests : IDisposable
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly ScratchDirectory _modFolder = new("medit-treedocuments-");
-    private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
@@ -76,8 +74,8 @@ public sealed class SourceTreeDocumentsTests : IDisposable
     private static string Leaf(IMajorRecordGetter record) =>
         $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
 
-    private byte[] Serialize(IMajorRecordGetter record) =>
-        Encoding.UTF8.GetBytes(_codec.SerializeToText(record, Release));
+    private static byte[] Serialize(IMajorRecordGetter record) =>
+        Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));
 
     private SourceRepository Repository =>
         SourceRepository.Open(TestMod.In(_modFolder), Release)
@@ -85,7 +83,7 @@ public sealed class SourceTreeDocumentsTests : IDisposable
 
     private Dictionary<string, PluginDocument> Documents()
     {
-        using var tree = Repository.OpenDocuments(Plugin, SharedSchemaReflector.Instance.GetSchemas(Release));
+        using var tree = Repository.OpenDocuments(Plugin);
         return tree.Records.ToDictionary(document => document.FormKey, document => document, StringComparer.Ordinal);
     }
 

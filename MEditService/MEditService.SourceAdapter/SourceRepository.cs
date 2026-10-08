@@ -1,5 +1,4 @@
 using System.Text;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
@@ -114,9 +113,9 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary>The record the tree holds at <paramref name="formKey"/>, or null when nothing carries
     /// it. A document named for the key whose text is no document refuses with the reader's words.</summary>
     public SourceDocument? Get(
-        PluginAddress plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        PluginAddress plugin, string formKey)
     {
-        if (Locator.IdentityOf(plugin, formKey, schemas) is { } identity) return RecordOf(plugin, identity);
+        if (Locator.IdentityOf(plugin, formKey) is { } identity) return RecordOf(plugin, identity);
         return Locator.UnreadableDocumentFor(plugin, formKey) is { } why
             ? throw new UnreadableSourceDocumentException($"{plugin.Name}'s document for {formKey} is no record document: {why}")
             : null;
@@ -126,10 +125,10 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <paramref name="identity"/>, when <paramref name="body"/> holds what reading the whole tree
     /// refuses.</summary>
     public void RefuseUnreadable(
-        PluginAddress plugin, RecordIdentity identity, string body, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        PluginAddress plugin, RecordIdentity identity, string body)
     {
         if (Locator.Locate(plugin, identity) is not { } unit) return;
-        using var documents = new SourceTreeDocuments(_modFolder, plugin.Name, _release, schemas);
+        using var documents = new SourceTreeDocuments(_modFolder, plugin.Name, _release);
         documents.RefuseUnreadable(identity.RecordType, identity.FormKey, body, unit.FullPath);
     }
 
@@ -137,21 +136,20 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// the tree only says which document that is. Null when nothing holds it; text naming no record throws
     /// <see cref="UnreadableSourceDocumentException"/>.</summary>
     public (RecordIdentity Record, SourceDocument Carrying)? CarryingFromText(
-        PluginAddress plugin, string formKey, string text, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        Locator.CarryingFromText(plugin, formKey, text, schemas);
+        PluginAddress plugin, string formKey, string text) =>
+        Locator.CarryingFromText(plugin, formKey, text);
 
     /// <summary>The record at <paramref name="formKey"/> with its own text read out of <paramref name="text"/>, the
     /// document carrying it by <see cref="CarryingFromText"/>'s rule. Null and throws as that does.</summary>
     public SourceDocument? RecordFromText(
-        PluginAddress plugin, string formKey, string text, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        PluginAddress plugin, string formKey, string text)
     {
-        if (CarryingFromText(plugin, formKey, text, schemas) is not var (record, carrying)) return null;
+        if (CarryingFromText(plugin, formKey, text) is not var (record, carrying)) return null;
         if (FormKey.TryFactory(carrying.FormKey, out var declared) && declared == FormKey.Factory(record.FormKey))
             return new SourceDocument(record.FormKey, record.RecordType, record.EditorId, text);
 
         var bytes = Encoding.UTF8.GetBytes(text);
-        var body = EmbeddedChildSplice.TextOf(
-                bytes, EmbeddedChildSplice.ContainerTypeName(carrying.RecordType, bytes, _release), record.FormKey, _release)
+        var body = EmbeddedChildSplice.TextOf(bytes, carrying.RecordType, record.FormKey, _release)
             ?? throw new InvalidOperationException($"Expected the text CarryingFromText found carrying {record.FormKey} to hold it.");
         return new SourceDocument(record.FormKey, record.RecordType, record.EditorId, body);
     }
@@ -159,8 +157,8 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary>The record that carries <paramref name="identity"/> inline, and the slot it sits in; null
     /// for a record with a document of its own.</summary>
     public DocumentContainment? ContainerOf(
-        PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        Locator.ContainerOf(plugin, identity, schemas);
+        PluginAddress plugin, RecordIdentity identity) =>
+        Locator.ContainerOf(plugin, identity);
 
     /// <summary>The document holding <paramref name="identity"/>, relative to the mod folder — a
     /// diagnostic's path for the Problems panel. Null when nothing there holds it.</summary>
@@ -211,8 +209,8 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary>The exterior cell this plugin's tree holds at grid (<paramref name="x"/>,
     /// <paramref name="y"/>) of <paramref name="worldspace"/>, or null when it holds none there.</summary>
     public SourceDocument? GetCellAt(
-        PluginAddress plugin, string worldspace, int x, int y, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        Locator.CellFormKeyAt(plugin, worldspace, x, y) is { } formKey ? Get(plugin, formKey, schemas) : null;
+        PluginAddress plugin, string worldspace, int x, int y) =>
+        Locator.CellFormKeyAt(plugin, worldspace, x, y) is { } formKey ? Get(plugin, formKey) : null;
 
     /// <summary>Every EditorID the plugin's tree holds now, a record with a document of its own and
     /// an embedded child alike — what a derived EditorID is checked against to stay unique in the
@@ -228,8 +226,8 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary>The plugin's tree as the documents it holds right now, each record's own. The caller
     /// disposes it.</summary>
     public IPluginDocuments OpenDocuments(
-        PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        new SourceTreeDocuments(_modFolder, plugin.Name, _release, schemas);
+        PluginAddress plugin) =>
+        new SourceTreeDocuments(_modFolder, plugin.Name, _release);
 
     /// <summary>Every file one plugin's source tree holds in the working tree, relative to the mod
     /// folder — the carrier Track hands in, handed back out. Empty when there is no source there.</summary>
@@ -254,8 +252,8 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// child among them; a tree with no repository is all added. A failed read throws
     /// <see cref="UnreadableSourceDocumentException"/>, never reads as a deletion.</summary>
     public IReadOnlyDictionary<string, RecordChange> ChangedSinceLastCommit(
-        PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        LastCommitComparison.Of(_modFolder, _release, _git, Locator, plugin, schemas);
+        PluginAddress plugin) =>
+        LastCommitComparison.Of(_modFolder, _release, _git, Locator, plugin);
 
     /// <summary>Creates or replaces the record's document, placing an absent one from its identity
     /// alone with the levels above it. A record another document carries is replaced at its own slot.

@@ -1,7 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -10,7 +9,6 @@ namespace MEditService.Codec.Tests.Serialization;
 
 public sealed class RegionDataDocumentTests
 {
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private static Region RegionWithEveryDataEntry() =>
         new(new FormKey(ModKey.FromFileName("Test.esp"), 0x800), Fallout4Release.Fallout4)
@@ -37,7 +35,7 @@ public sealed class RegionDataDocumentTests
     [Fact]
     public void ARegionsDataEntries_SpellEachMemberOnce()
     {
-        using var document = JsonDocument.Parse(Codec.SerializeToText(RegionWithEveryDataEntry(), GameRelease.Fallout4));
+        using var document = JsonDocument.Parse(RecordTextCodec.SerializeToText(RegionWithEveryDataEntry(), GameRelease.Fallout4));
 
         Assert.Empty(MembersSpelledTwice(document.RootElement, "$"));
     }
@@ -45,7 +43,7 @@ public sealed class RegionDataDocumentTests
     [Fact]
     public void ARegionsDataEntries_ReadBackWithTheirLodAndOcclusionValues()
     {
-        var read = ReadBack.Of(Codec, RegionWithEveryDataEntry(), GameRelease.Fallout4, "regn");
+        var read = ReadBack.Of(RegionWithEveryDataEntry(), GameRelease.Fallout4, "regn");
 
         Assert.Equal(
             [(1f, 11f), (2f, 12f), (3f, 13f), (4f, 14f), (5f, 15f), (6f, 16f)],

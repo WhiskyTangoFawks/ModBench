@@ -14,17 +14,15 @@ internal sealed class OverrideCopy
     private readonly WriteTargets _targets;
     private readonly RecordCopy _recordCopy;
     private readonly LoadOrderResolution _resolution;
-    private readonly RecordTextCodec _codec;
     private readonly ILogger _logger;
 
     internal OverrideCopy(
         WriteTargets targets,
         RecordCopy recordCopy,
         LoadOrderResolution resolution,
-        RecordTextCodec codec,
         ILogger logger)
     {
-        (_targets, _recordCopy, _resolution, _codec, _logger) = (targets, recordCopy, resolution, codec, logger);
+        (_targets, _recordCopy, _resolution, _logger) = (targets, recordCopy, resolution, logger);
     }
 
     /// <summary>An unreadable source record refuses rather than landing as a stub.
@@ -81,7 +79,7 @@ internal sealed class OverrideCopy
 
         if (destination.Repository.FormKeysUsed(destinationPlugin).Contains(formKey))
         {
-            if (_recordCopy.Identity(destination, formKey, release) is not { } existingTarget)
+            if (RecordCopy.Identity(destination, formKey) is not { } existingTarget)
                 return RecordCopy.RefuseKeyWithNoDocument(destination, formKey);
             if (!replace) return RecordCopy.RefuseHeldWithoutReplace(formKey, destinationPlugin);
 
@@ -98,7 +96,7 @@ internal sealed class OverrideCopy
     {
         var (source, identity, destination, release, _) = copy;
         var formKey = identity.FormKey;
-        var isCell = RecordTypeDispatch.For(release).IsCell(identity.RecordType);
+        var isCell = RecordTypes.For(release).IsCell(identity.RecordType);
         if (isCell && source.WorldspaceOf(identity) is { } worldspace)
         {
             var placed = SourceTransaction.Atomically(destination.Repository, transaction => _recordCopy.PlaceExteriorCell(
@@ -118,7 +116,7 @@ internal sealed class OverrideCopy
         }
 
         // Copy as Override is own-fields-only, so a container's inline children are stripped.
-        if (ContainerChildFields.HasChildFields(identity.RecordType, release))
+        if (RecordTypes.For(release).HasChildSlots(identity.RecordType))
             body = StripEmbeddedChildren(body, identity.RecordType, release);
 
         destination.Repository.Put(
@@ -146,7 +144,7 @@ internal sealed class OverrideCopy
                 $"{destination.Plugin.Name} holds {identity.FormKey}, but no document in its source tree carries it.");
 
         var replacement = ContainerDocumentEdits.WithOwnFieldsReplaced(
-            _codec, existing.Body, existing.RecordType, body, identity.RecordType, release);
+            existing.Body, existing.RecordType, body, identity.RecordType, release);
 
         destination.Repository.Put(
             destination.Plugin,
@@ -173,6 +171,6 @@ internal sealed class OverrideCopy
                 $"there would be an underride, not an override. Pick a destination that loads after {master}.")
             : null;
 
-    private string StripEmbeddedChildren(string body, string recordType, GameRelease release) =>
-        ContainerDocumentEdits.WithoutChildren(_codec, body, release, recordType);
+    private static string StripEmbeddedChildren(string body, string recordType, GameRelease release) =>
+        ContainerDocumentEdits.WithoutChildren(body, release, recordType);
 }

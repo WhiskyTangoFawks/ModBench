@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -18,8 +17,7 @@ public class PartialFormFlagTests
 
     private static bool IsPartialForm(IMajorRecordGetter record, string table)
     {
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        using var document = JsonDocument.Parse(codec.SerializeToText(record, GameRelease.Fallout4));
+        using var document = JsonDocument.Parse(RecordTextCodec.SerializeToText(record, GameRelease.Fallout4));
         return SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table].IsPartialForm(document.RootElement);
     }
 
@@ -49,22 +47,22 @@ public class PartialFormFlagTests
     }
 
     [Fact]
-    public void IsPartialFormable_Cell_ReturnsTrue()
+    public void ACell_IsPartialFormable()
     {
-        Assert.True(PartialFormFlag.IsPartialFormable(typeof(Cell)));
+        Assert.True(SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["cell"].IsPartialFormable);
     }
 
     [Fact]
-    public void IsPartialFormable_Npc_ReturnsFalse()
+    public void AnNpc_IsNotPartialFormable()
     {
-        Assert.False(PartialFormFlag.IsPartialFormable(typeof(Npc)));
+        Assert.False(SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["npc_"].IsPartialFormable);
     }
 
     [Fact]
     public void EveryPartialFormableType_NamesBit14OfItsRecordFlags()
     {
         var partialFormable = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Values
-            .Where(s => !s.IsHeader && PartialFormFlag.IsPartialFormable(s.RecordType))
+            .Where(s => !s.IsHeader && s.IsPartialFormable)
             .ToList();
 
         Assert.NotEmpty(partialFormable);

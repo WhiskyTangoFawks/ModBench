@@ -1,7 +1,4 @@
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -11,9 +8,6 @@ namespace MEditService.Codec.Tests.Serialization;
 
 public sealed class EmbeddedChildSearchTests
 {
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
-    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
-        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
     private const string NewFormKey = "FFF000:EmbedSearch.esp";
 
     private static Fallout4Mod NewMod() =>
@@ -21,8 +15,8 @@ public sealed class EmbeddedChildSearchTests
 
     private static string? RekeyedViaRecordDocumentEditsBecauseTheSearchIsCodecInternal(IMajorRecordGetter owner, string formKey) =>
         RecordDocumentEdits.WithEmbeddedChildFormKey(
-            Codec, Codec.SerializeToText(owner, GameRelease.Fallout4), GameRelease.Fallout4,
-            RecordTableName.Of(owner.GetType(), Schemas), formKey, NewFormKey);
+            RecordTextCodec.SerializeToText(owner, GameRelease.Fallout4), GameRelease.Fallout4,
+            RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(owner), formKey, NewFormKey);
 
     private static void AssertRekeyed(string? text, string formKey)
     {
@@ -80,9 +74,8 @@ public sealed class EmbeddedChildSearchTests
 
     private static EmbeddedChildSpan? Located(IMajorRecordGetter owner, string formKey)
     {
-        var bytes = System.Text.Encoding.UTF8.GetBytes(Codec.SerializeToText(owner, GameRelease.Fallout4));
-        return EmbeddedChildLocator.Find(
-            bytes, EmbeddedChildLocator.ContainerTypeName(null, bytes, GameRelease.Fallout4), formKey, GameRelease.Fallout4);
+        var bytes = System.Text.Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(owner, GameRelease.Fallout4));
+        return EmbeddedChildLocator.Find(bytes, null, formKey, GameRelease.Fallout4);
     }
 
     [Fact]

@@ -27,7 +27,6 @@ internal static class LoadOrderLinks
     internal static LinkAnswers Targets(
         IReadOnlyList<ModPath> loadOrder,
         GameRelease gameRelease,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas,
         IReadOnlyCollection<string> formKeys)
     {
         if (loadOrder.Count == 0 || formKeys.Count == 0) return LinkAnswers.None;
@@ -46,7 +45,7 @@ internal static class LoadOrderLinks
                     unreadable.Add(new UnreadablePlugin(modPath.ModKey.FileName.String, Why(ex)));
                 }
             }
-            return new LinkAnswers(Named(opened, schemas, formKeys), unreadable);
+            return new LinkAnswers(Named(opened, RecordTypes.For(gameRelease), formKeys), unreadable);
         }
         finally
         {
@@ -60,7 +59,7 @@ internal static class LoadOrderLinks
 
     private static Dictionary<string, ResolvedFormKey> Named(
         List<ILoadedMod> opened,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        RecordTypes types,
         IReadOnlyCollection<string> formKeys)
     {
         var targets = new Dictionary<string, ResolvedFormKey>(StringComparer.OrdinalIgnoreCase);
@@ -72,7 +71,7 @@ internal static class LoadOrderLinks
             // A malformed FormKey is an editor's raw input: it names nothing and throws nothing.
             if (!FormKey.TryFactory(formKey, out var parsed)) continue;
             if (!cache.TryResolve<IMajorRecordGetter>(parsed, out var record)) continue;
-            targets[formKey] = new ResolvedFormKey(RecordTableName.Of(record.GetType(), schemas), record.EditorID);
+            targets[formKey] = new ResolvedFormKey(types.RecordTypeOf(record), record.EditorID);
         }
         return targets;
     }

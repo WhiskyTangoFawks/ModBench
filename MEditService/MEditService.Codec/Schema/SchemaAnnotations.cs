@@ -143,7 +143,7 @@ internal sealed record SchemaAnnotations(
     ];
 
     private static readonly ContainmentMember CellGridInEveryGame = new(
-        "ICellGetter", RecordTypeDispatch.CellGridMember,
+        "ICellGetter", RecordTypes.CellGridMember,
         "it is an exterior cell's own place in the world — it decides the block and sub-block directories that hold " +
         "the cell's source, so moving it restructures the tree rather than rewriting one file. That is a structural " +
         "gesture, not a field edit");

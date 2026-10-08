@@ -1,4 +1,3 @@
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Composition;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -25,7 +24,6 @@ internal static class TestEditService
             .AddSingleton(TimeProvider.System)
             .AddSingleton(notifications ?? new InMemoryNotificationPublisher())
             .AddSingleton(adapter ?? new MutagenPluginAdapter())
-            .AddSingleton<RecordTextCodec>()
             .AddSingleton(SharedSchemaReflector.Instance)
             .AddCommandHandlers()
             .BuildServiceProvider();

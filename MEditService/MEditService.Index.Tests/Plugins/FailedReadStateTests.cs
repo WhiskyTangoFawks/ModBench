@@ -474,10 +474,10 @@ public sealed class FailedReadStateTests : IDisposable
             return stamps;
         }
 
-        public IPluginDocuments OpenDocuments(PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        public IPluginDocuments OpenDocuments(PluginAddress plugin)
         {
             at(TreeMoment.ReadBegins, plugin);
-            return new ReleasedDocuments(inner.OpenDocuments(plugin, schemas), () => at(TreeMoment.ReadEnds, plugin));
+            return new ReleasedDocuments(inner.OpenDocuments(plugin), () => at(TreeMoment.ReadEnds, plugin));
         }
 
         public SourceDocument? RecordOf(PluginAddress plugin, RecordIdentity identity)
@@ -487,16 +487,16 @@ public sealed class FailedReadStateTests : IDisposable
         }
 
         public IReadOnlyDictionary<string, RecordChange> ChangedSinceLastCommit(
-            PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-            inner.ChangedSinceLastCommit(plugin, schemas);
+            PluginAddress plugin) =>
+            inner.ChangedSinceLastCommit(plugin);
 
         public void RefuseUnreadable(
-            PluginAddress plugin, RecordIdentity identity, string body, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-            inner.RefuseUnreadable(plugin, identity, body, schemas);
+            PluginAddress plugin, RecordIdentity identity, string body) =>
+            inner.RefuseUnreadable(plugin, identity, body);
 
         public SourceDocument? RecordFromText(
-            PluginAddress plugin, string formKey, string text, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-            inner.RecordFromText(plugin, formKey, text, schemas);
+            PluginAddress plugin, string formKey, string text) =>
+            inner.RecordFromText(plugin, formKey, text);
 
         public DocumentFile? DocumentOf(PluginAddress plugin, RecordIdentity identity) => inner.DocumentOf(plugin, identity);
 

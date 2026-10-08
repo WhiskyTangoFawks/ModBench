@@ -5,8 +5,8 @@ using Mutagen.Bethesda;
 namespace MEditService.Codec.Serialization;
 
 /// <summary>A container's embedded children read out of its own document, by the slot facts
-/// <see cref="ContainerSlots"/> holds.</summary>
-public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+/// <see cref="RecordTypes"/> holds.</summary>
+public sealed class ContainerDocuments(GameRelease release)
 {
     /// <summary><c>Node</c> is the child's subtree of its owner's document; <c>SlotIndex</c> is its
     /// GRUP position. <c>RecordType</c> is null when nothing names a type this game has.</summary>
@@ -25,29 +25,14 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
 
     private const string FormKeyMember = RecordMembers.FormKey;
 
-    private readonly RecordTypeDispatch _dispatch = RecordTypeDispatch.For(release);
-
-    private readonly ContainerSlots _slots = ContainerSlots.For(release);
-
-    /// <summary>The concrete class name a container's slot table is keyed by, which is the codec's
-    /// spelling of the type rather than the schema's table name.</summary>
-    public string ContainerTypeOf(string recordType) => _dispatch.ConcreteFor(recordType)?.Name ?? recordType;
-
-    /// <summary>The schema table a document's own <c>MutagenObjectType</c> names, for a path that does
-    /// not decide the type. Null when nothing in the game's schema answers to it.</summary>
-    public string? RecordTypeNamed(string? declaredType) =>
-        declaredType is not null && _dispatch.ConcreteFor(declaredType) is { } concrete ? TableFor(concrete) : null;
-
-    /// <summary>Whether this is the game's cell — the one record type whose place in the world is a
-    /// structure rather than a member of its own document.</summary>
-    public bool IsCell(string recordType) => _dispatch.IsCell(recordType);
+    private readonly RecordTypes _types = RecordTypes.For(release);
 
     /// <summary>Empty for a record type with no child slots. A slot the document omits is a slot with
     /// no children.</summary>
     public IEnumerable<ChildDocument> ChildrenOf(string ownerRecordType, JsonElement ownerRoot)
     {
-        if (_dispatch.ConcreteFor(ownerRecordType) is not { } owner) yield break;
-        var slots = _slots.ChildSlotsOf(owner.Name);
+        if (_types.ContainerTypeOf(ownerRecordType) is not { } owner) yield break;
+        var slots = _types.ChildSlotsOf(owner);
         if (slots.Count == 0) yield break;
         if (ownerRoot.ValueKind != JsonValueKind.Object) yield break;
 
@@ -78,8 +63,7 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
     /// the owner's document drops the paths that lie under a child slot.</summary>
     public List<FormReference> OwnReferences(string ownerRecordType, IEnumerable<FormReference> references)
     {
-        if (_dispatch.ConcreteFor(ownerRecordType) is not { } owner) return [.. references];
-        var slots = _slots.ChildSlotsOf(owner.Name);
+        var slots = _types.ChildSlotsOf(ownerRecordType);
         return [.. references.Where(r => !slots.Contains(MemberOf(r.FieldPath)))];
 
         static string MemberOf(string path)
@@ -91,13 +75,13 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
 
     /// <summary>The child's own standalone document: the bytes the codec produces for it as a record
     /// in its own right, so what a container yields and what ingest stores are one text.</summary>
-    public string TextOf(RecordTextCodec codec, ChildDocument child) =>
-        codec.RoundTrip(
+    public string TextOf(ChildDocument child) =>
+        RecordTextCodec.RoundTrip(
             child.Node.GetRawText(),
             release,
             child.Node.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out _) ? null : child.RecordType);
 
-    private ChildDocument? Child(Type owner, string slotName, int index, JsonElement node)
+    private ChildDocument? Child(string owner, string slotName, int index, JsonElement node)
     {
         if (node.ValueKind != JsonValueKind.Object) return null;
         if (!node.TryGetProperty(FormKeyMember, out var formKey) || formKey.ValueKind != JsonValueKind.String) return null;
@@ -109,30 +93,27 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
     // The child's own spelling where the document carries one, else the slot's declared element type:
     // a slot whose member type is concrete writes no discriminator. A spelling no type the slot holds
     // answers to is no type.
-    private string? RecordTypeOf(Type owner, string slotName, JsonElement node)
+    private string? RecordTypeOf(string owner, string slotName, JsonElement node)
     {
         var concrete = node.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var named) && named.ValueKind == JsonValueKind.String
             ? SpelledTypeHeld(owner, slotName, DocumentNodes.StringValueOf(named))
             : SlotElementType(owner, slotName);
-        return concrete is null ? null : TableFor(concrete);
+        return concrete is null ? null : _types.TableOf(concrete);
     }
 
-    private Type? SpelledTypeHeld(Type owner, string slotName, string spelled) =>
-        _dispatch.ConcreteFor(spelled) is { } type && _slots.Holds(owner.Name, slotName, type) ? type : null;
+    private Type? SpelledTypeHeld(string owner, string slotName, string spelled) =>
+        _types.ConcreteFor(spelled) is { } type && _types.HeldBy(owner, slotName).Any(held => held.IsAssignableFrom(type)) ? type : null;
 
-    private Type? SlotElementType(Type owner, string slotName) =>
-        _slots.ElementTypeOf(owner.Name, slotName) is { } element ? _dispatch.ConcreteFor(element) : null;
-
-    private string TableFor(Type concrete) => RecordTableName.Of(concrete, schemas);
+    private Type? SlotElementType(string owner, string slotName) =>
+        _types.ElementTypeOf(owner, slotName) is { } element ? _types.ConcreteFor(element) : null;
 
     /// <summary>Every child a document carries inline, at any depth: a worldspace's own document
     /// holds its top cell, which holds its placed references.</summary>
     internal IEnumerable<ChildDocument> EmbeddedDescendantsOf(string ownerRecordType, JsonElement ownerRoot)
     {
-        var ownerType = ContainerTypeOf(ownerRecordType);
         foreach (var child in ChildrenOf(ownerRecordType, ownerRoot))
         {
-            if (!_slots.IsEmbeddedSlot(ownerType, child.SlotName)) continue;
+            if (!_types.IsEmbeddedSlot(ownerRecordType, child.SlotName)) continue;
             yield return child;
             if (child.RecordType is not { } childType) continue;
             foreach (var deeper in EmbeddedDescendantsOf(childType, child.Node)) yield return deeper;
@@ -151,13 +132,12 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
             return null;
         }
 
-        var ownerType = ContainerTypeOf(ownerRecordType);
         foreach (var child in ChildrenOf(ownerRecordType, ownerRoot))
         {
             if (string.Equals(child.FormKey, formKey, StringComparison.Ordinal))
                 return new DocumentContainment(DocumentNodes.StringValueOf(ownKey), ownerRecordType, child.SlotName);
 
-            if (!_slots.IsEmbeddedSlot(ownerType, child.SlotName) || child.RecordType is not { } childType) continue;
+            if (!_types.IsEmbeddedSlot(ownerRecordType, child.SlotName) || child.RecordType is not { } childType) continue;
             if (ContainmentOf(childType, child.Node, formKey) is { } deeper) return deeper;
         }
         return null;
@@ -167,7 +147,7 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
     /// Null when no embedded slot carries it, the text is no JSON, or no owner type resolves.</summary>
     public ChildDocument? EmbeddedChild(string? ownerRecordType, byte[] ownerBytes, string formKey)
     {
-        if (EmbeddedChildLocator.ContainerTypeName(ownerRecordType, ownerBytes, release) is not { } ownerType) return null;
+        if (EmbeddedChildLocator.OwnerTypeOf(ownerRecordType, ownerBytes, _types) is not { } ownerType) return null;
 
         try
         {

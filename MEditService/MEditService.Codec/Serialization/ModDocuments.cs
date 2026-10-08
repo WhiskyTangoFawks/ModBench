@@ -5,7 +5,6 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Text;
 using MEditService.Codec.Schema;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
@@ -38,7 +37,6 @@ internal sealed class MutagenModDocuments(
 {
     private const int SerializeBatchSize = 2048;
 
-    private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
     private readonly List<RecordTypeFailure> _failures = [];
     private readonly Lazy<Dictionary<string, HeldCell>> _cells = new(() => CellsIn(mod));
 
@@ -106,14 +104,14 @@ internal sealed class MutagenModDocuments(
     // Mutagen's enumeration by one placed-trap variant (a placed arrow, hazard, missile...) yields
     // every variant a cell holds.
     private bool IsOf(string tableName, RecordTableSchema schema, IMajorRecordGetter record) =>
-        schema.RecordType.IsInstanceOfType(record) || RecordTableName.Of(record.GetType(), schemas) == tableName;
+        schema.RecordType.IsInstanceOfType(record) || RecordTypes.For(mod.GameRelease).RecordTypeOf(record) == tableName;
 
     private PluginDocument Document(string tableName, RecordTableSchema schema, IMajorRecordGetter record)
     {
         var formKey = record.FormKey.ToString();
         try
         {
-            var text = Encoding.UTF8.GetString(DeletedRecord.Serialize(_codec, record, schema, mod.GameRelease, file));
+            var text = Encoding.UTF8.GetString(DeletedRecord.Serialize(record, schema, mod.GameRelease, file));
             return WithGrupFacts(new PluginDocument(tableName, formKey, text), record);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -158,12 +156,12 @@ internal sealed class MutagenModDocuments(
 
             foreach (var block in List(worldspace, "SubCells"))
             {
-                int? blockX = Int(Get(block, RecordTypeDispatch.BlockNumberXMember));
-                int? blockY = Int(Get(block, RecordTypeDispatch.BlockNumberYMember));
+                int? blockX = Int(Get(block, RecordTypes.BlockNumberXMember));
+                int? blockY = Int(Get(block, RecordTypes.BlockNumberYMember));
                 foreach (var subBlock in List(block, "Items"))
                 {
-                    int? subX = Int(Get(subBlock, RecordTypeDispatch.BlockNumberXMember));
-                    int? subY = Int(Get(subBlock, RecordTypeDispatch.BlockNumberYMember));
+                    int? subX = Int(Get(subBlock, RecordTypes.BlockNumberXMember));
+                    int? subY = Int(Get(subBlock, RecordTypes.BlockNumberYMember));
                     foreach (var cell in List(subBlock, "Items"))
                     {
                         Record(
@@ -176,11 +174,11 @@ internal sealed class MutagenModDocuments(
 
         foreach (var cellBlock in Enumerate(Get(mod, "Cells")))
         {
-            int? block = Int(Get(cellBlock, RecordTypeDispatch.BlockNumberMember));
-            foreach (var subBlock in List(cellBlock, RecordTypeDispatch.BlockChildMember))
+            int? block = Int(Get(cellBlock, RecordTypes.BlockNumberMember));
+            foreach (var subBlock in List(cellBlock, RecordTypes.BlockChildMember))
             {
-                int? sub = Int(Get(subBlock, RecordTypeDispatch.BlockNumberMember));
-                foreach (var cell in List(subBlock, RecordTypeDispatch.SubBlockChildMember))
+                int? sub = Int(Get(subBlock, RecordTypes.BlockNumberMember));
+                foreach (var cell in List(subBlock, RecordTypes.SubBlockChildMember))
                     Record(cells, cell, CellStructure.Interior(block, sub));
             }
         }
@@ -193,7 +191,7 @@ internal sealed class MutagenModDocuments(
 
     /// <summary>The grid the cell names, or null when it names none.</summary>
     internal static (int X, int Y)? GridOf(object cell) =>
-        Get(Get(cell, RecordTypeDispatch.CellGridMember), PlacedCell.GridPointMember) is P2Int point ? (point.X, point.Y) : null;
+        Get(Get(cell, RecordTypes.CellGridMember), PlacedCell.GridPointMember) is P2Int point ? (point.X, point.Y) : null;
 
     private static string FormKeyOf(object cell) => ((IMajorRecordGetter)cell).FormKey.ToString();
 

@@ -2,7 +2,6 @@ using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -15,13 +14,12 @@ public sealed class CodecFixedPointTests(ITestOutputHelper output)
     [Fact]
     public void EveryDocumentOfTheCutDownPlugin_DeserializesAndReserializesToItself()
     {
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var documents = DocumentsOfCutDownPlugin();
 
         Assert.True(documents.Count > 3000,
             $"Expected the whole cut-down plugin to be read; got {documents.Count} documents.");
 
-        var divergent = documents.SelectMany(document => Divergence(codec, document)).ToList();
+        var divergent = documents.SelectMany(document => Divergence(document)).ToList();
 
         output.WriteLine($"{documents.Count} records round-tripped through the codec.");
         Assert.True(divergent.Count == 0,
@@ -41,7 +39,7 @@ public sealed class CodecFixedPointTests(ITestOutputHelper output)
         return all;
     }
 
-    private static IEnumerable<string> Divergence(RecordTextCodec codec, PluginDocument document)
+    private static IEnumerable<string> Divergence(PluginDocument document)
     {
         var where = $"{document.RecordType} {document.FormKey}";
         if (document.ParseDiagnosis is { } diagnosis)
@@ -52,7 +50,7 @@ public sealed class CodecFixedPointTests(ITestOutputHelper output)
         {
             reserialized = document.RecordType == PluginHeader.RecordType
                 ? RoundTripHeader(document.Text)
-                : RoundTripRecord(codec, document.RecordType, document.Text);
+                : RoundTripRecord(document.RecordType, document.Text);
         }
         catch (Exception ex) when (ex is not Xunit.Sdk.XunitException)
         {
@@ -62,9 +60,9 @@ public sealed class CodecFixedPointTests(ITestOutputHelper output)
         return reserialized == document.Text ? [] : [$"{where}: {FirstDifference(document.Text, reserialized)}"];
     }
 
-    private static string RoundTripRecord(RecordTextCodec codec, string recordType, string stored)
+    private static string RoundTripRecord(string recordType, string stored)
     {
-        return codec.RoundTrip(stored, GameRelease.Fallout4, recordType);
+        return RecordTextCodec.RoundTrip(stored, GameRelease.Fallout4, recordType);
     }
 
     private static string RoundTripHeader(string stored) =>

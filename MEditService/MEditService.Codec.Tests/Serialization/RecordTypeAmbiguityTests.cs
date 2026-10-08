@@ -10,13 +10,13 @@ namespace MEditService.Codec.Tests.Serialization;
 
 public sealed class RecordTypeAmbiguityTests
 {
-    private static readonly RecordTypeDispatch Dispatch = RecordTypeDispatch.For(GameRelease.Fallout4);
+    private static readonly RecordTypes Dispatch = RecordTypes.For(GameRelease.Fallout4);
 
     [Fact]
-    public void ConcreteFor_ResolvesEveryConcreteMajorRecordTypeByItsClrName_SweptBecauseARuleReadOffReflectionCanBeQuietlyWrongForAWholeClassOfTypesAndLookRightForTwo()
+    public void EveryConcreteMajorRecordClass_NamesItsGrupsTable_SweptBecauseARuleReadOffReflectionCanBeQuietlyWrongForAWholeClassOfTypesAndLookRightForTwo()
     {
         var unresolved = ConcreteMajorRecordTypes()
-            .Where(t => Dispatch.ConcreteFor(t.Name) != t)
+            .Where(t => !string.Equals(Dispatch.RecordTypeNamed(t.Name), SignatureOf(t), StringComparison.OrdinalIgnoreCase))
             .Select(t => t.Name)
             .ToList();
 
@@ -25,14 +25,14 @@ public sealed class RecordTypeAmbiguityTests
     }
 
     [Fact]
-    public void ConcreteFor_ResolvesEverySchemaTableName()
+    public void EverySchemaTableName_NamesItself()
     {
         const string HeaderTheOneTableWithNoDocumentToReconstituteExcludedByNameNotPredicateSoASecondUnresolvableNameCannotHideBehindARuleThatGrew = "header";
         var tableNames = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Keys
             .Where(n => n != HeaderTheOneTableWithNoDocumentToReconstituteExcludedByNameNotPredicateSoASecondUnresolvableNameCannotHideBehindARuleThatGrew)
             .ToList();
 
-        var unresolved = tableNames.Where(n => Dispatch.ConcreteFor(n) is null).ToList();
+        var unresolved = tableNames.Where(n => Dispatch.RecordTypeNamed(n) != n).ToList();
 
         Assert.NotEmpty(tableNames);
         Assert.Empty(unresolved);

@@ -103,7 +103,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     {
         var path = new LayoutPath(relativePath);
         return path.IsContainerDocument
-            && RecordTypeDispatch.For(gameRelease).DirectoryPerRecordFolderNames.Contains(path.GroupFolderName);
+            && RecordTypes.For(gameRelease).DirectoryPerRecordFolderNames.Contains(path.GroupFolderName);
     }
 
     /// <summary>Each container directory's document among <paramref name="relativePaths"/>, by the one rule of
@@ -157,7 +157,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     internal static string FlatPathFor(
         string pluginFileName, string recordType, string formKeyString, string? editorId, GameRelease gameRelease)
     {
-        var folder = RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType)
+        var folder = RecordTypes.For(gameRelease).FolderNameFor(recordType)
             ?? throw new NotSupportedException(
                 $"'{recordType}' has no flat source path under the source layout — it is a " +
                 "directory-per-record container type (Cell/Worldspace), or has no top-level " +
@@ -179,13 +179,13 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         GameRelease gameRelease,
         IReadOnlyList<string>? blockPath = null)
     {
-        var dispatch = RecordTypeDispatch.For(gameRelease);
+        var types = RecordTypes.For(gameRelease);
 
         // A flat record has a top-level group folder of its own and needs no directory.
-        if (dispatch.FolderNameFor(recordType) is not null)
+        if (types.FolderNameFor(recordType) is not null)
             return new SourcePlacement(FlatPathFor(pluginFileName, recordType, formKeyString, editorId, gameRelease));
 
-        var groupFolder = dispatch.GroupFolderNameFor(recordType)
+        var groupFolder = types.GroupFolderNameFor(recordType)
             ?? throw new NotSupportedException(
                 $"'{recordType}' has no group folder at all — it is an embedded child, which lands inside " +
                 "its container's document rather than at a path of its own.");
@@ -251,7 +251,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
         var path = new LayoutPath(relativePath);
         return path.IsContainerDocument
-            ? RecordTypeDispatch.For(gameRelease)
+            ? RecordTypes.For(gameRelease)
                 .DirectoryPerRecordTypeIn(path.GroupFolderName, nested: path.ContainerIsNested)
             : null;
     }
@@ -266,7 +266,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
             return new SourceRecordIdentity(path.PluginFileName, PluginHeader.RecordType);
 
         if (!path.IsFlatDocument) return null;
-        if (RecordTypeDispatch.For(gameRelease).RecordTypeForFolder(path.GroupFolderName) is not { } recordType)
+        if (RecordTypes.For(gameRelease).RecordTypeForFolder(path.GroupFolderName) is not { } recordType)
             return null;
 
         return new SourceRecordIdentity(path.PluginFileName, recordType);
@@ -308,18 +308,18 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     internal (IReadOnlyList<DocumentChange> Levels, SourceUnit Unit)? PlaceNewDocument(
         PluginAddress plugin, RecordIdentity identity, CellPlacement? placement)
     {
-        var dispatch = RecordTypeDispatch.For(_release);
-        if (dispatch.GroupFolderNameFor(identity.RecordType) is not { } groupFolder) return null;
+        var types = RecordTypes.For(_release);
+        if (types.GroupFolderNameFor(identity.RecordType) is not { } groupFolder) return null;
 
         // The one document that does not sit in a group folder at all. Only the placement it is put
         // with tells an exterior cell from an interior one, which has no worldspace above it.
-        if (dispatch.IsCell(identity.RecordType) && placement is { IsInterior: false } exterior)
+        if (types.IsCell(identity.RecordType) && placement is { IsInterior: false } exterior)
         {
             var (exteriorLevels, cell) = ExteriorCellDocuments(plugin, identity, exterior);
             return (exteriorLevels, locator.Unit(cell, identity.FormKey, identity.RecordType, isEmbedded: false));
         }
 
-        var (levels, blockPath) = dispatch.IsCell(identity.RecordType)
+        var (levels, blockPath) = types.IsCell(identity.RecordType)
             ? InteriorCellBlocksIn(
                 Path.Combine(_modFolder, RootFor(plugin.Name), groupFolder), FormKey.Factory(identity.FormKey).ID)
             : ([], null);
@@ -335,7 +335,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     private (IReadOnlyList<DocumentChange> Levels, string Cell) ExteriorCellDocuments(
         PluginAddress plugin, RecordIdentity identity, CellPlacement placement)
     {
-        var levels = RecordTypeDispatch.For(_release).ExteriorCellBlockLevels;
+        var levels = RecordTypes.For(_release).ExteriorCellBlockLevels;
         if (levels.Count != ExteriorBlockLevels)
         {
             throw new NotSupportedException(
@@ -344,7 +344,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         }
 
         var (block, subBlock, cell) = ExteriorCellLevels(plugin, identity, placement);
-        (string Directory, Type Level, int? X, int? Y)[] needed =
+        (string Directory, string Level, int? X, int? Y)[] needed =
         [
             (block, levels[0], placement.BlockX, placement.BlockY),
             (subBlock, levels[1], placement.SubX, placement.SubY),
@@ -387,13 +387,13 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
     // Only a level the tree lacks gets one: Track writes a level's document with whatever metadata the
     // source mod carried, and a cell landing in the level is no reason to respell it.
-    private string BlockLevelDocument(Type level, int? x, int? y) =>
+    private string BlockLevelDocument(string level, int? x, int? y) =>
         RecordTextCodec.BlankDocument(
             level, _release,
             new JsonObject
             {
-                [RecordTypeDispatch.BlockNumberXMember] = x ?? 0,
-                [RecordTypeDispatch.BlockNumberYMember] = y ?? 0,
+                [RecordTypes.BlockNumberXMember] = x ?? 0,
+                [RecordTypes.BlockNumberYMember] = y ?? 0,
             });
 
     private DocumentChange LevelDocument(string fullPath, string text) => new(Path.GetRelativePath(_modFolder, fullPath), text);
@@ -402,8 +402,8 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     private (IReadOnlyList<DocumentChange> Levels, List<string> BlockPath) InteriorCellBlocksIn(
         string groupDirectory, uint formId)
     {
-        var levels = RecordTypeDispatch.For(_release).InteriorCellBlockLevels;
-        var labels = RecordTypeDispatch.InteriorCellBlockGroupTypes;
+        var levels = RecordTypes.For(_release).InteriorCellBlockLevels;
+        var labels = RecordTypes.InteriorCellBlockGroupTypes;
         if (levels.Count != labels.Count)
         {
             throw new NotSupportedException(
@@ -431,8 +431,8 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
                 levels[level], _release,
                 new JsonObject
                 {
-                    [RecordTypeDispatch.GroupTypeMember] = labels[level],
-                    [RecordTypeDispatch.BlockNumberMember] = numbers[level],
+                    [RecordTypes.GroupTypeMember] = labels[level],
+                    [RecordTypes.BlockNumberMember] = numbers[level],
                 })));
         }
         return (documents, path);

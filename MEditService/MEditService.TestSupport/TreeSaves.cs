@@ -2,7 +2,6 @@ using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -32,7 +31,7 @@ public static class TreeSaves
                 (text, edit) => text.Replace(edit.From, edit.To, StringComparison.Ordinal))))).ToList();
 
         var (tree, diagnosis, error) = await adapter.ReadTreeAsync(
-            edited, new RecordTextCodec(NullLogger<RecordTextCodec>.Instance), GameRelease.Fallout4);
+            edited, GameRelease.Fallout4);
         if (tree is null) throw new InvalidOperationException($"{name}'s source tree will not compile: {diagnosis}", error);
 
         return await tree.PrepareSaveAsync(

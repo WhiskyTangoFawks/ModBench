@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -14,7 +13,6 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class UnionVariantEditTests : IDisposable
 {
     private readonly DocumentEditFixture _fixture = new();
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
     public void Dispose() => _fixture.Dispose();
 
@@ -23,7 +21,7 @@ public sealed class UnionVariantEditTests : IDisposable
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     private static string Serialize(IMajorRecordGetter record) =>
-        Codec.SerializeToText(record, GameRelease.Fallout4);
+        RecordTextCodec.SerializeToText(record, GameRelease.Fallout4);
 
     [Fact]
     public void GameSettingFloat_Data_IsWrittenAsTheFloatItsLeafDeclares()

@@ -19,17 +19,17 @@ internal enum ParentageTable { ContainerChild, Placement, CellLocation }
 /// text, the block coordinates out of the structure handed over beside it.</summary>
 internal static class PlacementWalker
 {
-    internal static ParentageTable TableFor(string containerType, string slotName) => (containerType, slotName) switch
+    internal static ParentageTable TableFor(RecordTypes types, string recordType, string slotName) => slotName switch
     {
-        ("Cell", "Persistent" or "Temporary") => ParentageTable.Placement,
-        ("Worldspace", "TopCell") => ParentageTable.CellLocation,
+        PersistentFlag.PersistentGroup or PersistentFlag.TemporaryGroup when types.IsCell(recordType) => ParentageTable.Placement,
+        PlacedCell.WorldspacePersistentCellMember when types.IsWorldspace(recordType) => ParentageTable.CellLocation,
         _ => ParentageTable.ContainerChild,
     };
 
     /// <summary>The <c>placement_group</c> a placement slot's children land in.</summary>
     internal static string PlacementGroupOf(string slotName) => slotName.ToLowerInvariant();
 
-    private static readonly string GridPointPath = $"{RecordTypeDispatch.CellGridMember}.Point";
+    private static readonly string GridPointPath = $"{RecordTypes.CellGridMember}.Point";
 
     /// <summary>A null document is a cell whose text the codec could not produce: its place in the
     /// world is still known, its grid is not.</summary>
@@ -48,7 +48,7 @@ internal static class PlacementWalker
     // grid the document does carry is the origin the codec omits.
     private static (int? X, int? Y) Grid(JsonElement cellDocument)
     {
-        if (DocumentNodes.At(cellDocument, RecordTypeDispatch.CellGridMember) is null) return (null, null);
+        if (DocumentNodes.At(cellDocument, RecordTypes.CellGridMember) is null) return (null, null);
 
         return Components(cellDocument, GridPointPath) is { Length: >= 2 } point
             ? (Int(point[0]), Int(point[1]))

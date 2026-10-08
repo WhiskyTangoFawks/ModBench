@@ -1,21 +1,16 @@
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
-using Mutagen.Bethesda.Plugins.Utility;
 
 namespace MEditService.Codec.Tests.Schema;
 
 public sealed class ChildRecordTypesTests
 {
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
-    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
-        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
-
     private static readonly Fallout4Mod Mod = new(ModKey.FromFileName("Holds.esp"), Fallout4Release.Fallout4);
 
     private static string[] Holding(params string[] others) =>
@@ -23,8 +18,8 @@ public sealed class ChildRecordTypesTests
 
     private static string[] Of(IMajorRecordGetter container, CellPlace? place = null) =>
         [.. ChildRecordTypes.Of(
-                RecordTableName.Of(container.GetType(), Schemas), Codec.SerializeToText(container, GameRelease.Fallout4), place,
-                Schemas, GameRelease.Fallout4)
+                RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(container), RecordTextCodec.SerializeToText(container, GameRelease.Fallout4), place,
+                GameRelease.Fallout4)
             .Order(StringComparer.Ordinal)];
 
     [Fact]
@@ -109,15 +104,13 @@ public sealed class ChildRecordTypesTests
         foreach (var release in Enum.GetValues<GameRelease>())
         {
             if (SchemasOf(release) is not { } schemas) continue;
-            var dispatch = RecordTypeDispatch.For(release);
-            foreach (var type in schemas.Keys.Where(type => ContainerChildFields.HasChildFields(type, release)))
+            var types = RecordTypes.For(release);
+            foreach (var type in schemas.Keys.Where(types.HasChildSlots))
             {
-                var empty = MajorRecordInstantiator.Activator(
-                    FormKey.Factory("000800:Holds.esp"), release, dispatch.ConcreteFor(type).Require());
-                var text = Codec.SerializeToText(empty, release);
-                CellPlace?[] places = dispatch.IsCell(type) ? [.. Enum.GetValues<CellPlace>().Cast<CellPlace?>()] : [null];
+                var text = RecordTextCodec.BlankDocument(type, release, new JsonObject { [RecordMembers.FormKey] = "000800:Holds.esp" });
+                CellPlace?[] places = types.IsCell(type) ? [.. Enum.GetValues<CellPlace>().Cast<CellPlace?>()] : [null];
                 foreach (var place in places)
-                    Assert.True(ChildRecordTypes.Of(type, text, place, schemas, release).Count > 0, $"{release} {type} in {place} holds nothing.");
+                    Assert.True(ChildRecordTypes.Of(type, text, place, release).Count > 0, $"{release} {type} in {place} holds nothing.");
                 checkedTypes++;
             }
         }

@@ -13,11 +13,10 @@ namespace MEditService.Commands.Edits;
 internal sealed class PluginCompileService(
     LoadOrderHolder loadOrderHolder,
     SchemaReflector schemaReflector,
-    RecordTextCodec codec,
     IPluginAdapter adapter,
     ILogger<PluginCompileService> logger)
 {
-    private readonly CompileLinks _links = new(adapter, schemaReflector, logger);
+    private readonly CompileLinks _links = new(adapter, logger);
 
     // A tracked mod refuses Track, so decompile is the way back (ADR-0007).
     private const string RegenerateTheSource = "Decompile the plugin to regenerate the source.";
@@ -154,7 +153,7 @@ internal sealed class PluginCompileService(
         var schemas = schemaReflector.GetSchemas(loadOrder.GameRelease);
         var records = new List<SourceRecord>();
         var required = new RequiredMasters(plugin);
-        foreach (var document in tree.Documents(schemas))
+        foreach (var document in tree.Documents())
         {
             var schema = schemas[document.RecordType];
             records.Add(new SourceRecord(document.RecordType, schema, document, EditorIds.In(document.Text)));
@@ -177,7 +176,7 @@ internal sealed class PluginCompileService(
             return (null, $"{pluginName} could not be read from its source: {ex.Message}");
         }
 
-        var read = await adapter.ReadTreeAsync(doorFiles, codec, release);
+        var read = await adapter.ReadTreeAsync(doorFiles, release);
         if (read.Tree is { } tree) return (tree, null);
 
         logger.LogWarning(read.Error, "{Plugin} could not be read from its source", pluginName);

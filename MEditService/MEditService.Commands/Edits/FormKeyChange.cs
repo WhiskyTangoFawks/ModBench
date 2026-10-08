@@ -10,7 +10,7 @@ namespace MEditService.Commands.Edits;
 
 /// <summary>An edit of a record's FormID changes its FormKey, and moves the Next Object ID past it. The records
 /// that reference it, itself included, are left as they are, and updating them is a script.</summary>
-internal sealed class FormKeyChange(RecordTextCodec codec, ILogger logger)
+internal sealed class FormKeyChange(ILogger logger)
 {
     /// <summary>The document member a record's FormID is, which the edit's path names.</summary>
     internal const string Member = RecordMembers.FormKey;
@@ -60,9 +60,9 @@ internal sealed class FormKeyChange(RecordTextCodec codec, ILogger logger)
         return WriteFailure.Refused<RecordEditChanges>(() => new RecordEditChanges(
             RecordEditResult.Success(targetFormKey),
             repository.ChangesToRekey(plugin, carrying, identity, targetFormKey, new DocumentRekey(
-                (document, newKey) => Read(() => RecordDocumentEdits.WithFormKey(codec, document.Body, release, document.RecordType, newKey)),
+                (document, newKey) => Read(() => RecordDocumentEdits.WithFormKey(document.Body, release, document.RecordType, newKey)),
                 (owner, oldKey, newKey) => Read(() => RecordDocumentEdits.WithEmbeddedChildFormKey(
-                    codec, owner.Body, release, owner.RecordType, oldKey, newKey)))).Then(allocator.HeaderChanges())),
+                    owner.Body, release, owner.RecordType, oldKey, newKey)))).Then(allocator.HeaderChanges())),
             refused => refused, failed, logger);
     }
 
