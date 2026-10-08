@@ -102,4 +102,24 @@ public sealed class SpatialWorkingTreeStateApiTests : HostedTests
             async () => (await States(formKeys)).SequenceEqual(expected),
             $"the {edited} and the document holding it listed as Modified");
     }
+
+    [Fact]
+    public async Task AnEditedInteriorRef_IsBeneathItsCell_ItsGroup_AndItsPlugin()
+    {
+        var formKeys = new Dictionary<string, string>();
+        using var fx = Build(formKeys);
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
+        await Client.PluginReportsTracked(Plugin);
+
+        (await Client.Edit(formKeys["interiorRef"], Plugin, Origin, "EditorID", "Renamed")).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
+
+        var expected = """{"plugin":["Modified"],"recordTypes":{"cell":["Modified"]},"records":{"""
+            + $"\"{formKeys["interiorCell"]}\"" + """:["Modified"]}}""";
+        await Wire.Eventually(
+            async () => await Client.GetStringAsync($"/plugins/{Plugin}/working-tree-states-beneath?origin={Origin}") == expected,
+            "the interior ref beneath its cell, its group and its plugin");
+    }
 }

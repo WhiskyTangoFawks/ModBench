@@ -18,6 +18,7 @@ public interface IRecordQueryService
     CompareResult? GetCompareRecords(IReadOnlyList<RecordCopy> copies);
 
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(PluginAddress plugin);
+    WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin);
     IReadOnlyList<RecordTypeChoice> GetCreatableRecordTypes();
     // Null when the plugin holds no such record.
     IReadOnlyList<RecordTypeChoice>? GetChildRecordTypes(PluginAddress plugin, string formKey);

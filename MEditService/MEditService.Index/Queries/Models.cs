@@ -136,6 +136,15 @@ public record ReferenceResult(
 public record PluginRecordTypeCount(
     string Type, int Count, string DisplayName, bool HasParseFailure, bool IsCreatable, bool IsContainer);
 
+/// <summary>The working-tree states beneath each row of a plugin's tree that has any (common.md,
+/// story 11): the plugin's own row, each record-type group by its type, and each record by its
+/// FormKey. A record's own state is on its listing, never here, and the record filter narrows these
+/// as it narrows the rows. A block or sub-block holds what the cells its listing nests in it hold.</summary>
+public record WorkingTreeStatesBeneath(
+    IReadOnlyList<WorkingTreeState> Plugin,
+    IReadOnlyDictionary<string, IReadOnlyList<WorkingTreeState>> RecordTypes,
+    IReadOnlyDictionary<string, IReadOnlyList<WorkingTreeState>> Records);
+
 public record RecordTypeChoice(string Type, string DisplayName);
 
 /// <summary>The answer to "did the projection reach at least N?" (ADR-0015). Sequence

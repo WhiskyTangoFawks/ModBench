@@ -1253,10 +1253,22 @@ describe('HttpMEditClient — a plugin address on the wire', () => {
     ['getCellChildRecords', (c: MEditClient) => c.getCellChildRecords(plugin, '000800:Shared.esp'), { persistent: [], temporary: [] }],
     ['getInteriorCells', (c: MEditClient) => c.getInteriorCells(plugin), []],
     ['getContainerChildren', (c: MEditClient) => c.getContainerChildren(plugin, '000800:Shared.esp'), []],
+    ['getWorkingTreeStatesBeneath', (c: MEditClient) => c.getWorkingTreeStatesBeneath(plugin), { plugin: [], recordTypes: {}, records: {} }],
   ])('%s asks for the plugin by filename in the path and by origin in the query', async (_name, call, answer) => {
     const request = await requestOf(call, answer);
 
     expect(new URL(request.url).pathname).toContain('/plugins/Shared.esp/');
     expect(new URL(request.url).searchParams.get('origin')).toBe('ModA');
+  });
+
+  it('answers the working-tree states beneath each row as mEdit sends them', async () => {
+    const beneath = {
+      plugin: ['Modified', 'Added'],
+      recordTypes: { wrld: ['Modified', 'Added'] },
+      records: { '000800:Shared.esp': ['Added'] },
+    };
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, beneath)));
+
+    await expect(makeClient(fetch).getWorkingTreeStatesBeneath(plugin)).resolves.toEqual(beneath);
   });
 });

@@ -221,6 +221,51 @@ internal sealed class RelationReads(
         return types;
     }
 
+    // A group holds its listed records' own states and what is beneath them; a record only what is
+    // beneath it.
+    public (IReadOnlyDictionary<string, IReadOnlyList<WorkingTreeState>> ByRecordType,
+        IReadOnlyDictionary<string, IReadOnlyList<WorkingTreeState>> ByRecord) GetWorkingTreeStatesBeneath(PluginAddress plugin)
+    {
+        using var connection = store.OpenReadConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"""
+            WITH RECURSIVE
+            held AS (SELECT parent, child FROM ({NavigatorSql.Held}) h WHERE h.plugin = $1 AND h.origin = $2),
+            changed(form_key, state) AS (
+                SELECT c.form_key, c.working_tree_state FROM records c
+                WHERE c.plugin = $1 AND c.origin = $2 AND c.working_tree_state <> '{WorkingTreeState.None.Stored()}'
+                  {store.Filter.AlsoKeeps("c")}
+            ),
+            above_change(form_key, state) AS (
+                SELECT held.parent, changed.state FROM held JOIN changed ON changed.form_key = held.child
+                UNION
+                SELECT held.parent, a.state FROM held JOIN above_change a ON a.form_key = held.child
+            )
+            SELECT FALSE, form_key, state FROM above_change
+            UNION
+            SELECT TRUE, r.record_type, s.state FROM records r
+            JOIN (SELECT form_key, state FROM changed UNION SELECT form_key, state FROM above_change) s
+              ON s.form_key = r.form_key
+            WHERE r.plugin = $1 AND r.origin = $2 AND {NavigatorSql.NotHeld("r")}
+            """;
+        DuckDbSql.AddParams(cmd, [plugin.Name, plugin.Origin]);
+        using var reader = cmd.ExecuteReader();
+
+        var byRecordType = new Dictionary<string, SortedSet<WorkingTreeState>>(StringComparer.OrdinalIgnoreCase);
+        var byRecord = new Dictionary<string, SortedSet<WorkingTreeState>>(StringComparer.Ordinal);
+        while (reader.Read())
+        {
+            var rows = reader.GetBoolean(0) ? byRecordType : byRecord;
+            var key = reader.GetString(1);
+            if (!rows.TryGetValue(key, out var states)) rows[key] = states = [];
+            states.Add(WorkingTreeStates.FromStored(reader.GetString(2)));
+        }
+        return (Listed(byRecordType), Listed(byRecord));
+    }
+
+    private static Dictionary<string, IReadOnlyList<WorkingTreeState>> Listed(Dictionary<string, SortedSet<WorkingTreeState>> rows) =>
+        rows.ToDictionary(row => row.Key, row => (IReadOnlyList<WorkingTreeState>)[.. row.Value], rows.Comparer);
+
     private RecordLookupEntry? Resolve(string formKey)
     {
         using var connection = store.OpenReadConnection();

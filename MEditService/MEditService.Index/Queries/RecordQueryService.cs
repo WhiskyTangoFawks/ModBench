@@ -209,15 +209,30 @@ internal sealed class RecordQueryService(
         var schemas = RequireSchemas();
         var release = _loadOrder.Require().GameRelease;
 
-        // The header is one `records` row per plugin, so this exclusion has to be real; without it
-        // "Main File Header" appears as a browsable record-type node under every plugin.
         return [.. reads.GetRecordTypeCounts(plugin)
-            .Where(c => c.Type != PluginHeader.RecordType && schemas.ContainsKey(c.Type))
+            .Where(c => IsGroup(c.Type, schemas))
             .Select(c => new PluginRecordTypeCount(
                 c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure,
                 CreatableRecordTypes.Includes(c.Type, release), ContainerChildFields.HasChildFields(c.Type, release)))
             .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
+    }
+
+    // The header is one `records` row per plugin, so this exclusion has to be real; without it
+    // "Main File Header" appears as a browsable record-type node under every plugin.
+    private static bool IsGroup(string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        recordType != PluginHeader.RecordType && schemas.ContainsKey(recordType);
+
+    // The plugin's own row holds exactly what its groups hold.
+    public WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin)
+    {
+        var schemas = RequireSchemas();
+        var (byRecordType, byRecord) = RequireReads().GetWorkingTreeStatesBeneath(plugin);
+        var groups = byRecordType
+            .Where(group => IsGroup(group.Key, schemas))
+            .ToDictionary(group => group.Key, group => group.Value, StringComparer.OrdinalIgnoreCase);
+        return new WorkingTreeStatesBeneath(
+            [.. groups.Values.SelectMany(states => states).Distinct().Order()], groups, byRecord);
     }
 
     public IReadOnlyList<RecordTypeChoice> GetCreatableRecordTypes()
