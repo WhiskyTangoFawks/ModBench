@@ -4,7 +4,7 @@ using MEditService.LoadOrder;
 namespace MEditService.Commands.Resolution;
 
 /// <summary>What the walk to the left found: a copy, none, or what it could not read: a plugin's copy of what
-/// was <see cref="Unreadable.Asked"/>, or, with none asked, the source tree naming the plugin's masters.</summary>
+/// was <see cref="Unreadable.Asked"/>, or the source tree naming its masters.</summary>
 internal abstract record LeftCopy
 {
     private LeftCopy()

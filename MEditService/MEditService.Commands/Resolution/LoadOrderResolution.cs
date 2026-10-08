@@ -117,8 +117,8 @@ internal sealed class LoadOrderResolution(
             });
 
         /// <summary>The copy that says where <paramref name="cell"/> sits: its own, else its nearest copy to the
-        /// left (xEdit's highest override visible to the file). Null when neither says; <paramref name="unreadable"/>
-        /// is set when the walk could not read.</summary>
+        /// left (xEdit's highest override). Null when neither says, and
+        /// <paramref name="unreadable"/> when the walk could not read.</summary>
         internal JsonObject? WhereItSits(JsonObject cell, out LeftCopy.Unreadable? unreadable)
         {
             var copy = PlacedCell.Says(cell) || cell[RecordMembers.FormKey]?.GetValue<string>() is not { } formKey
