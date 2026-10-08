@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -10,23 +11,27 @@ public sealed class DocumentFromTextTests
 {
     private static readonly PluginAddress Elsewhere = new("Elsewhere.esp", PluginOrigin.DataDirectory);
 
+    private static RecordDetail? CopyFromText(OpenedIndex index, string formKey, string text) =>
+        index.Records.GetCompareRecords([new RecordCopy(formKey, Elsewhere, text)])?.Overrides.Single();
+
+    private static PluginAddress PluginOf(RecordDetail copy) => new(copy.Plugin, copy.Origin);
+
     [Fact]
-    public void ACopyReadFromText_HoldsTheFieldsOfTheText_UnderThePluginAndLoadOrderIndexGiven()
+    public void ACopyReadFromText_HoldsTheFieldsOfTheText_UnderThePluginGiven()
     {
         FormKey npc = default;
         using var fixture = new PluginFixtureBuilder("document-from-text")
             .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
-        var stored = reads.GetDocument(npc.ToString(), fixture.Plugins.Single().KeyOf())
-            ?? throw new InvalidOperationException("Expected the Npc to be indexed.");
-        var text = (stored.Body ?? throw new InvalidOperationException("Expected a body.")).Replace("FixtureNpc", "EditedNpc", StringComparison.Ordinal);
+        var plugin = fixture.Plugins.Single().KeyOf();
+        var stored = index.DocumentOf(npc.ToString(), plugin);
+        var text = index.BodyOf(npc.ToString(), plugin).Replace("FixtureNpc", "EditedNpc", StringComparison.Ordinal);
 
-        var copy = reads.DocumentFromText(npc.ToString(), Elsewhere, 7, text);
+        var copy = CopyFromText(index, npc.ToString(), text);
 
         Assert.NotNull(copy);
-        Assert.Equal(("EditedNpc", Elsewhere, 7, stored.RecordType), (copy.EditorId, copy.Plugin, copy.LoadOrderIndex, copy.RecordType));
+        Assert.Equal(("EditedNpc", Elsewhere, stored.RecordType), (copy.EditorId, PluginOf(copy), copy.RecordType));
         Assert.Equal(
             stored.Fields.Select(f => f.Metadata.Name), copy.Fields.Select(f => f.Metadata.Name));
         Assert.Equal(
@@ -41,7 +46,7 @@ public sealed class DocumentFromTextTests
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
 
-        Assert.Null(index.RequireReads().DocumentFromText("00DEAD:Nowhere.esp", Elsewhere, 7, "{}"));
+        Assert.Null(CopyFromText(index, "00DEAD:Nowhere.esp", "{}"));
     }
 
     [Theory]
@@ -54,14 +59,13 @@ public sealed class DocumentFromTextTests
             .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
-        var stored = index.RequireReads().GetDocument(npc.ToString(), fixture.Plugins.Single().KeyOf())
-            ?? throw new InvalidOperationException("Expected the Npc to be indexed.");
+        var stored = index.DocumentOf(npc.ToString(), fixture.Plugins.Single().KeyOf());
 
-        var copy = index.RequireReads().DocumentFromText(npc.ToString(), Elsewhere, 7, text);
+        var copy = CopyFromText(index, npc.ToString(), text);
 
         Assert.NotNull(copy);
         Assert.False(string.IsNullOrWhiteSpace(copy.ParseDiagnosis));
-        Assert.Equal((Elsewhere, 7, stored.RecordType), (copy.Plugin, copy.LoadOrderIndex, copy.RecordType));
+        Assert.Equal((Elsewhere, stored.RecordType), (PluginOf(copy), copy.RecordType));
         Assert.All(copy.Fields, f => Assert.Null(f.Value));
     }
 
@@ -73,12 +77,10 @@ public sealed class DocumentFromTextTests
             .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
-        var stored = index.RequireReads().GetDocument(npc.ToString(), fixture.Plugins.Single().KeyOf())
-            ?? throw new InvalidOperationException("Expected the Npc to be indexed.");
-        var text = (stored.Body ?? throw new InvalidOperationException("Expected a body."))
+        var text = index.BodyOf(npc.ToString(), fixture.Plugins.Single().KeyOf())
             .Replace("\"FixtureNpc\"", "5", StringComparison.Ordinal);
 
-        var copy = index.RequireReads().DocumentFromText(npc.ToString(), Elsewhere, 7, text);
+        var copy = CopyFromText(index, npc.ToString(), text);
 
         Assert.NotNull(copy);
         Assert.Contains("'EditorID'", copy.ParseDiagnosis, StringComparison.Ordinal);

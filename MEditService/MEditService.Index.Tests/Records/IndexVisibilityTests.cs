@@ -33,7 +33,7 @@ public sealed class IndexVisibilityTests
 
         var reconcile = Task.Run(() => index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4));
         Assert.True(await ingestPaused.WaitAsync(PauseBound), "the ingest never reached the plugin's last record");
-        var readMidIngest = Task.Run(() => (Npcs: index.RequireReads().CountOf(key, "npc_"), index.Sequence));
+        var readMidIngest = Task.Run(() => (Npcs: index.CountOf(key, "npc_"), index.Sequence));
         var servedMidIngest = await Waits.CompletesWithin(readMidIngest, ReadBound);
         ingestResumed.Release();
         await reconcile;
@@ -43,7 +43,7 @@ public sealed class IndexVisibilityTests
         var (npcsMidIngest, sequenceMidIngest) = await readMidIngest;
         Assert.True(npcsMidIngest == 0,
             $"a read made while the plugin was being indexed saw {npcsMidIngest} of its {NpcCount} NPCs");
-        Assert.Equal(NpcCount, index.RequireReads().CountOf(key, "npc_"));
+        Assert.Equal(NpcCount, index.CountOf(key, "npc_"));
         Assert.True(sequenceMidIngest == 0,
             $"a read made while the plugin was being indexed saw sequence {sequenceMidIngest}, though nothing had landed");
     }

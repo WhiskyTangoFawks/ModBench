@@ -109,7 +109,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         WriteValidPlugin(_pluginPath);
         ReconcileHeld();
 
-        _index.RebuildStore(GameRelease.Fallout4, _instanceRoot);
+        _index.Records.RebuildStore(GameRelease.Fallout4, _instanceRoot);
 
         var status = Assert.Single(SinceReconcile.OfType<LoadOrderStatusNotification>());
         Assert.Equal(LoadOrderState.None, status.Status.State);
