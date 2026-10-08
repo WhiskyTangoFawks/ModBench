@@ -1161,8 +1161,8 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
   });
 });
 
-const loaded = (result: CompareResult | null, conflictsComputed = true, goneRecord = '000001:Fallout4.esm') => ({
-  ok: true as const, result, goneRecord: result === null ? goneRecord : undefined, immutableSet: new Set<string>(), trackedSet: new Set<string>(), sourceUnreadableSet: new Set<string>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
+const loaded = (result: CompareResult | null, conflictsComputed = true, gone = ['000001:Fallout4.esm'], notInPlugin: string[] = []) => ({
+  ok: true as const, ...(result === null ? { result, gone, notInPlugin } : { result }), immutableSet: new Set<string>(), trackedSet: new Set<string>(), sourceUnreadableSet: new Set<string>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
 });
 
 function deferred<T>() {
@@ -1245,16 +1245,23 @@ describe('RecordPanel — states', () => {
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
   });
 
-  it('names the column record that is gone, not the tab\'s own', async () => {
+  it('names every record that is gone, not only the tab\'s own', async () => {
     const load = vi.fn()
       .mockResolvedValueOnce(loaded(compareResult))
-      .mockResolvedValue(loaded(null, true, '000777:Column.esm'));
+      .mockResolvedValue(loaded(null, true, ['000777:Column.esm', '000778:Column.esm']));
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText('Override Name'));
 
     loadRecord();
 
-    await waitFor(() => screen.getByText('000777:Column.esm is gone.'));
+    await waitFor(() => screen.getByText('000777:Column.esm, 000778:Column.esm are gone.'));
+  });
+
+  it('says what mEdit said of a copy only its plugin lacks, beside the gone record', async () => {
+    const load = vi.fn().mockResolvedValue(loaded(null, true, ['000777:Column.esm'], ['000778:Column.esm is not in B.esp (ModB).']));
+    renderPanel(compareResult, { load });
+
+    await waitFor(() => screen.getByText('000777:Column.esm is gone. 000778:Column.esm is not in B.esp (ModB).'));
   });
 
   it('says the last read failed, beside the gone record, until a good read replaces it', async () => {

@@ -146,7 +146,7 @@ internal sealed class RecordQueryService(
         }
         if (missing.Count > 0)
         {
-            var gone = missing.Select(c => c.FormKey).Distinct().Where(k => reads.GetOverrideStack(k) == null).ToList();
+            var gone = missing.Select(c => c.FormKey).Distinct().Where(k => !reads.IsHeldByAnyPlugin(k)).ToList();
             throw new RecordCopiesMissingException(missing, gone);
         }
 

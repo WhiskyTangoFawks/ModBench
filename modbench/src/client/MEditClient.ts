@@ -6,7 +6,7 @@ import {
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellChildRecords, type CellSummary,
   type ChildRecordSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
-  type PluginLoadFailure, type CompareResult, type RecordCopy, type CopyText,
+  type PluginLoadFailure, type CompareResult, type CompareRecordsResponse, type CopyMissing, type RecordCopy, type CopyText,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress } from '../wire/pluginAddress';
@@ -22,13 +22,6 @@ export type BackendStatus = 'starting' | 'running' | 'disconnected' | 'stopped';
 
 export function isMEditGone(status: BackendStatus): status is 'disconnected' | 'stopped' {
   return status === 'disconnected' || status === 'stopped';
-}
-
-/** A comparison of several records refused because records it names are held by no plugin. */
-export class RecordsGoneError extends Error {
-  constructor(message: string, readonly goneFormKeys: readonly string[]) {
-    super(message);
-  }
 }
 
 /** A write verb's outright refusal — non-2xx, a thrown request, or write-gate contention.
@@ -240,10 +233,9 @@ export interface MEditClient {
    *  Null: no active plugin holds it and no `text` gives it. With `text`, that plugin's column reads
    *  from it, outside the conflict states if inactive. */
   getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null>;
-  /** Several records side by side: one column per copy, in order, with no conflict state. Rejects naming
-   *  each copy held by no plugin and given no `documentText`; a `RecordsGoneError` when a record is held
-   *  by no plugin at all. */
-  getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult>;
+  /** Several records side by side: one column per copy, in order, with no conflict state. With no
+   *  `compare`, `missing` names each copy no plugin gave and why. */
+  getRecordsComparison(copies: RecordCopy[]): Promise<CompareRecordsResponse>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
   /** The referrers of the active plugins and of the inactive tracked ones. */
   getReferencesInActiveOrTrackedPlugins(formKey: string): Promise<ReferenceResult[]>;
@@ -314,5 +306,5 @@ export type {
   TrackStatus, PluginMetadata, PluginDiagnosisReport,
   RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, CompileDiagnostic,
-  LoadOrderRefusal, PluginLoadFailure, CompareResult, 
+  LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsResponse, CopyMissing,
 };

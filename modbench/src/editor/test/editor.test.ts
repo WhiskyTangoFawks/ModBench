@@ -111,7 +111,6 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import { createEditor } from '..';
 import type { ModFacts } from '../modsByOrigin';
-import { RecordsGoneError } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
@@ -731,7 +730,7 @@ describe('a record file\'s tab', () => {
 
     it('reads the file\'s column from the unsaved text beside the other records the tab shows', async () => {
       const client = holdingClient();
-      client.setQueryAnswer('getRecordsComparison', comparisonOf('000800:A.esp', []));
+      client.setQueryAnswer('getRecordsComparison', { compare: comparisonOf('000800:A.esp', []), missing: [] });
       const { openFile } = makeEditor(client);
       const tab = await openFile(FILE, fileDocument('{ "EditorID": "Typed" }', true));
       const column = { formKey: '000900:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
@@ -994,7 +993,7 @@ describe('what a record tab\'s webview posts', () => {
       tab.receive(loadRequest);
       await settle();
 
-      expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare: null, goneRecord: GUN, conflictsComputed: false, loadFailures: [] })]);
+      expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare: null, gone: [GUN], notInPlugin: [], conflictsComputed: false, loadFailures: [] })]);
     });
 
     it('is answered with a null plugin list, rather than failed, when only the list fails', async () => {
@@ -1288,7 +1287,7 @@ describe('several records opened at once', () => {
 
   it('read the tab again when mEdit reports a record of another column changed, and not for a record it does not show', async () => {
     const client = severalClient();
-    client.setQueryAnswer('getRecordsComparison', comparisonOf('000800:A.esp', []));
+    client.setQueryAnswer('getRecordsComparison', { compare: comparisonOf('000800:A.esp', []), missing: [] });
     const { openDocument } = makeEditor(client);
     const tab = await openDocument(gunDocument);
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [{ formKey: AMMO, plugin: winner }] });
@@ -1300,49 +1299,66 @@ describe('several records opened at once', () => {
     expect(tab.webview.postMessage.mock.calls).toEqual([[expect.objectContaining({ type: 'recordLoadAnswered' })], [{ type: 'loadRecord', formKey: GUN }]]);
   });
 
-  describe('refused for a copy no plugin holds', () => {
-    const reason = `getRecordsComparison failed (404): Copies not found: ${AMMO} in B.esp (ModB).`;
-    const loadWithAColumn = async (refusal: Error) => {
+  describe('refused for a copy no plugin gives', () => {
+    const missing = (formKey: string, reason: 'RecordGone' | 'NotInPlugin') => ({
+      formKey, plugin: { name: 'B.esp', origin: 'ModB' }, reason, message: `${formKey} is not in B.esp (ModB).`,
+    });
+    const loadWithAColumn = async (...refused: ReturnType<typeof missing>[]) => {
       const client = severalClient();
-      client.setQueryFailure('getRecordsComparison', refusal);
-      const { openDocument } = makeEditor(client);
+      client.setQueryAnswer('getRecordsComparison', { compare: null, missing: refused });
+      const { openDocument, outputChannel } = makeEditor(client);
       const tab = await openDocument(gunDocument);
       tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [{ formKey: AMMO, plugin: winner }] });
       await settle();
-      return { tab, client };
+      return { tab, client, channel: outputChannel };
     };
 
     it('answer with the reason mEdit gave, naming each copy, when a plugin lacks only its copy', async () => {
-      const { tab, client } = await loadWithAColumn(new RecordsGoneError(reason, []));
+      const { tab, client } = await loadWithAColumn(missing(AMMO, 'NotInPlugin'));
 
-      expect(tab.webview.postMessage).toHaveBeenCalledWith({ type: 'recordLoadAnswered', requestId: 'r1', ok: false, error: reason });
+      expect(tab.webview.postMessage).toHaveBeenCalledWith(
+        { type: 'recordLoadAnswered', requestId: 'r1', ok: false, error: `${AMMO} is not in B.esp (ModB).` });
       expect(comparisonsAsked(client)).toEqual([]);
     });
 
     it('answer that the column record is gone, naming it, when no plugin holds it', async () => {
-      const { tab, client } = await loadWithAColumn(new RecordsGoneError(reason, [AMMO]));
+      const { tab, client } = await loadWithAColumn(missing(AMMO, 'RecordGone'));
 
       expect(tab.webview.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'recordLoadAnswered', ok: true, compare: null, goneRecord: AMMO }));
+        expect.objectContaining({ type: 'recordLoadAnswered', ok: true, compare: null, gone: [AMMO], notInPlugin: [] }));
       expect(comparisonsAsked(client)).toEqual([]);
     });
 
     it('answer that the tab\'s own record is gone when no plugin holds it', async () => {
-      const { tab } = await loadWithAColumn(new RecordsGoneError(reason, [GUN]));
+      const { tab } = await loadWithAColumn(missing(GUN, 'RecordGone'));
 
-      expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ ok: true, compare: null, goneRecord: GUN }));
+      expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ ok: true, compare: null, gone: [GUN] }));
     });
 
-    it('name the first of several gone records, in the grid\'s order', async () => {
-      const { tab } = await loadWithAColumn(new RecordsGoneError(reason, [GUN, AMMO]));
+    it('name every gone record once, in the grid\'s order', async () => {
+      const { tab } = await loadWithAColumn(missing(GUN, 'RecordGone'), missing(AMMO, 'RecordGone'), missing(GUN, 'RecordGone'));
 
-      expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ ok: true, compare: null, goneRecord: GUN }));
+      expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ ok: true, compare: null, gone: [GUN, AMMO] }));
+    });
+
+    it('keep mEdit\'s word on a copy only its plugin lacks beside the records that are gone', async () => {
+      const { tab } = await loadWithAColumn(missing(AMMO, 'RecordGone'), missing(KNIFE, 'NotInPlugin'));
+
+      expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+        ok: true, compare: null, gone: [AMMO], notInPlugin: [`${KNIFE} is not in B.esp (ModB).`],
+      }));
+    });
+
+    it('write the gone records to the Output', async () => {
+      const { channel } = await loadWithAColumn(missing(AMMO, 'RecordGone'));
+
+      expect(channel.warn).toHaveBeenCalledWith(expect.stringContaining(AMMO));
     });
   });
 
   it('read the first record\'s copy and the columns the tab shows side by side, in that order', async () => {
     const client = severalClient();
-    client.setQueryAnswer('getRecordsComparison', comparisonOf('000800:A.esp', []));
+    client.setQueryAnswer('getRecordsComparison', { compare: comparisonOf('000800:A.esp', []), missing: [] });
     const { openDocument } = makeEditor(client);
     const tab = await openDocument(gunDocument);
 

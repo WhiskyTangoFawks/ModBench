@@ -23,12 +23,14 @@ public sealed class CompareRecordsTests : IDisposable
     private readonly Container _chest;
     private readonly Container _otherChest;
     private readonly Weapon _sword;
+    private readonly Weapon _dagger;
 
     public CompareRecordsTests()
     {
         Container? chest = null;
         Container? otherChest = null;
         Weapon? sword = null;
+        Weapon? dagger = null;
         _fixture = new PluginFixtureBuilder("medit-compare-records")
             .WithPlugin(BasePlugin.Name, mod =>
             {
@@ -42,9 +44,14 @@ public sealed class CompareRecordsTests : IDisposable
                 mod.Containers.Add(otherChest);
                 mod.Weapons.Add(sword);
             })
+            .WithPlugin(InactivePlugin.Name, mod =>
+            {
+                dagger = new Weapon(mod) { EditorID = "Dagger", Name = "Dagger" };
+                mod.Weapons.Add(dagger);
+            }, enabled: false)
             .Build();
         _index = Indexes.Reconciled(_fixture);
-        (_chest, _otherChest, _sword) = (chest.Require(), otherChest.Require(), sword.Require());
+        (_chest, _otherChest, _sword, _dagger) = (chest.Require(), otherChest.Require(), sword.Require(), dagger.Require());
     }
 
     public void Dispose()
@@ -159,6 +166,14 @@ public sealed class CompareRecordsTests : IDisposable
             () => Compare(Copy(_chest, BasePlugin), swordInBase, nowhere));
 
         Assert.Equal([nowhere.FormKey], refusal.GoneFormKeys);
+    }
+
+    [Fact]
+    public void ARecordOnlyADisabledPluginHolds_IsNotGone()
+    {
+        var refusal = Assert.Throws<RecordCopiesMissingException>(() => Compare(Copy(_dagger, BasePlugin)));
+
+        Assert.Empty(refusal.GoneFormKeys);
     }
 
     [Fact]

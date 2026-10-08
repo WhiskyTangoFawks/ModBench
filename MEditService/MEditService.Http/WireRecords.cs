@@ -80,6 +80,17 @@ internal sealed record RecordAddressRefusal(RecordAddress Item, RecordEditRefusa
 
 internal sealed record CompareRecordsRequest(IReadOnlyList<RecordCopy> Copies);
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum CopyMissingReason { RecordGone, NotInPlugin }
+
+/// <summary>A copy of the comparison that no plugin gave: <see cref="CopyMissingReason.RecordGone"/> when no
+/// registered plugin holds its record at all, otherwise only the plugin it names lacks it.</summary>
+internal sealed record CopyMissing(string FormKey, PluginAddress Plugin, CopyMissingReason Reason, string Message);
+
+/// <summary>The comparison, or the copies that stopped it (ADR-0019): <see cref="Compare"/> is null exactly
+/// when <see cref="Missing"/> is not empty.</summary>
+internal sealed record CompareRecordsResponse(CompareResult? Compare, IReadOnlyList<CopyMissing> Missing);
+
 internal sealed record RecordDeleteRequest(IReadOnlyList<RecordAddress> Records);
 
 /// <summary>Applied or refusal, per record (ADR-0019): a refusal is an item of the

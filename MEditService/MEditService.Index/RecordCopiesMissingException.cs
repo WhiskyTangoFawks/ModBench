@@ -19,8 +19,12 @@ public sealed class RecordCopiesMissingException : Exception
     internal RecordCopiesMissingException(IReadOnlyList<RecordCopy> missing, IReadOnlyList<string> goneFormKeys)
         : this($"Copies not found: {string.Join("; ", missing.Select(c => $"{c.FormKey} in {c.Plugin.Name} ({c.Plugin.Origin})"))}.")
     {
+        Missing = missing;
         GoneFormKeys = goneFormKeys;
     }
+
+    /// <summary>The copies no plugin holds, in the order given.</summary>
+    public IReadOnlyList<RecordCopy> Missing { get; } = [];
 
     /// <summary>The missing copies' records that no plugin holds, in the order given.</summary>
     public IReadOnlyList<string> GoneFormKeys { get; } = [];

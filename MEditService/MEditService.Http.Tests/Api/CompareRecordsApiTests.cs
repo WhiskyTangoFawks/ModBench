@@ -39,7 +39,7 @@ public sealed class CompareRecordsApiTests : HostedTests
         });
 
         response.EnsureSuccessStatusCode();
-        var answer = await response.Body();
+        var answer = (await response.Body()).GetProperty("compare");
         var columns = answer.GetProperty("overrides").EnumerateArray().ToList();
         Assert.Equal([weapon, npc], columns.Select(c => c.GetProperty("formKey").GetString()));
         Assert.All(columns, c => Assert.False(c.TryGetProperty("conflictThis", out var state) && state.ValueKind != System.Text.Json.JsonValueKind.Null));
@@ -47,37 +47,35 @@ public sealed class CompareRecordsApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ACopyNoPluginHolds_Is404_NamingEachRecordAndPlugin()
-    {
-        var (npc, weapon) = await Loaded();
-
-        var response = await Client.PostAsJsonAsync("/records/compare", new
-        {
-            copies = new[] { Copy(npc, WithWeapon, WithWeaponMod), Copy(weapon, WithNpc, WithNpcMod) },
-        });
-
-        var detail = (await response.AssertIsProblem(HttpStatusCode.NotFound)).GetProperty("detail").GetString();
-        Assert.Contains(npc, detail);
-        Assert.Contains(WithWeapon, detail);
-        Assert.Contains(WithWeaponMod, detail);
-        Assert.Contains(weapon, detail);
-        Assert.Contains(WithNpc, detail);
-        Assert.Contains(WithNpcMod, detail);
-    }
-
-    [Fact]
-    public async Task ARecordNoPluginHolds_Is404_NamingItAsGone_ApartFromACopyMissingOnlyFromItsPlugin()
+    public async Task ACopyNoPluginGives_IsAnAnswerWithNoComparison_NamingEachCopyAndWhyItIsMissing()
     {
         var (npc, weapon) = await Loaded();
         const string nowhere = "00DEAD:Nowhere.esp";
 
         var response = await Client.PostAsJsonAsync("/records/compare", new
         {
-            copies = new[] { Copy(npc, WithNpc, WithNpcMod), Copy(weapon, WithNpc, WithNpcMod), Copy(nowhere, WithNpc, WithNpcMod) },
+            copies = new[] { Copy(npc, WithNpc, WithNpcMod), Copy(weapon, WithNpc, WithNpcMod), Copy(nowhere, WithWeapon, WithWeaponMod) },
         });
 
-        var problem = await response.AssertIsProblem(HttpStatusCode.NotFound);
-        Assert.Equal([nowhere], problem.GetProperty("goneFormKeys").EnumerateArray().Select(k => k.GetString()));
+        response.EnsureSuccessStatusCode();
+        var answer = await response.Body();
+        Assert.False(answer.TryGetProperty("compare", out var compare) && compare.ValueKind != JsonValueKind.Null);
+        var missing = answer.GetProperty("missing").EnumerateArray().ToList();
+        Assert.Equal(
+            [(weapon, WithNpc, WithNpcMod, "NotInPlugin"), (nowhere, WithWeapon, WithWeaponMod, "RecordGone")],
+            missing.Select(m => (m.GetProperty("formKey").GetString(), m.GetProperty("plugin").GetProperty("name").GetString(),
+                m.GetProperty("plugin").GetProperty("origin").GetString(), m.GetProperty("reason").GetString())));
+        Assert.All(missing, m => Assert.False(string.IsNullOrWhiteSpace(m.GetProperty("message").GetString())));
+    }
+
+    [Fact]
+    public async Task ACompleteComparison_HasNoMissingCopies()
+    {
+        var (npc, _) = await Loaded();
+
+        var response = await Client.PostAsJsonAsync("/records/compare", new { copies = new[] { Copy(npc, WithNpc, WithNpcMod) } });
+
+        Assert.Empty((await response.Body()).GetProperty("missing").EnumerateArray());
     }
 
     [Fact]
@@ -110,7 +108,7 @@ public sealed class CompareRecordsApiTests : HostedTests
         var response = await Client.PostAsJsonAsync("/records/compare", new { copies = new[] { Copy(npc, WithNpc, WithNpcMod, text) } });
 
         response.EnsureSuccessStatusCode();
-        var column = (await response.Body()).GetProperty("overrides").EnumerateArray().Single();
+        var column = (await response.Body()).GetProperty("compare").GetProperty("overrides").EnumerateArray().Single();
         Assert.False(string.IsNullOrWhiteSpace(column.GetProperty("parseDiagnosis").GetString()));
     }
 

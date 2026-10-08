@@ -34,6 +34,9 @@ internal interface IRecordReads
     /// FormKey isn't indexed anywhere.</summary>
     OverrideStack? GetOverrideStack(string formKey);
 
+    /// <summary>Whether any registered plugin, active or not, holds <paramref name="formKey"/>.</summary>
+    bool IsHeldByAnyPlugin(string formKey);
+
     PagedResult<RecordSummary> Search(RecordQuery query);
 
     /// <summary>Row count per record type for one plugin — a single grouped query replacing a

@@ -54,6 +54,16 @@ internal sealed class RelationReads(
         return (new RecordIdentity(formKey, reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1)), reader.GetString(2));
     }
 
+    public bool IsHeldByAnyPlugin(string formKey)
+    {
+        using var connection = store.OpenReadConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"SELECT 1 FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1 LIMIT 1";
+        DuckDbSql.AddParams(cmd, [formKey]);
+        using var reader = cmd.ExecuteReader();
+        return reader.Read();
+    }
+
     public OverrideStack? GetOverrideStack(string formKey)
     {
         using var connection = store.OpenReadConnection();
