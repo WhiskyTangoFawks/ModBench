@@ -223,6 +223,21 @@ describe('the Plugins view registers its own gestures', () => {
   });
 });
 
+describe('the Plugins view\'s move from the palette', () => {
+  it('offers above each row outside the selection, then the bottom of the view', async () => {
+    const { rows } = pluginsView(instanceValueFixture({
+      plugins: ['A.esp', 'B.esp', 'C.esp'].map((name, slot) => ({ name, path: `/fixture/${name}`, origin: 'SomeMod', slot, enabled: true, winning: true })),
+      gameFolder: FOUND,
+    }));
+    const [, b] = await rows();
+    h.selectRows([present(b, 'the B.esp row')]);
+
+    await present(h.commands.get('modbench.plugin.move'), 'the modbench.plugin.move handler')();
+
+    expect(h.picked).toEqual([['A.esp', 'C.esp', 'Bottom of the view']]);
+  });
+});
+
 describe('the Plugins view\'s selection for a key', () => {
   it('still holds a selected row the rebuilt tree shows, though VS Code reports none until the tree hands its rows back', async () => {
     const { plugins, view, rows } = pluginsView(instanceValueFixture({
