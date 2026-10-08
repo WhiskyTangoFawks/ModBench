@@ -8,7 +8,7 @@ import { pluralArgument, registerGesture, type GestureEntry } from '../drivingLi
 import {
   setPluginsEnabled, type PluginParticipation,
 } from '../pluginsCommands/plugins';
-import type { SelectionResult } from '../coreLib/commandResult';
+import type { SelectionResult } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 
 // modbench.plugin.enable / modbench.plugin.disable: the whole selection through the entry
