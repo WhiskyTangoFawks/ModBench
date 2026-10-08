@@ -51,8 +51,8 @@ export interface PluginsViewDeps {
   client: PluginFactsClient & RenamePluginDeps['client'] & TrackDeps['client'] & DecompileDeps['client'] & CompileDeps['client']
     & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onLoadOrderStatus' | 'onReconnected' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin'>;
   statusBar: StatusBar;
-  /** A reconcile reached Ready, or a track landed: the repositories the views outside this box register. */
-  conflictsComputed: () => Promise<void>;
+  /** Registers the tracked mods' repositories: a reconcile reached Ready, or a track landed. */
+  registerRepositories: () => Promise<void>;
   ask: AskQuestion;
   recordWrite: RecordWrite;
   /** The rows of the focused Mods or Plugins view, which the palette's track acts on. */
@@ -83,8 +83,8 @@ export interface PluginsView extends vscode.Disposable {
 
 // The one Plugins tree (ADR-0017; target-architecture.d2, Plugins).
 export function createPluginsView(deps: PluginsViewDeps): PluginsView {
-  const { instance, access, recordBrowser, client, pluginSync, channel, statusBar, conflictsComputed, log, reporterFor } = deps;
-  const notifyConflictsComputed = () => { void conflictsComputed(); };
+  const { instance, access, recordBrowser, client, pluginSync, channel, statusBar, registerRepositories, log, reporterFor } = deps;
+  const registerInBackground = () => { void registerRepositories(); };
   const loadOrderPut = reportSyncFailures('put load order', 'The load order is not sent', (line) => channel.error(`[loadOrder] ${line}`));
   const pluginFile = (plugin: PluginAddress) => tree.pluginFile(plugin);
   const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
@@ -120,7 +120,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const showRecordFilter = makeShowRecordFilter(lens, { pluginsNameFilter: nameFilter, pluginsTree: tree });
   const progress = pluginsViewProgress(view, nameFilter);
   const indexStatus = followIndexStatus({
-    client, facts: tree.facts, recordBrowser, progress, statusBar, showRecordFilter, notifyConflictsComputed, log,
+    client, facts: tree.facts, recordBrowser, progress, statusBar, showRecordFilter, registerRepositories: registerInBackground, log,
     reporter: reporterFor('loadOrder'),
   });
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
@@ -164,7 +164,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
 }
 
 function registerPluginGestures(
-  { instance, access, client, ask, conflictsComputed, pluginSync, reporterFor, recordWrite, trackSelection, modsView }: PluginsViewDeps,
+  { instance, access, client, ask, registerRepositories, pluginSync, reporterFor, recordWrite, trackSelection, modsView }: PluginsViewDeps,
   { tree, view, progress, selection, compileProblems }: {
     tree: PluginsTreeProvider; view: vscode.TreeView<PluginsTreeNode>; progress: PluginsViewProgress;
     selection: () => readonly PluginsTreeNode[]; compileProblems: CompileProblems;
@@ -172,7 +172,7 @@ function registerPluginGestures(
 ): vscode.Disposable[] {
   return [
     registerTrackCommand({
-      progress, instance, client, reporter: reporterFor('mod.track'), onTracked: conflictsComputed,
+      progress, instance, client, reporter: reporterFor('mod.track'), onTracked: registerRepositories,
       modDirs: () => instance.value.paths.modDirs, modsView,
     }, trackSelection),
     registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),

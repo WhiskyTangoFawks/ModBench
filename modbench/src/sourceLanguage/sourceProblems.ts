@@ -147,7 +147,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const ready = () => client.loadOrderStatus?.conflictsComputed ?? answeredAtSubscribe;
   const reaskWhenReady = () => { if (ready()) reask(); };
   const unsubscribe = [
-    client.onLoadOrderSettled(reask),
+    client.onLoadOrderSettled((status) => { if (status.conflictsComputed) reask(); }),
     client.onNotification('rows-changed', reaskWhenReady),
     client.onNotification('plugin-changed', reaskWhenReady),
     client.onReconnected(reask),

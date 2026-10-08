@@ -155,6 +155,19 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
   });
 
+  it('asks nothing when a plugin\'s failure arrives mid-reconcile, since mEdit would answer that it is not ready', () => {
+    const { client } = feed({});
+    const asked = () => client.calls.filter(({ method }) => method === 'getPluginProblems').length;
+    const before = asked();
+
+    const reconciling = loadOrderStatus(false);
+    client.emit({ ...reconciling, loadOrderStatus: reconciling.loadOrderStatus && {
+      ...reconciling.loadOrderStatus, failures: [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }],
+    } });
+
+    expect(asked()).toBe(before);
+  });
+
   it('shows mEdit\'s answer at subscribe, and asks again on a save before any load-order-status', async () => {
     const { client, published } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` }, modFolders, [{ plugin: PLUGIN, problems: [problem()] }]);
     await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1]); });
