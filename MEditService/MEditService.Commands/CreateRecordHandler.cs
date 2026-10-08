@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -15,6 +16,7 @@ namespace MEditService.Commands;
 public sealed class CreateRecordHandler
 {
     private readonly WriteTargets _targets;
+    private readonly LoadOrderResolution _resolution;
     private readonly LoadOrderHolder _loadOrder;
     private readonly RecordTextCodec _codec;
     private readonly SchemaReflector _schemaReflector;
@@ -24,13 +26,14 @@ public sealed class CreateRecordHandler
     // (MEditService.Commands.Composition) rather than the host naming a type it cannot see.
     internal CreateRecordHandler(
         WriteTargets targets,
+        LoadOrderResolution resolution,
         LoadOrderHolder loadOrder,
         RecordTextCodec codec,
         SchemaReflector schemaReflector,
         ILogger<CreateRecordHandler> logger)
     {
-        (_targets, _loadOrder, _codec, _schemaReflector, _logger) =
-            (targets, loadOrder, codec, schemaReflector, logger);
+        (_targets, _resolution, _loadOrder, _codec, _schemaReflector, _logger) =
+            (targets, resolution, loadOrder, codec, schemaReflector, logger);
     }
 
     public RecordEditResult CreateRecord(
@@ -146,22 +149,22 @@ public sealed class CreateRecordHandler
         GameRelease release, string worldspace, (int X, int Y) grid)
     {
         var at = $"at {grid.X}, {grid.Y}";
-        var holder = GridCells.At(_targets, repository, plugin, schemas, worldspace, grid, worldspace, $"whether a cell sits {at}");
+        var holder = _resolution.HolderOfCell(repository, plugin, schemas, worldspace, grid, worldspace, $"whether a cell sits {at}");
         switch (holder)
         {
-            case GridCells.Holder.Unreadable(var why):
+            case GridCellHolder.Unreadable(var why):
                 return why;
-            case GridCells.Holder.Plugins(var held):
+            case GridCellHolder.Plugins(var held):
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ChildSlotHeldByAnotherRecord, $"{plugin.Name} already holds the cell {held.FormKey} {at} of {worldspace}.");
-            case GridCells.Holder.Masters(var copy, var masterCell):
+            case GridCellHolder.Masters(var copy, var masterCell):
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ChildSlotHeldByAnotherRecord,
                     $"{copy.Plugin.Name} holds the cell {masterCell} {at} of {worldspace}. Copying the record as an override brings it into {plugin.Name}.");
-            case GridCells.Holder.Nobody:
+            case GridCellHolder.Nobody:
                 break;
             default:
-                throw new InvalidOperationException($"Expected GridCells.At to answer one of its holders, not {holder.GetType().Name}.");
+                throw new InvalidOperationException($"Expected HolderOfCell to answer one of its holders, not {holder.GetType().Name}.");
         }
 
         if (GridCells.Mint(repository, plugin, _codec, schemas[recordType], release, grid, out var cell) is { } exhausted) return exhausted;

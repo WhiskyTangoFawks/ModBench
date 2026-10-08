@@ -1,6 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
@@ -17,14 +18,20 @@ public static class CommandHandlers
     {
         // One instance for the write side: it holds singletons and decides nothing per request, and
         // a handler that built its own would answer from the same four.
-        services.AddSingleton(sp => new WriteTargets(
+        services.AddSingleton(sp => new LoadOrderResolution(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<SchemaReflector>()));
 
+        services.AddSingleton(sp => new WriteTargets(
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<LoadOrderResolution>(),
+            sp.GetRequiredService<SchemaReflector>()));
+
         services.AddSingleton(sp => new EditRecordChangesHandler(
             sp.GetRequiredService<WriteTargets>(),
+            sp.GetRequiredService<LoadOrderResolution>(),
             sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<EditRecordChangesHandler>>()));
@@ -36,6 +43,7 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new CreateRecordHandler(
             sp.GetRequiredService<WriteTargets>(),
+            sp.GetRequiredService<LoadOrderResolution>(),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<SchemaReflector>(),
@@ -44,7 +52,7 @@ public static class CommandHandlers
         // The container half both copy modes take. Held once: singletons only, nothing per
         // request.
         services.AddSingleton(sp => new RecordCopy(
-            sp.GetRequiredService<WriteTargets>(),
+            sp.GetRequiredService<LoadOrderResolution>(),
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(RecordCopy)),
             sp.GetRequiredService<RecordTextCodec>()));
