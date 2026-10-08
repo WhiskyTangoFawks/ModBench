@@ -373,6 +373,15 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     expect(provider.workingTreeStateOf(recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey))).toBe('Modified');
   });
 
+  it('badges an override-stack row under the plugin that owns its copy, not the plugin browsed', async () => {
+    const override = { ...makeRecord(0, 'Modified'), plugin: 'Other.esp' };
+    const { provider, typeNode } = await readGroup(makeClient({ records: { items: [override], total: 1 } }));
+
+    await provider.getChildren(typeNode);
+
+    expect(provider.workingTreeStateOf(recordResourceUri({ name: 'Other.esp', origin: 'Data/' }, override.formKey))).toBe('Modified');
+  });
+
   it('workingTreeStateOf is undefined for a record nothing has cached yet', () => {
     const provider = new PluginTreeProvider(makeClient());
     expect(provider.workingTreeStateOf(recordResourceUri({ name: 'Plugin0.esp', origin: 'Data/' }, '000001:Fallout4.esm'))).toBeUndefined();
