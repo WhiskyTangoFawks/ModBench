@@ -1,6 +1,5 @@
 using System.Text;
 using MEditService.Codec.Schema;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Cache;
@@ -17,7 +16,7 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
     private readonly IRecordFieldProbe _file;
     private readonly IReadOnlyDictionary<string, RecordTableSchema> _schemas;
     private readonly IDisposable? _open;
-    private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
+    private readonly RecordTypes _types;
     private readonly Lazy<ILinkCache> _cache;
     private readonly Lazy<Dictionary<string, DocumentContainment>> _containments;
     private readonly Lazy<Dictionary<string, HeldCell>> _cells;
@@ -30,6 +29,7 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
         _file = file;
         _schemas = schemas;
         _open = open;
+        _types = RecordTypes.For(mod.GameRelease);
         _cache = new Lazy<ILinkCache>(() => mod.ToUntypedImmutableLinkCache());
         _containments = new Lazy<Dictionary<string, DocumentContainment>>(BuildContainments);
         _cells = new Lazy<Dictionary<string, HeldCell>>(() => MutagenModDocuments.CellsIn(mod));
@@ -38,14 +38,14 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
 
     public RecordIdentity? IdentityOf(string formKey) =>
         Resolve(formKey) is { } record
-            ? new RecordIdentity(record.FormKey.ToString(), RecordTableName.Of(record.GetType(), _schemas), record.EditorID)
+            ? new RecordIdentity(record.FormKey.ToString(), _types.RecordTypeOf(record), record.EditorID)
             : null;
 
     public long? RecordFlagsOf(string formKey) => Resolve(formKey)?.MajorRecordFlagsRaw;
 
     public string? TextOf(string formKey) =>
         Resolve(formKey) is { } record
-            ? Encoding.UTF8.GetString(DeletedRecord.Serialize(_codec, record, _schemas[RecordTableName.Of(record.GetType(), _schemas)], _mod.GameRelease, _file))
+            ? Encoding.UTF8.GetString(DeletedRecord.Serialize(record, _schemas[_types.RecordTypeOf(record)], _mod.GameRelease, _file))
             : null;
 
     public DocumentContainment? ContainmentOf(string formKey) =>
@@ -88,7 +88,7 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
         var containments = new Dictionary<string, DocumentContainment>(StringComparer.Ordinal);
         foreach (var record in _mod.EnumerateMajorRecords())
         {
-            var parentType = RecordTableName.Of(record.GetType(), _schemas);
+            var parentType = _types.RecordTypeOf(record);
             foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(record))
             {
                 containments.TryAdd(

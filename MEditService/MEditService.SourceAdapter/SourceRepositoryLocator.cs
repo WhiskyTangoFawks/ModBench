@@ -60,7 +60,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         // Only a directory-per-record type (Cell, Worldspace) can have a directory of its own; a type
         // with no group of its own is always embedded, so nothing is scanned for it.
         var sourceRoot = Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name));
-        if (RecordTypeDispatch.For(_release).GroupFolderNameFor(identity.RecordType) is not null
+        if (RecordTypes.For(_release).GroupFolderNameFor(identity.RecordType) is not null
             && FindOwnUnit(sourceRoot, plugin.Name, identity.FormKey, byText) is { } own)
         {
             return Unit(own, identity.FormKey, identity.RecordType, isEmbedded: false);
@@ -75,7 +75,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     /// <summary>Which record the tree holds at <paramref name="formKey"/> — one with a document of
     /// its own, an embedded child, or the header — or null when nothing carries it.</summary>
     internal RecordIdentity? IdentityOf(
-        PluginAddress plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        PluginAddress plugin, string formKey)
     {
         // A malformed FormKey is a caller's raw input, not a broken tree: it names nothing and throws
         // nothing.
@@ -94,13 +94,13 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
                 : null;
         }
 
-        if (OwnDocumentIdentity(sourceRoot, plugin.Name, parsed, spelled, schemas) is { } own) return own;
+        if (OwnDocumentIdentity(sourceRoot, plugin.Name, parsed, spelled) is { } own) return own;
 
         // Nothing of its own, so another record's document carries it inline, and the codec reads its
         // type and name off that document's text.
         if (DocumentHolding(sourceRoot, spelled) is not { } owner) return null;
         if (DocumentText.BytesOrNull(owner.FullPath) is not { } ownerBytes) return null;
-        return new ContainerDocuments(_release, schemas).EmbeddedChild(owner.RecordType, ownerBytes, spelled) is { } child
+        return new ContainerDocuments(_release).EmbeddedChild(owner.RecordType, ownerBytes, spelled) is { } child
             ? ChildIdentity(child, owner.FullPath)
             : null;
     }
@@ -111,7 +111,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>
     /// rather than that document's file, which is only found. Null when nothing in the tree holds it.</summary>
     internal (RecordIdentity Record, SourceDocument Carrying)? CarryingFromText(
-        PluginAddress plugin, string formKey, string text, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        PluginAddress plugin, string formKey, string text)
     {
         if (!FormKey.TryFactory(formKey, out var parsed)) return null;
         var spelled = parsed.ToString();
@@ -133,22 +133,22 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         }
         if (TheOneHolding(holding, spelled) is { } own)
         {
-            var document = DeclaredIn(own, text, plugin.Name, schemas);
+            var document = DeclaredIn(own, text, plugin.Name);
             if (!FormKey.TryFactory(document.FormKey, out var declared) || declared != parsed)
                 throw new UnreadableSourceDocumentException($"The text given for {Path.GetRelativePath(_modFolder, own)} declares {document.FormKey}, not {spelled}.");
             return (document.Identity with { FormKey = spelled }, document);
         }
 
         if (DocumentHolding(sourceRoot, spelled) is not { } owner) return null;
-        var carrying = DeclaredIn(owner.FullPath, text, plugin.Name, schemas);
-        var child = new ContainerDocuments(_release, schemas).EmbeddedChild(owner.RecordType, Encoding.UTF8.GetBytes(text), spelled)
+        var carrying = DeclaredIn(owner.FullPath, text, plugin.Name);
+        var child = new ContainerDocuments(_release).EmbeddedChild(owner.RecordType, Encoding.UTF8.GetBytes(text), spelled)
             ?? throw new UnreadableSourceDocumentException(
                 $"The text given for {Path.GetRelativePath(_modFolder, owner.FullPath)} does not carry {spelled}.");
         return (ChildIdentity(child, owner.FullPath), carrying);
     }
 
     private SourceDocument DeclaredIn(
-        string documentPath, string text, string pluginFileName, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        string documentPath, string text, string pluginFileName)
     {
         var relativePath = Path.GetRelativePath(_modFolder, documentPath);
         if (NotADocument(text) is { } why)
@@ -158,7 +158,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         if (!FormKey.TryFactory(document.FormKey, out _))
             throw new UnreadableSourceDocumentException($"The text given for {relativePath} declares {document.FormKey}, which is no FormKey.");
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
-            ?? new ContainerDocuments(_release, schemas).RecordTypeNamed(document.RecordType)
+            ?? RecordTypes.For(_release).RecordTypeNamed(document.RecordType)
             ?? throw new UnreadableSourceDocumentException($"The text given for {relativePath} names no record type.");
         return document with { RecordType = recordType };
     }
@@ -229,14 +229,13 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     // A record with a document of its own, found as Locate finds it. A name the text contradicts is
     // stale, and the record it claims is elsewhere or gone.
     private RecordIdentity? OwnDocumentIdentity(
-        string sourceRoot, string pluginFileName, FormKey formKey, string spelled,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        string sourceRoot, string pluginFileName, FormKey formKey, string spelled)
     {
-        var identified = IdentitiesIn(DocumentsNaming(sourceRoot, spelled), pluginFileName, formKey, spelled, schemas);
+        var identified = IdentitiesIn(DocumentsNaming(sourceRoot, spelled), pluginFileName, formKey, spelled);
         if (identified.Count == 0)
         {
             identified = IdentitiesIn(
-                DocumentsDeclaring(sourceRoot, spelled), pluginFileName, formKey, spelled, schemas);
+                DocumentsDeclaring(sourceRoot, spelled), pluginFileName, formKey, spelled);
             RememberFoundByText(pluginFileName, spelled, [.. identified.Select(i => i.Path)]);
         }
 
@@ -246,8 +245,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     }
 
     private List<(string Path, RecordIdentity Identity)> IdentitiesIn(
-        IEnumerable<string> documentPaths, string pluginFileName, FormKey formKey, string spelled,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        IEnumerable<string> documentPaths, string pluginFileName, FormKey formKey, string spelled)
     {
         var identified = new List<(string, RecordIdentity)>();
         foreach (var documentPath in documentPaths)
@@ -260,7 +258,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             // A path-ambiguous group's document names its own type, and that name is the codec's
             // rather than the schema's table, so the codec maps it to one.
             if ((SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
-                 ?? new ContainerDocuments(_release, schemas).RecordTypeNamed(document.RecordType))
+                 ?? RecordTypes.For(_release).RecordTypeNamed(document.RecordType))
                 is not { } recordType)
             {
                 continue;
@@ -411,7 +409,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     // or inside its worldspace's.
     internal string? FindOwnUnit(string sourceRoot, string pluginFileName, string formKey, bool byText = true) =>
         OwnDocumentUnder(
-            [.. RecordTypeDispatch.For(_release).DirectoryPerRecordFolderNames
+            [.. RecordTypes.For(_release).DirectoryPerRecordFolderNames
                 .Select(groupFolder => Path.Combine(sourceRoot, groupFolder))],
             pluginFileName, formKey, byText);
 
@@ -458,7 +456,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     }
 
     internal SourceDocument? ContainerDocument(
-        PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        PluginAddress plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
         var text = Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(File.ReadAllBytes(unit.FullPath)));
@@ -466,7 +464,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         if (!unit.IsEmbedded)
             return new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, text);
 
-        if (IdentityOf(plugin, unit.OwnerFormKey, schemas) is not { } owner)
+        if (IdentityOf(plugin, unit.OwnerFormKey) is not { } owner)
         {
             throw new UnreadableSourceDocumentException(
                 $"{unit.RelativePath} carries {identity.FormKey}, but {unit.OwnerFormKey} names no document of its own.");
@@ -475,14 +473,14 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     }
 
     internal DocumentContainment? ContainerOf(
-        PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        PluginAddress plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { IsEmbedded: true } unit) return null;
-        var owner = ContainerDocument(plugin, identity, schemas)
+        var owner = ContainerDocument(plugin, identity)
             ?? throw new UnreadableSourceDocumentException($"{unit.RelativePath} could not be read.");
 
         using var parsed = JsonDocument.Parse(owner.Body);
-        return new ContainerDocuments(_release, schemas).ContainmentOf(owner.RecordType, parsed.RootElement, identity.FormKey);
+        return new ContainerDocuments(_release).ContainmentOf(owner.RecordType, parsed.RootElement, identity.FormKey);
     }
 
     /// <summary>Every document one plugin's tree holds right now, each as the record at its root. An

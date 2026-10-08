@@ -7,6 +7,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
@@ -18,12 +19,14 @@ internal sealed class PluginIngest
     private readonly DuckDBConnection _connection;
     private readonly ILogger _logger;
     private readonly ContainerDocuments _containers;
+    private readonly RecordTypes _types;
 
-    public PluginIngest(DuckDBConnection connection, ILogger logger, ContainerDocuments containers)
+    public PluginIngest(DuckDBConnection connection, ILogger logger, GameRelease release)
     {
         _connection = connection;
         _logger = logger;
-        _containers = containers;
+        _containers = new ContainerDocuments(release);
+        _types = RecordTypes.For(release);
     }
 
     internal readonly record struct IndexTiming(long DocumentsMs, long PrepareMs, long AppendMs, long ExtractedMs);
@@ -207,8 +210,7 @@ internal sealed class PluginIngest
         // its children. A refused cell loses only its grid.
         var refused = document.ParseDiagnosis is not null;
         JsonElement? carried = refused ? null : root;
-        var containerType = _containers.ContainerTypeOf(document.RecordType);
-        var placements = PlacementRowsOf(document, containerType);
+        var placements = PlacementRowsOf(document);
         CellLocationRow? cellLocation = document.Cell is { } structure
             ? PlacementWalker.CellLocation(document.FormKey, carried, structure)
             : null;
@@ -224,7 +226,7 @@ internal sealed class PluginIngest
             ? (document.Contents ?? []).Select(c => (c.FormKey, c.SlotName, c.SlotIndex))
             : _containers.ChildrenOf(document.RecordType, root).Select(c => (c.FormKey, c.SlotName, c.SlotIndex));
         List<ContainerChildRow> childRows = [.. children
-            .Where(c => PlacementWalker.TableFor(containerType, c.SlotName) == ParentageTable.ContainerChild)
+            .Where(c => PlacementWalker.TableFor(_types, document.RecordType, c.SlotName) == ParentageTable.ContainerChild)
             .Select(c => new ContainerChildRow(c.FormKey, document.FormKey, document.RecordType, c.SlotName, c.SlotIndex))];
 
         return new PreparedRecord(
@@ -233,10 +235,10 @@ internal sealed class PluginIngest
     }
 
     // One row per placed record the cell's groups hold, parentage from beside the document.
-    private static List<PlacementRow> PlacementRowsOf(PluginDocument document, string containerType) =>
+    private List<PlacementRow> PlacementRowsOf(PluginDocument document) =>
     [
         .. (document.Contents ?? [])
-            .Where(c => PlacementWalker.TableFor(containerType, c.SlotName) == ParentageTable.Placement)
+            .Where(c => PlacementWalker.TableFor(_types, document.RecordType, c.SlotName) == ParentageTable.Placement)
             .Select(c => new PlacementRow(c.FormKey, document.FormKey, PlacementWalker.PlacementGroupOf(c.SlotName))),
     ];
 

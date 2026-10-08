@@ -48,7 +48,6 @@ public sealed class LoadOrderLinkTargetsTests
             new LoadOrderSnapshot(
                 DataFolderOf(loadOrder[0]), null, GameRelease.Fallout4, loadOrder, [.. loadOrder.Select(plugin => plugin.Key)], []),
             loadOrder[^1],
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
             formKeys);
 
     private static string DataFolderOf(RegisteredPlugin plugin) => Path.GetDirectoryName(plugin.Path) ?? plugin.Path;

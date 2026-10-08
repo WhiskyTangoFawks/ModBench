@@ -13,7 +13,7 @@ public static class PartialFormFlag
     public const int Bit = 0x0000_4000;
 
     /// <summary>The container-record gate the bit is read through.</summary>
-    public static bool IsPartialFormable(Type recordType) =>
+    internal static bool IsPartialFormable(Type recordType) =>
         ContainerChildFields.EnumerateChildFieldsFor(recordType) != null;
 
     /// <summary>The plugin that alone defines a cell a Partial Form copy can override, or null where any can.</summary>

@@ -28,8 +28,8 @@ public sealed class SourceCodecReadScanTests
             "The Source folder touches a RecordTextCodec member outside its bound; the Codec owns a record as text and as document (target-architecture.d2): "
             + "a repository reads the kernel for facts about types and for the "
             + "spelling of a layout level it mints, never for a record's content. Only "
-            + "RecordTypeDispatch (type facts, not counted here) and RecordTextCodec.BlankDocument "
-            + "(the level it mints) are permitted — read the type fact through RecordTypeDispatch or "
+            + "RecordTypes (type facts, not counted here) and RecordTextCodec.BlankDocument "
+            + "(the level it mints) are permitted — read the type fact through RecordTypes or "
             + "mint through BlankDocument instead:\n"
             + string.Join("\n", counts));
     }
@@ -51,17 +51,16 @@ public sealed class SourceCodecReadScanTests
         Directory.CreateDirectory(Path.Combine(root, "MEditService.SourceAdapter", "obj"));
         File.WriteAllText(
             Path.Combine(root, "MEditService.SourceAdapter", "Permitted.cs"),
-            "var folder = RecordTypeDispatch.For(release).FolderNameFor(recordType);\n"
-            + "var minted = RecordTextCodec.BlankDocument(loquiType, release, identity);\n");
+            "var folder = RecordTypes.For(release).FolderNameFor(recordType);\n"
+            + "var minted = RecordTextCodec.BlankDocument(level, release, identity);\n");
         File.WriteAllText(
             Path.Combine(root, "MEditService.SourceAdapter", "Planted.cs"),
-            "internal sealed class Reader\n{\n"
-            + "    private readonly RecordTextCodec _codec = new(logger);\n"
-            + "    internal string Read(IMajorRecordGetter record, GameRelease release) =>\n"
-            + "        _codec.RoundTrip(text, release, null);\n}\n");
+            "internal static class Reader\n{\n"
+            + "    internal static string Read(string text, GameRelease release) =>\n"
+            + "        RecordTextCodec.RoundTrip(text, release, null);\n}\n");
         File.WriteAllText(
             Path.Combine(root, "MEditService.SourceAdapter", "obj", "Generated.cs"),
-            "var codec = new RecordTextCodec(logger);\n");
+            "var text = RecordTextCodec.RoundTrip(text, release, null);\n");
 
         var counts = Counts(root, ["MEditService.SourceAdapter"]);
 

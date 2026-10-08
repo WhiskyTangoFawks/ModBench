@@ -11,9 +11,9 @@ namespace MEditService.Codec.Tests.TestSupport;
 public static class ReadBack
 {
     /// <summary>The record as the codec's round trip spells it.</summary>
-    public static JsonElement Of(RecordTextCodec codec, IMajorRecordGetter record, GameRelease release, string? recordType)
+    public static JsonElement Of(IMajorRecordGetter record, GameRelease release, string? recordType)
     {
-        using var document = JsonDocument.Parse(codec.RoundTrip(codec.SerializeToText(record, release), release, recordType));
+        using var document = JsonDocument.Parse(RecordTextCodec.RoundTrip(RecordTextCodec.SerializeToText(record, release), release, recordType));
         return document.RootElement.Clone();
     }
 

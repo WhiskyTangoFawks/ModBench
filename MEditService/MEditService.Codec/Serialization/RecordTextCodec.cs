@@ -3,7 +3,6 @@ using System.IO.Abstractions;
 using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization;
@@ -17,7 +16,7 @@ namespace MEditService.Codec.Serialization;
 /// <summary>The per-record codec, never a whole plugin (ADR-0006). Takes
 /// IMajorRecordGetter rather than the generated serializer's narrower interface, because
 /// reflection needs only runtime assignability.</summary>
-public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
+public static class RecordTextCodec
 {
     private static readonly MutagenSerializationWriterKernel<NewtonsoftJsonSerializationWriterKernel, JsonWritingUnit> WriterKernel = new();
     private static readonly NewtonsoftJsonSerializationReaderKernel ReaderKernel = new();
@@ -29,41 +28,27 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
     /// <summary>A document read and written back: the one shape gate a write goes through, and the
     /// spelling the codec gives what it kept.</summary>
-    public string RoundTrip(string text, GameRelease gameRelease, string? recordType) =>
+    public static string RoundTrip(string text, GameRelease gameRelease, string? recordType) =>
         SerializeToText(Deserialize(text, gameRelease, recordType), gameRelease);
 
     /// <summary>A document's own graph, read back by the type its text names — a path-ambiguous
     /// group's document names its own class, which is the codec's spelling, not the schema's
     /// table.</summary>
-    internal IMajorRecord Deserialize(string text, GameRelease gameRelease, string? recordType)
+    internal static IMajorRecord Deserialize(string text, GameRelease gameRelease, string? recordType)
     {
-        var bytes = Encoding.UTF8.GetBytes(text);
-        using var stream = new MemoryStream(bytes, writable: false);
-        var record = DeserializeCore(stream, gameRelease, recordType, CancellationToken.None);
-
-        if (logger.IsEnabled(LogLevel.Trace))
-        {
-            logger.LogTrace("Deserialized record {FormKey} from {ByteCount} bytes", record.FormKey, bytes.Length);
-        }
-        return record;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(text), writable: false);
+        return DeserializeCore(stream, gameRelease, recordType, CancellationToken.None);
     }
 
     /// <summary>The record as the text a source document carries: what
     /// <see cref="SerializeToBytes"/> produces, decoded.</summary>
-    public string SerializeToText(IMajorRecordGetter record, GameRelease gameRelease) =>
+    public static string SerializeToText(IMajorRecordGetter record, GameRelease gameRelease) =>
         Encoding.UTF8.GetString(SerializeToBytes(record, gameRelease));
 
     /// <summary>The bytes of a source document, without the filesystem (ADR-0005): indexing
     /// produces millions, so a temp-file round trip is not an option.</summary>
-    internal byte[] SerializeToBytes(IMajorRecordGetter record, GameRelease gameRelease)
-    {
-        var bytes = SerializeCore(record, gameRelease, CancellationToken.None);
-        if (logger.IsEnabled(LogLevel.Trace))
-        {
-            logger.LogTrace("Serialized record {FormKey} to {ByteCount} bytes", record.FormKey, bytes.Length);
-        }
-        return bytes;
-    }
+    internal static byte[] SerializeToBytes(IMajorRecordGetter record, GameRelease gameRelease) =>
+        SerializeCore(record, gameRelease, CancellationToken.None);
 
     // Buffered rather than streamed: Newtonsoft's JsonTextWriter has no public NewLine to pin (it
     // reads its private inner TextWriter's), so newline normalization has to happen after the fact.
@@ -81,7 +66,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         // A path-ambiguous record dispatches through the game's abstract serializer, whose
         // SerializeWithCheck writes MutagenObjectType ahead of the fields, and every other record
         // carries none.
-        var serialize = RecordTypeDispatch.For(gameRelease).IsPathAmbiguous(record.GetType())
+        var serialize = RecordTypes.For(gameRelease).IsPathAmbiguous(record.GetType())
             ? ResolveCheckedSerializeMethod(gameRelease)
             : ResolveConcreteSerializeMethod(generated);
         var written = (Task)(serialize.Invoke(null, [writer, record, WriterKernel, metaData])
@@ -104,11 +89,13 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// <summary>The empty document of a major record: the identity the codec requires first.</summary>
     public const string EmptyMajorRecord = "{\"FormKey\":\"Null\"}";
 
-    /// <summary>The document of an empty instance of <paramref name="loquiType"/> carrying
-    /// <paramref name="identity"/> alone, so a caller places a container level rather than
-    /// constructing one. A minted document fed back as the identity is its round trip.</summary>
-    public static string BlankDocument(Type loquiType, GameRelease gameRelease, JsonObject identity)
+    /// <summary>The document of an empty block level or record carrying <paramref name="identity"/>
+    /// alone, so a caller places a container level rather than constructing one. A minted document fed
+    /// back as the identity is its round trip.</summary>
+    public static string BlankDocument(string name, GameRelease gameRelease, JsonObject identity)
     {
+        var loquiType = RecordTypes.For(gameRelease).LoquiTypeNamed(name)
+            ?? throw new ArgumentException($"{gameRelease} has no block level or record type named '{name}'.", nameof(name));
         var instance = DeserializeText(loquiType, identity.ToJsonString(), gameRelease);
         var bytes = SerializeCore(instance, gameRelease, CancellationToken.None);
         return Encoding.UTF8.GetString(bytes);
@@ -126,10 +113,10 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     private static IMajorRecord DeserializeCore(
         Stream stream, GameRelease gameRelease, string? recordType, CancellationToken cancel)
     {
-        // The reverse of SerializeCore's dispatch, driven by the same RecordTypeDispatch fact so
+        // The reverse of SerializeCore's dispatch, driven by the same RecordTypes fact so
         // the two directions cannot disagree. An unknown recordType reads as ambiguous, so it takes
         // the self-describing path and fails loudly rather than constructing a guessed type.
-        var dispatch = RecordTypeDispatch.For(gameRelease);
+        var dispatch = RecordTypes.For(gameRelease);
         var record = DeserializeObject(stream, gameRelease,
             readerType => recordType is not null
                 && dispatch.ConcreteFor(recordType) is { } concrete
@@ -226,8 +213,6 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         LookupGeneratedSerializationType(recordType)
             ?? throw new NotSupportedException(NoGeneratedSerializer(recordType, null, null));
 
-    private const string OverlaySuffix = "BinaryOverlay";
-
     // Under FilePerRecord a container writes each non-embedded child (a worldspace's blocks) to its
     // own file via StreamCreator. A block level is its own source unit, so its bytes go nowhere.
     private sealed class DiscardChildRecordStreams : ICreateStream
@@ -237,19 +222,10 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         public Stream GetStreamFor(IFileSystem fileSystem, FilePath path, bool write) => Stream.Null;
     }
 
-    // An overlay reader's runtime type is "<ConcreteSetterName>BinaryOverlay"; stripping that one
-    // suffix is the only safe normalization: an interface scan matched an ancestor's narrower
-    // serializer and silently produced truncated text.
+    // By the record class an overlay reader stands for: an interface scan matched an ancestor's
+    // narrower serializer and silently produced truncated text.
     private static Type? LookupGeneratedSerializationType(Type recordType) =>
-        LookupGeneratedType(recordType, recordType.Name)
-        ?? (recordType.Name.EndsWith(OverlaySuffix, StringComparison.Ordinal)
-            ? LookupGeneratedType(recordType, recordType.Name[..^OverlaySuffix.Length])
-            : null);
-
-    // The namespace comes from the record rather than a named game so this ingest path stays
-    // game-generic; only the seed (RecordTextCodecGeneratorSeed) is per-game.
-    private static Type? LookupGeneratedType(Type recordType, string concreteTypeName) =>
-        typeof(RecordTextCodec).Assembly.GetType($"{recordType.Namespace}.{concreteTypeName}_Serialization");
+        typeof(RecordTextCodec).Assembly.GetType($"{recordType.Namespace}.{RecordTypes.ClassNameOf(recordType)}_Serialization");
 
     // Derived from the record type's namespace, not a named game, the same derivation
     // LookupGeneratedType makes; hardcoding "Fallout4" would have a Skyrim record report a path the

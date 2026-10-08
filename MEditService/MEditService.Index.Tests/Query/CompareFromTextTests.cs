@@ -3,7 +3,6 @@ using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -12,7 +11,6 @@ namespace MEditService.Index.Tests.Query;
 
 public sealed class CompareFromTextTests : IDisposable
 {
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
     private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
     private static readonly PluginAddress ModPlugin = new("Mod.esp", PluginOrigin.DataDirectory);
     private static readonly PluginAddress GapPlugin = new("Gap.esp", PluginOrigin.DataDirectory);
@@ -52,7 +50,7 @@ public sealed class CompareFromTextTests : IDisposable
     private static ContainerEntry Entry(FormKey item) =>
         new() { Item = new ContainerItem { Item = new FormLink<IItemGetter>(item), Count = 1 } };
 
-    private static string OtherChestText => Codec.SerializeToText(OtherChest, GameRelease.Fallout4);
+    private static string OtherChestText => RecordTextCodec.SerializeToText(OtherChest, GameRelease.Fallout4);
 
     private CompareResult Compare(PluginAddress plugin, string text) =>
         _index.Records.GetCompare(Chest.ToString(), new CopyText(plugin, text))

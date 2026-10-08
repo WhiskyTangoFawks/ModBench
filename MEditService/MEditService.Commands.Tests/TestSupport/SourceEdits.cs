@@ -2,7 +2,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
@@ -11,7 +10,6 @@ namespace MEditService.Commands.Tests.TestSupport;
 
 public static class SourceEdits
 {
-    public static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
     public static void Rewrite<T>(
         SourceRepository repository, PluginAddress plugin, RecordIdentity identity, GameRelease release, Action<T> change)
@@ -28,7 +26,7 @@ public static class SourceEdits
         SourceRepository repository, PluginAddress plugin, IMajorRecordGetter record, string recordType, GameRelease release) =>
         repository.Put(plugin, new SourceDocument(
             record.FormKey.ToString(), recordType, record.EditorID,
-            Codec.SerializeToText(record, release)));
+            RecordTextCodec.SerializeToText(record, release)));
 
     private static IMod TreeOf(SourceRepository repository, PluginAddress plugin, GameRelease release)
     {

@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -14,7 +13,6 @@ public sealed class RecordTextCodecEmbedTests
 {
     private static readonly Fallout4Mod Mod = new(ModKey.FromFileName("Embed.esp"), Fallout4Release.Fallout4);
 
-    private static RecordTextCodec Codec() => new(NullLogger<RecordTextCodec>.Instance);
 
     private static string[] EditorIds(JsonElement slot) =>
         [.. slot.EnumerateArray().Select(e => e.GetProperty("EditorID").GetString()
@@ -33,7 +31,7 @@ public sealed class RecordTextCodecEmbedTests
     [Fact]
     public void SerializeToText_ForAPopulatedCell_EmbedsEveryChildSlot()
     {
-        var text = Codec().SerializeToText(MakePopulatedCell(), GameRelease.Fallout4);
+        var text = RecordTextCodec.SerializeToText(MakePopulatedCell(), GameRelease.Fallout4);
 
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
@@ -53,9 +51,8 @@ public sealed class RecordTextCodecEmbedTests
     [Fact]
     public void RoundTrip_OfAnEmbeddedCell_IsChildFaithful_WithTheParentsOwnFieldsUntouchedSoEmbedsChildrenNeverReadsAsSerializesChildrenInsteadOfItself()
     {
-        var codec = Codec();
 
-        var roundTripped = ReadBack.Of(codec, MakePopulatedCell(), GameRelease.Fallout4, "cell");
+        var roundTripped = ReadBack.Of(MakePopulatedCell(), GameRelease.Fallout4, "cell");
 
         Assert.Equal(["PersistentRef"], EditorIds(roundTripped.GetProperty("Persistent")));
         Assert.Equal(["TemporaryRef"], EditorIds(roundTripped.GetProperty("Temporary")));
@@ -75,7 +72,7 @@ public sealed class RecordTextCodecEmbedTests
             TopCell = new Cell(Mod) { EditorID = "EmbedTopCell" },
         };
 
-        var text = Codec().SerializeToText(worldspace, GameRelease.Fallout4);
+        var text = RecordTextCodec.SerializeToText(worldspace, GameRelease.Fallout4);
 
         using var doc = JsonDocument.Parse(text);
         Assert.Equal("EmbedTopCell", doc.RootElement.GetProperty("TopCell").GetProperty("EditorID").GetString());

@@ -29,13 +29,12 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
     public virtual bool GameFolderExists(string gameFolder) => inner.GameFolderExists(gameFolder);
 
     public virtual LinkAnswers LinkTargets(
-        LoadOrderSnapshot loadOrder, RegisteredPlugin compiled,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, IReadOnlyCollection<string> formKeys) =>
-        inner.LinkTargets(loadOrder, compiled, schemas, formKeys);
+        LoadOrderSnapshot loadOrder, RegisteredPlugin compiled, IReadOnlyCollection<string> formKeys) =>
+        inner.LinkTargets(loadOrder, compiled, formKeys);
 
     public virtual Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
-        IReadOnlyList<TreeFile> files, RecordTextCodec codec, GameRelease gameRelease, CancellationToken cancel = default) =>
-        inner.ReadTreeAsync(files, codec, gameRelease, cancel);
+        IReadOnlyList<TreeFile> files, GameRelease gameRelease, CancellationToken cancel = default) =>
+        inner.ReadTreeAsync(files, gameRelease, cancel);
 
     public virtual Task WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,

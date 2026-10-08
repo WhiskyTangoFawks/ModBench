@@ -43,7 +43,6 @@ public interface IPluginAdapter
     LinkAnswers LinkTargets(
         LoadOrderSnapshot loadOrder,
         RegisteredPlugin compiled,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas,
         IReadOnlyCollection<string> formKeys);
 
     // A source tree's root is the plugin's name as the load order spells it, so registeredName
@@ -53,7 +52,6 @@ public interface IPluginAdapter
     /// does not (ADR-0005). A tree that will not read answers with its diagnosis.</summary>
     Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files,
-        RecordTextCodec codec,
         GameRelease gameRelease,
         CancellationToken cancel = default);
 

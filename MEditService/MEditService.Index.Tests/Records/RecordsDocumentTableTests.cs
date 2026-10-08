@@ -1,9 +1,7 @@
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -26,9 +24,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
     {
         using var overlay = OpenPlugin();
         const int theHeaderDocumentAddedBackBecauseAModHeaderIsNotAMajorRecordGetter = 1;
-        var expectedMeasuredFromTheBinaryBecauseTheCuratedSliceIsRegenerable = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)
-            .Where(kv => kv.Key != PluginHeader.RecordType)
-            .Sum(kv => overlay.EnumerateMajorRecords(kv.Value.RecordType, throwIfUnknown: false).Count())
+        var expectedMeasuredFromTheBinaryBecauseTheCuratedSliceIsRegenerable = overlay.EnumerateMajorRecords().Count()
             + theHeaderDocumentAddedBackBecauseAModHeaderIsNotAMajorRecordGetter;
 
         var actual = DocumentsOf("TRUE");
@@ -56,8 +52,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
     {
         using var overlay = OpenPlugin();
         var record = ((IFallout4ModGetter)overlay).Npcs.First();
-        var expected = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
-            .SerializeToText(record, GameRelease.Fallout4);
+        var expected = RecordTextCodec.SerializeToText(record, GameRelease.Fallout4);
 
         Assert.Equal(expected, fixture.Index.BodyOf(record.FormKey.ToString(), CutDownPluginFixture.Plugin));
     }

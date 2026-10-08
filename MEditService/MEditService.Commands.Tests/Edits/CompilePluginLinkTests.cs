@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -169,7 +168,6 @@ public sealed class CompilePluginLinkTests : IDisposable
         public override LinkAnswers LinkTargets(
             LoadOrderSnapshot loadOrder,
             RegisteredPlugin compiled,
-            IReadOnlyDictionary<string, RecordTableSchema> schemas,
             IReadOnlyCollection<string> formKeys) =>
             throw new InvalidOperationException(Fault);
     }

@@ -153,10 +153,9 @@ public sealed class SchemaReflector
             ? LoquiUnions.BuildUnionColumns(LoquiUnions.RecordUnion(siblingGetterTypes), game, logger)
             : ColumnReflection.ReflectColumns(getterType, game, logger);
 
-        return new RecordTableSchema
+        return new RecordTableSchema(getterType)
         {
             TableName = tableName,
-            RecordType = getterType,
             RecordColumns = [.. columns.Select(column => ContainmentReadOnly.Marked(column, tableName, siblingGetterTypes, game.Annotations))],
         };
     }

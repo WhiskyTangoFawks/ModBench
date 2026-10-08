@@ -1,6 +1,5 @@
 using System.Text.Json;
 using MEditService.Codec.Serialization;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -18,13 +17,12 @@ public class ContainerSingleDocumentTests
     public void PopulatedContainer_SerializesToOneDocumentWithItsChildrenInline_AndRoundTripsToTheSameDocumentFromTheStatedRecordType_PopulatedBecauseAChildlessContainerIsOneDocumentNoMatterWhat(
         IMajorRecord record, string recordType)
     {
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var text = codec.SerializeToText((IMajorRecordGetter)record, GameRelease.Fallout4);
+        var text = RecordTextCodec.SerializeToText((IMajorRecordGetter)record, GameRelease.Fallout4);
 
         using var document = JsonDocument.Parse(text);
         Assert.Equal(JsonValueKind.Object, document.RootElement.ValueKind);
 
-        Assert.Equal(text, codec.RoundTrip(text, GameRelease.Fallout4, recordType));
+        Assert.Equal(text, RecordTextCodec.RoundTrip(text, GameRelease.Fallout4, recordType));
     }
 
     public static IEnumerable<object[]> PopulatedContainers()

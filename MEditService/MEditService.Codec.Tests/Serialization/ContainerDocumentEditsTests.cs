@@ -1,8 +1,6 @@
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -12,11 +10,8 @@ namespace MEditService.Codec.Tests.Serialization;
 
 public sealed class ContainerDocumentEditsTests
 {
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
-    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
-        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    private static string Text(IMajorRecordGetter record) => Codec.SerializeToText(record, GameRelease.Fallout4);
+    private static string Text(IMajorRecordGetter record) => RecordTextCodec.SerializeToText(record, GameRelease.Fallout4);
 
     private static JsonElement Read(string text)
     {
@@ -32,8 +27,8 @@ public sealed class ContainerDocumentEditsTests
 
     private static string? Appended(Worldspace worldspace, Cell cell) =>
         ContainerDocumentEdits.WithChildAppended(
-            Codec, Text(worldspace), GameRelease.Fallout4, RecordTableName.Of(worldspace.GetType(), Schemas),
-            worldspace.FormKey.ToString(), "TopCell", Text(cell), RecordTableName.Of(cell.GetType(), Schemas));
+            Text(worldspace), GameRelease.Fallout4, RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(worldspace),
+            worldspace.FormKey.ToString(), "TopCell", Text(cell), RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(cell));
 
     [Fact]
     public void AppendingToAWorldspacesPersistentCell_WhenItHoldsNone_SetsIt()

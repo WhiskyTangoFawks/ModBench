@@ -1,6 +1,7 @@
 using System.Globalization;
-using Loqui;
+using System.Reflection;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -11,6 +12,14 @@ public sealed class FieldOrderSchemaTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+
+    private static Type RecordClassOf(RecordTableSchema schema) =>
+        schema.IsHeader
+            ? typeof(Fallout4ModHeader)
+            : typeof(Weapon).Assembly.GetTypes().First(type =>
+                type is { IsClass: true, IsAbstract: false, IsPublic: true }
+                && type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static) is not null
+                && RecordTypes.For(GameRelease.Fallout4).RecordTypeNamed(type.Name) == schema.TableName);
 
     private static Dictionary<string, int> MutagensFieldIndex(Type loquiClass)
     {
@@ -51,7 +60,7 @@ public sealed class FieldOrderSchemaTests
             .SelectMany(schema => OutOfOrder(
                 schema.TableName,
                 schema.RecordColumns.Where(c => !c.Field.IsRecordHeaderMember).Select(c => c.Name),
-                LoquiRegistration.GetRegister(schema.RecordType).ClassType))
+                RecordClassOf(schema)))
             .ToList();
 
         Assert.NotEmpty(Schemas);

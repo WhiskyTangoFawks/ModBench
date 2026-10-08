@@ -2,7 +2,6 @@ using System.Diagnostics;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -18,7 +17,6 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
     [Fact]
     public void OverlayAndDeepParse_SerializeToIdenticalText_OnARealWeaponAtThe0531PinWhere0540OverlayRegressionSplitsItsObjectTemplatesFrom2To3()
     {
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         using var overlayImport = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
             GameRelease.Fallout4);
@@ -39,15 +37,15 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
             "Expected this fixture weapon to carry ObjectTemplates content; pick a different affected weapon if it does not.");
 
         var swSerializeOverlay = Stopwatch.StartNew();
-        var overlayText = codec.SerializeToText(overlayWeapon, GameRelease.Fallout4);
+        var overlayText = RecordTextCodec.SerializeToText(overlayWeapon, GameRelease.Fallout4);
         swSerializeOverlay.Stop();
 
         var swSerializeDeep = Stopwatch.StartNew();
-        var deepParsedText = codec.SerializeToText(deepParsedWeapon, GameRelease.Fallout4);
+        var deepParsedText = RecordTextCodec.SerializeToText(deepParsedWeapon, GameRelease.Fallout4);
         swSerializeDeep.Stop();
 
         var swRoundTrip = Stopwatch.StartNew();
-        var roundTripped = codec.RoundTrip(deepParsedText, GameRelease.Fallout4, "weap");
+        var roundTripped = RecordTextCodec.RoundTrip(deepParsedText, GameRelease.Fallout4, "weap");
         swRoundTrip.Stop();
 
         output.WriteLine($"AC4: serialize (overlay) {swSerializeOverlay.ElapsedMilliseconds} ms, " +

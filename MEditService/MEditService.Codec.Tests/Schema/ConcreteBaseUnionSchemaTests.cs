@@ -3,7 +3,6 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -101,8 +100,7 @@ public sealed class ConcreteBaseUnionSchemaTests
             },
         };
 
-        var body = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
-            .SerializeToText(cell, GameRelease.Fallout4);
+        var body = RecordTextCodec.SerializeToText(cell, GameRelease.Fallout4);
         using var document = JsonDocument.Parse(body);
         var layers = document.RootElement.GetProperty("Landscape").GetProperty("Layers");
 

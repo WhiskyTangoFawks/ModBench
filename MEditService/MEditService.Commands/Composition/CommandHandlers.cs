@@ -1,5 +1,4 @@
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
@@ -20,17 +19,14 @@ public static class CommandHandlers
         services.AddSingleton(sp => new LoadOrderResolution(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
-            sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<SchemaReflector>()));
 
         services.AddSingleton(sp => new WriteTargets(
-            sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<SchemaReflector>()));
+            sp.GetRequiredService<LoadOrderHolder>()));
 
         services.AddSingleton(sp => new EditRecordChangesHandler(
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<LoadOrderResolution>(),
-            sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<EditRecordChangesHandler>>()));
 
@@ -43,7 +39,6 @@ public static class CommandHandlers
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<LoadOrderResolution>(),
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<CreateRecordHandler>>()));
 
@@ -52,20 +47,17 @@ public static class CommandHandlers
         services.AddSingleton(sp => new RecordCopy(
             sp.GetRequiredService<LoadOrderResolution>(),
             sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(RecordCopy)),
-            sp.GetRequiredService<RecordTextCodec>()));
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(RecordCopy))));
 
         services.AddSingleton(sp => new CopyRecordHandler(
             new OverrideCopy(
                 sp.GetRequiredService<WriteTargets>(),
                 sp.GetRequiredService<RecordCopy>(),
                 sp.GetRequiredService<LoadOrderResolution>(),
-                sp.GetRequiredService<RecordTextCodec>(),
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(OverrideCopy))),
             new NewRecordCopy(
                 sp.GetRequiredService<WriteTargets>(),
                 sp.GetRequiredService<RecordCopy>(),
-                sp.GetRequiredService<RecordTextCodec>(),
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(NewRecordCopy))),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<LoadOrderResolution>(),
@@ -88,7 +80,6 @@ public static class CommandHandlers
             new PluginCompileService(
                 sp.GetRequiredService<LoadOrderHolder>(),
                 sp.GetRequiredService<SchemaReflector>(),
-                sp.GetRequiredService<RecordTextCodec>(),
                 sp.GetRequiredService<IPluginAdapter>(),
                 sp.GetRequiredService<ILogger<PluginCompileService>>()),
             sp.GetRequiredService<LoadOrderHolder>()));

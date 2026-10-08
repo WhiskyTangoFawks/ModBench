@@ -2,7 +2,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -15,7 +14,6 @@ namespace MEditService.Commands.Tests.TestSupport;
 internal sealed class DocumentEditFixture : TestInstance
 {
     private const string PluginName = "DocEdit.esp";
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private SourceRepository Repository => RepositoryOf(Plugin)
         ?? throw new InvalidOperationException($"Expected '{Plugin}' to already be tracked.");
@@ -29,7 +27,7 @@ internal sealed class DocumentEditFixture : TestInstance
     /// its FormKey.</summary>
     internal string Seed(IMajorRecordGetter record, string recordType)
     {
-        var text = Codec.SerializeToText(record, GameRelease.Fallout4);
+        var text = RecordTextCodec.SerializeToText(record, GameRelease.Fallout4);
         SeedRaw(record.FormKey.ToString(), recordType, record.EditorID, text);
         return record.FormKey.ToString();
     }

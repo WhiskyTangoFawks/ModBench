@@ -6,7 +6,6 @@ using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -15,7 +14,6 @@ namespace MEditService.Index.Tests.Query;
 
 public class ConflictByCompareTests
 {
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
     private static readonly FormKey GoodRecord = ComparedCopies.InMaster(0x900);
     private static readonly FormKey Dangling = ComparedCopies.InMaster(0xEEE);
 
@@ -97,7 +95,7 @@ public class ConflictByCompareTests
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
         var losingCopy = losing ?? throw new InvalidOperationException("The losing plugin was not built.");
-        var losingText = new CopyText(new PluginAddress("Shared.esp", losingOrigin), Codec.SerializeToText(losingCopy, GameRelease.Fallout4));
+        var losingText = new CopyText(new PluginAddress("Shared.esp", losingOrigin), RecordTextCodec.SerializeToText(losingCopy, GameRelease.Fallout4));
 
         var result = index.Records.GetCompare(losingCopy.FormKey.ToString(), losingText)
             ?? throw new InvalidOperationException("Expected the record to compare.");

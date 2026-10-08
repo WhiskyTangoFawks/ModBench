@@ -16,7 +16,6 @@ internal sealed class DeclaredDefaults(GameRelease release, ILogger logger)
 
     private readonly ConcurrentDictionary<Type, object?> _instances = new();
 
-    private static readonly RecordTextCodec Codec = new(Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance);
 
     /// <summary>The other members the codec spells the bit under: Mutagen's flag views over one raw
     /// integer, cleared by a patch so the reader takes the raw alone. Asked by writing the bit and
@@ -37,7 +36,7 @@ internal sealed class DeclaredDefaults(GameRelease release, ILogger logger)
     private HashSet<string> TopLevelMembers(Type concrete, string json)
     {
         var instance = (IMajorRecordGetter)RecordTextCodec.DeserializeText(concrete, json, release);
-        var bytes = Codec.SerializeToBytes(instance, release);
+        var bytes = RecordTextCodec.SerializeToBytes(instance, release);
         using var document = System.Text.Json.JsonDocument.Parse(bytes);
         return [.. document.RootElement.EnumerateObject().Select(p => p.Name)];
     }

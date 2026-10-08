@@ -13,9 +13,9 @@ internal static class LastCommitComparison
 {
     internal static IReadOnlyDictionary<string, RecordChange> Of(
         string modFolder, GameRelease release, SourceRepositoryGit git, SourceRepositoryLocator locator,
-        PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        PluginAddress plugin)
     {
-        using var expansion = new SourceTreeDocuments(modFolder, plugin.Name, release, schemas);
+        using var expansion = new SourceTreeDocuments(modFolder, plugin.Name, release);
         var committed = new Dictionary<string, string>(StringComparer.Ordinal);
         var working = new Dictionary<string, string>(StringComparer.Ordinal);
 

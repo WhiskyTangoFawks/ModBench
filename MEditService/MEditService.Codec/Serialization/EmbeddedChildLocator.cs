@@ -27,16 +27,11 @@ public static class EmbeddedChildLocator
 {
     private const string FormKeyMember = RecordMembers.FormKey;
 
-    /// <summary>The class name the owner's slots are keyed by: from the record type its path decides,
-    /// or from the document's own discriminator when the path names none that resolves.</summary>
-    public static string? ContainerTypeName(string? ownerRecordType, byte[] ownerBytes, GameRelease release) =>
-        (ownerRecordType is { } recordType ? RecordTypeDispatch.For(release).ConcreteFor(recordType)?.Name : null)
-            ?? RootDiscriminator(ownerBytes);
-
     /// <summary>Where <paramref name="formKey"/> sits inside <paramref name="ownerBytes"/>, or null
-    /// when no child slot of the owner carries it. Malformed text carries nothing.</summary>
+    /// when no child slot of the owner carries it. An owner whose record type names no slots reads
+    /// its document's own discriminator. Malformed text carries nothing.</summary>
     public static EmbeddedChildSpan? Find(
-        byte[] ownerBytes, string? ownerTypeName, string formKey, GameRelease release)
+        byte[] ownerBytes, string? ownerRecordType, string formKey, GameRelease release)
     {
         try
         {
@@ -44,13 +39,19 @@ public static class EmbeddedChildLocator
             if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) return null;
 
             // The owner's own key is not a child of itself, so only what the scan found below it counts.
-            return ScanObject(ref reader, ownerTypeName, formKey, ContainerSlots.For(release)).Deeper;
+            var types = RecordTypes.For(release);
+            return ScanObject(ref reader, OwnerTypeOf(ownerRecordType, ownerBytes, types), formKey, types).Deeper;
         }
         catch (JsonException)
         {
             return null;
         }
     }
+
+    /// <summary>The class name the owner's slots are keyed by: its record type's, or its document's own
+    /// discriminator where the record type names none.</summary>
+    internal static string? OwnerTypeOf(string? ownerRecordType, byte[] ownerBytes, RecordTypes types) =>
+        types.ContainerTypeOf(ownerRecordType) ?? RootDiscriminator(ownerBytes);
 
     private static string? RootDiscriminator(byte[] ownerBytes)
     {
@@ -73,7 +74,7 @@ public static class EmbeddedChildLocator
 
     // Enters on the object's '{' and leaves on its '}'.
     private static ObjectScan ScanObject(
-        ref Utf8JsonReader reader, string? containerType, string formKey, ContainerSlots slots)
+        ref Utf8JsonReader reader, string? containerType, string formKey, RecordTypes slots)
     {
         string? ownFormKey = null;
         string? discriminator = null;
@@ -97,7 +98,7 @@ public static class EmbeddedChildLocator
                 containerType ??= discriminator;
                 continue;
             }
-            if (found != null || !slots.IsEmbeddedSlot(containerType, member))
+            if (found != null || !slots.IsEmbeddedSlotOf(containerType, member))
             {
                 reader.Skip();
                 continue;
@@ -116,7 +117,7 @@ public static class EmbeddedChildLocator
 
     // Enters on the slot value's '{' and leaves on its '}'.
     private static EmbeddedChildSpan? InSingleSlot(
-        ref Utf8JsonReader reader, string formKey, string slot, int memberStart, ContainerSlots slots)
+        ref Utf8JsonReader reader, string formKey, string slot, int memberStart, RecordTypes slots)
     {
         var start = (int)reader.TokenStartIndex;
         var scan = ScanObject(ref reader, null, formKey, slots);
@@ -137,7 +138,7 @@ public static class EmbeddedChildLocator
 
     // Every element is walked even after a hit, so the reader leaves this slot on its ']'.
     private static EmbeddedChildSpan? InListSlot(
-        ref Utf8JsonReader reader, string formKey, string slot, int memberStart, ContainerSlots slots)
+        ref Utf8JsonReader reader, string formKey, string slot, int memberStart, RecordTypes slots)
     {
         EmbeddedChildSpan? found = null;
         var index = -1;

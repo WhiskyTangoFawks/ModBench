@@ -19,28 +19,23 @@ public sealed class RecordTableNameTests
         var path = Path.Combine(scratch.Path, mod.ModKey.FileName);
         await mod.BeginWrite.ToPath(path).WithNoLoadOrder().WriteAsync();
         using var read = Fallout4Mod.CreateFromBinaryOverlay(new ModPath(mod.ModKey, path), Fallout4Release.Fallout4);
-        var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-        Assert.All(read.GameSettings, setting => Assert.Equal("gmst", RecordTableName.Of(setting.GetType(), schemas)));
+        Assert.All(read.GameSettings, setting => Assert.Equal("gmst", RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(setting)));
     }
 
     [Fact]
     public void ARecordClassThatInheritsItsGrupSignature_BelongsToThatGrupsTable()
     {
-        const string deletedObjectModificationMutagenReadsWhenADeletedOmodHasNoData =
-            "Mutagen.Bethesda.Fallout4.DeletedObjectModification";
-        var inheriting = typeof(AObjectModification).Assembly.GetType(deletedObjectModificationMutagenReadsWhenADeletedOmodHasNoData);
-        Assert.NotNull(inheriting);
+        const string deletedObjectModificationMutagenReadsWhenADeletedOmodHasNoData = "DeletedObjectModification";
+        Assert.NotNull(typeof(AObjectModification).Assembly.GetType(
+            $"{typeof(AObjectModification).Namespace}.{deletedObjectModificationMutagenReadsWhenADeletedOmodHasNoData}"));
 
-        Assert.Equal("omod", RecordTableName.Of(inheriting, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)));
+        Assert.Equal("omod", RecordTypes.For(GameRelease.Fallout4).RecordTypeNamed(deletedObjectModificationMutagenReadsWhenADeletedOmodHasNoData));
     }
 
     [Fact]
-    public void AClassNoGrupRegisters_IsRefused_NamingIt()
+    public void AClassNoGrupRegisters_NamesNoRecordType()
     {
-        var refused = Assert.Throws<InvalidOperationException>(
-            () => RecordTableName.Of(typeof(Fallout4MajorRecord), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)));
-
-        Assert.Contains(nameof(Fallout4MajorRecord), refused.Message, StringComparison.Ordinal);
+        Assert.Null(RecordTypes.For(GameRelease.Fallout4).RecordTypeNamed(nameof(Fallout4MajorRecord)));
     }
 }

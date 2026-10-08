@@ -11,12 +11,12 @@ namespace MEditService.Commands.Resolution;
 /// <summary>What the load order says about a record (target-architecture.d2 medit_core.commands).
 /// An internal module of Commands, tested through the gestures.</summary>
 internal sealed class LoadOrderResolution(
-    LoadOrderHolder loadOrder, IPluginAdapter adapter, RecordTextCodec codec, SchemaReflector schemaReflector)
+    LoadOrderHolder loadOrder, IPluginAdapter adapter, SchemaReflector schemaReflector)
 {
     internal CopySource SourceOf(PluginAddress plugin) => SourceIn(loadOrder.Current, plugin);
 
     private CopySource SourceIn(LoadOrderSnapshot snapshot, PluginAddress plugin) =>
-        new(plugin, snapshot, adapter, codec, schemaReflector);
+        new(plugin, snapshot, adapter, schemaReflector);
 
     /// <summary>The walk to the left among the masters <paramref name="plugin"/>'s source tree requires,
     /// over the load order held now, whole.</summary>
@@ -80,7 +80,7 @@ internal sealed class LoadOrderResolution(
     {
         try
         {
-            if (repository.GetCellAt(plugin, worldspace, grid.X, grid.Y, schemas) is { } held) return new GridCellHolder.Plugins(held);
+            if (repository.GetCellAt(plugin, worldspace, grid.X, grid.Y) is { } held) return new GridCellHolder.Plugins(held);
             switch (WalkAmongMastersOf(repository, plugin, schemas).NearestCell(worldspace, grid.X, grid.Y))
             {
                 case LeftCopy.Unreadable left:
@@ -88,7 +88,7 @@ internal sealed class LoadOrderResolution(
                         left.Refusal(spelled, $"{subject} is read from the nearest of {plugin.Name}'s masters"));
                 case LeftCopy.Found found:
                     var formKey = GridCellHolder.FormKeyOf(JsonNode.Parse(found.Text) as JsonObject);
-                    return repository.Get(plugin, formKey, schemas) is { } copy
+                    return repository.Get(plugin, formKey) is { } copy
                         ? new GridCellHolder.Plugins(copy)
                         : new GridCellHolder.Masters(found, formKey);
                 default:

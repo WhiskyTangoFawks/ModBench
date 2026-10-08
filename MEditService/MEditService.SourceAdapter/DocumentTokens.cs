@@ -12,7 +12,7 @@ internal static class DocumentTokens
     // own, so the slot a key sits under tells the two apart. Malformed text yields what it read.
     internal static List<(string FormKey, bool AtRoot, bool InAnEmbedSlot)> FormKeysIn(byte[] bytes, GameRelease release)
     {
-        var embeddedSlotNames = ContainerSlots.For(release).EmbeddedSlotNames;
+        var embeddedSlotNames = RecordTypes.For(release).EmbeddedSlotNames;
         var found = new List<(string, bool, bool)>();
         var reader = new Utf8JsonReader(bytes);
 

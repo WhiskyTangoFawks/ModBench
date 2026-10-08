@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -143,7 +142,7 @@ internal static class PluginTrees
     /// <summary>One source tree's files read into the mod they compile to, in a scratch folder of the
     /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005).</summary>
     internal static async Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
-        IReadOnlyList<TreeFile> files, RecordTextCodec codec, GameRelease gameRelease,
+        IReadOnlyList<TreeFile> files, GameRelease gameRelease,
         CancellationToken cancel = default)
     {
         var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
@@ -158,7 +157,7 @@ internal static class PluginTrees
             try
             {
                 var mod = await DeserializeTree(treeRoot, cancel);
-                return (new CompiledTree(mod, codec, gameRelease), null, null);
+                return (new CompiledTree(mod, gameRelease), null, null);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -183,14 +182,12 @@ internal static class PluginTrees
 public sealed class CompiledTree
 {
     private readonly IMod _mod;
-    private readonly RecordTextCodec _codec;
     private readonly GameRelease _gameRelease;
     private readonly Lazy<IReadOnlyList<FormKey>> _formKeys;
 
-    internal CompiledTree(IMod mod, RecordTextCodec codec, GameRelease gameRelease)
+    internal CompiledTree(IMod mod, GameRelease gameRelease)
     {
         _mod = mod;
-        _codec = codec;
         _gameRelease = gameRelease;
         _formKeys = new Lazy<IReadOnlyList<FormKey>>(
             () => mod.EnumerateMajorRecords().Select(record => record.FormKey).ToList());
@@ -215,9 +212,9 @@ public sealed class CompiledTree
     public IReadOnlyList<FormKey> FormKeys => _formKeys.Value;
 
     /// <summary>Each record as its own document, under the schema table it belongs to.</summary>
-    public IEnumerable<PluginDocument> Documents(IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+    public IEnumerable<PluginDocument> Documents() =>
         _mod.EnumerateMajorRecords().Select(record => new PluginDocument(
-            RecordTableName.Of(record.GetType(), schemas), record.FormKey.ToString(), _codec.SerializeToText(record, _gameRelease)));
+            RecordTypes.For(_gameRelease).RecordTypeOf(record), record.FormKey.ToString(), RecordTextCodec.SerializeToText(record, _gameRelease)));
 
     /// <summary>What the current codec would write for this mod, which is what the round-trip gate
     /// compares the tree against.</summary>

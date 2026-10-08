@@ -106,7 +106,7 @@ internal static class TreeTampering
     {
         var folder = Path.Combine(
             modFolder, PluginSourceRoot.For(plugin.Name),
-            RecordTypeDispatch.For(GameRelease.Fallout4).FolderNameFor("globalfloat").Require());
+            RecordTypes.For(GameRelease.Fallout4).FolderNameFor("globalfloat").Require());
         Directory.CreateDirectory(folder);
         File.WriteAllText(
             Path.Combine(folder, $"Carrier - 00A000_{plugin.Name}.json"),

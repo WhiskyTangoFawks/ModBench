@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -52,7 +51,7 @@ public sealed class CreateRecordHandlerTests
     public void CreateRecord_LandsEveryTypeTheCreatableListNames()
     {
         using var mod = SourceModFixture.Tracked("Creatable.esp", "CreatableMod", _ => { });
-        var creatable = CreatableRecordTypes.Of(SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), GameRelease.Fallout4);
+        var creatable = RecordTypes.For(GameRelease.Fallout4).Creatable;
 
         var refused = creatable
             .Select(type => (type, result: mod.CreateHandler.CreateRecord(mod.Plugin, type)))
@@ -68,7 +67,7 @@ public sealed class CreateRecordHandlerTests
     public void CreateRecord_RefusesATypeTheCreatableListLeavesOut(string recordType)
     {
         using var mod = SourceEditFixture.Tracked();
-        Assert.DoesNotContain(recordType, CreatableRecordTypes.Of(SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), GameRelease.Fallout4));
+        Assert.DoesNotContain(recordType, RecordTypes.For(GameRelease.Fallout4).Creatable);
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType);
 

@@ -1,7 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -11,7 +10,6 @@ namespace MEditService.Codec.Tests.Serialization;
 
 public sealed class DocumentShapeParityTests
 {
-    private static RecordTextCodec Codec() => new(NullLogger<RecordTextCodec>.Instance);
 
     private static Fallout4Mod NewMod() => new(ModKey.FromFileName("Parity.esp"), Fallout4Release.Fallout4);
 
@@ -47,7 +45,7 @@ public sealed class DocumentShapeParityTests
     [Fact]
     public void SerializeToText_ForAQuest_CarriesItsTopicAndItsResponseInline()
     {
-        using var doc = JsonDocument.Parse(Codec().SerializeToText(MakePopulatedQuest(NewMod()), GameRelease.Fallout4));
+        using var doc = JsonDocument.Parse(RecordTextCodec.SerializeToText(MakePopulatedQuest(NewMod()), GameRelease.Fallout4));
 
         var topic = doc.RootElement.GetProperty("DialogTopics")[0];
         Assert.Equal("ParityTopic", topic.GetProperty("EditorID").GetString());
@@ -111,7 +109,7 @@ public sealed class DocumentShapeParityTests
         Assert.True(File.Exists(wholeModFile), $"Expected the whole-mod door to write {wholeModFile}.");
 
         var wholeModBytes = await File.ReadAllBytesAsync(wholeModFile);
-        var codecText = Codec().SerializeToText(record, GameRelease.Fallout4);
+        var codecText = RecordTextCodec.SerializeToText(record, GameRelease.Fallout4);
 
         Assert.Equal(System.Text.Encoding.UTF8.GetString(wholeModBytes), codecText);
         Assert.Equal(wholeModBytes, System.Text.Encoding.UTF8.GetBytes(codecText));

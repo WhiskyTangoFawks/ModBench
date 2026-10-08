@@ -187,7 +187,7 @@ internal sealed class RecordQueryService(
 
         try
         {
-            return tree.RecordFromText(plugin, formKey, text, RequireSchemas()) is { } record
+            return tree.RecordFromText(plugin, formKey, text) is { } record
                 ? reads.DocumentFromText(formKey, plugin, loadOrderIndex, record.Body)
                 : Unread(reads, formKey, plugin, loadOrderIndex, $"No document in {plugin.Name}'s source tree carries {formKey}.");
         }
@@ -233,13 +233,13 @@ internal sealed class RecordQueryService(
     {
         var reads = RequireReads();
         var schemas = RequireSchemas();
-        var release = _loadOrder.Require().GameRelease;
+        var types = RecordTypes.For(_loadOrder.Require().GameRelease);
 
         return [.. reads.GetRecordTypeCounts(plugin)
             .Where(c => IsGroup(c.Type, schemas))
             .Select(c => new PluginRecordTypeCount(
                 c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure,
-                CreatableRecordTypes.Includes(c.Type, release), ContainerChildFields.HasChildFields(c.Type, release)))
+                types.IsCreatable(c.Type), types.HasChildSlots(c.Type)))
             .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }
@@ -250,7 +250,7 @@ internal sealed class RecordQueryService(
     public IReadOnlyList<RecordTypeChoice> GetCreatableRecordTypes()
     {
         var schemas = RequireSchemas();
-        return Choices(CreatableRecordTypes.Of(schemas, _loadOrder.Require().GameRelease), schemas);
+        return Choices(RecordTypes.For(_loadOrder.Require().GameRelease).Creatable, schemas);
     }
 
     public IReadOnlyList<RecordTypeChoice>? GetChildRecordTypes(PluginAddress plugin, string formKey)
@@ -261,7 +261,7 @@ internal sealed class RecordQueryService(
         var place = reads.GetCellLocation(plugin, formKey) is { } cell
             ? new CellStructure(cell.ParentWorldspace, cell.BlockX, cell.BlockY, cell.SubX, cell.SubY, cell.IsInterior).Place
             : (CellPlace?)null;
-        return Choices(ChildRecordTypes.Of(container.RecordType, body, place, schemas, _loadOrder.Require().GameRelease), schemas);
+        return Choices(ChildRecordTypes.Of(container.RecordType, body, place, _loadOrder.Require().GameRelease), schemas);
     }
 
     // Sorted as a plugin's groups are, so the pick reads in the order the tree shows.

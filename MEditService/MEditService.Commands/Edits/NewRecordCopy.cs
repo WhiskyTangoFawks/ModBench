@@ -12,12 +12,11 @@ internal sealed class NewRecordCopy
 {
     private readonly WriteTargets _targets;
     private readonly RecordCopy _recordCopy;
-    private readonly RecordTextCodec _codec;
     private readonly ILogger _logger;
 
-    internal NewRecordCopy(WriteTargets targets, RecordCopy recordCopy, RecordTextCodec codec, ILogger logger)
+    internal NewRecordCopy(WriteTargets targets, RecordCopy recordCopy, ILogger logger)
     {
-        (_targets, _recordCopy, _codec, _logger) = (targets, recordCopy, codec, logger);
+        (_targets, _recordCopy, _logger) = (targets, recordCopy, logger);
     }
 
     /// <summary>The fresh FormKey comes from the same allocator create draws on. A self-link is
@@ -40,7 +39,7 @@ internal sealed class NewRecordCopy
         var (source, identity, destination, release, _) = copy;
         if (RefuseIfDisallowedForCopyAsNewRecord(identity.RecordType) is { } disallowedRefusal) return disallowedRefusal;
 
-        if (RecordTypeDispatch.For(release).FolderNameFor(identity.RecordType) is null
+        if (RecordTypes.For(release).FolderNameFor(identity.RecordType) is null
             && source.ContainerOf(identity) is { } container)
         {
             return CopyEmbeddedChildAsNewRecord(copy, container, destinationPlugin);
@@ -73,7 +72,7 @@ internal sealed class NewRecordCopy
         if (allocator.Next(out var targetFormKey) is { } refusedTarget) return refusedTarget;
 
         var named = RecordDocumentEdits.DuplicatedWithoutChildren(
-            _codec, body, release, identity.RecordType, targetFormKey,
+            body, release, identity.RecordType, targetFormKey,
             EditorIdDeriver(destination.Repository.EditorIdsHeld(destinationPlugin)));
         var duplicate = new SourceDocument(targetFormKey, identity.RecordType, named.EditorId, named.Text);
         var landed = SourceTransaction.Atomically(destination.Repository, transaction =>

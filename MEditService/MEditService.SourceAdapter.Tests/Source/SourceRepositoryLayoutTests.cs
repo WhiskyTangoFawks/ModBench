@@ -54,11 +54,9 @@ public sealed class SourceRepositoryLayoutTests
 
         Assert.NotNull(document);
         Assert.Equal(formKeyString, document.FormKey);
-        var concreteTypeGetsSchemaTableSpellingAndPutsSpellingBothResolveTo = RecordTypeDispatch.For(Release).ConcreteFor(recordType);
-        Assert.NotNull(concreteTypeGetsSchemaTableSpellingAndPutsSpellingBothResolveTo);
-        Assert.Equal(
-            concreteTypeGetsSchemaTableSpellingAndPutsSpellingBothResolveTo,
-            RecordTypeDispatch.For(Release).ConcreteFor(document.RecordType));
+        var tableBothSpellingsName = RecordTypes.For(Release).RecordTypeNamed(recordType);
+        Assert.NotNull(tableBothSpellingsName);
+        Assert.Equal(tableBothSpellingsName, RecordTypes.For(Release).RecordTypeNamed(document.RecordType));
     }
 
     [Fact]

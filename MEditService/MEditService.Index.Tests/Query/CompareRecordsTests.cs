@@ -3,7 +3,6 @@ using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -13,7 +12,6 @@ namespace MEditService.Index.Tests.Query;
 
 public sealed class CompareRecordsTests : IDisposable
 {
-    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
     private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
     private static readonly PluginAddress ModPlugin = new("Mod.esp", PluginOrigin.DataDirectory);
     private static readonly PluginAddress InactivePlugin = new("Off.esp", PluginOrigin.DataDirectory);
@@ -134,7 +132,7 @@ public sealed class CompareRecordsTests : IDisposable
     [Fact]
     public void ACopyWithText_IsAColumnReadFromIt_EvenWhenItsPluginIsNotActive()
     {
-        var edited = Codec.SerializeToText(_otherChest, GameRelease.Fallout4);
+        var edited = RecordTextCodec.SerializeToText(_otherChest, GameRelease.Fallout4);
 
         var compare = Compare(Copy(_chest, InactivePlugin, edited), Copy(_chest, BasePlugin));
 

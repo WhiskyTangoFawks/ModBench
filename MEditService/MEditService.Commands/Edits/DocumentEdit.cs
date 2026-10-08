@@ -73,7 +73,7 @@ internal static class DocumentEdit
             };
         if (patched is { } refused) return refused;
         RecordEmptying.ClearAliases(record, cursor.Column);
-        emptying?.Apply(record, request.Schema, left);
+        emptying?.Apply(record, request.Schema, request.Release, left);
         var prefix = into == null ? move?.Apply(root) ?? request.Prefix : request.Prefix;
 
         var chain = IndexChain(edited ?? throw new InvalidOperationException("Expected the edit to set which node changed."));

@@ -3,7 +3,6 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -119,14 +118,13 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
         public string PerkTheCodecReads()
         {
-            var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
             using var overlay = Fallout4Mod.CreateFromBinaryOverlay(
                 new ModPath(ModKey.FromFileName(SourcePluginName), _sourcePath), Fallout4Release.Fallout4);
             foreach (var perk in overlay.Perks)
             {
                 try
                 {
-                    codec.SerializeToText(perk, GameRelease.Fallout4);
+                    RecordTextCodec.SerializeToText(perk, GameRelease.Fallout4);
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
