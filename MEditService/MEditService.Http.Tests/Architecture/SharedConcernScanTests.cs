@@ -7,7 +7,7 @@ public sealed class SharedConcernScanTests
 {
     private static readonly (string Concern, string Needle, string Module)[] ConcernMechanismNeedles =
     [
-        ("target resolution", @"\bnew EditTarget\(", "WriteTargets.cs"),
+        ("target resolution", @"\bnew (WriteTargets\.)?EditTarget\(", "WriteTargets.cs"),
         ("FormKey allocation", @"\bHighRangeFormIdFloor\b", "FormKeyAllocator.cs"),
         ("FormKey allocation", @"\bFullIdMask\b", "FormKeyAllocator.cs"),
     ];
@@ -44,11 +44,11 @@ public sealed class SharedConcernScanTests
         Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
         File.WriteAllText(
             Path.Combine(root, "Layer", "Second.cs"),
-            "target = new EditTarget(release, document.Identity, repository);\n"
+            "target = new WriteTargets.EditTarget(release, document.Identity, repository);\n"
             + "var floor = PluginFlagPredicates.HighRangeFormIdFloor(release);\n");
         File.WriteAllText(Path.Combine(root, "Layer", "WriteTargets.cs"), "target = new EditTarget(release, record, repository);");
         File.WriteAllText(Path.Combine(root, "Layer", "FormKeyAllocator.cs"), "var floor = PluginFlagPredicates.HighRangeFormIdFloor(release);");
-        File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "target = new EditTarget(release, document.Identity, repository);");
+        File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "target = new WriteTargets.EditTarget(release, document.Identity, repository);");
         File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "repository.Put(plugin, document);");
 
         var counts = Counts(root, ["Layer"]);
@@ -56,7 +56,7 @@ public sealed class SharedConcernScanTests
         Assert.Equal(
             [
                 @"Layer/Second.cs: \bHighRangeFormIdFloor\b: 1",
-                @"Layer/Second.cs: \bnew EditTarget\(: 1",
+                @"Layer/Second.cs: \bnew (WriteTargets\.)?EditTarget\(: 1",
             ],
             counts);
     }

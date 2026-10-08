@@ -37,7 +37,7 @@ internal sealed class NewRecordCopy
     private RecordEditResult CopyAsNewRecord(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin)
     {
         var (source, identity, destination, release, _) = copy;
-        if (RefuseIfDisallowedForCopyAsNewRecord(identity.RecordType) is { } disallowedRefusal) return disallowedRefusal;
+        if (RefuseIfDisallowedForCopyAsNewRecord(identity.RecordType, RecordTypes.For(release)) is { } disallowedRefusal) return disallowedRefusal;
 
         if (RecordTypes.For(release).FolderNameFor(identity.RecordType) is null
             && source.ContainerOf(identity) is { } container)
@@ -113,11 +113,11 @@ internal sealed class NewRecordCopy
     }
 
     // xEdit refuses CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI: a fresh FormKey leaves the copy with no group
-    // to sit in. Only cell/wrld are named; the others have no schema table and already refuse as
-    // RecordNotFound.
-    private static RecordEditResult? RefuseIfDisallowedForCopyAsNewRecord(string recordType)
+    // to sit in. Only the cell and the worldspace are named; the others have no schema table and
+    // already refuse as RecordNotFound.
+    private static RecordEditResult? RefuseIfDisallowedForCopyAsNewRecord(string recordType, RecordTypes types)
     {
-        if (recordType is not ("cell" or "wrld")) return null;
+        if (recordType != types.Cell && recordType != types.Worldspace) return null;
 
         return RecordEditResult.Refused(
             RecordEditRefusal.CopyAsNewRecordDisallowedForType,

@@ -133,12 +133,19 @@ public sealed class RecordTypes
     public string? RecordTypeNamed(string? name) =>
         name is not null && _recordTypeByName.TryGetValue(WithoutOverlaySuffix(name), out var table) ? table : null;
 
-    /// <summary>The schema table a live record belongs to.</summary>
     public string RecordTypeOf(IMajorRecordGetter record) => TableOf(record.GetType());
 
     internal string TableOf(Type recordClass) =>
         RecordTypeNamed(recordClass.Name)
         ?? throw new InvalidOperationException($"'{recordClass.Name}' is no record class a GRUP registers, so no table holds it.");
+
+    /// <summary>The game's cell and worldspace record types.</summary>
+    public string Cell => RecordTypeNamed(NestedDirectoryPerRecordType) ?? throw MissingRecordType(NestedDirectoryPerRecordType);
+
+    public string Worldspace => RecordTypeNamed(WorldspaceTypeName) ?? throw MissingRecordType(WorldspaceTypeName);
+
+    private InvalidOperationException MissingRecordType(string recordClass) =>
+        new($"{_category} names no record type '{recordClass}', and every Bethesda game has one.");
 
     /// <summary>Whether this is the game's cell — the one record type whose place in the world is its
     /// directory rather than a slot.</summary>
@@ -225,7 +232,6 @@ public sealed class RecordTypes
             ? EmbeddedSlotNames.Contains(member)
             : _members.EmbeddedSlots.Contains((_category, containerTypeName, member));
 
-    /// <summary>The types a slot's own member declares it holds.</summary>
     internal IReadOnlyList<Type> HeldBy(string containerTypeName, string slot) =>
         _members.HeldTypesBySlot.TryGetValue((_category, containerTypeName, slot), out var held) ? held : [];
 
@@ -241,7 +247,6 @@ public sealed class RecordTypes
     /// the container levels whose blank documents label a minted bucket.</summary>
     public IReadOnlyList<string> InteriorCellBlockLevels { get; }
 
-    /// <summary>The class a block level or a record type names.</summary>
     internal Type? LoquiTypeNamed(string name) =>
         _blockLevelByName.GetValueOrDefault(name) ?? ConcreteFor(name);
 
@@ -249,31 +254,24 @@ public sealed class RecordTypes
 
     private const string WorldspaceTypeName = "Worldspace";
 
-    /// <summary>The one placement key not simply the folder it sits in: a block level's directory is
-    /// named after coordinates. Here because this layer owns game-specific naming; static because
-    /// every Bethesda game spells it the same.</summary>
+    // The member names below are static because every Bethesda game spells them the same. This one is
+    // the one placement key not simply the folder it sits in: a block level's directory is named after
+    // coordinates.
     internal static string SubBlockChildMember => "Cells";
 
-    /// <summary>Static for the same reason as <see cref="SubBlockChildMember"/>.</summary>
     internal static string BlockChildMember => "SubBlocks";
 
-    /// <summary>The coordinates a block level carries. Static for the same reason as
-    /// <see cref="SubBlockChildMember"/>.</summary>
     public static string BlockNumberXMember => "BlockNumberX";
 
-    /// <summary>Static for the same reason as <see cref="SubBlockChildMember"/>.</summary>
     public static string BlockNumberYMember => "BlockNumberY";
 
     /// <summary>A cell's position in its worldspace's grid, which a bare minted ancestor holds none
-    /// of. Static for the same reason as <see cref="SubBlockChildMember"/>.</summary>
+    /// of.</summary>
     public static string CellGridMember => "Grid";
 
-    /// <summary>The member a level of the interior tree numbers itself with, one coordinate rather
-    /// than the exterior pair. Static for the same reason as <see cref="SubBlockChildMember"/>.</summary>
+    /// <summary>One coordinate rather than the exterior pair.</summary>
     public static string BlockNumberMember => "BlockNumber";
 
-    /// <summary>The member a level's document labels itself with. Static for the same reason as
-    /// <see cref="SubBlockChildMember"/>.</summary>
     public static string GroupTypeMember => "GroupType";
 
     /// <summary>The label each interior level carries, positionally matching

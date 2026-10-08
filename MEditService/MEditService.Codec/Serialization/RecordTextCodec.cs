@@ -227,9 +227,8 @@ public static class RecordTextCodec
     private static Type? LookupGeneratedSerializationType(Type recordType) =>
         typeof(RecordTextCodec).Assembly.GetType($"{recordType.Namespace}.{RecordTypes.ClassNameOf(recordType)}_Serialization");
 
-    // Derived from the record type's namespace, not a named game, the same derivation
-    // LookupGeneratedType makes; hardcoding "Fallout4" would have a Skyrim record report a path the
-    // lookup never tried.
+    // Derived from the record type's namespace, not a named game, as LookupGeneratedSerializationType
+    // derives it: hardcoding "Fallout4" would have a Skyrim record report a path the lookup never tried.
     private static string NoGeneratedSerializer(Type recordType, Type? generatedType, string? missingMethodName) =>
         generatedType == null
             ? $"No generated serializer found for record type '{recordType.Name}' — expected " +

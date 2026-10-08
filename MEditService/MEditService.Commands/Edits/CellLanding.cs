@@ -80,7 +80,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
 
         var move = new Move(
             plugin, repository, release, moved, worldspace,
-            schemaReflector.GetSchemas(release).Keys.Single(RecordTypes.For(release).IsCell), spelled);
+            RecordTypes.For(release).Cell, spelled);
         var landing = crossing.Into is AnotherCell.GridCell grid ? IntoGridCell(move, grid, record) : IntoPersistentCell(move, record);
         return landing.Finish(landed => new RecordEditChanges(
             RecordEditResult.Success(),

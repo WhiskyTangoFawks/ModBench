@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-public class RecordTypeDispatchTests
+public class RecordTextCodecDispatchTests
 {
     private static Npc MakeNpc() =>
         new(new FormKey(ModKey.FromFileName("Test.esp"), 0x900), Fallout4Release.Fallout4)
