@@ -18,7 +18,7 @@ public class IndexAtomicityTests
                 mod.Npcs.AddNew("AtomicNPC3");
             })
             .Build();
-        var key = new PluginAddress("Atomic.esp", "Data");
+        var key = new PluginAddress("Atomic.esp", PluginOrigin.DataDirectory);
         using var index = Indexes.Reconciled(fixture, adapter: new PartwayAdapter(
             afterRecords: 2, () => throw new InvalidOperationException("injected mid-plugin read failure")));
         var reads = index.RequireReads();

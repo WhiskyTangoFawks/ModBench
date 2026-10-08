@@ -399,7 +399,7 @@
         "isPartialForm": false,
         "isWinner": false,
         "loadIndex": "00",
-        "origin": "Data",
+        "origin": "Data/",
         "plugin": "Base.esm",
         "recordType": "cobj"
       },
@@ -445,7 +445,7 @@
         "isPartialForm": false,
         "isWinner": true,
         "loadIndex": "02",
-        "origin": "Data",
+        "origin": "Data/",
         "plugin": "Top.esp",
         "recordType": "cobj"
       }
@@ -648,7 +648,7 @@
         "isPartialForm": false,
         "isWinner": false,
         "loadIndex": "00",
-        "origin": "Data",
+        "origin": "Data/",
         "plugin": "Base.esm",
         "recordType": "npc_"
       },
@@ -760,7 +760,7 @@
         "isPartialForm": false,
         "isWinner": false,
         "loadIndex": "01",
-        "origin": "Data",
+        "origin": "Data/",
         "plugin": "Mid.esp",
         "recordType": "npc_"
       },
@@ -872,7 +872,7 @@
         "isPartialForm": false,
         "isWinner": true,
         "loadIndex": "02",
-        "origin": "Data",
+        "origin": "Data/",
         "plugin": "Top.esp",
         "recordType": "npc_"
       }
@@ -991,7 +991,7 @@
         "isPartialForm": false,
         "isWinner": true,
         "loadIndex": "01",
-        "origin": "Data",
+        "origin": "Data/",
         "plugin": "Mid.esp",
         "recordType": "npc_"
       }
@@ -1107,7 +1107,7 @@
         "isPartialForm": false,
         "isWinner": true,
         "loadIndex": "00",
-        "origin": "Data",
+        "origin": "Data/",
         "plugin": "Base.esm",
         "recordType": "npc_"
       }
@@ -1204,7 +1204,7 @@
         "isPartialForm": false,
         "isWinner": false,
         "loadIndex": "00",
-        "origin": "Data",
+        "origin": "Data/",
         "plugin": "Base.esm",
         "recordType": "weap"
       },
@@ -1294,7 +1294,7 @@
         "isPartialForm": false,
         "isWinner": true,
         "loadIndex": "01",
-        "origin": "Data",
+        "origin": "Data/",
         "plugin": "Mid.esp",
         "recordType": "weap"
       }

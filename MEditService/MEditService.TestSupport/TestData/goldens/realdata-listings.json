@@ -30,7 +30,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -43,7 +43,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -56,7 +56,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -74,7 +74,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -87,7 +87,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -100,7 +100,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -113,7 +113,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -131,7 +131,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -144,7 +144,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -157,7 +157,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -170,7 +170,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -188,7 +188,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -201,7 +201,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -214,7 +214,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -227,7 +227,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -240,7 +240,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -253,7 +253,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -266,7 +266,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -284,7 +284,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -297,7 +297,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -310,7 +310,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -323,7 +323,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -336,7 +336,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -349,7 +349,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -362,7 +362,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -375,7 +375,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -388,7 +388,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -401,7 +401,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -419,7 +419,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -432,7 +432,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -445,7 +445,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -458,7 +458,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -471,7 +471,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -484,7 +484,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -497,7 +497,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -510,7 +510,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -523,7 +523,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -536,7 +536,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -554,7 +554,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -567,7 +567,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -580,7 +580,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -593,7 +593,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -611,7 +611,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -624,7 +624,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -637,7 +637,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -650,7 +650,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -668,7 +668,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -681,7 +681,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -694,7 +694,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -707,7 +707,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -720,7 +720,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -733,7 +733,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -746,7 +746,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -759,7 +759,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -772,7 +772,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -785,7 +785,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -803,7 +803,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -816,7 +816,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -829,7 +829,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -842,7 +842,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -860,7 +860,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -873,7 +873,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -886,7 +886,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -899,7 +899,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -917,7 +917,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -930,7 +930,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -943,7 +943,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -956,7 +956,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -974,7 +974,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -987,7 +987,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1000,7 +1000,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1013,7 +1013,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1031,7 +1031,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1044,7 +1044,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1057,7 +1057,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1070,7 +1070,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1088,7 +1088,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1101,7 +1101,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1114,7 +1114,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1127,7 +1127,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1140,7 +1140,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1153,7 +1153,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1166,7 +1166,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1179,7 +1179,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1192,7 +1192,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1205,7 +1205,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1223,7 +1223,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1236,7 +1236,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1249,7 +1249,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1262,7 +1262,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1275,7 +1275,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1288,7 +1288,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1301,7 +1301,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1314,7 +1314,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1327,7 +1327,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1340,7 +1340,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1358,7 +1358,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1371,7 +1371,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1384,7 +1384,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1397,7 +1397,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1415,7 +1415,7 @@
           "HasParseFailure": false,
           "IsWinner": true,
           "LoadOrderIndex": 0,
-          "Origin": "Data",
+          "Origin": "Data/",
           "ParseDiagnosis": null,
           "Plugin": "mEditTestSubset.esm",
           "WorkingTreeState": "None"
@@ -1434,7 +1434,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1447,7 +1447,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1460,7 +1460,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1473,7 +1473,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1486,7 +1486,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1499,7 +1499,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1512,7 +1512,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1525,7 +1525,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1538,7 +1538,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1551,7 +1551,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1564,7 +1564,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1577,7 +1577,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1590,7 +1590,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1603,7 +1603,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1616,7 +1616,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1629,7 +1629,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1642,7 +1642,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"
@@ -1655,7 +1655,7 @@
       "HasParseFailure": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "ParseDiagnosis": null,
       "Plugin": "mEditTestSubset.esm",
       "WorkingTreeState": "None"

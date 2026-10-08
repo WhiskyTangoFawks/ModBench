@@ -22,4 +22,14 @@ public class ColumnKeyTests
     {
         Assert.Equal("Shared.esp", ColumnKey.Of("Shared.esp", PluginOrigin.DataDirectory));
     }
+
+    [Theory]
+    [InlineData("Data")]
+    [InlineData("overwrite")]
+    public void Of_ModFolderNamedLikeAReservedOrigin_KeepsItsOwnColumnApartFromTheReservedOne(string modFolder)
+    {
+        var reserved = modFolder == "Data" ? PluginOrigin.DataDirectory : PluginOrigin.Overwrite;
+
+        Assert.NotEqual(ColumnKey.Of("Shared.esp", reserved), ColumnKey.Of("Shared.esp", modFolder));
+    }
 }

@@ -14,7 +14,7 @@ import { recordSummaryFixture } from '../../client/test/fixtures';
 import { cellRow, recordGroupRow, recordRow } from './browserRows';
 
 const pluginRow = (name: string, origin = 'SomeMod') => new PluginNode({ name, enabled: true }, origin);
-const lockedRow = (name: string) => new ImplicitMasterNode(name, 'Data');
+const lockedRow = (name: string) => new ImplicitMasterNode(name, 'Data/');
 
 describe('the locked rows (a plugin the game loads with no line) never carry the Argument', () => {
   const alpha = pluginRow('Alpha.esp');
@@ -42,7 +42,7 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   const beta = pluginRow('Beta.esp', 'ModB');
   const untracked = withFlags(pluginRow('Gamma.esp', 'ModC'), 'plugin enabled inUntrackedMod untracked editable');
   const alsoUntracked = withFlags(pluginRow('Zeta.esp', 'ModZ'), 'plugin enabled inUntrackedMod untracked editable');
-  const inOverwrite = withFlags(pluginRow('Eta.esp', 'overwrite'), 'plugin enabled inOverwrite untracked editable');
+  const inOverwrite = withFlags(pluginRow('Eta.esp', 'overwrite/'), 'plugin enabled inOverwrite untracked editable');
   const compilable = withFlags(pluginRow('Eps.esp', 'ModE'), 'plugin enabled inTrackedMod tracked editable');
   const trackedReadOnly = withFlags(pluginRow('Iota.esp', 'ModI'), 'plugin enabled inTrackedMod tracked');
   const untrackedInTrackedMod = withFlags(pluginRow('Kappa.esp', 'ModE'), 'plugin enabled inTrackedMod untracked editable');

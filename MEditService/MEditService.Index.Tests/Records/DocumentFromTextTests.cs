@@ -8,7 +8,7 @@ namespace MEditService.Index.Tests.Records;
 
 public sealed class DocumentFromTextTests
 {
-    private static readonly PluginAddress Elsewhere = new("Elsewhere.esp", "Data");
+    private static readonly PluginAddress Elsewhere = new("Elsewhere.esp", PluginOrigin.DataDirectory);
 
     [Fact]
     public void ACopyReadFromText_HoldsTheFieldsOfTheText_UnderThePluginAndLoadOrderIndexGiven()

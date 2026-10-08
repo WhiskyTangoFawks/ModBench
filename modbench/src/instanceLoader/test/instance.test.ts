@@ -332,8 +332,8 @@ describe('Instance — the value', () => {
     expect(instance.value.plugins).toEqual([
       { name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, slot: 0, enabled: true, winning: true },
       { name: 'Tracked Patch Mod.esp', path: join(root, 'mods', 'Tracked Patch Mod', 'Tracked Patch Mod.esp'), origin: 'Tracked Patch Mod', slot: 1, enabled: true, winning: true },
-      { name: 'Unofficial Fallout 4 Patch.esp', path: join(DATA_FOLDER, 'Unofficial Fallout 4 Patch.esp'), origin: 'Data', slot: 2, enabled: true, winning: true },
-      { name: 'ccSBJFO4003-Grenade.esl', path: join(DATA_FOLDER, 'ccSBJFO4003-Grenade.esl'), origin: 'Data', slot: 3, enabled: true, winning: true },
+      { name: 'Unofficial Fallout 4 Patch.esp', path: join(DATA_FOLDER, 'Unofficial Fallout 4 Patch.esp'), origin: 'Data/', slot: 2, enabled: true, winning: true },
+      { name: 'ccSBJFO4003-Grenade.esl', path: join(DATA_FOLDER, 'ccSBJFO4003-Grenade.esl'), origin: 'Data/', slot: 3, enabled: true, winning: true },
       { name: 'NonAsciiRetexture - Addon.esl', path: join(root, 'mods', NONO, 'NonAsciiRetexture - Addon.esl'), origin: NONO, slot: null, enabled: false, winning: true },
     ]);
   });
@@ -371,7 +371,7 @@ describe('Instance — the overwrite folder', () => {
 
     const plugins = instance.value.plugins.filter((p) => p.name === 'NonAsciiRetexture.esp');
     expect(plugins).toEqual([
-      { name: 'NonAsciiRetexture.esp', path: overwritePlugin, origin: 'overwrite', slot: 0, enabled: true, winning: true },
+      { name: 'NonAsciiRetexture.esp', path: overwritePlugin, origin: 'overwrite/', slot: 0, enabled: true, winning: true },
       { name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, slot: 0, enabled: true, winning: false },
     ]);
   });
@@ -383,8 +383,8 @@ describe('Instance — the overwrite folder', () => {
 
     await instance.refresh();
 
-    expect(instance.value.plugins.filter((p) => p.origin === 'overwrite')).toEqual([
-      { name: 'New.esp', path: join(root, 'overwrite', 'New.esp'), origin: 'overwrite', slot: null, enabled: false, winning: true },
+    expect(instance.value.plugins.filter((p) => p.origin === 'overwrite/')).toEqual([
+      { name: 'New.esp', path: join(root, 'overwrite', 'New.esp'), origin: 'overwrite/', slot: null, enabled: false, winning: true },
     ]);
   });
 
@@ -947,7 +947,7 @@ describe('Instance — downloads, profile and game directory', () => {
     await instance.refresh();
     const withGameDirectory = instance.value.plugins;
     const dataOnlyBefore = withGameDirectory.find((p) => p.name === 'Unofficial Fallout 4 Patch.esp');
-    expect(dataOnlyBefore?.origin).toBe('Data');
+    expect(dataOnlyBefore?.origin).toBe('Data/');
     expect(dataOnlyBefore?.path).toEqual(expect.any(String));
     const modProvidedBefore = withGameDirectory.find((p) => p.name === 'NonAsciiRetexture.esp');
     expect(modProvidedBefore?.path).toEqual(expect.any(String));
@@ -961,7 +961,7 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(dataOnly).toBeDefined();
     expect(dataOnly?.slot).toBe(dataOnlyBefore?.slot);
     expect(dataOnly?.enabled).toBe(dataOnlyBefore?.enabled);
-    expect(dataOnly?.origin).toBe('Data');
+    expect(dataOnly?.origin).toBe('Data/');
     expect(dataOnly?.path).toBeUndefined();
   });
 
@@ -1199,7 +1199,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
     await instance.refresh();
 
     expect(instance.value.pluginsLoadedWithNoLine).toEqual(
-      ['Fallout4.esm', 'DLCRobot.esm', 'ccListed.esl'].map((name) => ({ name, origin: 'Data' })));
+      ['Fallout4.esm', 'DLCRobot.esm', 'ccListed.esl'].map((name) => ({ name, origin: 'Data/' })));
   });
 
   it('carries a game master an enabled mod provides where the game folder holds none', async () => {

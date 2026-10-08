@@ -70,7 +70,7 @@ function registered(viewSelection: () => PluginNode[] = () => []) {
 describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection, one command per direction', () => {
   const alpha = new PluginNode({ name: 'Alpha.esp', enabled: false }, 'SomeMod');
   const beta = new PluginNode({ name: 'Beta.esp', enabled: true }, 'SomeMod');
-  const locked = new ImplicitMasterNode('Fallout4.esm', 'Data');
+  const locked = new ImplicitMasterNode('Fallout4.esm', 'Data/');
 
   it('enable applies to every selected plugin, whatever its own current state', async () => {
     registered();

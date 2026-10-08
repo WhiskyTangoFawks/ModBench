@@ -63,10 +63,10 @@ function plugin(
 function valueOf(
   plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], pluginsLoadedWithNoLine?: readonly (string | PluginAddress)[],
 ): InstanceValue {
-  const mods = [...new Set(plugins.map((p) => p.origin))].filter((origin) => origin !== 'Data' && origin !== 'overwrite');
+  const mods = [...new Set(plugins.map((p) => p.origin))].filter((origin) => origin !== 'Data/' && origin !== 'overwrite/');
   return instanceValueFixture({
     gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
-    pluginsLoadedWithNoLine: pluginsLoadedWithNoLine?.map((p) => (typeof p === 'string' ? { name: p, origin: 'Data' } : p)),
+    pluginsLoadedWithNoLine: pluginsLoadedWithNoLine?.map((p) => (typeof p === 'string' ? { name: p, origin: 'Data/' } : p)),
     plugins, paths: { overwriteDir: '/instance/overwrite', downloadsDir: '', modDirs: new Map(mods.map((m) => [m, `/instance/mods/${m}`])) },
   });
 }
@@ -195,23 +195,23 @@ function callCount(client: InMemoryMEditClient, method: string): number {
 
 describe('ImplicitMasterNode — leading slot', () => {
   it('renders a lock icon, not a checkbox, as VS Code has no non-interactive checkbox variant', () => {
-    const node = new ImplicitMasterNode('Fallout4.esm', 'Data');
+    const node = new ImplicitMasterNode('Fallout4.esm', 'Data/');
     expect(node.iconPath).toEqual({ id: 'lock' });
     expect(node.checkboxState).toBeUndefined();
   });
 
   it('tooltip is MO2\'s one sentence alone, with no file name', () => {
-    const node = new ImplicitMasterNode('Fallout4.esm', 'Data');
+    const node = new ImplicitMasterNode('Fallout4.esm', 'Data/');
     expect(node.tooltip).toBe("This plugin can't be disabled or moved (enforced by the game).");
   });
 
   it('keys resourceUri on the given path, for the label-graying decoration provider', () => {
-    const node = new ImplicitMasterNode('Fallout4.esm', 'Data', '/game/Data/Fallout4.esm');
+    const node = new ImplicitMasterNode('Fallout4.esm', 'Data/', '/game/Data/Fallout4.esm');
     expect(node.resourceUri?.path).toBe('/game/Data/Fallout4.esm');
   });
 
   it('gives the locked row a resourceUri outside the file: scheme, where its plugin\'s diagnostics are published, so no Problems badge reaches it', () => {
-    const node = new ImplicitMasterNode('Fallout4.esm', 'Data', '/game/Data/Fallout4.esm');
+    const node = new ImplicitMasterNode('Fallout4.esm', 'Data/', '/game/Data/Fallout4.esm');
     expect(node.resourceUri?.scheme).toEqual(expect.any(String));
     expect(node.resourceUri?.scheme).not.toBe('file');
   });
@@ -227,9 +227,9 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header'
   });
 
   it('ImplicitMasterNode opens the header at the plugin and origin its row stands for', () => {
-    const node = new ImplicitMasterNode('Fallout4.esm', 'Data');
+    const node = new ImplicitMasterNode('Fallout4.esm', 'Data/');
     expect(node.command).toEqual({
-      command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey: '000000:Fallout4.esm', plugin: { name: 'Fallout4.esm', origin: 'Data' } } }],
+      command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey: '000000:Fallout4.esm', plugin: { name: 'Fallout4.esm', origin: 'Data/' } } }],
     });
   });
 
@@ -329,10 +329,10 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
   it('carries each row\'s own origin from the Instance value', async () => {
     const { tree } = makeTree([
       plugin({ name: 'A.esp', slot: 0, origin: 'ModA' }),
-      plugin({ name: 'B.esp', slot: 1, origin: 'overwrite' }),
+      plugin({ name: 'B.esp', slot: 1, origin: 'overwrite/' }),
     ]);
     const rows = expectInstancesOf(await tree.getChildren(), PluginNode);
-    expect(rows.map((r) => r.origin)).toEqual(['ModA', 'overwrite']);
+    expect(rows.map((r) => r.origin)).toEqual(['ModA', 'overwrite/']);
   });
 
   it('an overridden plugin of a listed name renders no row of its own', async () => {
@@ -355,7 +355,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
   it('still renders a row for a listed name no mod provides, when the Data folder is unresolved', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data', path: '/unresolved/Fallout4.esm' }),
+      plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data/', path: '/unresolved/Fallout4.esm' }),
       plugin({ name: 'Mod.esp', slot: 1, origin: 'SomeMod' }),
     ], { dataFolderFile: () => undefined });
 
@@ -365,7 +365,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
   it('renders a row for a LoadOrderPluginLine (path: undefined)', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data', path: undefined }),
+      plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data/', path: undefined }),
     ]);
     const rows = (await tree.getChildren()).filter((n): n is PluginNode => n instanceof PluginNode);
     expect(rows.map((n) => n.plugin.name)).toEqual(['Fallout4.esm']);
@@ -463,7 +463,7 @@ describe('PluginsTreeProvider — a plugin row is identified by its kind and (or
   });
 
   it('gives a locked row an identity of its own kind, never a plugin row\'s', async () => {
-    const withLine = makeTree([plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data' })]).tree;
+    const withLine = makeTree([plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data/' })]).tree;
     const locked = makeTree([], { loadedWithNoLine: ['Fallout4.esm'] }).tree;
 
     const [lineId] = await idsOf(withLine);
@@ -640,7 +640,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     await tree.getChildren();
     const dt = new DataTransfer();
     tree.handleDrag([node('B.esp')], dt, IGNORED_TOKEN);
-    await tree.handleDrop(new ImplicitMasterNode('Fallout4.esm', 'Data'), dt, IGNORED_TOKEN);
+    await tree.handleDrop(new ImplicitMasterNode('Fallout4.esm', 'Data/'), dt, IGNORED_TOKEN);
     expect(moves()).toEqual([{ names: ['B.esp'], drop: { kind: 'losingEnd' } }]);
   });
 
@@ -773,7 +773,7 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
 
   it('resolves a locked row to nothing while the game folder is not found', async () => {
     const { tree } = makeTree([], { dataFolderFile: () => undefined });
-    expect(await tree.resolvePluginPath(new ImplicitMasterNode('Fallout4.esm', 'Data'))).toBeUndefined();
+    expect(await tree.resolvePluginPath(new ImplicitMasterNode('Fallout4.esm', 'Data/'))).toBeUndefined();
   });
 });
 
@@ -809,8 +809,8 @@ describe('PluginsTreeProvider — implicit master rows', () => {
 
   it('a name the backend calls implicit which plugins.txt also lists renders exactly once, as the implicit row (an .esl the game loads on its own)', async () => {
     const rows = await treeFor([
-      plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data' }),
-      plugin({ name: 'ccBGSFO4044-HellfirePowerArmor.esl', slot: 1, origin: 'Data' }),
+      plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data/' }),
+      plugin({ name: 'ccBGSFO4044-HellfirePowerArmor.esl', slot: 1, origin: 'Data/' }),
     ], ['Fallout4.esm', 'ccBGSFO4044-HellfirePowerArmor.esl']).getChildren();
 
     const labels = rows.map((r) => r.label);
@@ -824,7 +824,7 @@ describe('PluginsTreeProvider — implicit master rows', () => {
   });
 
   it('matches a plugins.txt line to an implicit name case-insensitively', async () => {
-    const rows = await treeFor([plugin({ name: 'FALLOUT4.ESM', slot: 0, origin: 'Data' })], ['Fallout4.esm']).getChildren();
+    const rows = await treeFor([plugin({ name: 'FALLOUT4.ESM', slot: 0, origin: 'Data/' })], ['Fallout4.esm']).getChildren();
     expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm']);
   });
 
@@ -935,7 +935,7 @@ describe('PluginsTreeProvider — the sort direction', () => {
 describe('PluginsTreeProvider — a drop asks for the place it is shown, in either sort direction', () => {
   const node = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
   const LINES = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
-  const LOCKED_ROW = new ImplicitMasterNode('Fallout4.esm', 'Data');
+  const LOCKED_ROW = new ImplicitMasterNode('Fallout4.esm', 'Data/');
 
   it.each([
     { direction: 'losingAtTop', moved: ['E.esp'], where: 'B.esp', target: node('B.esp'), drop: { kind: 'before', name: 'B.esp' } },
@@ -959,7 +959,7 @@ describe('PluginsTreeProvider — a drop asks for the place it is shown, in eith
 });
 
 describe('PluginsTreeProvider — the locked plugins follow the instance value', () => {
-  const LINES = () => [plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data' }), plugin({ name: 'Mod.esp', slot: 1 })];
+  const LINES = () => [plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data/' }), plugin({ name: 'Mod.esp', slot: 1 })];
   const shapeOf = async (tree: PluginsTreeProvider) => (await tree.getChildren())
     .map((row) => (row instanceof PluginNode || row instanceof ImplicitMasterNode ? `${row.kind} ${row.kind === 'plugin' ? row.plugin.name : row.name}` : row.kind));
 
@@ -1200,7 +1200,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
   it('states an override record under a tracked, editable plugin tracked and editable', async () => {
     const client = weaponOf(recordSummary({ formKey: '000001:Fallout4.esm' }));
     const h = makeTree([plugin({ name: 'A.esp', slot: 0 })], { client });
-    await reconcile(h, [held('A.esp', { isTracked: true }), held('Fallout4.esm', { origin: 'Data', isImmutable: true })]);
+    await reconcile(h, [held('A.esp', { isTracked: true }), held('Fallout4.esm', { origin: 'Data/', isImmutable: true })]);
 
     const [row] = await h.tree.getChildren();
     const { record } = await firstRecordUnder(h, present(row, 'the A.esp row'));
@@ -1235,12 +1235,12 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     expect(client.calls.filter((c) => c.method === 'getRecords')).toHaveLength(reads);
   });
 
-  const DATA_COPY = held('Fallout4.esm', { origin: 'Data', isImmutable: true });
+  const DATA_COPY = held('Fallout4.esm', { origin: 'Data/', isImmutable: true });
   const MOD_COPY = held('Fallout4.esm', { origin: 'ModA', isTracked: true });
   const lockedTree = (modCopyWins: boolean) => makeTree(
     [plugin({ name: 'Fallout4.esm', slot: null, origin: 'ModA', winning: modCopyWins }), plugin({ name: 'A.esp', slot: 0 })],
-    { client: weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data' })),
-      loadedWithNoLine: [{ name: 'Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data' }] });
+    { client: weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data/' })),
+      loadedWithNoLine: [{ name: 'Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data/' }] });
 
   it.each([['last', [DATA_COPY, MOD_COPY]], ['first', [MOD_COPY, DATA_COPY]]])(
     'states a locked row the game folder provides by the game folder\'s copy, with the mod\'s copy listed %s',
@@ -1251,7 +1251,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
       const locked = present((await h.tree.getChildren()).find((n) => n instanceof ImplicitMasterNode), 'the locked row');
       const { group, record } = await firstRecordUnder(h, locked);
 
-      expect(locked.origin).toBe('Data');
+      expect(locked.origin).toBe('Data/');
       expect([group.contextValue, record.contextValue]).toEqual(['recordType untracked creatable', 'record untracked']);
     });
 
@@ -1453,12 +1453,12 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
 
   it('hides an implicit master row the record filter matches no records of', async () => {
     const h = makeTree([], { loadedWithNoLine: ['Fallout4.esm'] });
-    await reconcile(h, [held('Fallout4.esm', { origin: 'Data', hasMatchingRecords: false })]);
+    await reconcile(h, [held('Fallout4.esm', { origin: 'Data/', hasMatchingRecords: false })]);
 
     expect(await h.tree.getChildren()).toEqual([]);
   });
 
-  const ownCopy = (matches: boolean) => held('Fallout4.esm', { origin: 'Data', hasMatchingRecords: matches });
+  const ownCopy = (matches: boolean) => held('Fallout4.esm', { origin: 'Data/', hasMatchingRecords: matches });
   const modCopy = (matches: boolean) => held('Fallout4.esm', { origin: 'ModA', hasMatchingRecords: matches });
   it.each([
     ['hides', 'matches nothing', 'first', [ownCopy(false), modCopy(true)], 0],
@@ -2155,7 +2155,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
 
   it('never adds a read-only line to the locked row — its tooltip is the one sentence alone', async () => {
     const h = makeTree([], { loadedWithNoLine: ['Fallout4.esm'] });
-    await reconcile(h, [held('Fallout4.esm', { origin: 'Data', isImmutable: true })]);
+    await reconcile(h, [held('Fallout4.esm', { origin: 'Data/', isImmutable: true })]);
 
     expect((await rowItem(h)).tooltip).toBe(
       "This plugin can't be disabled or moved (enforced by the game).");

@@ -14,7 +14,7 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
 
     public static TheoryData<string> Variants { get; } = [.. VariantTables];
 
-    private static readonly PluginAddress Key = new("PlacedVariants.esp", "Data");
+    private static readonly PluginAddress Key = new("PlacedVariants.esp", PluginOrigin.DataDirectory);
 
     internal sealed record Placed(FormKey FormKey, string EditorId, FormKey Base, string Group, float X);
 

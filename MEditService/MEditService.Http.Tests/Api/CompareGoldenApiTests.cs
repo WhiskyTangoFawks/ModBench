@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
@@ -77,7 +78,7 @@ public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : ICl
         var plugins = await Client.Plugins();
         var perPluginTypes = new Dictionary<string, JsonElement>();
         foreach (var name in new[] { "Base.esm", "Mid.esp", "Top.esp" })
-            perPluginTypes[name] = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{name}/record-types?origin=Data");
+            perPluginTypes[name] = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{name}/record-types?origin={PluginOrigin.DataDirectory}");
 
         var winningRecords = new Dictionary<string, object?>();
         foreach (var fk in new[]

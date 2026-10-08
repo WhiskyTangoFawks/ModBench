@@ -9,7 +9,7 @@ namespace MEditService.Index.Tests.Records;
 
 public sealed class RecordSummaryContainerChildrenTests
 {
-    private static readonly PluginAddress Key = new("Dialogue.esp", "Data");
+    private static readonly PluginAddress Key = new("Dialogue.esp", PluginOrigin.DataDirectory);
 
     private static RecordSummary SummaryFor(PagedResult<RecordSummary> page, string formKey) =>
         page.Items.Single(i => i.FormKey == formKey);

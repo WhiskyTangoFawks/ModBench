@@ -26,9 +26,9 @@ public sealed class ReconcileScatteredTests
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         var reads = index.RequireReads();
-        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("A.esp", "Data"))
+        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("A.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("B.esp", "Data"))
+        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("B.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
@@ -72,7 +72,7 @@ public sealed class ReconcileScatteredTests
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Same(firstReads, index.RequireReads());
-        Assert.NotEmpty(firstReads.GetRecordTypeCounts(new PluginAddress("A.esp", "Data")));
+        Assert.NotEmpty(firstReads.GetRecordTypeCounts(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 
     [Fact]
@@ -92,9 +92,9 @@ public sealed class ReconcileScatteredTests
 
         var reads = index.RequireReads();
         Assert.Contains(index.Status.Failures, f => f.Name == "Bad.esp");
-        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("Good.esp", "Data"))
+        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("Good.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(0, reads.GetRecordTypeCounts(new PluginAddress("Bad.esp", "Data"))
+        Assert.Equal(0, reads.GetRecordTypeCounts(new PluginAddress("Bad.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "Bad.esp");
     }

@@ -9,9 +9,9 @@ namespace MEditService.Queries.Tests.Query;
 
 public sealed class LoadOrderFormIdKeyOrderTests
 {
-    private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
-    private static readonly PluginAddress LightPlugin = new("Light.esl", "Data");
-    private static readonly PluginAddress TopPlugin = new("Top.esp", "Data");
+    private static readonly PluginAddress BasePlugin = new("Base.esm", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress LightPlugin = new("Light.esl", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress TopPlugin = new("Top.esp", PluginOrigin.DataDirectory);
 
     private static readonly FormKey ContainerKey = new(ModKey.FromFileName(BasePlugin.Name), 0x800);
 
@@ -21,7 +21,7 @@ public sealed class LoadOrderFormIdKeyOrderTests
     private static readonly FormKey InUnloaded = new(ModKey.FromFileName("Unloaded.esp"), 0x700);
     private static readonly FormKey InOtherUnloaded = new(ModKey.FromFileName("Other.esp"), 0x600);
 
-    private static readonly PluginAddress MediumPlugin = new("Medium.esm", "Data");
+    private static readonly PluginAddress MediumPlugin = new("Medium.esm", PluginOrigin.DataDirectory);
     private static readonly FormKey InMedium = new(ModKey.FromFileName(MediumPlugin.Name), 0x801);
     private static readonly FormKey InLightBeyondItsSpace = new(ModKey.FromFileName(LightPlugin.Name), 0x1001);
     private static readonly FormKey InMediumBeyondItsSpace = new(ModKey.FromFileName(MediumPlugin.Name), 0x10001);
@@ -35,7 +35,7 @@ public sealed class LoadOrderFormIdKeyOrderTests
             p => new PluginContent(p.Light, IsMaster: p.Plugin.Name.EndsWith(".esm", StringComparison.Ordinal), IsBlueprint: false, Masters: [], RecordCount: 1, IsMedium: p.Medium));
         var rows = placed.Select((p, slot) => Row(
             new Container(ContainerKey, Fallout4Release.Fallout4) { Items = [.. p.Items] }, p.Plugin, slot));
-        var plugins = placed.Select((p, slot) => new LoadOrderEntry(p.Plugin.Name, p.Plugin.Name, "Data", slot, Enabled: true, Winning: true));
+        var plugins = placed.Select((p, slot) => new LoadOrderEntry(p.Plugin.Name, p.Plugin.Name, PluginOrigin.DataDirectory, slot, Enabled: true, Winning: true));
         var service = QueryHost.Records(
             new FakeIndex(new FakeReads(opened, [.. rows])), FakeLoadOrder.Of(GameRelease.Fallout4, [.. plugins]));
         return service.GetCompare(ContainerKey.ToString())

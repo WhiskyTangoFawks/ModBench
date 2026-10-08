@@ -21,14 +21,14 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
 {
     private readonly List<(string Name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> Configure, string Origin)> _plugins = [];
 
-    internal FakeFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, string origin = "Data")
+    internal FakeFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, string origin = PluginOrigin.DataDirectory)
     {
         _plugins.Add((name, configure is null ? (_, _) => { } : (mod, _) => configure(mod), origin));
         return this;
     }
 
     internal FakeFixtureBuilder WithPlugin(
-        string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, string origin = "Data")
+        string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, string origin = PluginOrigin.DataDirectory)
     {
         _plugins.Add((name, configure, origin));
         return this;

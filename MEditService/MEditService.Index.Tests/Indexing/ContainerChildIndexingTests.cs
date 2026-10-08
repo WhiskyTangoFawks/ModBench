@@ -9,7 +9,7 @@ namespace MEditService.Index.Tests.Indexing;
 
 public sealed class ContainerChildIndexingTests : IDisposable
 {
-    private static readonly PluginAddress Key = new("Dialogue.esp", "Data");
+    private static readonly PluginAddress Key = new("Dialogue.esp", PluginOrigin.DataDirectory);
 
     private readonly PluginFixtureData _fixture;
     private readonly string _questFk;

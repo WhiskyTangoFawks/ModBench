@@ -1,3 +1,4 @@
+import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 import { describe, it, expect, vi } from 'vitest';
 import { uriFrom } from '../../test/vscodeMock';
 
@@ -53,6 +54,15 @@ describe('a rendered document\'s address', () => {
     const odd = { formKey: '000801:Mod/A.esp', plugin: { name: 'Mod/A.esp', origin: 'Mods/A' } };
 
     expect(copyOf(await uriOf(untracked(NAME), odd))).toEqual(odd);
+  });
+
+  it('keeps the game folder\'s origin whole, as one segment of the path', async () => {
+    const game = { formKey: GUN, plugin: { name: 'A.esp', origin: DATA_DIRECTORY_ORIGIN } };
+
+    const uri = await uriOf(untracked(NAME), game);
+
+    expect(uri.path.split('/').slice(1)).not.toContain('');
+    expect(copyOf(uri)).toEqual(game);
   });
 
   it('refuses an address that states no plugin name, naming what it lacks', () => {

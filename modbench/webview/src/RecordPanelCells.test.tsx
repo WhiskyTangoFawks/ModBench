@@ -39,7 +39,7 @@ function recordOf(
   return compareResultFixture({
     conflictAll: 'NoConflict',
     overrides: columns.map(({ plugin, origin }, column) => compareOverride({
-      formKey: FORM_KEY, plugin, origin: origin ?? 'Data', isWinner: column === columns.length - 1, editorId: 'TestNPC',
+      formKey: FORM_KEY, plugin, origin: origin ?? 'Data/', isWinner: column === columns.length - 1, editorId: 'TestNPC',
       fields: fields.map(f => ({
         metadata: f.meta, value: column === 0 ? f.master : f.mod, checkError: f.checkErrors?.[column],
       })),
@@ -304,7 +304,7 @@ describe('RecordPanel — a string cell\'s right-click menu, the extended editor
       copyText: 'disk-value',
       formKey: FORM_KEY,
       plugin: MOD,
-      origin: 'Data',
+      origin: 'Data/',
       recordLabel: `TestNPC [${FORM_KEY}]`,
       fieldName: 'Name',
       value: 'disk-value',

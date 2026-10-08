@@ -10,7 +10,7 @@ namespace MEditService.Index.Tests.Records;
 
 public sealed class LinkResolutionTests
 {
-    private static readonly PluginAddress OverKey = new("Over.esp", "Data");
+    private static readonly PluginAddress OverKey = new("Over.esp", PluginOrigin.DataDirectory);
     private const string ExpectedKeywordErrors =
         "[1]: [FFFFFF:BASE.esm] <Error: Could not be resolved>; [2]: Found a RACE reference, expected: KYWD";
 

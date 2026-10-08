@@ -64,19 +64,19 @@ const holder = (plugin: string, origin: string): CompareResult['overrides'][numb
   loadIndex: '00', isInOverwrite: false,
 });
 
-const comparison = (diffs: Diff[], holders: Array<[string, string]> = [['Fallout4.esm', 'Data']]): CompareResult => ({
+const comparison = (diffs: Diff[], holders: Array<[string, string]> = [['Fallout4.esm', 'Data/']]): CompareResult => ({
   overrides: holders.map(([plugin, origin]) => holder(plugin, origin)), diffs, conflictAll: 'NoConflict', recordTypeName: 'Npc',
 });
 
 const descriptionOf = (value: string) => comparison([diff('Description', { 'Fallout4.esm': value })]);
 
 const deacon: OpenExtendedFieldEditorParams = {
-  formKey: '000123:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data', path: [{ kind: 'member', name: 'Description' }],
+  formKey: '000123:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data/', path: [{ kind: 'member', name: 'Description' }],
   recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', readOnly: false,
 };
 
 const rowsChanged = (keys: string[]): NotificationEvent =>
-  ({ kind: 'rows-changed', plugin: 'Fallout4.esm', origin: 'Data', keys, sequence: 1 });
+  ({ kind: 'rows-changed', plugin: 'Fallout4.esm', origin: 'Data/', keys, sequence: 1 });
 const pluginChanged = (plugin: string, origin: string): NotificationEvent =>
   ({ kind: 'plugin-changed', plugin, origin, keys: [], sequence: 1 });
 
@@ -181,8 +181,8 @@ describe('the extended-field documents', () => {
     await textOf(shownUri());
     const changes = recordChanges();
 
-    client.emit(pluginChanged('Other.esp', 'Data'));
-    client.emit(pluginChanged('Fallout4.esm', 'Data'));
+    client.emit(pluginChanged('Other.esp', 'Data/'));
+    client.emit(pluginChanged('Fallout4.esm', 'Data/'));
 
     expect(changes).toHaveLength(1);
   });
@@ -227,7 +227,7 @@ describe('the extended-field documents', () => {
 
   it('a plugin copy the record lacks reads as gone', async () => {
     await documents.open(deacon);
-    client.setQueryAnswer('getComparison', comparison([diff('Description', { 'Other.esp': 'x' })], [['Other.esp', 'Data']]));
+    client.setQueryAnswer('getComparison', comparison([diff('Description', { 'Other.esp': 'x' })], [['Other.esp', 'Data/']]));
 
     await expect(textOf(shownUri())).rejects.toThrow('has no such field');
   });
@@ -263,7 +263,7 @@ describe('the extended-field documents', () => {
     await provider().writeFile(shownUri(), encode('first'));
     await provider().writeFile(shownUri(), encode('second'));
 
-    const address = { formKey: deacon.formKey, plugin: { name: 'Fallout4.esm', origin: 'Data' }, path: deacon.path };
+    const address = { formKey: deacon.formKey, plugin: { name: 'Fallout4.esm', origin: 'Data/' }, path: deacon.path };
     expect(commit.mock.calls).toEqual([[address, 'first'], [address, 'second']]);
   });
 

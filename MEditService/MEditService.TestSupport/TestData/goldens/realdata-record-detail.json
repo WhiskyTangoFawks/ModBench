@@ -82,7 +82,7 @@
       "FormKey": "1A6C6F:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "achr"
     },
@@ -171,7 +171,7 @@
       "FormKey": "1A6C71:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "achr"
     },
@@ -256,7 +256,7 @@
       "FormKey": "1A6C7B:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "achr"
     }
@@ -344,7 +344,7 @@
       "FormKey": "24A313:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "acti"
     },
@@ -430,7 +430,7 @@
       "FormKey": "24A314:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "acti"
     },
@@ -516,7 +516,7 @@
       "FormKey": "24A315:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "acti"
     }
@@ -799,7 +799,7 @@
       "FormKey": "24A3FE:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "armo"
     },
@@ -1048,7 +1048,7 @@
       "FormKey": "24A3FF:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "armo"
     },
@@ -1297,7 +1297,7 @@
       "FormKey": "24A400:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "armo"
     }
@@ -11546,7 +11546,7 @@
       "FormKey": "00DB41:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "cell"
     },
@@ -25648,7 +25648,7 @@
       "FormKey": "00DB42:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "cell"
     },
@@ -40894,7 +40894,7 @@
       "FormKey": "00DB43:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "cell"
     }
@@ -50793,7 +50793,7 @@
       "FormKey": "0048EB:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "dial"
     },
@@ -53788,7 +53788,7 @@
       "FormKey": "0057DD:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "dial"
     },
@@ -55195,7 +55195,7 @@
       "FormKey": "00581D:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "dial"
     }
@@ -55221,7 +55221,7 @@
       "FormKey": "01DADA:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "dlbr"
     },
@@ -55245,7 +55245,7 @@
       "FormKey": "0267FA:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "dlbr"
     },
@@ -55269,7 +55269,7 @@
       "FormKey": "0CA9D0:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "dlbr"
     }
@@ -55317,7 +55317,7 @@
       "FormKey": "249D44:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "fact"
     },
@@ -55354,7 +55354,7 @@
       "FormKey": "249E8F:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "fact"
     },
@@ -55395,7 +55395,7 @@
       "FormKey": "24A157:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "fact"
     }
@@ -55418,7 +55418,7 @@
       "FormKey": "24A340:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "glob"
     },
@@ -55439,7 +55439,7 @@
       "FormKey": "24A341:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "glob"
     },
@@ -55460,7 +55460,7 @@
       "FormKey": "24A342:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "glob"
     }
@@ -55523,7 +55523,7 @@
       "FormKey": "0057DE:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "info"
     },
@@ -55584,7 +55584,7 @@
       "FormKey": "0057DF:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "info"
     },
@@ -55645,7 +55645,7 @@
       "FormKey": "0057E0:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "info"
     }
@@ -55671,7 +55671,7 @@
       "FormKey": "24A403:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "kywd"
     },
@@ -55698,7 +55698,7 @@
       "FormKey": "24A405:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "kywd"
     },
@@ -55725,7 +55725,7 @@
       "FormKey": "24A406:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "kywd"
     }
@@ -55806,7 +55806,7 @@
       "FormKey": "24A068:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "misc"
     },
@@ -55885,7 +55885,7 @@
       "FormKey": "24A069:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "misc"
     },
@@ -55964,7 +55964,7 @@
       "FormKey": "24A06B:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "misc"
     }
@@ -56236,7 +56236,7 @@
       "FormKey": "2499C4:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "npc_"
     },
@@ -56457,7 +56457,7 @@
       "FormKey": "2499C8:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "npc_"
     },
@@ -56723,7 +56723,7 @@
       "FormKey": "24A37F:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "npc_"
     }
@@ -140349,7 +140349,7 @@
       "FormKey": "003648:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "qust"
     },
@@ -158122,7 +158122,7 @@
       "FormKey": "0179EF:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "qust"
     },
@@ -184191,7 +184191,7 @@
       "FormKey": "0179F3:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "qust"
     }
@@ -184629,7 +184629,7 @@
       "FormKey": "0A96BF:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "race"
     },
@@ -185015,7 +185015,7 @@
       "FormKey": "187AF9:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "race"
     },
@@ -185302,7 +185302,7 @@
       "FormKey": "1A6D64:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "race"
     }
@@ -185396,7 +185396,7 @@
       "FormKey": "0782AA:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "refr"
     },
@@ -185488,7 +185488,7 @@
       "FormKey": "0782B7:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "refr"
     },
@@ -185578,7 +185578,7 @@
       "FormKey": "0782B8:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "refr"
     }
@@ -185712,7 +185712,7 @@
       "FormKey": "004E1E:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "scen"
     },
@@ -185872,7 +185872,7 @@
       "FormKey": "00583D:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "scen"
     },
@@ -186032,7 +186032,7 @@
       "FormKey": "017B27:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "scen"
     }
@@ -186247,7 +186247,7 @@
       "FormKey": "24A3AF:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "weap"
     },
@@ -186450,7 +186450,7 @@
       "FormKey": "24A3B0:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "weap"
     },
@@ -186769,7 +186769,7 @@
       "FormKey": "24A3B1:Fallout4.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "weap"
     }
@@ -187059,7 +187059,7 @@
       "FormKey": "000800:mEditTestSubset.esm",
       "IsWinner": true,
       "LoadOrderIndex": 0,
-      "Origin": "Data",
+      "Origin": "Data/",
       "Plugin": "mEditTestSubset.esm",
       "RecordType": "wrld"
     }

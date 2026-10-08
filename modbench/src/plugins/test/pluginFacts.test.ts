@@ -382,8 +382,8 @@ describe('placeOf — where a plugin lives, from the instance value', () => {
     ['a mod without a repository', 'SomeMod', 'inUntrackedMod'],
     ['a mod with a repository', 'TrackedMod', 'inTrackedMod'],
     ['a mod named without case', 'trackedmod', 'inTrackedMod'],
-    ['Overwrite', 'overwrite', 'inOverwrite'],
-    ['the game folder', 'Data', undefined],
+    ['Overwrite', 'overwrite/', 'inOverwrite'],
+    ['the game folder', 'Data/', undefined],
     ['an origin no mod folder carries', 'Nowhere', undefined],
   ])('%s', (_label, origin, place) => {
     expect(placeOf(origin, { modDirs, trackedMods })).toBe(place);

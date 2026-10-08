@@ -261,7 +261,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
         using var index = LoadedIndex();
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var record = index.RequireReads().GetDocument(formKey, new PluginAddress(TestPluginFixture.PluginName, "Data"));
+        var record = index.RequireReads().GetDocument(formKey, new PluginAddress(TestPluginFixture.PluginName, PluginOrigin.DataDirectory));
 
         Assert.NotNull(record);
         Assert.Equal(TestPluginFixture.PluginName, record.Plugin.Name);
@@ -351,7 +351,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void ACountOfAPluginsType_IsItsRecordCount()
     {
         using var index = LoadedIndex();
-        var count = index.RequireReads().CountOf(new PluginAddress(TestPluginFixture.PluginName, "Data"), "npc_");
+        var count = index.RequireReads().CountOf(new PluginAddress(TestPluginFixture.PluginName, PluginOrigin.DataDirectory), "npc_");
         Assert.Equal(TestPluginFixture.RecordCount, count);
     }
 
@@ -359,7 +359,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void ACountOfAnUnknownPlugin_IsZero()
     {
         using var index = LoadedIndex();
-        var count = index.RequireReads().CountOf(new PluginAddress("NonExistent.esp", "Data"), "npc_");
+        var count = index.RequireReads().CountOf(new PluginAddress("NonExistent.esp", PluginOrigin.DataDirectory), "npc_");
         Assert.Equal(0, count);
     }
 

@@ -57,14 +57,14 @@ describe('RecordPanelClient.load', () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer(lastRequestId(), {
       ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' },
-      plugins: [{ name: 'A.esp', origin: 'Data', isImmutable: true, loadOrderIndex: 0 }], conflictsComputed: true, loadFailures: [],
+      plugins: [{ name: 'A.esp', origin: 'Data/', isImmutable: true, loadOrderIndex: 0 }], conflictsComputed: true, loadFailures: [],
     });
 
     const r = await promise;
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.result?.conflictAll).toBe('OnlyOne');
-    expect(r.immutableSet).toEqual(new Set([columnKey({ name: 'A.esp', origin: 'Data' })]));
+    expect(r.immutableSet).toEqual(new Set([columnKey({ name: 'A.esp', origin: 'Data/' })]));
     expect(r.conflictsComputed).toBe(true);
   });
 

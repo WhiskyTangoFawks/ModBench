@@ -10,8 +10,8 @@ namespace MEditService.Index.Tests.Indexing;
 
 public sealed class SqlDoorSchemaTests : IDisposable
 {
-    private static readonly PluginAddress BaseKey = new("Base.esm", "Data");
-    private static readonly PluginAddress OverKey = new("Over.esp", "Data");
+    private static readonly PluginAddress BaseKey = new("Base.esm", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress OverKey = new("Over.esp", PluginOrigin.DataDirectory);
 
     private readonly PluginFixtureData _fixture;
     private readonly OpenedIndex _index;

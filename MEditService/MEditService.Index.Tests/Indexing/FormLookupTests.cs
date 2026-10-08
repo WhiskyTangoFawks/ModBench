@@ -30,7 +30,7 @@ public class FormLookupTests
         Assert.NotNull(header);
         Assert.Equal(PluginHeader.RecordType, header.Value.RecordType);
         Assert.Null(header.Value.EditorId);
-        Assert.Equal(3, reads.DocumentsOf(new PluginAddress("Lookup.esp", "Data")).Count);
+        Assert.Equal(3, reads.DocumentsOf(new PluginAddress("Lookup.esp", PluginOrigin.DataDirectory)).Count);
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public class FormLookupTests
             .WithPlugin("Reindex.esp", mod => npcFormKey = mod.Npcs.AddNew("TestNPC01").FormKey)
             .Build();
         using var index = Indexes.Reconciled(fixture);
-        var key = new PluginAddress("Reindex.esp", "Data");
+        var key = new PluginAddress("Reindex.esp", PluginOrigin.DataDirectory);
         var reads = index.RequireReads();
         var before = reads.DocumentsOf(key).Count;
 

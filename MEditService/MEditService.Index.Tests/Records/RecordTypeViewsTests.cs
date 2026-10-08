@@ -8,7 +8,7 @@ namespace MEditService.Index.Tests.Records;
 
 public sealed class RecordTypeViewsTests
 {
-    private static readonly PluginAddress Plugin = new("Lazy.esp", "Data");
+    private static readonly PluginAddress Plugin = new("Lazy.esp", PluginOrigin.DataDirectory);
 
     [Fact]
     public void EveryTypedRead_AnswersBeforeAnyFilter_AndAFilterNamingARecordTypeStillNarrows()

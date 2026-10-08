@@ -424,7 +424,7 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
     const provider = filtered('icon', false);
     const row = await rootOf(provider, ModNode, 'Armour');
 
-    expect(shown(await provider.getChildren())).toEqual(['mod Armour', 'overwrite Overwrite']);
+    expect(shown(await provider.getChildren())).toEqual(['mod Armour', 'runtimeOutput Overwrite']);
     expect(shown(await provider.getChildren(row))).toEqual(['folder textures']);
   });
 
@@ -433,7 +433,7 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
     const ungrouped = filtered('icon', true, { mods: [mod('Armour'), mod('Boots')] });
 
     expect(shown(await withSeparator.getChildren(await rootOf(withSeparator, SeparatorNode, 'Gear')))).toEqual(['mod Armour']);
-    expect(shown(await ungrouped.getChildren())).toEqual(['mod Armour', 'overwrite Overwrite']);
+    expect(shown(await ungrouped.getChildren())).toEqual(['mod Armour', 'runtimeOutput Overwrite']);
   });
 
   it('Overwrite stays, does not match by its own name, and shows only its files that do', async () => {

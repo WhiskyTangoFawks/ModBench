@@ -10,7 +10,7 @@ namespace MEditService.Queries.Tests.Query;
 public sealed class CommittedOnlyReadPathTests
 {
     private const string PluginName = "TestPlugin.esp";
-    private const string Origin = "Data";
+    private const string Origin = PluginOrigin.DataDirectory;
     private static readonly GameRelease Release = GameRelease.Fallout4;
     private static readonly PluginAddress Plugin = new(PluginName, Origin);
 
