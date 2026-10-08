@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
@@ -156,7 +157,7 @@ internal sealed class PluginCompileService(
         foreach (var document in tree.Documents(schemas))
         {
             var schema = schemas[document.RecordType];
-            records.Add(new SourceRecord(document.RecordType, schema, document, WriteTargets.EditorIdOf(document.Text)));
+            records.Add(new SourceRecord(document.RecordType, schema, document, EditorIds.In(document.Text)));
             required.Add(document, schema);
         }
 

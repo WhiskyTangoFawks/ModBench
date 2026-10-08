@@ -1,6 +1,7 @@
+using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 
-namespace MEditService.Commands.Edits;
+namespace MEditService.Commands.Resolution;
 
 /// <summary>What the walk to the left found: a copy, none, or a nearest copy it cannot read.</summary>
 internal abstract record LeftCopy

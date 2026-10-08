@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Resolution;
 using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
