@@ -39,10 +39,7 @@ internal interface IRecordReads
     /// per-type loop.</summary>
     IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin);
 
-    /// <summary>The working-tree states beneath each of <paramref name="plugin"/>'s record-type groups
-    /// and records, under the record filter.</summary>
-    (IReadOnlyDictionary<string, IReadOnlyList<WorkingTreeState>> ByRecordType,
-        IReadOnlyDictionary<string, IReadOnlyList<WorkingTreeState>> ByRecord) GetWorkingTreeStatesBeneath(PluginAddress plugin);
+    WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin);
 
     /// <summary>One response's FormKey → (record type, EditorID) lookup against the winning override,
     /// about <paramref name="formKey"/>, each distinct FormKey asked once. The store resolves the

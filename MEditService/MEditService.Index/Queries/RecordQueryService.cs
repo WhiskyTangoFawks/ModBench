@@ -57,6 +57,8 @@ internal sealed class RecordQueryService(
 
     // The header is not a browsable record type: it stays a schemas.Keys entry so GetRecord/
     // GetCompare resolve it by FormKey, but both browse paths below exclude it.
+    private static bool IsGroup(string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        recordType != PluginHeader.RecordType && schemas.ContainsKey(recordType);
 
     public PagedResult<RecordSummary> GetRecords(
         IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset)
@@ -65,7 +67,7 @@ internal sealed class RecordQueryService(
         var schemas = RequireSchemas();
 
         IReadOnlyList<string> recordTypes = types is null
-            ? [.. schemas.Keys.Where(t => t != PluginHeader.RecordType)]
+            ? [.. schemas.Keys.Where(t => IsGroup(t, schemas))]
             : [.. types.Where(schemas.ContainsKey)];
         if (recordTypes.Count == 0)
             return new PagedResult<RecordSummary>([], 0);
@@ -218,22 +220,8 @@ internal sealed class RecordQueryService(
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }
 
-    // The header is one `records` row per plugin, so this exclusion has to be real; without it
-    // "Main File Header" appears as a browsable record-type node under every plugin.
-    private static bool IsGroup(string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        recordType != PluginHeader.RecordType && schemas.ContainsKey(recordType);
-
-    // The plugin's own row holds exactly what its groups hold.
-    public WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin)
-    {
-        var schemas = RequireSchemas();
-        var (byRecordType, byRecord) = RequireReads().GetWorkingTreeStatesBeneath(plugin);
-        var groups = byRecordType
-            .Where(group => IsGroup(group.Key, schemas))
-            .ToDictionary(group => group.Key, group => group.Value, StringComparer.OrdinalIgnoreCase);
-        return new WorkingTreeStatesBeneath(
-            [.. groups.Values.SelectMany(states => states).Distinct().Order()], groups, byRecord);
-    }
+    public WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin) =>
+        RequireReads().GetWorkingTreeStatesBeneath(plugin);
 
     public IReadOnlyList<RecordTypeChoice> GetCreatableRecordTypes()
     {

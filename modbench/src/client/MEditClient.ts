@@ -126,8 +126,6 @@ export type PluginDependants = components['schemas']['PluginDependantsResponse']
  *  record and its source file relative to the mod folder. */
 export type PluginProblems = components['schemas']['PluginProblems'];
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
-/** The working-tree states beneath each row of a plugin's tree that has any. A block or sub-block
- *  holds what its cells hold. */
 export type WorkingTreeStatesBeneath = components['schemas']['WorkingTreeStatesBeneath'];
 export type RecordTypeChoice = components['schemas']['RecordTypeChoice'];
 export type RenderedDocument = components['schemas']['RenderedDocument'];

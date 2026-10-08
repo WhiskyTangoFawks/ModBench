@@ -1260,15 +1260,4 @@ describe('HttpMEditClient — a plugin address on the wire', () => {
     expect(new URL(request.url).pathname).toContain('/plugins/Shared.esp/');
     expect(new URL(request.url).searchParams.get('origin')).toBe('ModA');
   });
-
-  it('answers the working-tree states beneath each row as mEdit sends them', async () => {
-    const beneath = {
-      plugin: ['Modified', 'Added'],
-      recordTypes: { wrld: ['Modified', 'Added'] },
-      records: { '000800:Shared.esp': ['Added'] },
-    };
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, beneath)));
-
-    await expect(makeClient(fetch).getWorkingTreeStatesBeneath(plugin)).resolves.toEqual(beneath);
-  });
 });

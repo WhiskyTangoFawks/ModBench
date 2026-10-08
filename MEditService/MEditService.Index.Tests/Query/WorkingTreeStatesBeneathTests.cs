@@ -1,7 +1,7 @@
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
-using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -96,6 +96,40 @@ public sealed class WorkingTreeStatesBeneathTests : IDisposable
 
         Assert.Equal([WorkingTreeState.Modified], Assert.Single(beneath.RecordTypes, group => group.Key == "qust").Value);
         Assert.Equal([WorkingTreeState.Modified], Assert.Single(beneath.Records, row => row.Key == quest).Value);
+    }
+
+    [Fact]
+    public void AChangeInOneOriginsPlugin_IsBeneathNoRowOfAnotherOriginsPluginOfTheSameName()
+    {
+        const string sharedName = "Shared.esp";
+        string placed = "";
+        void HoldingAPlacedRef(Fallout4Mod mod)
+        {
+            var cell = new Cell(mod) { EditorID = "SharedCell" };
+            var reference = new PlacedObject(mod) { EditorID = "SharedRef" };
+            cell.Persistent.Add(reference);
+            var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+            subBlock.Cells.Add(cell);
+            var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+            block.SubBlocks.Add(subBlock);
+            mod.Cells.Records.Add(block);
+            placed = reference.FormKey.ToString();
+        }
+        using var fixture = new PluginFixtureBuilder("working-tree-states-beneath-origins")
+            .WithPlugin(sharedName, HoldingAPlacedRef)
+            .WithPlugin(sharedName, HoldingAPlacedRef, origin: "SharedMod")
+            .BuildScattered();
+        var tracked = fixture.Plugins.Single(p => p.Origin == "SharedMod");
+        TrackedMods.Track(tracked, fixture.GameDirectory);
+        using var index = Indexes.Reconciled(fixture);
+        index.Edit(tracked, index.DocumentOf(placed, tracked.KeyOf()),
+            index.BodyOf(placed, tracked.KeyOf()).Replace("SharedRef", "RenamedRef", StringComparison.Ordinal));
+        Assert.NotEmpty(index.Records.GetWorkingTreeStatesBeneath(tracked.KeyOf()).Records);
+
+        var otherOrigin = index.Records.GetWorkingTreeStatesBeneath(new PluginAddress(sharedName, PluginOrigin.DataDirectory));
+
+        Assert.Empty(otherOrigin.Plugin);
+        Assert.Empty(otherOrigin.Records);
     }
 
     [Fact]

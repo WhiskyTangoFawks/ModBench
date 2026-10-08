@@ -222,49 +222,38 @@ internal sealed class RelationReads(
     }
 
     // A group holds its listed records' own states and what is beneath them; a record only what is
-    // beneath it.
-    public (IReadOnlyDictionary<string, IReadOnlyList<WorkingTreeState>> ByRecordType,
-        IReadOnlyDictionary<string, IReadOnlyList<WorkingTreeState>> ByRecord) GetWorkingTreeStatesBeneath(PluginAddress plugin)
+    // beneath it. The header lists in no group.
+    public WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin)
     {
+        var scope = RecordScope.Active;
         using var connection = store.OpenReadConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"""
-            WITH RECURSIVE
-            held AS (SELECT parent, child FROM ({NavigatorSql.Held}) h WHERE h.plugin = $1 AND h.origin = $2),
-            changed(form_key, state) AS (
-                SELECT c.form_key, c.working_tree_state FROM records c
-                WHERE c.plugin = $1 AND c.origin = $2 AND c.working_tree_state <> '{WorkingTreeState.None.Stored()}'
-                  {store.Filter.AlsoKeeps("c")}
-            ),
-            above_change(form_key, state) AS (
-                SELECT held.parent, changed.state FROM held JOIN changed ON changed.form_key = held.child
-                UNION
-                SELECT held.parent, a.state FROM held JOIN above_change a ON a.form_key = held.child
-            )
-            SELECT FALSE, form_key, state FROM above_change
+            WITH RECURSIVE {NavigatorSql.AboveAChange(scope, "WHERE h.plugin = $1 AND h.origin = $2", store.Filter.AlsoKeeps("f"))}
+            SELECT FALSE AS is_group, form_key AS row_key, fact AS state FROM above_change
             UNION
-            SELECT TRUE, r.record_type, s.state FROM records r
-            JOIN (SELECT form_key, state FROM changed UNION SELECT form_key, state FROM above_change) s
-              ON s.form_key = r.form_key
-            WHERE r.plugin = $1 AND r.origin = $2 AND {NavigatorSql.NotHeld("r")}
+            SELECT TRUE, r.record_type, r.working_tree_state FROM {scope.Records} r
+            WHERE r.plugin = $1 AND r.origin = $2 AND r.working_tree_state <> '{WorkingTreeState.None.Stored()}'
+              AND r.record_type <> '{PluginHeader.RecordType}' AND {NavigatorSql.NotHeld("r")}{store.Filter.AlsoKeeps("r")}
+            UNION
+            SELECT TRUE, r.record_type, a.fact FROM above_change a
+            JOIN {scope.Records} r ON r.form_key = a.form_key AND r.plugin = a.plugin AND r.origin = a.origin
+            WHERE {NavigatorSql.NotHeld("r")}
             """;
         DuckDbSql.AddParams(cmd, [plugin.Name, plugin.Origin]);
         using var reader = cmd.ExecuteReader();
 
-        var byRecordType = new Dictionary<string, SortedSet<WorkingTreeState>>(StringComparer.OrdinalIgnoreCase);
-        var byRecord = new Dictionary<string, SortedSet<WorkingTreeState>>(StringComparer.Ordinal);
+        var byRecordType = new Dictionary<string, IReadOnlyList<WorkingTreeState>>(StringComparer.OrdinalIgnoreCase);
+        var byRecord = new Dictionary<string, IReadOnlyList<WorkingTreeState>>(StringComparer.Ordinal);
         while (reader.Read())
         {
             var rows = reader.GetBoolean(0) ? byRecordType : byRecord;
             var key = reader.GetString(1);
-            if (!rows.TryGetValue(key, out var states)) rows[key] = states = [];
-            states.Add(WorkingTreeStates.FromStored(reader.GetString(2)));
+            rows[key] = [.. rows.GetValueOrDefault(key, []).Append(WorkingTreeStates.FromStored(reader.GetString(2))).Order()];
         }
-        return (Listed(byRecordType), Listed(byRecord));
+        return new WorkingTreeStatesBeneath(
+            [.. byRecordType.Values.SelectMany(states => states).Distinct().Order()], byRecordType, byRecord);
     }
-
-    private static Dictionary<string, IReadOnlyList<WorkingTreeState>> Listed(Dictionary<string, SortedSet<WorkingTreeState>> rows) =>
-        rows.ToDictionary(row => row.Key, row => (IReadOnlyList<WorkingTreeState>)[.. row.Value], rows.Comparer);
 
     private RecordLookupEntry? Resolve(string formKey)
     {
