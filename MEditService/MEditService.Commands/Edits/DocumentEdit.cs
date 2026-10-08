@@ -72,7 +72,7 @@ internal static class DocumentEdit
                 _ => Move(cursor, envelope.Value, spelled, out edited, out editedMeta),
             };
         if (patched is { } refused) return refused;
-        ClearAliases(record, cursor.Column);
+        RecordEmptying.ClearAliases(record, cursor.Column);
         emptying?.Apply(record, request.Schema, left);
         var prefix = into == null ? move?.Apply(root) ?? request.Prefix : request.Prefix;
 
@@ -189,7 +189,7 @@ internal static class DocumentEdit
         if (column.Synthetic != null && path.Count > 1)
             return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, spelled, $"'{name}' has no members.");
 
-        var meta = column.ToFieldMetadata();
+        var meta = column.Field;
         if (LeafOf(record) is { } recordLeaf && meta.Variants is { } byClass && !byClass.ContainsKey(recordLeaf))
         {
             return RecordEditResult.RefusedAt(
@@ -278,7 +278,7 @@ internal static class DocumentEdit
         }
 
         // Asked once, of whatever the path resolved to: a read-only member's reason reaches every
-        // member below it (SubFieldSpec.ToFieldMetadata), so no path through one ends writable.
+        // member below it (FieldMetadata.WithReadOnlyReason), so no path through one ends writable.
         return cursor.Field?.ReadOnlyReason is { } why
             ? ReadOnlyRefusal(spelled, cursor.MemberName ?? name, why)
             : null;
@@ -304,7 +304,7 @@ internal static class DocumentEdit
 
     private static FieldMetadata RootMetadata(RecordTableSchema schema) =>
         new("", "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-            Fields: [.. schema.RecordColumns.Where(c => c.Synthetic == null).Select(c => c.ToFieldMetadata())]);
+            Fields: [.. schema.RecordColumns.Where(c => c.Synthetic == null).Select(c => c.Field)]);
 
     // A Partial Form record's own fields are never seen by the game (CONTEXT.md). Its EditorID and
     // record header edit (editor-fields.md § Partial Form), as does the flag itself.
@@ -652,14 +652,6 @@ internal static class DocumentEdit
     }
 
     // A column's aliases sit beside the member they spell again, so they clear in that member's owner.
-    private static void ClearAliases(JsonObject record, ColumnSpec column)
-    {
-        JsonNode? owner = record;
-        foreach (var segment in (column.Synthetic?.BackingPath ?? column.PropertyName).Split('.')[..^1]) owner = owner?[segment];
-        if (owner is not JsonObject members) return;
-        foreach (var alias in column.Aliases) members.Remove(alias);
-    }
-
     // ── walking ─────────────────────────────────────────────────────────────
 
     private static JsonObject WalkPrefix(JsonObject root, IReadOnlyList<PathHop> prefix) =>

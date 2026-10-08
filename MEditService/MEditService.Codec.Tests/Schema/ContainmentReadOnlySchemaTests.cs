@@ -31,6 +31,23 @@ public sealed class ContainmentReadOnlySchemaTests
     }
 
     [Fact]
+    public void EveryMemberBelowAReadOnlyColumn_IsReadOnly_SoNoPathThroughItEndsWritable()
+    {
+        Assert.NotEmpty(Column("cell", "Grid").Field.Fields ?? []);
+        var writable = Schemas.Values
+            .SelectMany(schema => schema.RecordColumns
+                .Where(c => c.Field.ReadOnlyReason != null)
+                .SelectMany(c => Below(c.Field).Where(m => m.ReadOnlyReason == null).Select(m => $"{schema.TableName}.{c.Name}.{m.Name}")));
+        Assert.Empty(writable);
+
+        static IEnumerable<FieldMetadata> Below(FieldMetadata field) =>
+            new[] { field.ElementType }.OfType<FieldMetadata>()
+                .Concat(field.Fields ?? [])
+                .Concat(field.Variants?.Values ?? [])
+                .SelectMany(m => Below(m).Prepend(m));
+    }
+
+    [Fact]
     public void ACellsGrid_IsReadOnly_AsItsPlaceInTheWorld()
     {
         Assert.Contains(

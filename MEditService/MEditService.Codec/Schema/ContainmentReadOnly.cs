@@ -10,7 +10,7 @@ internal static class ContainmentReadOnly
     internal static ColumnSpec Marked(
         ColumnSpec column, string tableName, IReadOnlyList<Type> recordGetters, SchemaAnnotations annotations) =>
         ReasonFor(column.PropertyName, tableName, recordGetters, annotations) is { } reason
-            ? column with { Field = column.Field with { ReadOnlyReason = reason } }
+            ? column with { Field = column.Field.WithReadOnlyReason(reason) }
             : column;
 
     private static string? ReasonFor(

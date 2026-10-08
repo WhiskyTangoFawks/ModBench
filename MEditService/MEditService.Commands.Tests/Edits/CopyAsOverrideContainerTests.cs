@@ -159,7 +159,7 @@ public sealed class CopyAsOverrideContainerTests
 
         result.OnlyLanded();
         var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
-        Assert.False(worldspace.IsPartialForm());
+        Assert.True(worldspace.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
 
         var topCell = JsonNode.Parse(worldspace.Body).Require()["TopCell"].Require();
@@ -179,7 +179,7 @@ public sealed class CopyAsOverrideContainerTests
 
         result.OnlyLanded();
         var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
-        Assert.False(worldspace.IsPartialForm());
+        Assert.True(worldspace.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
 
         var topCell = JsonNode.Parse(worldspace.Body).Require()["TopCell"].Require().AsObject();
@@ -233,7 +233,7 @@ public sealed class CopyAsOverrideContainerTests
         result.OnlyLanded();
 
         var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
-        Assert.False(worldspace.IsPartialForm());
+        Assert.True(worldspace.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
 
         var cell = fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell.ToString());
@@ -308,7 +308,7 @@ public sealed class CopyAsOverrideContainerTests
         result.OnlyLanded();
 
         var worldspace = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()).Require();
-        Assert.False(worldspace.IsPartialForm());
+        Assert.True(worldspace.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
 
         var cell = fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell.ToString());

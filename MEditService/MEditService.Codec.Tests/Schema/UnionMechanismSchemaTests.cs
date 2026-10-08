@@ -12,7 +12,7 @@ public sealed class UnionMechanismSchemaTests
 
     private static FieldMetadata At(string table, params string[] hops)
     {
-        var meta = Schemas[table].RecordColumns.Single(c => c.Name == hops[0]).ToFieldMetadata();
+        var meta = Schemas[table].RecordColumns.Single(c => c.Name == hops[0]).Field;
         foreach (var hop in hops.Skip(1)) meta = hop == "[]" ? RequireElementType(meta) : RequireFields(meta).Single(f => f.Name == hop);
         return meta;
     }
@@ -40,7 +40,7 @@ public sealed class UnionMechanismSchemaTests
     public void EveryBaseWithLeaves_IsOneSparseUnionKeyedByTheDocumentsDiscriminator(string table, params string[] hops)
     {
         var fields = hops.Length == 0
-            ? Schemas[table].RecordColumns.Select(c => c.ToFieldMetadata()).ToList()
+            ? Schemas[table].RecordColumns.Select(c => c.Field).ToList()
             : RequireFields(At(table, hops));
 
         var discriminator = Assert.Single(fields, f => f.IsDiscriminator);

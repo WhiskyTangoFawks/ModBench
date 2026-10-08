@@ -46,11 +46,11 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "Properties");
 
-        static List<string> PropertyDomain(SubFieldSpec variant)
+        static List<string> PropertyDomain(FieldMetadata variant)
         {
-            var elementSpec = variant.ElementSpec
+            var elementSpec = variant.ElementType
                 ?? throw new InvalidOperationException("Expected a variant to declare an element spec.");
-            var subFields = elementSpec.SubFields
+            var subFields = elementSpec.Fields
                 ?? throw new InvalidOperationException("Expected a variant's element spec to declare sub-fields.");
             return [.. subFields.Single(f => f.Name == "Property").EnumMembers.Select(m => m.Value)];
         }
@@ -68,9 +68,9 @@ public class SchemaReflectorTests
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "Properties");
-        var elementSpec = properties.Field.ElementSpec
+        var elementSpec = properties.Field.ElementType
             ?? throw new InvalidOperationException("Expected 'Properties' to declare an element spec.");
-        var fields = elementSpec.SubFields
+        var fields = elementSpec.Fields
             ?? throw new InvalidOperationException("Expected 'Properties' element spec to declare sub-fields.");
 
         var value = fields.Single(f => f.Name == "Value");
@@ -81,19 +81,19 @@ public class SchemaReflectorTests
 
         var valueVariantsBecauseValueValue2AndFunctionTypeCollideInClrTypeAcrossTheSevenLeaves = value.Variants
             ?? throw new InvalidOperationException("Expected 'Value' to carry per-leaf variants.");
-        Assert.Equal("int", valueVariantsBecauseValueValue2AndFunctionTypeCollideInClrTypeAcrossTheSevenLeaves["ObjectModIntProperty<Armor+Property>"].ApiType);
-        Assert.Equal("float", valueVariantsBecauseValueValue2AndFunctionTypeCollideInClrTypeAcrossTheSevenLeaves["ObjectModFloatProperty<Armor+Property>"].ApiType);
-        Assert.Equal("bool", valueVariantsBecauseValueValue2AndFunctionTypeCollideInClrTypeAcrossTheSevenLeaves["ObjectModBoolProperty<Armor+Property>"].ApiType);
+        Assert.Equal("int", valueVariantsBecauseValueValue2AndFunctionTypeCollideInClrTypeAcrossTheSevenLeaves["ObjectModIntProperty<Armor+Property>"].Type);
+        Assert.Equal("float", valueVariantsBecauseValueValue2AndFunctionTypeCollideInClrTypeAcrossTheSevenLeaves["ObjectModFloatProperty<Armor+Property>"].Type);
+        Assert.Equal("bool", valueVariantsBecauseValueValue2AndFunctionTypeCollideInClrTypeAcrossTheSevenLeaves["ObjectModBoolProperty<Armor+Property>"].Type);
         Assert.NotNull(value2.Variants);
         Assert.NotNull(functionType.Variants);
-        Assert.Equal("formKey", record.ApiType);
+        Assert.Equal("formKey", record.Type);
         var recordVariantsNamingExactlyTheLeavesDeclaringItBecauseTheyTypeItAlike = record.Variants
             ?? throw new InvalidOperationException("Expected 'Record' to carry per-leaf variants.");
         Assert.Equal(
             ["ObjectModFormLinkFloatProperty<Armor+Property>", "ObjectModFormLinkIntProperty<Armor+Property>"],
             recordVariantsNamingExactlyTheLeavesDeclaringItBecauseTheyTypeItAlike.Keys.Order(StringComparer.Ordinal));
-        Assert.All(recordVariantsNamingExactlyTheLeavesDeclaringItBecauseTheyTypeItAlike.Values, v => Assert.Equal("formKey", v.ApiType));
-        Assert.Equal("int", enumIntValue.ApiType);
+        Assert.All(recordVariantsNamingExactlyTheLeavesDeclaringItBecauseTheyTypeItAlike.Values, v => Assert.Equal("formKey", v.Type));
+        Assert.Equal("int", enumIntValue.Type);
         var enumIntValueVariants = enumIntValue.Variants
             ?? throw new InvalidOperationException("Expected 'EnumIntValue' to carry per-leaf variants.");
         Assert.Equal(["ObjectModEnumProperty<Armor+Property>"], enumIntValueVariants.Keys);
@@ -117,7 +117,7 @@ public class SchemaReflectorTests
         var variants = outputChar.Field.Variants
             ?? throw new InvalidOperationException("Expected 'OutputChar' to carry a per-class variant.");
         Assert.Equal([nameof(GlobalFloat)], variants.Keys);
-        Assert.Equal("bool", variants[nameof(GlobalFloat)].ApiType);
+        Assert.Equal("bool", variants[nameof(GlobalFloat)].Type);
         Assert.True(outputChar.IsViewable);
     }
 
@@ -189,7 +189,7 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Factions");
         Assert.NotNull(col);
-        var faction = col.Field.ElementSpec?.SubFields?.FirstOrDefault(f => f.Name == "Faction");
+        var faction = col.Field.ElementType?.Fields?.FirstOrDefault(f => f.Name == "Faction");
         Assert.NotNull(faction);
         Assert.False(faction.AllowsNull);
     }
@@ -211,9 +211,9 @@ public class SchemaReflectorTests
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Keywords");
         Assert.NotNull(col);
         Assert.Equal("array", col.ApiType);
-        Assert.NotNull(col.Field.ElementSpec);
-        Assert.Equal("formKey", col.Field.ElementSpec.ApiType);
-        Assert.Contains("kywd", col.Field.ElementSpec.ValidFormKeyTypes);
+        Assert.NotNull(col.Field.ElementType);
+        Assert.Equal("formKey", col.Field.ElementType.Type);
+        Assert.Contains("kywd", col.Field.ElementType.ValidFormKeyTypes);
     }
 
     [Fact]
@@ -223,12 +223,12 @@ public class SchemaReflectorTests
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Factions");
         Assert.NotNull(col);
         Assert.Equal("array", col.ApiType);
-        Assert.NotNull(col.Field.ElementSpec);
-        Assert.Equal("struct", col.Field.ElementSpec.ApiType);
-        var fields = col.Field.ElementSpec.SubFields;
+        Assert.NotNull(col.Field.ElementType);
+        Assert.Equal("struct", col.Field.ElementType.Type);
+        var fields = col.Field.ElementType.Fields;
         Assert.NotNull(fields);
-        Assert.Contains(fields, f => f.Name == "Faction" && f.ApiType == "formKey");
-        Assert.Contains(fields, f => f.Name == "Rank" && f.ApiType == "int");
+        Assert.Contains(fields, f => f.Name == "Faction" && f.Type == "formKey");
+        Assert.Contains(fields, f => f.Name == "Rank" && f.Type == "int");
     }
 
     [Fact]
@@ -284,14 +284,14 @@ public class SchemaReflectorTests
         var structCol = npc.RecordColumns.FirstOrDefault(c => c.Name == structOrArrayColumn);
         Assert.NotNull(structCol);
 
-        IReadOnlyList<SubFieldSpec>? subFields = isArray
-            ? structCol.Field.ElementSpec?.SubFields
-            : structCol.Field.SubFields;
+        IReadOnlyList<FieldMetadata>? subFields = isArray
+            ? structCol.Field.ElementType?.Fields
+            : structCol.Field.Fields;
 
         Assert.NotNull(subFields);
         var subField = subFields.FirstOrDefault(f => f.Name == subFieldName);
         Assert.NotNull(subField);
-        Assert.Equal(expectedApiType, subField.ApiType);
+        Assert.Equal(expectedApiType, subField.Type);
     }
 
     [Fact]
@@ -383,12 +383,12 @@ public class SchemaReflectorTests
         Assert.NotNull(col);
         Assert.Equal("array", col.ApiType);
         Assert.Equal("ModHeader.MasterReferences", col.PropertyName);
-        var elementSpec = col.Field.ElementSpec;
+        var elementSpec = col.Field.ElementType;
         Assert.NotNull(elementSpec);
-        Assert.Equal("struct", elementSpec.ApiType);
-        var subFields = elementSpec.SubFields;
+        Assert.Equal("struct", elementSpec.Type);
+        var subFields = elementSpec.Fields;
         Assert.NotNull(subFields);
-        Assert.Contains(subFields, f => f.Name == "Master" && f.ApiType == "string");
+        Assert.Contains(subFields, f => f.Name == "Master" && f.Type == "string");
     }
 
     [Fact]
@@ -407,8 +407,8 @@ public class SchemaReflectorTests
         Assert.NotNull(col);
         Assert.Equal("struct", col.ApiType);
 
-        Assert.Equal("vector", col.Field.SubFields?.FirstOrDefault(f => f.Name == "First")?.ApiType);
-        Assert.Equal("vector", col.Field.SubFields?.FirstOrDefault(f => f.Name == "Second")?.ApiType);
+        Assert.Equal("vector", col.Field.Fields?.FirstOrDefault(f => f.Name == "First")?.Type);
+        Assert.Equal("vector", col.Field.Fields?.FirstOrDefault(f => f.Name == "Second")?.Type);
     }
 
     [Fact]
@@ -417,16 +417,16 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var destructible = schemas["cont"].RecordColumns.First(c => c.Name == "Destructible");
 
-        var resistances = destructible.Field.SubFields?.FirstOrDefault(f => f.Name == "Resistances");
+        var resistances = destructible.Field.Fields?.FirstOrDefault(f => f.Name == "Resistances");
         Assert.NotNull(resistances);
-        Assert.Equal("array", resistances.ApiType);
+        Assert.Equal("array", resistances.Type);
 
-        var stages = destructible.Field.SubFields?.FirstOrDefault(f => f.Name == "Stages");
+        var stages = destructible.Field.Fields?.FirstOrDefault(f => f.Name == "Stages");
         Assert.NotNull(stages);
-        Assert.Equal("array", stages.ApiType);
-        var stagesElementSpec = stages.ElementSpec
+        Assert.Equal("array", stages.Type);
+        var stagesElementSpec = stages.ElementType
             ?? throw new InvalidOperationException("Expected 'Stages' to declare an element spec.");
-        var stagesSubFields = stagesElementSpec.SubFields
+        var stagesSubFields = stagesElementSpec.Fields
             ?? throw new InvalidOperationException("Expected 'Stages' element spec to declare sub-fields.");
         Assert.Contains(stagesSubFields, f => f.Name == "HealthPercent");
     }
@@ -438,7 +438,7 @@ public class SchemaReflectorTests
         var col = schemas["mato"].RecordColumns.FirstOrDefault(c => c.Name == "ProjectionVector");
         Assert.NotNull(col);
         Assert.Equal("vector", col.ApiType);
-        Assert.Null(col.Field.SubFields);
+        Assert.Null(col.Field.Fields);
     }
 
     [Fact]
@@ -448,8 +448,8 @@ public class SchemaReflectorTests
         var teleport = schemas["refr"].RecordColumns.FirstOrDefault(c => c.Name == "TeleportDestination");
         Assert.NotNull(teleport);
 
-        Assert.Equal("vector", teleport.Field.SubFields?.FirstOrDefault(f => f.Name == "Position")?.ApiType);
-        Assert.Equal("vector", teleport.Field.SubFields?.FirstOrDefault(f => f.Name == "Rotation")?.ApiType);
+        Assert.Equal("vector", teleport.Field.Fields?.FirstOrDefault(f => f.Name == "Position")?.Type);
+        Assert.Equal("vector", teleport.Field.Fields?.FirstOrDefault(f => f.Name == "Rotation")?.Type);
     }
 
     [Fact]
@@ -459,12 +459,12 @@ public class SchemaReflectorTests
         var col = schemas["cell"].RecordColumns.FirstOrDefault(c => c.Name == "Grid");
         Assert.NotNull(col);
         Assert.Equal("struct", col.ApiType);
-        var subFields = col.Field.SubFields
+        var subFields = col.Field.Fields
             ?? throw new InvalidOperationException("Expected 'Grid' to declare sub-fields.");
         Assert.Equal(2, subFields.Count);
 
-        Assert.Contains(subFields, f => f.Name == "Flags" && f.ApiType is "enum" or "Flags");
-        Assert.Contains(subFields, f => f.Name == "Point" && f.ApiType == "vector");
+        Assert.Contains(subFields, f => f.Name == "Flags" && f.Type is "enum" or "Flags");
+        Assert.Contains(subFields, f => f.Name == "Point" && f.Type == "vector");
     }
 
     [Fact]
@@ -475,11 +475,11 @@ public class SchemaReflectorTests
         Assert.NotNull(col);
         Assert.Equal("array", col.ApiType);
 
-        var coordinates = col.Field.ElementSpec?.SubFields?.FirstOrDefault(f => f.Name == "Coordinates");
+        var coordinates = col.Field.ElementType?.Fields?.FirstOrDefault(f => f.Name == "Coordinates");
         Assert.NotNull(coordinates);
-        Assert.Equal("array", coordinates.ApiType);
-        var coordinatesElementSpec = coordinates.ElementSpec
+        Assert.Equal("array", coordinates.Type);
+        var coordinatesElementSpec = coordinates.ElementType
             ?? throw new InvalidOperationException("Expected 'Coordinates' to declare an element spec.");
-        Assert.Equal("vector", coordinatesElementSpec.ApiType);
+        Assert.Equal("vector", coordinatesElementSpec.Type);
     }
 }

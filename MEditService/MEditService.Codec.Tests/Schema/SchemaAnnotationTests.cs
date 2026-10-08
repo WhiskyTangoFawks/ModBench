@@ -16,11 +16,11 @@ public sealed class SchemaAnnotationTests
     public void TheSceneActionTypeKnownDefect_IsNamedInTheSchema_ReadOnlyWithItsReason()
     {
         var type = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["scen"]
-            .RecordColumns.Single(c => c.Name == "Actions").Field.ElementSpec.Require().SubFields.Require()
+            .RecordColumns.Single(c => c.Name == "Actions").Field.ElementType.Require().Fields.Require()
             .Single(f => f.Name == "Type");
 
         Assert.Equal("ASceneActionType", type.LeafTypeName);
-        Assert.Empty(type.SubFields.Require());
+        Assert.Empty(type.Fields.Require());
         Assert.Contains("unimplemented throw upstream", type.ReadOnlyReason, StringComparison.Ordinal);
     }
 }

@@ -11,7 +11,7 @@ public class LeafTypeNameSchemaTests
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     private static FieldMetadata Column(string table, string column) =>
-        Schemas[table].RecordColumns.Single(c => c.Name == column).ToFieldMetadata();
+        Schemas[table].RecordColumns.Single(c => c.Name == column).Field;
 
     private static FieldMetadata Member(FieldMetadata meta, string name) =>
         (meta.Fields ?? throw new InvalidOperationException($"Expected fields to look up member '{name}'."))
@@ -73,7 +73,7 @@ public class LeafTypeNameSchemaTests
     private static List<string> PathsWhere(Func<FieldMetadata, bool> predicate) =>
     [
         .. Schemas
-            .SelectMany(s => s.Value.RecordColumns.Select(c => (Path: $"{s.Key}.{c.Name}", Meta: c.ToFieldMetadata())))
+            .SelectMany(s => s.Value.RecordColumns.Select(c => (Path: $"{s.Key}.{c.Name}", Meta: c.Field)))
             .SelectMany(c => Walk(c.Path, c.Meta))
             .Where(f => predicate(f.Meta))
             .Select(f => f.Path),

@@ -83,4 +83,15 @@ public record FieldMetadata(
 
     // xEdit's extended key: the members ordering the elements that share a key, so the nth of them
     // pairs with the nth in every other column. The compare reads it; the webview never does.
-    [property: JsonIgnore] IReadOnlyList<string>? ExtendedKeyMembers = null);
+    [property: JsonIgnore] IReadOnlyList<string>? ExtendedKeyMembers = null)
+{
+    /// <summary>A read-only member has no writable members of its own, so its reason reaches every
+    /// member below it, except one that already names its own.</summary>
+    internal FieldMetadata WithReadOnlyReason(string reason) => this with
+    {
+        ReadOnlyReason = reason,
+        ElementType = ElementType?.WithReadOnlyReason(ElementType.ReadOnlyReason ?? reason),
+        Fields = Fields?.Select(f => f.WithReadOnlyReason(f.ReadOnlyReason ?? reason)).ToList(),
+        Variants = Variants?.ToDictionary(v => v.Key, v => v.Value.WithReadOnlyReason(v.Value.ReadOnlyReason ?? reason), StringComparer.Ordinal),
+    };
+}

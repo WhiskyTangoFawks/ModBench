@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -9,9 +10,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The container half of both copy modes: a child lands inside its container's document,
-/// copied in as an override with its own fields when the destination lacks it. One write path with
-/// the write side (ADR-0007).</summary>
+/// <summary>The container half of both copy modes: a child lands inside its container's document, the
+/// container copied in when absent, as a Partial Form where the game allows (ADR-0007).</summary>
 internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger, RecordTextCodec codec)
 {
     /// <summary>The tracked plugin a copy lands in: its repository and its key. No folder — every
@@ -82,10 +82,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     {
         var containerFormKey = container.ParentFormKey;
         var sourceContainer = HeldBy(source, containerFormKey);
-        if (resolution.HighestOverrideVisibleToTheDestination(
-                source, sourceContainer, destination.Repository, destination.Plugin, out var visibleText) is { } refused)
-            return refused;
-        var ownFields = OwnFieldsOf(source, sourceContainer, visibleText, release);
+        if (!TryCopyIn(source, sourceContainer, destination, release, out var ownFields, out var refused)) return refused;
         var withChild = ownFields with
         {
             Body = ContainerDocumentEdits.WithChildAppended(
@@ -103,7 +100,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         {
             logger.LogInformation(
                 "Landed {FormKey} in {DestinationPlugin} ({DestinationOrigin}) — copied in its container {ContainerFormKey} " +
-                "as an override around it",
+                "around it",
                 child.FormKey, destination.Plugin.Name, destination.Plugin.Origin, containerFormKey);
         }
         return landed;
@@ -173,10 +170,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         if (Identity(destination, worldspaceFormKey, release) is null)
         {
             var worldspace = HeldBy(source, worldspaceFormKey);
-            if (resolution.HighestOverrideVisibleToTheDestination(
-                source, worldspace, destination.Repository, destination.Plugin, out var visibleText) is { } refused)
-                return refused;
-            worldspaceCopy = OwnFieldsOf(source, worldspace, visibleText, release);
+            if (!TryCopyIn(source, worldspace, destination, release, out var copied, out var refused)) return refused;
+            worldspaceCopy = copied;
         }
 
         var sourceCell = source.Identity(cellFormKey)
@@ -244,6 +239,44 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         source.Identity(containerFormKey)
         ?? throw new InvalidOperationException(
             $"{source.Plugin.Name} does not hold {containerFormKey}, which a copied record names as its container.");
+
+    private bool TryCopyIn(
+        CopySource source, RecordIdentity container, Destination destination, GameRelease release,
+        [NotNullWhen(true)] out SourceDocument? copy, [NotNullWhen(false)] out RecordEditResult? refused)
+    {
+        refused = null;
+        var schema = schemaReflector.GetSchemas(release)[container.RecordType];
+        if (CanBePartial.Of(schema, release, container.FormKey, TemporaryExterior(source, container, release)) is CanBePartial.Verdict.Can)
+        {
+            copy = PartialFormOf(source.Document(container), schema, release);
+            return true;
+        }
+
+        copy = null;
+        if (resolution.HighestOverrideVisibleToTheDestination(
+                source, container, destination.Repository, destination.Plugin, out var visibleText) is { } visibleRefusal)
+        {
+            refused = visibleRefusal;
+            return false;
+        }
+        copy = OwnFieldsOf(source, container, visibleText, release);
+        return true;
+    }
+
+    private static bool? TemporaryExterior(CopySource source, RecordIdentity container, GameRelease release) =>
+        CanBePartial.TemporaryExterior(
+            (source.RecordFlags(container) & PersistentFlag.Bit) != 0,
+            source.ContainerOf(container) is not null,
+            RecordTypeDispatch.For(release).IsCell(container.RecordType) ? source.WorldspaceOf(container) is null : null);
+
+    private SourceDocument PartialFormOf(SourceDocument container, RecordTableSchema schema, GameRelease release)
+    {
+        var body = ContainerDocumentEdits.WithoutChildren(codec, container.Body, release, container.RecordType);
+        var record = RequireParsed(body).AsObject();
+        return RecordEmptying.MakePartialForm(record, schema)
+            ? container with { Body = codec.RoundTrip(record.ToJsonString(), release, container.RecordType) }
+            : container with { Body = body };
+    }
 
     // The container as xEdit copies it in: the copy the destination can see, its own fields only.
     private SourceDocument OwnFieldsOf(CopySource source, RecordIdentity container, string? visibleText, GameRelease release)

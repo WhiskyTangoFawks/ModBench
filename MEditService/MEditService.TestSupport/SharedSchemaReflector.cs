@@ -14,14 +14,14 @@ public static class SharedSchemaReflector
         RequireSubFields(ElementSubFields(table, column).Single(f => f.Name == member), member)
             .Single(f => f.Name == discriminator).EnumMembers[0].Value;
 
-    private static IReadOnlyList<SubFieldSpec> ElementSubFields(string table, string column)
+    private static IReadOnlyList<FieldMetadata> ElementSubFields(string table, string column)
     {
         var field = Instance.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(c => c.Name == column).Field;
-        var elementSpec = field.ElementSpec
+        var elementSpec = field.ElementType
             ?? throw new InvalidOperationException($"Expected '{table}.{column}' to have an array element spec.");
         return RequireSubFields(elementSpec, column);
     }
 
-    private static IReadOnlyList<SubFieldSpec> RequireSubFields(SubFieldSpec field, string name) =>
-        field.SubFields ?? throw new InvalidOperationException($"Expected '{name}' to have sub-fields.");
+    private static IReadOnlyList<FieldMetadata> RequireSubFields(FieldMetadata field, string name) =>
+        field.Fields ?? throw new InvalidOperationException($"Expected '{name}' to have sub-fields.");
 }

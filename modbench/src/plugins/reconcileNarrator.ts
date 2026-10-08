@@ -1,5 +1,5 @@
 import {
-  type LoadOrderProgress, type LoadOrderRefusal, type MEditClient, type PluginAddress,
+  type LoadOrderProgress, type LoadOrderRefusal, type PluginAddress,
   type PluginLoadFailure,
 } from '../client';
 import { errorMessage } from '../ports/errorMessage';
@@ -40,13 +40,6 @@ interface Span {
 
 const terminal = (status: LoadOrderProgress): boolean =>
   status.conflictsComputed || status.refusal !== undefined;
-
-/** The narrator hears every index status the stream carries; the answer is the unsubscribe. */
-export function subscribeNarratorToLoadOrderStatus(
-  client: Pick<MEditClient, 'onNotification'>, narrator: ReconcileNarrator,
-): () => void {
-  return client.onNotification('load-order-status', (status) => narrator.hear(status));
-}
 
 // plugins.md, States 2: the index status says what the Plugins view shows, whoever started the
 // reconcile — a put, a rebuild's refill or the watcher.

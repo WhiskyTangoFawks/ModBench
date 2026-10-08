@@ -426,12 +426,44 @@ describe('the Referenced By selection', () => {
   });
 });
 
+const statusTick = (conflictsComputed: boolean, version: number): NotificationEvent => ({
+  kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
+  loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed, failures: [], version },
+});
+const conflictsComputedTick = statusTick(true, 1);
+
 describe('conflicts computed', () => {
+  const reads = (tab: { webview: { postMessage: { mock: { calls: unknown[][] } } } }) => tab.webview.postMessage.mock.calls.length;
+
+  it('has the tabs read again for each settled reconcile, even one whose picture is the last\'s', () => {
+    const client = new InMemoryMEditClient();
+    const { open } = makeEditor(client);
+    const tab = open('000801:A.esp');
+
+    client.emit(statusTick(true, 1));
+    client.emit(statusTick(true, 2));
+
+    expect(reads(tab)).toBe(2);
+  });
+
+  it('has the tabs read nothing again as a reconcile starts, or when mEdit goes', () => {
+    const client = new InMemoryMEditClient();
+    const { open } = makeEditor(client);
+    client.emit(statusTick(true, 1));
+    const tab = open('000801:A.esp');
+
+    client.emit(statusTick(false, 2));
+    client.setStatus('disconnected');
+
+    expect(reads(tab)).toBe(0);
+  });
+
   it('has every open record tab read its record again', () => {
-    const { editor, open } = makeEditor();
+    const client = new InMemoryMEditClient();
+    const { open } = makeEditor(client);
     const tabs = [open('000801:A.esp'), open('000802:A.esp')];
 
-    editor.announceConflictsComputed();
+    client.emit(conflictsComputedTick);
 
     expect(tabs.map((tab) => tab.webview.postMessage.mock.calls)).toEqual([
       [[{ type: 'loadRecord', formKey: '000801:A.esp' }]],
@@ -525,14 +557,14 @@ describe('a record file\'s tab', () => {
   it('shows the record mEdit says the file holds, followed by Referenced By and read again as any record tab is', async () => {
     const client = fileClient();
     client.setQueryAnswer('getRecordOfFile', holding(GUN));
-    const { editor, openFile, referencedBy } = makeEditor(client);
+    const { openFile, referencedBy } = makeEditor(client);
 
     const tab = await openFile(FILE);
 
     expect(client.calls).toContainEqual({ method: 'getRecordOfFile', args: [FILE] });
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
     expect((await recordOf(referencedBy)).description).toBe('Gun');
-    editor.announceConflictsComputed();
+    client.emit(conflictsComputedTick);
     expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
   });
 
@@ -714,7 +746,7 @@ describe('a record tab closed', () => {
     client.setQueryAnswer('getReferences', []);
     let land: (answer: typeof holding) => void = () => undefined;
     client.setQueryAnswerOnce('getRecordOfFile', new Promise<typeof holding>((resolve) => { land = resolve; }));
-    const { editor, referencedBy } = makeEditor(client);
+    const { referencedBy } = makeEditor(client);
     const provider = h.editorProviders.get('modbench.record');
     if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
     const tab = fakePanel();
@@ -723,7 +755,7 @@ describe('a record tab closed', () => {
     tab.close();
     land(holding);
     await resolving;
-    editor.announceConflictsComputed();
+    client.emit(conflictsComputedTick);
 
     expect(pageGlobal(tab, 'mEditFormKey')).toBeUndefined();
     expect(tab.webview.postMessage).not.toHaveBeenCalled();
