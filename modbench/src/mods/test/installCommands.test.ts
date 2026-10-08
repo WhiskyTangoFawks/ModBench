@@ -61,7 +61,7 @@ type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
     access: ACCESS,
-    instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE }), refresh: () => Promise.resolve() },
+    instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE, downloads: { kind: 'listed', rows: [downloadRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
     warnIfFomod: vi.fn(),
     downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
@@ -213,7 +213,7 @@ describe('modbench.mod.install: a downloaded file is its source', () => {
     const row = downloadRowFixture('foo.7z');
 
     registerModInstallCommands(deps());
-    const outcome = await invoke('modbench.mod.install', { argument: { kind: 'download', row, upgrades: [] } });
+    const outcome = await invoke('modbench.mod.install', { argument: { kind: 'download', row } });
 
     expect(installFromArchive).toHaveBeenCalledWith(ACCESS, { kind: 'new', name: 'Foo' }, row.path, expect.objectContaining({ modID: row.modID }));
     expect(showQuickPick).not.toHaveBeenCalled();
@@ -227,7 +227,7 @@ describe('modbench.mod.install: a downloaded file is its source', () => {
     showInputBox.mockResolvedValue('Foo');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false, downloadRefusal: 'locked' });
     installFromArchive.mockResolvedValueOnce({ applied: false, refusal: 'disk full' });
-    const argument = { argument: { kind: 'download', row: downloadRowFixture('foo.7z'), upgrades: [] } };
+    const argument = { argument: { kind: 'download', row: downloadRowFixture('foo.7z') } };
 
     registerModInstallCommands(deps({ downloadInstall: { reporter, log, progressViewId: 'modbench.downloads' }, reporterFor: () => recordingReporter() }));
     await invoke('modbench.mod.install', argument);

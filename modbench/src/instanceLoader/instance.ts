@@ -19,7 +19,7 @@ import { modSyncArgumentsOf, pluginSyncArgumentsOf, type ModSyncArguments, type 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
 export type { FileOrigin, Mod, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
-export type { DownloadFile, DownloadRow } from './downloadRows';
+export type { DownloadFile, DownloadRow, UpgradeCandidate, UpgradeTier } from './downloadRows';
 export type { Copy, FileCopies } from './sameCopies';
 export type { ModSyncArguments, PluginSyncArguments } from './syncArguments';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
@@ -445,7 +445,7 @@ export class Instance implements Subscription {
         ? { kind: 'unresolved', reason: downloadsOutcome.reason }
         : {
           kind: 'listed',
-          rows: downloadsOutcome.files && installedInto ? buildDownloadRows(downloadsOutcome.files, installedInto) : [],
+          rows: downloadsOutcome.files && installedInto ? buildDownloadRows(downloadsOutcome.files, installedInto, entries) : [],
         },
       activeProfile: profile,
       managerNames: adapter.names,

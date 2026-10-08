@@ -10,6 +10,7 @@ const row = (name: string, mtimeMs: number, excluded = false): DownloadRow => ({
   mtimeMs,
   hasMeta: false,
   excluded,
+  upgrades: [],
 });
 
 describe('sortDownloadRows', () => {
@@ -66,7 +67,7 @@ describe('sortDownloadRows', () => {
 });
 
 describe('downloadContextValue, the space-separated flag string the view/item/context when clauses match', () => {
-  const plain: DownloadRow = { name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, excluded: false };
+  const plain: DownloadRow = { name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, excluded: false, upgrades: [] };
 
   it('is the base "download" token alone when no optional flag applies', () => {
     expect(downloadContextValue(plain)).toBe('download');
