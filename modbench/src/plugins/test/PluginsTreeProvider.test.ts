@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PluginsDrop } from '../../pluginsCommands/plugins';
-import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
+import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
+import { FileConflictLookup, modOrigin } from '../../instanceLoader/fileConflictIndex';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import {
@@ -2254,6 +2255,26 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
     expect(item.description).toBe('failed to read');
     expect(item.tooltip).toContain('Failed to read: InvalidOperationException: Malformed record');
     expect(item.tooltip).toContain('FormatException: bad subrecord at offset 12');
+  });
+
+  it('shows the failure of a line naming plugins whose names differ only in case, never "Still indexing…"', async () => {
+    const files = new FileConflictLookup();
+    files.set({ relativePath: 'Foo.esp', winner: '/mods/SomeMod/Foo.esp', winnerOrigin: modOrigin('SomeMod'), providers: [modOrigin('SomeMod')] });
+    const modFile = (relativePath: string) => ({ relativePath, path: `/mods/SomeMod/${relativePath}`, sourcePath: `/mods/SomeMod/${relativePath}`, excluded: false, excludedByName: false });
+    const rows = buildLoadOrderRows(
+      [{ name: 'FOO.esp', enabled: true }],
+      { files, filesByMod: new Map([['SomeMod', [modFile('Foo.esp'), modFile('foo.esp')]]]), foldersByMod: new Map() },
+      [], { kind: 'found', root: '/game', dataFolder: '/game/Data' },
+    );
+    const h = makeTree(rows);
+    await reconcile(h, [], [
+      { name: 'Foo.esp', origin: 'SomeMod', reason: 'differs only in case from foo.esp' },
+      { name: 'foo.esp', origin: 'SomeMod', reason: 'differs only in case from Foo.esp' },
+    ]);
+
+    const [row] = await h.tree.getChildren();
+    expect((await rowItem(h)).description).toBe('failed to read');
+    expect((await h.tree.getChildren(row)).map((c) => c.tooltip)).toEqual(['differs only in case from foo.esp']);
   });
 
   it('never abandons the row: it stays collapsible, but expands to the error node — it will never be indexed', async () => {
