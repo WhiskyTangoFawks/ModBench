@@ -10,7 +10,7 @@ public static class MisshapedPerkPlugin
     public const string FileName = "Misshaped Perks.esp";
     public const string EditorId = "HarborMisshapedPerk";
     public const uint FormId = 0x000008EF;
-    public static readonly string FormKey = $"{FormId & 0xFFFFFF:X6}:{FileName}";
+    public static readonly string FormKey = $"{FormId:X6}:{FileName}";
 
     private static readonly string[] ReadableEditorIds = ["HarborReadablePerkOne", "HarborReadablePerkTwo"];
 
@@ -23,7 +23,7 @@ public static class MisshapedPerkPlugin
         foreach (var editorId in ReadableEditorIds)
             mod.Perks.AddNew(editorId).Effects.Add(CleanEntry());
 
-        var misshaped = new Perk(new FormKey(modKey, FormId & 0xFFFFFF), Fallout4Release.Fallout4) { EditorID = EditorId };
+        var misshaped = new Perk(new FormKey(modKey, FormId), Fallout4Release.Fallout4) { EditorID = EditorId };
         misshaped.Effects.Add(CleanEntry());
         misshaped.Effects.Add(MisshapedPerks.ActorValueEntry());
         mod.Perks.Add(misshaped);
