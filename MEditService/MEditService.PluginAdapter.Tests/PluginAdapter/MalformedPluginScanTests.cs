@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
+using static MEditService.TestSupport.RawPlugin;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -23,12 +24,12 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void GaussRevolver_TemplateRotation_IsDiagnosedByExactClassAndText_TheCombinationsObtsPrecedingItsObtfAndFullLeavingThemUnclosed()
     {
-        var diagnoses = Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("WEAP", 0x03000860,
-            Sub("EDID", "GaussRevolver\0"u8.ToArray()),
-            Sub("OBTE", Le(1)),
-            Sub("OBTS", new byte[67]),
-            Sub("OBTF", []), Sub("FULL", "Gauss Revolver\0"u8.ToArray()),
-            Sub("STOP", [])));
+        var diagnoses = Scan(Record("WEAP", 0x03000860,
+            Subrecord("EDID", "GaussRevolver\0"u8.ToArray()),
+            Subrecord("OBTE", Le(1)),
+            Subrecord("OBTS", new byte[67]),
+            Subrecord("OBTF", []), Subrecord("FULL", "Gauss Revolver\0"u8.ToArray()),
+            Subrecord("STOP", [])));
 
         var d = Assert.Single(diagnoses);
         Assert.Equal("subrecord-out-of-ck-order", d.DefectClass);
@@ -56,10 +57,10 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void SouthOfTheSea_CounterDisagreeingWithEntries_XwpgSaysOnePowerGridConnectionButTwoXwpnEntriesFollow_IsDiagnosedByExactClassAndText()
     {
-        var diagnoses = Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("REFR", 0x07431EDC,
-            Sub("EDID", "00sots_Necropolis_WorkshopRef\0"u8.ToArray()),
-            Sub("XWPG", Le(1)),
-            Sub("XWPN", new byte[12]), Sub("XWPN", new byte[12])));
+        var diagnoses = Scan(Record("REFR", 0x07431EDC,
+            Subrecord("EDID", "00sots_Necropolis_WorkshopRef\0"u8.ToArray()),
+            Subrecord("XWPG", Le(1)),
+            Subrecord("XWPN", new byte[12]), Subrecord("XWPN", new byte[12])));
 
         var d = Assert.Single(diagnoses);
         Assert.Equal("counter-entries-mismatch", d.DefectClass);
@@ -83,14 +84,14 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void FastTravelSigns_Function9MissingEpf3_AnAddActivateChoiceEntryCarryingEpft4EpfbAndEpf2_IsDiagnosedByExactClassAndText()
     {
-        var diagnoses = Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("PERK", 0x050008AB,
-            Sub("EDID", "FTS_CallMarkerPerk\0"u8.ToArray()),
-            Sub("PRKE", [2, 0, 0]),
-            Sub("DATA", [0, 9, 0]),
-            Sub("EPFT", [4]),
-            Sub("EPFB", new byte[2]),
-            Sub("EPF2", new byte[27]),
-            Sub("PRKF", [])));
+        var diagnoses = Scan(Record("PERK", 0x050008AB,
+            Subrecord("EDID", "FTS_CallMarkerPerk\0"u8.ToArray()),
+            Subrecord("PRKE", [2, 0, 0]),
+            Subrecord("DATA", [0, 9, 0]),
+            Subrecord("EPFT", [4]),
+            Subrecord("EPFB", new byte[2]),
+            Subrecord("EPF2", new byte[27]),
+            Subrecord("PRKF", [])));
 
         var d = Assert.Single(diagnoses);
         Assert.Equal("entry-point-parameter-shape", d.DefectClass);
@@ -102,14 +103,14 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void Radfall_Function6WithParameters_AnAbsoluteValueEntryCarryingAnEpftEpfbEpfdBlockItNeverTakes_IsDiagnosedLossyByExactClassAndText()
     {
-        var diagnoses = Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("PERK", 0x0004C92C,
-            Sub("EDID", "Sniper03\0"u8.ToArray()),
-            Sub("PRKE", [2, 0, 0]),
-            Sub("DATA", [0, 6, 0]),
-            Sub("EPFT", [1]),
-            Sub("EPFB", new byte[2]),
-            Sub("EPFD", new byte[4]),
-            Sub("PRKF", [])));
+        var diagnoses = Scan(Record("PERK", 0x0004C92C,
+            Subrecord("EDID", "Sniper03\0"u8.ToArray()),
+            Subrecord("PRKE", [2, 0, 0]),
+            Subrecord("DATA", [0, 6, 0]),
+            Subrecord("EPFT", [1]),
+            Subrecord("EPFB", new byte[2]),
+            Subrecord("EPFD", new byte[4]),
+            Subrecord("PRKF", [])));
 
         var d = Assert.Single(diagnoses);
         Assert.Equal("entry-point-parameter-shape", d.DefectClass);
@@ -122,13 +123,13 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void EntryPointShape_AVanillaShapedFunction14_ReportsNothing()
     {
-        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("PERK", 0x00000009,
-            Sub("EDID", "CleanPerk\0"u8.ToArray()),
-            Sub("PRKE", [2, 0, 0]),
-            Sub("DATA", [0, 14, 0]),
-            Sub("EPFT", [8]),
-            Sub("EPFD", new byte[8]),
-            Sub("PRKF", []));
+        var record = Record("PERK", 0x00000009,
+            Subrecord("EDID", "CleanPerk\0"u8.ToArray()),
+            Subrecord("PRKE", [2, 0, 0]),
+            Subrecord("DATA", [0, 14, 0]),
+            Subrecord("EPFT", [8]),
+            Subrecord("EPFD", new byte[8]),
+            Subrecord("PRKF", []));
 
         Assert.Empty(Scan(record));
     }
@@ -136,12 +137,12 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void EntryPointShape_AFunctionVanillaNeverExercises_MakesNoClaim_Function4NeverOccursInTheShippedGameSoNoCanonicalShapeIsProvableAndTheTableStaysSilentRatherThanTrustingAReferencesComments()
     {
-        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("PERK", 0x0000000A,
-            Sub("PRKE", [2, 0, 0]),
-            Sub("DATA", [0, 4, 0]),
-            Sub("EPFT", [1]),
-            Sub("EPFD", new byte[4]),
-            Sub("PRKF", []));
+        var record = Record("PERK", 0x0000000A,
+            Subrecord("PRKE", [2, 0, 0]),
+            Subrecord("DATA", [0, 4, 0]),
+            Subrecord("EPFT", [1]),
+            Subrecord("EPFD", new byte[4]),
+            Subrecord("PRKF", []));
 
         Assert.Empty(Scan(record));
     }
@@ -163,7 +164,7 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void FixedSize_AnExactLengthSubrecord_ReportsNothing()
     {
-        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("REGN", 0x00000001, Sub("EDID", "CleanRegion\0"u8.ToArray()), Sub("RDAT", new byte[8]));
+        var record = Record("REGN", 0x00000001, Subrecord("EDID", "CleanRegion\0"u8.ToArray()), Subrecord("RDAT", new byte[8]));
 
         Assert.Empty(Scan(record));
     }
@@ -171,8 +172,8 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void FixedCount_ARaceWithThirtyOneNames_IsDiagnosed()
     {
-        var names = Enumerable.Range(0, 31).Select(_ => Sub("NAME", "Slot\0"u8.ToArray())).ToArray();
-        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("RACE", 0x00000002, [Sub("EDID", "ShortRace\0"u8.ToArray()), .. names]);
+        var names = Enumerable.Range(0, 31).Select(_ => Subrecord("NAME", "Slot\0"u8.ToArray())).ToArray();
+        var record = Record("RACE", 0x00000002, [Subrecord("EDID", "ShortRace\0"u8.ToArray()), .. names]);
 
         var d = Assert.Single(Scan(record));
         Assert.Equal("fixed-count-list-wrong-count", d.DefectClass);
@@ -184,8 +185,8 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void FixedCount_ARaceWithAllThirtyTwoNames_ReportsNothing()
     {
-        var names = Enumerable.Range(0, 32).Select(_ => Sub("NAME", "Slot\0"u8.ToArray())).ToArray();
-        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("RACE", 0x00000003, [Sub("EDID", "CleanRace\0"u8.ToArray()), .. names]);
+        var names = Enumerable.Range(0, 32).Select(_ => Subrecord("NAME", "Slot\0"u8.ToArray())).ToArray();
+        var record = Record("RACE", 0x00000003, [Subrecord("EDID", "CleanRace\0"u8.ToArray()), .. names]);
 
         Assert.Empty(Scan(record));
     }
@@ -193,11 +194,11 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void CounterEntries_AnXwpgDisagreeingWithItsXwpnEntries_IsDiagnosed()
     {
-        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("REFR", 0x00000004,
-            Sub("EDID", "BadWorkshop\0"u8.ToArray()),
-            Sub("XWPG", Le(1)),
-            Sub("XWPN", new byte[12]),
-            Sub("XWPN", new byte[12]));
+        var record = Record("REFR", 0x00000004,
+            Subrecord("EDID", "BadWorkshop\0"u8.ToArray()),
+            Subrecord("XWPG", Le(1)),
+            Subrecord("XWPN", new byte[12]),
+            Subrecord("XWPN", new byte[12]));
 
         var d = Assert.Single(Scan(record));
         Assert.Equal("counter-entries-mismatch", d.DefectClass);
@@ -209,8 +210,8 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void CounterEntries_AnAgreeingPair_ReportsNothing()
     {
-        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("REFR", 0x00000005,
-            Sub("XWPG", Le(2)), Sub("XWPN", new byte[12]), Sub("XWPN", new byte[12]));
+        var record = Record("REFR", 0x00000005,
+            Subrecord("XWPG", Le(2)), Subrecord("XWPN", new byte[12]), Subrecord("XWPN", new byte[12]));
 
         Assert.Empty(Scan(record));
     }
@@ -218,12 +219,12 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void CkOrder_TrailingObtfFullWithNoClosingObts_IsDiagnosed_BecauseTheCkClosesEveryObtfLedCombinationWithAnObts()
     {
-        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("WEAP", 0x00000006,
-            Sub("EDID", "BadWeap\0"u8.ToArray()),
-            Sub("OBTE", Le(1)),
-            Sub("OBTS", new byte[8]),
-            Sub("OBTF", []), Sub("FULL", "N\0"u8.ToArray()),
-            Sub("STOP", []));
+        var record = Record("WEAP", 0x00000006,
+            Subrecord("EDID", "BadWeap\0"u8.ToArray()),
+            Subrecord("OBTE", Le(1)),
+            Subrecord("OBTS", new byte[8]),
+            Subrecord("OBTF", []), Subrecord("FULL", "N\0"u8.ToArray()),
+            Subrecord("STOP", []));
 
         var d = Assert.Single(Scan(record));
         Assert.Equal("subrecord-out-of-ck-order", d.DefectClass);
@@ -235,11 +236,11 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void CkOrder_ALeadingBareObtsFollowedByClosedCombinations_ReportsNothing_BecauseItIsVanillaGaussRiflesShapeTheDefaultCombinationAndCanonicalCkOutputProvenByTheMeditSmokeVanillaScan()
     {
-        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("WEAP", 0x00000007,
-            Sub("OBTE", Le(2)),
-            Sub("OBTS", new byte[8]),
-            Sub("OBTF", []), Sub("FULL", "A\0"u8.ToArray()), Sub("OBTS", new byte[8]),
-            Sub("STOP", []));
+        var record = Record("WEAP", 0x00000007,
+            Subrecord("OBTE", Le(2)),
+            Subrecord("OBTS", new byte[8]),
+            Subrecord("OBTF", []), Subrecord("FULL", "A\0"u8.ToArray()), Subrecord("OBTS", new byte[8]),
+            Subrecord("STOP", []));
 
         Assert.Empty(Scan(record));
     }
@@ -247,7 +248,7 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void Scan_ACleanRecordOfAnUntabledType_ReportsNothing()
     {
-        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("MISC", 0x00000008, Sub("EDID", "Junk\0"u8.ToArray()), Sub("DATA", new byte[8]));
+        var record = Record("MISC", 0x00000008, Subrecord("EDID", "Junk\0"u8.ToArray()), Subrecord("DATA", new byte[8]));
 
         Assert.Empty(Scan(record));
     }
@@ -256,37 +257,15 @@ public sealed class MalformedPluginScanTests
 
     private static byte[] RaceWithNames(uint formId, string editorId, int nameCount)
     {
-        var subs = new List<byte[]> { Sub("EDID", Encoding.UTF8.GetBytes(editorId + "\0")) };
-        subs.AddRange(Enumerable.Range(0, nameCount).Select(_ => Sub("NAME", "Slot\0"u8.ToArray())));
-        return SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("RACE", formId, [.. subs]);
+        var subs = new List<byte[]> { Subrecord("EDID", Encoding.UTF8.GetBytes(editorId + "\0")) };
+        subs.AddRange(Enumerable.Range(0, nameCount).Select(_ => Subrecord("NAME", "Slot\0"u8.ToArray())));
+        return Record("RACE", formId, [.. subs]);
     }
 
     private static byte[] Le(uint value)
     {
         var b = new byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(b, value);
-        return b;
-    }
-
-    private static byte[] Sub(string sig, byte[] payload)
-    {
-        var b = new byte[6 + payload.Length];
-        Encoding.ASCII.GetBytes(sig).CopyTo(b, 0);
-        BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(4), (ushort)payload.Length);
-        payload.CopyTo(b, 6);
-        return b;
-    }
-
-    private static byte[] SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent(string type, uint formId, params byte[][] subrecords)
-    {
-        const uint UncompressedFlags = 0;
-        var data = subrecords.SelectMany(s => s).ToArray();
-        var b = new byte[24 + data.Length];
-        Encoding.ASCII.GetBytes(type).CopyTo(b, 0);
-        BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(4), (uint)data.Length);
-        BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(8), UncompressedFlags);
-        BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(12), formId);
-        data.CopyTo(b, 24);
         return b;
     }
 }
