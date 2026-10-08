@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { pluginStanding } from '../pluginStanding';
 import type { LoadOrderPlugin } from '../loadOrderSnapshot';
-import { OVERWRITE_ORIGIN } from '../loadOrderSnapshot';
+import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../loadOrderSnapshot';
 import type { Mod } from '../instance';
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
@@ -11,12 +11,16 @@ const A = { name: 'A.esp', origin: 'ModA' };
 const standing = (mods: Mod[], plugins: LoadOrderPlugin[]) => pluginStanding({ mods, plugins, pluginsLoadedWithNoLine: [] }, A);
 
 describe('a plugin\'s standing', () => {
-  it('is overridden by the mod, named as the instance spells it, whose enabled file wins its filename', () => {
-    expect(standing([mod('ModA'), mod('Mod B')], [row({ winning: false }), row({ origin: 'mod b' })])).toEqual({ kind: 'overridden', by: 'Mod B' });
+  it('is overridden by the mod whose enabled file wins its filename', () => {
+    expect(standing([mod('ModA'), mod('ModB')], [row({ winning: false }), row({ origin: 'ModB' })])).toEqual({ kind: 'overridden', by: 'ModB' });
   });
 
   it('is overridden by Overwrite, named as the Mods view names it, not by its origin key', () => {
     expect(standing([mod('ModA')], [row({ winning: false }), row({ origin: OVERWRITE_ORIGIN })])).toEqual({ kind: 'overridden', by: 'Overwrite' });
+  });
+
+  it('is overridden by the game folder, named so and not by its origin key, when the Data copy wins', () => {
+    expect(standing([mod('ModA')], [row({ winning: false }), row({ origin: DATA_DIRECTORY_ORIGIN })])).toEqual({ kind: 'overridden', by: 'the game folder' });
   });
 
   it('is enabled for the plugin that wins', () => {
