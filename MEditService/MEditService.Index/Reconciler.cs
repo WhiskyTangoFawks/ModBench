@@ -33,6 +33,7 @@ internal sealed class Reconciler(
     private bool _validating;
     private int _plannedCount;
     private int _activeCount;
+    private IReadOnlyList<PluginLoadFailure> _collisionFailures = [];
     // Set only by the reconcile door's own catch, cleared at the top of every attempt: a repeated
     // refusal re-sets it a moment later, a successful one leaves it clear.
     private string? _heldElsewhereMessage;
@@ -121,7 +122,7 @@ internal sealed class Reconciler(
                 else
                 {
                     var state = _conflictsComputed && !_validating ? LoadOrderState.Ready : LoadOrderState.Reconciling;
-                    held = new LoadOrderStatus(state, _plannedCount, _activeCount, [.. _indexed], _conflictsComputed, _scope.Held.Failures, Version: _version);
+                    held = new LoadOrderStatus(state, _plannedCount, _activeCount, [.. _indexed], _conflictsComputed, [.. _scope.Held.Failures, .. _collisionFailures], Version: _version);
                 }
 
                 if (_heldElsewhereMessage is { } heldElsewhere)
@@ -329,6 +330,7 @@ internal sealed class Reconciler(
             _conflictsComputed = false;
             _plannedCount = 0;
             _activeCount = 0;
+            _collisionFailures = [];
             _scope = scope;
             filter.Reapply(scope.Index);
         }
@@ -345,6 +347,7 @@ internal sealed class Reconciler(
     private bool ReconcileProgressively(OpenScope scope, LoadOrderSnapshot snapshot, CancellationToken token)
     {
         var (held, index) = (scope.Held, scope.Index);
+        FailCollisions(snapshot.CaseOnlyCollisions);
         var resolved = snapshot.Plugins;
         var wanted = resolved.ToDictionary(r => r.Key, PluginAddress.Comparer);
         var open = held.Plugins.ToDictionary(p => p.Key, PluginAddress.Comparer);
@@ -483,6 +486,34 @@ internal sealed class Reconciler(
             logger.LogWarning(ex, "Could not read {Plugin} ({Origin})", plugin.Name, plugin.Origin);
             FailRead(scope, plugin.Key, ReadFailure(ex, scope.Index.DerivationOf(plugin.Key)));
         }
+    }
+
+    // plugins.md, A row, Plugin: each plugin of a case-only collision is that row's "Failed to read".
+    private void FailCollisions(IReadOnlyList<RegisteredPlugin> collided)
+    {
+        IReadOnlyList<PluginLoadFailure> failures =
+        [
+            .. collided.GroupBy(p => p.Key, PluginAddress.Comparer).SelectMany(twins => twins.Select(plugin =>
+            {
+                var others = twins.Where(other => other != plugin).ToList();
+                var differing = (others.Any(o => o.Name != plugin.Name), others.Any(o => o.Origin != plugin.Origin)) switch
+                {
+                    (true, true) => "name and origin",
+                    (true, false) => "name",
+                    _ => "origin",
+                };
+                return new PluginLoadFailure(plugin.Name, plugin.Origin,
+                    $"Its {differing} differs only in case from {string.Join(", ", others.Select(o => $"{o.Name} from {o.Origin}"))}, "
+                    + "so no one can tell which the game loads. None is read.");
+            })),
+        ];
+        lock (_lock)
+        {
+            if (failures.SequenceEqual(_collisionFailures)) return;
+            _collisionFailures = failures;
+        }
+        foreach (var failure in failures)
+            logger.LogWarning("Could not read {Plugin} ({Origin}): {Reason}", failure.Name, failure.Origin, failure.Reason);
     }
 
     // common.md, Errors (ADR-0019): the rows a failed read leaves stand, and the reason says whose they are.
@@ -806,6 +837,7 @@ internal sealed class Reconciler(
         _validating = false;
         _plannedCount = 0;
         _activeCount = 0;
+        _collisionFailures = [];
         _heldElsewhereMessage = null;
         _failureMessage = null;
     }

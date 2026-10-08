@@ -37,6 +37,11 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// <summary>Every plugin file in the instance, in the order it was given.</summary>
     public IReadOnlyList<RegisteredPlugin> Plugins { get; }
 
+    /// <summary>The plugins whose address another plugin's differs from only in case. Nothing can
+    /// tell which of them the game loads, so they are in none of the other lists. Linux can hold such
+    /// a pair; Windows cannot.</summary>
+    public IReadOnlyList<RegisteredPlugin> CaseOnlyCollisions { get; }
+
     /// <summary>The active plugins, in load order (ADR-0013).</summary>
     public IReadOnlyList<RegisteredPlugin> Active { get; }
 
@@ -52,12 +57,18 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         DataFolderPath = dataFolderPath;
         InstanceRoot = instanceRoot;
         GameRelease = gameRelease;
+        CaseOnlyCollisions =
+        [
+            .. plugins.GroupBy(p => p.Key, PluginAddress.Comparer).Where(group => group.Count() > 1).SelectMany(group => group),
+        ];
+        var colliding = CaseOnlyCollisions.Select(p => p.Key).ToHashSet(PluginAddress.Comparer);
         // Copied, not aliased: a caller keeping its list would otherwise mutate this value.
-        Plugins = [.. plugins];
+        Plugins = [.. plugins.Where(p => !colliding.Contains(p.Key))];
+        active = [.. active.Where(a => !colliding.Contains(a))];
         _loadOrderIndex = active.Select((address, index) => (address, index))
             .ToDictionary(a => a.address, a => a.index, PluginAddress.Comparer);
         Active = [.. active.Select(PluginRefusalOfVouchesFor)];
-        LoadedWithNoLine = [.. loadedWithNoLine.Select(PluginRefusalOfVouchesFor)];
+        LoadedWithNoLine = [.. loadedWithNoLine.Where(a => !colliding.Contains(a)).Select(PluginRefusalOfVouchesFor)];
         _places = PlacesOf(Plugins, Active, LoadedWithNoLine);
     }
 
@@ -143,6 +154,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         && string.Equals(DataFolderPath, other.DataFolderPath, StringComparison.OrdinalIgnoreCase)
         && string.Equals(InstanceRoot, other.InstanceRoot, StringComparison.OrdinalIgnoreCase)
         && Plugins.SequenceEqual(other.Plugins)
+        && CaseOnlyCollisions.SequenceEqual(other.CaseOnlyCollisions)
         && Active.SequenceEqual(other.Active)
         && LoadedWithNoLine.SequenceEqual(other.LoadedWithNoLine);
 

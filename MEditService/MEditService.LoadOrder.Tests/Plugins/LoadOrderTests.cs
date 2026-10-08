@@ -300,4 +300,30 @@ public sealed class LoadOrderTests
     {
         Assert.Null(Order([]).ProviderOf(new PluginAddress("A.esp", "ModA")));
     }
+
+    [Fact]
+    public void PluginsDifferingOnlyInCase_AreInNoListButTheCollisions_ActiveOneIncluded()
+    {
+        var inactive = Registered("Dup.esp", "ModA");
+        var active = Registered("dup.esp", "ModA");
+        var other = Registered("Other.esp", "ModA");
+
+        var order = Order([inactive, active, other], active, other);
+
+        Assert.Equal([inactive, active], order.CaseOnlyCollisions);
+        Assert.Equal([other], order.Plugins);
+        Assert.Equal([other], order.Active);
+        Assert.Null(order.LoadOrderIndex(active.Key));
+        Assert.Null(order.Plugin(inactive.Key));
+        Assert.Equal(0, order.LoadOrderIndex(other.Key));
+    }
+
+    [Fact]
+    public void PluginsDifferingOnlyInTheCaseOfTheirOrigin_AreACollision()
+    {
+        var upper = Registered("A.esp", "ModA");
+        var lower = Registered("A.esp", "moda");
+
+        Assert.Equal([upper, lower], Order([upper, lower]).CaseOnlyCollisions);
+    }
 }
