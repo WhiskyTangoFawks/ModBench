@@ -252,6 +252,8 @@ const inactiveA = [pluginMetadataFixture({ name: 'A.esp', origin: 'ModA', loadOr
 
 const opened = () => h.executed.filter(([id]) => id === 'vscode.openWith').map(([, uri]) => uri);
 
+const NO_COLUMNS = { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Weapon' } as const;
+
 describe('Referenced By follows the record tab in focus', () => {
   function followed() {
     const client = new InMemoryMEditClient();
@@ -730,7 +732,7 @@ describe('a record file\'s tab', () => {
 
     it('reads the file\'s column from the unsaved text beside the other records the tab shows', async () => {
       const client = holdingClient();
-      client.setQueryAnswer('getRecordsComparison', null);
+      client.setQueryAnswer('getRecordsComparison', NO_COLUMNS);
       const { openFile } = makeEditor(client);
       const tab = await openFile(FILE, fileDocument('{ "EditorID": "Typed" }', true));
       const column = { formKey: '000900:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
@@ -1287,7 +1289,7 @@ describe('several records opened at once', () => {
 
   it('read the tab again when mEdit reports a record of another column changed, and not for a record it does not show', async () => {
     const client = severalClient();
-    client.setQueryAnswer('getRecordsComparison', null);
+    client.setQueryAnswer('getRecordsComparison', NO_COLUMNS);
     const { openDocument } = makeEditor(client);
     const tab = await openDocument(gunDocument);
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [{ formKey: AMMO, plugin: winner }] });
@@ -1314,7 +1316,7 @@ describe('several records opened at once', () => {
 
   it('read the first record\'s copy and the columns the tab shows side by side, in that order', async () => {
     const client = severalClient();
-    client.setQueryAnswer('getRecordsComparison', null);
+    client.setQueryAnswer('getRecordsComparison', NO_COLUMNS);
     const { openDocument } = makeEditor(client);
     const tab = await openDocument(gunDocument);
 
