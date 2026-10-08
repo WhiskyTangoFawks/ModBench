@@ -67,12 +67,12 @@ public sealed class MalformedPluginScanTests
     }
 
     [Fact]
-    public void PlasmaAutocannon_WrongEpftForFunction14_IsDiagnosedByExactClassAndText_EntryZeroOfTheSamePerkIsCleanWhichPinsPerEntryIndexing()
+    public void MisshapedPerk_WrongEpftForFunction14_IsDiagnosedByExactClassAndText_EntryZeroOfTheSamePerkIsCleanWhichPinsPerEntryIndexing()
     {
-        var diagnoses = ScanFixture("SKI_PlasmaAutocannon.esp");
+        var diagnoses = Scan(MisshapedPerkPlugin.Plugin.Bytes);
 
         var d = Assert.Single(diagnoses, d => d.DefectClass == "entry-point-parameter-shape");
-        Assert.Equal("PERK 040000EF (T6M_QuickReload_ReloadVATs)", d.Anchor);
+        Assert.Equal($"PERK {MisshapedPerkPlugin.FormId:X8} ({MisshapedPerkPlugin.EditorId})", d.Anchor);
         var noRepairTailBecauseRetypingTheParameterIsASemanticMappingNotAByteOperation = d.Tail;
         Assert.Null(noRepairTailBecauseRetypingTheParameterIsASemanticMappingNotAByteOperation);
         Assert.Equal("entry point 1 (function 14, Multiply 1 + Actor Value Mult) has EPFT 2; vanilla writes EPFT 8", d.Message);
@@ -154,9 +154,6 @@ public sealed class MalformedPluginScanTests
         Assert.NotNull(claim.Diagnoses);
         return [.. claim.Diagnoses];
     }
-
-    private static List<PluginDiagnosis> ScanFixture(string fileName) =>
-        Scan(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "TestData", fileName)));
 
     [Fact]
     public void FixedSize_AnExactLengthSubrecord_ReportsNothing()
