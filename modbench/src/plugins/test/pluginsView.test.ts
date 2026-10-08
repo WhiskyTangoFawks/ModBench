@@ -565,6 +565,19 @@ describe('the record filter, from the commands that set and clear it', () => {
       ]);
     });
 
+    it('warns when the clearing of another source leaves the view without the filter it showed', async () => {
+      const view = await showingA();
+      view.client.setQueryAnswer('getActiveFilter', null);
+
+      view.client.emit(cleared('older.sql'));
+      await flushed();
+
+      expect(view.description()).toBeUndefined();
+      expect(view.reporter.reports).toEqual([
+        { severity: 'warning', message: 'The record filter older.sql was cleared', detail: 'Conversion Error' },
+      ]);
+    });
+
     it('shows no filter when the clearing outruns the reply to the set it clears', async () => {
       h.document = { uri: { scheme: 'untitled', path: 'a' }, fileName: 'a', getText: () => ARMOR_SQL };
       const view = filtering();
