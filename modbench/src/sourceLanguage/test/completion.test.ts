@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { completionsAt } from '../completion';
 import type { CompareResult, RecordPage, RecordSummary } from '../../client';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import { comparisonOf, fieldOf, type Field } from '../../test/comparison';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 
@@ -23,8 +24,8 @@ const asking = (fields: Field[], found: RecordSummary[] = [record('Gun', GUN)], 
   searchRecords: vi.fn((): Promise<RecordPage> => Promise.resolve({ items: found, total: found.length })),
 });
 
-const completingAtBar = (client: ReturnType<typeof asking>, marked: string) =>
-  completionsAt(client, marked.replace('|', ''), marked.indexOf('|'));
+const completingAtBar = (client: Parameters<typeof completionsAt>[0]['client'], marked: string, reporter = recordingReporter()) =>
+  completionsAt({ client, reporter }, marked.replace('|', ''), marked.indexOf('|'));
 
 const documentOf = (members: string) => `{ "FormKey": "${OWNER}", ${members} }`;
 
@@ -187,5 +188,18 @@ describe('completionsAt (plugin-source.md, In the text editor, story 5)', () => 
     it('offers nothing for a string field that has no members', async () => {
       expect(await completingAtBar(asking([fieldOf({ name: 'Mode', type: 'string' })]), documentOf('"Mode": "|"'))).toBeUndefined();
     });
+  });
+
+  it.each([
+    ['the record\'s comparison', { getComparison: () => Promise.reject(new Error('mEdit is down.')) }],
+    ['the search', { searchRecords: () => Promise.reject(new Error('mEdit is down.')) }],
+  ])('writes why to the Output, and offers nothing, when mEdit cannot answer %s', async (_, failing) => {
+    const reporter = recordingReporter();
+    const client = { ...asking([reference('Armor')]), ...failing };
+
+    const found = await completingAtBar(client, documentOf('"Armor": "Gu|"'), reporter);
+
+    expect(found).toBeUndefined();
+    expect(reporter.shownFailures).toEqual([{ severity: 'error', message: `Completion cannot list what ${OWNER} offers here.`, detail: 'mEdit is down.' }]);
   });
 });
