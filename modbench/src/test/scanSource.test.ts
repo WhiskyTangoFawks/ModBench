@@ -115,6 +115,23 @@ describe('importSpecifiers', () => {
     expect(specifiers("// import x from './nope';\nconst s = \"import y from './nope2'\";\nfoo.mock('./nope3');")).toEqual([]);
   });
 
+  it('reads a vi module call that carries type arguments, and not one on another object', () => {
+    expect(specifiers([
+      "await vi.importActual<typeof import('./ty')>('./ia');",
+      "await vi.importActual<Map<string, Set<number>>>('./nested');",
+      "foo.vi.mock('./nope');",
+      "vi.fn('./nope2');",
+    ].join('\n'))).toEqual(['./ty', './ia', './nested']);
+  });
+
+  it('reads past a regular expression, a template and a division that hold a quote', () => {
+    expect(specifiers([
+      "const re = /'/g; import before from './before'; const half = a / b / c;",
+      "const t = `it's ${ `nested ' ${ x / 2 }` } ${ { a: 1 }.a } end`;",
+      "import after from './after';",
+    ].join('\n'))).toEqual(['./before', './after']);
+  });
+
   it('reads a tsx file', () => {
     expect(importSpecifiers("import { A } from './a';\nexport const x = <A />;", 'view.tsx')).toEqual(['./a']);
   });
