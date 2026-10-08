@@ -32,7 +32,7 @@ public static class FormReferences
         // per ColumnSpec since the schema is built at startup.
         var (meta, carriesFormKeys) = Plans.GetOrAdd(col, static c =>
         {
-            var m = c.ToFieldMetadata();
+            var m = c.Field;
             return (m, CarriesFormKeys(m));
         });
         if (!carriesFormKeys) return;

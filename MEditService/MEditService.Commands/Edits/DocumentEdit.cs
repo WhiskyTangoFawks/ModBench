@@ -189,7 +189,7 @@ internal static class DocumentEdit
         if (column.Synthetic != null && path.Count > 1)
             return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, spelled, $"'{name}' has no members.");
 
-        var meta = column.ToFieldMetadata();
+        var meta = column.Field;
         if (LeafOf(record) is { } recordLeaf && meta.Variants is { } byClass && !byClass.ContainsKey(recordLeaf))
         {
             return RecordEditResult.RefusedAt(
@@ -304,7 +304,7 @@ internal static class DocumentEdit
 
     private static FieldMetadata RootMetadata(RecordTableSchema schema) =>
         new("", "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-            Fields: [.. schema.RecordColumns.Where(c => c.Synthetic == null).Select(c => c.ToFieldMetadata())]);
+            Fields: [.. schema.RecordColumns.Where(c => c.Synthetic == null).Select(c => c.Field)]);
 
     // A Partial Form record's own fields are never seen by the game (CONTEXT.md). Its EditorID and
     // record header edit (editor-fields.md § Partial Form), as does the flag itself.

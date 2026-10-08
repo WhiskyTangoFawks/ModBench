@@ -37,8 +37,6 @@ public sealed record ColumnSpec(
     public bool IsViewable =>
         !Field.IsArray && Field.Fields == null && Synthetic == null
         && (Field.Variants == null || Field.Variants.Values.Select(v => v.Type).Distinct(StringComparer.Ordinal).Count() == 1);
-
-    public FieldMetadata ToFieldMetadata() => Field;
 }
 
 public sealed class RecordTableSchema
@@ -72,7 +70,7 @@ public sealed class RecordTableSchema
             var value = col.Synthetic is { } bit
                 ? JsonSerializer.SerializeToElement(SyntheticBits.IsSet(document, bit))
                 : DocumentNodes.At(document, col.PropertyName);
-            var meta = col.ToFieldMetadata();
+            var meta = col.Field;
             // The check reads the shape this record's own class gives the column; the wire keeps the
             // column's whole metadata, variants included, so the editor can pick the same.
             fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, document), value, resolve, release)));

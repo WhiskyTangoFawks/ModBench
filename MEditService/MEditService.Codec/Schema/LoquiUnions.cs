@@ -133,7 +133,7 @@ public static class LoquiUnions
             .Select(l => (l.ClassName, (IReadOnlyList<ColumnSpec>)[.. ColumnReflection.ReflectColumns(l.GetterType, game, logger).Where(c => !baseNames.Contains(c.Name))]))
             .ToList();
 
-        columns.AddRange(UnionMembers(leaves, c => c.Name, c => c.ToFieldMetadata())
+        columns.AddRange(UnionMembers(leaves, c => c.Name, c => c.Field)
             .Select(m => m.First with
             {
                 Field = m.First.Field with

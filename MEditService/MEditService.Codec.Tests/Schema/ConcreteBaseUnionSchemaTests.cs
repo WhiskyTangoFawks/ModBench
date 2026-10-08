@@ -36,7 +36,7 @@ public sealed class ConcreteBaseUnionSchemaTests
 
     private static FieldMetadata ScriptPropertyElement(ColumnSpec adapter)
     {
-        var scripts = RequireFields(adapter.ToFieldMetadata()).Single(f => f.Name == "Scripts");
+        var scripts = RequireFields(adapter.Field).Single(f => f.Name == "Scripts");
         var properties = RequireFields(RequireElementType(scripts)).Single(f => f.Name == "Properties");
         return RequireElementType(properties);
     }

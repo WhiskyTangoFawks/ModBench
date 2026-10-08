@@ -11,7 +11,7 @@ public sealed class ConditionSchemaTests
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     private static FieldMetadata ConditionElement(string table = "cobj") =>
-        Schemas[table].RecordColumns.Single(c => c.Name == "Conditions").ToFieldMetadata().ElementType
+        Schemas[table].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementType
             ?? throw new InvalidOperationException($"Expected '{table}.Conditions' to have an element type.");
 
     private static FieldMetadata Member(FieldMetadata owner, string name) =>
@@ -96,7 +96,7 @@ public sealed class ConditionSchemaTests
     public void AnEnumThatGovernsNothing_CarriesNoMap()
     {
         Assert.Null(Member(ConditionElement(), "CompareOperator").SiblingsInUse);
-        Assert.Null(Schemas["npc_"].RecordColumns.Single(c => c.Name == "Aggression").ToFieldMetadata().SiblingsInUse);
+        Assert.Null(Schemas["npc_"].RecordColumns.Single(c => c.Name == "Aggression").Field.SiblingsInUse);
     }
 
     [Theory]
@@ -109,7 +109,7 @@ public sealed class ConditionSchemaTests
     public void EveryConditionBearingColumn_ReachesTheFunctionMemberBelowIt(string table, string column)
     {
         var found = new List<string>();
-        Walk(Schemas[table].RecordColumns.Single(c => c.Name == column).ToFieldMetadata(), column, found);
+        Walk(Schemas[table].RecordColumns.Single(c => c.Name == column).Field, column, found);
 
         Assert.NotEmpty(found);
         Assert.All(found, path => Assert.EndsWith("Data.Function", path, StringComparison.Ordinal));

@@ -15,7 +15,7 @@ public class SchemaReflectorAtomicValueTests
     private FieldMetadata FieldAt(string table, string dottedPathWithArrayHopsAsBrackets)
     {
         var hops = dottedPathWithArrayHopsAsBrackets.Split('.');
-        var field = Column(table, hops[0]).ToFieldMetadata();
+        var field = Column(table, hops[0]).Field;
         foreach (var hop in hops[1..])
         {
             field = hop == "[]"
@@ -66,7 +66,7 @@ public class SchemaReflectorAtomicValueTests
     [Fact]
     public void NoLeafButAColorHoldsAlpha()
     {
-        Assert.False(Column("kywd", "EditorID").ToFieldMetadata().HoldsAlpha);
+        Assert.False(Column("kywd", "EditorID").Field.HoldsAlpha);
     }
 
     private const string HeldAlphaWarningPrefix = "SchemaReflector: a colour's alpha unavailable";
