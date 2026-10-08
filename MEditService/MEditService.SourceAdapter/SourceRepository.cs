@@ -174,7 +174,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
         Locator.Locate(plugin, identity) is { } unit && File.Exists(unit.FullPath) ? new DocumentFile(unit.FullPath, unit.IsEmbedded) : null;
 
     /// <summary>What the file at <paramref name="path"/> holds, read from its text as the index reads it.</summary>
-    public static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path)
+    internal static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path)
     {
         var fullPath = Path.GetFullPath(path);
         if (SourceRepositoryLayout.CarriesNoRecord(fullPath)) return new RecordOfFileAnswer.HoldsNone();
