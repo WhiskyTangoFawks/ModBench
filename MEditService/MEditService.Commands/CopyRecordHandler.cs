@@ -23,10 +23,9 @@ public sealed class CopyRecordHandler
         ILogger<CopyRecordHandler> logger) =>
         (_override, _new, _loadOrder, _resolution, _logger) = (overrideCopy, newRecordCopy, loadOrder, resolution, logger);
 
-    /// <summary>Each record lands in each destination or is refused on its own; <paramref name="replace"/>
-    /// lets an override copy over the one a destination holds. A record goes after the records that
-    /// contain it, so a container is copied once, in its turn. Throws <see cref="NoLoadOrderException"/>
-    /// with no load order held.</summary>
+    /// <summary>Each record lands in each destination or is refused on its own, a record after the
+    /// records containing it; <paramref name="replace"/> lets an override copy over a held one.
+    /// Throws <see cref="NoLoadOrderException"/> with no load order held.</summary>
     public async Task<SelectionResult<CopyItem, RecordEditRefusal, string?>> Copy(
         IReadOnlyList<RecordAt> records, CopyMode mode, IReadOnlyList<PluginAddress> destinations, bool replace)
     {

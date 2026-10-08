@@ -83,10 +83,8 @@ internal sealed class CopySource(
     internal string? WorldspaceOf(RecordIdentity identity) =>
         _tree != null ? _tree.WorldspaceOf(plugin, identity) : Loaded()?.CellStructureOf(identity.FormKey)?.ParentWorldspace;
 
-    /// <summary>How many records sit above this one: the containers whose documents carry it, and a
-    /// numbered cell's worldspace. A container copied in before its children is copied once, not
-    /// refused as held when its own turn comes. A record that cannot be read stops the count where it
-    /// stood: its own copy refuses it, naming why.</summary>
+    /// <summary>How many records sit above this one: its containers, and a numbered cell's worldspace.
+    /// An unreadable record ends the count where it stood; its own copy refuses it, naming why.</summary>
     internal int ContainmentDepth(string formKey)
     {
         var depth = 0;
