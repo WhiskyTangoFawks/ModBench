@@ -2,8 +2,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>What a file holds: the record whose own document it is, none by the layout, or a refusal saying why it
-/// cannot be read as one.</summary>
+/// <summary>What a file holds. <see cref="HoldsNone"/> is the layout's answer, from the path alone.</summary>
 public abstract record RecordOfFile
 {
     private RecordOfFile()

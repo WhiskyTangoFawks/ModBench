@@ -716,9 +716,12 @@ describe('a tracked copy of a record', () => {
   it('opens a file mEdit answers holds no record in the text editor, in place of the record grid', async () => {
     const onMetadata = () => openTabs().filter(({ input }) =>
       (input instanceof vscode.TabInputText || input instanceof vscode.TabInputCustom) && input.uri.fsPath === METADATA_FS_PATH);
+    const asked = `GET /plugin-source/record?path=${encodeURIComponent(METADATA_FS_PATH)}`;
+    const askedBefore = requestLog.filter((line) => line === asked).length;
 
     await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(METADATA_FILE));
 
+    await waitFor('mEdit asked which record the file holds', () => requestLog.filter((line) => line === asked).length > askedBefore);
     await waitFor('the file\'s one tab, in the text editor', () => {
       const tabs = onMetadata();
       return tabs.length === 1 && tabs[0]?.input instanceof vscode.TabInputText;

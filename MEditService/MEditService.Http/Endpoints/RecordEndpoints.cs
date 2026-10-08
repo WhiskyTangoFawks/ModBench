@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Index.Queries;
@@ -108,7 +109,7 @@ internal static class RecordEndpoints
                 RecordOfFile.Holds holds => Results.Ok(Addressed(holds.Record)),
                 RecordOfFile.HoldsNone => Results.NoContent(),
                 RecordOfFile.Refused refused => Results.Problem(refused.Why, statusCode: 422),
-                var other => throw new ArgumentOutOfRangeException(nameof(path), other, null),
+                _ => throw new UnreachableException(),
             };
         })
         .WithName("GetRecordOfFile")
