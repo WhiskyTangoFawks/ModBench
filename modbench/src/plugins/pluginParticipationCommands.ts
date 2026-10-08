@@ -5,8 +5,9 @@ import { runWritingGesture } from '../drivingLib/writingGesture';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
 import { pluralArgument, registerGesture, type GestureEntry } from '../drivingLib/gestureEntry';
 import {
-  setPluginsEnabled, type PluginParticipation, type PluginsAccess, type PluginsSelectionResult,
+  setPluginsEnabled, type PluginParticipation, type PluginsAccess,
 } from '../pluginsCommands/plugins';
+import type { SelectionResult } from '../coreLib/commandResult';
 import type { Reporter } from '../ports/reporter';
 
 // modbench.plugin.enable / modbench.plugin.disable: the whole selection through the entry
@@ -41,7 +42,7 @@ function participationVerb(entries: readonly PluginParticipation[]): string {
 
 // Shared by the menu/key path above and the check box, so both read one outcome the same way.
 export function reportPluginsParticipation(
-  result: PluginsSelectionResult, entries: readonly PluginParticipation[], reporter: Reporter,
+  result: SelectionResult<string>, entries: readonly PluginParticipation[], reporter: Reporter,
 ): void {
   const verb = participationVerb(entries);
   if (!result.applied) {

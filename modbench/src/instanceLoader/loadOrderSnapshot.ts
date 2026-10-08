@@ -66,6 +66,8 @@ export interface OriginFiles {
  *  own. */
 export type OriginFilesOf = (origin: string) => OriginFiles | undefined;
 
+export const NO_ORIGIN_FILES: OriginFilesOf = () => undefined;
+
 /** The files of the folder the Instance adapter answered for the origin (ADR-0012). `undefined`
  *  when it answered none. */
 export function originFiles(value: Pick<InstanceValue, 'paths' | 'gameFolder'>, origin: string): OriginFiles | undefined {
