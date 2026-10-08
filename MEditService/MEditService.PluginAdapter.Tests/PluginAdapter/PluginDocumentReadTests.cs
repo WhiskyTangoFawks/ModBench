@@ -13,10 +13,6 @@ public sealed class PluginDocumentReadTests
 {
     private const string PluginName = "Documents.esp";
 
-    private const string ParseFailureFixture = "SKI_PlasmaAutocannon.esp";
-
-    private const string UnreadablePerk = "0000EF:SKI_PlasmaAutocannon.esp";
-
     private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
 
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
@@ -64,13 +60,15 @@ public sealed class PluginDocumentReadTests
     [Fact]
     public void OpenDocuments_YieldsARecordTheCodecCannotRead_AsItsIdentityAndItsDiagnosis()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "TestData", ParseFailureFixture);
+        using var scratch = new ScratchDirectory("documents-unreadable-perk");
+        MisshapedPerkPlugin.Plugin.WriteInto(scratch.Path);
+        var path = Path.Combine(scratch.Path, MisshapedPerkPlugin.FileName);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(ParseFailureFixture), path), GameRelease.Fallout4, Schemas);
+            new ModPath(ModKey.FromFileName(MisshapedPerkPlugin.FileName), path), GameRelease.Fallout4, Schemas);
         var perks = documents.Records.Where(d => d.RecordType == "perk").ToList();
 
-        var unreadable = perks.Single(d => d.FormKey == UnreadablePerk);
+        var unreadable = perks.Single(d => d.FormKey == MisshapedPerkPlugin.FormKey);
         Assert.NotNull(unreadable.ParseDiagnosis);
         Assert.Contains("did not have expected parameter type flag", unreadable.ParseDiagnosis);
 
@@ -79,7 +77,7 @@ public sealed class PluginDocumentReadTests
             ["FormKey", "EditorID"],
             stub.RootElement.EnumerateObject().Select(p => p.Name).ToList());
 
-        Assert.All(perks.Where(d => d.FormKey != UnreadablePerk), d => Assert.Null(d.ParseDiagnosis));
+        Assert.All(perks.Where(d => d.FormKey != MisshapedPerkPlugin.FormKey), d => Assert.Null(d.ParseDiagnosis));
     }
 
     [Fact]
