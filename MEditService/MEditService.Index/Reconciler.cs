@@ -364,7 +364,7 @@ internal sealed class Reconciler(
             .ToList();
         var moved = resolved
             .Select(r => r.Key)
-            .Where(key => open.TryGetValue(key, out var h) && h.Registration != snapshot.RegistrationOf(key))
+            .Where(key => open.TryGetValue(key, out var h) && h.Registration != Registration.In(snapshot, key))
             .ToList();
         // A plugin in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
@@ -404,7 +404,7 @@ internal sealed class Reconciler(
         if (leaving.Count > 0) PublishStatus();
 
         // ADR-0012.
-        if (moved.Count > 0) index.Commit(_ => moved.ForEach(key => index.Register(held.Update(open[key], snapshot.RegistrationOf(key)))));
+        if (moved.Count > 0) index.Commit(_ => moved.ForEach(key => index.Register(held.Update(open[key], Registration.In(snapshot, key)))));
 
         ReDeriveMovedTruths(scope, reDerived, token);
 
@@ -425,7 +425,7 @@ internal sealed class Reconciler(
             PluginMetadata? metadata = null;
             ReadOne(scope, plugin, state =>
             {
-                metadata = held.Open(plugin, snapshot.RegistrationOf(plugin.Key));
+                metadata = held.Open(plugin, Registration.In(snapshot, plugin.Key));
                 return metadata is not null ? RegisterOrIndex(scope, metadata, state, token) : ReadOutcome.Unread;
             });
             if (metadata is null) continue;
@@ -653,7 +653,7 @@ internal sealed class Reconciler(
             new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path),
             scope.Index.Release,
             scope.Index.Schemas,
-            new PluginStrings(LoadOrderSnapshot.FileFolderOf(plugin.Path), scope.Held.DataFolderPath));
+            new PluginStrings(Path.GetDirectoryName(plugin.Path), scope.Held.DataFolderPath));
 
     // ADR-0015.
     private void ValidateIndex(CancellationToken token)

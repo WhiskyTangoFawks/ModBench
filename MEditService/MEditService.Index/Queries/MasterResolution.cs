@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 
 namespace MEditService.Index.Queries;
 
