@@ -41,7 +41,6 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
         CommitOnMain();
         Git("pack-refs", "--all");
 
-        Assert.False(File.Exists(Path.Combine(_modFolder, ".git", "refs", "heads", "main")));
         Assert.True(SourceRepository.IsTracked(_modFolder));
     }
 

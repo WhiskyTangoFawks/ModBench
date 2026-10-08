@@ -208,8 +208,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     public void RenameSource_WhenGitRefusesToMoveWhatModbenchLastWrote_PutsTheTreeAndTheRefBack()
     {
         var before = TreeOf(Old.Name);
-        var lockOfTheNewRef = Path.Combine(_modFolder, ".git", "refs", "medit", "last-compile", "New.esp.lock");
-        File.WriteAllText(lockOfTheNewRef, "");
+        LastWriteRecord.RefuseRecordingUnder(_modFolder, "New.esp");
 
         Assert.ThrowsAny<InvalidOperationException>(() => Repository.RenameSource(Old, "New.esp"));
 
@@ -237,7 +236,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         var newName = Old with { Name = "New.esp" };
         Repository.WriteBinary(newName, "EARLIER-UNDER-THE-NEW-NAME", () => { });
         var before = TreeOf(Old.Name);
-        File.WriteAllText(Path.Combine(_modFolder, ".git", "refs", "medit", "last-compile", "Old.esp.lock"), "");
+        LastWriteRecord.RefuseClearing(_modFolder, "Old.esp");
 
         Assert.ThrowsAny<InvalidOperationException>(() => Repository.RenameSource(Old, "New.esp"));
 

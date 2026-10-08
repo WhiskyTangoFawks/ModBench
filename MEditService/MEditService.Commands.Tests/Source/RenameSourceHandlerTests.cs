@@ -153,7 +153,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
     public void RenameSource_WhenGitRefusesTheWrite_RefusesIt_AndPutsTheSourceBack()
     {
         var before = TrackedTree.Records(_trackedMod, Old);
-        File.WriteAllText(Path.Combine(_trackedMod, ".git", "refs", "medit", "last-compile", "New.esp.lock"), "");
+        LastWriteRecord.RefuseRefUpdates(_trackedMod);
 
         var result = RenameSource(Old, "New.esp");
 
