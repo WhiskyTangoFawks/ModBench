@@ -115,17 +115,18 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
         var offenders = new List<string>();
         foreach (var (table, schema) in Schemas)
         {
-            foreach (var column in schema.RecordColumns.Where(c => c.AbsentIsNull && IsScalar(c) && !c.Field.IsEditorId))
-            {
-                checkedColumns++;
-                var path = $"$.{column.PropertyName}";
-                var filled = Matching($"""
-                    SELECT v.form_key FROM "{table}" v
-                    JOIN records r ON r.form_key = v.form_key AND r.plugin = v.plugin AND r.origin = v.origin
-                    WHERE json_extract(r.body, '{path}') IS NULL AND v."{column.Name}" IS NOT NULL
-                    """);
-                if (filled > 0) offenders.Add($"{table}.{column.Name}");
-            }
+            var filled = schema.RecordColumns
+                .Where(c => c.AbsentIsNull && IsScalar(c) && !c.Field.IsEditorId)
+                .Select(c => $"(json_extract(r.body, '$.{c.PropertyName}') IS NULL AND v.\"{c.Name}\" IS NOT NULL)")
+                .ToList();
+            if (filled.Count == 0) continue;
+            checkedColumns += filled.Count;
+            if (Matching($"""
+                SELECT v.form_key FROM "{table}" v
+                JOIN records r ON r.form_key = v.form_key AND r.plugin = v.plugin AND r.origin = v.origin
+                WHERE {string.Join(" OR ", filled)}
+                """) > 0)
+                offenders.Add(table);
         }
 
         Assert.True(checkedColumns > 0, "Positive control: some column must read null when absent.");
