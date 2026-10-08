@@ -1,9 +1,7 @@
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -46,7 +44,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     [Fact]
     public void CopyRecordAsOverride_OfAReadablePerkFromTheSamePlugin_StillLands()
     {
-        var readable = _mod.PerkTheCodecReads();
+        var readable = MisshapedPerkPlugin.ReadableFormKey;
 
         var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, readable)], CopyMode.Override, [_mod.DestinationPlugin], replace: false);
 
@@ -58,7 +56,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     [Fact]
     public void CopyRecordAsNewRecord_OfAReadablePerkFromTheSamePlugin_StillLands()
     {
-        var readable = _mod.PerkTheCodecReads();
+        var readable = MisshapedPerkPlugin.ReadableFormKey;
 
         var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, readable)], CopyMode.New, [_mod.DestinationPlugin], replace: false);
 
@@ -116,26 +114,6 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         }
 
         public string ModFolderOf(PluginAddress plugin) => plugin == DestinationPlugin ? _destinationModFolder : _sourceModFolder;
-
-        public string PerkTheCodecReads()
-        {
-            var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-            using var overlay = Fallout4Mod.CreateFromBinaryOverlay(
-                new ModPath(ModKey.FromFileName(SourcePluginName), _sourcePath), Fallout4Release.Fallout4);
-            foreach (var perk in overlay.Perks)
-            {
-                try
-                {
-                    codec.SerializeToText(perk, GameRelease.Fallout4);
-                }
-                catch (Exception ex) when (ex is not OutOfMemoryException)
-                {
-                    continue;
-                }
-                return perk.FormKey.ToString();
-            }
-            throw new InvalidOperationException($"{SourcePluginName} holds no perk the codec can read.");
-        }
 
         public IReadOnlyList<string> DestinationChangedFormKeys() => TrackedTree.ChangedFormKeys(_destinationModFolder, DestinationPlugin);
 
