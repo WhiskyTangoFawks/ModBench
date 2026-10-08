@@ -36,8 +36,8 @@ internal static class PluginEndpoints
             .WithName("GetPluginProblems")
             .WithTags(Tag)
             .WithDescription(
-                "What is wrong in each tracked active plugin's source, on the file that holds the " +
-                "record: a reference to a record no active plugin holds. Answers only once the index is ready.")
+                "What is wrong in each tracked plugin's source, on the file that holds the " +
+                "record: a reference to a record neither it nor an active plugin holds. Answers only once the index is ready.")
             .Produces<IReadOnlyList<PluginProblems>>()
             .ProducesProblem(503);
 
