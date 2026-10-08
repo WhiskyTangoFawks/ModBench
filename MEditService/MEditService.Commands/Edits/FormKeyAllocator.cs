@@ -19,7 +19,6 @@ internal sealed class FormKeyAllocator
     private readonly GameRelease _release;
     private readonly SourceDocument? _header;
     private readonly bool _isLight;
-    private readonly bool _eslFlagIsRemovable;
     private readonly IReadOnlySet<string> _used;
     private readonly uint _nextObjectIdHeld;
     private uint _nextObjectId;
@@ -31,8 +30,7 @@ internal sealed class FormKeyAllocator
         _nextObjectIdHeld = _nextObjectId = headerBody is null ? 0 : HeaderDocument.NextObjectId(headerBody);
         // The working tree's header document decides (ADR-0007), so a flag flipped this session caps
         // minting immediately.
-        _eslFlagIsRemovable = headerBody is not null && HeaderDocument.IsLight(headerBody);
-        _isLight = _eslFlagIsRemovable || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
+        _isLight = (headerBody is not null && HeaderDocument.IsLight(headerBody)) || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
         _used = repository.FormKeysUsed(plugin);
     }
 
@@ -46,12 +44,7 @@ internal sealed class FormKeyAllocator
         formKey = "";
         if (RefuseWithoutHeader() is { } headerless) return headerless;
         var free = FirstFreeId();
-        if (free > Cap(_isLight))
-        {
-            var freeAboveTheLightCap = _isLight && _eslFlagIsRemovable && free <= Cap(isLight: false);
-            return RecordEditResult.Refused(
-                RecordEditRefusal.FormKeySpaceExhausted, ExhaustedMessage(freeAboveTheLightCap));
-        }
+        if (free > Cap) return RecordEditResult.Refused(RecordEditRefusal.FormKeySpaceExhausted, ExhaustedMessage());
 
         formKey = KeyOf(free);
         _nextObjectId = free + 1;
@@ -103,7 +96,7 @@ internal sealed class FormKeyAllocator
         return id;
     }
 
-    private static uint Cap(bool isLight) => isLight ? PluginFlagPredicates.LightLocalFormIdCap : FormID.FullIdMask;
+    private uint Cap => _isLight ? PluginFlagPredicates.LightLocalFormIdCap : FormID.FullIdMask;
 
     private string KeyOf(uint id) => $"{id:X6}:{_plugin.Name}";
 
@@ -137,22 +130,11 @@ internal sealed class FormKeyAllocator
         return null;
     }
 
-    // Every branch names both remedies, even where one is moot for this plugin.
-    private string ExhaustedMessage(bool freeAboveTheLightCap)
-    {
-        const string remedies = "Clear the light flag in the header, or change a record's FormID.";
-        const string noneInTheLightRange =
-            "no local FormID from its Next Object ID up to 0xFFF (a light-flagged plugin's addressable range) is free";
-        if (freeAboveTheLightCap)
-        {
-            return $"{_plugin.Name} has exhausted its ESL FormKey space — {noneInTheLightRange} — but native space " +
-                $"remains free above it. {remedies}";
-        }
-        return _isLight
-            ? $"{_plugin.Name} has exhausted its ESL FormKey space — {noneInTheLightRange}. {remedies}"
-            : $"{_plugin.Name} has exhausted its FormKey space — no local FormID from its Next Object ID up to " +
-              $"0xFFFFFF is free. {remedies}";
-    }
+    private string ExhaustedMessage() =>
+        _isLight
+            ? $"{_plugin.Name} has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can " +
+              "address. Clear the light flag in the header to draw above it."
+            : $"{_plugin.Name} has no FormKey free at or above its Next Object ID, up to 0xFFFFFF.";
 
     private static uint LocalId(string formKey) =>
         uint.Parse(formKey[..formKey.IndexOf(':')], NumberStyles.HexNumber, CultureInfo.InvariantCulture);

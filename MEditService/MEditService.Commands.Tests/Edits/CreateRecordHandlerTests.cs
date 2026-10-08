@@ -282,16 +282,15 @@ public sealed class CreateRecordHandlerTests
     }
 
     [Fact]
-    public void CreateRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
+    public void CreateRecord_OnAFullPlugin_WithNoFormKeyFreeAtOrAboveTheNextObjectId_RefusesSayingSo_NamingNoRemedy()
     {
         using var mod = SourceEditFixture.Tracked();
         TakeTheNextObjectId(mod, "FFFFFF:Fixture.esp");
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
-        Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
-        Assert.Contains(BothRemedies, result.Message, StringComparison.Ordinal);
+        Assert.Equal("Fixture.esp has no FormKey free at or above its Next Object ID, up to 0xFFFFFF.", result.Message);
     }
 
     private static void TakeTheNextObjectId(SourceEditFixture mod, string formKey)
@@ -300,7 +299,6 @@ public sealed class CreateRecordHandlerTests
         TrackedTree.Seed(mod.ModFolder, mod.Plugin, formKey);
     }
 
-    private const string BothRemedies = "Clear the light flag in the header, or change a record's FormID.";
 
     [Fact]
     public void CreateRecord_OnALightEspPlugin_Refuses_WhenTheEslRangeIsExhausted()
@@ -315,14 +313,17 @@ public sealed class CreateRecordHandlerTests
     }
 
     [Fact]
-    public void CreateRecord_OnALightEspPlugin_WhenEslRangeExhausted_NamesBothRemedies()
+    public void CreateRecord_OnALightPlugin_WithNoFormKeyFreeAtOrAboveTheNextObjectId_NamesClearingTheLightFlag()
     {
         using var mod = SourceEditFixture.TrackedLight();
         TakeTheNextObjectId(mod, "000FFF:Fixture.esp");
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
-        Assert.Contains(BothRemedies, result.Message, StringComparison.Ordinal);
+        Assert.Equal(
+            "Fixture.esp has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can " +
+            "address. Clear the light flag in the header to draw above it.",
+            result.Message);
     }
 
     [Fact]

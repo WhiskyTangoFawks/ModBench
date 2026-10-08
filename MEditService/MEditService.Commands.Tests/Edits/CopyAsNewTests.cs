@@ -130,8 +130,7 @@ public sealed class CopyAsNewTests
         var refused = result.OnlyRefused();
 
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, refused.Refusal);
-        Assert.Contains("Clear the light flag", refused.Message, StringComparison.Ordinal);
-        Assert.Contains("change a record's FormID", refused.Message, StringComparison.Ordinal);
+        Assert.Equal("Destination.esp has no FormKey free at or above its Next Object ID, up to 0xFFFFFF.", refused.Message);
     }
 
     [Fact]
