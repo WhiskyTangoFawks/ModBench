@@ -506,14 +506,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/records/{formKey}/references-in-tracked-plugins": {
+    "/records/{formKey}/references-in-active-or-tracked-plugins": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["GetReferencesInTrackedPlugins"];
+        get: operations["GetReferencesInActiveOrTrackedPlugins"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2691,7 +2691,7 @@ export interface operations {
             };
         };
     };
-    GetReferencesInTrackedPlugins: {
+    GetReferencesInActiveOrTrackedPlugins: {
         parameters: {
             query?: never;
             header?: never;
