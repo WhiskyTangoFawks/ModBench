@@ -10,7 +10,7 @@ namespace MEditService.SourceAdapter;
 /// <summary>Documents by identity over one tracked mod folder (ADR-0014), and ADR-0007's
 /// git verbs beneath them. Every verb tolerates the folder having vanished since last observed —
 /// MO2's Replace install shell-deletes mod folders.</summary>
-public sealed class SourceRepository
+public sealed class SourceRepository : ISourceRepositoryReads
 {
     private readonly string _modFolder;
     private readonly string _modName;
@@ -103,7 +103,7 @@ public sealed class SourceRepository
     /// <summary>The record's own text, or null when no document holds it. The identity comes back as
     /// asked; the body is the tree's answer, spliced out of another record's document when that is
     /// what carries it.</summary>
-    public SourceDocument? Get(PluginAddress plugin, RecordIdentity identity)
+    public SourceDocument? RecordOf(PluginAddress plugin, RecordIdentity identity)
     {
         if (Locator.Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
 
@@ -116,7 +116,7 @@ public sealed class SourceRepository
     public SourceDocument? Get(
         PluginAddress plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
-        if (Locator.IdentityOf(plugin, formKey, schemas) is { } identity) return Get(plugin, identity);
+        if (Locator.IdentityOf(plugin, formKey, schemas) is { } identity) return RecordOf(plugin, identity);
         return Locator.UnreadableDocumentFor(plugin, formKey) is { } why
             ? throw new UnreadableSourceDocumentException($"{plugin.Name}'s document for {formKey} is no record document: {why}")
             : null;
@@ -172,7 +172,7 @@ public sealed class SourceRepository
         Locator.Locate(plugin, identity) is { } unit && File.Exists(unit.FullPath) ? new DocumentFile(unit.FullPath, unit.IsEmbedded) : null;
 
     /// <summary>What the file at <paramref name="path"/> holds, read from its text as the index reads it.</summary>
-    public static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path)
+    internal static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path)
     {
         var fullPath = Path.GetFullPath(path);
         if (SourceRepositoryLayout.CarriesNoRecord(fullPath)) return new RecordOfFileAnswer.HoldsNone();
@@ -185,7 +185,7 @@ public sealed class SourceRepository
     }
 
     /// <summary>The name the layout gives the file of the record's own document.</summary>
-    public static string FileNameOf(RecordIdentity identity) =>
+    internal static string FileNameOf(RecordIdentity identity) =>
         SourceRepositoryLayout.FileNameFor(FormKey.Factory(identity.FormKey), identity.EditorId);
 
     /// <summary>The name of the file in this tree holding <paramref name="identity"/>, whatever it was renamed to; null

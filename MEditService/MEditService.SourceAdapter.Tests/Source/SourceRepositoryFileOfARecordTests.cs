@@ -65,10 +65,10 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         SnapshotPlugins.Snapshot(_modFolder, null, Release, plugins.Length == 0 ? [Entry(_modFolder, Origin)] : plugins);
 
     private RecordAt RecordOf(string path, LoadOrderSnapshot? loadOrder = null) =>
-        Assert.IsType<RecordOfFileAnswer.Holds>(SourceRepository.RecordOfFile(loadOrder ?? LoadOrder(), path)).Record;
+        Assert.IsType<RecordOfFileAnswer.Holds>(new GitSourceAdapter().RecordOfFile(loadOrder ?? LoadOrder(), path)).Record;
 
     private string WhyRefused(string path, LoadOrderSnapshot? loadOrder = null) =>
-        Assert.IsType<RecordOfFileAnswer.Refused>(SourceRepository.RecordOfFile(loadOrder ?? LoadOrder(), path)).Why;
+        Assert.IsType<RecordOfFileAnswer.Refused>(new GitSourceAdapter().RecordOfFile(loadOrder ?? LoadOrder(), path)).Why;
 
     private string RenameNpcFileByHand()
     {
@@ -203,7 +203,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     [Fact]
     public void AGroupsMetadataFile_HoldsNoRecord()
     {
-        Assert.IsType<RecordOfFileAnswer.HoldsNone>(SourceRepository.RecordOfFile(LoadOrder(), Path.Combine(_modFolder, GroupMetadata)));
+        Assert.IsType<RecordOfFileAnswer.HoldsNone>(new GitSourceAdapter().RecordOfFile(LoadOrder(), Path.Combine(_modFolder, GroupMetadata)));
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         using var other = new ScratchDirectory("medit-file-of-a-record-unlisted-");
         TrackFiledIn(other);
 
-        Assert.IsType<RecordOfFileAnswer.HoldsNone>(SourceRepository.RecordOfFile(LoadOrder(), Path.Combine(other, GroupMetadata)));
+        Assert.IsType<RecordOfFileAnswer.HoldsNone>(new GitSourceAdapter().RecordOfFile(LoadOrder(), Path.Combine(other, GroupMetadata)));
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         var notes = Path.Combine(PluginSourceRoot.For(PluginName), "Npcs", "notes.txt");
         File.WriteAllText(Path.Combine(_modFolder, notes), "{\"FormKey\": \"000900:Filed.esp\"}");
 
-        Assert.IsType<RecordOfFileAnswer.HoldsNone>(SourceRepository.RecordOfFile(LoadOrder(), Path.Combine(_modFolder, notes)));
+        Assert.IsType<RecordOfFileAnswer.HoldsNone>(new GitSourceAdapter().RecordOfFile(LoadOrder(), Path.Combine(_modFolder, notes)));
     }
 
     [Fact]

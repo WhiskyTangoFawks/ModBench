@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -24,6 +25,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     public Indexer(
         LoadOrderHolder holder,
         IPluginAdapter adapter,
+        ISourceAdapter source,
         SchemaReflector schemaReflector,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
@@ -36,7 +38,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
             schemaReflector, new TableDdlBuilder(schemaReflector), _gate, _filter, notifications,
             loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>(), timeProvider);
         _reconciler = new Reconciler(
-            holder, adapter, _indexFactory, _filter, logger, notifications, timeProvider ?? TimeProvider.System);
+            holder, adapter, source, _indexFactory, _filter, logger, notifications, timeProvider ?? TimeProvider.System);
     }
 
     public LoadOrderStatus Status => _reconciler.Status;

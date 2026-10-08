@@ -50,7 +50,7 @@ public sealed class SourceRepositoryLayoutTests
         Assert.Equal("plugin-source", segmentsUnderTheOneRootTrackAndPutBothWriteTo[0]);
         Assert.Equal(pluginFileName, segmentsUnderTheOneRootTrackAndPutBothWriteTo[1]);
 
-        var document = repository.Get(plugin, new RecordIdentity(formKeyString, recordType, editorId));
+        var document = repository.RecordOf(plugin, new RecordIdentity(formKeyString, recordType, editorId));
 
         Assert.NotNull(document);
         Assert.Equal(formKeyString, document.FormKey);

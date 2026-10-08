@@ -9,7 +9,7 @@ internal sealed record MissingReferenceOnFile(MissingReference Reference, string
 
 internal static class SourceFilePlacement
 {
-    internal static MissingReferenceOnFile Place(MissingReference reference, SourceRepository repository)
+    internal static MissingReferenceOnFile Place(MissingReference reference, ISourceRepositoryReads repository)
     {
         try
         {

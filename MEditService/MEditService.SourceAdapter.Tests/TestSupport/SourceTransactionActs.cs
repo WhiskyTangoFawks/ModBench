@@ -30,6 +30,6 @@ internal static class SourceTransactionActs
         var owner = identity;
         while (repository.ContainerOf(plugin, owner, schemas) is { } container)
             owner = repository.Get(plugin, container.ParentFormKey, schemas).Require().Identity;
-        return repository.Get(plugin, owner).Require();
+        return repository.RecordOf(plugin, owner).Require();
     }
 }

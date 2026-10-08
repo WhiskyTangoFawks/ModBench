@@ -299,20 +299,21 @@ internal sealed class RelationReads(
     }
 
     public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(
-        Func<PluginAddress, PluginProvider.FromMod?> modOf)
+        Func<PluginAddress, ISourceRepositoryReads?> sourceOf)
     {
-        var repositories = new Dictionary<PluginAddress, SourceRepository>(PluginAddress.Comparer);
+        var repositories = new Dictionary<PluginAddress, ISourceRepositoryReads?>(PluginAddress.Comparer);
         return
         [
             .. GetReferencesToMissingRecords().Select(reference =>
             {
-                if (modOf(reference.Plugin) is not { } mod) return SourceFilePlacement.Unprovided(reference);
                 if (!repositories.TryGetValue(reference.Plugin, out var repository))
                 {
-                    repository = SourceRepository.Over(mod, store.Release);
+                    repository = sourceOf(reference.Plugin);
                     repositories[reference.Plugin] = repository;
                 }
-                return SourceFilePlacement.Place(reference, repository);
+                return repository is null
+                    ? SourceFilePlacement.Unprovided(reference)
+                    : SourceFilePlacement.Place(reference, repository);
             }),
         ];
     }
