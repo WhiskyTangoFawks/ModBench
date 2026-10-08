@@ -27,10 +27,10 @@ import {
   renameModNameRefusal,
   separatorNameRefusal,
   type ModlistAccess,
-  type ModlistSelectionResult,
   type MovePlace,
   type OriginFileMark,
 } from '../modlist/modlist';
+import type { SelectionResult } from '../coreLib/commandResult';
 import { FILE_MARKS, fileLabel } from './modFiles';
 import { endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
 import { installNameRefusal } from '../install/install';
@@ -98,7 +98,7 @@ const SEPARATOR_PLACES =
 export function registerModMoveCommand(
   access: ModlistAccess, instance: Pick<Instance, 'value' | 'refresh'>, view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
-  const report = (kind: 'mod' | 'separator', names: readonly string[], result: ModlistSelectionResult) => {
+  const report = (kind: 'mod' | 'separator', names: readonly string[], result: SelectionResult<string>) => {
     const noun = `${kind}s`;
     if (!result.applied) {
       reporter.report('error', `Failed to move ${noun}.`, result.refusal);
