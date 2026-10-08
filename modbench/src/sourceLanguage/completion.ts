@@ -1,4 +1,6 @@
 import type { MEditClient } from '../client';
+import { errorMessage } from '../ports/errorMessage';
+import type { Reporter } from '../ports/reporter';
 import { metadataAt } from './fieldMetadata';
 import { fieldAt, type FieldAtOffset } from './sourceText';
 
@@ -46,13 +48,21 @@ async function fieldOfRecord(client: Client, found: FieldAtOffset): Promise<Fiel
 }
 
 /** What the string under the cursor completes to: the records a reference field offers for the text typed so
- *  far, or the values of an enum field; undefined elsewhere. */
-export async function completionsAt(client: Client, text: string, offset: number): Promise<SourceCompletions | undefined> {
+ *  far, or the values of an enum field; undefined elsewhere, and where mEdit cannot answer, which the Output says. */
+export async function completionsAt(
+  { client, reporter }: { client: Client; reporter: Pick<Reporter, 'shownOnSurface'> },
+  text: string, offset: number,
+): Promise<SourceCompletions | undefined> {
   const found = fieldAt(text, offset);
   if (!found || offset <= found.start) return undefined;
-  const field = await fieldOfRecord(client, found);
-  const range = { start: found.start + 1, end: found.end - 1 };
-  if (field?.type === 'enum' || field?.type === 'flags') return enumCompletions(field, range);
-  if (field?.type === 'formKey') return referenceCompletions(client, field, text.slice(range.start, offset), range);
-  return undefined;
+  try {
+    const field = await fieldOfRecord(client, found);
+    const range = { start: found.start + 1, end: found.end - 1 };
+    if (field?.type === 'enum' || field?.type === 'flags') return enumCompletions(field, range);
+    if (field?.type === 'formKey') return await referenceCompletions(client, field, text.slice(range.start, offset), range);
+    return undefined;
+  } catch (error) {
+    reporter.shownOnSurface('error', `Completion cannot list what ${found.recordFormKey} offers here.`, errorMessage(error));
+    return undefined;
+  }
 }
