@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 import { pluginAddressOf, samePluginAddress } from '../wire/pluginAddress';
-import type { CopyItem, CopyMode, PluginAddress, PluginMetadata, RecordAddress, RecordChildHolders } from '../client';
+import type { CopyItem, CopyMode, PluginAddress, PluginMetadata, RecordAddress } from '../client';
 
 export interface CopyModeItem extends vscode.QuickPickItem {
   readonly mode: CopyMode;
@@ -12,31 +12,9 @@ const OVERRIDE_ITEM: CopyModeItem = {
 const NEW_ITEM: CopyModeItem = {
   label: 'New record', detail: 'A duplicate under the next free FormID of each plugin you pick.', mode: 'New',
 };
-const DEEP_ITEM: CopyModeItem = {
-  label: 'Deep copy as override',
-  detail: 'The record itself and all its child records, under their own FormKeys, in each plugin you pick.',
-  mode: 'DeepOverride',
-};
+export const copyModeItems: readonly CopyModeItem[] = [OVERRIDE_ITEM, NEW_ITEM];
 
-/** xEdit's menu order: override, deep copy as override, new record. */
-export function copyModeItems(offerDeep: boolean): readonly CopyModeItem[] {
-  return offerDeep ? [OVERRIDE_ITEM, DEEP_ITEM, NEW_ITEM] : [OVERRIDE_ITEM, NEW_ITEM];
-}
-
-export const isOverride = (mode: CopyMode): boolean => mode === 'Override' || mode === 'DeepOverride';
-
-export const runsUnderPluginsBar = (mode: CopyMode): boolean => mode === 'DeepOverride';
-
-/** A deep copy keeps the destination's own copy of a record that has child records, whatever
- *  replace says, so only the other records' held copies are asked about. */
-export function recordsAskedToReplace(
-  mode: CopyMode, records: readonly RecordAddress[], withChildren: readonly RecordAddress[],
-): readonly RecordAddress[] {
-  if (mode !== 'DeepOverride') return records;
-  const hasChildren = (record: RecordAddress) => withChildren.some((w) =>
-    w.formKey === record.formKey && samePluginAddress(pluginAddressOf(w), pluginAddressOf(record)));
-  return records.filter((record) => !hasChildren(record));
-}
+export const isOverride = (mode: CopyMode): boolean => mode === 'Override';
 
 export interface CopyDestinationItem extends vscode.QuickPickItem {
   readonly plugin: PluginAddress;
@@ -77,17 +55,4 @@ export function heldCopies(
     .filter((destination) => (holders.get(record.formKey) ?? []).some((holder) => samePluginAddress(holder, destination)))
     .map((destination) => ({ record, destination })))
     .filter((item) => !intoItsOwnPlugin(item));
-}
-
-/** Each record and destination where the destination holds any of the record's child records:
- *  what a deep copy's replace would overwrite. A record's own plugin holds them as the source. */
-export const heldChildren = (childHolders: readonly RecordChildHolders[]): CopyItem[] =>
-  childHolders
-    .flatMap(({ record, destinations }) => destinations.map((destination) => ({ record, destination })))
-    .filter((item) => !intoItsOwnPlugin(item));
-
-export function withoutDestinations(
-  destinations: readonly PluginAddress[], dropped: readonly CopyItem[],
-): PluginAddress[] {
-  return destinations.filter((d) => !dropped.some((item) => samePluginAddress(item.destination, d)));
 }

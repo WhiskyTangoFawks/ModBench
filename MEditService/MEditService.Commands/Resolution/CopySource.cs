@@ -91,11 +91,6 @@ internal sealed class CopySource(
         return Loaded()?.CellAt(worldspace, x, y) is { } formKey ? Loaded()?.IdentityOf(formKey) : null;
     }
 
-    /// <summary>The FormKey of every cell <paramref name="worldspace"/> holds in this plugin, its
-    /// persistent cell and each numbered cell.</summary>
-    internal IReadOnlyList<string> CellsIn(string worldspace) =>
-        _tree != null ? _tree.CellsIn(plugin, worldspace, _schemas) : Loaded()?.CellsIn(worldspace) ?? [];
-
     public void Dispose() => _loaded?.Dispose();
 
     // Null when the load order registers no such plugin: it holds nothing, which is an answer.

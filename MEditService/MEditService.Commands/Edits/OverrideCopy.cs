@@ -4,7 +4,6 @@ using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
@@ -29,10 +28,9 @@ internal sealed class OverrideCopy
     }
 
     /// <summary>An unreadable source record refuses rather than landing as a stub.
-    /// <paramref name="replace"/> lets it take a held record's place; <paramref name="deep"/> brings
-    /// the child records, and a record with none is a plain override.</summary>
+    /// <paramref name="replace"/> lets it take a held record's place.</summary>
     internal RecordEditResult Copy(
-        PluginAddress sourcePlugin, string formKey, PluginAddress destinationPlugin, bool replace, bool deep = false)
+        PluginAddress sourcePlugin, string formKey, PluginAddress destinationPlugin, bool replace)
     {
         if (_targets.ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
         using var source = copy.Source;
@@ -40,7 +38,7 @@ internal sealed class OverrideCopy
         if (PluginAddress.Comparer.Equals(sourcePlugin, destinationPlugin)) return RecordEditResult.Success();
         try
         {
-            return CopyAsOverride(copy, destinationPlugin, replace, deep);
+            return CopyAsOverride(copy, destinationPlugin, replace);
         }
         catch (UnreadableSourceDocumentException ex)
         {
@@ -52,26 +50,39 @@ internal sealed class OverrideCopy
         }
     }
 
+    /// <summary>How many containers the record sits in. A record the source cannot read answers 0:
+    /// its own copy refuses it.</summary>
+    internal int ContainerDepth(PluginAddress sourcePlugin, string formKey)
+    {
+        try
+        {
+            using var source = _resolution.SourceOf(sourcePlugin);
+            var depth = 0;
+            var identity = source.Identity(formKey);
+            while (identity is { } held && source.ContainerOf(held) is { } container)
+            {
+                depth++;
+                identity = source.Identity(container.ParentFormKey);
+            }
+            return depth;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return 0;
+        }
+    }
+
     private static RecordEditResult RefuseSlotHeldByAnotherRecord(PluginAddress destinationPlugin, ChildSlotHeldByAnotherRecordException ex) =>
         RecordEditResult.Refused(
             RecordEditRefusal.ChildSlotHeldByAnotherRecord,
             $"{destinationPlugin.Name} ({destinationPlugin.Origin}) holds another record where the copy puts one: {ex.Message}");
 
     private RecordEditResult CopyAsOverride(
-        WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, bool replace, bool deep)
+        WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, bool replace)
     {
         var (source, identity, destination, release, body) = copy;
         var formKey = identity.FormKey;
         if (RefuseIfUnderride(formKey, destinationPlugin) is { } underrideRefusal) return underrideRefusal;
-
-        var cells = deep ? WorldspaceCellsOf(copy) : new WorldspaceCells([], []);
-        var childKeys = deep ? ChildKeysOf(copy, cells) : [];
-        var withChildren = childKeys.Count > 0;
-        if (withChildren)
-        {
-            if (RefuseIfAnyChildIsAnUnderride(childKeys, destinationPlugin) is { } childUnderride) return childUnderride;
-            if (!replace && RecordCopy.RefuseIfHoldsChildRecords(destination, formKey, childKeys) is { } held) return held;
-        }
 
         // A record a container's document carries, a worldspace's persistent cell among them, lands
         // inside the destination's copy of that document (the container rule).
@@ -79,97 +90,14 @@ internal sealed class OverrideCopy
         {
             return _recordCopy.CopyEmbeddedChildAsOverride(
                 source, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body),
-                container, destination, release, replace, withChildren);
+                container, destination, release, replace);
         }
 
-        var landed = LandRecord(copy, destinationPlugin, replace, withChildren);
-        return landed.Applied && cells.Numbered.Count > 0 ? LandCells(copy, cells) : landed;
-    }
-
-    // Every child record at any depth, a worldspace's numbered cells and what they carry included.
-    private List<string> ChildKeysOf(WriteTargets.CopyTarget copy, WorldspaceCells cells)
-    {
-        var (source, identity, _, release, body) = copy;
-        var keys = ContainerDocumentEdits.ChildFormKeys(_codec, body, release, identity.RecordType).ToList();
-        foreach (var cell in cells.Numbered)
-        {
-            keys.Add(cell);
-            var cellDocument = source.Document(CellIdentity(source, cell));
-            keys.AddRange(ContainerDocumentEdits.ChildFormKeys(_codec, cellDocument.Body, release, cellDocument.RecordType));
-        }
-        return keys;
-    }
-
-    private static RecordIdentity CellIdentity(CopySource source, string cell) =>
-        source.Identity(cell)
-        ?? throw new InvalidOperationException($"{source.Plugin.Name} does not hold {cell} — its own worldspace named it.");
-
-    // The origin of each child record is a plugin the destination must load after.
-    private RecordEditResult? RefuseIfAnyChildIsAnUnderride(IEnumerable<string> childKeys, PluginAddress destinationPlugin) =>
-        childKeys
-            .DistinctBy(key => FormKey.Factory(key).ModKey)
-            .Select(key => RefuseIfUnderride(key, destinationPlugin))
-            .FirstOrDefault(refusal => refusal is not null);
-
-    // The persistent cell is in the worldspace's own document; every other cell has one of its own.
-    private readonly record struct WorldspaceCells(IReadOnlyList<string> Persistent, IReadOnlyList<string> Numbered);
-
-    private WorldspaceCells WorldspaceCellsOf(WriteTargets.CopyTarget copy)
-    {
-        var (source, identity, _, release, body) = copy;
-        if (!RecordTypeDispatch.For(release).IsWorldspace(identity.RecordType)) return new WorldspaceCells([], []);
-
-        var embedded = ContainerDocumentEdits.ChildFormKeys(_codec, body, release, identity.RecordType).ToHashSet();
-        var cells = source.CellsIn(identity.FormKey).ToLookup(embedded.Contains);
-        return new WorldspaceCells([.. cells[true]], [.. cells[false].Order(StringComparer.Ordinal)]);
-    }
-
-    // A failure leaves the cells before it in the working tree, and the answer names them. Only a
-    // fault of the tree, the file system or a slot another record holds is that answer.
-    private RecordEditResult LandCells(WriteTargets.CopyTarget copy, WorldspaceCells cells)
-    {
-        var (source, identity, destination, release, _) = copy;
-        var landed = new List<string>(cells.Persistent);
-        var held = destination.Repository.FormKeysUsed(destination.Plugin);
-        foreach (var cell in cells.Numbered)
-        {
-            try
-            {
-                var document = source.Document(CellIdentity(source, cell));
-                if (held.Contains(cell)) _recordCopy.OverwriteHeldCell(document, destination, release);
-                else
-                {
-                    var elsewhere = _recordCopy.FindHeldElsewhere(destination, document.Body, document.RecordType, null, release);
-                    RecordCopy.LandWithoutHeldElsewhere(destination, elsewhere, () =>
-                    {
-                        _recordCopy.PutExteriorCell(identity.FormKey, document, document.Body, destination, release);
-                        return RecordEditResult.Success();
-                    });
-                }
-                landed.Add(cell);
-            }
-            catch (Exception ex) when (ex is AmbiguousSourceUnitException or UnreadableSourceDocumentException
-                                           or ChildSlotHeldByAnotherRecordException or IOException or UnauthorizedAccessException)
-            {
-                _logger.LogError(ex, "A deep copy of {FormKey} stopped at {Cell}", identity.FormKey, cell);
-                return RecordEditResult.Refused(
-                    ex switch
-                    {
-                        AmbiguousSourceUnitException => RecordEditRefusal.AmbiguousSourceUnit,
-                        UnreadableSourceDocumentException => RecordEditRefusal.RecordParseFailed,
-                        ChildSlotHeldByAnotherRecordException => RecordEditRefusal.ChildSlotHeldByAnotherRecord,
-                        _ => RecordEditRefusal.SourceAccessFailed,
-                    },
-                    $"{identity.FormKey} landed in {destination.Plugin.Name} ({destination.Plugin.Origin}) only in part, " +
-                    $"and nothing was rolled back. The cells that landed: {(landed.Count == 0 ? "none" : string.Join(", ", landed))}. " +
-                    $"The cell that failed: {cell}: {ex.Message} Discard the working-tree changes to undo it.");
-            }
-        }
-        return RecordEditResult.Success();
+        return LandRecord(copy, destinationPlugin, replace);
     }
 
     private RecordEditResult LandRecord(
-        WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, bool replace, bool withChildren)
+        WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, bool replace)
     {
         var (source, identity, destination, release, body) = copy;
         var formKey = identity.FormKey;
@@ -178,8 +106,6 @@ internal sealed class OverrideCopy
         {
             if (_recordCopy.Identity(destination, formKey, release) is not { } existingTarget)
                 return RecordCopy.RefuseKeyWithNoDocument(destination, formKey);
-            if (withChildren)
-                return _recordCopy.MergeChildrenIntoHeldCopy(source.Plugin, existingTarget, body, identity.RecordType, destination, release);
             if (!replace) return RecordCopy.RefuseHeldWithoutReplace(formKey, destinationPlugin);
 
             // Own fields only, as xEdit's copy-into does: the children the destination's copy
@@ -187,16 +113,11 @@ internal sealed class OverrideCopy
             return ReplaceHeldCopy(source, identity, body, existingTarget, destination, release);
         }
 
-        var elsewhere = withChildren
-            ? _recordCopy.FindHeldElsewhere(destination, body, identity.RecordType, null, release)
-            : RecordCopy.HeldElsewhere.None;
-        var carrying = _recordCopy.CarryingHeldElsewhere(elsewhere, body, identity.RecordType, release);
-        return RecordCopy.LandWithoutHeldElsewhere(
-            destination, elsewhere, () => LandNewRecord(copy, carrying, destinationPlugin, withChildren));
+        return LandNewRecord(copy, body, destinationPlugin);
     }
 
     private RecordEditResult LandNewRecord(
-        WriteTargets.CopyTarget copy, string body, PluginAddress destinationPlugin, bool withChildren)
+        WriteTargets.CopyTarget copy, string body, PluginAddress destinationPlugin)
     {
         var (source, identity, destination, release, _) = copy;
         var formKey = identity.FormKey;
@@ -207,7 +128,7 @@ internal sealed class OverrideCopy
                 source, worldspace,
                 new SourceDocument(
                     formKey, identity.RecordType, identity.EditorId,
-                    withChildren ? body : StripEmbeddedChildrenForShallowCopy(body, identity.RecordType, release)),
+                    StripEmbeddedChildren(body, identity.RecordType, release)),
                 destination, release);
             if (placed.Applied && _logger.IsEnabled(LogLevel.Information))
             {
@@ -219,9 +140,9 @@ internal sealed class OverrideCopy
             return placed;
         }
 
-        // A plain Copy as Override is own-fields-only, so a container's inline children are stripped.
-        if (!withChildren && ContainerChildFields.HasChildFields(identity.RecordType, release))
-            body = StripEmbeddedChildrenForShallowCopy(body, identity.RecordType, release);
+        // Copy as Override is own-fields-only, so a container's inline children are stripped.
+        if (ContainerChildFields.HasChildFields(identity.RecordType, release))
+            body = StripEmbeddedChildren(body, identity.RecordType, release);
 
         destination.Repository.Put(
             destinationPlugin, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body));
@@ -276,6 +197,6 @@ internal sealed class OverrideCopy
                 "Pick a destination that loads after the origin.")
             : null;
 
-    private string StripEmbeddedChildrenForShallowCopy(string body, string recordType, GameRelease release) =>
+    private string StripEmbeddedChildren(string body, string recordType, GameRelease release) =>
         ContainerDocumentEdits.WithoutChildren(_codec, body, release, recordType);
 }

@@ -10,6 +10,21 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class CopyAsOverrideContainerTests
 {
     [Fact]
+    public void CopyRecordAsOverride_OfAChildSelectedBeforeItsContainer_LandsBoth_ContainerFirst()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+
+        var result = fixture.CopyHandler.CopySync(
+            [new RecordAt(fixture.SourcePlugin, fixture.DialogTopic.ToString()), new RecordAt(fixture.SourcePlugin, fixture.Quest.ToString())],
+            CopyMode.Override, [fixture.DestinationPlugin], replace: false);
+
+        Assert.Empty(result.Refused);
+        Assert.Equal(2, result.Landed.Count);
+        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()));
+        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString()));
+    }
+
+    [Fact]
     public void CopyRecordAsOverride_OnAQuest_Succeeds_OwnFieldsLand_ChildListsEmpty()
     {
         using var fixture = ContainerCopyFixture.Create();
