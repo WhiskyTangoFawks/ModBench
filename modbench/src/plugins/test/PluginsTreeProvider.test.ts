@@ -1401,7 +1401,7 @@ describe('PluginsTreeProvider — the message line takes the first message that 
   const withoutGameFolder = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]) =>
     new FakeInstance({ ...valueOf(plugins), gameFolder: GAME_FOLDER_NOT_FOUND });
 
-  it('puts the game folder over a failed index', async () => {
+  it('puts the game folder over a failed index', () => {
     const h = makeTree([A_ROW()], { instance: withoutGameFolder([A_ROW()]) });
     h.tree.facts.refused(indexFailed);
 
