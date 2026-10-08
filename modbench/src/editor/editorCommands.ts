@@ -57,7 +57,6 @@ export interface EditorCommandDeps {
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const { context, tabs, meditClient, outputChannel } = deps;
   const selections: ViewSelections = { focused: deps.focusedViewSelection, of: deps.selectionOf };
-  // Lives for the activation, disposed with the editor commands.
   const loadOrderStatusTracker = trackLoadOrderStatus(
     meditClient, () => { announceConflictsComputed(tabs); });
   // The picker and the title are each tab's own, which the record grid adds per tab.
