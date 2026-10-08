@@ -120,7 +120,6 @@ import { comparisonOf } from '../../test/comparison';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 import { columnKey } from '../../wire/columnKey';
-import { copyDocument } from '../../drivingLib/recordDocument';
 
 const COPY_PLUGIN = { name: 'A.esp', origin: 'ModA' };
 const renderedUri = (formKey: string, fileName: string) => vscode.Uri.from({
@@ -219,6 +218,8 @@ beforeEach(() => {
   h.commands.clear();
   h.contextKeys.clear();
   h.executed.length = 0;
+  h.fileSystems.clear();
+  h.openedDocuments.length = 0;
 });
 
 const rowsOf = ({ options }: FakeTreeView): ReferencedByTreeProvider =>
@@ -565,9 +566,17 @@ describe('the Editor\'s file systems', () => {
   const isReadable = (value: unknown): value is ReadableFileSystem =>
     typeof value === 'object' && value !== null && 'readFile' in value && typeof value.readFile === 'function';
 
-  async function readThrough(scheme: string, uri: unknown): Promise<string> {
-    const files = h.fileSystems.get(scheme);
-    if (!isReadable(files)) throw new Error(`no file system registered on ${scheme}`);
+  const hasScheme = (value: unknown): value is { scheme: string } =>
+    typeof value === 'object' && value !== null && 'scheme' in value && typeof value.scheme === 'string';
+
+  const documentIn = (uri: unknown): { scheme: string } => {
+    if (!hasScheme(uri)) throw new Error('no document opened');
+    return uri;
+  };
+
+  async function readThrough(uri: { scheme: string }): Promise<string> {
+    const files = h.fileSystems.get(uri.scheme);
+    if (!isReadable(files)) throw new Error(`no file system registered on ${uri.scheme}`);
     return new TextDecoder().decode(await files.readFile(uri));
   }
 
@@ -583,22 +592,27 @@ describe('the Editor\'s file systems', () => {
     return client;
   };
 
-  async function openedField(readOnly: boolean): Promise<unknown> {
+  async function openedField(readOnly: boolean): Promise<{ scheme: string }> {
     makeEditor(fieldClient());
-    h.openedDocuments.length = 0;
     await h.commands.get('modbench.record.openFieldValue')?.({
       webviewSection: 'stringValue', formKey: FORM_KEY, plugin: plugin.name, origin: plugin.origin, recordLabel: 'Cell [000803:A.esp]',
       fieldName: 'Description', value: 'a long description', readOnly, path: [{ kind: 'member', name: 'Description' }],
     });
-    return h.openedDocuments.at(-1);
+    return documentIn(h.openedDocuments.at(-1));
   }
 
   it('read a field value through the editable scheme', async () => {
-    expect(await readThrough('modbench-field', await openedField(false))).toBe('a long description');
+    const uri = await openedField(false);
+
+    expect(uri.scheme).toBe('modbench-field');
+    expect(await readThrough(uri)).toBe('a long description');
   });
 
   it('read a field value through the read-only scheme', async () => {
-    expect(await readThrough('modbench-field-readonly', await openedField(true))).toBe('a long description');
+    const uri = await openedField(true);
+
+    expect(uri.scheme).toBe('modbench-field-readonly');
+    expect(await readThrough(uri)).toBe('a long description');
   });
 
   it('read a child record through its container\'s file', async () => {
@@ -607,10 +621,10 @@ describe('the Editor\'s file systems', () => {
     client.setQueryAnswer('getRecordOfFile', null);
     makeEditor(client);
     h.disk.set(CELL_FILE, '{ "EditorID": "Cell" }');
-    const document = await copyDocument(client, { formKey: FORM_KEY, plugin });
-    if (!('uri' in document)) throw new Error('the child record did not open');
+    await h.commands.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: FORM_KEY, plugin } });
+    const [uri] = opened();
 
-    expect(await readThrough('modbench-child-record', document.uri)).toBe('{ "EditorID": "Cell" }');
+    expect(await readThrough(documentIn(uri))).toBe('{ "EditorID": "Cell" }');
   });
 });
 
