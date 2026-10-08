@@ -2,18 +2,29 @@ using System.Net;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class RecordFileApiTests : HostedTests
+public sealed class RecordDocumentApiTests : HostedTests
 {
     private const string Plugin = "Filed.esp";
     private const string Origin = "FiledMod";
 
     private async Task<ScatteredFixtureData> Untracked()
     {
-        var fx = Owned(new PluginFixtureBuilder("api-record-file")
-            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FiledNpc"), origin: Origin)
+        var fx = Owned(new PluginFixtureBuilder("api-record-document")
+            .WithPlugin(Plugin, mod =>
+            {
+                mod.Npcs.AddNew("FiledNpc");
+                var cell = new Cell(mod) { EditorID = "FiledCell" };
+                cell.Temporary.Add(new PlacedObject(mod) { EditorID = "FiledRef" });
+                var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+                subBlock.Cells.Add(cell);
+                var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+                block.SubBlocks.Add(subBlock);
+                mod.Cells.Records.Add(block);
+            }, origin: Origin)
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         return fx;
@@ -30,9 +41,9 @@ public sealed class RecordFileApiTests : HostedTests
 
     private Task<string> Npc() => Client.FormKeyNamed(Plugin, Origin, "npc_", "FiledNpc");
 
-    private Task<HttpResponseMessage> FileOf(string formKey, string? origin = Origin) =>
+    private Task<HttpResponseMessage> DocumentOf(string formKey, string? origin = Origin) =>
         Client.GetAsync(new Uri(
-            $"/plugins/{Plugin}/records/{Uri.EscapeDataString(formKey)}/file" + (origin is null ? string.Empty : $"?origin={origin}"),
+            $"/plugins/{Plugin}/records/{Uri.EscapeDataString(formKey)}/document" + (origin is null ? string.Empty : $"?origin={origin}"),
             UriKind.Relative));
 
     private Task<HttpResponseMessage> RecordOf(string? path) =>
@@ -48,10 +59,36 @@ public sealed class RecordFileApiTests : HostedTests
     {
         var fx = await Tracked();
 
-        var file = await FileOf(await Npc());
+        var file = await DocumentOf(await Npc());
 
         Assert.Equal(HttpStatusCode.OK, file.StatusCode);
-        Assert.Equal(NpcFile(fx), (await file.Body()).GetProperty("path").GetString());
+        var document = await file.Body();
+        Assert.Equal("OwnFile", document.GetProperty("kind").GetString());
+        Assert.Equal(NpcFile(fx), document.GetProperty("location").GetString());
+    }
+
+    [Fact]
+    public async Task ATrackedChildCopy_IsInItsContainersFile()
+    {
+        var fx = await Tracked();
+
+        var document = await (await DocumentOf(await Client.FormKeyNamed(Plugin, Origin, "refr", "FiledRef"))).Body();
+
+        Assert.Equal("ContainersFile", document.GetProperty("kind").GetString());
+        Assert.Equal(
+            Directory.EnumerateFiles(Path.GetDirectoryName(fx.Plugins.Single().Path).Require(), "FiledCell - *.json", SearchOption.AllDirectories).Single(),
+            document.GetProperty("location").GetString());
+    }
+
+    [Fact]
+    public async Task AnUntrackedCopy_IsRenderedUnderTheLayoutsName()
+    {
+        await Untracked();
+
+        var document = await (await DocumentOf(await Npc())).Body();
+
+        Assert.Equal("Rendered", document.GetProperty("kind").GetString());
+        Assert.Equal($"FiledNpc - {(await Npc()).Replace(':', '_')}.json", document.GetProperty("location").GetString());
     }
 
     [Fact]
@@ -76,7 +113,7 @@ public sealed class RecordFileApiTests : HostedTests
 
         File.Delete(NpcFile(fx));
 
-        await (await FileOf(npc)).AssertIsProblem(HttpStatusCode.NotFound);
+        await (await DocumentOf(npc)).AssertIsProblem(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -87,7 +124,7 @@ public sealed class RecordFileApiTests : HostedTests
 
         File.Copy(NpcFile(fx), Path.Combine(Path.GetDirectoryName(NpcFile(fx)).Require(), $"Twin - {npc.Replace(':', '_')}.json"));
 
-        var refused = await (await FileOf(npc)).AssertIsProblem(HttpStatusCode.UnprocessableEntity);
+        var refused = await (await DocumentOf(npc)).AssertIsProblem(HttpStatusCode.UnprocessableEntity);
         Assert.Contains("More than one document", refused.GetProperty("detail").GetString(), StringComparison.Ordinal);
     }
 
@@ -96,7 +133,7 @@ public sealed class RecordFileApiTests : HostedTests
     {
         await Untracked();
 
-        await (await FileOf(await Npc(), origin: null)).AssertIsProblem(HttpStatusCode.BadRequest);
+        await (await DocumentOf(await Npc(), origin: null)).AssertIsProblem(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -104,7 +141,7 @@ public sealed class RecordFileApiTests : HostedTests
     {
         await Untracked();
 
-        await (await FileOf(await Npc(), origin: "AnotherMod")).AssertIsProblem(HttpStatusCode.NotFound);
+        await (await DocumentOf(await Npc(), origin: "AnotherMod")).AssertIsProblem(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -137,9 +174,9 @@ public sealed class RecordFileApiTests : HostedTests
     }
 
     [Fact]
-    public async Task TheFileOfACopy_BeforeAnyLoadOrder_Is503()
+    public async Task TheDocumentOfACopy_BeforeAnyLoadOrder_Is503()
     {
-        await (await FileOf($"000000:{Plugin}")).AssertIsProblem(HttpStatusCode.ServiceUnavailable);
+        await (await DocumentOf($"000000:{Plugin}")).AssertIsProblem(HttpStatusCode.ServiceUnavailable);
     }
 
     [Fact]

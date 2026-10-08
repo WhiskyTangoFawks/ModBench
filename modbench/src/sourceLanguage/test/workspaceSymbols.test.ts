@@ -45,9 +45,12 @@ function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Recor
       return Promise.resolve({ items, total: items.length });
     }),
     getRecordOwner: () => Promise.reject(new Error('A symbol names its plugin.')),
-    getRecordFile: (address, formKey) => Promise.resolve(files[key(formKey, address)] ? { path: files[key(formKey, address)]?.file } : null),
-    getRecordOfFile: (path) => Promise.resolve({ formKey: Object.entries(files).find(([, copy]) => copy.file === path)?.[0].split(' ')[0] ?? '' }),
-    getRenderedDocument: () => Promise.reject(new Error('A tracked copy has a file.')),
+    getCopyDocument: (address, formKey) => {
+      const copyKey = key(formKey, address);
+      const copy = files[copyKey];
+      const firstOnFile = Object.entries(files).find(([, other]) => other.file === copy?.file)?.[0];
+      return Promise.resolve(copy ? { kind: firstOnFile !== copyKey ? 'ContainersFile' : 'OwnFile', location: copy.file } : null);
+    },
     ...answering,
   };
   const open = (uri: vscode.Uri) => new Promise<{ getText(): string }>((resolve) => {

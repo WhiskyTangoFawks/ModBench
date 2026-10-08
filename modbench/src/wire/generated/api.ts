@@ -281,15 +281,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/{plugin}/records/{formKey}/file": {
+    "/plugins/{plugin}/records/{formKey}/document": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** @description The absolute path of the file in plugin source holding the plugin's copy of a record: its own document, the root header document for the Plugin Header record, or the document of the record carrying a child record. Null for an untracked plugin's copy, which has no file. Two documents claiming the copy refuse, naming them. */
-        get: operations["GetRecordFile"];
+        /** @description Where the plugin's copy of a record is a document: its own file in plugin source, the file of the record carrying it (a child record), or, for an untracked plugin's copy, the name of its rendered document. Two documents claiming the copy refuse, naming them. */
+        get: operations["GetCopyDocument"];
         put?: never;
         post?: never;
         delete?: never;
@@ -816,6 +816,12 @@ export interface components {
             fullName?: string | null;
             isContainer: boolean;
         };
+        CopyDocument: {
+            kind: components["schemas"]["CopyDocumentKind"];
+            location: string;
+        };
+        /** @enum {string} */
+        CopyDocumentKind: "OwnFile" | "ContainersFile" | "Rendered";
         /** @enum {string} */
         CopyMode: "New" | "Override";
         CopyText: {
@@ -1171,9 +1177,6 @@ export interface components {
             op: string;
             path: components["schemas"]["PathHop"][];
             value?: unknown;
-        };
-        RecordFile: {
-            path?: string | null;
         };
         RecordFilterClearedNotification: {
             source: string;
@@ -1974,7 +1977,7 @@ export interface operations {
             };
         };
     };
-    GetRecordFile: {
+    GetCopyDocument: {
         parameters: {
             query?: {
                 origin?: string;
@@ -1994,7 +1997,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordFile"];
+                    "application/json": components["schemas"]["CopyDocument"];
                 };
             };
             /** @description Bad Request */

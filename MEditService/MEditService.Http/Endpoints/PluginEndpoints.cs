@@ -110,16 +110,16 @@ internal static class PluginEndpoints
             .ProducesProblem(422)
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/records/{formKey}/file", (
+        app.MapGet("/plugins/{plugin}/records/{formKey}/document", (
             string plugin, string formKey, string? origin, IRecordQueryService svc) =>
-            PluginRecordAnswer(plugin, formKey, origin, svc.GetRecordFile))
-            .WithName("GetRecordFile")
+            PluginRecordAnswer(plugin, formKey, origin, svc.GetCopyDocument))
+            .WithName("GetCopyDocument")
             .WithTags(Tag)
             .WithDescription(
-                "The absolute path of the file in plugin source holding the plugin's copy of a record: its own document, the " +
-                "root header document for the Plugin Header record, or the document of the record carrying a child record. " +
-                "Null for an untracked plugin's copy, which has no file. Two documents claiming the copy refuse, naming them.")
-            .Produces<RecordFile>()
+                "Where the plugin's copy of a record is a document: its own file in plugin source, the file of the record carrying " +
+                "it (a child record), or, for an untracked plugin's copy, the name of its rendered document. " +
+                "Two documents claiming the copy refuse, naming them.")
+            .Produces<CopyDocument>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(422)

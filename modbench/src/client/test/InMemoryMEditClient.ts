@@ -10,7 +10,7 @@ type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
   | 'getRecords' | 'searchRecords'
   | 'getRecordOwner' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrTrackedPlugins'
-  | 'getRenderedDocument' | 'getRecordFile' | 'getRecordOfFile'
+  | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
@@ -338,8 +338,8 @@ export class InMemoryMEditClient implements MEditClient {
     return this.query('getRenderedDocument', args);
   }
 
-  getRecordFile(...args: Parameters<MEditClient['getRecordFile']>): ReturnType<MEditClient['getRecordFile']> {
-    return this.query('getRecordFile', args);
+  getCopyDocument(...args: Parameters<MEditClient['getCopyDocument']>): ReturnType<MEditClient['getCopyDocument']> {
+    return this.query('getCopyDocument', args);
   }
 
   getRecordOfFile(...args: Parameters<MEditClient['getRecordOfFile']>): ReturnType<MEditClient['getRecordOfFile']> {

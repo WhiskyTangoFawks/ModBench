@@ -124,7 +124,12 @@ public record CopyText(PluginAddress Plugin, string DocumentText);
 
 public record RenderedDocument(string FileName, string Text);
 
-public record RecordFile(string? Path);
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum CopyDocumentKind { OwnFile, ContainersFile, Rendered }
+
+/// <summary>Where a copy is a document: <paramref name="Location"/> is the path of its own file, of the
+/// file of the record carrying it, or the name of its rendered document, as <paramref name="Kind"/> says.</summary>
+public record CopyDocument(CopyDocumentKind Kind, string Location);
 
 // ADR-0012.
 public record ReferenceResult(

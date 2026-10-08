@@ -167,8 +167,9 @@ public sealed class SourceRepository
     public string? RelativePathOf(PluginAddress plugin, RecordIdentity identity) =>
         Locator.Locate(plugin, identity)?.RelativePath;
 
-    public string? FullPathOf(PluginAddress plugin, RecordIdentity identity) =>
-        Locator.Locate(plugin, identity) is { } unit && File.Exists(unit.FullPath) ? unit.FullPath : null;
+    /// <summary>The file in this tree holding <paramref name="identity"/>; null when nothing there holds it.</summary>
+    public DocumentFile? DocumentOf(PluginAddress plugin, RecordIdentity identity) =>
+        Locator.Locate(plugin, identity) is { } unit && File.Exists(unit.FullPath) ? new DocumentFile(unit.FullPath, unit.IsEmbedded) : null;
 
     /// <summary>What the file at <paramref name="path"/> holds, read from its text as the index reads it.</summary>
     public static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path)
