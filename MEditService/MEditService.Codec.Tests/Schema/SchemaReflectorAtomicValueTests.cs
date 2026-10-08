@@ -32,7 +32,6 @@ public class SchemaReflectorAtomicValueTests
 
         Assert.Equal("color", color.ApiType);
         Assert.Null(color.Field.Fields);
-        Assert.True(color.IsViewable);
     }
 
     [Fact]

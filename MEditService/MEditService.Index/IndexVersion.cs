@@ -19,8 +19,8 @@ internal static class IndexVersion
         return $"{FormatVersion}|{release}|{SchemaReflector.MutagenVersion}|{SchemaDigest(reflector, release)}";
     }
 
-    // Table name, column name and DuckDB type of every reflected column, in a deterministic order —
-    // the whole of what the generated views and the extracted columns are built from.
+    // Table name, column name and SQL type of every reflected column, in a deterministic order —
+    // what the generated views' column types are built from.
     private static string SchemaDigest(SchemaReflector reflector, GameRelease release)
     {
         var sb = new StringBuilder();
@@ -28,7 +28,7 @@ internal static class IndexVersion
         {
             sb.Append(table).Append('{');
             foreach (var column in schema.RecordColumns.OrderBy(c => c.Name, StringComparer.Ordinal))
-                sb.Append(column.Name).Append(':').Append(column.DuckDbType).Append(',');
+                sb.Append(column.Name).Append(':').Append(RecordViewBuilder.SqlType(column)).Append(',');
             sb.Append('}');
         }
 

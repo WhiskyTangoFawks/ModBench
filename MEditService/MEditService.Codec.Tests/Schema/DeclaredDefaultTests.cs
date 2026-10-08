@@ -52,12 +52,11 @@ public sealed class DeclaredDefaultTests
     }
 
     [Fact]
-    public void AViewPutsTheDeclaredDefaultBack()
+    public void AColumnCarriesItsDeclaredDefault()
     {
         var priority = Schemas["dial"].RecordColumns.Single(c => c.Name == "Priority");
 
         Assert.Equal(50, AsLong(priority.Field.Default));
-        Assert.Equal("50", priority.ViewDefaultLiteral);
     }
 
     [Theory]

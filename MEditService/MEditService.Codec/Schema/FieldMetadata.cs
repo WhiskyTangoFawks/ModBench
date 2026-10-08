@@ -20,8 +20,9 @@ public record FieldMetadata(
     FieldMetadata? ElementType = null,
     IReadOnlyList<FieldMetadata>? Fields = null,
 
-    // The member may be absent-meaning-null rather than absent-meaning-default: a nullable
-    // FormLink, a sub-record the getter declares nullable, a member some union leaf lacks.
+    // The member may hold no value rather than a default: a nullable FormLink, a sub-record the
+    // getter declares nullable, any union member. Reference validation and ElementKey read it, and
+    // a view reads ColumnSpec.AbsentIsNull instead.
     bool AllowsNull = false,
 
     // Null for an ordinary field, whose row label is its own name; set by the abstract-union

@@ -25,31 +25,20 @@ internal static class LeafClassification
 
     // A 64-bit width presents as "int" like every other integer: the wire vocabulary has no wider
     // member, and a JSON number past 2^53 loses precision.
-    internal static readonly Dictionary<Type, (string DuckDbType, string ApiType)> PrimitiveMap = new()
+    internal static readonly Dictionary<Type, string> PrimitiveMap = new()
     {
-        [typeof(bool)] = ("BOOLEAN", "bool"),
-        [typeof(byte)] = ("INTEGER", "int"),
-        [typeof(sbyte)] = ("INTEGER", "int"),
-        [typeof(short)] = ("INTEGER", "int"),
-        [typeof(ushort)] = ("INTEGER", "int"),
-        [typeof(int)] = ("INTEGER", "int"),
-        [typeof(uint)] = ("BIGINT", "int"),
-        [typeof(long)] = ("BIGINT", "int"),
-        [typeof(ulong)] = ("BIGINT", "int"),
-        [typeof(float)] = ("FLOAT", "float"),
-        [typeof(string)] = ("VARCHAR", "string"),
+        [typeof(bool)] = "bool",
+        [typeof(byte)] = "int",
+        [typeof(sbyte)] = "int",
+        [typeof(short)] = "int",
+        [typeof(ushort)] = "int",
+        [typeof(int)] = "int",
+        [typeof(uint)] = "int",
+        [typeof(long)] = "int",
+        [typeof(ulong)] = "int",
+        [typeof(float)] = "float",
+        [typeof(string)] = "string",
     };
-
-    internal static bool TryMapPrimitive(Type core, out string duckDbType, out string apiType)
-    {
-        if (PrimitiveMap.TryGetValue(core, out var mapped))
-        {
-            (duckDbType, apiType) = mapped;
-            return true;
-        }
-        duckDbType = ""; apiType = "";
-        return false;
-    }
 
     // A CLR enum's members: a flags enum keeps only the atomic members, each with its bit, and any
     // other keeps every member with no bit.
@@ -77,24 +66,14 @@ internal static class LeafClassification
     {
         var declared = prop == null ? null : game.Defaults.Of(prop);
 
-        if (TryMapPrimitive(core, out var duckDb, out var apiType))
+        if (PrimitiveMap.TryGetValue(core, out var apiType))
         {
-            // A string has no default the codec omits, so null is honest; a value type's view puts
-            // the declared default back.
-            if (core == typeof(string))
-                return new(apiType, duckDb, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
-            var nonZero = NonZero(declared);
-            var zero = core == typeof(bool) ? "false" : "0";
-            var literal = nonZero == null ? zero
-                : (Convert.ToString(nonZero, CultureInfo.InvariantCulture)
-                    ?? throw new InvalidOperationException($"Expected '{nonZero}' to have a string representation."))
-                        .ToLowerInvariant();
-            return new(apiType, duckDb, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-                ViewDefaultLiteral: literal, Default: nonZero);
+            return new(apiType, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
+                Default: core == typeof(string) ? null : NonZero(declared));
         }
 
         if (ReflectedTypes.IsTranslatedString(core))
-            return new("translatedString", "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
+            return new("translatedString", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
 
         // A hex blob, a colour and a vector each have a zero the wire's own 0 does not stand for and
         // the type name alone cannot say, so the leaf carries the codec's own spelling of it.
@@ -108,14 +87,14 @@ internal static class LeafClassification
             return TextLeaf("vector", declared == null ? null : ReflectedTypes.VectorText(declared));
 
         if (ReflectedTypes.IsModKey(core) || ReflectedTypes.IsFormKey(core))
-            return new("string", "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
+            return new("string", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
 
         if (core.IsEnum)
             return ClassifyEnumLeaf(core, declared, prop == null ? null : game.Annotations.EnumLabelsFor(prop));
 
         if (ReflectedTypes.IsFormLink(core))
         {
-            return new("formKey", "VARCHAR", GetFormLinkValidTypes(core, game), LeafSpec.NoEnumMembers,
+            return new("formKey", GetFormLinkValidTypes(core, game), LeafSpec.NoEnumMembers,
                 AllowsNull: ReflectedTypes.IsNullableFormLink(core)
                     || (prop != null && game.Annotations.IsPermittedNullFormLink(prop)));
         }
@@ -123,10 +102,9 @@ internal static class LeafClassification
         return null;
     }
 
-    // One VARCHAR leaf, carrying the zero the codec named for the wire and, SQL-quoted, for a view.
+    // One text leaf, carrying the zero the codec named for the wire.
     private static LeafSpec TextLeaf(string apiType, string? zero) =>
-        new(apiType, "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-            ViewDefaultLiteral: zero == null ? null : $"'{zero}'", Default: zero);
+        new(apiType, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, Default: zero);
 
     // Enum leaf, shared by every projection. The codec writes a [Flags] enum as an array of member
     // names ("flags"), a plain enum as its name. `declared` is null where the leaf has no owner (a
@@ -140,19 +118,17 @@ internal static class LeafClassification
         // attribute alone, since a flags enum with no power-of-two members still serializes as an array.
         if (core.GetCustomAttribute<FlagsAttribute>() != null)
         {
-            // A flags enum renders as a joined name list in a view, so its default is the empty string.
             var set = NonZero(declared) is { } bits
                 ? (bits.ToString() ?? throw new InvalidOperationException($"Expected '{bits}' to have a string representation."))
                     .Split(", ")
                 : null;
-            return new("flags", "VARCHAR", LeafSpec.NoFormKeyTypes, members, ViewDefaultLiteral: "''", Default: set);
+            return new("flags", LeafSpec.NoFormKeyTypes, members, Default: set);
         }
 
         // An absent plain enum is its declared default, which the wire cannot derive from the
         // members alone, so the name always travels: the zero member's where nothing is declared.
         var name = Enum.GetName(core, declared ?? Enum.ToObject(core, 0));
-        return new("enum", "VARCHAR", LeafSpec.NoFormKeyTypes, members,
-            ViewDefaultLiteral: name == null ? null : $"'{name}'", Default: name);
+        return new("enum", LeafSpec.NoFormKeyTypes, members, Default: name);
     }
 
     // xEdit's name for a member the document spells with Mutagen's, and no label where the two agree.

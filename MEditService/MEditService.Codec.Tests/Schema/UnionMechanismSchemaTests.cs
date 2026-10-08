@@ -85,13 +85,12 @@ public sealed class UnionMechanismSchemaTests
     }
 
     [Fact]
-    public void AColumnVaryingByRecordClass_CoalescesToNoLiteral_BecauseGlobOutputCharIsDeclaredByGlobalFloatAloneSoAViewPuttingFalseBackWouldAnswerItForAGlobalIntRowWithNoSuchMember()
+    public void AColumnVaryingByRecordClass_IsAbsentNull_BecauseGlobOutputCharIsDeclaredByGlobalFloatAloneSoPuttingFalseBackWouldAnswerItForAGlobalIntRowWithNoSuchMember()
     {
         var outputChar = Schemas["glob"].RecordColumns.Single(c => c.Name == "OutputChar");
 
         Assert.NotNull(outputChar.Field.Variants);
-        Assert.True(outputChar.IsViewable, "the leaves agree on its type, so the view keeps the column");
-        Assert.Null(outputChar.ViewDefaultLiteral);
+        Assert.True(outputChar.AbsentIsNull);
     }
 
     [Fact]

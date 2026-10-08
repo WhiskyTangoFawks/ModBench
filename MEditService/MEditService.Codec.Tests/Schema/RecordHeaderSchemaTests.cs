@@ -132,12 +132,6 @@ public sealed class RecordHeaderSchemaTests
     }
 
     [Fact]
-    public void VersionControlInfo1_IsAColumnWideEnoughForAllThirtyTwoBits()
-    {
-        Assert.Equal("BIGINT", HeaderOf("weap").Single(c => c.Name == "VersionControl").DuckDbType);
-    }
-
-    [Fact]
     public void APluginHeader_PresentsItsRecordHeader_ThenItsAuthorAndMasters()
     {
         Assert.Equal(
