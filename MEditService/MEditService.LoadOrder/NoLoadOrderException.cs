@@ -8,7 +8,7 @@ public sealed class NoLoadOrderException : Exception
     {
     }
 
-    public NoLoadOrderException(string message) : base(message)
+    internal NoLoadOrderException(string message) : base(message)
     {
     }
 

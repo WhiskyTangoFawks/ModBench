@@ -352,7 +352,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     }
 
     [Fact]
-    public async Task GetCompare_OfARecordNoCopyWinsBeforeTheSweep_Throws_NamingTheRecordsFormKey()
+    public async Task GetCompare_BeforeTheWinnerSweep_IsNotReady()
     {
         const string npc = "000800:Base.esm";
         var fixture = Built(new PluginFixtureBuilder("record-query")
@@ -371,11 +371,10 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         var load = Task.Run(() => index.Reconcile(holder, fixture.GameDirectory, winnerDeactivated, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        var thrown = Assert.Throws<InvalidOperationException>(() => index.Records.GetCompare(npc));
+        Assert.Throws<IndexNotReadyException>(() => index.Records.GetCompare(npc));
 
         gate.Release();
         await load;
-        Assert.Contains(npc, thrown.Message);
     }
 
     [Fact]
@@ -465,6 +464,25 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         var plugins = KeywordReferredToFromBaseAndPatch().Records.GetReferences("000800:Target.esp").Select(r => r.Plugin);
 
         Assert.Equal(["Base.esp", "Patch.esp"], plugins);
+    }
+
+    [Fact]
+    public async Task GetReferences_WhileTheIndexIsReconciling_AreNotReady_ForAPluginNotReachedMayHoldAReferrer()
+    {
+        var fixture = Built(new PluginFixtureBuilder("record-query")
+            .WithPlugin("Target.esp", mod => mod.Keywords.AddNew("Target"))
+            .WithPlugin("Later.esp", (mod, prev) => mod.Npcs.AddNew("Referrer").Keywords = [prev[0].Keywords.Single().ToLink()]));
+        var holder = new LoadOrderHolder();
+        using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
+        using var index = Indexes.Open(holder, gate);
+        var load = Task.Run(() => index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4));
+        await gate.WaitUntilParkedAsync();
+
+        Assert.Throws<IndexNotReadyException>(() => index.Records.GetReferences("000800:Target.esp"));
+        Assert.Throws<IndexNotReadyException>(() => index.Records.GetReferencesInActiveOrTrackedPlugins("000800:Target.esp"));
+
+        gate.Release();
+        await load;
     }
 
     [Fact]

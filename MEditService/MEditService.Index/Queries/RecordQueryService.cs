@@ -92,7 +92,7 @@ internal sealed class RecordQueryService(
 
     public CompareResult? GetCompare(string formKey, CopyText? text = null)
     {
-        var reads = RequireReads();
+        var reads = _index.RequireWholeSetReads();
         var stack = reads.GetOverrideStack(formKey);
         if (stack == null && text == null) return null;
         var snapshot = _loadOrder.Require();
@@ -248,10 +248,10 @@ internal sealed class RecordQueryService(
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
-        Referrers(RequireReads().GetReferencedBy(targetFormKey));
+        Referrers(_index.RequireWholeSetReads().GetReferencedBy(targetFormKey));
 
     public IReadOnlyList<ReferenceResult> GetReferencesInActiveOrTrackedPlugins(string targetFormKey) =>
-        Referrers(RequireReads().GetReferencedByInActiveOrTrackedPlugins(targetFormKey));
+        Referrers(_index.RequireWholeSetReads().GetReferencedByInActiveOrTrackedPlugins(targetFormKey));
 
     private IReadOnlyList<ReferenceResult> Referrers(IReadOnlyList<ReferenceRow> rows)
     {

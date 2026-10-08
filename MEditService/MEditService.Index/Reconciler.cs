@@ -70,6 +70,13 @@ internal sealed class Reconciler(
     /// the Index has opened no store to read.</summary>
     public IRecordReads RequireReads() => RequireScope().Index.Reads;
 
+    public IRecordReads RequireWholeSetReads()
+    {
+        if (Status.State == LoadOrderState.Ready) return RequireReads();
+        holder.Require();
+        throw new IndexNotReadyException();
+    }
+
     public IReadOnlyList<SourceFileFailure> SourceFileFailures
     {
         get { lock (_lock) return _scope?.Failed.SourceFileFailures ?? []; }

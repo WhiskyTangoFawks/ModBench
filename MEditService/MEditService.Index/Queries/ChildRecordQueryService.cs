@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.Ports;
 
 namespace MEditService.Index.Queries;
 
@@ -20,14 +19,11 @@ public sealed class ChildRecordQueryService
         return [.. records.Where(record => reads.HasChildRecords(record.Plugin, record.FormKey))];
     }
 
-    /// <summary>Throws <see cref="NoLoadOrderException"/> until every plugin is indexed: a destination
-    /// not yet reached holds no rows and would read as holding nothing.</summary>
+    /// <summary>A destination not yet reached holds no rows and would read as holding nothing.</summary>
     public IReadOnlyList<HoldingDestinations> DestinationsHoldingChildRecords(
         IReadOnlyList<RecordAt> records, IReadOnlyList<PluginAddress> destinations)
     {
-        var reads = _index.RequireReads();
-        if (_index.Status.State != LoadOrderState.Ready)
-            throw new NoLoadOrderException("The load order is still being indexed.");
+        var reads = _index.RequireWholeSetReads();
 
         return
         [

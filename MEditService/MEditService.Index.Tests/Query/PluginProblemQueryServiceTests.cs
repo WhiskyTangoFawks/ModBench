@@ -57,7 +57,7 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
     }
 
     private static IReadOnlyList<PluginProblems> Ready(OpenedIndex index) =>
-        index.Problems.GetProblems() ?? throw new InvalidOperationException("The index was ready.");
+        index.Problems.GetProblems();
 
     private string SourceFileHolding(Plugin plugin, string editorId) =>
         Directory.EnumerateFiles(PluginSourceRoot.In(Entry(plugin).ModFolderOf(), plugin.Name), "*.json", SearchOption.AllDirectories)
@@ -230,7 +230,8 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
         index.Reconcile(
             holder, Fixture.GameDirectory, [Entry(plugin) with { NamedProvider = PluginProvider.NoMod }], GameRelease.Fallout4);
 
-        var unprovided = Assert.Single(answered ?? throw new InvalidOperationException("The index was ready."));
+        Assert.NotNull(answered);
+        var unprovided = Assert.Single(answered);
         Assert.Empty(unprovided.Problems);
         Assert.Contains("no mod folder provides it", unprovided.Failure, StringComparison.Ordinal);
     }
@@ -319,7 +320,7 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
         var load = Task.Run(() => index.Reconcile(holder, Fixture.GameDirectory, plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        Assert.Null(index.Problems.GetProblems());
+        Assert.Throws<IndexNotReadyException>(index.Problems.GetProblems);
 
         gate.Release();
         await load;

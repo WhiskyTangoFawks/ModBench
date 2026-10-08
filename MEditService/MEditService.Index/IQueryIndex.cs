@@ -29,6 +29,11 @@ internal interface IQueryIndex
     /// Index has no store to read.</summary>
     IRecordReads RequireReads();
 
+    /// <summary><see cref="RequireReads"/> for a read derived from the whole plugin set. Throws
+    /// <see cref="IndexNotReadyException"/> until <see cref="Status"/> is Ready: a partial set
+    /// answers wrong, not smaller.</summary>
+    IRecordReads RequireWholeSetReads();
+
     /// <summary>The source files each plugin's last failed read stopped at, while it fails. Empty with
     /// no load order held.</summary>
     IReadOnlyList<SourceFileFailure> SourceFileFailures { get; }
