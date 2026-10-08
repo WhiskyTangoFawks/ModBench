@@ -29,7 +29,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
         var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
 
-        Assert.True(result.Applied);
+        Assert.True(result.Applied, result.Message);
         Assert.NotEmpty(_fixture.ChangedFormKeys());
         Assert.Equal(before.Replace("\"Scale\": 1.0", "\"Scale\": 2.5", StringComparison.Ordinal), EmbedCellDocument().Body);
     }
@@ -66,14 +66,27 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void APlacedRefsPosition_Edits_AsAnyField_AndTheRefStaysInItsCell()
+    public void APlacedRefsPosition_Edits_AsAnyField()
     {
         var result = EditService().Set(
             _fixture.Plugin, _fixture.TemporaryRef.ToString(), "Position", Json("\"99, 88, 77\""));
 
-        Assert.True(result.Applied);
-        Assert.Contains(_fixture.EmbedCell.ToString(), _fixture.ChangedFormKeys());
-        Assert.Contains("\"Position\": \"99, 88, 77\"", _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body.ToString(), StringComparison.Ordinal);
+        Assert.True(result.Applied, result.Message);
+        Assert.Contains("\"Position\": \"99, 88, 77\"", WorkingTreeCell(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnExteriorTemporaryRefMovedOutsideItsCellsGrid_StaysInItsOwnCellsDocument()
+    {
+        var outsideGrid = "\"90000, -90000, 0\"";
+
+        var result = EditService().Set(_fixture.Plugin, _fixture.ExteriorRef.ToString(), "Position", Json(outsideGrid));
+
+        Assert.True(result.Applied, result.Message);
+        var owner = _fixture.DocumentCarrying("ExteriorCell").Body;
+        Assert.Contains("\"EditorID\": \"ExteriorRef\"", owner, StringComparison.Ordinal);
+        Assert.Contains("\"Position\": \"90000, -90000, 0\"", owner, StringComparison.Ordinal);
+        Assert.Contains(_fixture.ExteriorCell.ToString(), _fixture.ChangedFormKeys());
     }
 
     [Fact]

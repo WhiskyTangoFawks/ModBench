@@ -314,8 +314,6 @@ internal sealed record SchemaAnnotations(
             ExteriorCellWidth: 4096f,
             PartialFormCellsDefinedIn: null,
             PluginHeaderMembers: PluginHeaderMembersOf("ISkyrimModHeaderGetter"),
-            // Skyrim's placed records hold their position inside Placement, a struct, which a row keyed
-            // on a record's own member does not reach.
             ContainmentMembers: [CellGridInEveryGame]),
 
         [GameCategory.Starfield] = new(
