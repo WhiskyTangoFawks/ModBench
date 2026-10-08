@@ -6,9 +6,7 @@ using System.Text;
 namespace MEditService.TestSupport;
 
 public sealed record StaleHeaderPlugin(string FileName, byte[] Bytes, uint StoredNextObjectId, uint StoredNumRecords)
-{
-    public void WriteInto(string directory) => File.WriteAllBytes(Path.Combine(directory, FileName), Bytes);
-}
+    : GeneratedPlugin(FileName, Bytes);
 
 /// <summary>Plugins whose stored HEDR disagrees with their content, three shapes a rewrite must carry through.</summary>
 public static class StaleHeaderPlugins
@@ -29,7 +27,7 @@ public static class StaleHeaderPlugins
         get
         {
             string[] masters = ["Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm"];
-            byte[][] records = [.. Enumerable.Range(0, 4).Select(i => Misc(masters, 0x800 + (uint)i, $"SortingSettings{i}"))];
+            byte[][] records = [.. Enumerable.Range(0, 4).Select(i => RawPlugin.Misc(Id(masters, 0x800 + (uint)i), $"SortingSettings{i}"))];
             return Build(SettingsFileName, nextObjectId: 2, numRecords: 16, light: false, masters, [RawPlugin.Group("MISC", records)]);
         }
     }
@@ -55,13 +53,13 @@ public static class StaleHeaderPlugins
                 [
                     RawPlugin.Group("MISC", deflated),
                     RawPlugin.Group("WRLD",
-                        RawPlugin.Record("WRLD", world, EditorId("BinWorld")),
+                        RawPlugin.Record("WRLD", world, RawPlugin.EditorId("BinWorld")),
                         RawPlugin.Group(WorldLabel(world), 1,
-                            RawPlugin.Record("CELL", Id(masters, 0x811), EditorId("BinWorldCell")))),
+                            RawPlugin.Record("CELL", Id(masters, 0x811), RawPlugin.EditorId("BinWorldCell")))),
                     RawPlugin.Group("CELL",
                         RawPlugin.Group(new byte[4], 2,
                             RawPlugin.Group(new byte[4], 3,
-                                RawPlugin.Record("CELL", Id(masters, 0x812), EditorId("BinInterior"))))),
+                                RawPlugin.Record("CELL", Id(masters, 0x812), RawPlugin.EditorId("BinInterior"))))),
                 ]);
         }
     }
@@ -80,13 +78,8 @@ public static class StaleHeaderPlugins
         return label;
     }
 
-    private static uint Id(string[] masters, uint objectId) => ((uint)masters.Length << 24) | objectId;
-
-    private static byte[] EditorId(string editorId) => RawPlugin.Subrecord("EDID", Encoding.ASCII.GetBytes(editorId + "\0"));
-
-    private static byte[] Misc(string[] masters, uint objectId, string editorId) =>
-        RawPlugin.Record("MISC", Id(masters, objectId), EditorId(editorId));
+    private static uint Id(string[] masters, uint objectId) => RawPlugin.NewRecordId(masters.Length, objectId);
 
     private static byte[] DeflatedMisc(string[] masters, uint objectId, string editorId) =>
-        RawPlugin.DeflatedRecord("MISC", Id(masters, objectId), LevelMutagenDoesNotWrite, EditorId(editorId), RawPlugin.Subrecord("FULL", Padding));
+    RawPlugin.DeflatedRecord("MISC", Id(masters, objectId), LevelMutagenDoesNotWrite, RawPlugin.EditorId(editorId), RawPlugin.Subrecord("FULL", Padding));
 }
