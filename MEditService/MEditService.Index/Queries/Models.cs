@@ -1,7 +1,7 @@
-using MEditService.PluginAdapter;
 using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 
 namespace MEditService.Index.Queries;
 

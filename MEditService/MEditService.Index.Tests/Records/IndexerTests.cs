@@ -1,6 +1,6 @@
-using MEditService.PluginAdapter;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
