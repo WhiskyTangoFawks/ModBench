@@ -7,7 +7,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { recordResourceUri, parseRecordResourceUri } from '../recordResourceUri';
+import { recordResourceUri, parseRecordResourceUri, rowResourceUri, parseRowResourceUri } from '../recordResourceUri';
 import { fakeUri } from '../../test/vscodeMock';
 
 describe('recordResourceUri / parseRecordResourceUri', () => {
@@ -27,5 +27,24 @@ describe('recordResourceUri / parseRecordResourceUri', () => {
 
   it('returns undefined for a URI outside the medit-record: scheme', () => {
     expect(parseRecordResourceUri(fakeUri('/tmp/x'))).toBeUndefined();
+  });
+});
+
+describe('rowResourceUri / parseRowResourceUri', () => {
+  it('round-trips a plugin and a path beneath it, each segment percent-encoded', () => {
+    const uri = rowResourceUri({ name: 'Weird/Plugin.esp', origin: 'Mod/Folder' }, 'wrld', '0,-1/2');
+    expect(uri.scheme).toBe('medit-row');
+    expect(parseRowResourceUri(uri)).toEqual({ plugin: { name: 'Weird/Plugin.esp', origin: 'Mod/Folder' }, path: ['wrld', '0,-1/2'] });
+  });
+
+  it('names a plugin row by an empty path', () => {
+    expect(parseRowResourceUri(rowResourceUri({ name: 'A.esp', origin: 'Data/' }))?.path).toEqual([]);
+  });
+
+  it('is not a record row, and a record row is not it', () => {
+    const plugin = { name: 'A.esp', origin: 'Data/' };
+    expect(parseRecordResourceUri(rowResourceUri(plugin, '000001:A.esp'))).toBeUndefined();
+    expect(parseRowResourceUri(recordResourceUri(plugin, '000001:A.esp'))).toBeUndefined();
+    expect(parseRowResourceUri(fakeUri('/tmp/x'))).toBeUndefined();
   });
 });

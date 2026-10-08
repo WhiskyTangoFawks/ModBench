@@ -13,7 +13,7 @@ const { handlers, registerCommand, showInputBox } = vi.hoisted(() => {
 });
 
 import {
-  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
+  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, uriFrom,
 } from '../../test/vscodeMock';
 
 vi.mock('vscode', async () => {
@@ -21,7 +21,7 @@ vi.mock('vscode', async () => {
   return {
     commands: { registerCommand, executeCommand: vi.fn() },
     window: { showInputBox, withProgress: recordedWithProgress },
-    TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
+    TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, Uri: { from: uriFrom },
   };
 });
 
