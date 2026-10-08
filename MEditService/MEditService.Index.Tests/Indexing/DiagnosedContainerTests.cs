@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -30,29 +31,32 @@ public sealed class DiagnosedContainerTests : IDisposable
     private OpenedIndex Indexed(string? cellDiagnosis) =>
         Indexes.Reconciled(_fixture, adapter: new StubbedDocumentsAdapter(cellDiagnosis));
 
+    private static (WorldspaceBlockDto Block, WorldspaceSubBlockDto SubBlock, CellSummary Cell) TheCellOf(OpenedIndex index)
+    {
+        var block = Assert.Single(index.Worldspaces.GetWorldspaceBlocks(Key, Worldspace).Blocks);
+        var subBlock = Assert.Single(block.SubBlocks);
+        return (block, subBlock, Assert.Single(subBlock.Cells, c => c.FormKey == CellFormKey));
+    }
+
     [Fact]
     public void ACellTheCodecRefuses_StillLandsItsLocation_WithItsGridUnknown()
     {
         using var index = Indexed(cellDiagnosis: "the codec refused this cell");
 
-        var location = index.RequireReads().GetCellLocation(Key, CellFormKey);
+        var (block, subBlock, cell) = TheCellOf(index);
 
-        Assert.NotNull(location);
-        Assert.Equal(Worldspace, location.Value.ParentWorldspace);
-        Assert.Equal(3, location.Value.BlockX);
-        Assert.Equal(2, location.Value.SubY);
-        Assert.Null(location.Value.GridX);
-        Assert.False(location.Value.IsInterior);
+        Assert.Equal((3, 4, 1, 2), (block.X, block.Y, subBlock.X, subBlock.Y));
+        Assert.Null(cell.CellX);
+        Assert.Empty(index.Worldspaces.GetInteriorCells(Key));
     }
 
     [Fact]
     public void ACellTheCodecRefuses_StillListsEachRefItHolds_InItsPlacementGroup()
     {
         using var index = Indexed(cellDiagnosis: "the codec refused this cell");
-        var reads = index.RequireReads();
 
-        Assert.Equal("persistent", reads.PlacementGroupIn(Key, CellFormKey, PersistentRef));
-        Assert.Equal("temporary", reads.PlacementGroupIn(Key, CellFormKey, TemporaryRef));
+        Assert.Equal("persistent", index.PlacementGroupIn(Key, CellFormKey, PersistentRef));
+        Assert.Equal("temporary", index.PlacementGroupIn(Key, CellFormKey, TemporaryRef));
     }
 
     [Fact]
@@ -60,7 +64,7 @@ public sealed class DiagnosedContainerTests : IDisposable
     {
         using var index = Indexed(cellDiagnosis: "the codec refused this cell");
 
-        var temporary = index.RequireReads().GetCellChildRecords(Key, CellFormKey).Temporary;
+        var temporary = index.Worldspaces.GetCellChildRecords(Key, CellFormKey).Temporary;
 
         Assert.Equal(
             [(TemporaryRef, "refr", null), (Landscape, "land", null), (Navmesh, "navm", NavmeshDiagnosis)],
@@ -71,10 +75,9 @@ public sealed class DiagnosedContainerTests : IDisposable
     public void AQuestTheCodecRefuses_StillHoldsItsDialogTopic_WhichIsNotListedAtThePluginRoot()
     {
         using var index = Indexed(cellDiagnosis: null);
-        var reads = index.RequireReads();
 
-        Assert.Equal([Topic], reads.GetContainerChildren(Key, Quest).Select(c => c.ChildFormKey));
-        Assert.DoesNotContain(reads.GetRecordTypeCounts(Key), group => group.Type == "dial");
+        Assert.Equal([Topic], index.Containers.GetChildren(Key, Quest).Select(c => c.FormKey));
+        Assert.DoesNotContain(index.Records.GetPluginRecordTypes(Key), group => group.Type == "dial");
     }
 
     [Fact]
@@ -82,7 +85,7 @@ public sealed class DiagnosedContainerTests : IDisposable
     {
         using var index = Indexed(cellDiagnosis: null);
 
-        var cell = index.RequireReads().GetWorldspaceCells(Key, Worldspace).Single();
+        var (_, _, cell) = TheCellOf(index);
 
         Assert.True(cell.HasParseFailure);
         Assert.Null(cell.ParseDiagnosis);
@@ -92,12 +95,10 @@ public sealed class DiagnosedContainerTests : IDisposable
     public void TheSameCellReadable_LandsItsGrid()
     {
         using var index = Indexed(cellDiagnosis: null);
-        var reads = index.RequireReads();
 
-        var location = reads.GetCellLocation(Key, CellFormKey);
-        Assert.NotNull(location);
-        Assert.Equal(12, location.Value.GridX);
-        Assert.Equal(-5, location.Value.GridY);
+        var (_, _, cell) = TheCellOf(index);
+
+        Assert.Equal<(int?, int?)>((12, -5), (cell.CellX, cell.CellY));
     }
 
     private sealed class StubbedDocumentsAdapter(string? cellDiagnosis) : DelegatingPluginAdapter(TestAdapters.Mutagen())

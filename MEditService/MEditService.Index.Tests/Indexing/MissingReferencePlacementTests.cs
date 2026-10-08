@@ -1,6 +1,5 @@
-using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
-using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -9,22 +8,18 @@ namespace MEditService.Index.Tests.Indexing;
 
 public sealed class MissingReferencePlacementTests : IDisposable
 {
-    private const string Referrer = "Referrer";
-
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("missing-ref-placement")
-        .WithPlugin("Tracked.esp", mod => mod.Npcs.AddNew(Referrer).Race.SetTo(FormKey.Factory("000ABC:Absent.esp")), origin: "TrackedMod")
-        .BuildScattered();
+        .WithPlugin("Tracked.esp", mod => mod.Npcs.AddNew("Referrer").Race.SetTo(FormKey.Factory("000ABC:Absent.esp")), origin: "TrackedMod")
+        .BuildScattered()
+        .Tracked();
 
-    private readonly LoadOrderHolder _holder = new();
     private readonly OpenedIndex _index;
     private readonly LoadOrderEntry _tracked;
 
     public MissingReferencePlacementTests()
     {
         _tracked = _fixture.Plugins.Single();
-        TrackedMods.Track(_tracked, _fixture.GameDirectory);
-        _index = Indexes.Open(_holder);
-        _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
+        _index = Indexes.Reconciled(_fixture);
     }
 
     public void Dispose()
@@ -33,38 +28,32 @@ public sealed class MissingReferencePlacementTests : IDisposable
         _fixture.Dispose();
     }
 
-    private IReadOnlyList<MissingReferenceOnFile> Placed(bool providedByMod = true) =>
-        _index.RequireReads().GetReferencesToMissingRecordsOnFiles(
-            _ => providedByMod ? new PluginProvider.FromMod(_tracked.Origin, _tracked.ModFolderOf()) : null);
+    private PluginProblems Problems() =>
+        Assert.Single(_index.Problems.GetProblems() ?? throw new InvalidOperationException("Expected the index to be ready."));
 
     [Fact]
     public void ReportingMissingReferences_ATrackedReferrer_NamesItsDocumentRelativeToTheModFolder()
     {
-        var placed = Assert.Single(Placed());
+        var problems = Problems();
+        var problem = Assert.Single(problems.Problems);
 
-        Assert.Null(placed.Failure);
+        Assert.Null(problems.Failure);
+        Assert.NotNull(problem.FormKey);
         Assert.Equal(
-            _tracked.SourceFileOf(new RecordIdentity(placed.Reference.FormKey, placed.Reference.RecordType, Referrer)),
-            Path.Combine(_tracked.ModFolderOf(), placed.SourceRelativePath ?? ""));
+            _tracked.SourceFileOf(_index.DocumentOf(problem.FormKey, _tracked.KeyOf())),
+            Path.Combine(_tracked.ModFolderOf(), problem.SourceRelativePath));
     }
 
     [Fact]
     public void ReportingMissingReferences_AReferrerWhoseDocumentWasDeletedOutsideModbench_IsAFailureNotAPath()
     {
-        File.Delete(Path.Combine(_tracked.ModFolderOf(), Assert.Single(Placed()).SourceRelativePath ?? ""));
+        var problem = Assert.Single(Problems().Problems);
+        Assert.NotNull(problem.FormKey);
+        File.Delete(Path.Combine(_tracked.ModFolderOf(), problem.SourceRelativePath));
 
-        var placed = Assert.Single(Placed());
+        var problems = Problems();
 
-        Assert.Null(placed.SourceRelativePath);
-        Assert.Contains(placed.Reference.FormKey, placed.Failure, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ReportingMissingReferences_APluginNoModFolderProvides_IsAFailure()
-    {
-        var placed = Assert.Single(Placed(providedByMod: false));
-
-        Assert.Null(placed.SourceRelativePath);
-        Assert.NotNull(placed.Failure);
+        Assert.Empty(problems.Problems);
+        Assert.Contains(problem.FormKey, problems.Failure, StringComparison.Ordinal);
     }
 }

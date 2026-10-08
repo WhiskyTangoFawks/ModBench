@@ -81,7 +81,7 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
     public void FlagsEnums_ReadAsJoinedNames_SoAFilterCanMatchOneWithLike()
     {
         var flagName = IndexFiles.Rows(fixture.InstanceRoot, "SELECT form_key FROM cell")
-            .Select(row => fixture.Reads.GetDocument(row[0], CutDownPluginFixture.Plugin)?.Fields.FirstOrDefault(f => f.Metadata.Name == "Flags")?.Value)
+            .Select(row => fixture.Index.CopyIn(row[0], CutDownPluginFixture.Plugin)?.Fields.FirstOrDefault(f => f.Metadata.Name == "Flags")?.Value)
             .OfType<JsonElement>()
             .Where(value => value.ValueKind == JsonValueKind.Array && value.GetArrayLength() > 0)
             .Select(value => value[0].GetString())
