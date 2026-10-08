@@ -15,7 +15,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
   const renderingTheWinner = (): { meditClient: InMemoryMEditClient } => {
     const meditClient = new InMemoryMEditClient();
     meditClient.setQueryAnswer('getRecordOwner', winner);
-    meditClient.setQueryAnswer('getCopyDocument', { path: null, isContainersDocument: false, renderedFileName: 'Gun.json' });
+    meditClient.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'Gun.json' });
     return { meditClient };
   };
 
@@ -87,8 +87,8 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
   const opened = () => executed().filter(([id]) => id === 'vscode.openWith').map(([, uri, viewType]) => [uri, viewType]);
 
-  const inFile = (path: string, isContainersDocument = false) => ({ path, isContainersDocument });
-  const rendered = (renderedFileName: string) => ({ path: null, isContainersDocument: false, renderedFileName });
+  const inFile = (location: string, isContainersDocument = false) => ({ kind: isContainersDocument ? 'ContainersFile' as const : 'OwnFile' as const, location });
+  const rendered = (location: string) => ({ kind: 'Rendered' as const, location });
 
   async function registerAnswering(document: ReturnType<typeof inFile> | ReturnType<typeof rendered> | null): Promise<void> {
     const meditClient = new InMemoryMEditClient();
@@ -143,7 +143,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     const meditClient = new InMemoryMEditClient();
     const winner = { name: 'B.esp', origin: 'ModB' };
     meditClient.setQueryAnswer('getRecordOwner', winner);
-    meditClient.setQueryAnswer('getCopyDocument', { path: null, isContainersDocument: false, renderedFileName: 'Gun.json' });
+    meditClient.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'Gun.json' });
     await register({ meditClient });
 
     await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN } });
@@ -167,7 +167,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
     reporter.report.mockClear();
     const meditClient = new InMemoryMEditClient();
     meditClient.setQueryAnswer('getRecordOwner', undefined);
-    meditClient.setQueryAnswer('getCopyDocument', { path: null, isContainersDocument: false, renderedFileName: 'Gun.json' });
+    meditClient.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'Gun.json' });
     await register({ meditClient });
 
     await commandHandlers.get('modbench.record.open')?.([{ argument: { kind: 'record', formKey: GUN, plugin } }, { argument: { kind: 'record', formKey: '000802:A.esp' } }]);

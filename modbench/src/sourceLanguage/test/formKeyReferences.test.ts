@@ -44,8 +44,8 @@ function references(rows: ReferenceResult[], copies: Record<string, Copy>, answe
     getCopyDocument: (plugin, formKey) => {
       const copyKey = key(formKey, plugin);
       const copy = copies[copyKey];
-      if (copy?.file) return Promise.resolve({ path: copy.file, isContainersDocument: firstOnFile(copy.file)?.[0] !== copyKey });
-      return Promise.resolve(copy?.rendered ? { path: null, isContainersDocument: false, renderedFileName: copy.rendered } : null);
+      if (copy?.file) return Promise.resolve({ kind: firstOnFile(copy.file)?.[0] !== copyKey ? 'ContainersFile' : 'OwnFile', location: copy.file });
+      return Promise.resolve(copy?.rendered ? { kind: 'Rendered', location: copy.rendered } : null);
     },
     ...answering,
   };

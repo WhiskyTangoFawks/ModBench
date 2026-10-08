@@ -264,8 +264,8 @@ function createMockBackend(): http.Server {
       const fsPath = vscode.Uri.file(path).fsPath;
       const ownerOfFile = fsPath === TRACKED_FS_PATH ? TRACKED_FORM_KEY : heldIn.get(fsPath);
       res.end(JSON.stringify(tracked
-        ? { path, isContainersDocument: ownerOfFile !== decoded }
-        : { path: null, isContainersDocument: false, renderedFileName: decoded === UNTRACKED_FORM_KEY ? UNTRACKED_FILE_NAME : renderedName(decoded) }));
+        ? { kind: ownerOfFile === decoded ? 'OwnFile' : 'ContainersFile', location: path }
+        : { kind: 'Rendered', location: decoded === UNTRACKED_FORM_KEY ? UNTRACKED_FILE_NAME : renderedName(decoded) }));
       return;
     }
     const rendered = /^\/plugins\/[^/?]+\/records\/([^/?]+)\/rendered-document\?/.exec(url)?.[1];

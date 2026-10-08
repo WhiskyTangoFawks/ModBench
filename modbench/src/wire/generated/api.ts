@@ -288,7 +288,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Where the plugin's copy of a record is a document: the absolute path of the file in plugin source holding it, and whether that file is the document of the record carrying the copy, which is the case for a child record. An untracked plugin's copy has no file, so the answer is the name of its rendered document. Two documents claiming the copy refuse, naming them. */
+        /** @description Where the plugin's copy of a record is a document: its own file in plugin source, the file of the record carrying it (a child record), or, for an untracked plugin's copy, the name of its rendered document. Two documents claiming the copy refuse, naming them. */
         get: operations["GetCopyDocument"];
         put?: never;
         post?: never;
@@ -817,10 +817,11 @@ export interface components {
             isContainer: boolean;
         };
         CopyDocument: {
-            path?: string | null;
-            isContainersDocument: boolean;
-            renderedFileName?: string | null;
+            kind: components["schemas"]["CopyDocumentKind"];
+            location: string;
         };
+        /** @enum {string} */
+        CopyDocumentKind: "OwnFile" | "ContainersFile" | "Rendered";
         /** @enum {string} */
         CopyMode: "New" | "Override";
         CopyText: {

@@ -277,23 +277,24 @@ internal sealed class RecordQueryService(
     public CopyDocument? GetCopyDocument(PluginAddress plugin, string formKey)
     {
         if (RequireReads().GetCopyText(formKey, plugin) is not var (identity, _)) return null;
-        var snapshot = _loadOrder.Require();
-        if (snapshot.Plugin(plugin) is not { Provider: PluginProvider.FromMod mod } registered || !SourceRepository.SourceReads(registered))
-            return new CopyDocument(null, false, RenderedFileName(plugin, identity));
-        return SourceRepository.Over(mod, snapshot.GameRelease).DocumentOf(plugin, identity)
-            is { } file
-            ? new CopyDocument(file.Path, file.IsContainersDocument, null)
-            : null;
+        if (TreeOf(plugin, SourceRepository.SourceReads) is not { } tree)
+            return new CopyDocument(CopyDocumentKind.Rendered, RenderedFileName(plugin, identity));
+        if (tree.DocumentOf(plugin, identity) is not { } file) return null;
+        var kind = file.IsContainersDocument ? CopyDocumentKind.ContainersFile : CopyDocumentKind.OwnFile;
+        return new CopyDocument(kind, file.Path);
     }
 
     // A tracked copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
-    private string RenderedFileName(PluginAddress plugin, RecordIdentity identity)
+    private string RenderedFileName(PluginAddress plugin, RecordIdentity identity) =>
+        TreeOf(plugin, registered => SourceRepository.IsTracked(registered))?.FileNameOf(plugin, identity)
+            ?? SourceRepository.FileNameOf(identity);
+
+    private SourceRepository? TreeOf(PluginAddress plugin, Func<RegisteredPlugin, bool> admits)
     {
         var snapshot = _loadOrder.Require();
-        var tree = snapshot.Plugin(plugin) is { Provider: PluginProvider.FromMod mod } registered && SourceRepository.IsTracked(registered)
+        return snapshot.Plugin(plugin) is { Provider: PluginProvider.FromMod mod } registered && admits(registered)
             ? SourceRepository.Over(mod, snapshot.GameRelease)
             : null;
-        return tree?.FileNameOf(plugin, identity) ?? SourceRepository.FileNameOf(identity);
     }
 
     public RecordOfFileAnswer GetRecordOfFile(string path) => SourceRepository.RecordOfFile(_loadOrder.Require(), path);

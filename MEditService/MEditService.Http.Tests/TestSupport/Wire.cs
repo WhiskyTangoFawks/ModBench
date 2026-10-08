@@ -76,7 +76,7 @@ internal static class Wire
     internal static async Task<HttpResponseMessage> Edit(
         this HttpClient client, string formKey, string plugin, string origin, string member, object value)
     {
-        var response = await client.EditChanges(formKey, plugin, origin, member, value, await client.RecordFileText(formKey, plugin, origin));
+        var response = await client.EditChanges(formKey, plugin, origin, member, value, await client.CopyDocumentText(formKey, plugin, origin));
         if (!response.IsSuccessStatusCode) return response;
 
         var changes = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
@@ -88,11 +88,14 @@ internal static class Wire
     }
 
     /// <summary>The text of the file holding the plugin's copy of the record; empty when it has none.</summary>
-    internal static async Task<string> RecordFileText(this HttpClient client, string formKey, string plugin, string origin)
+    internal static async Task<string> CopyDocumentText(this HttpClient client, string formKey, string plugin, string origin)
     {
         var file = await client.GetAsync(
             $"/plugins/{Uri.EscapeDataString(plugin)}/records/{Uri.EscapeDataString(formKey)}/document?origin={Uri.EscapeDataString(origin)}");
-        var path = file.IsSuccessStatusCode ? (await file.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("path").GetString() : null;
+        var document = file.IsSuccessStatusCode ? await file.Content.ReadFromJsonAsync<JsonElement>() : default;
+        var path = document.ValueKind == JsonValueKind.Object && document.GetProperty("kind").GetString() != "Rendered"
+            ? document.GetProperty("location").GetString()
+            : null;
         return path is null ? "" : await File.ReadAllTextAsync(path);
     }
 

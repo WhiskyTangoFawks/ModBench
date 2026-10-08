@@ -149,7 +149,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var formKey = await Client.FirstFormKey(Plugin, Origin);
 
         var response = await Client.EditChanges(
-            formKey, Plugin, Origin, "HeightMax", 1, await Client.RecordFileText(formKey, Plugin, Origin), op: "frobnicate");
+            formKey, Plugin, Origin, "HeightMax", 1, await Client.CopyDocumentText(formKey, Plugin, Origin), op: "frobnicate");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var problem = await Body(response);

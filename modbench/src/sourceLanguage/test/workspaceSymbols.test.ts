@@ -49,7 +49,7 @@ function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Recor
       const copyKey = key(formKey, address);
       const copy = files[copyKey];
       const firstOnFile = Object.entries(files).find(([, other]) => other.file === copy?.file)?.[0];
-      return Promise.resolve(copy ? { path: copy.file, isContainersDocument: firstOnFile !== copyKey } : null);
+      return Promise.resolve(copy ? { kind: firstOnFile !== copyKey ? 'ContainersFile' : 'OwnFile', location: copy.file } : null);
     },
     ...answering,
   };

@@ -1045,7 +1045,7 @@ describe('HttpMEditClient — a copy rendered as its document', () => {
 
 describe('HttpMEditClient — the document of a copy of a record', () => {
   it('asks mEdit for the document of the plugin\'s copy of the record', async () => {
-    const file = { path: '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json', isContainersDocument: false };
+    const file = { kind: 'OwnFile', location: '/mods/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json' };
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, file)));
     const client = makeClient(fetch);
 

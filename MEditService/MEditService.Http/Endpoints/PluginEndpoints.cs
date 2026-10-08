@@ -116,9 +116,8 @@ internal static class PluginEndpoints
             .WithName("GetCopyDocument")
             .WithTags(Tag)
             .WithDescription(
-                "Where the plugin's copy of a record is a document: the absolute path of the file in plugin source holding it, " +
-                "and whether that file is the document of the record carrying the copy, which is the case for a child record. " +
-                "An untracked plugin's copy has no file, so the answer is the name of its rendered document. " +
+                "Where the plugin's copy of a record is a document: its own file in plugin source, the file of the record carrying " +
+                "it (a child record), or, for an untracked plugin's copy, the name of its rendered document. " +
                 "Two documents claiming the copy refuse, naming them.")
             .Produces<CopyDocument>()
             .ProducesProblem(400)

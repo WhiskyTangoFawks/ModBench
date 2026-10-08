@@ -46,7 +46,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
         TrackedMods.Track(Entry, _fixture.GameDirectory);
         using var index = Reconciled();
 
-        Assert.Equal(new CopyDocument(NpcFile, false, null), index.Records.GetCopyDocument(Plugin, Npc));
+        Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, NpcFile), index.Records.GetCopyDocument(Plugin, Npc));
     }
 
     [Fact]
@@ -55,10 +55,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
         TrackedMods.Track(Entry, _fixture.GameDirectory);
         using var index = Reconciled();
 
-        var document = index.Records.GetCopyDocument(Plugin, PlacedRef);
-
-        Assert.True(document?.IsContainersDocument);
-        Assert.Equal(CellFile, document?.Path);
+        Assert.Equal(new CopyDocument(CopyDocumentKind.ContainersFile, CellFile), index.Records.GetCopyDocument(Plugin, PlacedRef));
     }
 
     [Fact]
@@ -67,7 +64,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
         TrackedMods.Track(Entry, _fixture.GameDirectory);
         using var index = Indexes.Reconciled(_fixture.GameDirectory, [Entry with { Enabled = false }]);
 
-        Assert.Equal(new CopyDocument(NpcFile, false, null), index.Records.GetCopyDocument(Plugin, Npc));
+        Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, NpcFile), index.Records.GetCopyDocument(Plugin, Npc));
     }
 
     [Fact]
@@ -86,7 +83,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     {
         using var index = Reconciled();
 
-        Assert.Equal(new CopyDocument(null, false, "FiledNpc - 000800_Filed.esp.json"), index.Records.GetCopyDocument(Plugin, Npc));
+        Assert.Equal(new CopyDocument(CopyDocumentKind.Rendered, "FiledNpc - 000800_Filed.esp.json"), index.Records.GetCopyDocument(Plugin, Npc));
     }
 
     [Fact]
@@ -96,7 +93,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
         Directory.Delete(PluginSourceRoot.In(Entry.ModFolderOf(), Plugin.Name), recursive: true);
         using var index = Reconciled();
 
-        Assert.Equal(new CopyDocument(null, false, "FiledNpc - 000800_Filed.esp.json"), index.Records.GetCopyDocument(Plugin, Npc));
+        Assert.Equal(new CopyDocument(CopyDocumentKind.Rendered, "FiledNpc - 000800_Filed.esp.json"), index.Records.GetCopyDocument(Plugin, Npc));
     }
 
     [Fact]

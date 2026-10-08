@@ -25,17 +25,17 @@ const CELL_FILE = '/mods/ModA/plugin-source/A.esp/Cells/Cell.json';
 
 const untracked = (renderedFileName: string): RecordDocumentClient => ({
   getRecordOwner: () => Promise.resolve(undefined),
-  getCopyDocument: () => Promise.resolve({ path: null, isContainersDocument: false, renderedFileName }),
+  getCopyDocument: () => Promise.resolve({ kind: 'Rendered', location: renderedFileName }),
 });
 
 const carriedIn = (path: string): RecordDocumentClient => ({
   ...untracked(NAME),
-  getCopyDocument: () => Promise.resolve({ path, isContainersDocument: true, renderedFileName: null }),
+  getCopyDocument: () => Promise.resolve({ kind: 'ContainersFile', location: path }),
 });
 
 const ownFile = (path: string): RecordDocumentClient => ({
   ...untracked(NAME),
-  getCopyDocument: () => Promise.resolve({ path, isContainersDocument: false, renderedFileName: null }),
+  getCopyDocument: () => Promise.resolve({ kind: 'OwnFile', location: path }),
 });
 
 const holdingNone: RecordDocumentClient = { ...untracked(NAME), getCopyDocument: () => Promise.resolve(null) };

@@ -56,7 +56,7 @@ describe('a definition\'s place in its record\'s document (plugin-source.md, In 
 function definitions({ open = (): Promise<{ getText(): string }> => Promise.resolve({ getText: () => GUN_TEXT }) } = {}) {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getRecordOwner', modA);
-  client.setQueryAnswer('getCopyDocument', { path: GUN_FILE, isContainersDocument: false });
+  client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
   const reporter = recordingReporter();
   const opened: unknown[] = [];
   const definitionAt = definitionsOf({
