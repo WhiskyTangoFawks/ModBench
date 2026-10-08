@@ -27,7 +27,6 @@ public sealed class CompilePluginHandlerTests : IDisposable
         Assert.Equal([_mod.Plugin], result.Landed.Select(landed => landed.Item));
     }
 
-    // Patch.esp overrides Master.esp's NPC and links a keyword of each master, and Master.esp is disabled.
     private static Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileAPatchOfADisabledMaster(
         LoadOrderOfPlugins plugins, bool patchEnabled)
     {

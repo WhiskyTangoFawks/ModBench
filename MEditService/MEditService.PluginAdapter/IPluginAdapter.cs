@@ -38,9 +38,8 @@ public interface IPluginAdapter
     (PluginContent Content, Exception? Unreachable) ReadContent(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null);
 
-    /// <summary>What each of <paramref name="formKeys"/> names in the files the game loads (ADR-0013), or every
-    /// plugin when it does not load <paramref name="compiled"/> (commands.md § Principles), beside the
-    /// unreadable files. The link cache lives only here (ADR-0005).</summary>
+    /// <summary>What each of <paramref name="formKeys"/> names in the files the game loads (ADR-0013), or in every
+    /// plugin when it does not load <paramref name="compiled"/>, beside the unreadable files (ADR-0005).</summary>
     LinkAnswers LinkTargets(
         LoadOrderSnapshot loadOrder,
         RegisteredPlugin compiled,
