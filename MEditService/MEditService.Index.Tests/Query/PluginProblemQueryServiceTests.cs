@@ -12,7 +12,7 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
 {
     private const string Absent = "000ABC:Absent.esp";
 
-    private sealed record Plugin(string Name, bool RefersToAbsent = true, bool Enabled = true, bool Tracked = true)
+    private sealed record Plugin(string Name, string? RefersTo = Absent, bool Enabled = true, bool Tracked = true)
     {
         public string Referrer => $"000800:{Name}";
     }
@@ -36,7 +36,7 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
             builder.WithPlugin(plugin.Name, mod =>
             {
                 var referrer = mod.Npcs.AddNew("Referrer");
-                if (plugin.RefersToAbsent) referrer.Race.SetTo(FormKey.Factory(Absent));
+                if (plugin.RefersTo is { } target) referrer.Race.SetTo(FormKey.Factory(target));
                 mod.Npcs.AddNew("Other");
             }, enabled: plugin.Enabled, origin: $"{Path.GetFileNameWithoutExtension(plugin.Name)}Mod");
         }
@@ -86,7 +86,7 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
     [Fact]
     public void GetProblems_AFileThePluginsReadStoppedAt_IsAProblemOnThatFile_SayingWhy()
     {
-        var plugin = new Plugin("Strayed.esp", RefersToAbsent: false);
+        var plugin = new Plugin("Strayed.esp", RefersTo: null);
         Build(plugin);
         var stray = Path.Combine(Path.GetDirectoryName(SourceFileHolding(plugin, "Other")) ?? "", "Stray.json");
         File.WriteAllText(stray, "{}");
@@ -105,7 +105,7 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
     [Fact]
     public void GetProblems_FilesThatClaimOneFormKey_AreAProblemOnEach_NamingIt()
     {
-        var plugin = new Plugin("Twice.esp", RefersToAbsent: false);
+        var plugin = new Plugin("Twice.esp", RefersTo: null);
         Build(plugin);
         var (document, backup) = BackupClaimingTheFormKeyOf(plugin, "Referrer");
         using var index = Indexes.Reconciled(Fixture);
@@ -238,7 +238,7 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
     [Fact]
     public void GetProblems_AnActiveTrackedPluginWithNoMissingReference_IsAnsweredWithNoProblems()
     {
-        var plugin = new Plugin("Clean.esp", RefersToAbsent: false);
+        var plugin = new Plugin("Clean.esp", RefersTo: null);
         using var index = Reconciled(plugin);
 
         var answer = Assert.Single(Ready(index));
@@ -257,17 +257,62 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_ATrackedPluginThatIsNotActive_IsNotAnswered()
+    public void GetProblems_AMissingReferenceOfATrackedPluginThatIsNotActive_IsAProblemOnItsFile()
     {
-        using var index = Reconciled(new Plugin("Dormant.esp", Enabled: false));
+        var dormant = new Plugin("Dormant.esp", Enabled: false);
+        using var index = Reconciled(dormant);
 
-        Assert.Empty(Ready(index));
+        var answer = Assert.Single(Ready(index));
+
+        Assert.Equal(Entry(dormant).KeyOf(), answer.Plugin);
+        var problem = Assert.Single(answer.Problems);
+        Assert.Equal(
+            (Absent, Path.Combine(PluginSourceRoot.For(dormant.Name), "Npcs", "Referrer - 000800_Dormant.esp.json")),
+            (problem.TargetFormKey, problem.SourceRelativePath));
+    }
+
+    [Fact]
+    public void GetProblems_AReferenceOfAPluginThatIsNotActive_ToARecordItsOwnHolds_OrAnActivePluginHolds_IsNoProblem()
+    {
+        var active = new Plugin("Active.esp", RefersTo: null);
+        var ownRecord = new Plugin("OwnRecord.esp", Enabled: false, RefersTo: "000801:OwnRecord.esp");
+        var activeRecord = new Plugin("ActiveRecord.esp", Enabled: false, RefersTo: "000801:Active.esp");
+        using var index = Reconciled(active, ownRecord, activeRecord);
+
+        var answers = Ready(index);
+        foreach (var plugin in new[] { active, ownRecord, activeRecord })
+            Assert.Empty(Assert.Single(answers, answer => answer.Plugin == Entry(plugin).KeyOf()).Problems);
+    }
+
+    [Fact]
+    public void GetProblems_AFileThePluginsReadStoppedAt_OfAPluginThatIsNotActive_IsAProblemOnThatFile()
+    {
+        var dormant = new Plugin("DormantTwice.esp", RefersTo: null, Enabled: false);
+        Build(dormant);
+        var (document, backup) = BackupClaimingTheFormKeyOf(dormant, "Referrer");
+        using var index = Indexes.Reconciled(Fixture);
+
+        var answer = Assert.Single(Ready(index));
+
+        Assert.Equivalent(new[] { document, backup }, answer.Problems.Select(p => p.SourceRelativePath), strict: true);
+    }
+
+    [Fact]
+    public void GetProblems_AReferenceOfAPluginThatIsNotActive_ToARecordOnlyAnotherInactivePluginHolds_IsAProblem()
+    {
+        var holder = new Plugin("Holder.esp", RefersTo: null, Enabled: false);
+        var referrer = new Plugin("Referrer.esp", Enabled: false, RefersTo: "000801:Holder.esp");
+        using var index = Reconciled(holder, referrer);
+
+        var answer = Assert.Single(Ready(index), p => p.Plugin == Entry(referrer).KeyOf());
+
+        Assert.Equal("000801:Holder.esp", Assert.Single(answer.Problems).TargetFormKey);
     }
 
     [Fact]
     public async Task GetProblems_WhileTheIndexIsReconciling_AnswersNothing_ForAPartialSetReadsAsNoProblem()
     {
-        var plugins = Build(new Plugin("Clean.esp", RefersToAbsent: false), new Plugin("Later.esp", Tracked: false));
+        var plugins = Build(new Plugin("Clean.esp", RefersTo: null), new Plugin("Later.esp", Tracked: false));
         var holder = new LoadOrderHolder();
         using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
         using var index = Indexes.Open(holder, gate);
