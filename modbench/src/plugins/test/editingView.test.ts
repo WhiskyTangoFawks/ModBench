@@ -54,21 +54,21 @@ describe('the entry shown', () => {
     expect(ran).toEqual(['after Starting backend… and 1 reveal']);
   });
 
-  it('tells a backend that did not come up, as an error of the entry', async () => {
+  it.each(['backendFailed', 'exited'] as const)('tells %s as mEdit stopped, and that reloading the window starts it again', async (kind) => {
     const { view, entryReports, putReports } = wired();
 
-    await view.tell({ kind: 'backendFailed' });
+    await view.tell({ kind });
 
-    expect(entryReports).toEqual([expect.stringContaining('Backend failed to start')]);
+    expect(entryReports).toEqual(['mEdit stopped. Reload the window to start it again.']);
     expect(putReports).toEqual([]);
   });
 
-  it('tells a launch that threw as a failed launch, with its reason', async () => {
+  it('tells a launch that threw as mEdit stopped, with its reason', async () => {
     const { view, launchReports, entryReports, putReports } = wired();
 
     await view.tell({ kind: 'launchFailed', reason: 'no port' });
 
-    expect(launchReports).toEqual([['Failed to launch mEdit.', 'no port']]);
+    expect(launchReports).toEqual([['mEdit stopped. Reload the window to start it again.', 'no port']]);
     expect([...entryReports, ...putReports]).toEqual([]);
   });
 });

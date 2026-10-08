@@ -87,6 +87,7 @@ describe('the load order is put at every recompute', () => {
     const { client, told, land } = wired('stopped');
     client.answerStart(() => Promise.resolve());
 
+    void client.start();
     land(valueWith('A.esp'));
     await client.latestLoadOrder();
     await settle();
@@ -98,6 +99,7 @@ describe('the load order is put at every recompute', () => {
     const { client, told, land } = wired('stopped');
     client.answerStart(() => Promise.reject(new Error('no port')));
 
+    void client.start();
     land(valueWith('A.esp'));
     await client.latestLoadOrder();
     await settle();
@@ -139,6 +141,7 @@ describe('entering editing', () => {
     client.answerStart(() => launched.promise.then(() => { client.setStatus('running'); }));
 
     const entering = flow.enter(Promise.resolve().then(() => { land(valueWith('A.esp')); }));
+    void client.start();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(around).toMatchObject({ entered: 1, settled: false });
     launched.resolve();
@@ -173,63 +176,45 @@ function pending() {
   return { promise, resolve };
 }
 
-describe('a launch after the entry', () => {
-  it('is shown from the relaunch a snapshot asks for until that snapshot is told', async () => {
-    const { client, around, land } = wired('stopped');
-    const launched = pending();
-    client.answerStart(() => launched.promise.then(() => { client.setStatus('running'); }));
-
-    land(valueWith('A.esp'));
-    await settle();
-    expect(around).toMatchObject({ entered: 1, settled: false });
-    launched.resolve();
-    await until(() => around.settled);
-
-    expect(around.told).toEqual([1]);
-  });
-
-  it('is shown when a restarted mEdit runs, until the snapshot put again is told', async () => {
-    const { client, around, told, toldCount, land } = wired();
-    land(valueWith('A.esp'));
-    await toldCount(1);
-
-    client.disconnected();
-    client.setStatus('running');
-    await until(() => around.settled);
-
-    expect(around).toEqual({ entered: 1, settled: true, told: [2] });
-    expect(told[1]).toMatchObject({ kind: 'put', put: { sent: true, outcome: APPLIED } });
-  });
-
-  it('is not shown for a put again on a reconnect, mEdit having kept running', async () => {
-    const { client, around, toldCount, land } = wired();
-    land(valueWith('A.esp'));
-    await toldCount(1);
-
-    client.reconnected();
-    await toldCount(2);
-
-    expect(around.entered).toBe(0);
-  });
-});
-
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const until = async (check: () => boolean): Promise<void> => {
   while (!check()) await settle();
 };
 
+describe('mEdit exiting', () => {
+  it('is told as exited, once, and shows nothing', async () => {
+    const { client, around, told, toldCount, land } = wired();
+    land(valueWith('A.esp'));
+    await toldCount(1);
+
+    client.crashed();
+    await toldCount(2);
+    await settle();
+
+    expect(told.slice(1)).toEqual([{ kind: 'exited' }]);
+    expect(around.entered).toBe(0);
+  });
+
+  it('is not told for a failed launch twice: the launch tells it', async () => {
+    const { client, told } = wired('stopped');
+    client.answerStart(() => Promise.reject(new Error('no port')));
+
+    await client.start();
+    await settle();
+
+    expect(told).toEqual([{ kind: 'launchFailed', reason: 'no port' }]);
+  });
+});
+
 describe('a tell that threw', () => {
   it('reaches the Output once, and the entries after it still end', async () => {
-    const { client, flow, toldCount, land, logged, failNextTell, around } = wired();
+    const { flow, toldCount, land, logged, failNextTell } = wired();
     failNextTell(new Error('boom'));
     land(valueWith('A.esp'));
     await toldCount(1);
 
     await flow.enter(Promise.resolve().then(() => { land(valueWith('B.esp')); }));
-    client.crashed({ restarting: true });
-    client.setStatus('running');
-    await until(() => around.entered === 2 && around.told.length === 2);
 
     expect(logged).toEqual(['[loadOrder] handing mEdit the load order threw: boom']);
   });
@@ -241,6 +226,7 @@ describe('telling a launch that threw', () => {
     client.answerStart(() => Promise.reject(new Error('no port')));
     failNextTell(new Error('boom'));
 
+    void client.start();
     land(valueWith('A.esp'));
     await until(() => logged.length > 0);
 
@@ -248,11 +234,11 @@ describe('telling a launch that threw', () => {
   });
 });
 
-describe('the same recompute after a failed launch', () => {
+describe('a recompute after a failed launch', () => {
   it('neither launches mEdit again nor tells nor shows anything', async () => {
     const { client, told, land, around } = wired('stopped');
     client.answerStart(() => Promise.resolve());
-    land(valueWith('A.esp'));
+    void client.start();
     await until(() => around.settled);
     const toldBefore = told.length;
 

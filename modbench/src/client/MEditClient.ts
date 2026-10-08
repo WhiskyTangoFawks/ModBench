@@ -287,9 +287,10 @@ export interface MEditClient {
   /** commands.md, No lifecycle gestures for mEdit: it starts with the extension. Never rejects;
    *  a launch that fails leaves mEdit stopped, and `onLaunch` hears why. */
   start(): Promise<void>;
-  /** Each launch as it begins, and each restart once it runs after a crash: plugins.md, States
-   *  story 2, shows progress while mEdit starts. */
+  /** Each launch as it begins: plugins.md, States story 2, shows progress while mEdit starts. */
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void;
+  /** mEdit exited outside a launch and not by `stop`. Nothing starts it again. */
+  onExit(listener: () => void): () => void;
   /** Abandons the snapshot in flight, then takes mEdit down. */
   stop(): Promise<void>;
 }

@@ -808,46 +808,6 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await load;
   });
 
-  it('answers a PUT to a process restarted after a crash from that process\'s own ticks, never the last one\'s', async () => {
-    const streams: { push: (chunk: Uint8Array) => void }[] = [];
-    const fetch = routedFetch([
-      ['/notifications/stream', () => {
-        const stream = pushableStreamResponse();
-        streams.push(stream);
-        return Promise.resolve(stream.response);
-      }],
-      ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
-        state: 'Reconciling', totalPlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0,
-      }))],
-      ['/load-order', () => { puts += 1; return Promise.resolve(jsonResponse(200, appliedBody)); }],
-    ]);
-    let puts = 0;
-    const children: EventEmitter[] = [];
-    const client = createMEditClient({
-      backend: {
-        freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
-        spawn: () => { const child = Object.assign(new EventEmitter(), { kill: () => undefined }); children.push(child); return child; },
-        pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(true),
-      },
-      backendLog: fakeLogChannel(), fetch,
-    });
-    await client.start();
-    await vi.waitFor(() => expect(streams).toHaveLength(1));
-    streams[0]?.push(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 5 }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    children[0]?.emit('exit', 1);
-    await vi.waitFor(() => expect(streams).toHaveLength(2));
-
-    let settled = false;
-    const load = client.sendLoadOrder(snapshot).then((r) => { settled = true; return r; });
-    await vi.waitFor(() => expect(puts).toBe(1));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(settled).toBe(false);
-
-    streams[1]?.push(readyTickThatSettlesPutLoadOrder());
-    await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
-  });
-
   it('answers a PUT whose version is already Ready from the process\'s own status, with no tick, a snapshot identical to the one held reconciling nothing and publishing no tick', async () => {
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
@@ -910,146 +870,59 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
-  it('holds a snapshot sent while mEdit restarts after a crash, launching and killing nothing of its own, through a restart that never answers', async () => {
-    const health = { up: true };
+  it('stays stopped after a crash: a snapshot answers backendFailed, with no second child spawned and nothing launched or killed', async () => {
     const kills: number[] = [];
     const children: EventEmitter[] = [];
     const client = createMEditClient({
       backend: {
         freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
         spawn: () => {
-          const index = children.length;
-          const child = Object.assign(new EventEmitter(), { kill: () => { kills.push(index); } });
+          const child = Object.assign(new EventEmitter(), { kill: () => { kills.push(children.length); } });
           children.push(child);
           return child;
         },
-        pollIntervalMs: 3, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(health.up),
+        pollIntervalMs: 3, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(true),
       },
       backendLog: fakeLogChannel(), fetch: routedFetch([['/notifications/stream', () => Promise.resolve(openStreamResponse())]]),
     });
     await client.start();
     const launches: unknown[] = [];
+    const exits: unknown[] = [];
     client.onLaunch((launched) => launches.push(launched));
-
-    health.up = false;
-    children[0]?.emit('exit', 1);
-    const sent = client.sendLoadOrder(snapshot);
-
-    await expect(sent).resolves.toEqual({ outcome: 'backendFailed' });
-    expect(launches).toEqual([]);
-    expect(kills).toEqual([]);
-    expect(children).toHaveLength(2);
-  });
-
-  it('holds a snapshot sent during the second restart of a crash loop, launching and killing nothing, through a restart that never answers', async () => {
-    const health = { up: true };
-    const kills: number[] = [];
-    const children: EventEmitter[] = [];
-    let puts = 0;
-    const client = createMEditClient({
-      backend: {
-        freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
-        spawn: () => {
-          const index = children.length;
-          const child: EventEmitter & { kill: () => void } = Object.assign(new EventEmitter(), {
-            kill: () => { kills.push(index); child.emit('exit', 0); },
-          });
-          children.push(child);
-          return child;
-        },
-        pollIntervalMs: 3, pollTimeoutMs: 300, checkHealth: () => Promise.resolve(health.up),
-      },
-      backendLog: fakeLogChannel(),
-      fetch: routedFetch([
-        ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-        ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
-          state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
-        }))],
-        ['/load-order', () => { puts += 1; return Promise.resolve(jsonResponse(200, appliedBody)); }],
-      ]),
-    });
-    await client.start();
-    const launches: unknown[] = [];
-    client.onLaunch((launched) => launches.push(launched));
-
-    health.up = false;
-    children[0]?.emit('exit', 1);
-    await vi.waitFor(() => expect(children).toHaveLength(2), { interval: 2 });
-    children[1]?.emit('exit', 1);
-    await vi.waitFor(() => expect(children).toHaveLength(3), { interval: 2 });
-    const sent = client.sendLoadOrder(snapshot);
-
-    await expect(sent).resolves.toEqual({ outcome: 'backendFailed' });
-    expect(puts).toBe(0);
-    expect(kills).toEqual([]);
-    expect(launches).toEqual([]);
-  });
-
-  it('answers a snapshot waiting on a crash restart that throws as backendFailed, launching nothing of its own', async () => {
-    const children: EventEmitter[] = [];
-    const ports = [Promise.resolve(5172), Promise.reject(new Error('no port'))];
-    const log = vi.fn();
-    const client = createMEditClient({
-      backend: {
-        freePort: () => ports.shift() ?? Promise.reject(new Error('asked again')), executablePath: '/x/backend',
-        spawn: () => {
-          const child: EventEmitter & { kill: () => void } = Object.assign(new EventEmitter(), {
-            kill: () => { child.emit('exit', 0); },
-          });
-          children.push(child);
-          return child;
-        },
-        pollIntervalMs: 3, checkHealth: () => Promise.resolve(true),
-      },
-      backendLog: fakeLogChannel(), log,
-      fetch: routedFetch([['/notifications/stream', () => Promise.resolve(openStreamResponse())]]),
-    });
-    await client.start();
-    const launches: unknown[] = [];
-    client.onLaunch((launched) => launches.push(launched));
+    client.onExit(() => exits.push('exit'));
 
     children[0]?.emit('exit', 1);
-    const sent = client.sendLoadOrder(snapshot);
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
-    await expect(sent).resolves.toEqual({ outcome: 'backendFailed' });
-    expect(launches).toEqual([]);
-    expect(log.mock.calls.filter(([line]) => String(line).includes('no port'))).toHaveLength(1);
-  });
-
-  it('launches again for a changed snapshot after a launch whose children all exited before they answered, and settles it', async () => {
-    const backend = { exitsAtOnce: true, healthy: false };
-    const children: EventEmitter[] = [];
-    let puts = 0;
-    const client = createMEditClient({
-      backend: {
-        freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
-        spawn: () => {
-          const child: EventEmitter & { kill: () => void } = Object.assign(new EventEmitter(), {
-            kill: () => { child.emit('exit', 0); },
-          });
-          children.push(child);
-          if (backend.exitsAtOnce) process.nextTick(() => child.emit('exit', 1));
-          return child;
-        },
-        pollIntervalMs: 3, pollTimeoutMs: 300, checkHealth: () => Promise.resolve(backend.healthy),
-      },
-      backendLog: fakeLogChannel(),
-      fetch: routedFetch([
-        ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-        ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
-          state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
-        }))],
-        ['/load-order', () => { puts += 1; return Promise.resolve(jsonResponse(200, appliedBody)); }],
-      ]),
-    });
+    expect(client.status).toBe('stopped');
+    expect(exits).toHaveLength(1);
     await expect(client.sendLoadOrder(snapshot)).resolves.toEqual({ outcome: 'backendFailed' });
+    expect(launches).toEqual([]);
+    expect(kills).toEqual([]);
+    expect(children).toHaveLength(1);
+  });
 
-    backend.exitsAtOnce = false;
-    backend.healthy = true;
-    const changed = { ...snapshot, gameDirectory: '/other/Data' };
+  it('answers a snapshot backendFailed after a launch whose child exited before it answered, and launches nothing again', async () => {
+    const children: EventEmitter[] = [];
+    const client = createMEditClient({
+      backend: {
+        freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
+        spawn: () => {
+          const child: EventEmitter & { kill: () => void } = Object.assign(new EventEmitter(), {
+            kill: () => { child.emit('exit', 0); },
+          });
+          children.push(child);
+          process.nextTick(() => child.emit('exit', 1));
+          return child;
+        },
+        pollIntervalMs: 3, pollTimeoutMs: 300, checkHealth: () => Promise.resolve(false),
+      },
+      backendLog: fakeLogChannel(), fetch: routedFetch([['/notifications/stream', () => Promise.resolve(openStreamResponse())]]),
+    });
+    await client.start();
 
-    await expect(client.sendLoadOrder(changed)).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
-    expect(puts).toBe(1);
+    await expect(client.sendLoadOrder(snapshot)).resolves.toEqual({ outcome: 'backendFailed' });
+    expect(children).toHaveLength(1);
   });
 
   it('aborts the PUT in flight before it kills the mEdit it spawned, and answers it abandoned, not a failure', async () => {

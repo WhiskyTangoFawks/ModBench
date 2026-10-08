@@ -6,9 +6,6 @@ import {
 /** What an adapter gives the sender: its process, its stream's reopen, and one PUT of a snapshot. */
 export interface LoadOrderWire {
   status(): BackendStatus;
-  /** The process's own start in flight, a restart after a crash included. It settles once mEdit
-   *  runs or the restarts end, and is the one start every launch waits on. */
-  starting(): Promise<void> | undefined;
   onStatusChanged(listener: (status: BackendStatus) => void): () => void;
   onReconnected(listener: () => void): () => void;
   start(): Promise<void>;
@@ -22,6 +19,8 @@ export interface LoadOrderSender {
   latest(): Promise<LoadOrderOutcome | undefined>;
   onResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void;
+  /** mEdit went away outside a launch and not by a stop: nothing starts it again. */
+  onExit(listener: () => void): () => void;
   launch(): Promise<LaunchOutcome>;
   stop(): Promise<void>;
 }
@@ -147,34 +146,23 @@ function createLauncher(wire: LoadOrderWire, announce: (launched: Promise<Launch
 export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
   const slot = createSendSlot(wire);
   let newestHanded: LoadOrderSnapshot | undefined;
-  // The snapshot mEdit went down with. The same one again launches nothing: a recompute lands at
-  // every focus regain (ADR-0019: a toast the user learns to dismiss recreates silence).
-  let downWith: string | undefined;
-  let wentAway = false;
   const resent = listeners<[LoadOrderSnapshot, LoadOrderOutcome]>();
   const launches = listeners<[Promise<LaunchOutcome>]>();
+  const exits = listeners<[]>();
   const launcher = createLauncher(wire, launches.fire);
-
-  const wentDown = (): void => {
-    downWith = newestHanded && JSON.stringify(newestHanded);
-    slot.drop(BACKEND_FAILED);
-  };
 
   const launch = (): Promise<LaunchOutcome> => {
     const launched = launcher.launch();
-    void launched.then(({ outcome }) => { if (outcome === 'failed') wentDown(); });
+    void launched.then(({ outcome }) => { if (outcome === 'failed') slot.drop(BACKEND_FAILED); });
     return launched;
   };
 
-  // While a launch or the process's own restart is under way, a snapshot only waits for it.
+  // A launch under way holds a snapshot until mEdit runs. Once mEdit is gone nothing starts it again.
   const hand = (snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> => {
     if (launcher.stopped()) return Promise.resolve(ABANDONED);
-    const down = wire.status() !== 'running' && !launcher.launching() && !wire.starting();
-    if (down && JSON.stringify(snapshot) === downWith) return Promise.resolve(BACKEND_FAILED);
+    if (isMEditGone(wire.status()) && !launcher.launching()) return Promise.resolve(BACKEND_FAILED);
     newestHanded = snapshot;
-    const sent = slot.hold(snapshot);
-    if (down) void launch();
-    return sent;
+    return slot.hold(snapshot);
   };
 
   const resend = (): void => {
@@ -183,22 +171,13 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     void hand(snapshot).then((outcome) => { resent.fire(snapshot, outcome); });
   };
 
-  // A send in flight when mEdit goes answers abandoned, never a killed backend as a network
-  // failure. The process that runs next holds nothing, so the newest snapshot goes again.
+  // A send in flight when mEdit goes answers abandoned, never a killed backend as a network failure.
   wire.onStatusChanged((status) => {
     if (isMEditGone(status)) {
-      wentAway = true;
       slot.abortInFlight();
-      if (launcher.launching()) return;
-      const restart = wire.starting();
-      if (!restart) wentDown();
-      else void restart.then(() => { if (wire.status() !== 'running' && !launcher.launching()) wentDown(); });
+      slot.drop(BACKEND_FAILED);
+      if (!launcher.launching() && !launcher.stopped()) exits.fire();
       return;
-    }
-    if (status === 'running' && wentAway) {
-      wentAway = false;
-      resend();
-      if (!launcher.launching()) launches.fire(Promise.resolve(RUNNING));
     }
     slot.pump();
   });
@@ -209,6 +188,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     latest: () => slot.latest(),
     onResent: resent.add,
     onLaunch: launches.add,
+    onExit: exits.add,
     launch,
     async stop() {
       launcher.stop();
