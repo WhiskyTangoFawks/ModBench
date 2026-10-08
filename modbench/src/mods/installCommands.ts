@@ -11,7 +11,7 @@ import { promptModName } from '../drivingLib/promptModName';
 import { reportFailure } from '../drivingLib/reportFailure';
 import type { Reporter } from '../ports/reporter';
 import { runModsWriting } from './gestureEntry';
-import { installDownloadedFile } from './installDownloaded';
+import { installDownloadedFile, type DownloadInstallDeps } from './installDownloaded';
 
 interface InstallOutcome {
   installed: boolean;
@@ -23,9 +23,7 @@ interface ModInstallDeps {
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporterFor: (tag: string) => Reporter;
   warnIfFomod: (name: string, isFomod: boolean) => void;
-  log: (line: string) => void;
-  /** The view a downloaded file's install runs its progress bar under. */
-  downloadsView: string;
+  downloadInstall: Pick<DownloadInstallDeps, 'reporter' | 'log' | 'progressViewId'>;
 }
 
 interface SourceKindItem extends vscode.QuickPickItem {
@@ -35,7 +33,7 @@ interface SourceKindItem extends vscode.QuickPickItem {
 // modbench.mod.install: with no source, as from the Mods menu, it asks archive-or-folder first,
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
-  const { access, instance, reporterFor, warnIfFomod, log, downloadsView } = deps;
+  const { access, instance, reporterFor, warnIfFomod, downloadInstall } = deps;
   const validateName = (name: string) => installNameRefusal(access, name);
   const installArchive = async (archivePath: string): Promise<InstallOutcome> => {
     const name = await promptModName(defaultModName(archivePath), validateName);
@@ -66,7 +64,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       const download = downloadArgumentOf(argument);
       if (download) {
         const installed = await installDownloadedFile(
-          download, access, instance, reporterFor('installFromArchive'), { warnIfFomod, log, progressView: downloadsView });
+          download, access, instance, { ...downloadInstall, warnIfFomod });
         return { installed };
       }
       const picked = await vscode.window.showQuickPick<SourceKindItem>(

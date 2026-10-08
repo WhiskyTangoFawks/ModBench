@@ -95,7 +95,7 @@ const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row)
 
 const otherDeps = () => ({
   access: accessTo('/instance'), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
-  extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), downloadsView: 'modbench.downloads', nexusRow: () => undefined,
+  extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), downloadInstall: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
 });
 
 const silentChannel = { error: () => undefined, info: () => undefined };

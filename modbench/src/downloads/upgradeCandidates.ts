@@ -1,6 +1,3 @@
-// The installed mods that share a downloaded file's Nexus mod ID, ranked by what the mod manager
-// itself recorded. Never a guess from the file's name.
-
 import type { DownloadRow, InstanceValue, Mod } from '../instanceLoader/instance';
 import { archiveKey } from '../instanceLoader/downloadRows';
 import type { UpgradeCandidate, UpgradeTier } from '../drivingLib/argument';
@@ -13,8 +10,6 @@ const isArchiveFilenameMatch = (mod: Mod, downloadName: string): boolean =>
 
 const TIER_RANK: Record<'fileId' | 'archiveFilename' | 'none', number> = { fileId: 0, archiveFilename: 1, none: 2 };
 
-// The pool is the mods sharing the mod id, so no mod id empties it. The tiers rank within the
-// pool; a file-id match drops the archive-filename tier for every other mod.
 export function upgradeCandidates(
   value: { mods: InstanceValue['mods'] },
   download: Pick<DownloadRow, 'modID' | 'fileID' | 'name'>,

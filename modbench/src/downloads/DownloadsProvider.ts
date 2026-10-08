@@ -56,7 +56,7 @@ export class DownloadNode extends vscode.TreeItem {
   /** The Argument view on Nexus reads, which the Mods row supplies under the same name. */
   readonly nexusModId: string | undefined;
   readonly argument: DownloadArgument;
-  constructor(public readonly row: DownloadFile, upgrades: readonly UpgradeCandidate[] = []) {
+  constructor(row: DownloadFile, upgrades: readonly UpgradeCandidate[]) {
     super(row.displayName, vscode.TreeItemCollapsibleState.None);
     this.argument = { kind: 'download', row, upgrades };
     this.nexusModId = row.modID;
@@ -162,8 +162,8 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   /** Empty before the first render, and whenever Show excluded is off, because excluded rows
    *  are then already absent from the cache. */
   excludedNames(): ReadonlySet<string> {
-    const excluded = (this.cache ?? []).filter((n) => n.row.excluded);
-    return new Set(excluded.map((n) => n.row.name));
+    const excluded = (this.cache ?? []).filter((n) => n.argument.row.excluded);
+    return new Set(excluded.map((n) => n.argument.row.name));
   }
 
   getTreeItem(element: DownloadsTreeNode): vscode.TreeItem {
@@ -179,7 +179,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     if (this.instanceValue.downloads.kind === 'unresolved') return [new ErrorNode(this.instanceValue.downloads.reason)];
     this.cache ??= this.build(this.instanceValue.downloads.rows);
     if (!this.filterLower) return this.cache;
-    return this.cache.filter((n) => n.row.displayName.toLowerCase().includes(this.filterLower));
+    return this.cache.filter((n) => n.argument.row.displayName.toLowerCase().includes(this.filterLower));
   }
 
   private build(downloads: readonly DownloadFile[]): DownloadNode[] {

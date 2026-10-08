@@ -9,14 +9,15 @@ vi.mock('vscode', () => ({
 }));
 
 import { DownloadNode } from '../DownloadsProvider';
+import { downloadNodeFixture } from '../../test/mo2/downloadNodeFixture';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText, downloadsKeyContext } from '../keyContext';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 
 describe('what the Downloads palette entries, handed no row, read off the selection', () => {
-  const plain = new DownloadNode(downloadRowFixture('plain.7z'));
-  const withMeta = new DownloadNode(downloadRowFixture('meta.7z', { hasMeta: true }));
-  const excluded = new DownloadNode(downloadRowFixture('excluded.7z', { hasMeta: true, excluded: true }));
+  const plain = downloadNodeFixture(downloadRowFixture('plain.7z'));
+  const withMeta = downloadNodeFixture(downloadRowFixture('meta.7z', { hasMeta: true }));
+  const excluded = downloadNodeFixture(downloadRowFixture('excluded.7z', { hasMeta: true, excluded: true }));
 
   it('open sees exactly one selected file', () => {
     expect(downloadsKeyContext([plain]).singleFile).toBe(true);
@@ -44,8 +45,8 @@ describe('what the Downloads palette entries, handed no row, read off the select
 });
 
 describe('Downloads\' own text for the catalog\'s copy value', () => {
-  const alpha = new DownloadNode(downloadRowFixture('alpha.7z', { displayName: 'Alpha Mod' }));
-  const beta = new DownloadNode(downloadRowFixture('beta.7z'));
+  const alpha = downloadNodeFixture(downloadRowFixture('alpha.7z', { displayName: 'Alpha Mod' }));
+  const beta = downloadNodeFixture(downloadRowFixture('beta.7z'));
   const copy = (selection: readonly (DownloadNode | ErrorNode)[]) => downloadsCopyValueText(() => selection);
 
   it('is the file name of a right-clicked row, not its display name', () => {

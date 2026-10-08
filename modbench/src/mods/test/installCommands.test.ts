@@ -8,13 +8,12 @@ interface InputBoxOptionsDoubleOfJustPromptAndValidateInput {
   validateInput?: (value: string) => string | undefined;
 }
 
-const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuickPick, openExternal, createQuickPick } = vi.hoisted(() => ({
+const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuickPick, openExternal } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
   executeCommand: vi.fn((_command: string, _uri?: { fsPath: string }) => Promise.resolve()),
   showOpenDialog: vi.fn(),
   showInputBox: vi.fn<(options?: InputBoxOptionsDoubleOfJustPromptAndValidateInput) => Promise<string | undefined>>(),
   showQuickPick: vi.fn(),
-  createQuickPick: vi.fn(),
   openExternal: vi.fn(),
 }));
 
@@ -22,7 +21,7 @@ vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
   return {
     commands: { registerCommand, executeCommand },
-    window: { showOpenDialog, showInputBox, showQuickPick, createQuickPick, withProgress: recordedWithProgress },
+    window: { showOpenDialog, showInputBox, showQuickPick, withProgress: recordedWithProgress },
     env: { openExternal },
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
     Uri: { file: uriFile, parse: (s: string) => ({ toString: () => s }) },
@@ -40,7 +39,6 @@ vi.mock('../../install/install', async (importOriginal) => ({
 }));
 
 import { registerModInstallCommands } from '../installCommands';
-import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -66,8 +64,7 @@ function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
     instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
     warnIfFomod: vi.fn(),
-    log: vi.fn(),
-    downloadsView: 'modbench.downloads',
+    downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     ...over,
   };
 }
@@ -224,19 +221,20 @@ describe('modbench.mod.install: a downloaded file is its source', () => {
     expect(outcome).toEqual({ installed: true });
   });
 
-  it('upgrades the mod the Argument names when the user picks it, computing no target itself', async () => {
-    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
-    const row = downloadRowFixture('foo.7z');
-    const { qp, accept } = fakeQuickPick<{ label: string; choice: unknown }>();
-    createQuickPick.mockReturnValue(qp);
+  it('reports a download install through the downloads reporter and log it was given, not the mod list\'s', async () => {
+    const reporter = recordingReporter();
+    const log = vi.fn();
+    showInputBox.mockResolvedValue('Foo');
+    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false, downloadRefusal: 'locked' });
+    installFromArchive.mockResolvedValueOnce({ applied: false, refusal: 'disk full' });
+    const argument = { argument: { kind: 'download', row: downloadRowFixture('foo.7z'), upgrades: [] } };
 
-    registerModInstallCommands(deps());
-    const running = invoke('modbench.mod.install', { argument: { kind: 'download', row, upgrades: [{ modName: 'Harder VATS', tier: 'fileId' }] } });
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
-    accept({ label: 'Harder VATS', choice: { kind: 'upgrade', name: 'Harder VATS' } });
-    await running;
+    registerModInstallCommands(deps({ downloadInstall: { reporter, log, progressViewId: 'modbench.downloads' }, reporterFor: () => recordingReporter() }));
+    await invoke('modbench.mod.install', argument);
+    await invoke('modbench.mod.install', argument);
 
-    expect(installFromArchive).toHaveBeenCalledWith(ACCESS, { kind: 'upgrade', name: 'Harder VATS' }, row.path, expect.anything());
+    expect(log).toHaveBeenCalledWith('"foo.7z" was installed, but its Downloads status could not be updated: locked');
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'disk full' }]);
   });
 
   it('a mod row as Argument is no source, so it asks archive or folder', async () => {

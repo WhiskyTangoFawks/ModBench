@@ -1,5 +1,3 @@
-// The install target of a downloaded file: the mods Downloads found as its upgrades, shown as one pick.
-
 import type * as vscode from 'vscode';
 import { defaultModName, type InstallTarget } from '../install/install';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
@@ -29,7 +27,6 @@ const upgradePickItems = (candidates: readonly UpgradeCandidate[]): UpgradePickI
   NEW_MOD_ITEM,
 ];
 
-// The new-mod row is always last, and is the marked one when no candidate carries a tier.
 async function pickInstallChoice(name: string, candidates: readonly UpgradeCandidate[]): Promise<InstallChoice | undefined> {
   const items = upgradePickItems(candidates);
   const hasTier = candidates.some((c) => c.tier !== undefined);

@@ -135,7 +135,11 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   }));
   const mods = own(createModsView({
     instance, access, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
-    extensionUri: deps.extensionUri, warnIfFomod: fomodWarning, downloadsView: DOWNLOADS_KEY_ARGS.view,
+    extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
+    downloadInstall: {
+      reporter: reporterFor('downloadList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),
+      progressViewId: DOWNLOADS_KEY_ARGS.view,
+    },
     nexusRow: nexusRowInFocusedView(own, deps.focusedView, ['modbench.modList', 'modbench.downloads'], 'modbench.mod.nexusRowIn'),
   }));
   const view = editingView({

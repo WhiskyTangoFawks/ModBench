@@ -52,6 +52,7 @@ import {
   registerDownloadsSortCommand,
 } from '../DownloadsPanel';
 import { DownloadNode, DownloadsProvider } from '../DownloadsProvider';
+import { downloadNodeFixture } from '../../test/mo2/downloadNodeFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { deleteDownloads } from '../../downloadsCommands/downloads';
 import type { MoveToTrash } from '../../ports/trash';
@@ -62,7 +63,7 @@ import { accessTo } from '../../test/mo2/adapterOver';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const node = (root: string, name: string, row: Partial<DownloadRow> = {}): DownloadNode =>
-  new DownloadNode(downloadRowFixture(name, row, root));
+  downloadNodeFixture(downloadRowFixture(name, row, root));
 
 const NO_INSTALLED_MODS_SO_THE_UPGRADE_PICK_NEVER_SHOWS: InstanceValue['mods'] = [];
 
@@ -448,7 +449,7 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
     registerDownloadsMultiRowCommands(accessTo(root), instance, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.exclude', node(root, 'foo.7z'));
 
-    expect((await provider.getChildren()).map((n) => n.kind === 'download' && n.row.name)).toEqual(['foo.7z']);
+    expect((await provider.getChildren()).map((n) => n.kind === 'download' && n.argument.row.name)).toEqual(['foo.7z']);
     expect(provider.viewMessage()).toBe('Showing the last good read: locked');
   });
 });

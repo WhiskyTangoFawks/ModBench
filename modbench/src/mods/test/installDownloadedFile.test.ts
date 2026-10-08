@@ -47,9 +47,10 @@ const fakeInstance = (): Pick<Instance, 'value' | 'refresh'> => ({
 });
 
 const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDeps => ({
+  reporter: recordingReporter(),
   warnIfFomod: vi.fn(),
   log: (line) => { downloadsLogLines.push(line); },
-  progressView: 'modbench.downloads',
+  progressViewId: 'modbench.downloads',
   ...over,
 });
 
@@ -88,13 +89,13 @@ async function writeMeta(root: string, name: string, text = '[General]\r\n'): Pr
 describe('installDownloadedFile', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('installDownloadedFile installs the row\'s archive', async () => {
+  it('installs the row\'s archive as a new mod named after it', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     await writeMeta(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -108,7 +109,7 @@ describe('installDownloadedFile', () => {
     const archive = await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z', [], { modID: '123', fileID: '456', version: '2.0' }), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z', [], { modID: '123', fileID: '456', version: '2.0' }), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -124,7 +125,7 @@ describe('installDownloadedFile', () => {
     const before = await readFile(meta, 'utf8');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -142,7 +143,7 @@ describe('installDownloadedFile', () => {
     });
     const report = recordingReporter();
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), report, installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: report }));
 
     await vi.waitFor(() => expect(downloadsLogLines).toHaveLength(1));
     const line = present(downloadsLogLines[0], 'the one recorded Output line');
@@ -160,7 +161,7 @@ describe('installDownloadedFile', () => {
     const meta = await writeMeta(root, 'foo.7z');
     showInputBox.mockResolvedValueOnce(undefined);
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
 
     await vi.waitFor(() => expect(showInputBox).toHaveBeenCalled());
     expect(installFromArchive).not.toHaveBeenCalled();
@@ -174,7 +175,7 @@ describe('installDownloadedFile', () => {
     installFromArchive.mockResolvedValueOnce({ applied: false, refusal: 'boom' });
     const report = recordingReporter();
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), report, installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: report }));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'boom' }]);
@@ -187,7 +188,7 @@ describe('installDownloadedFile', () => {
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: true });
     const warnIfFomod = vi.fn();
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), recordingReporter(), installDeps({ warnIfFomod }));
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter(), warnIfFomod }));
 
     await vi.waitFor(() => expect(warnIfFomod).toHaveBeenCalledWith('foo', true));
   });
@@ -208,7 +209,7 @@ describe('installDownloadedFile: the pick among the upgrades the Argument carrie
     const double = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(double.qp);
     const installing = installDownloadedFile(
-      argumentOf(root, 'foo.7z', upgrades, ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+      argumentOf(root, 'foo.7z', upgrades, ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     act(double);
     await installing;
@@ -283,7 +284,7 @@ describe('installDownloadedFile: the pick among the upgrades the Argument carrie
     const archive = await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
 
     expect(installFromArchive).toHaveBeenCalledWith(
       expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
@@ -303,7 +304,7 @@ describe('installDownloadedFile: the progress bar and the read', () => {
     await writeArchive(root, 'foo.7z');
     installFromArchive.mockImplementationOnce(() => { progressSteps.push('install'); return Promise.resolve({ applied: true, wrote: true, isFomod: false }); });
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), instanceThatReads, recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), instanceThatReads, installDeps({ reporter: recordingReporter() }));
 
     expect(progressSteps).toEqual([opens, 'install', reads, 'progress closes']);
   });
@@ -313,7 +314,7 @@ describe('installDownloadedFile: the progress bar and the read', () => {
     await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: false, refusal: 'boom' });
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), instanceThatReads, recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), instanceThatReads, installDeps({ reporter: recordingReporter() }));
 
     expect(progressSteps).toEqual([opens, reads, 'progress closes']);
   });
@@ -324,7 +325,7 @@ describe('installDownloadedFile: the progress bar and the read', () => {
     const { qp, escape } = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    const running = installDownloadedFile(argumentOf(root, 'foo.7z', [{ modName: 'Foo Mod', version: '1.0' }], ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR), accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    const running = installDownloadedFile(argumentOf(root, 'foo.7z', [{ modName: 'Foo Mod', version: '1.0' }], ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR), accessTo(root), fakeInstance(), installDeps({ reporter: recordingReporter() }));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
     await running;
@@ -337,7 +338,7 @@ describe('installDownloadedFile: the progress bar and the read', () => {
     await writeArchive(root, 'foo.7z');
     showInputBox.mockResolvedValueOnce(undefined);
 
-    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), instanceThatReads, recordingReporter(), installDeps());
+    await installDownloadedFile(argumentOf(root, 'foo.7z'), accessTo(root), instanceThatReads, installDeps({ reporter: recordingReporter() }));
 
     expect(progressSteps).toEqual([]);
   });
