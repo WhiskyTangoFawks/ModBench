@@ -98,12 +98,13 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         IReadOnlyCollection<string> formKeys)
     {
-        // One mod per filename, because that is what a link cache can hold: the plugin being compiled
-        // stands in for its own filename, at whatever slot the load order gives that name.
         // A copy a line names stands for its filename; a plugin with no line is found after them.
         var loaded = loadOrder.LoadOrderIndex(compiled.Key) is null
             ? loadOrder.JudgedCopies().Concat(loadOrder.InJudgedOrder())
             : loadOrder.Active;
+
+        // One mod per filename, because that is what a link cache can hold: the plugin being compiled
+        // stands in for its own filename, at whatever slot the load order gives that name.
         var files = loaded
             .Select(plugin => SameFile(plugin, compiled) ? compiled : plugin)
             .Append(compiled)
