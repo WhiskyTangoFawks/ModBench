@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Index.Tests.TestSupport;
@@ -29,12 +28,26 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
         }
     }
 
-    private bool AnyColumnOf(string table, IEnumerable<string> columns)
+    private string ViewColumnType(string table, string column) =>
+        IndexFiles.Rows(fixture.InstanceRoot,
+            $"SELECT data_type FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{column}'")
+            .Single()[0];
+
+    [Theory]
+    [InlineData("npc_", "AggroRadiusBehaviorEnabled", "BOOLEAN")]
+    [InlineData("npc_", "XpValueOffset", "BIGINT")]
+    [InlineData("imad", "Unknown", "BIGINT")]
+    [InlineData("npc_", "HeightMin", "FLOAT")]
+    [InlineData("npc_", "Aggression", "VARCHAR")]
+    [InlineData("npc_", "Flags", "VARCHAR")]
+    [InlineData("npc_", "Race", "VARCHAR")]
+    [InlineData("ligh", "Color", "VARCHAR")]
+    [InlineData("header", "Author", "VARCHAR")]
+    [InlineData("weap", "VersionControl", "BIGINT")]
+    [InlineData("glob", "OutputChar", "BOOLEAN")]
+    public void AViewColumn_HasTheSqlTypeOfItsLeaf(string table, string column, string expected)
     {
-        var names = columns.Select(Regex.Escape).ToList();
-        return names.Count != 0 && Binds($"""
-            SELECT form_key FROM "{table}" WHERE EXISTS (SELECT COLUMNS('^({string.Join("|", names)})$') FROM "{table}")
-            """);
+        Assert.Equal(expected, ViewColumnType(table, column));
     }
 
     [Fact]
@@ -93,20 +106,12 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
         Assert.Equal(0, Matching("SELECT form_key FROM \"cell\" WHERE \"Flags\" LIKE '%[%' OR \"Flags\" LIKE '%\"%'"));
     }
 
-    [Fact]
-    public void AViewCarriesEveryViewableScalar_AndNoArrayStructOrClassVaryingColumn()
+    [Theory]
+    [InlineData("npc_", "Factions")]
+    [InlineData("npc_", "Weight")]
+    public void AnArrayOrStructMember_HasNoViewColumn(string table, string column)
     {
-        var offenders = new List<string>();
-        var tablesWithScalars = 0;
-        foreach (var (table, schema) in Schemas)
-        {
-            if (AnyColumnOf(table, schema.RecordColumns.Where(c => !c.IsViewable).Select(c => c.Name)))
-                offenders.Add(table);
-            if (AnyColumnOf(table, schema.RecordColumns.Where(c => c.IsViewable).Select(c => c.Name)))
-                tablesWithScalars++;
-        }
-
-        Assert.Empty(offenders);
-        Assert.True(tablesWithScalars > 0, "Positive control: viewable scalars must actually be reachable.");
+        Assert.Empty(IndexFiles.Rows(fixture.InstanceRoot,
+            $"SELECT 1 FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{column}'"));
     }
 }

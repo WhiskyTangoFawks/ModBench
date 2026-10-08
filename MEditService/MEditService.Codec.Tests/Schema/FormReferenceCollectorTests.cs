@@ -5,10 +5,10 @@ namespace MEditService.Codec.Tests.Schema;
 
 public class FormReferenceCollectorTests
 {
-    private static ColumnSpec Column(FieldMetadata field) => new(field, field.Name, "JSON");
+    private static ColumnSpec Column(FieldMetadata field) => new(field, field.Name);
 
     private static ColumnSpec ScalarFormKeyCol(string name) =>
-        new(new FieldMetadata(name, "formKey", false, [], []), name, "VARCHAR");
+        new(new FieldMetadata(name, "formKey", false, [], []), name);
 
     private static ColumnSpec ArrayFormKeyCol(string name) =>
         Column(new FieldMetadata(name, "array", true, [], [], ElementType: new FieldMetadata(name, "formKey", false, [], [])));
@@ -110,7 +110,7 @@ public class FormReferenceCollectorTests
     [Fact]
     public void Collect_UnknownApiType_IsNotYielded()
     {
-        var col = new ColumnSpec(new FieldMetadata("Name", "string", false, [], []), "Name", "VARCHAR");
+        var col = new ColumnSpec(new FieldMetadata("Name", "string", false, [], []), "Name");
         Assert.Empty(Collect(col, "some value"));
     }
 
