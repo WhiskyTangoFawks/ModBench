@@ -3,7 +3,7 @@ import { hasSection, isRecordEditEnvelope, moveEnvelope, type ArrayElementContex
 import type { RecordEditEnvelope } from '../client';
 import { pluginAddressOf } from '../wire/pluginAddress';
 import type { ExtendedFieldDocuments, FieldAddress } from './extendedFieldEditor';
-import type { EditAddress, EditGate } from './followRecord';
+import type { EditAddress, EditGate } from './recordTab';
 import type { FocusedCellContext } from './focusedCells';
 
 export interface FieldCommitDeps {

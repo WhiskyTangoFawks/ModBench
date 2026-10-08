@@ -704,6 +704,52 @@ describe('a record tab closed while its read is in flight', () => {
   });
 });
 
+describe('a record tab closed', () => {
+  const GUN = '000801:A.esp';
+  const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+  const holding = { formKey: GUN, plugin: 'A.esp', origin: 'ModA' };
+
+  it('before mEdit says which record its file holds shows nothing when the answer lands, nor is followed by Referenced By', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', []);
+    let land: (answer: typeof holding) => void = () => undefined;
+    client.setQueryAnswerOnce('getRecordOfFile', new Promise<typeof holding>((resolve) => { land = resolve; }));
+    const { editor, referencedBy } = makeEditor(client);
+    const provider = h.editorProviders.get('modbench.record');
+    if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
+    const tab = fakePanel();
+    const resolving = provider.resolveCustomTextEditor({ uri: { scheme: 'file', fsPath: FILE } }, tab);
+
+    tab.close();
+    land(holding);
+    await resolving;
+    editor.announceConflictsComputed();
+
+    expect(pageGlobal(tab, 'mEditFormKey')).toBeUndefined();
+    expect(tab.webview.postMessage).not.toHaveBeenCalled();
+    expect((await recordOf(referencedBy)).message).toBe('Open a record to see what references it.');
+  });
+
+  it('lets go of what it listened to: its document\'s changes and the instance\'s mods', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getRecordOfFile', holding);
+    const modsHeard = new Set<object>();
+    const modFacts: ModFacts = { ...NO_MODS, onChange: () => {
+      const heard = {};
+      modsHeard.add(heard);
+      return { dispose: () => { modsHeard.delete(heard); } };
+    } };
+    const { openFile } = makeEditor(client, [], modFacts);
+    const documentsHeard = h.documentChanges.size;
+    const tab = await openFile(FILE);
+    expect([modsHeard.size, h.documentChanges.size]).toEqual([1, documentsHeard + 1]);
+
+    tab.close();
+
+    expect([modsHeard.size, h.documentChanges.size]).toEqual([0, documentsHeard]);
+  });
+});
+
 describe('what a record tab\'s webview posts', () => {
   const GUN = '000801:A.esp';
   const compare = comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]);

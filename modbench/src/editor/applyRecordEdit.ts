@@ -5,7 +5,7 @@ import type { PluginAddress } from '../wire/pluginAddress';
 import type { PathHop } from '../wire/messages';
 import type { RecordDocument } from '../drivingLib/recordDocument';
 import { errorMessage } from '../ports/errorMessage';
-import type { EditAddress } from './followRecord';
+import type { EditAddress } from './recordTab';
 
 /** A file or folder an edit moves. */
 export interface SourceMove { from: vscode.Uri; to: vscode.Uri }

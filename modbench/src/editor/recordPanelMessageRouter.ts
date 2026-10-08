@@ -7,8 +7,9 @@ import type { MEditClient, PluginLoadFailure } from '../client';
 import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
 import { pickRecord, type RecordPickerDeps } from './recordPicker';
-import type { EditsInFlight, FollowedPanel } from './followRecord';
-import type { FocusedCellContext, FocusedCells } from './focusedCells';
+import type { RecordTab } from './recordTab';
+import type { RecordTabs } from './recordTabs';
+import type { FocusedCellContext } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
 import type { TitledColumn } from './recordTitle';
 import type { TabPlace } from './recordOpenPlan';
@@ -52,41 +53,30 @@ export interface RouteRecordPanelMessageDeps {
 
 /** What every panel's messages share: the rest is the panel's own. */
 export type SharedRecordPanelDeps = Omit<
-  RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'readAnswered' | 'tabPlace' | 'originsShown'>;
+  RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'keepViewState' | 'readAnswered' | 'tabPlace' | 'originsShown'>;
 
-/** What a tab gives its panel's messages: its document's, and a keeper of its place. */
-export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'plugin' | 'documentText' | 'keepViewState'>;
+/** What a tab's document gives its panel's messages. */
+export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'plugin' | 'documentText'>;
 
-/** The router's bundle for one panel's messages: the picker and the record load both reply to it.
- *  An answer can land after the panel closed, and then touches nothing of it. */
-export function routerDepsForPanel<Panel extends FollowedPanel & Pick<vscode.WebviewPanel, 'onDidDispose' | 'viewColumn'>>(
-  shared: SharedRecordPanelDeps,
-  panel: Panel,
-  focusedCells: FocusedCells<Panel>,
-  editsInFlight: Pick<EditsInFlight<Panel>, 'answered'>,
-  tab: TabDocument,
-  document: string,
+/** The router's bundle for one tab's messages: the picker and the record load both reply to it. */
+export function routerDepsForTab(
+  shared: SharedRecordPanelDeps, tab: RecordTab, tabs: Pick<RecordTabs, 'setCell'>, document: TabDocument,
 ): RouteRecordPanelMessageDeps {
-  let open = true;
-  let origins: readonly string[] = [];
-  panel.onDidDispose(() => { open = false; });
-  const whileOpen = <Args extends unknown[]>(act: (...args: Args) => void) => (...args: Args): void => { if (open) act(...args); };
-  const reply = whileOpen((m: ExtensionToWebview) => { void panel.webview.postMessage(m); });
-  const modsChanged = shared.modFacts.onChange(() => {
-    reply({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: modsByOrigin(origins, shared.modFacts) });
-  });
-  panel.onDidDispose(() => { modsChanged.dispose(); });
+  const reply = (m: ExtensionToWebview) => { tab.post(m); };
+  tab.own(shared.modFacts.onChange(() => {
+    reply({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: modsByOrigin(tab.origins, shared.modFacts) });
+  }));
   return {
     ...shared,
     formKeyPicker: { meditClient: shared.meditClient, reporter: shared.reporter, reply },
-    focusCell: (context, userFocus) => { focusedCells.setCell(panel, context, userFocus); },
+    focusCell: (context, userFocus) => { tabs.setCell(tab, context, userFocus); },
     reply,
-    originsShown: whileOpen((shown) => { origins = shown; }),
-    ...tab,
-    titleFromRead: whileOpen(tab.titleFromRead),
-    keepViewState: whileOpen(tab.keepViewState),
-    readAnswered: whileOpen((formKey: string, columns: readonly ColumnCopy[]) => { editsInFlight.answered(panel, formKey, columns); }),
-    tabPlace: () => (panel.viewColumn === undefined ? undefined : { document, viewColumn: panel.viewColumn }),
+    originsShown: (shown) => { tab.origins = shown; },
+    ...document,
+    titleFromRead: (formKey, columns) => { if (tab.isOpen) document.titleFromRead(formKey, columns); },
+    keepViewState: (state) => { tab.place = state; },
+    readAnswered: (formKey, columns) => { tab.answered(formKey, columns); },
+    tabPlace: () => (tab.panel.viewColumn === undefined ? undefined : { document: tab.document.toString(), viewColumn: tab.panel.viewColumn }),
   };
 }
 
