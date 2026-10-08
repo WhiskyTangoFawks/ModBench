@@ -105,6 +105,20 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
   });
 });
 
+describe('PluginFacts — plugins that differ only in case', () => {
+  it('shows each its own reason for failing to read', () => {
+    const facts = new PluginFacts();
+    const upper = { name: 'Foo.esp', origin: 'SomeMod' };
+    const lower = { name: 'foo.esp', origin: 'SomeMod' };
+    facts.reconciled([], [failure('differs from foo.esp', upper), failure('differs from Foo.esp', lower)]);
+
+    expect(facts.tooltipLines(upper)).toContain('Failed to read: differs from foo.esp');
+    expect(facts.tooltipLines(lower)).toContain('Failed to read: differs from Foo.esp');
+    expect(facts.expansion(upper)).toEqual({ kind: 'error', message: 'differs from foo.esp' });
+    expect(facts.expansion(lower)).toEqual({ kind: 'error', message: 'differs from Foo.esp' });
+  });
+});
+
 describe('PluginFacts — which statuses stay and which land (plugins.md, A row, bullets)', () => {
   it('shows no master status while mEdit has not checked, which is not no issues', () => {
     const facts = new PluginFacts();

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 import type { Mod, Separator, ModlistEntry } from '../instance';
 import {
-  buildFileConflictIndex, modOrigin, rootLevelWinners, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, RUNTIME_OUTPUT, type ConflictEntry,
+  buildFileConflictIndex, modOrigin, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';
 import type { InstanceAdapter, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../loadOrderSnapshot';
@@ -160,12 +160,10 @@ describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine 
     expect(entry?.winner).toBe(join(caseFixtureRoot, 'mods', 'ModA', 'Textures', 'Foo.dds'));
   });
 
-  it('rootLevelWinners folds a case-variant root-level plugin pair to one winner', async () => {
+  it('folds a case-variant root-level plugin pair of two mods to one winner', async () => {
     const index = await buildFileConflictIndex([mod('RootA'), mod('RootB')], [], caseFixture, () => {});
-    const winners = rootLevelWinners(index);
 
-    expect(winners.size).toBe(1);
-    expect(winners.get('foo.esp')).toBe(join(caseFixtureRoot, 'mods', 'RootA', 'Foo.esp'));
+    expect([...index.files].map((entry) => entry.winner)).toEqual([join(caseFixtureRoot, 'mods', 'RootA', 'Foo.esp')]);
   });
 });
 
