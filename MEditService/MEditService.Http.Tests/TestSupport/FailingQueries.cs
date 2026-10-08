@@ -36,7 +36,7 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IRecordQue
 
     public RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey) => throw Failed();
 
-    public RecordFile? GetRecordFile(PluginAddress plugin, string formKey) => throw Failed();
+    public CopyDocument? GetCopyDocument(PluginAddress plugin, string formKey) => throw Failed();
 
     public RecordOfFileAnswer GetRecordOfFile(string path) => throw Failed();
 

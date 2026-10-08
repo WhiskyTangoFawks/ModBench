@@ -80,25 +80,39 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     [Fact]
     public void ARecord_IsInItsOwnDocument()
     {
-        Assert.Equal(NpcFile, Repository.FullPathOf(Plugin, Npc));
+        Assert.Equal(NpcFile, Repository.DocumentOf(Plugin, Npc)?.Path);
     }
 
     [Fact]
     public void ThePluginHeaderRecord_IsInTheRootHeaderDocument()
     {
-        Assert.Equal(HeaderFile, Repository.FullPathOf(Plugin, Header));
+        Assert.Equal(HeaderFile, Repository.DocumentOf(Plugin, Header)?.Path);
     }
 
     [Fact]
     public void AContainerRecord_IsInItsOwnDocument()
     {
-        Assert.Equal(RoomFile, Repository.FullPathOf(Plugin, Room));
+        Assert.Equal(RoomFile, Repository.DocumentOf(Plugin, Room)?.Path);
     }
 
     [Fact]
     public void AChildRecord_IsInTheDocumentOfTheRecordCarryingIt()
     {
-        Assert.Equal(RoomFile, Repository.FullPathOf(Plugin, Placed));
+        Assert.Equal(RoomFile, Repository.DocumentOf(Plugin, Placed)?.Path);
+    }
+
+    [Fact]
+    public void AChildRecordsDocument_IsItsContainers()
+    {
+        Assert.True(Repository.DocumentOf(Plugin, Placed)?.IsContainersDocument);
+    }
+
+    [Fact]
+    public void ARecordsOwnDocument_IsNotItsContainers()
+    {
+        Assert.False(Repository.DocumentOf(Plugin, Npc)?.IsContainersDocument);
+        Assert.False(Repository.DocumentOf(Plugin, Room)?.IsContainersDocument);
+        Assert.False(Repository.DocumentOf(Plugin, Header)?.IsContainersDocument);
     }
 
     [Fact]
@@ -106,7 +120,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         var renamed = RenameNpcFileByHand();
 
-        Assert.Equal(renamed, Repository.FullPathOf(Plugin, Npc));
+        Assert.Equal(renamed, Repository.DocumentOf(Plugin, Npc)?.Path);
     }
 
     [Fact]
@@ -114,7 +128,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         File.Delete(NpcFile);
 
-        Assert.Null(Repository.FullPathOf(Plugin, Npc));
+        Assert.Null(Repository.DocumentOf(Plugin, Npc)?.Path);
     }
 
     [Fact]

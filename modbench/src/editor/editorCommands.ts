@@ -35,7 +35,7 @@ export interface EditorCommandDeps {
     | 'deleteRecords' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders'
     | 'getComparison' | 'getRecordsComparison' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onReconnected' | 'getRecordOwner'
-    | 'getRecordFile' | 'getRecordOfFile' | 'getRenderedDocument'>;
+    | 'getCopyDocument' | 'getRecordOfFile' | 'getRenderedDocument'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
   // The rows selected in the view `view` names, which a key bound in that view acts on.
@@ -123,7 +123,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   ];
 }
 
-type OpenClient = Pick<MEditClient, 'getRecordOwner' | 'getRecordFile' | 'getRecordOfFile' | 'getRenderedDocument'>;
+type OpenClient = Pick<MEditClient, 'getRecordOwner' | 'getCopyDocument'>;
 
 // Several records open one grid: the first record's document, with the others as its columns
 // (editor.md, Opening, story 4).

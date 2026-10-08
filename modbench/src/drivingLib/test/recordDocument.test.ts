@@ -23,18 +23,22 @@ const copy = { formKey: GUN, plugin: modA };
 const NAME = 'Gun - 000801_A.esp.json';
 const CELL_FILE = '/mods/ModA/plugin-source/A.esp/Cells/Cell.json';
 
-const untracked = (fileName: string): RecordDocumentClient => ({
+const untracked = (renderedFileName: string): RecordDocumentClient => ({
   getRecordOwner: () => Promise.resolve(undefined),
-  getRecordFile: () => Promise.resolve({ path: null }),
-  getRecordOfFile: () => Promise.reject(new Error('an untracked copy has no file')),
-  getRenderedDocument: () => Promise.resolve({ fileName }),
+  getCopyDocument: () => Promise.resolve({ kind: 'Rendered', location: renderedFileName }),
 });
 
-const carriedIn = (file: string): RecordDocumentClient => ({
+const carriedIn = (path: string): RecordDocumentClient => ({
   ...untracked(NAME),
-  getRecordFile: () => Promise.resolve({ path: file }),
-  getRecordOfFile: () => Promise.resolve({ formKey: '000700:A.esp' }),
+  getCopyDocument: () => Promise.resolve({ kind: 'ContainersFile', location: path }),
 });
+
+const ownFile = (path: string): RecordDocumentClient => ({
+  ...untracked(NAME),
+  getCopyDocument: () => Promise.resolve({ kind: 'OwnFile', location: path }),
+});
+
+const holdingNone: RecordDocumentClient = { ...untracked(NAME), getCopyDocument: () => Promise.resolve(null) };
 
 const uriOf = async (client: RecordDocumentClient, of: RecordCopy): Promise<vscode.Uri> => {
   const document = await copyDocument(client, of);
@@ -82,5 +86,26 @@ describe('a child record\'s address', () => {
     const placed = { formKey: '000803:A.esp', plugin: modA };
 
     expect(await uriOf(carriedIn(CELL_FILE), placed)).not.toEqual(await uriOf(carriedIn(CELL_FILE), { formKey: '000804:A.esp', plugin: modA }));
+  });
+});
+
+describe("a copy's document", () => {
+  it("is the copy's own file when the file is the record's whole document", async () => {
+    const uri = await uriOf(ownFile(CELL_FILE), copy);
+
+    expect(uri.scheme).toBe('file');
+    expect(uri.path).toBe(CELL_FILE);
+  });
+
+  it("is the container's file, in the child scheme, when the record sits inside it", async () => {
+    const uri = await uriOf(carriedIn(CELL_FILE), copy);
+
+    expect(uri.scheme).toBe('modbench-child-record');
+    expect(uri.path).toBe(CELL_FILE);
+    expect(copyOf(uri)).toEqual(copy);
+  });
+
+  it('is a refusal naming the plugin when it holds no copy', async () => {
+    expect(await copyDocument(holdingNone, copy)).toEqual({ refused: 'A.esp (ModA) holds no 000801:A.esp.' });
   });
 });

@@ -56,8 +56,7 @@ describe('a definition\'s place in its record\'s document (plugin-source.md, In 
 function definitions({ open = (): Promise<{ getText(): string }> => Promise.resolve({ getText: () => GUN_TEXT }) } = {}) {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getRecordOwner', modA);
-  client.setQueryAnswer('getRecordFile', { path: GUN_FILE });
-  client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: modA.name, origin: modA.origin });
+  client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
   const reporter = recordingReporter();
   const opened: unknown[] = [];
   const definitionAt = definitionsOf({
@@ -95,7 +94,7 @@ describe('Go to Definition on a FormKey (plugin-source.md, In the text editor, s
 
   it('offers none, and writes why to the Output, when the winning plugin holds no copy', async () => {
     const { client, reporter, definitionAt } = definitions();
-    client.setQueryAnswer('getRecordFile', null);
+    client.setQueryAnswer('getCopyDocument', null);
 
     expect(await definitionAt(REFERENCING, AT_GUN)).toBeUndefined();
     expect(reporter.shownFailures).toEqual([
@@ -114,7 +113,7 @@ describe('Go to Definition on a FormKey (plugin-source.md, In the text editor, s
 
   it('writes the reason again each time it recurs', async () => {
     const { client, reporter, definitionAt } = definitions();
-    client.setQueryAnswer('getRecordFile', null);
+    client.setQueryAnswer('getCopyDocument', null);
 
     await definitionAt(REFERENCING, AT_GUN);
     await definitionAt(REFERENCING, AT_GUN);

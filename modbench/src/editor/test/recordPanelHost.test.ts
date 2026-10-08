@@ -181,7 +181,6 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
   }
 
   async function childTabShown(meditClient: InMemoryMEditClient, inAGroup = true) {
-    meditClient.setQueryAnswer('getRecordOfFile', { formKey: '000700:A.esp', plugin: plugin.name, origin: plugin.origin });
     const warn = vi.fn();
     await register({ meditClient, outputChannel: { debug: vi.fn(), info: vi.fn(), warn } });
     const provider = registerCustomEditorProvider.mock.calls.at(-1)?.[1];
@@ -195,31 +194,31 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
 
   it('follows it again for a report that arrives while it follows the one before', async () => {
     const meditClient = new InMemoryMEditClient();
-    let answerFirst: (file: { path: string }) => void = () => undefined;
-    meditClient.setQueryAnswerOnce('getRecordFile', new Promise<{ path: string }>((resolve) => { answerFirst = resolve; }));
-    meditClient.setQueryAnswer('getRecordFile', { path: OTHER_CELL_FILE });
+    let answerFirst: (document: { kind: 'ContainersFile'; location: string }) => void = () => undefined;
+    meditClient.setQueryAnswerOnce('getCopyDocument', new Promise<{ kind: 'ContainersFile'; location: string }>((resolve) => { answerFirst = resolve; }));
+    meditClient.setQueryAnswer('getCopyDocument', { kind: 'ContainersFile', location: OTHER_CELL_FILE });
     await childTabShown(meditClient);
 
     meditClient.emit(changed);
     meditClient.emit({ ...changed, sequence: 2 });
-    answerFirst({ path: CELL_FILE });
+    answerFirst({ kind: 'ContainersFile', location: CELL_FILE });
 
     await vi.waitFor(() => expect(opened()).toEqual([`modbench-child-record:${OTHER_CELL_FILE}?${query}`]));
-    expect(meditClient.calls.filter(({ method }) => method === 'getRecordFile')).toHaveLength(2);
+    expect(meditClient.calls.filter(({ method }) => method === 'getCopyDocument')).toHaveLength(2);
   });
 
   it('follows no tab closed while it follows the one before', async () => {
     const meditClient = new InMemoryMEditClient();
-    let answerFirst: (file: { path: string }) => void = () => undefined;
-    meditClient.setQueryAnswerOnce('getRecordFile', new Promise<{ path: string }>((resolve) => { answerFirst = resolve; }));
-    meditClient.setQueryAnswer('getRecordFile', { path: OTHER_CELL_FILE });
+    let answerFirst: (document: { kind: 'ContainersFile'; location: string }) => void = () => undefined;
+    meditClient.setQueryAnswerOnce('getCopyDocument', new Promise<{ kind: 'ContainersFile'; location: string }>((resolve) => { answerFirst = resolve; }));
+    meditClient.setQueryAnswer('getCopyDocument', { kind: 'ContainersFile', location: OTHER_CELL_FILE });
     const { warn, provider } = await childTabShown(meditClient);
     const closing = await showChild(provider, '000802:A.esp');
 
     meditClient.emit(changed);
     closing.close();
     meditClient.emit({ ...changed, sequence: 2 });
-    answerFirst({ path: CELL_FILE });
+    answerFirst({ kind: 'ContainersFile', location: CELL_FILE });
 
     await vi.waitFor(() => expect(opened()).toEqual([`modbench-child-record:${OTHER_CELL_FILE}?${query}`]));
     expect(warn).not.toHaveBeenCalled();
@@ -227,7 +226,7 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
 
   it('stays, saying why in the Output, when mEdit names no document carrying its record', async () => {
     const meditClient = new InMemoryMEditClient();
-    meditClient.setQueryAnswer('getRecordFile', null);
+    meditClient.setQueryAnswer('getCopyDocument', null);
     const { warn } = await childTabShown(meditClient);
 
     meditClient.emit(changed);
@@ -239,7 +238,7 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
 
   it('stays, saying why in the Output, when VS Code shows it in no group', async () => {
     const meditClient = new InMemoryMEditClient();
-    meditClient.setQueryAnswer('getRecordFile', { path: OTHER_CELL_FILE });
+    meditClient.setQueryAnswer('getCopyDocument', { kind: 'ContainersFile', location: OTHER_CELL_FILE });
     const { warn } = await childTabShown(meditClient, false);
 
     meditClient.emit(changed);

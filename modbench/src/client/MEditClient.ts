@@ -130,7 +130,7 @@ export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount
 export type WorkingTreeStatesBeneath = components['schemas']['WorkingTreeStatesBeneath'];
 export type RecordTypeChoice = components['schemas']['RecordTypeChoice'];
 export type RenderedDocument = components['schemas']['RenderedDocument'];
-export type RecordFile = components['schemas']['RecordFile'];
+export type CopyDocument = components['schemas']['CopyDocument'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type InteriorCellBlock = components['schemas']['InteriorCellBlock'];
 export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock'];
@@ -240,8 +240,9 @@ export interface MEditClient {
   getReferencesInActiveOrTrackedPlugins(formKey: string): Promise<ReferenceResult[]>;
   /** Null: the plugin holds no such record. */
   getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null>;
-  /** Null: the plugin holds no such record. No path: the plugin is untracked, so its copy has no file. */
-  getRecordFile(plugin: PluginAddress, formKey: string): Promise<RecordFile | null>;
+  /** Null: the plugin holds no such record. `location` is the path of the copy's own file, of the file of the
+   *  record carrying it, or the name of its rendered document, as `kind` says. */
+  getCopyDocument(plugin: PluginAddress, formKey: string): Promise<CopyDocument | null>;
   /** The record whose own document the file at the absolute `path` is; null when mEdit answers the file holds
    *  no record. Rejects with mEdit's reason when it cannot read the file. */
   getRecordOfFile(path: string): Promise<RecordAddress | null>;
