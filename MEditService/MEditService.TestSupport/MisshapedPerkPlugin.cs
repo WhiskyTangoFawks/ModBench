@@ -15,6 +15,9 @@ public static class MisshapedPerkPlugin
 
     private static readonly FormKey PerkInTheMaster = new(ModKey.FromFileName("Fallout4.esm"), 0x000800);
 
+    public const uint ReadableFormId = 0x00000800;
+    public static readonly string ReadableFormKey = $"{ReadableFormId:X6}:{FileName}";
+
     private static readonly string[] ReadableEditorIds = ["HarborReadablePerkOne", "HarborReadablePerkTwo"];
 
     public static GeneratedPlugin Plugin => new(FileName, MisshapedPerks.Misshape(Readable()));
