@@ -155,6 +155,14 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([own, beta]).selectionToggle).toBe('enable');
   });
 
+  it('enable sees a selection holding a plugin whose line is disabled now, disable one whose line is enabled', () => {
+    expect(context([alpha, beta])).toMatchObject({ holdsEnabledPlugin: true, holdsDisabledPlugin: true });
+    expect(context([alpha])).toMatchObject({ holdsEnabledPlugin: true, holdsDisabledPlugin: false });
+    expect(context([beta, own])).toMatchObject({ holdsEnabledPlugin: false, holdsDisabledPlugin: true });
+    expect(context([own, lockedRow('Fallout4.esm')])).toMatchObject({ holdsEnabledPlugin: false, holdsDisabledPlugin: false });
+    expect(context([])).toMatchObject({ holdsEnabledPlugin: false, holdsDisabledPlugin: false });
+  });
+
   it('move sees a selection holding a plugin with a plugins.txt line', () => {
     expect(context([own, lockedRow('Fallout4.esm'), alpha]).holdsPluginLine).toBe(true);
     expect(context([own, lockedRow('Fallout4.esm')]).holdsPluginLine).toBe(false);
