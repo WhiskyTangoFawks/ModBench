@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.SourceAdapter;
 
@@ -19,4 +21,9 @@ internal abstract record GridCellHolder
     internal sealed record Nobody : GridCellHolder;
 
     internal sealed record Unreadable(RecordEditResult Refusal) : GridCellHolder;
+
+    internal static string FormKeyOf(JsonObject? cell) =>
+        cell?[RecordMembers.FormKey] is JsonValue key && key.TryGetValue<string>(out var formKey)
+            ? formKey
+            : throw new InvalidDataException("A cell's document names no FormKey.");
 }

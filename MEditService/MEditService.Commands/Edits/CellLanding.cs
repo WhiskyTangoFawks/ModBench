@@ -99,9 +99,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
             : MastersOf(move)
                 .Then(masters => CopiedOrNew(
                     move,
-                    resolution.NearestCopyToTheLeft(
-                        move.Plugin, move.Worldspace, copy => copy[PlacedCell.WorldspacePersistentCellMember] is JsonObject,
-                        among: masters),
+                    masters.NearestCopy(move.Worldspace, copy => copy[PlacedCell.WorldspacePersistentCellMember] is JsonObject),
                     copy => Parsed(copy, move.Worldspace)[PlacedCell.WorldspacePersistentCellMember],
                     PersistentFlag.Bit, (0, 0)))
                 .Then<JsonObject>(copied =>
@@ -138,7 +136,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
                 TakeIn(cell, PersistentFlag.TemporaryGroup, record);
                 var text = codec.RoundTrip(cell.ToJsonString(), move.Release, move.CellType);
                 return new Step<Landed>.Done(new(
-                    new SourceDocument(GridCells.FormKeyOf(cell), move.CellType, EditorIds.In(text), text),
+                    new SourceDocument(GridCellHolder.FormKeyOf(cell), move.CellType, EditorIds.In(text), text),
                     move.Worldspace));
             });
     }
@@ -151,12 +149,12 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
     }
 
     // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile; ADR-0018).
-    private Step<IReadOnlySet<string>> MastersOf(Move move) =>
-        LoadOrderResolution.MastersOf(
+    private Step<LoadOrderResolution.MastersWalk> MastersOf(Move move) =>
+        resolution.WalkAmongMastersOf(
             move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release), move.Spelled,
             $"the cell {move.Moved.FormKey} moves into", out var masters) is { } unreadable
-            ? new Step<IReadOnlySet<string>>.Refused(unreadable)
-            : new Step<IReadOnlySet<string>>.Done(masters);
+            ? new Step<LoadOrderResolution.MastersWalk>.Refused(unreadable)
+            : new Step<LoadOrderResolution.MastersWalk>.Done(masters);
 
     // The own fields of the nearest master's copy, as an override, or else a new cell native to the plugin.
     private Step<JsonObject> CopiedOrNew(Move move, LeftCopy left, Func<string, JsonNode?> cellIn, long flags, (int X, int Y) grid)

@@ -16,8 +16,7 @@ public static class CommandHandlers
 {
     public static IServiceCollection AddCommandHandlers(this IServiceCollection services)
     {
-        // One instance for the write side: it holds singletons and decides nothing per request, and
-        // a handler that built its own would answer from the same four.
+        // One instance each for the write side: they hold singletons and decide nothing per request.
         services.AddSingleton(sp => new LoadOrderResolution(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
@@ -61,7 +60,7 @@ public static class CommandHandlers
             new OverrideCopy(
                 sp.GetRequiredService<WriteTargets>(),
                 sp.GetRequiredService<RecordCopy>(),
-                sp.GetRequiredService<LoadOrderHolder>(),
+                sp.GetRequiredService<LoadOrderResolution>(),
                 sp.GetRequiredService<RecordTextCodec>(),
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(OverrideCopy))),
             new NewRecordCopy(

@@ -91,7 +91,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     {
         var containerFormKey = container.ParentFormKey;
         var sourceContainer = HeldBy(source, containerFormKey);
-        if (resolution.HighestOverrideVisibleToTheDestination(source, sourceContainer, destination, out var visibleText) is { } refused)
+        if (resolution.HighestOverrideVisibleToTheDestination(
+                source, sourceContainer, destination.Repository, destination.Plugin, out var visibleText) is { } refused)
             return refused;
         var ownFields = OwnFieldsOf(source, sourceContainer, visibleText, release);
         var withChild = ownFields with
@@ -224,7 +225,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         if (Identity(destination, worldspaceFormKey, release) is null)
         {
             var worldspace = HeldBy(source, worldspaceFormKey);
-            if (resolution.HighestOverrideVisibleToTheDestination(source, worldspace, destination, out var visibleText) is { } refused)
+            if (resolution.HighestOverrideVisibleToTheDestination(
+                source, worldspace, destination.Repository, destination.Plugin, out var visibleText) is { } refused)
                 return refused;
             worldspaceCopy = OwnFieldsOf(source, worldspace, visibleText, release);
         }

@@ -90,15 +90,14 @@ public sealed class EditRecordChangesHandler
         LeftCopy? refillCopyOnTheLeft = null;
         if (cellToLookUp is not null || refills)
         {
-            if (LoadOrderResolution.MastersOf(
+            if (_resolution.WalkAmongMastersOf(
                     repository, plugin, schemas, spelled, $"the copy of {formKey} read to its left", out var masters) is { } unreadable)
                 return unreadable;
             if (cellToLookUp is not null)
-                cellCopyOnTheLeft = _resolution.NearestCopyToTheLeft(plugin, cellToLookUp, PlacedCell.Says, among: masters);
+                cellCopyOnTheLeft = masters.NearestCopy(cellToLookUp, PlacedCell.Says);
             if (refills)
             {
-                refillCopyOnTheLeft = _resolution.NearestCopyToTheLeft(
-                    plugin, formKey, _ => true, RecordEmptying.EmptyingBits(schema), masters);
+                refillCopyOnTheLeft = masters.NearestCopy(formKey, _ => true, RecordEmptying.EmptyingBits(schema));
             }
         }
 

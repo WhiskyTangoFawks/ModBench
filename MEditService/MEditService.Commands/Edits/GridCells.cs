@@ -22,9 +22,4 @@ internal static class GridCells
         cell[RecordTypeDispatch.CellGridMember] = PlacedCell.GridAt(grid.X, grid.Y);
         return null;
     }
-
-    internal static string FormKeyOf(JsonObject? cell) =>
-        cell?[RecordMembers.FormKey] is JsonValue key && key.TryGetValue<string>(out var formKey)
-            ? formKey
-            : throw new InvalidDataException("A cell's document names no FormKey.");
 }

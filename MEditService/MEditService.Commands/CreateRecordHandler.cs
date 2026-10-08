@@ -168,7 +168,7 @@ public sealed class CreateRecordHandler
         }
 
         if (GridCells.Mint(repository, plugin, _codec, schemas[recordType], release, grid, out var cell) is { } exhausted) return exhausted;
-        var formKey = GridCells.FormKeyOf(cell);
+        var formKey = GridCellHolder.FormKeyOf(cell);
         var text = _codec.RoundTrip(cell.ToJsonString(), release, recordType);
         repository.PutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace);
 
