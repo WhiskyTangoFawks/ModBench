@@ -48,8 +48,8 @@ export function defaultModNameForFolder(folder: string): string {
 }
 
 /** Why a new mod may not take `name`, in the words install refuses it with. */
-export const installNameRefusal = (access: Pick<InstallAccess, 'adapter'>, name: string): Promise<string | undefined> =>
-  newModNameRefusal(access.adapter, name);
+export const installNameRefusal = (adapter: InstanceAdapter, name: string): Promise<string | undefined> =>
+  newModNameRefusal(adapter, name);
 
 /** Which install this is, settled by the caller: the folder on disk is checked against this
  *  claim, never consulted to decide it. */

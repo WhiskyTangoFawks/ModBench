@@ -6,10 +6,11 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
-  deleteDownloads, excludeDownloads, includeDownloads, type DownloadsAccess,
+  deleteDownloads, excludeDownloads, includeDownloads,
 } from '../downloads';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
-import { accessTo, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
+import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
+import { adapterOver, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 import { assertSelectionOutcome } from '../../test/surfacingDoubles';
 
 const NAME = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
@@ -25,11 +26,11 @@ const LOCKED_ARCHIVE = `downloads/${LOCKED}`;
 
 describe('downloads commands over the committed corpus fixture, since these verbs mutate MO2-owned state', () => {
   let dir: string;
-  let access: DownloadsAccess;
+  let adapter: InstanceAdapter;
 
   beforeEach(async () => {
     dir = cloneCorpusFixture();
-    access = accessTo(dir);
+    adapter = adapterOver(dir);
     await writeFile(join(dir, MANUAL_ARCHIVE), 'archive bytes');
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
@@ -41,7 +42,7 @@ describe('downloads commands over the committed corpus fixture, since these verb
   it('exclude writes one sidecar and nothing else, and the row reads back excluded', async () => {
     const before = await snapshotTree(dir);
 
-    assertSelectionOutcome(await excludeDownloads(access, [NAME]), { landed: [NAME], refused: [] });
+    assertSelectionOutcome(await excludeDownloads(adapter, [NAME]), { landed: [NAME], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
     expect((await excludedOrFalseWithNoMetadata(NAME))).toBe(true);
@@ -50,17 +51,17 @@ describe('downloads commands over the committed corpus fixture, since these verb
   it('excluding a metaless archive creates its sidecar and nothing else', async () => {
     const before = await snapshotTree(dir);
 
-    assertSelectionOutcome(await excludeDownloads(access, [MANUAL]), { landed: [MANUAL], refused: [] });
+    assertSelectionOutcome(await excludeDownloads(adapter, [MANUAL]), { landed: [MANUAL], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([MANUAL_META]));
     expect((await excludedOrFalseWithNoMetadata(MANUAL))).toBe(true);
   });
 
   it('include writes one sidecar and nothing else, and the row reads back visible', async () => {
-    await excludeDownloads(access, [NAME]);
+    await excludeDownloads(adapter, [NAME]);
     const before = await snapshotTree(dir);
 
-    assertSelectionOutcome(await includeDownloads(access, [NAME]), { landed: [NAME], refused: [] });
+    assertSelectionOutcome(await includeDownloads(adapter, [NAME]), { landed: [NAME], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
     expect((await excludedOrFalseWithNoMetadata(NAME))).toBe(false);
@@ -69,27 +70,27 @@ describe('downloads commands over the committed corpus fixture, since these verb
   it('including a metaless archive touches nothing — visible is already its default', async () => {
     const before = await snapshotTree(dir);
 
-    assertSelectionOutcome(await includeDownloads(access, [MANUAL]), { landed: [MANUAL], refused: [] });
+    assertSelectionOutcome(await includeDownloads(adapter, [MANUAL]), { landed: [MANUAL], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
     expect((await excludedOrFalseWithNoMetadata(MANUAL))).toBe(false);
   });
 
   it('excluding an already excluded download touches nothing', async () => {
-    await excludeDownloads(access, [NAME]);
+    await excludeDownloads(adapter, [NAME]);
     const before = await snapshotTree(dir);
 
-    assertSelectionOutcome(await excludeDownloads(access, [NAME]), { landed: [NAME], refused: [] });
+    assertSelectionOutcome(await excludeDownloads(adapter, [NAME]), { landed: [NAME], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
   });
 
   it('including an already included download touches nothing, with a real removed=false key on disk', async () => {
-    await excludeDownloads(access, [NAME]);
-    await includeDownloads(access, [NAME]);
+    await excludeDownloads(adapter, [NAME]);
+    await includeDownloads(adapter, [NAME]);
     const before = await snapshotTree(dir);
 
-    assertSelectionOutcome(await includeDownloads(access, [NAME]), { landed: [NAME], refused: [] });
+    assertSelectionOutcome(await includeDownloads(adapter, [NAME]), { landed: [NAME], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
   });
@@ -97,7 +98,7 @@ describe('downloads commands over the committed corpus fixture, since these verb
   it('excludeDownloads excludes every landing name and refuses the one gone from disk, by name', async () => {
     const before = await snapshotTree(dir);
 
-    const outcome = await excludeDownloads(access, [NAME, 'Gone Archive.7z', MANUAL]);
+    const outcome = await excludeDownloads(adapter, [NAME, 'Gone Archive.7z', MANUAL]);
 
     assertSelectionOutcome(outcome, {
       landed: [NAME, MANUAL],
@@ -109,11 +110,11 @@ describe('downloads commands over the committed corpus fixture, since these verb
   });
 
   it('includeDownloads includes every landing name and refuses the one gone from disk, by name', async () => {
-    await excludeDownloads(access, [NAME]);
-    await excludeDownloads(access, [MANUAL]);
+    await excludeDownloads(adapter, [NAME]);
+    await excludeDownloads(adapter, [MANUAL]);
     const before = await snapshotTree(dir);
 
-    const outcome = await includeDownloads(access, [NAME, 'Gone Archive.7z', MANUAL]);
+    const outcome = await includeDownloads(adapter, [NAME, 'Gone Archive.7z', MANUAL]);
 
     assertSelectionOutcome(outcome, {
       landed: [NAME, MANUAL],
@@ -134,7 +135,7 @@ describe('downloads commands over the committed corpus fixture, since these verb
     const before = await snapshotTree(dir);
     const trashed: string[] = [];
 
-    const outcome = await deleteDownloads(access, [fileOf(NAME)], async (path) => {
+    const outcome = await deleteDownloads(adapter, [fileOf(NAME)], async (path) => {
       trashed.push(path);
       await rm(path);
     });
@@ -150,7 +151,7 @@ describe('downloads commands over the committed corpus fixture, since these verb
   it('a trash failure on the archive leaves the archive and its sidecar in place, and refuses', async () => {
     const before = await snapshotTree(dir);
 
-    const outcome = await deleteDownloads(access, [fileOf(NAME)], async (path) => {
+    const outcome = await deleteDownloads(adapter, [fileOf(NAME)], async (path) => {
       if (path === join(dir, ARCHIVE)) throw new Error('disk full');
       await rm(path);
     });
@@ -165,7 +166,7 @@ describe('downloads commands over the committed corpus fixture, since these verb
   it('a trash failure on the sidecar after the archive landed reports the delete as done, not a refusal', async () => {
     const before = await snapshotTree(dir);
 
-    const outcome = await deleteDownloads(access, [fileOf(NAME)], async (path) => {
+    const outcome = await deleteDownloads(adapter, [fileOf(NAME)], async (path) => {
       if (path === join(dir, META)) throw new Error('disk full');
       await rm(path);
     });
@@ -181,7 +182,7 @@ describe('downloads commands over the committed corpus fixture, since these verb
     await writeFile(join(dir, LOCKED_ARCHIVE), 'archive bytes');
     const before = await snapshotTree(dir);
 
-    const outcome = await deleteDownloads(access, [fileOf(NAME), fileOf(LOCKED), fileOf(MANUAL)], async (path) => {
+    const outcome = await deleteDownloads(adapter, [fileOf(NAME), fileOf(LOCKED), fileOf(MANUAL)], async (path) => {
       if (path === join(dir, LOCKED_ARCHIVE)) throw new Error('EPERM: operation not permitted');
       await rm(path);
     });

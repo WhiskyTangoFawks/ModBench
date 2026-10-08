@@ -9,7 +9,7 @@ import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, snapshotTree,
 } from './corpusFixture';
-import { accessTo, providedPluginsIn, readPluginLines } from './adapterOver';
+import { adapterOver, providedPluginsIn, readPluginLines } from './adapterOver';
 
 const NOT_INDEXED = { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) };
 const moving = (...names: string[]) => names.map((name) => ({ name, origin: 'SomeMod' }));
@@ -32,7 +32,7 @@ describe('plugins.txt corpus', () => {
   it('setPluginsEnabled(false) flips several lines in one write, touching only the active profile\'s plugins.txt', async () => {
     const before = await snapshotTree(dir);
     const orderBefore = await pluginOrder(dir);
-    const result = await setPluginsEnabled(accessTo(dir), PROFILE, ['Tracked Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], false);
+    const result = await setPluginsEnabled(adapterOver(dir), PROFILE, ['Tracked Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], false);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
@@ -48,7 +48,7 @@ describe('plugins.txt corpus', () => {
 
   it('setPluginsParticipation flips a mixed selection in one write, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    const result = await setPluginsParticipation(accessTo(dir), PROFILE, [
+    const result = await setPluginsParticipation(adapterOver(dir), PROFILE, [
       { name: 'Tracked Patch Mod.esp', enabled: false },
       { name: 'NonAsciiRetexture.esp', enabled: true },
     ]);
@@ -66,7 +66,7 @@ describe('plugins.txt corpus', () => {
 
   it('syncPlugins converges the fixture on disk, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    const result = await pluginSyncOver(accessTo(dir))({
+    const result = await pluginSyncOver(adapterOver(dir))({
       profile: PROFILE, pluginOrder: await readPluginLines(dir), provided: await providedPluginsIn(dir), inData: GAME_DATA_FOLDER, loadedWithNoLine: [],
     });
     const after = await snapshotTree(dir);
@@ -81,7 +81,7 @@ describe('plugins.txt corpus', () => {
 
   it('reorderPlugins moves a plugin within load order, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    await reorderPlugins(accessTo(dir), NOT_INDEXED, PROFILE, moving('NonAsciiRetexture.esp'), { kind: 'winningEnd' }, []);
+    await reorderPlugins(adapterOver(dir), NOT_INDEXED, PROFILE, moving('NonAsciiRetexture.esp'), { kind: 'winningEnd' }, []);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 

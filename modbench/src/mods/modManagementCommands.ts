@@ -26,10 +26,10 @@ import {
   uninstallMods,
   renameModNameRefusal,
   separatorNameRefusal,
-  type ModlistAccess,
   type MovePlace,
   type OriginFileMark,
 } from '../modlist/modlist';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { SelectionResult } from '../coreLib/commandResult';
 import { FILE_MARKS, fileLabel } from './modFiles';
 import { endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
@@ -41,7 +41,7 @@ import { reportFailure } from '../drivingLib/reportFailure';
 // modbench.mod.enable / modbench.mod.disable: the whole selection through the entry (mods.md,
 // Menus and keys, story 3). Each mod lands on its own (commands.md, "A selection is one gesture").
 export function registerModEnableCommands(
-  access: ModlistAccess, instance: Pick<Instance, 'value' | 'refresh'>,
+  adapter: InstanceAdapter, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
   const run = (enabled: boolean) => (entry: GestureEntry<ModlistNode>) => {
@@ -49,7 +49,7 @@ export function registerModEnableCommands(
     if (modNames.length === 0) return;
     const verb = enabled ? 'enable' : 'disable';
     return runModsWriting(instance, async () => {
-      const result = await setModsEnabled(access, instance.value.activeProfile, modNames, enabled);
+      const result = await setModsEnabled(adapter, instance.value.activeProfile, modNames, enabled);
       if (!result.applied) {
         reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
         return;
@@ -69,7 +69,7 @@ export function registerModEnableCommands(
 // modbench.mod.excludeFile / modbench.mod.includeFile: the direction is the command's, so a mixed
 // selection takes the right-clicked row's (mods.md, Menus and keys, story 7).
 export function registerFileExclusionCommands(
-  access: ModlistAccess, instance: Pick<Instance, 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
+  adapter: InstanceAdapter, instance: Pick<Instance, 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
   const run = (mark: OriginFileMark) => (entry: GestureEntry<ModlistNode>) => {
     const rows = pluralArgument(entry, 'file');
@@ -77,7 +77,7 @@ export function registerFileExclusionCommands(
     const { verb } = FILE_MARKS[mark];
     const refs = rows.map((row) => row.ref);
     return runModsWriting(instance, async () => {
-      const outcome = await markFiles(access, refs, mark);
+      const outcome = await markFiles(adapter, refs, mark);
       reporter.selectionOutcome(`Could not ${verb} ${outcome.refused.length} of ${refs.length} files.`, outcome, fileLabel);
     });
   };
@@ -96,7 +96,7 @@ const SEPARATOR_PLACES =
   'A separator lands beside another separator or at an end of mod order, never beside a mod or among the ungrouped mods.';
 
 export function registerModMoveCommand(
-  access: ModlistAccess, instance: Pick<Instance, 'value' | 'refresh'>, view: MoveView, reporter: Reporter,
+  adapter: InstanceAdapter, instance: Pick<Instance, 'value' | 'refresh'>, view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
   const report = (kind: 'mod' | 'separator', names: readonly string[], result: SelectionResult<string>) => {
     const noun = `${kind}s`;
@@ -122,7 +122,7 @@ export function registerModMoveCommand(
       const target = given ?? await pick(modsMovePick(entries, direction, modNames), 'Move to…');
       if (!target) return;
       await runModsWriting(instance, async () =>
-        report('mod', modNames, await moveMods(access, activeProfile, modNames, target.place, target.end)));
+        report('mod', modNames, await moveMods(adapter, activeProfile, modNames, target.place, target.end)));
     } else if (separatorNames.length > 0 && modNames.length === 0) {
       const target = given ?? await pick(separatorsMovePick(entries, direction, separatorNames), 'Move above…');
       if (!target) return;
@@ -132,7 +132,7 @@ export function registerModMoveCommand(
         return;
       }
       await runModsWriting(instance, async () =>
-        report('separator', separatorNames, await moveSeparators(access, activeProfile, separatorNames, place, end)));
+        report('separator', separatorNames, await moveSeparators(adapter, activeProfile, separatorNames, place, end)));
     }
   });
 }
@@ -148,7 +148,7 @@ async function confirmUninstall(names: readonly string[], ask: AskQuestion): Pro
 }
 
 interface ModContextDeps {
-  access: ModlistAccess;
+  adapter: InstanceAdapter;
   instance: Pick<Instance, 'value' | 'refresh'>;
   viewSelection: () => readonly ModlistNode[];
   reporter: Reporter;
@@ -158,18 +158,18 @@ interface ModContextDeps {
 }
 
 export function registerModContextCommands(
-  { access, instance, viewSelection, reporter, ask, trash, log }: ModContextDeps,
+  { adapter, instance, viewSelection, reporter, ask, trash, log }: ModContextDeps,
 ): vscode.Disposable[] {
   return [
       registerGesture('modbench.mod.rename', viewSelection, async (entry) => {
         const node = singularArgument(entry, 'mod');
         if (!node) return;
         const oldName = node.mod.name;
-        const newName = await promptRename('Rename mod', oldName, modNamePrompt(access, instance, oldName));
+        const newName = await promptRename('Rename mod', oldName, modNamePrompt(adapter, instance, oldName));
         if (newName === undefined) return;
         await runModsWriting(instance, async () => {
           const { activeProfile, profiles, managerNames } = instance.value;
-          const result = await renameMod(access, activeProfile, profiles, oldName, newName);
+          const result = await renameMod(adapter, activeProfile, profiles, oldName, newName);
           if (!result.applied) {
             reporter.report('error', 'Failed to rename mod.', result.refusal);
             return;
@@ -187,7 +187,7 @@ export function registerModContextCommands(
         if (mods.length === 0) return;
         if (!(await confirmUninstall(mods.map((m) => m.name), ask))) return;
         await runModsWriting(instance, async () => {
-          const result = await uninstallMods(access, instance.value.activeProfile, mods, trash);
+          const result = await uninstallMods(adapter, instance.value.activeProfile, mods, trash);
           if (!result.applied) {
             reporter.report('error', 'Failed to uninstall mods.', result.refusal);
             return;
@@ -207,15 +207,15 @@ export function registerModContextCommands(
   ];
 }
 function separatorNamePrompt(
-  access: ModlistAccess, instance: Pick<Instance, 'value'>, own?: string,
+  adapter: InstanceAdapter, instance: Pick<Instance, 'value'>, own?: string,
 ): (value: string) => Promise<string | undefined> {
-  return async (value) => (value === '' ? undefined : separatorNameRefusal(access, instance.value.activeProfile, value, own));
+  return async (value) => (value === '' ? undefined : separatorNameRefusal(adapter, instance.value.activeProfile, value, own));
 }
 
 function modNamePrompt(
-  access: ModlistAccess, instance: Pick<Instance, 'value'>, own: string,
+  adapter: InstanceAdapter, instance: Pick<Instance, 'value'>, own: string,
 ): (value: string) => Promise<string | undefined> {
-  return async (value) => (value === '' ? undefined : renameModNameRefusal(access, instance.value.activeProfile, value, own));
+  return async (value) => (value === '' ? undefined : renameModNameRefusal(adapter, instance.value.activeProfile, value, own));
 }
 
 async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion): Promise<boolean> {
@@ -226,7 +226,7 @@ async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion
 }
 
 export function registerSeparatorCommands(
-  access: ModlistAccess, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  adapter: InstanceAdapter, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   viewSelection: () => readonly ModlistNode[],
 ): vscode.Disposable[] {
   return [
@@ -234,12 +234,12 @@ export function registerSeparatorCommands(
         const node = singularArgument(entry, 'separator');
         if (!node) return;
         const oldName = node.separator.name;
-        const newName = await promptRename('Rename separator', oldName, separatorNamePrompt(access, instance, oldName));
+        const newName = await promptRename('Rename separator', oldName, separatorNamePrompt(adapter, instance, oldName));
         if (newName === undefined) return;
         const failed = 'Failed to rename separator.';
         await runModsWriting(instance, async () => {
           try {
-            const result = await renameSeparator(access, instance.value.activeProfile, oldName, newName);
+            const result = await renameSeparator(adapter, instance.value.activeProfile, oldName, newName);
             if (!result.applied) reporter.report('error', failed, result.refusal);
           } catch (err) {
             reporter.report('error', failed, errorMessage(err));
@@ -250,7 +250,7 @@ export function registerSeparatorCommands(
         const node = singularArgument(entry, 'mod', 'separator');
         if (!node) return;
         const name = await vscode.window.showInputBox({
-          prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(access, instance),
+          prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(adapter, instance),
         });
         if (!name) return;
         const anchor = node.kind === 'mod' ? node.mod : node.separator;
@@ -258,7 +258,7 @@ export function registerSeparatorCommands(
         await runModsWriting(instance, async () => {
           try {
             const result = await insertSeparator(
-              access, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name });
+              adapter, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name });
             if (!result.applied) reporter.report('error', failed, result.refusal);
           } catch (err) {
             reporter.report('error', failed, errorMessage(err));
@@ -270,7 +270,7 @@ export function registerSeparatorCommands(
         if (names.length === 0) return;
         if (!(await confirmSeparatorDelete(names, ask))) return;
         await runModsWriting(instance, async () => {
-          const result = await deleteSeparators(access, instance.value.activeProfile, names, trash);
+          const result = await deleteSeparators(adapter, instance.value.activeProfile, names, trash);
           if (!result.applied) {
             reporter.report('error', 'Failed to delete separators.', result.refusal);
             return;
@@ -289,17 +289,17 @@ export function registerSeparatorCommands(
   ];
 }
 export function registerCreateEmptyModCommand(
-  access: ModlistAccess, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
+  adapter: InstanceAdapter, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.mod.createEmpty', async () => {
     const name = await vscode.window.showInputBox({
       prompt: 'New mod name', placeHolder: 'My New Mod',
-      validateInput: (value) => installNameRefusal(access, value),
+      validateInput: (value) => installNameRefusal(adapter, value),
     });
     if (!name) return;
     await runModsWriting(instance, async () => {
       try {
-        const outcome = await createEmptyMod(access, instance.value.activeProfile, name);
+        const outcome = await createEmptyMod(adapter, instance.value.activeProfile, name);
         if (!outcome.applied) {
           reporter.report('error', `Failed to create "${name}".`, outcome.refusal);
           return;

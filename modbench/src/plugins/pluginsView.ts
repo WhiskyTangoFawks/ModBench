@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress } from '../client';
 import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
-import { type PluginsAccess } from '../pluginsCommands/plugins';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
@@ -43,7 +43,7 @@ import type { StatusBar } from './statusBar';
 export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, slot, enabled and winning for every plugin. */
   instance: PluginsInstance & Pick<Instance, 'quiet'>;
-  access: PluginsAccess;
+  adapter: InstanceAdapter;
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: RecordBrowser;
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the index
@@ -83,7 +83,7 @@ export interface PluginsView extends vscode.Disposable {
 
 // The one Plugins tree (ADR-0017; target-architecture.d2, Plugins).
 export function createPluginsView(deps: PluginsViewDeps): PluginsView {
-  const { instance, access, recordBrowser, client, pluginSync, channel, statusBar, registerRepositories, log, reporterFor } = deps;
+  const { instance, adapter, recordBrowser, client, pluginSync, channel, statusBar, registerRepositories, log, reporterFor } = deps;
   const registerInBackground = () => { void registerRepositories(); };
   const loadOrderPut = reportSyncFailures('put load order', 'The load order is not sent', (line) => channel.error(`[loadOrder] ${line}`));
   const pluginFile = (plugin: PluginAddress) => tree.pluginFile(plugin);
@@ -135,9 +135,9 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     { dispose: unsubscribe },
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, lens),
     ...registerPluginEnableCommands(
-      access, instance, selected.rows, reporterFor('pluginListTree.enableDisable')),
+      adapter, instance, selected.rows, reporterFor('pluginListTree.enableDisable')),
     ...registerPluginGestures(deps, { tree, view, progress, selection: selected.rows, compileProblems }),
-    registerPluginMoveCommand(access, client, instance, { selection: selected.rows, movePlaces: (names) => tree.movePlaces(names) },
+    registerPluginMoveCommand(adapter, client, instance, { selection: selected.rows, movePlaces: (names) => tree.movePlaces(names) },
       reporterFor('pluginListTree.move')),
     ...registerFilterCommands({
       client, treeProvider: recordBrowser, refreshMatchingPlugins: () => { void tree.facts.refresh(); },
@@ -146,7 +146,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     ...registerPluginSortCommands(tree),
     registerRevealInExplorerCommand(tree, reporterFor('pluginListTree.revealInExplorer'), selected.rows),
     view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
-      e, access, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), instance)),
+      e, adapter, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), instance)),
     // Grays an implicit master's row the way the reference tool grays COL_NAME for a forceLoaded
     // plugin — live against the tree's own locked row URIs so it never drifts from what is rendered.
     vscode.window.registerFileDecorationProvider(new ImplicitMasterDecorationProvider(() => tree.lockedRowUris())),
@@ -164,7 +164,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
 }
 
 function registerPluginGestures(
-  { instance, access, client, ask, registerRepositories, pluginSync, reporterFor, recordWrite, trackSelection, modsView }: PluginsViewDeps,
+  { instance, adapter, client, ask, registerRepositories, pluginSync, reporterFor, recordWrite, trackSelection, modsView }: PluginsViewDeps,
   { tree, view, progress, selection, compileProblems }: {
     tree: PluginsTreeProvider; view: vscode.TreeView<PluginsTreeNode>; progress: PluginsViewProgress;
     selection: () => readonly PluginsTreeNode[]; compileProblems: CompileProblems;
@@ -184,7 +184,7 @@ function registerPluginGestures(
       client, reporter: reporterFor('record.create'), write: recordWrite,
       createdRecords: createdRecordSelection({ client, rowOf: (place, formKey) => tree.recordRow(place, formKey), view }),
     }, selection),
-    registerRenamePluginCommand({ client, adapter: access.adapter, ask, instance, reporter: reporterFor('plugin.rename') }, selection),
+    registerRenamePluginCommand({ client, adapter, ask, instance, reporter: reporterFor('plugin.rename') }, selection),
     registerCreatePluginCommand(client, instance, reporterFor('newPlugin')),
     vscode.commands.registerCommand('modbench.plugin.sync', (value: InstanceValue) => pluginSync.run(value.pluginSyncArguments)),
   ];

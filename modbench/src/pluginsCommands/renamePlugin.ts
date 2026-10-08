@@ -6,9 +6,9 @@ import { isRefused, type MEditClient } from '../client';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
-import type { PluginsAccess } from './plugins';
 
-export interface PluginRenameAccess extends PluginsAccess {
+export interface PluginRenameAccess {
+  readonly adapter: InstanceAdapter;
   readonly client: Pick<MEditClient, 'renameSource'>;
 }
 

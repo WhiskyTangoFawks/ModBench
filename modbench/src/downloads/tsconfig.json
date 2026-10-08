@@ -11,6 +11,7 @@
     { "path": "../downloadsCommands" },
     { "path": "../drivingLib" },
     { "path": "../install" },
+    { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
     { "path": "../ports" },
     { "path": "../wire" }

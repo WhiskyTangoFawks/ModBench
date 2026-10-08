@@ -22,7 +22,7 @@ import { PluginNode } from '../PluginsTreeProvider';
 import { recordRow } from './browserRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { recordSummaryFixture } from '../../client/test/fixtures';
-import { accessTo } from '../../test/mo2/adapterOver';
+import { adapterOver } from '../../test/mo2/adapterOver';
 import { progressSteps } from '../../test/recordedProgress';
 
 let dir: string;
@@ -46,7 +46,7 @@ const toggled = (...items: [string, 0 | 1][]) => ({
   items: items.map(([name, state]) => [new PluginNode({ name, enabled: state === 0 }, 'SomeMod'), state] as [PluginNode, 0 | 1]),
 });
 const toggle = (event: ReturnType<typeof toggled>, reporter = recordingReporter()) =>
-  onPluginCheckboxChanged(event, accessTo(dir), profile, reporter, instance);
+  onPluginCheckboxChanged(event, adapterOver(dir), profile, reporter, instance);
 
 describe('onPluginCheckboxChanged', () => {
   it('enables the plugin in plugins.txt and says nothing on a full landing', async () => {
@@ -96,7 +96,7 @@ describe('onPluginCheckboxChanged', () => {
   it('ignores a non-plugin row (a record-tree row sharing the merged view)', async () => {
     const recordNode = await recordRow(recordSummaryFixture(), 'Data/');
 
-    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, accessTo(dir), profile, recordingReporter(), instance);
+    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, adapterOver(dir), profile, recordingReporter(), instance);
 
     expect(await mtime()).toBe(LONG_AGO.getTime());
   });
@@ -128,7 +128,7 @@ describe('a check box ends when the read lands (common.md, A gesture that writes
 
   it('opens no progress for a record row', async () => {
     await onPluginCheckboxChanged(
-      { items: [[await recordRow(recordSummaryFixture(), 'Data/'), 1]] }, accessTo(dir), profile, recordingReporter(), instance);
+      { items: [[await recordRow(recordSummaryFixture(), 'Data/'), 1]] }, adapterOver(dir), profile, recordingReporter(), instance);
 
     expect(progressSteps).toEqual([]);
   });

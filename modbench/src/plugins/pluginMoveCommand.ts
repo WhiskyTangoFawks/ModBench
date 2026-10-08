@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress } from '../client';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import { reorderPlugins, type PluginsAccess, type PluginsDrop } from '../pluginsCommands/plugins';
+import { reorderPlugins, type PluginsDrop } from '../pluginsCommands/plugins';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
@@ -24,7 +25,7 @@ interface MoveView extends Pick<PluginsTreeProvider, 'movePlaces'> {
  *  land. Left out, the plugins are the view's selection and the drop is picked. A tree drop is
  *  one entry point into it. */
 export function registerPluginMoveCommand(
-  access: PluginsAccess, masters: Pick<MEditClient, 'getPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
+  adapter: InstanceAdapter, masters: Pick<MEditClient, 'getPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
   view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.plugin.move', async (plugins?: unknown, drop?: unknown) => {
@@ -39,7 +40,7 @@ export function registerPluginMoveCommand(
     try {
       const { activeProfile, pluginsLoadedWithNoLine } = instance.value;
       const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => reorderPlugins(
-        access, masters, activeProfile, moving, target, (pluginsLoadedWithNoLine ?? []).map(({ name }) => name)));
+        adapter, masters, activeProfile, moving, target, (pluginsLoadedWithNoLine ?? []).map(({ name }) => name)));
       if (!result.applied) reporter.report('error', 'Could not move plugins.', result.refusal);
     } catch (e) {
       reporter.report('error', 'Failed to move plugins.', errorMessage(e));

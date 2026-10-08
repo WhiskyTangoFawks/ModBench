@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { PluginNode, PluginsTreeNode } from './PluginsTreeProvider';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
 import { pluralArgument, registerGesture, type GestureEntry } from '../drivingLib/gestureEntry';
 import {
-  setPluginsEnabled, type PluginParticipation, type PluginsAccess,
+  setPluginsEnabled, type PluginParticipation,
 } from '../pluginsCommands/plugins';
 import type { SelectionResult } from '../coreLib/commandResult';
 import type { Reporter } from '../ports/reporter';
@@ -13,7 +14,7 @@ import type { Reporter } from '../ports/reporter';
 // modbench.plugin.enable / modbench.plugin.disable: the whole selection through the entry
 // (plugins.md, Menus and keys, story 3 — behaves as in Mods).
 export function registerPluginEnableCommands(
-  access: PluginsAccess, instance: Pick<Instance, 'value' | 'refresh'>,
+  adapter: InstanceAdapter, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly PluginsTreeNode[], reporter: Reporter,
 ): vscode.Disposable[] {
   const run = (enabled: boolean) => async (entry: GestureEntry<PluginsTreeNode>) => {
@@ -21,7 +22,7 @@ export function registerPluginEnableCommands(
     if (rows.length === 0) return;
     const names = rows.map((n: PluginNode) => n.plugin.name);
     await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, async () => {
-      const result = await setPluginsEnabled(access, instance.value.activeProfile, names, enabled);
+      const result = await setPluginsEnabled(adapter, instance.value.activeProfile, names, enabled);
       reportPluginsParticipation(result, names.map((name) => ({ name, enabled })), reporter);
     });
   };

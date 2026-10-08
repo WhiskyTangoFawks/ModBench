@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { Instance, InstanceView } from '../instanceLoader/instance';
-import type { DownloadsAccess } from '../downloadsCommands/downloads';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
@@ -16,7 +16,7 @@ import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { downloadsKeyContext } from './keyContext';
 
 interface DownloadsViewDeps {
-  access: DownloadsAccess;
+  adapter: InstanceAdapter;
   instance: InstanceView & Pick<Instance, 'refresh'>;
   reporter: Reporter;
   ask: AskQuestion;
@@ -33,7 +33,7 @@ interface DownloadsView extends vscode.Disposable {
 
 /** Rows come from the Instance value alone (ADR-0015). */
 export function createDownloadsView(
-  { access, instance, reporter, ask, trash, log, logUnresolved }: DownloadsViewDeps,
+  { adapter, instance, reporter, ask, trash, log, logUnresolved }: DownloadsViewDeps,
 ): DownloadsView {
   const provider = new DownloadsProvider({ instance }); // disposes its Instance subscriptions
   const view = vscode.window.createTreeView('modbench.downloads', {
@@ -74,7 +74,7 @@ export function createDownloadsView(
     registerDownloadsSortCommand(provider),
     ...registerDownloadsExcludedToggleCommands(provider),
     ...registerDownloadsSingleRowCommands(reporter, () => view.selection),
-    ...registerDownloadsMultiRowCommands(access, instance, reporter, ask, trash, log, () => view.selection),
+    ...registerDownloadsMultiRowCommands(adapter, instance, reporter, ask, trash, log, () => view.selection),
     nameFilter,
     view,
     provider,
