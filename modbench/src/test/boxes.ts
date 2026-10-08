@@ -1,5 +1,5 @@
-// The Modbench column of the zoom-out, docs/architecture/target-architecture.d2, joined to the
-// box folders on disk; a box's references are its tsconfig's.
+// The Modbench column of the zoom-out, docs/architecture/target-architecture.d2, and each band's
+// lib, which it does not draw, joined to the box folders on disk; a box's references are its tsconfig's.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import ts from 'typescript';
@@ -13,7 +13,7 @@ function boxIdsByBand(): Record<string, string[]> {
   for (const line of readFileSync(ZOOM_OUT, 'utf8').split('\n')) {
     const container = /^modbench_(\w+): "/.exec(line)?.[1];
     if (container !== undefined) {
-      current = [];
+      current = [`${container}lib`];
       bands[container] = current;
       continue;
     }

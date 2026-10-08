@@ -30,7 +30,7 @@ One or two sentences: what the user can do once this epic ships, from the user's
 
 ## Scope
 
-The spec lines this epic makes true, as pointers. One bullet per file.
+The spec lines this epic makes true, as pointers. One bullet per file. A caption is never a scope line: it orients, and no epic makes its words true.
 
 <scope-example>
 

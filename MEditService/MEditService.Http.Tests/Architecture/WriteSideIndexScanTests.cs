@@ -44,8 +44,8 @@ public sealed class WriteSideIndexScanTests
         Assert.True(walked > 5, $"The endpoint scan walked only {walked} files under {EndpointRoot}.");
         Assert.True(
             named.Count == 0,
-            "An endpoint names the Source repository. Resolution under the load order is what the "
-            + "Commands caption hides:\n"
+            "An endpoint names the Source repository. A write reaches it only through Commands "
+            + "(ADR-0014):\n"
             + string.Join("\n", named));
     }
 

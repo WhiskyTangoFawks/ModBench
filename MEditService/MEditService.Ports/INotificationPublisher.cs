@@ -8,7 +8,7 @@ public interface INotificationPublisher
     void Publish(INotification notification);
 }
 
-/// <summary>One of the notification kinds the Ports box names (target-architecture.d2
+/// <summary>One notification mEdit sends its clients (target-architecture.d2
 /// medit_kernel.ports).</summary>
 public interface INotification;
 

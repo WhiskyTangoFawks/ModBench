@@ -18,7 +18,7 @@ public sealed class PluginPortSurfaceTests
         Assert.True(
             offenders.Count == 0,
             "A member of IPluginAdapter names a live Mutagen object, directly or through a value it "
-            + "returns. The Plugin adapter hides the game assemblies (target-architecture.d2), so the "
+            + "returns. The Plugin adapter hides the binary format (target-architecture.d2), so the "
             + "port answers in documents and facts:\n"
             + string.Join("\n", offenders));
     }
