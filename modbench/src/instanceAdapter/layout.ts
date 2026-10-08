@@ -138,7 +138,7 @@ export const isPluginSourcePath = (path: string): boolean => path.split(/[\\/]/)
 const REPOSITORY_OR_PLUGIN_SOURCE_ENTRIES = new Set([GIT_DIR, '.gitignore', PLUGIN_SOURCE_FOLDER]);
 
 /** Whether an entry at a mod folder's root is its repository or its plugin source (ADR-0007),
- *  which an upgrade keeps (target-architecture.d2, install) and no release supplies. */
+ *  which an upgrade keeps (mods.md, What install does) and no release supplies. */
 export const isRepositoryOrPluginSource = (name: string): boolean => REPOSITORY_OR_PLUGIN_SOURCE_ENTRIES.has(nameKey(name));
 
 // Watch patterns, POSIX-separated and relative to the instance root: a `RelativePattern` takes a

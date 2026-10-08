@@ -126,7 +126,8 @@ def reaches_its_bands_lib(src_id: str, dst_id: str):
 
 
 def load_boxes(zoom_out: Path):
-    """Every box the zoom-out draws, a part of a box included, by column and name:
+    """Every box the zoom-out draws, a part of a box included, and each band's lib, which it
+    does not draw, by column and name:
     {'medit': {'index': 'medit_readmodel.index', 'queries': 'medit_readmodel.index.queries'}}."""
     boxes = {}
     column, path = None, []
@@ -134,6 +135,7 @@ def load_boxes(zoom_out: Path):
         m = CONTAINER_RE.match(line)
         if m:
             column, path = m.group('column'), [f'{m.group("column")}_{m.group("band")}']
+            boxes.setdefault(column, {})[f'{m.group("band")}lib'] = f'{path[0]}.{m.group("band")}lib'
             continue
         m = MEMBER_RE.match(line)
         if m and column:

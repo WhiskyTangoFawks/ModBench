@@ -22,7 +22,7 @@ The run never waits. A tactical question is decided, and a strategic one parks i
 
 The stack is an epic's `ready-for-agent` sub-issues with their blocking edges. Edges decide what can start. Boxes decide what can run beside what.
 
-A box is a module `docs/architecture/target-architecture.d2` draws, and its folder is the unit the kernel scans hold: a folder under `modbench/src/`, or an `MEditService.*` project. Read each ticket once, with its comments and its epic's comments, and name the boxes it touches and the tier it runs on: the one its Notes name, else Sonnet. Raise a ticket's tier only when its text leaves a judgement the chain does not answer, and say why in its lane line. A ticket you would raise for size alone is too coarse: park it for the user to split rather than spend the larger tier on it. Cut the stack into lanes so that tickets touching one box share a lane. Work is serial within a lane and parallel across lanes. Run 3 lanes at most.
+A box is a module `docs/architecture/target-architecture.d2` draws, or a band's lib, and its folder is the unit the kernel scans hold: a folder under `modbench/src/`, or an `MEditService.*` project. Read each ticket once, with its comments and its epic's comments, and name the boxes it touches and the tier it runs on: the one its Notes name, else Sonnet. Raise a ticket's tier only when its text leaves a judgement the chain does not answer, and say why in its lane line. A ticket you would raise for size alone is too coarse: park it for the user to split rather than spend the larger tier on it. Cut the stack into lanes so that tickets touching one box share a lane. Work is serial within a lane and parallel across lanes. Run 3 lanes at most.
 
 Three things sit outside that rule:
 

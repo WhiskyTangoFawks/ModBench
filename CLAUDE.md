@@ -39,7 +39,7 @@ principle > ADR > spec (`docs/architecture/`) > code. The higher level wins. An 
   - It adds or changes a gesture, an entry point, or a state, row or status that a view shows and no spec draws.
   - It needs a module or port that `docs/architecture/` does not draw.
   - It needs a reference that `layers.d2` forbids.
-  - It adds a public member that exposes what its box's caption hides, or does what another box owns.
+  - It moves a responsibility from one box to another.
   - It meets two documents at one level that disagree.
 - A copy of another box's code is never the way around a stop; ADR-0014 rejects it.
 - Report every break: two documents in the chain that disagree about the work. Build to the higher one. A break report and a stop quote the texts at stake, name their levels and say what you built; the maintainer decides every change to their documents.

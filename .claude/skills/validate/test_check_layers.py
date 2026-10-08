@@ -60,7 +60,6 @@ modbench_driving: "MODBENCH · Driving adapters" {
   mods: "Mods" {class: driving}
   plugins: "Plugins" {class: driving}
   webview: "Webview pages" {class: driving}
-  drivinglib: "driving lib" {class: driving}
 }
 medit_core: "MEDIT · Core" {
   class: band; grid-rows: 1
