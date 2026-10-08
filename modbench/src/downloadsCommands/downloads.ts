@@ -2,39 +2,19 @@
 
 import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
-import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import type { SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import type { DownloadedFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
+import { selectionOutcomeOf, type CommandResult } from '../coreLib/commandResult';
 
 /** What a downloads command reaches the instance through. */
 export interface DownloadsAccess {
   readonly adapter: InstanceAdapter;
 }
 
-// `wrote` is false when the gesture already held (commands.md, Doing nothing is not an error),
-// so no watcher fires.
 // `metadataLeftBehind` is delete's own: the file trashed but its metadata didn't.
-type DownloadsCommandResult =
-  | { applied: true; wrote: boolean; metadataLeftBehind?: string }
-  | { applied: false; refusal: string };
-
-// The one selection loop every plural verb shares. `toItem` builds the item a caller sees, so
-// delete's can carry a per-landed note while exclude and include's stays the bare name.
-async function selectionOutcomeOf<I, T>(
-  items: readonly I[],
-  run: (item: I) => Promise<DownloadsCommandResult>,
-  toItem: (item: I, metadataLeftBehind?: string) => T,
-): Promise<SelectionOutcome<T>> {
-  const landed: T[] = [];
-  const refused: ItemRefusal<T>[] = [];
-  for (const item of items) {
-    const outcome = await run(item);
-    if (outcome.applied) landed.push(toItem(item, outcome.metadataLeftBehind));
-    else refused.push({ item: toItem(item), reason: outcome.refusal });
-  }
-  return { landed, refused };
-}
+type DownloadsCommandResult = CommandResult<{ wrote: boolean; metadataLeftBehind?: string }>;
 
 async function mark(access: DownloadsAccess, name: string, excluded: 'Excluded' | 'Included'): Promise<DownloadsCommandResult> {
   try {
@@ -74,8 +54,8 @@ export interface DeletedDownload {
   metadataLeftBehind?: string;
 }
 
-const toDeletedDownload = ({ name }: DownloadToDelete, metadataLeftBehind?: string): DeletedDownload =>
-  metadataLeftBehind === undefined ? { name } : { name, metadataLeftBehind };
+const toDeletedDownload = ({ name }: DownloadToDelete, landed?: { metadataLeftBehind?: string }): DeletedDownload =>
+  landed?.metadataLeftBehind === undefined ? { name } : { name, metadataLeftBehind: landed.metadataLeftBehind };
 
 /** Never touches the mod installed from any of them. */
 export function deleteDownloads(
