@@ -30,7 +30,7 @@ import {
   type OriginFileMark,
 } from '../modlist/modlist';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import type { SelectionResult } from '../ports/selectionOutcome';
+import type { SelectionResult } from '../modlist/modlist';
 import { FILE_MARKS, fileLabel } from './modFiles';
 import { endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
 import { installNameRefusal } from '../install/install';

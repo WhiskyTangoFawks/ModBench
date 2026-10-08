@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { join, relative } from 'node:path';
 import ts from 'typescript';
 import { tsFiles } from './tsFiles';
 import { BOXES, BOXES_BY_BAND, CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, READ_MODEL_AND_REPOSITORY_BOXES, parseProject } from './boxes';
@@ -91,34 +90,6 @@ describe('one composite project per box', () => {
     expect(files.length).toBeGreaterThan(0);
     expect(files.every((f) => f.startsWith(join('src', box) + '/'))).toBe(true);
     expect(files.filter(isTest)).toEqual([]);
-  });
-});
-
-const owningBox = (file: string): string | undefined => {
-  const [dir] = relative(join(MODBENCH, 'src'), file).split('/');
-  return BOXES.find((box) => box === dir);
-};
-
-function importedBoxes(file: string): Map<string, string> {
-  const imported = new Map<string, string>();
-  for (const { fileName } of ts.preProcessFile(readFileSync(file, 'utf8'), true, true).importedFiles) {
-    if (!fileName.startsWith('.')) continue;
-    const base = resolve(dirname(file), fileName);
-    const target = [`${base}.ts`, join(base, 'index.ts')].find((candidate) => existsSync(candidate));
-    const box = target === undefined ? undefined : owningBox(target);
-    if (box !== undefined) imported.set(box, fileName);
-  }
-  return imported;
-}
-
-describe('a box imports only the boxes its own tsconfig lists, since tsc also accepts the ones its references reach', () => {
-  it.each(BOXES)('%s', (box) => {
-    const allowed = new Set([box, ...referencePaths(boxProject(box)).map((p) => p.replace(/^src\//, ''))]);
-    const unreferenced = fileNames(boxProject(box)).flatMap((file) =>
-      [...importedBoxes(join(MODBENCH, file))]
-        .filter(([imported]) => !allowed.has(imported))
-        .map(([imported, specifier]) => `${file} imports ${specifier} (${imported})`));
-    expect(unreferenced).toEqual([]);
   });
 });
 

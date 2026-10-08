@@ -7,6 +7,12 @@ export type CommandResult<Landed extends object = { wrote: boolean }> =
   | ({ applied: true } & Landed)
   | { applied: false; refusal: string };
 
+/** A gesture over a selection, in one write: each item landed or refused by name, or the whole
+ *  selection refused once. */
+export type SelectionResult<T> =
+  | { applied: true; outcome: SelectionOutcome<T> }
+  | { applied: false; refusal: string };
+
 /** The loop every plural verb shares: `run` each item, gathering the landed and the refused.
  *  `toItem` builds the item a caller sees; a landed item is handed its own result. */
 export async function selectionOutcomeOf<I, T, Landed extends object>(
