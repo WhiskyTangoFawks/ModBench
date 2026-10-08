@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
-import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
+import type { Reporter } from '../ports/reporter';
+import { isPluginSourcePath, PLUGIN_SOURCE_GLOB } from '../instanceAdapter/instanceAdapter';
 import type { RecordDocumentClient } from '../drivingLib/recordDocument';
 import { hoverAt } from './formKeyHover';
 import { definitionsOf } from './formKeyDefinition';
@@ -10,12 +11,14 @@ import { completionsAt } from './completion';
 import { workspaceSymbolsOf, type RecordSymbol } from './workspaceSymbols';
 import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
 
-interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'originFiles' | 'reporter'> {
+interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'originFiles'> {
+  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
   client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferences' | 'getPlugins'> & RecordDocumentClient & SourceProblemsDeps['client'];
 }
 
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };
 const pluginSource: vscode.DocumentSelector = { language: 'json' };
+const pluginSourceStatusSelector: vscode.DocumentSelector = { language: 'json', pattern: PLUGIN_SOURCE_GLOB };
 
 const diagnosticOf = ({ message, start, end }: ProblemOnFile): vscode.Diagnostic =>
   new vscode.Diagnostic(new vscode.Range(start.line, start.character, end.line, end.character), message, vscode.DiagnosticSeverity.Warning);
@@ -33,9 +36,16 @@ function sourceProblems(deps: SourceLanguageDeps): vscode.Disposable {
     collection.clear();
     collection.set([...problems].map(([file, onFile]) => [vscode.Uri.file(file), onFile.map(diagnosticOf)]));
   };
+  let status: vscode.LanguageStatusItem | undefined;
+  const languageStatus = (text: string | undefined) => {
+    if (text === undefined) { status?.dispose(); status = undefined; return; }
+    status ??= vscode.languages.createLanguageStatusItem('modbench.sourceProblems', pluginSourceStatusSelector);
+    status.severity = vscode.LanguageStatusSeverity.Warning;
+    status.text = text;
+  };
   const readText = async (file: string) => (await vscode.workspace.openTextDocument(vscode.Uri.file(file))).getText();
-  const unsubscribe = feedSourceProblems({ ...deps, readText, publish });
-  return new vscode.Disposable(() => { unsubscribe(); collection.dispose(); });
+  const unsubscribe = feedSourceProblems({ ...deps, readText, publish, languageStatus });
+  return new vscode.Disposable(() => { unsubscribe(); collection.dispose(); status?.dispose(); });
 }
 
 export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposable {
