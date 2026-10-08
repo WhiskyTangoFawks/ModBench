@@ -13,7 +13,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class ParseFailedCopyRefusalTests : IDisposable
 {
-    private const string UnreadablePerk = "0000EF:SKI_PlasmaAutocannon.esp";
+    private static readonly string UnreadablePerk = MisshapedPerkPlugin.FormKey;
     private const string Diagnosis = "did not have expected parameter type flag";
 
     private readonly ParseFailedCopyFixture _mod = new();
@@ -69,7 +69,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
     private sealed class ParseFailedCopyFixture : IDisposable, ITrackedPlugins
     {
-        private const string SourcePluginName = "SKI_PlasmaAutocannon.esp";
+        private const string SourcePluginName = MisshapedPerkPlugin.FileName;
         private const string SourceOrigin = "ParseFailedFixtureMod";
         private const string DestinationPluginName = "Destination.esp";
         private const string DestinationOrigin = "DestinationMod";
@@ -87,7 +87,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         {
             var holder = new LoadOrderHolder();
             _sourcePath = Path.Combine(_sourceModFolder, SourcePluginName);
-            File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", SourcePluginName), _sourcePath);
+            File.WriteAllBytes(_sourcePath, MisshapedPerkPlugin.Plugin.Bytes);
 
             var inputs = new List<LoadOrderEntry>();
             using (var overlay = Fallout4Mod.CreateFromBinaryOverlay(
