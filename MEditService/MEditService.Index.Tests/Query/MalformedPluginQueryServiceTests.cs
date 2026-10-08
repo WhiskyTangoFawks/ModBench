@@ -11,7 +11,6 @@ namespace MEditService.Index.Tests.Query;
 public sealed class MalformedPluginQueryServiceTests : IDisposable
 {
     private const string Malformed = ShortRdatRegionPlugin.FileName;
-    private static readonly string Anchor = $"REGN {ShortRdatRegionPlugin.FormId:X8} ({ShortRdatRegionPlugin.EditorId})";
     private const string ShortRdat = "fixed-size-subrecord-short";
 
     private readonly ScratchDirectory _instance = new("medit-malformed-query-");
@@ -25,7 +24,7 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
         bool malformed = true)
     {
         var path = Path.Combine(Directory.CreateDirectory(Path.Combine(_instance, "mods", origin)).FullName, name);
-        if (malformed) File.WriteAllBytes(path, (ShortRdatRegionPlugin.Plugin with { FileName = name }).Bytes);
+        if (malformed) File.WriteAllBytes(path, ShortRdatRegionPlugin.Plugin.Bytes);
         else new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4).WriteToBinary(path);
         return new LoadOrderEntry(name, path, origin, slot, enabled, winning);
     }
@@ -45,12 +44,12 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
 
         Assert.Equal(Malformed, report.Plugin);
         Assert.Equal("SomeMod", report.Origin);
-        Assert.Equal(Anchor, report.Anchor);
+        Assert.Equal(ShortRdatRegionPlugin.Anchor, report.Anchor);
         Assert.Equal(ShortRdat, report.DefectClass);
         Assert.Equal("repairable (lossless)", report.Tail);
         Assert.Equal("RDAT is 6 bytes; a REGN RDAT is always 8", report.Message);
         Assert.Equal(
-            $"{Anchor} — fixed-size-subrecord-short, repairable (lossless): "
+            $"{ShortRdatRegionPlugin.Anchor} — fixed-size-subrecord-short, repairable (lossless): "
             + "RDAT is 6 bytes; a REGN RDAT is always 8",
             report.Text);
     }
@@ -139,7 +138,7 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
 
         Assert.Equal(
             [("First.esp", "PERK 00000800 (FirstPerk)"), ("First.esp", "PERK 00000801 (SecondPerk)"),
-             ("Second.esp", Anchor), ("Disabled.esp", Anchor)],
+             ("Second.esp", ShortRdatRegionPlugin.Anchor), ("Disabled.esp", ShortRdatRegionPlugin.Anchor)],
             reports.Select(r => (r.Plugin, r.Anchor)));
     }
 

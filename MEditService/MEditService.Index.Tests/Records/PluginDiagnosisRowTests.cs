@@ -11,7 +11,6 @@ public sealed class PluginDiagnosisRowTests : IDisposable
 {
     private const string MalformedFixture = ShortRdatRegionPlugin.FileName;
     private const string Origin = "ShortRdatMod";
-    private static readonly string Anchor = $"REGN {ShortRdatRegionPlugin.FormId:X8} ({ShortRdatRegionPlugin.EditorId})";
     private static readonly PluginAddress Key = new(MalformedFixture, Origin);
 
     private readonly ScratchDirectory _gameDirectory = new("medit-diagnosis-game-");
@@ -67,10 +66,10 @@ public sealed class PluginDiagnosisRowTests : IDisposable
 
         Assert.Equal(Key, new PluginAddress(report.Plugin, report.Origin));
         Assert.Equal("fixed-size-subrecord-short", report.DefectClass);
-        Assert.Equal(Anchor, report.Anchor);
+        Assert.Equal(ShortRdatRegionPlugin.Anchor, report.Anchor);
         Assert.Equal("repairable (lossless)", report.Tail);
         Assert.Equal(
-            $"{Anchor} — fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8",
+            $"{ShortRdatRegionPlugin.Anchor} — fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8",
             report.Text);
     }
 
