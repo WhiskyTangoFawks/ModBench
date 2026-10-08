@@ -15,7 +15,7 @@ public sealed record SourceProblem(
 /// its <paramref name="Problems"/> are not a clean bill (ADR-0019).</summary>
 public sealed record PluginProblems(PluginAddress Plugin, IReadOnlyList<SourceProblem> Problems, string? Failure = null);
 
-/// <summary>The Problems panel's source, per tracked plugin, active or not, in load order. A plugin whose read
+/// <summary>The Problems panel's source, per tracked plugin, active or not. A plugin whose read
 /// failed is answered with the files that stopped it, and the links of rows its tree gave.</summary>
 public sealed class PluginProblemQueryService
 {
