@@ -84,10 +84,13 @@ let instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem: string[] =
 
 const instanceThatReads = fakeInstance();
 
+const commandsStillRunningWhenTheirTestEnded: Promise<unknown>[] = [];
+
 let downloadsLogLines: string[] = [];
 const downloadsLog = (line: string): void => { downloadsLogLines.push(line); };
 
 afterEach(async () => {
+  await Promise.allSettled(commandsStillRunningWhenTheirTestEnded.splice(0));
   await Promise.all(instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem.map((root) => rm(root, { recursive: true, force: true })));
   instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem = [];
   downloadsLogLines = [];
@@ -124,7 +127,9 @@ const trashedPaths = (): string[] => trash.mock.calls.map(([path]) => path);
 function invoke(commandId: string, ...args: unknown[]): unknown {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
   if (!call) throw new Error(`command not registered: ${commandId}`);
-  return call[1](...args);
+  const running = call[1](...args);
+  commandsStillRunningWhenTheirTestEnded.push(Promise.resolve(running));
+  return running;
 }
 
 const onDisk = (path: string): Promise<boolean> => access(path).then(() => true, () => false);
