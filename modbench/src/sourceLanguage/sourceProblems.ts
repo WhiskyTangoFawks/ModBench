@@ -92,6 +92,14 @@ function onEveryFile(contributions: Contribution[]): ProblemsByFile {
   return byFile;
 }
 
+function nextHeld(held: Map<string, Contribution>, answered: Map<string, Contribution | undefined>, unplaced: Set<string>): Map<string, Contribution> {
+  return new Map([...answered].flatMap(([key, fresh]) => {
+    const before = held.get(key);
+    const now = unplaced.has(key) && fresh ? { links: before?.links ?? new Map(), stops: fresh.stops } : fresh ?? before;
+    return now ? [[key, now] as const] : [];
+  }));
+}
+
 /** Publishes what mEdit answers is wrong in each tracked active plugin's source. A plugin mEdit
  *  cannot answer for keeps the links it last had and takes the stops it now answers, and the
  *  language status says why. */
@@ -109,31 +117,31 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   let ready: boolean | undefined;
   let latest = 0;
   let shown = 0;
+  const settle = (mine: number, { ofPlugin, unplaced, unread }: Placed) => {
+    if (mine < shown) return;
+    shown = mine;
+    if (failed && failed.ask < mine) failed = undefined;
+    held = nextHeld(held, ofPlugin, new Set(unplaced.map(({ key }) => key)));
+    publish(onEveryFile([...held.values()]));
+    unplacedStatus = unplaced.length > 0 ? lastRead(unplaced.map(({ plugin, why }) => `${plugin}: ${why}`).join('; ')) : undefined;
+    showStatus();
+    tellUnplaced(unplaced);
+    tellUnread(unread);
+  };
+  const keepLastAnswer = (mine: number, error: unknown) => {
+    const why = errorMessage(error);
+    if (why !== failed?.why) reporter.shownOnSurface('warning', 'The Problems panel shows mEdit\'s last answer.', why);
+    failed = { ask: mine, why };
+    showStatus();
+  };
   const ask = async (atSubscribe = false) => {
     const mine = ++latest;
     try {
-      const { ofPlugin, unplaced, unread } = await placed(await client.getPluginProblems(), deps);
+      const answer = await placed(await client.getPluginProblems(), deps);
       if (atSubscribe) ready ??= true;
-      if (mine < shown) return;
-      shown = mine;
-      if (failed && failed.ask < mine) failed = undefined;
-      const unplacedKeys = new Set(unplaced.map(({ key }) => key));
-      held = new Map([...ofPlugin].flatMap(([key, fresh]) => {
-        const before = held.get(key);
-        const now = unplacedKeys.has(key) && fresh ? { links: before?.links ?? new Map(), stops: fresh.stops } : fresh ?? before;
-        return now ? [[key, now] as const] : [];
-      }));
-      publish(onEveryFile([...held.values()]));
-      unplacedStatus = unplaced.length > 0 ? lastRead(unplaced.map(({ plugin, why }) => `${plugin}: ${why}`).join('; ')) : undefined;
-      showStatus();
-      tellUnplaced(unplaced);
-      tellUnread(unread);
+      settle(mine, answer);
     } catch (error) {
-      if (mine !== latest || atSubscribe) return;
-      const why = errorMessage(error);
-      if (why !== failed?.why) reporter.shownOnSurface('warning', 'The Problems panel shows mEdit\'s last answer.', why);
-      failed = { ask: mine, why };
-      showStatus();
+      if (mine === latest && !atSubscribe) keepLastAnswer(mine, error);
     }
   };
   const reask = () => { void ask(); };
