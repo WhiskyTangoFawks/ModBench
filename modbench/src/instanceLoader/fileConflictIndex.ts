@@ -100,24 +100,6 @@ export function isRootLevel(relativePath: string): boolean {
   return !relativePath.includes('/');
 }
 
-function rootLevelEntries(index: FileConflictIndex): ConflictEntry[] {
-  return [...index.files].filter((entry) => isRootLevel(entry.relativePath));
-}
-
-/** Keyed by lowercased basename; root-level only, so every key is a bare basename and a
- *  slash-free plugin-filename query can never reach a nested entry. */
-export function rootLevelWinners(index: FileConflictIndex): Map<string, string> {
-  return new Map(rootLevelEntries(index).map((entry) => [foldPath(entry.relativePath), entry.winner]));
-}
-
-/** The origin-resolution twin of `rootLevelWinners` (ADR-0012), under the same
- *  root-level-only contract. A path Overwrite wins has no mod winner and no entry. */
-export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, string> {
-  const modWinners = rootLevelEntries(index).flatMap((entry): [string, string][] =>
-    entry.winnerOrigin.kind === 'mod' ? [[foldPath(entry.relativePath), entry.winnerOrigin.name]] : []);
-  return new Map(modWinners);
-}
-
 // A mod's own files and folders as the adapter lists them; each entry the listing skipped is one
 // Output line.
 async function modListing(
