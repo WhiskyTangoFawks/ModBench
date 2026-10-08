@@ -34,6 +34,15 @@ public sealed class RecordFileQueryTests : IDisposable
     }
 
     [Fact]
+    public void ATrackedCopyInAPluginThatIsNotActive_IsInItsFile()
+    {
+        TrackedMods.Track(Entry, _fixture.GameDirectory);
+        using var index = Indexes.Reconciled(_fixture.GameDirectory, [Entry with { Enabled = false }]);
+
+        Assert.Equal(new RecordFile(NpcFile), index.Records.GetRecordFile(Plugin, Npc));
+    }
+
+    [Fact]
     public void ATrackedCopyWhoseFileIsGone_HasNoAnswer()
     {
         TrackedMods.Track(Entry, _fixture.GameDirectory);

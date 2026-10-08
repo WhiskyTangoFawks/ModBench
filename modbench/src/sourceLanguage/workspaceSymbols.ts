@@ -42,7 +42,7 @@ export function workspaceSymbolsOf<Document extends { getText(): string }>({ cli
       tell('error', `${GESTURE} cannot list the tracked plugins.`, errorMessage(error));
       return [];
     }
-    const pages = await Promise.all(plugins.filter((plugin) => plugin.isTracked && plugin.inLoadOrder)
+    const pages = await Promise.all(plugins.filter((plugin) => plugin.isTracked)
       .map((plugin) => searched(query, plugin)));
     const copies = pages.flatMap((page) => typeof page === 'string' ? [] : page)
       .map((row) => ({ formKey: row.formKey, plugin: pluginAddressOf(row), name: recordLabel(row.editorId, row.formKey) }));
