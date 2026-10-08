@@ -58,7 +58,7 @@ export async function listModFolders(
 
 export function modFoldersOf(all: readonly ModFolder[]): ModFolders {
   const byKey = new Map(all.map((folder) => [entryKey(folder), folder]));
-  return { all, holding: (entry) => byKey.get(entryKey(entry)) };
+  return { all, holding: (entry) => all.find((folder) => folder.kind === entry.kind && folder.name === entry.name) ?? byKey.get(entryKey(entry)) };
 }
 
 /** The downloads folder as the settings name it now; rejects with why when it cannot be resolved. */

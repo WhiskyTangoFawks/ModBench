@@ -1170,7 +1170,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
 
     const listed = instance.value.dataFolderPlugins;
     expect(listed.kind).toBe('listed');
-    expect([...(listed.kind === 'listed' ? listed.names : [])].sort()).toEqual(['fallout4.esm']);
+    expect([...(listed.kind === 'listed' ? listed.names : [])].sort()).toEqual(['Fallout4.ESM']);
   });
 
   it('tells an unresolved game directory from a folder that resolved and could not be read, an unreadable folder not being an empty set that would prune every plugins.txt line', async () => {

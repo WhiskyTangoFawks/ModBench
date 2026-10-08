@@ -137,7 +137,7 @@ async function syncPlugins(
   // story 2), so a mod's plugin of that name earns no line.
   const noLine = new Set((loadedWithNoLine ?? []).map(pluginKey));
   const addable = new Map([...provided].filter(([key]) => !noLine.has(key)));
-  const inDataNames = inData.names;
+  const inDataNames = new Set([...inData.names].map(pluginKey));
 
   let delta: PluginLinesDelta = { added: [], dropped: [] };
   const result = await changePluginOrder(adapter, profile, (order) => {

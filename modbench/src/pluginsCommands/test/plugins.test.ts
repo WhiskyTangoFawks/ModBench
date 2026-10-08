@@ -266,9 +266,9 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     reason: "ENOENT: no such file or directory, scandir '/game/Data'",
   };
 
-  const inDataOnDiskAsCaseFoldedNamesAtTheDataFoldersRoot = async (): Promise<DataFolderPlugins> => {
+  const inDataOnDiskAtTheDataFoldersRoot = async (): Promise<DataFolderPlugins> => {
     const dirents = await readdir(dataFolder(), { withFileTypes: true });
-    const names = dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => d.name.toLowerCase());
+    const names = dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => d.name);
     return { kind: 'listed', names: new Set(names) };
   };
 
@@ -276,7 +276,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     profile, pluginOrder: await readPluginLines(dir, profile), provided: await providedPluginsIn(dir, profile), inData, loadedWithNoLine,
   });
 
-  const run = async (inDataOrTheFolderOnDiskWhenUndefined?: DataFolderPlugins, loadedWithNoLine: readonly string[] = []) => pluginSyncOver(adapterOver(dir))(await readNow(PROFILE, inDataOrTheFolderOnDiskWhenUndefined ?? await inDataOnDiskAsCaseFoldedNamesAtTheDataFoldersRoot(), loadedWithNoLine));
+  const run = async (inDataOrTheFolderOnDiskWhenUndefined?: DataFolderPlugins, loadedWithNoLine: readonly string[] = []) => pluginSyncOver(adapterOver(dir))(await readNow(PROFILE, inDataOrTheFolderOnDiskWhenUndefined ?? await inDataOnDiskAtTheDataFoldersRoot(), loadedWithNoLine));
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'plugins-sync-'));
