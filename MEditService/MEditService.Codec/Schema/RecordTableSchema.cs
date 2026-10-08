@@ -7,18 +7,15 @@ namespace MEditService.Codec.Schema;
 /// <summary>A member the document never spells: the flag FlagName of the flags member at BackingPath.</summary>
 public sealed record SyntheticBit(string BackingPath, string FlagName);
 
-/// <summary>One column of a record table: the member's own spec, plus what a generated view
-/// needs. A column refuses writes only by naming ReadOnlyReason; the codec
-/// decides the rest.</summary>
+/// <summary>One column of a record table: the member's own spec, plus whether a document that
+/// omits it means null (AbsentIsNull) rather than the default. A column refuses writes only by
+/// naming ReadOnlyReason; the codec decides the rest.</summary>
 public sealed record ColumnSpec(
     FieldMetadata Field,
     // The JSON path from the document root, dotted where the document nests the member (the
     // header's "ModHeader.Author"); the same as Name for every record column.
     string PropertyName,
-    string DuckDbType,
-    // The SQL literal a view COALESCEs to when the serializer omitted a default-valued field, or null
-    // when NULL is the honest answer.
-    string? ViewDefaultLiteral = null,
+    bool AbsentIsNull = false,
     SyntheticBit? Synthetic = null)
 {
     /// <summary>The document's other spellings of this column's value, which the reader takes over
@@ -28,15 +25,8 @@ public sealed record ColumnSpec(
     /// <summary>The document's own member name, which is the wire name and the view column name.</summary>
     public string Name => Field.Name;
 
-    /// <summary>The wire's own name for the leaf kind, which decides how a view projects it.</summary>
+    /// <summary>The wire's own name for the leaf kind.</summary>
     public string ApiType => Field.Type;
-
-    /// <summary>Scalar leaves with one DuckDB type only: arrays and structs have no scalar rendering,
-    /// a column varying by record class no single type, a synthetic member no document node. "No
-    /// column" beats "a column with broken semantics".</summary>
-    public bool IsViewable =>
-        !Field.IsArray && Field.Fields == null && Synthetic == null
-        && (Field.Variants == null || Field.Variants.Values.Select(v => v.Type).Distinct(StringComparer.Ordinal).Count() == 1);
 }
 
 public sealed class RecordTableSchema
