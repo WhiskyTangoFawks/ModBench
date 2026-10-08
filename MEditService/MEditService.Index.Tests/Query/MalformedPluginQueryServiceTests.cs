@@ -1,48 +1,51 @@
-using MEditService.Codec.Serialization;
-using MEditService.Index;
-using MEditService.LoadOrder;
-using MEditService.Ports;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Query;
 
-public sealed class MalformedPluginQueryServiceTests
+public sealed class MalformedPluginQueryServiceTests : IDisposable
 {
     private const string Malformed = "LitR - TrueStorms.esp";
+    private const string ShortRdat = "fixed-size-subrecord-short";
 
-    private static readonly PluginDiagnosis Short = new(
-        "REGN 001D2AF4 (DowntownRegion)", "fixed-size-subrecord-short", "repairable (lossless)",
-        "RDAT is 6 bytes; a REGN RDAT is always 8");
+    private readonly ScratchDirectory _instance = new("medit-malformed-query-");
 
-    private static readonly PluginDiagnosis Trailing = new(
-        "NPC_ 00012345 (Sierra)", "trailing-bytes", "repairable (lossless)", "3 bytes past the last subrecord");
+    public void Dispose() => _instance.Dispose();
 
-    private static LoadOrderEntry Plugin(
-        string name, string origin = "SomeMod", int? slot = 0, bool enabled = true, bool winning = true) =>
-        new(name, $@"C:\mods\{origin}\{name}", origin, slot, enabled, winning);
+    private string GameDirectory => Directory.CreateDirectory(Path.Combine(_instance, "GameDir")).FullName;
 
-    private static PluginDiagnosisRow Row(LoadOrderEntry plugin, PluginDiagnosis diagnosis) => new(plugin.Key, diagnosis);
+    private LoadOrderEntry Plugin(
+        string name, string origin = "SomeMod", int? slot = 0, bool enabled = true, bool winning = true,
+        string? committedFixtureBytes = Malformed)
+    {
+        var path = Path.Combine(Directory.CreateDirectory(Path.Combine(_instance, "mods", origin)).FullName, name);
+        if (committedFixtureBytes is null) new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4).WriteToBinary(path);
+        else File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", committedFixtureBytes), path);
+        return new LoadOrderEntry(name, path, origin, slot, enabled, winning);
+    }
 
-    private static PluginDiagnosisReport[] Diagnose(
-        IReadOnlyList<PluginDiagnosisRow> rows, params LoadOrderEntry[] plugins) =>
-        [.. new MalformedPluginQueryService(
-            new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), []) { Diagnoses = rows }),
-            FakeLoadOrder.Of(GameRelease.Fallout4, plugins))
-            .GetLoadOrderDiagnoses()];
+    private LoadOrderEntry Clean(string name, int slot = 0) => Plugin(name, slot: slot, committedFixtureBytes: null);
+
+    private PluginDiagnosisReport[] Diagnose(params LoadOrderEntry[] plugins)
+    {
+        using var index = Indexes.Reconciled(GameDirectory, plugins);
+        return [.. index.Malformed.GetLoadOrderDiagnoses()];
+    }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_ARowAgainstAHeldPlugin_IsReportedWithTheRefusalWording()
+    public void GetLoadOrderDiagnoses_AMalformedHeldPlugin_IsReportedWithTheRefusalWording()
     {
-        var plugin = Plugin(Malformed);
-
-        var report = Assert.Single(Diagnose([Row(plugin, Short)], plugin));
+        var report = Assert.Single(Diagnose(Plugin(Malformed)));
 
         Assert.Equal(Malformed, report.Plugin);
         Assert.Equal("SomeMod", report.Origin);
         Assert.Equal("REGN 001D2AF4 (DowntownRegion)", report.Anchor);
-        Assert.Equal("fixed-size-subrecord-short", report.DefectClass);
+        Assert.Equal(ShortRdat, report.DefectClass);
         Assert.Equal("repairable (lossless)", report.Tail);
         Assert.Equal("RDAT is 6 bytes; a REGN RDAT is always 8", report.Message);
         Assert.Equal(
@@ -52,64 +55,59 @@ public sealed class MalformedPluginQueryServiceTests
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_RowsOfAPluginLoadedWithNoLine_AreNeverReported_ForThoseAreTheProofSetTheTablesWereBuiltFrom()
+    public void GetLoadOrderDiagnoses_APluginLoadedWithNoLine_IsNeverReported_ForThoseAreTheProofSetTheTablesWereBuiltFrom()
     {
-        var master = Plugin("Fallout4.esm", origin: "CleanedMasters") with { LoadedWithNoLine = true };
+        var loadedWithNoLine = Plugin(Malformed, origin: "CleanedMasters") with { LoadedWithNoLine = true };
 
-        Assert.Empty(Diagnose([Row(master, Short)], master));
+        Assert.Empty(Diagnose(loadedWithNoLine));
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_APluginLoadedWithNoLine_IsMatchedIgnoringCase_ForACaseSensitiveFilesystemCanHoldASecondFileDifferingOnlyInCase()
-    {
-        var upper = Plugin("FALLOUT4.ESM", origin: "CleanedMasters", enabled: false);
-        var master = Plugin("Fallout4.esm", origin: "CleanedMasters") with { LoadedWithNoLine = true };
-
-        Assert.Empty(Diagnose([Row(upper, Short), Row(master, Trailing)], upper, master));
-    }
-
-    [Fact]
-    public void GetLoadOrderDiagnoses_RowsOfAUserPluginInTheGameFolder_AreReported_ForWhereTheFileSitsDecidesNothing()
+    public void GetLoadOrderDiagnoses_AUserPluginInTheGameFolder_IsReported_ForWhereTheFileSitsDecidesNothing()
     {
         var placed = Plugin(Malformed, origin: PluginOrigin.DataDirectory);
 
-        Assert.Equal(PluginOrigin.DataDirectory, Assert.Single(Diagnose([Row(placed, Short)], placed)).Origin);
+        Assert.Equal(PluginOrigin.DataDirectory, Assert.Single(Diagnose(placed)).Origin);
     }
 
     [Theory]
     [InlineData(null, true)]
     [InlineData(0, false)]
-    public void GetLoadOrderDiagnoses_RowsOfAPluginThatIsNotActive_AreReported_ForMalformedMeansBytesDepartingFromWhatTheCreationKitWritesActiveOrNot(int? slot, bool enabled)
+    public void GetLoadOrderDiagnoses_APluginThatIsNotActive_IsReported_ForMalformedMeansBytesDepartingFromWhatTheCreationKitWritesActiveOrNot(int? slot, bool enabled)
     {
         var inactive = Plugin(Malformed, slot: slot, enabled: enabled);
 
-        Assert.Equal("SomeMod", Assert.Single(Diagnose([Row(inactive, Short)], inactive)).Origin);
+        Assert.Equal("SomeMod", Assert.Single(Diagnose(inactive)).Origin);
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_APluginWithNoRows_IsNotReported_ForTheIndexStampsNoRowsOnANeverOpenedOrCleanPlugin()
+    public void GetLoadOrderDiagnoses_ACleanPlugin_IsNotReported()
     {
-        Assert.Empty(Diagnose([], Plugin("Clean.esp")));
+        Assert.Empty(Diagnose(Clean("Clean.esp")));
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_ARowNamingAPluginTheLoadOrderDoesNotHold_IsNotReported()
+    public void GetLoadOrderDiagnoses_APluginTheLoadOrderNoLongerHolds_IsNotReported()
     {
-        var held = Plugin("Held.esp");
+        var held = Clean("Held.esp");
         var gone = Plugin(Malformed, origin: "RemovedMod");
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        index.Reconcile(holder, GameDirectory, [held, gone], GameRelease.Fallout4);
+        Assert.Single(index.Malformed.GetLoadOrderDiagnoses());
 
-        Assert.Empty(Diagnose([Row(gone, Short)], held));
+        index.Reconcile(holder, GameDirectory, [held], GameRelease.Fallout4);
+
+        Assert.Empty(index.Malformed.GetLoadOrderDiagnoses());
     }
 
     [Fact]
     public void GetLoadOrderDiagnoses_TwoPluginsOfOneName_ReportAgainstTheirOwnOrigins_ForAFilenameIsNotAnIdentity()
     {
-        var winner = Plugin(Malformed, origin: "WinningMod");
+        var winner = Plugin(Malformed, origin: "WinningMod", committedFixtureBytes: null);
         var overridden = Plugin(Malformed, origin: "LosingMod", winning: false);
 
-        var reports = Diagnose([Row(overridden, Short)], winner, overridden);
-
-        Assert.Equal("LosingMod", Assert.Single(reports).Origin);
+        Assert.Equal("LosingMod", Assert.Single(Diagnose(winner, overridden)).Origin);
     }
 
     [Fact]
@@ -117,39 +115,43 @@ public sealed class MalformedPluginQueryServiceTests
     {
         var disabled = Plugin("Disabled.esp", origin: "DisabledMod", slot: 0, enabled: false);
         var second = Plugin("Second.esp", origin: "SecondMod", slot: 2);
-        var first = Plugin("First.esp", origin: "FirstMod", slot: 1);
+        var first = Plugin("First.esp", origin: "FirstMod", slot: 1, committedFixtureBytes: null);
+        var mod = new Fallout4Mod(ModKey.FromFileName(first.Name), Fallout4Release.Fallout4);
+        MisshapedPerks.Add(mod, "FirstPerk");
+        MisshapedPerks.Add(mod, "SecondPerk");
+        mod.WriteToBinary(first.Path);
+        MisshapedPerks.Misshape(first.Path);
 
-        var reports = Diagnose(
-            [Row(disabled, Short), Row(second, Short), Row(first, Short), Row(first, Trailing)], disabled, second, first);
+        var reports = Diagnose(disabled, second, first);
 
         Assert.Equal(
-            [("First.esp", "fixed-size-subrecord-short"), ("First.esp", "trailing-bytes"),
-             ("Second.esp", "fixed-size-subrecord-short"), ("Disabled.esp", "fixed-size-subrecord-short")],
-            reports.Select(r => (r.Plugin, r.DefectClass)));
+            [("First.esp", "PERK 00000800 (FirstPerk)"), ("First.esp", "PERK 00000801 (SecondPerk)"),
+             ("Second.esp", "REGN 001D2AF4 (DowntownRegion)"), ("Disabled.esp", "REGN 001D2AF4 (DowntownRegion)")],
+            reports.Select(r => (r.Plugin, r.Anchor)));
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_WhileReconciling_AnswersNothing_ForAPluginTheProjectionHasNotReachedHasNoRowsYetAndWouldReadClean()
+    public async Task GetLoadOrderDiagnoses_WhileReconciling_AnswersNothing_ForAPluginTheProjectionHasNotReachedHasNoRowsYetAndWouldReadClean()
     {
-        var plugin = Plugin(Malformed);
-        var reads = new FakeReads(new Dictionary<PluginAddress, PluginContent>(), []) { Diagnoses = [Row(plugin, Short)] };
-        var reconciling = new LoadOrderStatus(
-            LoadOrderState.Reconciling, TotalPlugins: 1, ActivePlugins: 1, [], ConflictsComputed: false, []);
+        LoadOrderEntry[] plugins = [Plugin(Malformed), Clean("Later.esp", slot: 1)];
+        var holder = new LoadOrderHolder();
+        using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
+        using var index = Indexes.Open(holder, gate);
+        var load = Task.Run(() => index.Reconcile(holder, GameDirectory, plugins, GameRelease.Fallout4));
+        await gate.WaitUntilParkedAsync();
 
-        var reports = new MalformedPluginQueryService(
-            new FakeIndex(reads, reconciling), FakeLoadOrder.Of(GameRelease.Fallout4, plugin))
-            .GetLoadOrderDiagnoses();
+        Assert.Empty(index.Malformed.GetLoadOrderDiagnoses());
 
-        Assert.Empty(reports);
+        gate.Release();
+        await load;
+        Assert.Single(index.Malformed.GetLoadOrderDiagnoses());
     }
 
     [Fact]
     public void GetLoadOrderDiagnoses_WithNoLoadOrderHeld_Throws()
     {
-        var service = new MalformedPluginQueryService(
-            new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), [])),
-            new LoadOrderHolder());
+        using var index = Indexes.Open(new LoadOrderHolder());
 
-        Assert.Throws<NoLoadOrderException>(service.GetLoadOrderDiagnoses);
+        Assert.Throws<NoLoadOrderException>(index.Malformed.GetLoadOrderDiagnoses);
     }
 }

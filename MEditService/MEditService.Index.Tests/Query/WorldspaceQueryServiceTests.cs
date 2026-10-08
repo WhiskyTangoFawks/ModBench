@@ -1,73 +1,138 @@
-using MEditService.Index;
-using MEditService.LoadOrder;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Query;
 
-public class WorldspaceQueryServiceTests
+public sealed class WorldspaceQueryServiceTests : IDisposable
 {
-    private static readonly PluginAddress Plugin = new("M.esp", PluginOrigin.DataDirectory);
-    private static readonly PluginAddress OtherOrigin = new("M.esp", "ModB");
-    private const string World = "wrld:M.esp";
+    private const string PluginName = "M.esp";
+    private static readonly PluginAddress Plugin = new(PluginName, PluginOrigin.DataDirectory);
+    private static readonly PluginAddress OtherOrigin = new(PluginName, "ModB");
 
-    private static IWorldspaceQueryService Service(FakeReads reads) => QueryHost.Worldspaces(new StubIndex(reads));
+    private readonly ScatteredFixtureData _fixture;
+    private readonly OpenedIndex _index;
+    private readonly Dictionary<string, string> _formKeys = new(StringComparer.Ordinal);
 
-    private static FakeReads Reads(params FakeRow[] rows) => new(new Dictionary<PluginAddress, PluginContent>(), rows);
-
-    private static IWorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) => Service(WorldAndInteriorCells((Plugin, cells)));
-
-    private static FakeReads WorldAndInteriorCells(params (PluginAddress Plugin, IReadOnlyList<CellLocationSummary> Cells)[] holdings)
+    public WorldspaceQueryServiceTests()
     {
-        var reads = Reads();
-        reads.WorldspaceCells = holdings.ToDictionary(h => new RecordAt(h.Plugin, World), h => h.Cells);
-        reads.InteriorCells = holdings.ToDictionary(h => h.Plugin, h => h.Cells);
-        return reads;
+        _fixture = new PluginFixtureBuilder("worldspace-query")
+            .WithPlugin(PluginName, mod =>
+            {
+                var grouped = World(mod, "Grouped");
+                Place(grouped, (0, 0), (0, 0), Cell(mod, "CellA"));
+                Place(grouped, (0, 0), (1, 1), Cell(mod, "CellB"));
+                Place(grouped, (1, 0), (0, 0), Cell(mod, "CellC"));
+
+                var scrambled = World(mod, "Scrambled");
+                Place(scrambled, (1, 0), (0, 0), Cell(mod, "ScrambledC"));
+                Place(scrambled, (0, 0), (1, 1), Cell(mod, "ScrambledA"));
+                Place(scrambled, (0, 1), (0, 0), Cell(mod, "ScrambledD"));
+                Place(scrambled, (0, 0), (0, 2), Cell(mod, "ScrambledA3"));
+                Place(scrambled, (0, 0), (0, 0), Cell(mod, "ScrambledA2"));
+
+                var withTopCell = World(mod, "WithTopCell");
+                withTopCell.TopCell = Cell(mod, "TopCell", name: "Sanctuary Hills");
+                Place(withTopCell, (0, 0), (0, 0), Cell(mod, "BlockCell", name: "Concord"));
+
+                _formKeys["Unnamed"] = World(mod, editorId: null).FormKey.ToString();
+
+                var interior = Cell(mod, "IntCell");
+                var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+                subBlock.Cells.Add(interior);
+                var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+                block.SubBlocks.Add(subBlock);
+                mod.Cells.Records.Add(block);
+
+                var placedIn = Cell(mod, "PlacedIn");
+                var persistentBase = new Static(mod) { EditorID = "PersistentBase" };
+                mod.Statics.Add(persistentBase);
+                var temporaryBase = mod.Npcs.AddNew("TemporaryBase");
+                var persistent = new PlacedObject(mod) { EditorID = "PersistentEditor" };
+                persistent.Base.SetTo(persistentBase);
+                placedIn.Persistent.Add(persistent);
+                var temporary = new PlacedNpc(mod) { EditorID = "TemporaryEditor" };
+                temporary.Base.SetTo(temporaryBase);
+                placedIn.Temporary.Add(temporary);
+                Place(World(mod, "Placing"), (0, 0), (0, 0), placedIn);
+                _formKeys["PersistentEditor"] = persistent.FormKey.ToString();
+                _formKeys["TemporaryEditor"] = temporary.FormKey.ToString();
+                _formKeys["PersistentBase"] = persistentBase.FormKey.ToString();
+                _formKeys["TemporaryBase"] = temporaryBase.FormKey.ToString();
+                _formKeys["PlacedIn"] = placedIn.FormKey.ToString();
+            })
+            .BuildScattered();
+        _index = Indexes.Reconciled(_fixture);
     }
 
-    private static CellLocationSummary Cell(string editorId) =>
-        new($"{editorId}:M.esp", editorId, 0, 0, 0, 0, 1, 1, Index.WorkingTreeState.None);
+    public void Dispose()
+    {
+        _index.Dispose();
+        _fixture.Dispose();
+    }
 
-    private static FakeRow Worldspace(string formKey, string? editorId, PluginAddress? plugin = null, bool holdsAnUnreadableRecord = false) =>
-        new(new RecordDocument(formKey, plugin ?? Plugin, 0, IsWinner: false, editorId, "wrld", null, []),
-            HoldsAnUnreadableRecord: holdsAnUnreadableRecord);
+    private Worldspace World(Fallout4Mod mod, string? editorId)
+    {
+        var world = new Worldspace(mod) { EditorID = editorId };
+        mod.Worldspaces.Add(world);
+        if (editorId is not null) _formKeys[editorId] = world.FormKey.ToString();
+        return world;
+    }
+
+    private Cell Cell(Fallout4Mod mod, string editorId, string? name = null)
+    {
+        var cell = new Cell(mod) { EditorID = editorId, Name = name };
+        _formKeys[editorId] = cell.FormKey.ToString();
+        return cell;
+    }
+
+    private static void Place(Worldspace world, (short X, short Y) block, (short X, short Y) subBlock, Cell cell)
+    {
+        var held = world.SubCells.FirstOrDefault(b => b.BlockNumberX == block.X && b.BlockNumberY == block.Y);
+        if (held is null)
+        {
+            held = new WorldspaceBlock { BlockNumberX = block.X, BlockNumberY = block.Y };
+            world.SubCells.Add(held);
+        }
+        var heldSub = held.Items.FirstOrDefault(s => s.BlockNumberX == subBlock.X && s.BlockNumberY == subBlock.Y);
+        if (heldSub is null)
+        {
+            heldSub = new WorldspaceSubBlock { BlockNumberX = subBlock.X, BlockNumberY = subBlock.Y };
+            held.Items.Add(heldSub);
+        }
+        heldSub.Items.Add(cell);
+    }
+
+    private string FormKeyOf(string editorId) => _formKeys[editorId];
 
     [Fact]
-    public void GetCellChildRecords_AnswersEveryChildFact_InQueriesOwnTypes()
+    public void GetCellChildRecords_SplitsThePersistentFromTheTemporary_NamingEachAndItsBase()
     {
-        var persistent = new Index.ChildRecordSummary(
-            "p1:M.esp", "PersistentEditor", "base1:M.esp", "REFR", Index.WorkingTreeState.Modified, HasParseFailure: true,
-            FullName: "PersistentFull", BaseEditorId: "PersistentBase", ParseDiagnosis: "persistent diagnosis");
-        var temporary = new Index.ChildRecordSummary(
-            "t1:M.esp", "TemporaryEditor", "base2:M.esp", "ACHR", Index.WorkingTreeState.None, HasParseFailure: false,
-            FullName: "TemporaryFull", BaseEditorId: "TemporaryBase", ParseDiagnosis: "temporary diagnosis");
-        var reads = Reads();
-        reads.CellChildren = new Dictionary<RecordAt, Index.CellChildRecords>
-        {
-            [new RecordAt(Plugin, "cell:M.esp")] = new([persistent], [temporary]),
-        };
-        var svc = Service(reads);
-
-        var result = svc.GetCellChildRecords(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "cell:M.esp");
+        var result = _index.Worldspaces.GetCellChildRecords(Plugin, FormKeyOf("PlacedIn"));
 
         Assert.Equal(
-            new ChildRecordSummary("p1:M.esp", "PersistentEditor", "base1:M.esp", "REFR", WorkingTreeState.Modified, true, "PersistentFull", "PersistentBase", "persistent diagnosis"),
+            new ChildRecordSummary(
+                FormKeyOf("PersistentEditor"), "PersistentEditor", FormKeyOf("PersistentBase"), "refr", WorkingTreeState.None,
+                BaseEditorId: "PersistentBase"),
             Assert.Single(result.Persistent));
         Assert.Equal(
-            new ChildRecordSummary("t1:M.esp", "TemporaryEditor", "base2:M.esp", "ACHR", WorkingTreeState.None, false, "TemporaryFull", "TemporaryBase", "temporary diagnosis"),
+            new ChildRecordSummary(
+                FormKeyOf("TemporaryEditor"), "TemporaryEditor", FormKeyOf("TemporaryBase"), "achr", WorkingTreeState.None,
+                BaseEditorId: "TemporaryBase"),
             Assert.Single(result.Temporary));
     }
 
     [Fact]
     public void GetWorldspaceBlocks_GroupsCellsIntoBlocksAndSubBlocks()
     {
-        var svc = Service([
-            new CellLocationSummary("aaa:M.esp", "CellA", 0, 0, 0, 0, 12, -5, Index.WorkingTreeState.None),
-            new CellLocationSummary("bbb:M.esp", "CellB", 0, 0, 1, 1, 13, -4, Index.WorkingTreeState.None),
-            new CellLocationSummary("ccc:M.esp", "CellC", 1, 0, 0, 0, 40, 2, Index.WorkingTreeState.None),
-        ]);
-
-        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "wrld:M.esp");
+        var result = _index.Worldspaces.GetWorldspaceBlocks(Plugin, FormKeyOf("Grouped"));
 
         Assert.Empty(result.TopCells);
         Assert.Equal(2, result.Blocks.Count);
@@ -81,148 +146,119 @@ public class WorldspaceQueryServiceTests
     [Fact]
     public void GetWorldspaceBlocks_SortsBlocksAndSubBlocksAscendingByXThenY_KeepingTwoBlocksSharingXApartByY()
     {
-        var svc = Service([
-            new CellLocationSummary("c1:M.esp", "CellC", 1, 0, 0, 0, 40, 2, Index.WorkingTreeState.None),
-            new CellLocationSummary("a1:M.esp", "CellA", 0, 0, 1, 1, 1, 1, Index.WorkingTreeState.None),
-            new CellLocationSummary("d1:M.esp", "CellD", 0, 1, 0, 0, 2, 2, Index.WorkingTreeState.None),
-            new CellLocationSummary("a3:M.esp", "CellA3", 0, 0, 0, 2, 3, 3, Index.WorkingTreeState.None),
-            new CellLocationSummary("a2:M.esp", "CellA2", 0, 0, 0, 0, 4, 4, Index.WorkingTreeState.None),
-        ]);
+        var result = _index.Worldspaces.GetWorldspaceBlocks(Plugin, FormKeyOf("Scrambled"));
 
-        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "wrld:M.esp");
-
-        Assert.Equal(
-            [(0, 0), (0, 1), (1, 0)],
-            result.Blocks.Select(b => (b.X, b.Y)).ToArray());
-
-        var block00 = result.Blocks[0];
-        Assert.Equal(
-            [(0, 0), (0, 2), (1, 1)],
-            block00.SubBlocks.Select(s => (s.X, s.Y)).ToArray());
+        Assert.Equal([(0, 0), (0, 1), (1, 0)], result.Blocks.Select(b => (b.X, b.Y)));
+        Assert.Equal([(0, 0), (0, 2), (1, 1)], result.Blocks[0].SubBlocks.Select(s => (s.X, s.Y)));
     }
 
     [Fact]
-    public void GetInteriorCells_NoReads_ThrowsNoLoadOrderException_ForOriginTravelsInFromTheCallerSoTheReadsAreTheOneGuard()
+    public void GetInteriorCells_NoLoadOrder_ThrowsNoLoadOrderException_ForOriginTravelsInFromTheCallerSoTheReadsAreTheOneGuard()
     {
-        var svc = QueryHost.Worldspaces(new StubIndex(reads: null));
-        Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells(new PluginAddress("M.esp", PluginOrigin.DataDirectory)));
+        using var index = Indexes.Open(new LoadOrderHolder());
+
+        Assert.Throws<NoLoadOrderException>(() => index.Worldspaces.GetInteriorCells(Plugin));
     }
 
     [Fact]
     public void GetWorldspaces_MapsRecordsToSummaries()
     {
-        var svc = Service(Reads(Worldspace("000801:M.esp", "WorldA"), Worldspace("000802:M.esp", null)));
+        var result = _index.Worldspaces.GetWorldspaces(Plugin);
 
-        var result = svc.GetWorldspaces(new PluginAddress("M.esp", PluginOrigin.DataDirectory));
-
-        Assert.Equal(2, result.Count);
-        Assert.Equal("000801:M.esp", result[0].FormKey);
-        Assert.Equal("WorldA", result[0].EditorId);
-        Assert.Null(result[1].EditorId);
-    }
-
-    [Fact]
-    public void GetWorldspaces_ListsTheWorldspacesOfTheGivenOrigin()
-    {
-        var svc = Service(Reads(Worldspace("000801:M.esp", "InData"), Worldspace("000802:M.esp", "InModB", OtherOrigin)));
-
-        var result = svc.GetWorldspaces(OtherOrigin);
-
-        Assert.Equal(["InModB"], result.Select(w => w.EditorId));
-    }
-
-    [Fact]
-    public void GetWorldspaceBlocks_ReadsTheCellsOfTheGivenOrigin()
-    {
-        var svc = Service(WorldAndInteriorCells((Plugin, [Cell("InData")]), (OtherOrigin, [Cell("InModB")])));
-
-        var result = svc.GetWorldspaceBlocks(OtherOrigin, World);
-
-        Assert.Equal("InModB", Assert.Single(Assert.Single(Assert.Single(result.Blocks).SubBlocks).Cells).EditorId);
-    }
-
-    [Fact]
-    public void GetInteriorCells_ReadsTheCellsOfTheGivenOrigin()
-    {
-        var svc = Service(WorldAndInteriorCells((Plugin, [Cell("InData")]), (OtherOrigin, [Cell("InModB")])));
-
-        var result = svc.GetInteriorCells(OtherOrigin);
-
-        Assert.Equal("InModB", Assert.Single(Assert.Single(Assert.Single(result).SubBlocks).Cells).EditorId);
+        Assert.Equal("Grouped", result.Single(w => w.FormKey == FormKeyOf("Grouped")).EditorId);
+        Assert.Null(result.Single(w => w.FormKey == FormKeyOf("Unnamed")).EditorId);
     }
 
     [Fact]
     public void GetInteriorCells_ReturnsRealContent()
     {
-        var svc = Service([
-            new CellLocationSummary("int:M.esp", "IntCell", null, null, null, null, 0, 0, Index.WorkingTreeState.None),
-        ]);
-
-        var result = svc.GetInteriorCells(new PluginAddress("M.esp", PluginOrigin.DataDirectory));
+        var result = _index.Worldspaces.GetInteriorCells(Plugin);
 
         Assert.Equal("IntCell", Assert.Single(Assert.Single(Assert.Single(result).SubBlocks).Cells).EditorId);
     }
 
     [Fact]
-    public void GetWorldspaceBlocks_NullBlockCell_IsTreatedAsTopCell()
+    public void GetWorldspaceBlocks_ATopCell_IsThePersistentWorldspaceCell_BesideTheBlocks()
     {
-        var svc = Service([
-            new CellLocationSummary("top:M.esp", "TopCell", null, null, null, null, 0, 0, Index.WorkingTreeState.None),
-            new CellLocationSummary("aaa:M.esp", "CellA", 0, 0, 0, 0, 1, 1, Index.WorkingTreeState.None),
-        ]);
+        var result = _index.Worldspaces.GetWorldspaceBlocks(Plugin, FormKeyOf("WithTopCell"));
 
-        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "wrld:M.esp");
-
-        Assert.Single(result.TopCells);
-        Assert.Equal("TopCell", result.TopCells[0].EditorId);
-        Assert.True(result.TopCells[0].IsPersistentWorldspaceCell);
+        var topCell = Assert.Single(result.TopCells);
+        Assert.Equal("TopCell", topCell.EditorId);
+        Assert.True(topCell.IsPersistentWorldspaceCell);
         Assert.Single(result.Blocks);
-    }
-
-    [Fact]
-    public void GetWorldspaceBlocks_TwoBlocklessCellRows_SurfacesBoth_NotLosingTheSecondRow()
-    {
-        var svc = Service([
-            new CellLocationSummary("first:M.esp", "FirstBlockless", null, null, null, null, 0, 0, Index.WorkingTreeState.None),
-            new CellLocationSummary("second:M.esp", "SecondBlockless", null, null, null, null, 0, 0, Index.WorkingTreeState.None),
-        ]);
-
-        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "wrld:M.esp");
-
-        Assert.Equal(2, result.TopCells.Count);
-        Assert.Equal(new string?[] { "FirstBlockless", "SecondBlockless" }, result.TopCells.Select(c => c.EditorId).ToArray());
-        Assert.True(result.TopCells[0].IsPersistentWorldspaceCell);
-        Assert.False(result.TopCells[1].IsPersistentWorldspaceCell);
     }
 
     [Fact]
     public void GetWorldspaceBlocks_ForwardsFullNameOntoCellSummary_ForTopCellsAndBlockCells()
     {
-        var svc = Service([
-            new CellLocationSummary("top:M.esp", "TopCell", null, null, null, null, 0, 0, Index.WorkingTreeState.None, "Sanctuary Hills"),
-            new CellLocationSummary("aaa:M.esp", "CellA", 0, 0, 0, 0, 1, 1, Index.WorkingTreeState.None, "Concord"),
-        ]);
-
-        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "wrld:M.esp");
+        var result = _index.Worldspaces.GetWorldspaceBlocks(Plugin, FormKeyOf("WithTopCell"));
 
         Assert.Equal("Sanctuary Hills", result.TopCells[0].FullName);
         Assert.Equal("Concord", result.Blocks[0].SubBlocks[0].Cells[0].FullName);
     }
 
+    private static ScatteredFixtureData TwoOriginsOfOneName() =>
+        new PluginFixtureBuilder("worldspace-query-origins")
+            .WithPlugin(PluginName, mod => HoldingWorldAndInterior(mod, "InData"))
+            .WithPlugin(PluginName, mod => HoldingWorldAndInterior(mod, "InModB"), origin: OtherOrigin.Origin)
+            .BuildScattered();
+
+    private static void HoldingWorldAndInterior(Fallout4Mod mod, string editorId)
+    {
+        Place(mod.Worldspaces.AddNew(editorId), (0, 0), (0, 0), new Cell(mod) { EditorID = editorId });
+        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+        subBlock.Cells.Add(new Cell(mod) { EditorID = editorId });
+        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+        block.SubBlocks.Add(subBlock);
+        mod.Cells.Records.Add(block);
+    }
+
+    [Fact]
+    public void GetWorldspaces_ListsTheWorldspacesOfTheGivenOrigin()
+    {
+        using var fixture = TwoOriginsOfOneName();
+        using var index = Indexes.Reconciled(fixture);
+
+        Assert.Equal(["InModB"], index.Worldspaces.GetWorldspaces(OtherOrigin).Select(w => w.EditorId));
+        Assert.Empty(index.Worldspaces.GetWorldspaces(Plugin));
+    }
+
+    [Fact]
+    public void GetWorldspaceBlocks_ReadsTheCellsOfTheGivenOrigin()
+    {
+        using var fixture = TwoOriginsOfOneName();
+        using var index = Indexes.Reconciled(fixture);
+
+        var result = index.Worldspaces.GetWorldspaceBlocks(OtherOrigin, "000800:M.esp");
+
+        Assert.Equal("InModB", Assert.Single(Assert.Single(Assert.Single(result.Blocks).SubBlocks).Cells).EditorId);
+        Assert.Empty(index.Worldspaces.GetWorldspaceBlocks(Plugin, "000800:M.esp").Blocks);
+    }
+
+    [Fact]
+    public void GetInteriorCells_ReadsTheCellsOfTheGivenOrigin()
+    {
+        using var fixture = TwoOriginsOfOneName();
+        using var index = Indexes.Reconciled(fixture);
+
+        var result = index.Worldspaces.GetInteriorCells(OtherOrigin);
+
+        Assert.Equal("InModB", Assert.Single(Assert.Single(Assert.Single(result).SubBlocks).Cells).EditorId);
+        Assert.Empty(index.Worldspaces.GetInteriorCells(Plugin));
+    }
+
     [Fact]
     public void GetWorldspaceBlocks_RollsACellsParseFailureUpItsSubBlockAndBlock_SoACollapsedNodeStillShowsTheErrorBeneathIt()
     {
-        var svc = Service([
-            new CellLocationSummary("aaa:M.esp", "CellA", 0, 0, 0, 0, 1, 1, Index.WorkingTreeState.None, null, HasParseFailure: true),
-            new CellLocationSummary("bbb:M.esp", "CellB", 1, 0, 0, 0, 2, 2, Index.WorkingTreeState.None),
-        ]);
+        using var index = Indexes.Reconciled(_fixture, adapter: new UnreadableRecordAdapter(FormKeyOf("CellA")));
 
-        var result = svc.GetWorldspaceBlocks(new PluginAddress("M.esp", PluginOrigin.DataDirectory), "wrld:M.esp");
+        var result = index.Worldspaces.GetWorldspaceBlocks(Plugin, FormKeyOf("Grouped"));
 
         var failing = result.Blocks.Single(b => b is { X: 0, Y: 0 });
         Assert.True(failing.HasParseFailure);
-        Assert.True(failing.SubBlocks.Single().HasParseFailure);
-        Assert.True(failing.SubBlocks.Single().Cells.Single().HasParseFailure);
+        Assert.True(failing.SubBlocks.Single(s => s is { X: 0, Y: 0 }).HasParseFailure);
+        Assert.True(failing.SubBlocks.Single(s => s is { X: 0, Y: 0 }).Cells.Single().HasParseFailure);
+        Assert.False(failing.SubBlocks.Single(s => s is { X: 1, Y: 1 }).HasParseFailure);
 
         var clean = result.Blocks.Single(b => b is { X: 1, Y: 0 });
         Assert.False(clean.HasParseFailure);
@@ -232,11 +268,32 @@ public class WorldspaceQueryServiceTests
     [Fact]
     public void GetWorldspaces_MarksOnlyTheWorldspaceTheIndexFindsAFailureBeneath()
     {
-        var svc = Service(Reads(Worldspace("000801:M.esp", "WorldA", holdsAnUnreadableRecord: true), Worldspace("000802:M.esp", "WorldB")));
+        using var index = Indexes.Reconciled(_fixture, adapter: new UnreadableRecordAdapter(FormKeyOf("CellA")));
 
-        var result = svc.GetWorldspaces(new PluginAddress("M.esp", PluginOrigin.DataDirectory));
+        var result = index.Worldspaces.GetWorldspaces(Plugin);
 
-        Assert.True(result.Single(w => w.FormKey == "000801:M.esp").HasParseFailure);
-        Assert.False(result.Single(w => w.FormKey == "000802:M.esp").HasParseFailure);
+        Assert.True(result.Single(w => w.FormKey == FormKeyOf("Grouped")).HasParseFailure);
+        Assert.False(result.Single(w => w.FormKey == FormKeyOf("Scrambled")).HasParseFailure);
+    }
+
+    private sealed class UnreadableRecordAdapter(string formKey) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        public override IPluginDocuments OpenDocuments(
+            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+            PluginStrings? strings = null) =>
+            new Unreadable(base.OpenDocuments(modPath, gameRelease, schemas, strings), formKey);
+    }
+
+    private sealed class Unreadable(IPluginDocuments inner, string formKey) : IPluginDocuments
+    {
+        public PluginDocument Header => inner.Header;
+        public IReadOnlyList<RecordTypeFailure> Failures => inner.Failures;
+
+        public IEnumerable<PluginDocument> Records => inner.Records.Select(record =>
+            record.FormKey == formKey
+                ? record with { Text = $"{{\"FormKey\": \"{record.FormKey}\"}}", ParseDiagnosis = "could not be read" }
+                : record);
+
+        public void Dispose() => inner.Dispose();
     }
 }
