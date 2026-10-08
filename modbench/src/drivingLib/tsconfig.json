@@ -3,7 +3,7 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "../../out/projects/drivingLib",
-    // The driving lib holds code two or more views share (ADR-0014), so it sees what a view sees.
+    // The driving lib holds the mechanics common.md draws, so it sees what a view sees.
     "types": ["node", "vscode"]
   },
   "references": [
