@@ -3,10 +3,8 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Index;
 
-/// <summary>Every read the index answers. A record read
-/// sees only the active plugins (ADR-0012), except those that reach one plugin whatever its state:
-/// a search scoped to it, <see cref="GetIdentity"/> and <see cref="DocumentFromText"/>. A plugin's
-/// own facts answer while the snapshot names it.</summary>
+/// <summary>Every read the index answers. A record read sees only the active plugins (ADR-0012),
+/// except a search scoped to one plugin, GetIdentity and DocumentFromText, which reach it whatever its state.</summary>
 internal interface IRecordReads
 {
     /// <summary>What the Index read out of each plugin it has open, keyed by identity. A plugin it has

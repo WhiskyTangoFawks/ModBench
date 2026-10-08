@@ -120,9 +120,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     private static string ActiveJoin(string alias, string pluginColumn, string originColumn) =>
         $"{RegisteredJoin(alias, pluginColumn, originColumn)} AND p.load_order_idx IS NOT NULL";
 
-    /// <summary>The records view without the active filter: every registered plugin's rows, a
-    /// plugin that is not active with a null load index and no winning copy. For the reads that
-    /// reach one plugin whatever its state (ADR-0012).</summary>
+    /// <summary>The records view without the active filter: a plugin that is not active has a null
+    /// load index and no winning copy. For reads that reach one plugin whatever its state (ADR-0012).</summary>
     internal const string PluginRecordsView = "plugin_records";
 
     private static void CreatePublicViews(DuckDBConnection connection)
