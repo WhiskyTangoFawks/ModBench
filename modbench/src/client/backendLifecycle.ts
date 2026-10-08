@@ -179,7 +179,6 @@ export class BackendLifecycle {
     this.expectedAlive = false;
     this.log(`[backend] mEdit exited unexpectedly (code ${code})`);
     this.setStatus('stopped');
-    void this.start();
   }
 
   // A spawned child that is gone before `/health` answers is a failed start, whoever else answers
