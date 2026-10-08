@@ -40,25 +40,14 @@ export function rowLabelOf(carrier: unknown): string | undefined {
 /** What names a row in a refusal. */
 export const rowNameOf = (carrier: unknown): string => rowLabelOf(carrier) ?? 'a selected row';
 
-export type UpgradeTier = 'fileId' | 'archiveFilename';
-
-export interface UpgradeCandidate {
-  readonly modName: string;
-  readonly version?: string;
-  /** `fileId` beats `archiveFilename`; absent, the mod shares only the Nexus mod id. */
-  readonly tier?: UpgradeTier;
-}
-
-/** A downloaded file, with the installed mods Downloads found it could upgrade, best match first. */
 export interface DownloadArgument {
   readonly kind: 'download';
   readonly row: DownloadFile;
-  readonly upgrades: readonly UpgradeCandidate[];
 }
 
 export function downloadArgumentOf(carrier: unknown): DownloadArgument | undefined {
   const argument = carriedArgument(carrier);
   const isDownload = (value: object): value is DownloadArgument =>
-    Reflect.get(value, 'kind') === 'download' && typeof Reflect.get(value, 'row') === 'object' && Array.isArray(Reflect.get(value, 'upgrades'));
+    Reflect.get(value, 'kind') === 'download' && typeof Reflect.get(value, 'row') === 'object';
   return argument && isDownload(argument) ? argument : undefined;
 }
