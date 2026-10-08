@@ -2,9 +2,8 @@
 
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
-import { newModNameRefusal } from '../coreLib/commandRefusals';
 import {
-  ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, installFromArchive, installFromFolder,
+  ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, installFromArchive, installFromFolder, installNameRefusal,
   type InstallAccess,
 } from '../install/install';
 import { downloadArgumentOf } from '../drivingLib/argument';
@@ -35,7 +34,7 @@ interface SourceKindItem extends vscode.QuickPickItem {
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { access, instance, reporterFor, warnIfFomod, downloadInstall } = deps;
-  const validateName = (name: string) => newModNameRefusal(access.adapter, name);
+  const validateName = (name: string) => installNameRefusal(access.adapter, name);
   const installArchive = async (archivePath: string): Promise<InstallOutcome> => {
     const name = await promptModName(defaultModName(archivePath), validateName);
     if (!name) return NOT_INSTALLED;
