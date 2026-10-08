@@ -9,7 +9,7 @@ vi.mock('vscode', () => ({
 import { compilableSelected, pluginsKeyContext } from '../gestureEntry';
 import { pluralArgument, selectionArgument, singularArgument } from '../../drivingLib/gestureEntry';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
-import type { PluginTreeNode } from '../PluginTreeProvider';
+import type { RecordBrowserNode } from '../RecordBrowser';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 import { cellRow, recordGroupRow, recordRow } from './browserRows';
 
@@ -51,15 +51,15 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   const WEAPON = { type: 'weap', count: 3, displayName: 'Weapon' };
   const ownRecord = (formKey: string, plugin: string, origin: string, conditions: { tracked: boolean; editable: boolean }, recordType?: string) =>
     recordRow(recordSummaryFixture({ formKey, plugin }), origin, conditions, recordType);
-  let weapons: PluginTreeNode;
-  let untrackedWeapons: PluginTreeNode;
-  let quests: PluginTreeNode;
-  let own: PluginTreeNode;
-  let immutable: PluginTreeNode;
-  let untrackedRecord: PluginTreeNode;
-  let cell: PluginTreeNode;
-  let quest: PluginTreeNode;
-  let readOnlyQuest: PluginTreeNode;
+  let weapons: RecordBrowserNode;
+  let untrackedWeapons: RecordBrowserNode;
+  let quests: RecordBrowserNode;
+  let own: RecordBrowserNode;
+  let immutable: RecordBrowserNode;
+  let untrackedRecord: RecordBrowserNode;
+  let cell: RecordBrowserNode;
+  let quest: RecordBrowserNode;
+  let readOnlyQuest: RecordBrowserNode;
   beforeAll(async () => {
     weapons = await recordGroupRow(WEAPON, ALPHA, EDITABLE);
     untrackedWeapons = await recordGroupRow(WEAPON, { name: 'Beta.esp', origin: 'ModB' });

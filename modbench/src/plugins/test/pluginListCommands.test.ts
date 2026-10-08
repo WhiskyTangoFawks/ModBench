@@ -30,7 +30,7 @@ import {
   pluginsCopyValueText, registerCreatePluginCommand, registerPluginSortCommands, registerRevealInExplorerCommand,
 } from '../pluginListCommands';
 import { PLUGINS_KEY_ARGS } from '../gestureEntry';
-import type { PluginTreeNode } from '../PluginTreeProvider';
+import type { RecordBrowserNode } from '../RecordBrowser';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 import { cellRow, placedRow, recordGroupRow, recordRow, worldspaceRow } from './browserRows';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
@@ -411,8 +411,8 @@ describe('pluginsCopyValueText', () => {
   const plugin = new PluginNode({ name: 'Alpha.esp', enabled: true }, 'ModA');
   const locked = new ImplicitMasterNode('Fallout4.esm', 'Data/');
   const ALPHA = { name: 'Alpha.esp', origin: 'ModA' };
-  let record: PluginTreeNode;
-  let mixed: (PluginTreeNode | PluginNode | ImplicitMasterNode)[];
+  let record: RecordBrowserNode;
+  let mixed: (RecordBrowserNode | PluginNode | ImplicitMasterNode)[];
   beforeAll(async () => {
     record = await recordRow(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp', editorId: 'Gun' }), 'ModA');
     mixed = [

@@ -11,7 +11,7 @@ vi.mock('vscode', () => ({
 
 import * as vscode from 'vscode';
 import { childrenOf, recordRow, soleChild, soleGroup } from './browserRows';
-import { PluginTreeProvider, type PluginTreeNode } from '../PluginTreeProvider';
+import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import type { PluginConditions } from '../pluginFacts';
 import { recordResourceUri } from '../recordResourceUri';
 import type { PluginAddress } from '../../wire/pluginAddress';
@@ -56,12 +56,12 @@ function makeClient(overrides: Partial<{
 
 const PLUGIN0: PluginAddress = { name: 'Plugin0.esp', origin: 'Data/' };
 
-function openedArguments(row: PluginTreeNode): unknown {
+function openedArguments(row: RecordBrowserNode): unknown {
   return row.command?.arguments;
 }
 
 async function containerRowOver(
-  record: RecordSummary, origin = 'Data/', client = makeClient(), provider = new PluginTreeProvider(client),
+  record: RecordSummary, origin = 'Data/', client = makeClient(), provider = new RecordBrowser(client),
 ) {
   const row = await recordRow(record, origin, undefined, 'qust', { client, provider });
   return { provider, repo: client, row };
@@ -81,15 +81,15 @@ function oneSubBlock(cells: CellSummary[], block = 0, subBlock = 0): InteriorCel
   return [{ number: block, hasParseFailure, subBlocks: [{ number: subBlock, hasParseFailure, cells }] }];
 }
 
-async function interiorCellsBeneath(provider: PluginTreeProvider, cellGroup: PluginTreeNode): Promise<PluginTreeNode[]> {
+async function interiorCellsBeneath(provider: RecordBrowser, cellGroup: RecordBrowserNode): Promise<RecordBrowserNode[]> {
   const [block] = await provider.getChildren(cellGroup);
   const [subBlock] = await provider.getChildren(present(block, 'the sole block'));
   return provider.getChildren(present(subBlock, 'the sole sub-block'));
 }
 
 async function interiorCellRow(
-  repo: InMemoryMEditClient, provider: PluginTreeProvider, cell: CellSummary, plugin: PluginAddress = PLUGIN0,
-): Promise<PluginTreeNode> {
+  repo: InMemoryMEditClient, provider: RecordBrowser, cell: CellSummary, plugin: PluginAddress = PLUGIN0,
+): Promise<RecordBrowserNode> {
   repo.setQueryAnswer('getRecordTypes', [recordTypeCountFixture({ type: 'cell', count: 1 })]);
   repo.setQueryAnswer('getInteriorCells', oneSubBlock([cell]));
   const [row] = await interiorCellsBeneath(provider, await soleGroup(provider, plugin));
@@ -97,10 +97,10 @@ async function interiorCellRow(
 }
 
 async function rowsBeneath(
-  provider: PluginTreeProvider, plugin: PluginAddress, told: PluginConditions,
-): Promise<PluginTreeNode[]> {
-  const states: PluginTreeNode[] = [];
-  const walk = async (nodes: readonly PluginTreeNode[]): Promise<void> => {
+  provider: RecordBrowser, plugin: PluginAddress, told: PluginConditions,
+): Promise<RecordBrowserNode[]> {
+  const states: RecordBrowserNode[] = [];
+  const walk = async (nodes: readonly RecordBrowserNode[]): Promise<void> => {
     for (const node of nodes) {
       if (/^(recordType|record|worldspace|cell|placed) /.test(String(node.contextValue))) states.push(node);
       if (node.collapsibleState !== vscode.TreeItemCollapsibleState.None) await walk(await provider.getChildren(node));
@@ -110,10 +110,10 @@ async function rowsBeneath(
   return states;
 }
 
-describe('PluginTreeProvider.getPluginChildren (record types)', () => {
+describe('RecordBrowser.getPluginChildren (record types)', () => {
   it('returns one group per record type', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'weap', count: 10 }, { type: 'npc_', count: 3 }] });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
 
@@ -125,7 +125,7 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
     const repo = makeClient({
       recordTypes: [{ type: 'acti', count: 10, displayName: 'Activator' }],
     });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const typeNode = await soleGroup(provider, PLUGIN0);
 
@@ -139,7 +139,7 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
         { type: 'qust', count: 1, isCreatable: false },
       ],
     });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const [npc, qust] = await provider.getPluginChildren(PLUGIN0);
 
@@ -149,7 +149,7 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
 
   it('builds the Worldspace and Cell groups as record-type groups of their type, so they offer create as any group does', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }, { type: 'cell', count: 2 }] });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const groups = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, { tracked: true, editable: true });
 
@@ -160,11 +160,11 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
   });
 });
 
-describe('PluginTreeProvider.getChildren of a record-type group', () => {
+describe('RecordBrowser.getChildren of a record-type group', () => {
   it('lists a record row for every record in one call', async () => {
     const records = [makeRecord(0), makeRecord(1), makeRecord(2)];
     const repo = makeClient({ records: { items: records, total: 3 } });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const typeNode = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(typeNode);
@@ -176,7 +176,7 @@ describe('PluginTreeProvider.getChildren of a record-type group', () => {
     const FALLOUT4_ESM_INFO_COUNT = 78_089;
     const records = Array.from({ length: FALLOUT4_ESM_INFO_COUNT }, (_, i) => makeRecord(i));
     const repo = makeClient({ records: { items: records, total: FALLOUT4_ESM_INFO_COUNT } });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const typeNode = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(typeNode);
@@ -200,7 +200,7 @@ describe('PluginTreeProvider.getChildren of a record-type group', () => {
         total: 2,
       },
     });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const typeNode = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(typeNode);
@@ -212,13 +212,13 @@ describe('PluginTreeProvider.getChildren of a record-type group', () => {
   });
 });
 
-describe('PluginTreeProvider.getChildren of a record-type group — no per-row fan-out for container presence', () => {
+describe('RecordBrowser.getChildren of a record-type group — no per-row fan-out for container presence', () => {
   it('listing ~1,300 Quests issues exactly one getRecords call and zero getContainerChildren calls', async () => {
     const FALLOUT4_ESM_APPROXIMATE_QUST_COUNT = 1_300;
     const records = Array.from(
       { length: FALLOUT4_ESM_APPROXIMATE_QUST_COUNT }, (_, i) => makeRecord(i, 'None', i % 2 === 0));
     const repo = makeClient({ recordTypes: [{ type: 'qust', count: FALLOUT4_ESM_APPROXIMATE_QUST_COUNT }], records: { items: records, total: FALLOUT4_ESM_APPROXIMATE_QUST_COUNT } });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const typeNode = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(typeNode);
@@ -231,7 +231,7 @@ describe('PluginTreeProvider.getChildren of a record-type group — no per-row f
 
 describe('a record-type group row', () => {
   const groupOf = async (type: { type: string; count: number; displayName?: string; isCreatable?: boolean }) => {
-    const provider = new PluginTreeProvider(makeClient({ recordTypes: [type] }));
+    const provider = new RecordBrowser(makeClient({ recordTypes: [type] }));
     return soleGroup(provider, PLUGIN0);
   };
 
@@ -310,7 +310,7 @@ describe('a record row', () => {
 
 describe('onDidReadRecords / workingTreeStateOf', () => {
   async function readGroup(repo: InMemoryMEditClient) {
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const typeNode = await soleGroup(provider, PLUGIN0);
     const read: (readonly unknown[])[] = [];
     provider.onDidReadRecords((uris) => read.push(uris));
@@ -383,7 +383,7 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
   });
 
   it('workingTreeStateOf is undefined for a record nothing has cached yet', () => {
-    const provider = new PluginTreeProvider(makeClient());
+    const provider = new RecordBrowser(makeClient());
     expect(provider.workingTreeStateOf(recordResourceUri({ name: 'Plugin0.esp', origin: 'Data/' }, '000001:Fallout4.esm'))).toBeUndefined();
   });
 
@@ -412,7 +412,7 @@ describe('worldspace, cell and placed rows state their record', () => {
       persistent: [{ workingTreeState: 'None', formKey: RECORD.formKey, editorId: placedEditorId, baseFormKey: '000802:A.esp', recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const worldspace = await soleChild(provider, await soleGroup(provider, A_ESP), 'the worldspace group');
     const cell = await soleChild(provider, worldspace, 'the worldspace');
     const placed = await soleChild(provider, await soleChild(provider, cell, 'the cell'), 'the placed group');
@@ -466,7 +466,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
   }
 
   it('states a tracked, editable plugin on its groups, records, a container\'s children, worldspace, cells and placed references', async () => {
-    const states = (await rowsBeneath(new PluginTreeProvider(spatialClient()), { name: 'Plugin0.esp', origin: 'Data/' }, TRACKED))
+    const states = (await rowsBeneath(new RecordBrowser(spatialClient()), { name: 'Plugin0.esp', origin: 'Data/' }, TRACKED))
       .map((n) => String(n.contextValue));
 
     expect(states).toEqual([
@@ -481,7 +481,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
   });
 
   it('states an untracked plugin untracked on every row beneath it', async () => {
-    const states = (await rowsBeneath(new PluginTreeProvider(spatialClient()), { name: 'Plugin0.esp', origin: 'Data/' }, { tracked: false, editable: true }))
+    const states = (await rowsBeneath(new RecordBrowser(spatialClient()), { name: 'Plugin0.esp', origin: 'Data/' }, { tracked: false, editable: true }))
       .map((n) => String(n.contextValue));
 
     const CONDITION_WORDS = new Set(['tracked', 'untracked', 'editable']);
@@ -490,10 +490,10 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
   });
 });
 
-describe('PluginTreeProvider.refresh', () => {
+describe('RecordBrowser.refresh', () => {
   it('asks the view to render again, and the group then lists what mEdit now holds', async () => {
     const repo = makeClient({ records: { items: [makeRecord(0)], total: 1 } });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const typeNode = await soleGroup(provider, PLUGIN0);
     const labelsBeneath = async () => (await provider.getChildren(typeNode)).map((n) => n.label);
     expect(await labelsBeneath()).toEqual(['Record0']);
@@ -508,7 +508,7 @@ describe('PluginTreeProvider.refresh', () => {
   });
 });
 
-describe('PluginTreeProvider worldspace tree', () => {
+describe('RecordBrowser worldspace tree', () => {
   it('expands a worldspace into its persistent cell and blocks, labeled the way xEdit does', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
     repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
@@ -516,7 +516,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       topCells: [{ workingTreeState: 'None', formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false }],
       blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }] }] }],
     });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
     const [wsNode] = await provider.getChildren(wsRoot);
 
@@ -543,7 +543,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       ],
       blocks: [],
     });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
     const [wsNode] = await provider.getChildren(wsRoot);
 
@@ -560,7 +560,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       persistent: [{ workingTreeState: 'None', formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const cellNode = await interiorCellRow(repo, provider, interiorCell('c:M.esp', 'TheCell'));
 
     const groups = await provider.getChildren(cellNode);
@@ -579,7 +579,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       ...oneSubBlock([interiorCell('a:M.esp', 'RoomA')], 0, 1),
       ...oneSubBlock([interiorCell('b:M.esp', 'RoomB')], 3, 7),
     ]);
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const [cellGroup] = await provider.getPluginChildren({ name: 'M.esp', origin: 'Data/' });
 
     const blocks = await provider.getChildren(present(cellGroup, 'the Cell group'));
@@ -594,7 +594,7 @@ describe('PluginTreeProvider worldspace tree', () => {
   it('lists every interior cell from one call', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'cell', count: 60 }] });
     repo.setQueryAnswer('getInteriorCells', oneSubBlock(Array.from({ length: 60 }, (_, i) => interiorCell(`${i}:M.esp`, `Room${i}`))));
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const cells = await interiorCellsBeneath(provider, await soleGroup(provider, { name: 'M.esp', origin: 'Data/' }));
 
@@ -608,7 +608,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       { workingTreeState: 'None', formKey: 'w1:M.esp', editorId: 'Holding', hasParseFailure: false, hasChildren: true },
       { workingTreeState: 'None', formKey: 'w2:M.esp', editorId: 'Empty', hasParseFailure: false, hasChildren: false },
     ]);
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const worldspaces = await childrenOf(provider, await soleGroup(provider, PLUGIN0), 'the worldspace group');
 
@@ -624,7 +624,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       interiorCell('c1:M.esp', 'Holding', { hasChildren: true }),
       interiorCell('c2:M.esp', 'Empty'),
     ]));
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const cells = await interiorCellsBeneath(provider, await soleGroup(provider, PLUGIN0));
 
@@ -635,7 +635,7 @@ describe('PluginTreeProvider worldspace tree', () => {
   });
 
   it('gives a group an expander only when it holds a record', async () => {
-    const provider = new PluginTreeProvider(makeClient({ recordTypes: [{ type: 'weap', count: 1 }, { type: 'npc_', count: 0 }] }));
+    const provider = new RecordBrowser(makeClient({ recordTypes: [{ type: 'weap', count: 1 }, { type: 'npc_', count: 0 }] }));
 
     const groups = await provider.getPluginChildren(PLUGIN0);
 
@@ -643,7 +643,7 @@ describe('PluginTreeProvider worldspace tree', () => {
   });
 });
 
-describe('PluginTreeProvider fetch failures', () => {
+describe('RecordBrowser fetch failures', () => {
   it('getPluginChildren: builds a plugin\'s children from its (origin, filename)', async () => {
     const repo = makeClient({
       recordTypes: [
@@ -652,7 +652,7 @@ describe('PluginTreeProvider fetch failures', () => {
         { type: 'wrld', count: 1, displayName: 'Worldspace' },
       ],
     });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
 
@@ -662,7 +662,7 @@ describe('PluginTreeProvider fetch failures', () => {
 
   it('getPluginChildren: records below it carry the open-editor command', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'weap', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const [recordType] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
 
     const [record] = await provider.getChildren(recordType);
@@ -673,7 +673,7 @@ describe('PluginTreeProvider fetch failures', () => {
   it('getPluginChildren: renders an error node when getRecordTypes fails', async () => {
     const repo = makeClient();
     repo.setQueryFailure('getRecordTypes', new Error('boom'));
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
 
@@ -683,7 +683,7 @@ describe('PluginTreeProvider fetch failures', () => {
   it('fetchRecords: renders an error node when getRecords fails', async () => {
     const repo = makeClient();
     repo.setQueryFailure('getRecords', new Error('boom'));
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const node = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(node);
@@ -694,7 +694,7 @@ describe('PluginTreeProvider fetch failures', () => {
   it('fetchWorldspaces: renders an error node when getWorldspaces fails', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
     repo.setQueryFailure('getWorldspaces', new Error('boom'));
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const node = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(node);
@@ -706,7 +706,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
     repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryFailure('getWorldspaceBlocks', new Error('boom'));
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const node = await soleChild(provider, await soleGroup(provider, PLUGIN0), 'the worldspace group');
 
     const children = await provider.getChildren(node);
@@ -717,7 +717,7 @@ describe('PluginTreeProvider fetch failures', () => {
   it('fetchCellGroups: renders an error node when getCellChildRecords fails', async () => {
     const repo = makeClient();
     repo.setQueryFailure('getCellChildRecords', new Error('boom'));
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const node = await interiorCellRow(repo, provider, interiorCell('c:M.esp', 'TheCell'));
 
     const children = await provider.getChildren(node);
@@ -728,7 +728,7 @@ describe('PluginTreeProvider fetch failures', () => {
   it('fetchInteriorCells: renders an error node when getInteriorCells fails', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'cell', count: 1 }] });
     repo.setQueryFailure('getInteriorCells', new Error('boom'));
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const node = await soleGroup(provider, PLUGIN0);
 
     const children = await provider.getChildren(node);
@@ -737,11 +737,11 @@ describe('PluginTreeProvider fetch failures', () => {
   });
 });
 
-describe('PluginTreeProvider spatial origin threading', () => {
+describe('RecordBrowser spatial origin threading', () => {
   it('fetchWorldspaces: asks the repository for the node\'s own plugin, and the worldspace rows it builds carry that origin forward', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
     repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const node = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModB' });
 
     const wsNode = await soleChild(provider, node, 'the worldspace group');
@@ -758,7 +758,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
       blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: true, hasParseFailure: false }] }] }],
     });
     repo.setQueryAnswer('getCellChildRecords', { persistent: [], temporary: [] });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const worldspace = await soleChild(provider, await soleGroup(provider, { name: 'Shared.esp', origin: 'ModB' }), 'the worldspace group');
 
     const [topCellNode, blockNode] = await provider.getChildren(worldspace);
@@ -778,7 +778,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
       persistent: [{ workingTreeState: 'None', formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const node = await interiorCellRow(repo, provider, interiorCell('c:M.esp', 'TheCell'), { name: 'Shared.esp', origin: 'ModB' });
 
     const groupNode = await soleChild(provider, node, 'the cell');
@@ -791,7 +791,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
   it('fetchInteriorCells: asks the repository for the node\'s own plugin, and the rows it builds carry that origin forward', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'cell', count: 1 }] });
     repo.setQueryAnswer('getInteriorCells', oneSubBlock([interiorCell('i:M.esp', 'IntCell', { hasChildren: true })]));
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const node = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModB' });
 
     const [cellNode] = await interiorCellsBeneath(provider, node);
@@ -804,7 +804,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
 
   it('caches each plugin\'s cell references separately, so one plugin\'s page is never served for the other', async () => {
     const repo = makeClient();
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const cell = interiorCell('c:M.esp', 'TheCell');
     const fromA = await interiorCellRow(repo, provider, cell, { name: 'Shared.esp', origin: 'ModA' });
     const fromB = await interiorCellRow(repo, provider, cell, { name: 'Shared.esp', origin: 'ModB' });
@@ -817,7 +817,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
 
   it('caches each plugin\'s interior cells separately, so one plugin\'s cells are never served for the other', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'cell', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const fromA = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModA' });
     const fromB = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModB' });
 
@@ -838,7 +838,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
       persistent: [{ workingTreeState: 'None', formKey: 'p:M.esp', editorId: 'DoorRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const TRACKED_EDITABLE: PluginConditions = { tracked: true, editable: true };
     const READ_ONLY: PluginConditions = { tracked: false, editable: false };
 
@@ -846,10 +846,10 @@ describe('PluginTreeProvider spatial origin threading', () => {
       rowsBeneath(provider, { name: 'Shared.esp', origin: 'ModA' }, TRACKED_EDITABLE),
       rowsBeneath(provider, { name: 'Shared.esp', origin: 'ModB' }, READ_ONLY),
     ]);
-    const rowOf = (nodes: PluginTreeNode[], kind: string) =>
+    const rowOf = (nodes: RecordBrowserNode[], kind: string) =>
       present(nodes.find((n) => String(n.contextValue).startsWith(`${kind} `)), `the ${kind} row`);
-    const cellOf = (nodes: PluginTreeNode[]) => rowOf(nodes, 'cell');
-    const placedOf = (nodes: PluginTreeNode[]) => rowOf(nodes, 'placed');
+    const cellOf = (nodes: RecordBrowserNode[]) => rowOf(nodes, 'cell');
+    const placedOf = (nodes: RecordBrowserNode[]) => rowOf(nodes, 'placed');
     const cellA = cellOf(fromA);
     const placedA = placedOf(fromA);
     const cellB = cellOf(fromB);
@@ -867,12 +867,12 @@ describe('PluginTreeProvider spatial origin threading', () => {
 
 });
 
-describe('PluginTreeProvider.getPluginChildren (origin)', () => {
+describe('RecordBrowser.getPluginChildren (origin)', () => {
   const sharedClient = () => listsForThePluginAsked(makeClient({ recordTypes: [{ type: 'weap', count: 1 }] }));
 
   it('asks the repository for the plugin the row stands for', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'weap', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     await provider.getPluginChildren({ name: 'Shared.esp', origin: 'ModB' });
 
@@ -881,7 +881,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
 
   it('carries that plugin through to its record pages', async () => {
     const repo = sharedClient();
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const typeNode = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModB' });
     await provider.getChildren(typeNode);
@@ -891,7 +891,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
 
   it('caches each plugin separately, so one plugin\'s page is never served for the other', async () => {
     const repo = sharedClient();
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const fromA = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModA' });
     const fromB = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModB' });
@@ -903,7 +903,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
 
   it('caches one plugin once, whatever case its filename and origin arrive in, as MO2 and a Windows filesystem compare them', async () => {
     const repo = sharedClient();
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const asListed = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModA' });
     const recased = await soleGroup(provider, { name: 'shared.ESP', origin: 'moda' });
@@ -928,7 +928,7 @@ describe('which record rows are containers is mEdit\'s answer', () => {
   it('a group mEdit calls a container lists container rows that expand into their children, whatever the type', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'xxxx', count: 1, isContainer: true }], records: { items: [makeRecord(0, 'None', true)], total: 1 } });
     repo.setQueryAnswer('getContainerChildren', [makeContainerChild('child1:Fallout4.esm', 'yyyy')]);
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const [typeNode] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
     const [row] = await provider.getChildren(present(typeNode, 'the sole group'));
 
@@ -940,7 +940,7 @@ describe('which record rows are containers is mEdit\'s answer', () => {
 
   it('a group mEdit calls no container lists leaves, whatever the type', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'qust', count: 1, isContainer: false }], records: { items: [makeRecord(0, 'None', true)], total: 1 } });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const [typeNode] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
 
     const [row] = await provider.getChildren(present(typeNode, 'the sole group'));
@@ -966,7 +966,7 @@ describe('which record rows are containers is mEdit\'s answer', () => {
   });
 });
 
-describe('PluginTreeProvider.getChildren of a container row', () => {
+describe('RecordBrowser.getChildren of a container row', () => {
   it('a quest row expands via repository.getContainerChildren into ordinary record rows', async () => {
     const repo = makeClient();
     repo.setQueryAnswer('getContainerChildren', [
@@ -1033,7 +1033,7 @@ describe('PluginTreeProvider.getChildren of a container row', () => {
     repo.setQueryAnswerOnce('getContainerChildren', [makeContainerChild('dial-a:Shared.esp', 'dial', 'TopicModA')]);
     repo.setQueryAnswerOnce('getContainerChildren', [makeContainerChild('dial-b:Shared.esp', 'dial', 'TopicModB')]);
     const quest = { ...makeRecord(0, 'None', true), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' };
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const a = await containerRowOver(quest, 'ModA', repo, provider);
     const b = await containerRowOver(quest, 'ModB', repo, provider);
 
@@ -1053,7 +1053,7 @@ describe('the failure prefix', () => {
   it('marks a record whose document could not be read, and only that record', async () => {
     const unreadable = { ...makeRecord(0), parseDiagnosis: 'Perk 0000EF — unknown: bad flag', hasParseFailure: true };
     const repo = makeClient({ records: { items: [unreadable, makeRecord(1)], total: 2 } });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const typeNode = await soleGroup(provider, PLUGIN0);
 
     const recordRows = await provider.getChildren(typeNode);
@@ -1072,7 +1072,7 @@ describe('the failure prefix', () => {
         { type: 'weap', count: 5, displayName: 'Weapon', hasParseFailure: false },
       ],
     });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const typeNodes = await provider.getPluginChildren(PLUGIN0);
     const perk = present(typeNodes[0], 'the perk type node');
@@ -1098,7 +1098,7 @@ describe('the failure prefix', () => {
       persistent: [{ workingTreeState: 'None', formKey: 'p:M.esp', editorId: 'Ref', baseFormKey: null, recordType: 'refr', hasParseFailure: true }],
       temporary: [],
     });
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
     const [failing, healthy] = await provider.getChildren(wsRoot);
@@ -1128,7 +1128,7 @@ describe('the failure prefix', () => {
       interiorCell('bad:M.esp', 'Bad', { hasParseFailure: true }),
       interiorCell('ok:M.esp', 'Ok'),
     ]));
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
 
     const [interiorRootOrUndefined] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
     const interiorRoot = present(interiorRootOrUndefined, 'the interior-cells root');
@@ -1152,7 +1152,7 @@ describe('the failure prefix', () => {
       { ...makeRecord(1), recordType: 'info', hasContainerChildren: false, isContainer: false,
         parseDiagnosis: 'INFO 12 — unknown: bad', hasParseFailure: true },
     ]);
-    const provider = new PluginTreeProvider(repo);
+    const provider = new RecordBrowser(repo);
     const typeNode = await soleGroup(provider, PLUGIN0);
     const [questRowOrUndefined] = await provider.getChildren(typeNode);
     const questRow = present(questRowOrUndefined, 'the qust row');
