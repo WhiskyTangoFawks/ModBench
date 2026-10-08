@@ -20,7 +20,7 @@ internal static class TrackedMods
         var pluginName = Path.GetFileName(pluginPath);
         var (files, missingStrings) = TestAdapters.Mutagen()
             .ReadSourceOfAsync(
-                new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game), release,
+                new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null), release,
                 new PluginStrings(modFolder, dataFolder))
             .GetAwaiter().GetResult();
         if (missingStrings is not null)

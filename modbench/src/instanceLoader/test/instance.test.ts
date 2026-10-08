@@ -324,39 +324,39 @@ describe('Instance — the value', () => {
     expect(instance.value.foldersByMod.get('Harder VATS')?.map((f) => f.relativePath)).toEqual(['textures']);
   });
 
-  it('carries every plugin — listed, unlisted and Data-folder — with origin, slot, enabled and winning', async () => {
+  it('carries every plugin — listed, unlisted and Data-folder — with origin, line, enabled and winning', async () => {
     const { root, instance } = realInstance();
 
     await instance.refresh();
 
     expect(instance.value.plugins).toEqual([
-      { name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, slot: 0, enabled: true, winning: true },
-      { name: 'Tracked Patch Mod.esp', path: join(root, 'mods', 'Tracked Patch Mod', 'Tracked Patch Mod.esp'), origin: 'Tracked Patch Mod', slot: 1, enabled: true, winning: true },
-      { name: 'Unofficial Fallout 4 Patch.esp', path: join(DATA_FOLDER, 'Unofficial Fallout 4 Patch.esp'), origin: 'Data/', slot: 2, enabled: true, winning: true },
-      { name: 'ccSBJFO4003-Grenade.esl', path: join(DATA_FOLDER, 'ccSBJFO4003-Grenade.esl'), origin: 'Data/', slot: 3, enabled: true, winning: true },
-      { name: 'NonAsciiRetexture - Addon.esl', path: join(root, 'mods', NONO, 'NonAsciiRetexture - Addon.esl'), origin: NONO, slot: null, enabled: false, winning: true },
+      { name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, line: 0, enabled: true, winning: true },
+      { name: 'Tracked Patch Mod.esp', path: join(root, 'mods', 'Tracked Patch Mod', 'Tracked Patch Mod.esp'), origin: 'Tracked Patch Mod', line: 1, enabled: true, winning: true },
+      { name: 'Unofficial Fallout 4 Patch.esp', path: join(DATA_FOLDER, 'Unofficial Fallout 4 Patch.esp'), origin: 'Data/', line: 2, enabled: true, winning: true },
+      { name: 'ccSBJFO4003-Grenade.esl', path: join(DATA_FOLDER, 'ccSBJFO4003-Grenade.esl'), origin: 'Data/', line: 3, enabled: true, winning: true },
+      { name: 'NonAsciiRetexture - Addon.esl', path: join(root, 'mods', NONO, 'NonAsciiRetexture - Addon.esl'), origin: NONO, line: null, enabled: false, winning: true },
     ]);
   });
 
-  it('carries a disabled mod\'s own plugin, with no slot, not enabled, not winning, so the snapshot names plugins of disabled mods too', async () => {
+  it('carries a disabled mod\'s own plugin, with no line, not enabled, not winning, so the snapshot names plugins of disabled mods too', async () => {
     const { root, instance } = realInstance();
     const path = await writeModFile(root, 'Harder VATS', 'Harder VATS.esp', 'disabled mod plugin');
 
     await instance.refresh();
 
     expect(instance.value.plugins).toContainEqual(
-      { name: 'Harder VATS.esp', path, origin: 'Harder VATS', slot: null, enabled: false, winning: false },
+      { name: 'Harder VATS.esp', path, origin: 'Harder VATS', line: null, enabled: false, winning: false },
     );
   });
 
-  it('sends the overridden plugin of a filename two enabled mods provide, at the same slot', async () => {
+  it('sends the overridden plugin of a filename two enabled mods provide, at the same line', async () => {
     const { root, instance } = realInstance();
     const overridden = await writeModFile(root, 'Unofficial Fallout 4 Patch', 'NonAsciiRetexture.esp', 'overridden plugin');
 
     await instance.refresh();
 
     expect(instance.value.plugins).toContainEqual(
-      { name: 'NonAsciiRetexture.esp', path: overridden, origin: 'Unofficial Fallout 4 Patch', slot: 0, enabled: true, winning: false },
+      { name: 'NonAsciiRetexture.esp', path: overridden, origin: 'Unofficial Fallout 4 Patch', line: 0, enabled: true, winning: false },
     );
   });
 });
@@ -371,12 +371,12 @@ describe('Instance — the overwrite folder', () => {
 
     const plugins = instance.value.plugins.filter((p) => p.name === 'NonAsciiRetexture.esp');
     expect(plugins).toEqual([
-      { name: 'NonAsciiRetexture.esp', path: overwritePlugin, origin: 'overwrite/', slot: 0, enabled: true, winning: true },
-      { name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, slot: 0, enabled: true, winning: false },
+      { name: 'NonAsciiRetexture.esp', path: overwritePlugin, origin: 'overwrite/', line: 0, enabled: true, winning: true },
+      { name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, line: 0, enabled: true, winning: false },
     ]);
   });
 
-  it('sends an unlisted plugin sitting in overwrite/ with no slot, winning-most', async () => {
+  it('sends an unlisted plugin sitting in overwrite/ with no line, winning-most', async () => {
     const { root, instance } = realInstance();
     await writeFile(join(root, 'overwrite', 'New.esp'), '');
     await writeFile(join(root, 'overwrite', 'notes.txt'), '');
@@ -384,7 +384,7 @@ describe('Instance — the overwrite folder', () => {
     await instance.refresh();
 
     expect(instance.value.plugins.filter((p) => p.origin === 'overwrite/')).toEqual([
-      { name: 'New.esp', path: join(root, 'overwrite', 'New.esp'), origin: 'overwrite/', slot: null, enabled: false, winning: true },
+      { name: 'New.esp', path: join(root, 'overwrite', 'New.esp'), origin: 'overwrite/', line: null, enabled: false, winning: true },
     ]);
   });
 
@@ -395,7 +395,7 @@ describe('Instance — the overwrite folder', () => {
     await instance.refresh();
 
     expect(instance.value.plugins.find((p) => p.name === 'NonAsciiRetexture.esp'))
-      .toEqual({ name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, slot: 0, enabled: true, winning: true });
+      .toEqual({ name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, line: 0, enabled: true, winning: true });
   });
 
   it('never treats a directory under overwrite/ sharing a plugin\'s name as that plugin\'s file', async () => {
@@ -405,7 +405,7 @@ describe('Instance — the overwrite folder', () => {
     await instance.refresh();
 
     expect(instance.value.plugins.filter((p) => p.name === 'NonAsciiRetexture.esp'))
-      .toEqual([{ name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, slot: 0, enabled: true, winning: true }]);
+      .toEqual([{ name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, line: 0, enabled: true, winning: true }]);
   });
 });
 
@@ -959,7 +959,7 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(modProvided).toEqual(modProvidedBefore);
     const dataOnly = instance.value.plugins.find((p) => p.name === 'Unofficial Fallout 4 Patch.esp');
     expect(dataOnly).toBeDefined();
-    expect(dataOnly?.slot).toBe(dataOnlyBefore?.slot);
+    expect(dataOnly?.line).toBe(dataOnlyBefore?.line);
     expect(dataOnly?.enabled).toBe(dataOnlyBefore?.enabled);
     expect(dataOnly?.origin).toBe('Data/');
     expect(dataOnly?.path).toBeUndefined();

@@ -60,7 +60,7 @@ export interface InstanceValue {
   readonly filesByMod: ReadonlyMap<string, readonly OriginFile[]>;
   /** Each listed mod's folders, a disabled mod's too. */
   readonly foldersByMod: ReadonlyMap<string, readonly OriginFolder[]>;
-  /** Every plugin file, with origin, slot, enabled and winning. A listed
+  /** Every plugin file, with origin, line, enabled and winning. A listed
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
    *  undefined — when the game folder is not found. */
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];

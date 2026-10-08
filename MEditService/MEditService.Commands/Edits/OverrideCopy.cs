@@ -59,7 +59,7 @@ internal sealed class OverrideCopy
     {
         var (source, identity, destination, release, body) = copy;
         var formKey = identity.FormKey;
-        if (RefuseIfUnderride(formKey, destinationPlugin) is { } underrideRefusal) return underrideRefusal;
+        if (RefuseIfUnderride(identity, body, destinationPlugin) is { } underrideRefusal) return underrideRefusal;
 
         // A record a container's document carries, a worldspace's persistent cell among them, lands
         // inside the destination's copy of that document (the container rule).
@@ -165,13 +165,12 @@ internal sealed class OverrideCopy
     }
 
     // A plugin the load order does not place passes.
-    private RecordEditResult? RefuseIfUnderride(string formKey, PluginAddress destinationPlugin) =>
-        _resolution.OriginLoadingAfter(formKey, destinationPlugin) is { } originName
+    private RecordEditResult? RefuseIfUnderride(RecordIdentity identity, string body, PluginAddress destinationPlugin) =>
+        _resolution.MasterLoadingAfter(identity, body, destinationPlugin) is { } master
             ? RecordEditResult.Refused(
                 RecordEditRefusal.UnderrideDestination,
-                $"{destinationPlugin.Name} loads before {originName}, which originates {formKey} — copying it " +
-                "there would be an underride, not an override: the origin's copy would still win at runtime. " +
-                "Pick a destination that loads after the origin.")
+                $"{destinationPlugin.Name} loads before {master}, a master the copy of {identity.FormKey} needs — copying it " +
+                $"there would be an underride, not an override. Pick a destination that loads after {master}.")
             : null;
 
     private string StripEmbeddedChildren(string body, string recordType, GameRelease release) =>

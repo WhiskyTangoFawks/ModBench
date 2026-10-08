@@ -13,7 +13,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
 
     private PutLoadOrderHandler Handler => TestEditService.PutLoadOrderHandler(_holder);
 
-    private static RegisteredPlugin Plugin(string name) => new(name, "ModA", $"C:\\Instance\\mods\\ModA\\{name}", new PluginProvider.FromMod("ModA", "C:\\Instance\\mods\\ModA"));
+    private static RegisteredPlugin Plugin(string name) => new(name, "ModA", $"C:\\Instance\\mods\\ModA\\{name}", new PluginProvider.FromMod("ModA", "C:\\Instance\\mods\\ModA"), Line: null);
 
     private PutLoadOrderResult Put(GameRelease release, RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
         Handler.Put(_dataFolder, _instanceRoot, release, plugins, [.. active.Select(p => p.Key)], []);

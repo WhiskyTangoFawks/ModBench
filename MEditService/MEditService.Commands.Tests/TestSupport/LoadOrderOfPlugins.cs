@@ -27,6 +27,13 @@ internal sealed class LoadOrderOfPlugins : TestInstance
         Seal();
     }
 
+    /// <summary>Plugins in load order, each from the origin given, for two mods that provide one filename.</summary>
+    internal void Load(params (Fallout4Mod Mod, string Origin, bool Tracked, Listing Listing)[] plugins)
+    {
+        foreach (var (mod, origin, tracked, listing) in plugins) Add(mod, origin, tracked, listing);
+        Seal();
+    }
+
     internal static PluginAddress Address(IModGetter mod) => new(mod.ModKey.FileName, Origin(mod));
 
     internal string Text(IModGetter mod, FormKey formKey) => TrackedTree.Body(FolderOf(mod), Address(mod), formKey.ToString());

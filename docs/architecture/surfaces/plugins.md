@@ -227,7 +227,7 @@ As a user, I want:
 
 1. A pick of the mode, then a pick of the destination: the plugins I can edit, each with its load index, or `(not active)`. A destination that already holds a copy asks whether to replace it. Esc on either copies nothing. Source: catalog `copy`
 2. A copy as new to take the next free FormKey. A reference to itself follows it.
-3. A copy as override into a plugin that loads before the source refused: that is an underride. A plugin that is not active is judged at its line in `plugins.txt`, and one with no line is not judged. A cell or a worldspace copied as new refused.
+3. A copy as override into a plugin that loads before a master the copy needs, its origin or a plugin holding a record it references, refused: that is an underride. A plugin that is not active is judged at its line in `plugins.txt`, and one with no line is not judged. A cell or a worldspace copied as new refused.
 4. A container the destination lacks copied in as an override, in every mode. Where the game lets it be a Partial Form, it is one, so it carries only its children and overrides none of the container's own fields. Source: xEdit; editor-fields.md, Partial Form; ruling
 5. A copy, in either mode, to copy each record without its child records. To copy a child record too, I select it. Source: xEdit; commands.md, An all variant is select all, then the gesture
 
