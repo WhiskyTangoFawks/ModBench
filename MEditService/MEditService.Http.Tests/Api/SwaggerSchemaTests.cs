@@ -162,7 +162,7 @@ public sealed class SwaggerSchemaTests
         new[]
         {
             "name", "path", "isLight", "isMaster", "isBlueprint", "masters", "recordCount", "isImmutable",
-            "origin", "inLoadOrder",
+            "origin", "masterIssues", "inLoadOrder",
             "hasMatchingRecords", "isTracked", "hasParseFailure", "pluginSourceUnreadable",
         })]
     [InlineData("CellSummary", new[] { "formKey", "isPersistentWorldspaceCell", "hasParseFailure", "hasChildren", "workingTreeState" })]
@@ -182,6 +182,7 @@ public sealed class SwaggerSchemaTests
     [InlineData("PluginResponse", "name")]
     [InlineData("PluginResponse", "origin")]
     [InlineData("PluginResponse", "masters")]
+    [InlineData("PluginResponse", "masterIssues")]
     [InlineData("RecordSummary", "plugin")]
     public async Task NonNullableReferenceProperty_IsNotDescribedAsNullable(string schemaName, string propertyName)
     {
