@@ -617,9 +617,8 @@ class HttpMEditClient implements MEditClient {
     return data;
   }
 
-  async getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult | null> {
+  async getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult> {
     const { data, error, response } = await this.apiClient.POST('/records/compare', { body: { copies } });
-    if (response.status === 404) return null;
     this.ensureOk('getRecordsComparison', response, error);
     if (!data) throw new Error('getRecordsComparison: ok response carried no body');
     return data;
