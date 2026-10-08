@@ -267,6 +267,20 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         Assert.Empty(Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }));
     }
 
+    [PosixFact]
+    public void RenameSource_WhenTheRefCannotBePutBack_NamesWhatModbenchLastWrote_WithTheReasonGitGave()
+    {
+        var marker = Path.Combine(_modFolder, "second-ref-update");
+        GitHooks.Write(
+            _modFolder,
+            "reference-transaction",
+            $"[ \"$1\" = prepared ] || exit 0\n[ -e '{marker}' ] && exit 1\ntouch '{marker}'");
+
+        var failure = Assert.ThrowsAny<IOException>(() => Repository.RenameSource(Old, "New.esp"));
+
+        Assert.Contains("what Modbench last wrote for Old.esp \u2014 could not be restored: git", failure.Message, StringComparison.Ordinal);
+    }
+
     private SourceRepository Repository => SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require();
 
     private static List<TreeFile> Files(string plugin, IEnumerable<(string Path, string Text)> tree) =>
