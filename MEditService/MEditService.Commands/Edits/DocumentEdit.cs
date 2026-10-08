@@ -7,8 +7,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>Everything a document edit needs and nothing it may touch, with the nearest copies to the
-/// left that a cell's place and a refill read.</summary>
+/// <summary>Everything a document edit needs and nothing it may touch, with the walk to the left that a
+/// cell's place and a refill read.</summary>
 internal sealed record DocumentEditRequest(
     string Text,
     IReadOnlyList<PathHop> Prefix,
@@ -16,8 +16,7 @@ internal sealed record DocumentEditRequest(
     RecordEditEnvelope Envelope,
     GameRelease Release,
     Func<string, string> RoundTrip,
-    LeftCopy? CellCopyOnTheLeft,
-    LeftCopy? RefillCopyOnTheLeft);
+    LoadOrderResolution.MastersWalk Masters);
 
 /// <summary>A write is a patch on the document (ADR-0005). Pure: text and metadata in,
 /// text or one refusal out.</summary>
@@ -46,16 +45,18 @@ internal static class DocumentEdit
         if (RefuseIfPartialForm(record, request.Schema, cursor, spelled) is { } partialForm) return partialForm;
 
         var emptying = RecordEmptying.Of(record, request.Schema, cursor.Column, envelope.Value);
-        if (emptying?.RefuseCell(record, request.Prefix, request.Schema, request.Release, request.CellCopyOnTheLeft, spelled) is { } cannot)
+        if (emptying?.RefuseCell(record, request.Prefix, request.Schema, request.Release, request.Masters, spelled) is { } cannot)
             return cannot;
-        if (emptying?.RefuseRefill(request.RefillCopyOnTheLeft, request.Schema, record[FormKeyMember]?.GetValue<string>(), spelled) is { } unreadable)
+        var formKey = record[FormKeyMember]?.GetValue<string>();
+        var refill = emptying?.RefillFrom(request.Masters, request.Schema, formKey);
+        if (RecordEmptying.RefuseRefill(refill, request.Schema, formKey, spelled) is { } unreadable)
             return unreadable;
-        var left = emptying?.LeftOf(request.RefillCopyOnTheLeft);
+        var left = RecordEmptying.LeftOf(refill);
         if (emptying != null) envelope = envelope with { Value = emptying.FlagsWith(left) };
         if (RefusePersistentOnDeleted(record, request, cursor.Column, envelope.Value, spelled) is { } deleted) return deleted;
         var move = CellGroupMove.Of(record, request.Prefix, request.Schema, cursor.Column, envelope.Value);
         AnotherCell? into = null;
-        if (move?.RefuseUnknownCell(root, request.Release, request.CellCopyOnTheLeft, spelled, out into) is { } unknown) return unknown;
+        if (move?.RefuseUnknownCell(root, request.Release, request.Masters, spelled, out into) is { } unknown) return unknown;
 
         JsonNode? edited;
         FieldMetadata editedMeta;
