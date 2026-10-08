@@ -2,11 +2,11 @@
 
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { dropIndexIn, type Drop } from './dropIndex';
-import type { CommandResult, SelectionResult } from '../coreLib/commandResult';
+import type { CommandResult } from '../coreLib/commandResult';
 import { refuse } from '../ports/refuse';
 import type { MEditClient, PluginAddress, PluginMetadata } from '../client';
 import { moveOrderRefusal, type PluginOrderFactsOf } from './pluginOrder';
-import type { ItemRefusal } from '../ports/selectionOutcome';
+import type { ItemRefusal, SelectionResult } from '../ports/selectionOutcome';
 import type {
   DataFolderPlugins, DecidePluginOrder, InstanceAdapter, PluginEntry, PluginOrderChange,
 } from '../instanceAdapter/instanceAdapter';

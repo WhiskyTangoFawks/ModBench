@@ -7,3 +7,9 @@ export interface SelectionOutcome<T> {
   landed: readonly T[];
   refused: readonly ItemRefusal<T>[];
 }
+
+/** A gesture over a selection, in one write: each item landed or refused by name, or the whole
+ *  selection refused once. */
+export type SelectionResult<T> =
+  | { applied: true; outcome: SelectionOutcome<T> }
+  | { applied: false; refusal: string };

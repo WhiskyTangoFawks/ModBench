@@ -1,13 +1,13 @@
 import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
-import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import type { ItemRefusal, SelectionOutcome, SelectionResult } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import {
   entryNotFound, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
   type ModFolder, type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk, newModNameRefusal } from '../coreLib/commandRefusals';
-import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
+import { selectionOutcomeOf, type CommandResult } from '../coreLib/commandResult';
 
 async function changeModOrder(adapter: InstanceAdapter, profile: string, decide: DecideModOrder): Promise<CommandResult> {
   try {
