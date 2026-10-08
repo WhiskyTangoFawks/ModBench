@@ -2,11 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { present } from '../ports/present';
-import { FOLDER_KEY, INSTANCE_READ_KEY } from '../drivingLib/folderContext';
-import { IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom,
 } from './vscodeMock';
+import { FOLDER_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
 const orderOf = (entry: MenuEntry): number => Number((entry.group ?? '').split('@')[1] ?? Number.NaN);
