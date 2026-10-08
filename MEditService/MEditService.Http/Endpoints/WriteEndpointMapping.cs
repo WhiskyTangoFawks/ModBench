@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 
@@ -102,12 +104,23 @@ internal static class WriteEndpointMapping
         },
         extensions: new Dictionary<string, object?> { ["refusal"] = refusal.ToString() });
 
-    /// <summary>Put load order's own refusal: a bad request, since the only one this handler
-    /// answers is discovered by validating the release, never by touching the Index.</summary>
+    /// <summary>Put load order's own refusal: a bad request, since none of them is found by touching the Index.</summary>
     internal static IResult Refusal(PutLoadOrderResult result) => Results.Problem(
         detail: result.Message,
         statusCode: 400,
         extensions: new Dictionary<string, object?> { ["refusal"] = result.Refusal.ToString() });
+
+    /// <summary>The store rebuild's refusal: a missing instance root is a bad request, a held index is 423
+    /// Locked (ADR-0010).</summary>
+    internal static IResult Refusal(StoreRebuildRefused refused) => Results.Problem(
+        detail: refused.Message,
+        statusCode: refused.Refusal switch
+        {
+            StoreRebuildRefusal.InstanceRootNotFound => 400,
+            StoreRebuildRefusal.HeldByAnotherWindow => 423,
+            _ => throw new InvalidEnumArgumentException(nameof(refused), (int)refused.Refusal, typeof(StoreRebuildRefusal)),
+        },
+        extensions: new Dictionary<string, object?> { ["refusal"] = refused.Refusal.ToString() });
 
     /// <summary>A gesture over a selection answers 200 with what landed and what was refused, or the
     /// refusal of the whole selection (ADR-0019).</summary>
