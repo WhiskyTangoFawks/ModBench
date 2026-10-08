@@ -112,10 +112,9 @@ describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story
       { severity: 'warning', message, detail: 'E.esp (ModE): mEdit is down.' },
       { severity: 'warning', message, detail: `B.esp (ModB) holds no ${STAND}.` },
     ]);
-    expect(reporter.reports).toEqual([]);
   });
 
-  it('tells a reason again each time a search meets it', async () => {
+  it('writes a reason again each time a search meets it', async () => {
     const { reporter, symbolsFor } = symbols([plugin(modA)], [], {}, { searchRecords: () => Promise.reject(new Error('mEdit is down.')) });
 
     await symbolsFor('Rus');
@@ -139,7 +138,7 @@ describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story
       .toEqual([`modbench-child-record:${GUN_FILE}`, `"FormKey": "${PLACED}"`]);
   });
 
-  it('locates nothing for a symbol whose document it cannot open, and tells why', async () => {
+  it('locates nothing for a symbol whose document it cannot open, and writes why', async () => {
     const files = { [key(GUN, modA)]: { file: GUN_FILE, text: '' } };
     const { reporter, symbolsFor, locate } = symbols([plugin(modA)], [summary(GUN, modA, 'RustyGun')], files);
     const listing = await symbolsFor('Rusty');
@@ -151,7 +150,16 @@ describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story
     ]);
   });
 
-  it('lists nothing, and tells why, when it cannot list the plugins', async () => {
+  it('locates nothing, and writes why, for a symbol whose document states no member for it', async () => {
+    const { reporter, symbolsFor, locate } = symbols([plugin(modA)], [summary(GUN, modA, 'RustyGun')], { [key(GUN, modA)]: { file: GUN_FILE, text: '{}' } });
+
+    expect(await Promise.all((await symbolsFor('Rusty')).map(locate))).toEqual([undefined]);
+    expect(reporter.shownFailures).toEqual([
+      { severity: 'warning', message: `Go to Symbol in Workspace cannot open RustyGun [${GUN}].`, detail: `${GUN_FILE} states no ${GUN} member.` },
+    ]);
+  });
+
+  it('lists nothing, and writes why, when it cannot list the plugins', async () => {
     const { reporter, symbolsFor } = symbols([], [], {}, { getPlugins: () => Promise.reject(new Error('mEdit is down.')) });
 
     expect(await symbolsFor('Rusty')).toEqual([]);

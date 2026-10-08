@@ -30,7 +30,7 @@ export async function hoverAt(
     const comparison = await client.getComparison(found.formKey);
     return comparison ? { start: found.start, end: found.end, markdown: markdownOf(found.formKey, comparison) } : undefined;
   } catch (error) {
-    reporter.shownOnSurface('warning', `Hover cannot describe ${found.formKey}.`, errorMessage(error));
+    reporter.shownOnSurface('error', `Hover cannot describe ${found.formKey}.`, errorMessage(error));
     return undefined;
   }
 }

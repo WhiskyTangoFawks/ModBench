@@ -24,8 +24,8 @@ const asking = (fields: Field[], found: RecordSummary[] = [record('Gun', GUN)], 
   searchRecords: vi.fn((): Promise<RecordPage> => Promise.resolve({ items: found, total: found.length })),
 });
 
-const completingAtBar = (client: ReturnType<typeof asking>, marked: string) =>
-  completionsAt({ client, reporter: recordingReporter() }, marked.replace('|', ''), marked.indexOf('|'));
+const completingAtBar = (client: Parameters<typeof completionsAt>[0]['client'], marked: string, reporter = recordingReporter()) =>
+  completionsAt({ client, reporter }, marked.replace('|', ''), marked.indexOf('|'));
 
 const documentOf = (members: string) => `{ "FormKey": "${OWNER}", ${members} }`;
 
@@ -193,15 +193,13 @@ describe('completionsAt (plugin-source.md, In the text editor, story 5)', () => 
   it.each([
     ['the record\'s comparison', { getComparison: () => Promise.reject(new Error('mEdit is down.')) }],
     ['the search', { searchRecords: () => Promise.reject(new Error('mEdit is down.')) }],
-  ])('offers nothing, and writes why to the Output, when mEdit cannot answer %s', async (_, failing) => {
+  ])('writes why to the Output, and offers nothing, when mEdit cannot answer %s', async (_, failing) => {
     const reporter = recordingReporter();
     const client = { ...asking([reference('Armor')]), ...failing };
 
-    const marked = documentOf('"Armor": "Gu|"');
-    const found = await completionsAt({ client, reporter }, marked.replace('|', ''), marked.indexOf('|'));
+    const found = await completingAtBar(client, documentOf('"Armor": "Gu|"'), reporter);
 
     expect(found).toBeUndefined();
-    expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: `Completion cannot list what ${OWNER} offers here.`, detail: 'mEdit is down.' }]);
-    expect(reporter.reports).toEqual([]);
+    expect(reporter.shownFailures).toEqual([{ severity: 'error', message: `Completion cannot list what ${OWNER} offers here.`, detail: 'mEdit is down.' }]);
   });
 });

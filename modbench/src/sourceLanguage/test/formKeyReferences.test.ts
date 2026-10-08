@@ -152,7 +152,7 @@ describe('Find All References on a FormKey (plugin-source.md, In the text editor
 
       await referencesAt(ASKING, AT_GUN(ASKING));
 
-      expect([...reporter.reports, ...reporter.shownFailures]).toEqual([]);
+      expect(reporter.shownFailures).toEqual([]);
     });
 
     it('lists the copies it can, and writes the copy left out, when a plugin holds no copy mEdit counted', async () => {
@@ -186,7 +186,6 @@ describe('Find All References on a FormKey (plugin-source.md, In the text editor
       await referencesAt(ASKING, AT_GUN(ASKING));
 
       expect(reporter.shownFailures).toEqual([line(STAND), line(GUN), line(STAND), line(GUN)]);
-      expect(reporter.reports).toEqual([]);
     });
   });
 

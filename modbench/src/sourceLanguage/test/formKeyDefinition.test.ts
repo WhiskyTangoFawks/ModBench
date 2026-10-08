@@ -76,13 +76,16 @@ describe('Go to Definition on a FormKey (plugin-source.md, In the text editor, s
     expect(found?.uri).toMatchObject({ scheme: 'file', path: GUN_FILE });
   });
 
-  it('offers none where the record\'s document states no FormKey member for it', async () => {
-    const { definitionAt } = definitions({ open: () => Promise.resolve({ getText: () => '{ "EditorID": "Gun" }' }) });
+  it('offers none, and writes why to the Output, where the record\'s document states no FormKey member for it', async () => {
+    const { reporter, definitionAt } = definitions({ open: () => Promise.resolve({ getText: () => '{ "EditorID": "Gun" }' }) });
 
     expect(await definitionAt(REFERENCING, AT_GUN)).toBeUndefined();
+    expect(reporter.shownFailures).toEqual([
+      { severity: 'warning', message: `Go to Definition cannot open ${GUN}.`, detail: `${GUN_FILE} states no ${GUN} member.` },
+    ]);
   });
 
-  it('offers none for a FormKey no active plugin holds, and tells nothing', async () => {
+  it('offers none for a FormKey no active plugin holds, and writes nothing', async () => {
     const { client, reporter, definitionAt } = definitions();
     client.setQueryAnswer('getRecordOwner', undefined);
 
@@ -105,7 +108,7 @@ describe('Go to Definition on a FormKey (plugin-source.md, In the text editor, s
 
     expect(await definitionAt(REFERENCING, AT_GUN)).toBeUndefined();
     expect(reporter.shownFailures).toEqual([
-      { severity: 'warning', message: `Go to Definition cannot open ${GUN}.`, detail: 'The file is gone.' },
+      { severity: 'error', message: `Go to Definition cannot open ${GUN}.`, detail: 'The file is gone.' },
     ]);
   });
 

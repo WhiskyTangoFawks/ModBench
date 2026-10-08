@@ -47,7 +47,11 @@ export function workspaceSymbolsOf<Document extends { getText(): string }>({ cli
     try {
       const document = await open(uri);
       const member = formKeyMember(document.getText(), formKey);
-      return member && { uri, document, ...member };
+      if (!member) {
+        reporter.shownOnSurface('warning', `${GESTURE} cannot open ${name}.`, `${uri.path} states no ${formKey} member.`);
+        return undefined;
+      }
+      return { uri, document, ...member };
     } catch (error) {
       reporter.shownOnSurface('error', `${GESTURE} cannot open ${name}.`, errorMessage(error));
       return undefined;

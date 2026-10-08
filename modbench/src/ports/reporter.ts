@@ -12,8 +12,9 @@ export interface Reporter {
   /** A gesture the user invoked landed: an information toast and no log line. Nothing went wrong,
    *  so there is no detail to go back and read. */
   landed: (message: string) => void;
-  /** A failure the surface already says, in a dialog the user is answering or in a view's own
-   *  display: an Output line, what and why, and no notification on top of it. */
+  /** A failure the surface already says, in a dialog the user is answering, in a view's own
+   *  display, or in the empty or partial answer of a VS Code feature Modbench answers: an Output
+   *  line, what and why, and no notification on top of it. */
   shownOnSurface: (severity: Severity, message: string, detail?: string) => void;
   /** A gesture over a selection: one error naming each refused item and why, and nothing for the
    *  items that landed, so a fully landed outcome says nothing. */

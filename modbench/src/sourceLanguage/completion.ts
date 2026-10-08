@@ -62,7 +62,7 @@ export async function completionsAt(
     if (field?.type === 'formKey') return await referenceCompletions(client, field, text.slice(range.start, offset), range);
     return undefined;
   } catch (error) {
-    reporter.shownOnSurface('warning', `Completion cannot list what ${found.recordFormKey} offers here.`, errorMessage(error));
+    reporter.shownOnSurface('error', `Completion cannot list what ${found.recordFormKey} offers here.`, errorMessage(error));
     return undefined;
   }
 }

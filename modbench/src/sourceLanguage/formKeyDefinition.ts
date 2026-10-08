@@ -8,13 +8,10 @@ interface DefinitionDeps<Document> extends RecordLocationDeps<Document> {
   reporter: Pick<Reporter, 'shownOnSurface'>;
 }
 
-/** A refusal or a failure offers no definition, and is written to the Output (common.md, Reporting). */
+/** A refusal or a failure offers no definition, and is written to the Output (ADR-0019). */
 export function definitionsOf<Document extends { getText(): string }>(
   { client, reporter, open }: DefinitionDeps<Document>,
 ): (text: string, offset: number) => Promise<RecordLocation<Document> | undefined> {
-  const tell = (formKey: string, why: string) => {
-    reporter.shownOnSurface('warning', `Go to Definition cannot open ${formKey}.`, why);
-  };
   return async (text, offset) => {
     const found = formKeyAt(text, offset);
     if (!found) return undefined;
@@ -23,14 +20,18 @@ export function definitionsOf<Document extends { getText(): string }>(
       const opened = await recordDocument(client, { formKey });
       if (!opened) return undefined;
       if ('refused' in opened) {
-        tell(formKey, opened.refused);
+        reporter.shownOnSurface('warning', `Go to Definition cannot open ${formKey}.`, opened.refused);
         return undefined;
       }
       const document = await open(opened.uri);
       const member = formKeyMember(document.getText(), formKey);
-      return member && { uri: opened.uri, document, ...member };
+      if (!member) {
+        reporter.shownOnSurface('warning', `Go to Definition cannot open ${formKey}.`, `${opened.uri.path} states no ${formKey} member.`);
+        return undefined;
+      }
+      return { uri: opened.uri, document, ...member };
     } catch (error) {
-      tell(formKey, errorMessage(error));
+      reporter.shownOnSurface('error', `Go to Definition cannot open ${formKey}.`, errorMessage(error));
       return undefined;
     }
   };
