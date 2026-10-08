@@ -102,7 +102,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
                 codec, owner.Body, GameRelease.Fallout4, owner.RecordType, oldKey, newKey));
         var repository = TrackedMods.RepositoryOf(fixture.Entry);
         var identity = new RecordIdentity(fixture.Worldspace, current.RecordType, current.EditorId);
-        var carrying = repository.ContainerDocument(fixture.Plugin, identity, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)).Require();
+        var carrying = repository.Get(fixture.Plugin, identity).Require();
         SourceTransaction.Atomically(repository, transaction => transaction.Apply(
             repository.ChangesToRekey(fixture.Plugin, carrying, identity, newWorldspaceKey, rekeying)));
     }

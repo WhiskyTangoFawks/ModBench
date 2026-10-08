@@ -6,8 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands;
 
 /// <summary>The Copy gesture's handler (ADR-0014): each record into each destination,
-/// in the mode picked, as xEdit's Copy as Override Into… and Copy as New Record Into… do. A container
-/// goes before the records it holds, as xEdit's navigator copies a selection in tree order.</summary>
+/// in the mode picked, as xEdit's Copy as Override Into… and Copy as New Record Into… do.</summary>
 public sealed class CopyRecordHandler
 {
     private readonly OverrideCopy _override;
@@ -29,7 +28,7 @@ public sealed class CopyRecordHandler
     {
         _loadOrder.Require();
         return ItemWrite.Over(
-            records.OrderBy(record => _override.ContainerDepth(record.Plugin, record.FormKey)).SelectMany(record => destinations.Select(destination => new CopyItem(record, destination))),
+            ContainersFirst(records).SelectMany(record => destinations.Select(destination => new CopyItem(record, destination))),
             SameCopy.Instance,
             item => mode switch
             {
@@ -40,4 +39,8 @@ public sealed class CopyRecordHandler
             item => $"Could not write the copy of {item.Record.FormKey} into {item.Destination.Name} ({item.Destination.Origin})",
             _logger);
     }
+
+    // xEdit's navigator copies a selection in tree order; a lone record has no order to keep.
+    private IEnumerable<RecordAt> ContainersFirst(IReadOnlyList<RecordAt> records) =>
+        records.Count < 2 ? records : records.OrderBy(record => _override.ContainerDepth(record.Plugin, record.FormKey));
 }

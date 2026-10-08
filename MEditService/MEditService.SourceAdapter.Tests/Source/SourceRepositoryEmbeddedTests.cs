@@ -478,7 +478,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         GiveTheTemporaryRefItsCellsOwnFormKey();
 
         AssertTheCellClaimedTwiceByItsOwnDocument(Assert.Throws<AmbiguousSourceUnitException>(
-            () => Repository.ContainerDocument(Plugin, Identity(_persistentRef, "refr"), Schemas)));
+            () => Repository.ContainerOf(Plugin, Identity(_persistentRef, "refr"), Schemas)));
     }
 
     [Fact]
@@ -522,7 +522,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         GiveTheInteriorCellsDocumentNoFormKey();
 
         var refused = Assert.Throws<UnreadableSourceDocumentException>(
-            () => Repository.ContainerDocument(Plugin, Identity(_temporaryRef, "refr"), Schemas));
+            () => Repository.ContainerOf(Plugin, Identity(_temporaryRef, "refr"), Schemas));
 
         Assert.Contains("names no document of its own", refused.Message, StringComparison.Ordinal);
     }
@@ -711,7 +711,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var child = new RecordIdentity("00A001:Embedded.esp", "refr", null);
 
         Assert.Equal(Path.GetRelativePath(_modFolder, carrier), Repository.RelativePathOf(Plugin, child));
-        Assert.Equal("00A000:Embedded.esp", Repository.ContainerDocument(Plugin, child, Schemas)?.FormKey);
+        Assert.Equal("00A000:Embedded.esp", Repository.ContainerOf(Plugin, child, Schemas)?.ParentFormKey);
     }
 
     [Fact]

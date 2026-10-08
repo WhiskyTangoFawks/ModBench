@@ -57,10 +57,6 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
     public string? CellAt(string worldspace, int x, int y) =>
         _cellsByGrid.Value.TryGetValue((worldspace, x, y), out var cell) ? cell : null;
 
-    public IReadOnlyList<string> CellsIn(string worldspace) =>
-        [.. _cells.Value.Where(held => held.Value.Structure is { IsInterior: false } structure && structure.ParentWorldspace == worldspace)
-            .Select(held => held.Key)];
-
     public void Dispose()
     {
         if (_cache.IsValueCreated) _cache.Value.Dispose();
