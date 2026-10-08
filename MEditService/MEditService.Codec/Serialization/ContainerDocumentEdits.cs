@@ -48,45 +48,6 @@ public static class ContainerDocumentEdits
         return new NamedDocument(codec.SerializeToText(replacement, release), replacement.EditorID);
     }
 
-    /// <summary>The FormKey of every child record the text carries, at any depth.</summary>
-    public static IReadOnlyList<string> ChildFormKeys(
-        RecordTextCodec codec, string text, GameRelease release, string? recordType) =>
-        [.. DescendantsOf(codec.Deserialize(text, release, recordType)).Select(child => child.FormKey.ToString())];
-
-    /// <summary>The destination's own fields, each source child record overwriting the one held in its
-    /// subtree or in <paramref name="carriedTexts"/>, or added. Throws
-    /// <see cref="ChildSlotHeldByAnotherRecordException"/> when a single slot holds another.</summary>
-    public static string WithChildRecordsMerged(
-        RecordTextCodec codec, string destinationText, string? destinationRecordType,
-        string sourceText, string? sourceRecordType, GameRelease release,
-        IReadOnlyList<(string Text, string? RecordType)>? carriedTexts = null)
-    {
-        var source = codec.Deserialize(sourceText, release, sourceRecordType);
-        var destination = codec.Deserialize(destinationText, release, destinationRecordType);
-        var carried = (carriedTexts ?? [])
-            .Select(carriedText => (IMajorRecordGetter)codec.Deserialize(carriedText.Text, release, carriedText.RecordType))
-            .ToDictionary(record => record.FormKey);
-        ContainerChildFields.MergeChildren(
-            destination, destination, [.. ContainerChildFields.EnumerateChildren(source).Select(c => (c.SlotName, c.Child))], carried);
-        return codec.SerializeToText(destination, release);
-    }
-
-    /// <summary>A record the destination holds as a child record of the one copied: the source's own
-    /// fields, the children of both merged. Throws as <see cref="WithChildRecordsMerged"/> does.</summary>
-    public static NamedDocument WithRecordOverwritten(
-        RecordTextCodec codec, string destinationText, string? destinationRecordType,
-        string sourceText, string? sourceRecordType, GameRelease release)
-    {
-        var overwritten = ContainerChildFields.Overwritten(
-            codec.Deserialize(destinationText, release, destinationRecordType),
-            codec.Deserialize(sourceText, release, sourceRecordType));
-        return new NamedDocument(codec.SerializeToText(overwritten, release), overwritten.EditorID);
-    }
-
-    private static IEnumerable<IMajorRecordGetter> DescendantsOf(IMajorRecordGetter record) =>
-        ContainerChildFields.EnumerateChildren(record)
-            .SelectMany(child => DescendantsOf(child.Child).Prepend(child.Child));
-
     private static IMajorRecordGetter? ContainerIn(IMajorRecord owner, string containerFormKey) =>
         owner.FormKey.ToString().Equals(containerFormKey, StringComparison.Ordinal)
             ? owner

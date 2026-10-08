@@ -49,6 +49,7 @@ export function compilableSelected(selection: readonly PluginsTreeNode[]): RowOf
  *  neither is handed a row. */
 export interface PluginsKeyContext {
   readonly singlePlugin: boolean;
+  readonly holdsPluginLine: boolean;
   readonly allInUntrackedMod: boolean;
   readonly allInTrackedMod: boolean;
   readonly singleCreatable: boolean;
@@ -66,6 +67,7 @@ export function pluginsKeyContext(
   const creatableCandidate = onlySelected(selection, ...CREATE_ROW_KINDS);
   return {
     singlePlugin: onlySelected(selection, ...PLUGIN_ROW_KINDS) !== undefined,
+    holdsPluginLine: firstPlugin !== undefined,
     allInUntrackedMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'inUntrackedMod')),
     allInTrackedMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'inTrackedMod')),
     // A plugin row carries no creatable fact and needs none: its own pick lists only creatable

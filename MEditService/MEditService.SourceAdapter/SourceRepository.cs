@@ -129,13 +129,6 @@ public sealed class SourceRepository
         documents.RefuseUnreadable(identity.RecordType, identity.FormKey, body, unit.FullPath);
     }
 
-    /// <summary>The document carrying <paramref name="identity"/>: its own, else its container's. Null
-    /// when no document holds it. Throws <see cref="UnreadableSourceDocumentException"/> when the
-    /// document carrying it names no record.</summary>
-    public SourceDocument? ContainerDocument(
-        PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        Locator.ContainerDocument(plugin, identity, schemas);
-
     /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>:
     /// the tree only says which document that is. Null when nothing holds it; text naming no record throws
     /// <see cref="UnreadableSourceDocumentException"/>.</summary>
@@ -215,17 +208,6 @@ public sealed class SourceRepository
     public SourceDocument? GetCellAt(
         PluginAddress plugin, string worldspace, int x, int y, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         Locator.CellFormKeyAt(plugin, worldspace, x, y) is { } formKey ? Get(plugin, formKey, schemas) : null;
-
-    /// <summary>The FormKey of every cell <paramref name="worldspace"/> holds in this plugin's tree, its
-    /// persistent cell and each numbered cell.</summary>
-    public IReadOnlyList<string> CellsIn(
-        PluginAddress plugin, string worldspace, IReadOnlyDictionary<string, RecordTableSchema> schemas)
-    {
-        using var documents = OpenDocuments(plugin, schemas);
-        return [.. documents.Records
-            .Where(document => document.Cell is { IsInterior: false } cell && cell.ParentWorldspace == worldspace)
-            .Select(document => document.FormKey)];
-    }
 
     /// <summary>Every EditorID the plugin's tree holds now, a record with a document of its own and
     /// an embedded child alike — what a derived EditorID is checked against to stay unique in the

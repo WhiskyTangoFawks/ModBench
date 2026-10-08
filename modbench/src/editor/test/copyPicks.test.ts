@@ -13,15 +13,7 @@ const elsewhere: RecordAddress = { formKey: '000803:Other.esp', plugin: 'Other.e
 
 describe('the mode pick', () => {
   it('offers override and new, override first as xEdit\'s navigator does', () => {
-    expect(copyModeItems(false).map((item) => item.mode)).toEqual(['Override', 'New']);
-  });
-
-  it('offers deep copy as override, in xEdit\'s words and place, when a selected record has child records', () => {
-    expect(copyModeItems(true).map(({ label, mode }) => ({ label, mode }))).toEqual([
-      { label: 'Override', mode: 'Override' },
-      { label: 'Deep copy as override', mode: 'DeepOverride' },
-      { label: 'New record', mode: 'New' },
-    ]);
+    expect(copyModeItems.map((item) => item.mode)).toEqual(['Override', 'New']);
   });
 });
 

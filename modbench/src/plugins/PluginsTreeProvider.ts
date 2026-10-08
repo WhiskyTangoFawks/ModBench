@@ -127,6 +127,7 @@ export class ImplicitMasterNode extends vscode.TreeItem {
 
 const LOSING_END: PluginsDrop = { kind: 'losingEnd' };
 const WINNING_END: PluginsDrop = { kind: 'winningEnd' };
+const BOTTOM_OF_THE_VIEW = 'Bottom of the view';
 
 /** plugins.md, States, story 1: an empty list says so on the message line, never as a row.
  *  @public Read by packageJson.test, which holds package.json to it. */
@@ -379,9 +380,13 @@ export class PluginsTreeProvider
     return isRow(row) ? this.shownRows().find((shown) => shown.id === row.id) : undefined;
   }
 
-  private shownRows(): PluginListNode[] {
+  private rowsInViewOrder(): PluginListNode[] {
     const losingFirst = this.builtRows();
-    const built = this.direction === 'winningAtTop' ? [...losingFirst].reverse() : losingFirst;
+    return this.direction === 'winningAtTop' ? [...losingFirst].reverse() : losingFirst;
+  }
+
+  private shownRows(): PluginListNode[] {
+    const built = this.rowsInViewOrder();
     const named = this.filterText
       ? built.filter((n) => pluginFileOf(n).toLowerCase().includes(this.filterLower))
       : built;
@@ -516,6 +521,17 @@ export class PluginsTreeProvider
     const drop = this.dropFor(target, plugins.map((p) => p.name));
     if (drop === undefined) return;
     await vscode.commands.executeCommand('modbench.plugin.move', plugins, drop);
+  }
+
+  /** plugins.md, Move: the block lands as a drop there lands. A drop on the row of a plugin the
+   *  game loads with no line does not land directly above it, so that row is no place to offer. */
+  movePlaces(names: readonly string[]): { label: string; drop: PluginsDrop }[] {
+    const lineRows = this.rowsInViewOrder().filter((row): row is PluginNode => row instanceof PluginNode);
+    const targets = [...lineRows.map((row) => [row.plugin.name, row] as const), [BOTTOM_OF_THE_VIEW, undefined] as const];
+    return targets.flatMap(([label, target]) => {
+      const drop = this.dropFor(target, names);
+      return drop === undefined ? [] : [{ label, drop }];
+    });
   }
 
   // plugins.md, Drag and drop, story 2: a drop lands as shown in either direction, and the locked
