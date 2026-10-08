@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -13,41 +14,43 @@ namespace MEditService.Commands.Tests.RealData;
 
 public sealed class StaleNextObjectIdRoundTripGateTests
 {
-    public static TheoryData<string, uint, uint, uint> RealFixturesWithAStaleHeader => new()
+    private const int HeaderLength = 24;
+    private const int InflatedLengthSize = 4;
+
+    public static TheoryData<string, uint> GeneratedPluginsWithAStaleHeader => new()
     {
-        { "LitR - Settings Holotapes Sorting.esp", 2, 16, 18 },
-        { "RecruitSierra.esl", 17098, 148, 145 },
-        { "Hitech Trashcans to BOS.esp", 43, 150, 149 },
+        { StaleHeaderPlugins.SettingsFileName, 5 },
+        { StaleHeaderPlugins.SierraFileName, 4 },
+        { StaleHeaderPlugins.HitechFileName, 11 },
     };
 
-    public static TheoryData<string> TrackAndCompileRealFixtures => new()
+    public static TheoryData<string> TrackAndCompileGeneratedPlugins => new()
     {
-        "LitR - Settings Holotapes Sorting.esp",
-        "RecruitSierra.esl",
-        "Hitech Trashcans to BOS.esp",
+        StaleHeaderPlugins.SettingsFileName,
+        StaleHeaderPlugins.SierraFileName,
+        StaleHeaderPlugins.HitechFileName,
     };
-
-    private static string FixturePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", fileName);
 
     [Theory]
-    [MemberData(nameof(RealFixturesWithAStaleHeader))]
-    public async Task Save_OfARealPluginWithAStaleHeader_KeepsItsNextObjectId_AndDerivesNumRecordsFromContent(
-        string fileName, uint storedNextObjectId, uint storedNumRecords, uint derivedNumRecords)
+    [MemberData(nameof(GeneratedPluginsWithAStaleHeader))]
+    public async Task Save_OfAGeneratedPluginWithAStaleHeader_KeepsItsNextObjectId_AndDerivesNumRecordsFromContent(
+        string fileName, uint derivedNumRecords)
     {
         using var scratch = new TrackedScratch(fileName);
-        Assert.Equal((storedNextObjectId, storedNumRecords), ReadHeaderStats(scratch.PluginPath));
+        var stale = StaleHeaderPlugins.Named(fileName);
+        Assert.Equal((stale.StoredNextObjectId, stale.StoredNumRecords), ReadHeaderStats(scratch.PluginPath));
 
         using (var prep = await TreeSaves.PrepareAsync(scratch.PluginPath))
         {
             prep.Commit();
         }
 
-        Assert.Equal((storedNextObjectId, derivedNumRecords), ReadHeaderStats(scratch.PluginPath));
+        Assert.Equal((stale.StoredNextObjectId, derivedNumRecords), ReadHeaderStats(scratch.PluginPath));
     }
 
     [Theory]
-    [MemberData(nameof(TrackAndCompileRealFixtures))]
-    public async Task Track_OfARealPluginWithAStaleHeader_Succeeds(string fileName)
+    [MemberData(nameof(TrackAndCompileGeneratedPlugins))]
+    public async Task Track_OfAGeneratedPluginWithAStaleHeader_Succeeds(string fileName)
     {
         using var scratch = new TrackedScratch(fileName);
 
@@ -57,8 +60,8 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Theory]
-    [MemberData(nameof(TrackAndCompileRealFixtures))]
-    public async Task Compile_OfARealPluginWithAStaleHeader_ReproducesTheSourceContent(string fileName)
+    [MemberData(nameof(TrackAndCompileGeneratedPlugins))]
+    public async Task Compile_OfAGeneratedPluginWithAStaleHeader_ReproducesTheSourceContent(string fileName)
     {
         using var scratch = new TrackedScratch(fileName);
         var original = Fallout4Mod.CreateFromBinary(
@@ -73,10 +76,24 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         Assert.Null(divergence);
     }
 
+    [Theory]
+    [InlineData(StaleHeaderPlugins.SierraFileName)]
+    [InlineData(StaleHeaderPlugins.HitechFileName)]
+    public async Task Compile_OfAGeneratedPluginDeflatedAtAnotherLevel_RewritesItsCompressedRecordsAtMutagensLevel(string fileName)
+    {
+        using var scratch = new TrackedScratch(fileName);
+        var originalHeader = ZlibHeaderOfFirstMisc(await File.ReadAllBytesAsync(scratch.PluginPath));
+        await scratch.TrackAsync();
+
+        await scratch.CompileService().CompileLandedAsync(scratch.Plugin);
+
+        Assert.NotEqual(originalHeader, ZlibHeaderOfFirstMisc(await File.ReadAllBytesAsync(scratch.PluginPath)));
+    }
+
     [Fact]
     public async Task Track_WithAnExtraRecordInTheRecompiledPlugin_NamesThatRecord()
     {
-        using var scratch = new TrackedScratch("LitR - Settings Holotapes Sorting.esp");
+        using var scratch = new TrackedScratch(StaleHeaderPlugins.SettingsFileName);
         FormKey? extra = null;
 
         async Task<IMod> DeserializeThenAddAnNpc(string folder, CancellationToken ct)
@@ -96,6 +113,21 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         Assert.Contains(extraFormKey.ToString(), result.Message);
         Assert.Contains("ExtraNpc", result.Message);
         Assert.Contains("not present in the original", result.Message);
+    }
+
+    private static int MiscGroupOffset(byte[] plugin)
+    {
+        var tes4Size = BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(4));
+        var group = HeaderLength + (int)tes4Size;
+        Assert.Equal("GRUP"u8.ToArray(), plugin[group..(group + 4)]);
+        Assert.Equal("MISC"u8.ToArray(), plugin[(group + 8)..(group + 12)]);
+        return group;
+    }
+
+    private static ushort ZlibHeaderOfFirstMisc(byte[] plugin)
+    {
+        var group = MiscGroupOffset(plugin);
+        return BinaryPrimitives.ReadUInt16BigEndian(plugin.AsSpan(group + HeaderLength + HeaderLength + InflatedLengthSize));
     }
 
     private static (uint NextObjectId, uint NumRecords) ReadHeaderStats(string pluginPath)
@@ -118,7 +150,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         public TrackedScratch(string fileName)
         {
             PluginPath = Path.Combine(ModFolder, fileName);
-            File.Copy(FixturePath(fileName), PluginPath);
+            StaleHeaderPlugins.Named(fileName).WriteInto(ModFolder);
             Plugin = new PluginAddress(fileName, "FixtureMod");
 
             _loadOrder = EmptyMasterStubs.LoadOrderOver(PluginPath, Plugin.Origin, _gameDirectory);
