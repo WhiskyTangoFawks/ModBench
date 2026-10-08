@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Text;
 
 namespace MEditService.TestSupport;
@@ -32,20 +31,8 @@ public static class ShortRdatRegionPlugin
                     RawPlugin.Subrecord("RDMO", new byte[4]),
                     RawPlugin.Subrecord("RDSA", new byte[12])))));
 
-    private static byte[] MasterWeather
-    {
-        get
-        {
-            var entry = new byte[12];
-            BinaryPrimitives.WriteUInt32LittleEndian(entry, 0x00000801);
-            return entry;
-        }
-    }
+    private static byte[] MasterWeather => RawPlugin.Concat(RawPlugin.U32(0x00000801), new byte[8]);
 
-    private static byte[] Header(uint dataType, int length)
-    {
-        var payload = new byte[length];
-        BinaryPrimitives.WriteUInt32LittleEndian(payload, dataType);
-        return RawPlugin.Subrecord("RDAT", payload);
-    }
+    private static byte[] Header(uint dataType, int length) =>
+        RawPlugin.Subrecord("RDAT", RawPlugin.Concat(RawPlugin.U32(dataType), new byte[length - 4]));
 }

@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
@@ -54,7 +53,7 @@ public static class StaleHeaderPlugins
                     RawPlugin.Group("MISC", deflated),
                     RawPlugin.Group("WRLD",
                         RawPlugin.Record("WRLD", world, RawPlugin.EditorId("BinWorld")),
-                        RawPlugin.Group(WorldLabel(world), 1,
+                        RawPlugin.Group(RawPlugin.U32(world), 1,
                             RawPlugin.Record("CELL", Id(masters, 0x811), RawPlugin.EditorId("BinWorldCell")))),
                     RawPlugin.Group("CELL",
                         RawPlugin.Group(new byte[4], 2,
@@ -70,13 +69,6 @@ public static class StaleHeaderPlugins
 
     private static byte[][] DeflatedMiscs(string[] masters, string editorIdPrefix) =>
         [.. Enumerable.Range(0, 3).Select(i => DeflatedMisc(masters, 0x800 + (uint)i, $"{editorIdPrefix}{i}"))];
-
-    private static byte[] WorldLabel(uint world)
-    {
-        var label = new byte[4];
-        BinaryPrimitives.WriteUInt32LittleEndian(label, world);
-        return label;
-    }
 
     private static uint Id(string[] masters, uint objectId) => RawPlugin.NewRecordId(masters.Length, objectId);
 

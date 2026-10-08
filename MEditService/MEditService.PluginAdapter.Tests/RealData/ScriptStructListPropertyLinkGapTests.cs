@@ -33,7 +33,7 @@ public sealed class ScriptStructListPropertyLinkGapTests
 
         Assert.NotEmpty(structList.Structs);
 
-        var masterFormKey = FormKey.Factory($"000A01:{StructListLinkPlugin.Master}");
+        var masterFormKey = new FormKey(ModKey.FromFileName(StructListLinkPlugin.Master), StructListLinkPlugin.LinkedMasterFormId);
         var memberFormLinks = structList.Structs
             .SelectMany(s => s.Members)
             .OfType<IScriptObjectPropertyGetter>()
