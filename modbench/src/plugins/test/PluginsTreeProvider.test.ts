@@ -822,6 +822,13 @@ describe('PluginsTreeProvider — implicit master rows', () => {
     expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm']);
   });
 
+  it('gives two game folder files that differ only in case a row each, each with an id of its own', async () => {
+    const rows = await treeFor([], ['Master.esm', 'master.esm']).getChildren();
+
+    expect(rows.map((r) => r.label)).toEqual(['Master.esm', 'master.esm']);
+    expect(new Set(rows.map((r) => r.id)).size).toBe(2);
+  });
+
   it('publishes each locked row\'s URI, for the graying decoration provider', async () => {
     const tree = treeFor([plugin({ name: 'Mod.esp', line: 0 })], ['Fallout4.esm']);
     const [locked] = await tree.getChildren();

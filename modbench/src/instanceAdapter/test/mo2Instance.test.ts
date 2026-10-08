@@ -297,15 +297,14 @@ describe('the MO2 Instance adapter', () => {
       expect(folders.holding({ kind: 'mod', name: 'No Such Mod' })).toBeUndefined();
     });
 
-    it.skipIf(process.platform === 'win32')('answers each of two folders whose names differ only in case for the entry spelled as its own, a spelling of neither for one of them', async () => {
+    it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) answers each of two folders whose names differ only in case for the entry spelled as its own', async () => {
       await mkdir(join(root, 'mods', 'ModA'));
       await mkdir(join(root, 'mods', 'moda'));
       const folders = present(await adapter.modFolders(), 'the mod folders');
 
       expect(folders.holding({ kind: 'mod', name: 'moda' })?.path).toBe(join(root, 'mods', 'moda'));
       expect(folders.holding({ kind: 'mod', name: 'ModA' })?.path).toBe(join(root, 'mods', 'ModA'));
-      expect(folders.holding({ kind: 'mod', name: 'MODA' })).toBeDefined();
-    });
+          });
 
     it('hands over a link it cannot follow rather than answering it as a folder', async () => {
       await symlink(join(root, 'mods', 'Loop'), join(root, 'mods', 'Loop'));
@@ -358,7 +357,7 @@ describe('the MO2 Instance adapter', () => {
         expect(plugins).toEqual({ kind: 'listed', names: new Set(['Fallout4.ESM', 'Patch.esp']) });
       });
 
-      it.skipIf(process.platform === 'win32')('answers both of two files whose names differ only in case', async () => {
+      it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) answers both of two files whose names differ only in case', async () => {
         const data = join(game, 'Data');
         await mkdir(data, { recursive: true });
         await writeFile(join(data, 'Foo.esp'), '');

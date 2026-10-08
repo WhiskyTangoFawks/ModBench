@@ -109,14 +109,17 @@ export function pluginsLoadedWithNoLineOf(
   return [...gameMasters, ...creationClub].flatMap((name) => {
     const provided = providedBy.get(foldPath(name));
     const found = provided === undefined ? dataSpellings(inData, name).map((spelled) => ({ name: spelled, origin: DATA_DIRECTORY_ORIGIN })) : [provided];
-    return found.filter((plugin) => {
-      const key = exactPluginAddressKey(plugin);
-      return !seen.has(key) && seen.add(key);
-    }).map(({ name: spelled, origin }) => ({ name: spelled, origin }));
+    return found.flatMap(({ name: spelled, origin }) => {
+      const key = exactPluginAddressKey({ name: spelled, origin });
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [{ name: spelled, origin }];
+    });
   });
 }
 
-// The Data folder files a name finds without regard to case, as the game finds them (ADR-0012).
+// The game and MO2 join a name to its file without regard to case, so a name finds every Data folder
+// file that differs from it only in case.
 const dataSpellings = (inData: DataFolderPlugins, name: string): string[] =>
   inData.kind === 'listed' ? [...inData.names].filter((spelled) => foldPath(spelled) === foldPath(name)) : [];
 
