@@ -98,12 +98,10 @@ public sealed class DecompilePluginTraceTests : HostedTests
         Assert.Equal([Plugin], body.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
         await Client.NextSnapshot(_instance);
-        await Wire.Eventually(async () => await EditorIdOnceReady(formKey) == "UpgradedNpc", "the decompiled source reaching the answers");
+        await Wire.Eventually(async () => await EditorIdUnlessTheIndexIsReconciling(formKey) == "UpgradedNpc", "the decompiled source reaching the answers");
     }
 
-    // The snapshot sent again is the version already held, so its reconcile can still be running once
-    // that version reads Ready, and a record read refuses meanwhile.
-    private async Task<string?> EditorIdOnceReady(string formKey)
+    private async Task<string?> EditorIdUnlessTheIndexIsReconciling(string formKey)
     {
         using var response = await Client.GetAsync($"/records/{Uri.EscapeDataString(formKey)}");
         if (response.StatusCode == HttpStatusCode.ServiceUnavailable) return null;
