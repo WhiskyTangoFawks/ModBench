@@ -22,6 +22,7 @@ public interface IRecordQueryService
     // Null when the plugin holds no such record.
     IReadOnlyList<RecordTypeChoice>? GetChildRecordTypes(PluginAddress plugin, string formKey);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
+    IReadOnlyList<ReferenceResult> GetReferencesInActiveOrTrackedPlugins(string targetFormKey);
     // Null when the plugin holds no such record.
     RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey);
     // Null when the plugin holds no such record.

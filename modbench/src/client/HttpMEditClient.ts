@@ -619,6 +619,12 @@ class HttpMEditClient implements MEditClient {
     return data ?? [];
   }
 
+  async getReferencesInActiveOrTrackedPlugins(formKey: string): Promise<ReferenceResult[]> {
+    const { data, error, response } = await this.apiClient.GET('/records/{formKey}/references-in-active-or-tracked-plugins', { params: { path: { formKey } } });
+    this.ensureOk(`getReferencesInActiveOrTrackedPlugins(${formKey})`, response, error);
+    return data ?? [];
+  }
+
   async getRenderedDocument({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RenderedDocument | null> {
     return this.withTimeout(`getRenderedDocument(${plugin}, ${formKey})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/rendered-document', {

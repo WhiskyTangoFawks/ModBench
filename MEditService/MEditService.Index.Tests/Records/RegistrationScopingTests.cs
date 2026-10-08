@@ -191,6 +191,47 @@ public class RegistrationScopingTests
     }
 
     [Fact]
+    public void AReferenceInATrackedPluginThatIsNotActive_IsListedForActiveOrTrackedPlugins()
+    {
+        using var fx = Build("registration-inactive-tracked-references");
+        TrackedMods.Track(fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name), fx.Plugins.GameDirectory);
+
+        fx.Reconcile(fx.WithBetaDisabled);
+
+        var reference = Assert.Single(fx.Index.Records.GetReferencesInActiveOrTrackedPlugins(fx.BetaRaceFk), r => r.FormKey == fx.BetaNpcFk);
+        Assert.Equal(BetaKey, new PluginAddress(reference.Plugin, reference.Origin));
+        Assert.Empty(fx.Index.Records.GetReferences(fx.BetaRaceFk));
+    }
+
+    [Fact]
+    public void AReferenceInAnUntrackedPluginThatIsNotActive_IsListedForNoOne()
+    {
+        using var fx = Build("registration-inactive-untracked-references");
+
+        fx.Reconcile(fx.WithBetaDisabled);
+
+        Assert.Empty(fx.Index.Records.GetReferencesInActiveOrTrackedPlugins(fx.BetaRaceFk));
+    }
+
+    [Fact]
+    public void AReferenceInAnUntrackedActivePlugin_IsListedForActiveOrTrackedPlugins()
+    {
+        using var fx = Build("registration-active-untracked-references");
+
+        Assert.Contains(fx.Index.Records.GetReferencesInActiveOrTrackedPlugins(fx.BetaRaceFk), r => r.FormKey == fx.BetaNpcFk);
+    }
+
+    [Fact]
+    public void AReferenceInAPluginAbsentFromTheSnapshot_IsListedForNoTrackedPlugin()
+    {
+        using var fx = Build("registration-absent-references");
+
+        fx.Reconcile(fx.WithoutBeta);
+
+        Assert.Empty(fx.Index.Records.GetReferencesInActiveOrTrackedPlugins(fx.BetaRaceFk));
+    }
+
+    [Fact]
     public void APluginThatIsNotActive_IsInNoRelationTheSqlDoorReads()
     {
         using var fx = Build("registration-inactive-door");
