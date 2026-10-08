@@ -651,7 +651,6 @@ internal static class DocumentEdit
         return null;
     }
 
-    // A column's aliases sit beside the member they spell again, so they clear in that member's owner.
     // ── walking ─────────────────────────────────────────────────────────────
 
     private static JsonObject WalkPrefix(JsonObject root, IReadOnlyList<PathHop> prefix) =>

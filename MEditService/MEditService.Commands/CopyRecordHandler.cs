@@ -25,10 +25,17 @@ public sealed class CopyRecordHandler
 
     /// <summary>Each record lands in each destination or is refused on its own, after its containers;
     /// <paramref name="replace"/> lets an override copy over a held one.
+    /// Refuses the whole selection when <paramref name="replace"/> asks a copy as new to replace.
     /// Throws <see cref="NoLoadOrderException"/> with no load order held.</summary>
     public async Task<SelectionResult<CopyItem, RecordEditRefusal, string?>> Copy(
         IReadOnlyList<RecordAt> records, CopyMode mode, IReadOnlyList<PluginAddress> destinations, bool replace)
     {
+        if (replace && mode == CopyMode.New)
+        {
+            return SelectionResult<CopyItem, RecordEditRefusal, string?>.WholeSelectionRefused(
+                RecordEditRefusal.InvalidEnvelope, "The replace Option does not apply to a copy as new.");
+        }
+
         _loadOrder.Require();
         using var sources = new CopySources(_resolution);
         var containersFirst = records.OrderBy(record => sources.Of(record.Plugin).ContainmentDepth(record.FormKey));
