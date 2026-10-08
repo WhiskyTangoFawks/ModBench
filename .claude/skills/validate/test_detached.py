@@ -1,7 +1,10 @@
 """Observes detached.sh: start returns at once and refuses a second start, wait blocks one
 bounded call at a time, delivers the verdict once and mirrors the command's exit."""
+import os
 import pathlib
+import signal
 import subprocess
+import time
 import unittest
 import uuid
 
@@ -57,6 +60,20 @@ class Detached(unittest.TestCase):
         died = detached("wait", self.name, "10")
         self.assertEqual(died.returncode, 4)
         self.assertIn("without a verdict", died.stdout)
+
+    def test_a_writer_left_from_an_earlier_run_does_not_reach_the_next_runs_verdict(self):
+        log = STATE / f"{self.name}.log"
+        late = STATE / f"{self.name}.late"
+        self.addCleanup(late.unlink, missing_ok=True)
+        detached("start", self.name, "bash", "-c", f'printf "%20000s\\n" x; sleep 1; echo late; touch {late}')
+        while not log.exists() or log.stat().st_size < 20000:
+            time.sleep(0.05)
+        os.kill(int((STATE / f"{self.name}.pid").read_text().split()[0]), signal.SIGKILL)
+        self.assertEqual(detached("wait", self.name, "10").returncode, 4)
+        detached("start", self.name, "true")
+        while not late.exists():
+            time.sleep(0.05)
+        self.assertEqual(detached("wait", self.name, "10").returncode, 0)
 
     def test_recorded_pid_reused_by_another_process_returns_4(self):
         (STATE / f"{self.name}.log").write_text("partial\n")

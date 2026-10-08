@@ -26,6 +26,9 @@ case $mode in
       echo "$name already running (pid $(head -n 1 "$PID")); log $LOG"
       exit 1
     fi
+    # A process left from an earlier run whose wrapper was killed still writes at its own offset,
+    # past this run's verdict line. A new file leaves it writing to the old one.
+    rm -f "$LOG"
     nohup bash -c '"$@"; s=$?; echo; echo "EXIT=$s"' _ "$@" >"$LOG" 2>&1 &
     pid=$!
     printf '%s\n%s\n' "$pid" "$(ps -o lstart= -p "$pid")" >"$PID"
