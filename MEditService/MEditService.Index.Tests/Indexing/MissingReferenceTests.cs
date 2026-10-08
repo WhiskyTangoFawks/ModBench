@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -9,62 +10,66 @@ namespace MEditService.Index.Tests.Indexing;
 
 public class MissingReferenceTests
 {
+    private const string Referrer = "Referrer";
+    private static readonly PluginAddress Refers = new("Refers.esp", "RefersMod");
+
     private static readonly FormKey AbsentRecord = FormKey.Factory("000ABC:Absent.esp");
     private static readonly FormKey EngineDefined = FormKey.Factory("000007:Fallout4.esm");
     private static readonly FormKey FirstHeldRangeFormId = FormKey.Factory("000800:Fallout4.esm");
 
-    private static IReadOnlyList<MissingReference> MissingReferencesOf(OpenedIndex index) =>
-        [.. index.RequireReads().GetReferencesToMissingRecordsOnFiles(_ => null).Select(placed => placed.Reference)];
+    private static List<(PluginAddress Plugin, SourceProblem Problem)> MissingReferencesOf(ScatteredFixtureData fixture)
+    {
+        using var index = Indexes.Reconciled(fixture.Tracked());
+        var problems = index.Problems.GetProblems() ?? throw new InvalidOperationException("Expected the index to be ready.");
+        return [.. problems.SelectMany(plugin => plugin.Problems.Select(problem => (plugin.Plugin, problem)))];
+    }
 
     [Fact]
     public void ReportingMissingReferences_ALinkToARecordNoPluginHolds_NamesTheReferrerAndTheTarget()
     {
         FormKey npc = default;
         using var fixture = new PluginFixtureBuilder("missing-ref-absent")
-            .WithPlugin("Refers.esp", mod =>
+            .WithPlugin(Refers.Name, mod =>
             {
-                var added = mod.Npcs.AddNew("Referrer");
+                var added = mod.Npcs.AddNew(Referrer);
                 npc = added.FormKey;
                 added.Race.SetTo(AbsentRecord);
-            })
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
+            }, origin: Refers.Origin)
+            .BuildScattered();
 
-        var missing = Assert.Single(MissingReferencesOf(index));
+        var (plugin, missing) = Assert.Single(MissingReferencesOf(fixture));
 
         Assert.Equal(
-            (new PluginAddress("Refers.esp", PluginOrigin.DataDirectory), npc.ToString(), "npc_", "Referrer", AbsentRecord.ToString(), "Race"),
-            (missing.Plugin, missing.FormKey, missing.RecordType, missing.EditorId, missing.TargetFormKey, missing.FieldPath));
+            (Refers, npc.ToString(), AbsentRecord.ToString(), "Race"),
+            (plugin, missing.FormKey, missing.TargetFormKey, missing.FieldPath));
     }
 
     [Fact]
     public void ReportingMissingReferences_ALinkToARecordAnActivePluginHolds_IsNotReported()
     {
         using var fixture = new PluginFixtureBuilder("missing-ref-held")
-            .WithPlugin("Refers.esp", mod =>
+            .WithPlugin(Refers.Name, mod =>
             {
                 var race = mod.Races.AddNew("Held");
-                mod.Npcs.AddNew("Referrer").Race.SetTo(race.FormKey);
-            })
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
+                mod.Npcs.AddNew(Referrer).Race.SetTo(race.FormKey);
+            }, origin: Refers.Origin)
+            .BuildScattered();
 
-        Assert.Empty(MissingReferencesOf(index));
+        Assert.Empty(MissingReferencesOf(fixture));
     }
 
     [Fact]
     public void ReportingMissingReferences_AnEngineDefinedFormIdInABaseMaster_IsNotReported_ButTheFirstHeldRangeFormIdIs()
     {
         using var fixture = new PluginFixtureBuilder("missing-ref-engine")
-            .WithPlugin("Refers.esp", mod =>
+            .WithPlugin(Refers.Name, mod =>
             {
                 mod.Npcs.AddNew("Engine").Race.SetTo(EngineDefined);
                 mod.Npcs.AddNew("Beyond").Race.SetTo(FirstHeldRangeFormId);
-            })
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
+            }, origin: Refers.Origin)
+            .BuildScattered();
 
-        var missing = Assert.Single(MissingReferencesOf(index));
+        var (_, missing) = Assert.Single(MissingReferencesOf(fixture));
 
         Assert.Equal(FirstHeldRangeFormId.ToString(), missing.TargetFormKey);
     }
@@ -74,15 +79,16 @@ public class MissingReferenceTests
     {
         FormKey inactiveRace = default;
         using var fixture = new PluginFixtureBuilder("missing-ref-inactive")
-            .WithPlugin("Dormant.esp", mod => inactiveRace = mod.Races.AddNew("Dormant").FormKey, enabled: false)
-            .WithPlugin("Refers.esp", mod =>
+            .WithPlugin("Dormant.esp", mod => inactiveRace = mod.Races.AddNew("Dormant").FormKey, enabled: false, origin: "DormantMod")
+            .WithPlugin(Refers.Name, mod =>
             {
                 mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Dormant.esp") });
-                mod.Npcs.AddNew("Referrer").Race.SetTo(inactiveRace);
-            })
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
+                mod.Npcs.AddNew(Referrer).Race.SetTo(inactiveRace);
+            }, origin: Refers.Origin)
+            .BuildScattered();
 
-        Assert.Equal(inactiveRace.ToString(), Assert.Single(MissingReferencesOf(index)).TargetFormKey);
+        var (_, missing) = Assert.Single(MissingReferencesOf(fixture));
+
+        Assert.Equal(inactiveRace.ToString(), missing.TargetFormKey);
     }
 }

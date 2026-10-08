@@ -9,6 +9,12 @@ namespace MEditService.Index.Tests.Indexing;
 
 public class FormLookupTests
 {
+    private static (string? RecordType, string? EditorId) Resolved(OpenedIndex index, FormKey npc, PluginAddress plugin, string target)
+    {
+        var resolution = index.ResolutionOf(npc.ToString(), plugin, target);
+        return (resolution.RecordType, resolution.EditorId);
+    }
+
     [Fact]
     public void TwoRecords_ResolveEachAndTheHeader()
     {
@@ -21,17 +27,14 @@ public class FormLookupTests
             })
             .Build();
         using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
+        var key = new PluginAddress("Lookup.esp", PluginOrigin.DataDirectory);
 
-        Assert.Equal(new RecordLookupEntry("npc_", "TestNPC01"), reads.LinkResolver(npc.ToString())(npc.ToString()));
-        Assert.Equal(new RecordLookupEntry("race", "TestRace01"), reads.LinkResolver(race.ToString())(race.ToString()));
-
-        var headerKey = PluginHeader.FormKeyFor(ModKey.FromFileName("Lookup.esp"));
-        var header = reads.LinkResolver(headerKey)(headerKey);
-        Assert.NotNull(header);
-        Assert.Equal(PluginHeader.RecordType, header.Value.RecordType);
-        Assert.Null(header.Value.EditorId);
-        Assert.Equal(3, reads.DocumentsOf(new PluginAddress("Lookup.esp", PluginOrigin.DataDirectory)).Count);
+        Assert.Equal(("npc_", "TestNPC01"), Resolved(index, npc, key, npc.ToString()));
+        Assert.Equal(("race", "TestRace01"), Resolved(index, npc, key, race.ToString()));
+        Assert.Equal<(string?, string?)>(
+            (PluginHeader.RecordType, null),
+            Resolved(index, npc, key, PluginHeader.FormKeyFor(ModKey.FromFileName("Lookup.esp"))));
+        Assert.Equal(2, index.ListedIn(key).Count);
     }
 
     [Fact]
@@ -43,14 +46,13 @@ public class FormLookupTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
         var key = new PluginAddress("Reindex.esp", PluginOrigin.DataDirectory);
-        var reads = index.RequireReads();
-        var before = reads.DocumentsOf(key).Count;
+        var before = index.ListedIn(key).Count;
 
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
         index.NextSnapshot();
 
-        Assert.Equal(before, reads.DocumentsOf(key).Count);
-        Assert.Equal(1, reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10)).Total);
-        Assert.Equal(new RecordLookupEntry("npc_", "TestNPC01"), reads.LinkResolver(npcFormKey.ToString())(npcFormKey.ToString()));
+        Assert.Equal(before, index.ListedIn(key).Count);
+        Assert.Equal(1, index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Total);
+        Assert.Equal(("npc_", "TestNPC01"), Resolved(index, npcFormKey, key, npcFormKey.ToString()));
     }
 }

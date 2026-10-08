@@ -61,8 +61,8 @@ public sealed class LandscapeAndNavmeshReferenceTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private static List<(string Referrer, string Plugin)> ReferrersOf(IRecordReads reads, string target) =>
-        [.. reads.GetReferencedBy(target).Select(r => (r.FormKey, r.Plugin)).Order()];
+    private static List<(string Referrer, string Plugin)> ReferrersOf(OpenedIndex index, string target) =>
+        [.. index.Records.GetReferences(target).Select(r => (r.FormKey, r.Plugin)).Order()];
 
     [Fact]
     public void ADoorListsTheNavmeshFromEachPluginThatHoldsIt_AndTheInfoMapThatLinksIt()
@@ -71,7 +71,7 @@ public sealed class LandscapeAndNavmeshReferenceTests : IDisposable
 
         Assert.Equal(
             [.. new[] { (_navmesh, "Base.esm"), (_navmesh, "Patch.esp"), (_infoMap, "Base.esm") }.Order()],
-            ReferrersOf(index.RequireReads(), _door));
+            ReferrersOf(index, _door));
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public sealed class LandscapeAndNavmeshReferenceTests : IDisposable
 
         Assert.Equal(
             [.. new[] { (_landscape, "Base.esm"), (_landscape, "Patch.esp") }.Order()],
-            ReferrersOf(index.RequireReads(), _texture));
+            ReferrersOf(index, _texture));
     }
 
     [Fact]
@@ -89,6 +89,6 @@ public sealed class LandscapeAndNavmeshReferenceTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture);
 
-        Assert.Equal([(_infoMap, "Base.esm")], ReferrersOf(index.RequireReads(), _navmesh));
+        Assert.Equal([(_infoMap, "Base.esm")], ReferrersOf(index, _navmesh));
     }
 }
