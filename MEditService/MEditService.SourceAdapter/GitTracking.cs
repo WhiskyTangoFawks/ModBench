@@ -30,7 +30,7 @@ internal static class GitTracking
         try
         {
             if (!git.Exists)
-                journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: Path.Combine(modFolder, ".git"));
+                journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: git.GitDirectory);
             CreateRepository(git);
             journal.Write(gitignorePath, System.Text.Encoding.UTF8.GetBytes(GitignoreContent));
             git.Run("add", "-A");

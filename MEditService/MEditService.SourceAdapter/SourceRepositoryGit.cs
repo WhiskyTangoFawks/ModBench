@@ -53,6 +53,8 @@ internal sealed class SourceRepositoryGit(string modFolder)
             .OfType<string>()];
     }
 
+    internal string GitDirectory => _gitDir;
+
     internal bool Exists => Directory.Exists(_gitDir);
 
     // Windows refuses to delete the read-only files git writes.
