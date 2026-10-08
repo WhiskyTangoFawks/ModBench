@@ -8,7 +8,7 @@ namespace MEditService.Index;
 internal readonly record struct PlacementRow(
     string FormKey, string ParentCell, string PlacementGroup);
 
-public readonly record struct CellLocationRow(
+internal readonly record struct CellLocationRow(
     string CellFormKey, string? ParentWorldspace,
     int? BlockX, int? BlockY, int? SubX, int? SubY, int? GridX, int? GridY, bool IsInterior);
 

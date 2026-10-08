@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceAdapter;

@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
@@ -46,9 +47,6 @@ internal static class TrackedMods
 
     internal static PluginAddress KeyOf(this LoadOrderEntry entry) => new(entry.Name, entry.Origin);
 
-    internal static DerivedFrom? DerivationOf(this IRecordReads reads, PluginAddress plugin) =>
-        reads.GetDerivations().TryGetValue(plugin, out var derivedFrom) ? derivedFrom : null;
-
     internal static string ModFolderOf(this LoadOrderEntry entry) =>
         Path.GetDirectoryName(entry.Path) ?? throw new ArgumentException("A tracked entry sits in a mod folder.", nameof(entry));
 
@@ -62,7 +60,7 @@ internal static class TrackedMods
         return Path.Combine(modFolder, relativePath);
     }
 
-    internal static string SourceFileOf(this LoadOrderEntry entry, RecordDocument document) =>
+    internal static string SourceFileOf(this LoadOrderEntry entry, RecordDetail document) =>
         entry.SourceFileOf(new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
 
     /// <summary>Git run against the tracked mod folder: the "other tool" actor, never an
@@ -72,7 +70,7 @@ internal static class TrackedMods
 
     /// <summary>A hand edit no repository write made: the bytes of a document's own file replaced
     /// behind the Index's back (ADR-0003).</summary>
-    internal static void HandEdit(this LoadOrderEntry entry, RecordDocument document, string from, string to)
+    internal static void HandEdit(this LoadOrderEntry entry, RecordDetail document, string from, string to)
     {
         var path = entry.SourceFileOf(document);
         File.WriteAllText(path, File.ReadAllText(path).Replace(from, to, StringComparison.Ordinal));
@@ -80,7 +78,7 @@ internal static class TrackedMods
 
     /// <summary>The working tree's copy of <paramref name="document"/> replaced by
     /// <paramref name="body"/>, then the next snapshot.</summary>
-    internal static void Edit(this OpenedIndex index, LoadOrderEntry entry, RecordDocument document, string body)
+    internal static void Edit(this OpenedIndex index, LoadOrderEntry entry, RecordDetail document, string body)
     {
         RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, document.EditorId, body));
         index.NextSnapshot();
@@ -89,7 +87,7 @@ internal static class TrackedMods
     /// <summary>The working tree's copy of <paramref name="document"/> put under
     /// <paramref name="newEditorId"/>, which moves it to the name that computes, then the next snapshot.</summary>
     internal static void Rename(
-        this OpenedIndex index, LoadOrderEntry entry, RecordDocument document, string newEditorId, string body)
+        this OpenedIndex index, LoadOrderEntry entry, RecordDetail document, string newEditorId, string body)
     {
         RepositoryOf(entry).Put(
             entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, newEditorId, body));
@@ -109,10 +107,9 @@ internal static class TrackedMods
         this OpenedIndex index, LoadOrderEntry entry, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
         var repository = RepositoryOf(entry);
-        var reads = index.RequireReads();
         foreach (var (formKey, body) in deltas)
         {
-            var current = reads.DocumentOf(formKey, entry.KeyOf());
+            var current = index.DocumentOf(formKey, entry.KeyOf());
             if (body is null)
                 repository.Remove(entry.KeyOf(), new RecordIdentity(formKey, current.RecordType, current.EditorId));
             else
@@ -123,7 +120,7 @@ internal static class TrackedMods
 
     /// <summary>The working tree's copy of <paramref name="document"/> taken out, then the next
     /// snapshot.</summary>
-    internal static void Delete(this OpenedIndex index, LoadOrderEntry entry, RecordDocument document)
+    internal static void Delete(this OpenedIndex index, LoadOrderEntry entry, RecordDetail document)
     {
         var removed = RepositoryOf(entry).Remove(
             entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
@@ -131,11 +128,4 @@ internal static class TrackedMods
             throw new InvalidOperationException($"The tree did not give up '{document.FormKey}': {removed}.");
         index.NextSnapshot();
     }
-
-    internal static string BodyOf(this RecordDocument document) =>
-        document.Body ?? throw new InvalidOperationException($"Expected document '{document.FormKey}' to carry a body.");
-
-    internal static RecordDocument DocumentOf(this IRecordReads reads, string formKey, PluginAddress plugin) =>
-        reads.GetDocument(formKey, plugin)
-            ?? throw new InvalidOperationException($"Expected a document for '{formKey}' in {plugin.Name} ({plugin.Origin}).");
 }

@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -18,10 +19,9 @@ public sealed class RecordFilterNarrowsSpatialReadsTests
         world.Filter("SELECT form_key FROM npc_");
 
         Assert.Empty(world.Worldspaces());
-        Assert.Empty(world.Reads.GetWorldspacesHoldingCells(FilteredWorld.Plugin));
-        Assert.Empty(world.Reads.GetWorldspaceCells(FilteredWorld.Plugin, world.WorldspaceFormKey));
-        Assert.Empty(world.Reads.GetInteriorCells(FilteredWorld.Plugin));
-        Assert.DoesNotContain(world.Reads.GetRecordTypeCounts(FilteredWorld.Plugin), c => c.Type is "wrld" or "cell");
+        Assert.Empty(world.ExteriorCells());
+        Assert.Empty(world.InteriorCells());
+        Assert.DoesNotContain(world.RecordTypes(), c => c.Type is "wrld" or "cell");
     }
 
     [Fact]
@@ -32,10 +32,8 @@ public sealed class RecordFilterNarrowsSpatialReadsTests
         world.Filter("SELECT form_key FROM records WHERE editor_id = 'FilterRef'");
 
         Assert.Equal(world.WorldspaceFormKey, Assert.Single(world.Worldspaces()).FormKey);
-        Assert.Equal(
-            world.ExteriorCellFormKey,
-            Assert.Single(world.Reads.GetWorldspaceCells(FilteredWorld.Plugin, world.WorldspaceFormKey)).FormKey);
-        Assert.Empty(world.Reads.GetInteriorCells(FilteredWorld.Plugin));
+        Assert.Equal(world.ExteriorCellFormKey, Assert.Single(world.ExteriorCells()).FormKey);
+        Assert.Empty(world.InteriorCells());
     }
 
     [Fact]
@@ -45,9 +43,9 @@ public sealed class RecordFilterNarrowsSpatialReadsTests
 
         world.Filter("SELECT form_key FROM records WHERE editor_id = 'FilterInterior'");
 
-        Assert.Equal(world.InteriorCellFormKey, Assert.Single(world.Reads.GetInteriorCells(FilteredWorld.Plugin)).FormKey);
+        Assert.Equal(world.InteriorCellFormKey, Assert.Single(world.InteriorCells()).FormKey);
         Assert.Empty(world.Worldspaces());
-        Assert.Equal(1, Assert.Single(world.Reads.GetRecordTypeCounts(FilteredWorld.Plugin), c => c.Type == "cell").Count);
+        Assert.Equal(1, Assert.Single(world.RecordTypes(), c => c.Type == "cell").Count);
     }
 
     private sealed class FilteredWorld : IDisposable
@@ -62,7 +60,6 @@ public sealed class RecordFilterNarrowsSpatialReadsTests
         internal string WorldspaceFormKey { get; }
         internal string ExteriorCellFormKey { get; }
         internal string InteriorCellFormKey { get; }
-        internal IRecordReads Reads => _index.RequireReads();
 
         internal FilteredWorld()
         {
@@ -104,9 +101,18 @@ public sealed class RecordFilterNarrowsSpatialReadsTests
 
         internal void Filter(string sql) => _index.SetFilter(sql, "filter.sql");
 
-        internal IReadOnlyList<RecordSummary> Worldspaces() =>
-            Reads.Search(new RecordQuery(RecordQueryScope.Navigator,
-                RecordTypes: ["wrld"], Plugin: PluginName, Origin: Plugin.Origin, Limit: 100, GroupOnly: true)).Items;
+        internal IReadOnlyList<WorldspaceSummary> Worldspaces() => _index.Worldspaces.GetWorldspaces(Plugin);
+
+        internal IEnumerable<CellSummary> ExteriorCells()
+        {
+            var blocks = _index.Worldspaces.GetWorldspaceBlocks(Plugin, WorldspaceFormKey);
+            return blocks.TopCells.Concat(blocks.Blocks.SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells));
+        }
+
+        internal IEnumerable<CellSummary> InteriorCells() =>
+            _index.Worldspaces.GetInteriorCells(Plugin).SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells);
+
+        internal IReadOnlyList<PluginRecordTypeCount> RecordTypes() => _index.Records.GetPluginRecordTypes(Plugin);
 
         public void Dispose()
         {

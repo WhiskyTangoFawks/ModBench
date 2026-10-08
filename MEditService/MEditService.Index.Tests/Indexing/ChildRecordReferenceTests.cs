@@ -41,10 +41,10 @@ public sealed class ChildRecordReferenceTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private void AssertEachListsOnlyItsOwn(IRecordReads reads)
+    private void AssertEachListsOnlyItsOwn(OpenedIndex index)
     {
-        Assert.Equal(_quest, Assert.Single(reads.GetReferencedBy(_global)).FormKey);
-        Assert.Equal(_topic, Assert.Single(reads.GetReferencedBy(_keyword)).FormKey);
+        Assert.Equal(_quest, Assert.Single(index.Records.GetReferences(_global)).FormKey);
+        Assert.Equal(_topic, Assert.Single(index.Records.GetReferences(_keyword)).FormKey);
     }
 
     [Fact]
@@ -52,19 +52,18 @@ public sealed class ChildRecordReferenceTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture);
 
-        AssertEachListsOnlyItsOwn(index.RequireReads());
+        AssertEachListsOnlyItsOwn(index);
     }
 
     [Fact]
     public void AnEditedQuestStillListsOnlyWhatItReferences()
     {
         using var index = Indexes.Reconciled(_fixture);
-        var reads = index.RequireReads();
-        var committed = reads.DocumentOf(_quest, _plugin.KeyOf());
+        var committed = index.DocumentOf(_quest, _plugin.KeyOf());
 
-        index.Edit(_plugin, committed, committed.BodyOf().Replace("Owner", "OwnerEdited", StringComparison.Ordinal));
+        index.Edit(_plugin, committed, index.BodyOf(_quest, _plugin.KeyOf()).Replace("Owner", "OwnerEdited", StringComparison.Ordinal));
 
-        Assert.Equal("OwnerEdited", reads.DocumentOf(_quest, _plugin.KeyOf()).EditorId);
-        AssertEachListsOnlyItsOwn(reads);
+        Assert.Equal("OwnerEdited", index.DocumentOf(_quest, _plugin.KeyOf()).EditorId);
+        AssertEachListsOnlyItsOwn(index);
     }
 }

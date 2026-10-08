@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -18,7 +19,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     private void Project(string formKey, string? body) =>
         _fixture.Index.Project(_fixture.Entry, [(formKey, body)]);
 
-    private string CellBody() => _fixture.Reads.DocumentOf(_fixture.EmbedCell, _fixture.Plugin).BodyOf();
+    private string CellBody() => _fixture.Index.BodyOf(_fixture.EmbedCell, _fixture.Plugin);
 
     private string CellBodyAfterCodecRoundTripThrough(Action<JsonArray> changeTemporaryRefs)
     {
@@ -41,12 +42,9 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 
         Project(_fixture.EmbedCell, body);
 
-        var newDocument = _fixture.Reads.DocumentOf(newRef.ToString(), _fixture.Plugin);
-        Assert.Equal("AppendedRef", newDocument.EditorId);
-        var entry = _fixture.Reads.StackEntry(newRef.ToString(), _fixture.Plugin);
-        Assert.NotNull(entry);
-        Assert.True(entry.HasWorkingTreeChange);
-        Assert.Equal("temporary", _fixture.Reads.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell, newRef.ToString()));
+        Assert.Equal("AppendedRef", _fixture.Index.DocumentOf(newRef.ToString(), _fixture.Plugin).EditorId);
+        Assert.Equal(WorkingTreeState.Added, _fixture.Index.RowOf(newRef.ToString(), _fixture.Plugin)?.WorkingTreeState);
+        Assert.Equal("temporary", _fixture.Index.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell, newRef.ToString()));
     }
 
     [Fact]
@@ -61,11 +59,11 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 
         Project(_fixture.EmbedCell, body);
 
-        Assert.Null(_fixture.Reads.GetDocument(removed, _fixture.Plugin));
-        Assert.Null(_fixture.Reads.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell, removed));
+        Assert.Null(_fixture.Index.CopyIn(removed, _fixture.Plugin));
+        Assert.Null(_fixture.Index.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell, removed));
         var siblingInTheOtherSlot = _fixture.PersistentRef;
-        Assert.NotNull(_fixture.Reads.GetDocument(siblingInTheOtherSlot, _fixture.Plugin));
-        Assert.Equal("persistent", _fixture.Reads.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell, siblingInTheOtherSlot));
+        Assert.NotNull(_fixture.Index.CopyIn(siblingInTheOtherSlot, _fixture.Plugin));
+        Assert.Equal("persistent", _fixture.Index.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell, siblingInTheOtherSlot));
     }
 
     [Fact]
@@ -74,9 +72,9 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         Project(_fixture.Worldspace, null);
 
         foreach (var formKey in new[] { _fixture.Worldspace, _fixture.TopCell, _fixture.TopCellRef })
-            Assert.Null(_fixture.Reads.GetDocument(formKey, _fixture.Plugin));
+            Assert.Null(_fixture.Index.CopyIn(formKey, _fixture.Plugin));
         var refInAnotherContainer = _fixture.TemporaryRef;
-        Assert.NotNull(_fixture.Reads.GetDocument(refInAnotherContainer, _fixture.Plugin));
+        Assert.NotNull(_fixture.Index.CopyIn(refInAnotherContainer, _fixture.Plugin));
     }
 
     [Fact]
@@ -88,7 +86,6 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 
         Project(_fixture.EmbedCell, scaleEditReachingOnlyTemporaryRefBecauseThePlacedRefsCarryDistinctScales);
 
-        var effectiveChild = _fixture.Reads.DocumentOf(_fixture.TemporaryRef, _fixture.Plugin);
-        Assert.Contains("\"Scale\": 2.5", effectiveChild.BodyOf(), StringComparison.Ordinal);
+        Assert.Contains("\"Scale\": 2.5", _fixture.Index.BodyOf(_fixture.TemporaryRef, _fixture.Plugin), StringComparison.Ordinal);
     }
 }

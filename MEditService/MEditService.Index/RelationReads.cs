@@ -2,6 +2,7 @@ using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
@@ -43,7 +44,7 @@ internal sealed class RelationReads(
             store.Schemas[tableName], LinkResolution.ForLinksOf(connection, formKey, Resolve), parseDiagnosis);
     }
 
-    public RecordOverrides? GetOverrideStack(string formKey)
+    public OverrideStack? GetOverrideStack(string formKey)
     {
         using var connection = store.OpenReadConnection();
         var tableName = FindRecordType(connection, formKey);
@@ -69,7 +70,7 @@ internal sealed class RelationReads(
             entries.Add(new OverrideStackEntry(doc.Plugin, doc.LoadOrderIndex, doc.IsWinner, doc, isDirty));
         }
 
-        return entries.Count == 0 ? null : new RecordOverrides(formKey, tableName, entries);
+        return entries.Count == 0 ? null : new OverrideStack(formKey, tableName, entries);
     }
 
     public PagedResult<RecordSummary> Search(RecordQuery query)
@@ -333,9 +334,8 @@ internal sealed class RelationReads(
     }
 
     /// <summary>Both halves of "could not be read": a record whose own document failed, and a
-    /// record type whose enumeration did. Keyed by <c>ColumnKey.Of</c> rather than a bare
-    /// filename, which two loaded plugins can share.</summary>
-    public IReadOnlySet<string> GetPluginsWithParseFailures()
+    /// record type whose enumeration did.</summary>
+    public IReadOnlySet<PluginAddress> GetPluginsWithParseFailures()
     {
         using var connection = store.OpenReadConnection();
         using var cmd = connection.CreateCommand();
@@ -348,9 +348,9 @@ internal sealed class RelationReads(
             """;
         using var reader = cmd.ExecuteReader();
 
-        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new HashSet<PluginAddress>(PluginAddress.Comparer);
         while (reader.Read())
-            result.Add(ColumnKey.Of(reader.GetString(0), reader.GetString(1)));
+            result.Add(new PluginAddress(reader.GetString(0), reader.GetString(1)));
         return result;
     }
 
