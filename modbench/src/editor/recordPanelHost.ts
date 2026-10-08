@@ -186,11 +186,11 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
         showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: 'main.js', globals: { mEditLoadError: reason } });
       }
     };
-    await tab.readFile(read);
+    await tab.askWhichRecord(read);
   }
 
   readAgain(): void {
-    for (const tab of this.deps.tabs) tab.readFileAgain();
+    for (const tab of this.deps.tabs) tab.askWhichRecordAgain();
   }
 
   // Saved, the read model wins (commands.md, Principles), but mEdit compares no inactive plugin's

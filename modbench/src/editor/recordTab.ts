@@ -23,7 +23,7 @@ interface TabEvents { retargeted(tab: RecordTab): void; closed(tab: RecordTab): 
  *  the answer, then reads once under the FormKey the tab then shows. Closed, it acts on nothing. */
 export class RecordTab {
   private shown: EditAddress | undefined;
-  private fileRead: (() => Promise<void>) | undefined;
+  private whichRecordRead: (() => Promise<void>) | undefined;
   private placeKept: ViewState | undefined;
   private focused: FocusedCellContext | undefined;
   private originsRead: readonly string[] = [];
@@ -64,14 +64,14 @@ export class RecordTab {
     this.shown = { formKey, plugin };
   }
 
-  /** Reads which record the tab's file holds, now and again on each `readFileAgain` until it shows one. */
-  readFile(read: () => Promise<void>): Promise<void> {
-    this.fileRead = read;
+  /** Asks which record the tab's file holds, now and on each `askWhichRecordAgain` until it shows one. */
+  askWhichRecord(read: () => Promise<void>): Promise<void> {
+    this.whichRecordRead = read;
     return read();
   }
 
-  readFileAgain(): void {
-    if (this.awaitsRecord) void this.fileRead?.();
+  askWhichRecordAgain(): void {
+    if (this.awaitsRecord) void this.whichRecordRead?.();
   }
 
   keepPlace(place: ViewState): void { this.placeKept = place; }

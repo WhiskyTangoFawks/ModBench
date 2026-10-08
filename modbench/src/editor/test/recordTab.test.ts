@@ -241,7 +241,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     });
   });
 
-  it('is no longer among the open tabs once closed, and shows no record', () => {
+  it('is not among the open tabs once closed, and shows no record', () => {
     const tabs = heard(new InMemoryMEditClient());
     const [closed, open] = [showing(tabs, '000800:Mod.esp'), showing(tabs, '000801:Mod.esp')];
 
