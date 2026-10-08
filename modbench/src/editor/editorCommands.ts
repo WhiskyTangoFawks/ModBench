@@ -14,7 +14,6 @@ import {
   registerRecordLifecycleCommands, registerRecordCopyCommands, type ViewSelections,
 } from './recordLifecycleCommands';
 import { announceConflictsComputed, subscribeRecordTabsToNotifications } from './notificationWiring';
-import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -36,7 +35,7 @@ export interface EditorCommandDeps {
     | 'getEditChanges' | 'searchRecords'
     | 'deleteRecords' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders'
-    | 'getComparison' | 'getRecordsComparison' | 'onNotification' | 'onStatusChanged' | 'onReconnected' | 'getRecordOwner'
+    | 'getComparison' | 'getRecordsComparison' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onReconnected' | 'getRecordOwner'
     | 'getRecordFile' | 'getRecordOfFile' | 'getRenderedDocument'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
@@ -57,12 +56,11 @@ export interface EditorCommandDeps {
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const { context, tabs, meditClient, outputChannel } = deps;
   const selections: ViewSelections = { focused: deps.focusedViewSelection, of: deps.selectionOf };
-  const loadOrderStatusTracker = trackLoadOrderStatus(
-    meditClient, () => { announceConflictsComputed(tabs); });
   // The picker and the title are each tab's own, which the record grid adds per tab.
   const routerDeps: SharedRecordPanelDeps = {
     meditClient, channel: outputChannel, reporter: deps.reporterFor('recordPanel'),
-    conflictsComputed: () => loadOrderStatusTracker.current(), loadFailures: () => loadOrderStatusTracker.failures(),
+    conflictsComputed: () => meditClient.loadOrderStatus?.conflictsComputed ?? false,
+    loadFailures: () => meditClient.loadOrderStatus?.failures ?? [],
     modFacts: deps.modFacts,
   };
   const recordEditorProvider = new RecordEditorProvider({ context, tabs, routerDeps, client: meditClient, channel: outputChannel });
@@ -90,7 +88,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     extendedFields,
     new RenderedDocuments(meditClient),
     new ChildRecordDocuments(meditClient),
-    { dispose: () => { loadOrderStatusTracker.dispose(); } },
+    { dispose: meditClient.onLoadOrderSettled(() => { announceConflictsComputed(tabs); }) },
     vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, keepsItsPlace),
     { dispose: meditClient.onNotification('load-order-status', () => { recordEditorProvider.readAgain(); }) },
     // A report names the records that changed, and a move of any of them can move a child's carrier.

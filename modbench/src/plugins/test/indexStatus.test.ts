@@ -48,7 +48,7 @@ function followed() {
     progress: { while: vi.fn((work: () => Promise<void>) => work()), say: vi.fn() },
     statusBar: createStatusBar(client),
     showRecordFilter: vi.fn(),
-    notifyConflictsComputed: vi.fn(),
+    registerRepositories: vi.fn(),
     log: vi.fn(),
     reporter: recordingReporter(),
   } satisfies Parameters<typeof followIndexStatus>[0];
@@ -179,7 +179,7 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
     await flushed();
 
     expect(deps.recordBrowser.refresh).toHaveBeenCalledOnce();
-    expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
+    expect(deps.registerRepositories).toHaveBeenCalledOnce();
   });
 
   it('warns and logs a skipped plugin by name', async () => {

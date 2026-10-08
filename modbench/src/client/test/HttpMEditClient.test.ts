@@ -93,6 +93,23 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
   });
 });
 
+describe('HttpMEditClient — the load-order status', () => {
+  it('is the latest tick the stream carried, and is gone once mEdit is stopped', async () => {
+    const { response, push } = pushableStreamResponse();
+    const client = makeClient(routedFetch([['/notifications/stream', () => Promise.resolve(response)]]));
+    const changes: (boolean | undefined)[] = [];
+    client.onLoadOrderStatus((status) => changes.push(status?.conflictsComputed));
+    await client.start();
+
+    push(readyTickThatSettlesPutLoadOrder());
+    await vi.waitFor(() => expect(client.loadOrderStatus?.conflictsComputed).toBe(true));
+    await client.stop();
+
+    expect(client.loadOrderStatus).toBeUndefined();
+    expect(changes).toEqual([true, undefined]);
+  });
+});
+
 describe('HttpMEditClient — the notification stream follows the status', () => {
   beforeEach(() => { vi.resetAllMocks(); });
   afterEach(() => { vi.restoreAllMocks(); });
