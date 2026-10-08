@@ -126,8 +126,16 @@ internal static class RecordEndpoints
         .ProducesProblem(503);
 
         app.MapGet("/records/{formKey}/references", (string formKey, IRecordQueryService svc) =>
-            GetReferences(formKey, svc, logger))
+            GetReferences(formKey, svc.GetReferences, logger))
         .WithName("GetReferences")
+        .WithTags("Records")
+        .Produces<IReadOnlyList<ReferenceResult>>()
+        .ProducesProblem(503)
+        .ProducesProblem(500);
+
+        app.MapGet("/records/{formKey}/references-in-tracked-plugins", (string formKey, IRecordQueryService svc) =>
+            GetReferences(formKey, svc.GetReferencesInTrackedPlugins, logger))
+        .WithName("GetReferencesInTrackedPlugins")
         .WithTags("Records")
         .Produces<IReadOnlyList<ReferenceResult>>()
         .ProducesProblem(503)
@@ -349,12 +357,13 @@ internal static class RecordEndpoints
             : Results.Problem("No plugin indexes this record.", statusCode: 404);
     }
 
-    internal static IResult GetReferences(string formKey, IRecordQueryService svc, ILogger logger)
+    internal static IResult GetReferences(
+        string formKey, Func<string, IReadOnlyList<ReferenceResult>> read, ILogger logger)
     {
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Received GetReferences for {FormKey}", formKey);
         }
-        return Results.Ok(svc.GetReferences(Uri.UnescapeDataString(formKey)));
+        return Results.Ok(read(Uri.UnescapeDataString(formKey)));
     }
 }

@@ -233,6 +233,8 @@ export interface MEditClient {
    *  state on any cell or row. Null is a copy no plugin holds and no `documentText` gives. */
   getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult | null>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
+  /** Every plugin's referrers, active or not: a location in each tracked plugin's file. */
+  getReferencesInTrackedPlugins(formKey: string): Promise<ReferenceResult[]>;
   /** Null: the plugin holds no such record. */
   getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null>;
   /** Null: the plugin holds no such record. No path: the plugin is untracked, so its copy has no file. */

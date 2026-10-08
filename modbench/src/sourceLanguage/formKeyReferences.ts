@@ -7,7 +7,7 @@ import { locateCopies, type RecordLocation, type RecordLocationDeps } from './re
 import { formKeyAt, referenceSpan } from './sourceText';
 
 interface ReferencesDeps<Document> extends RecordLocationDeps<Document> {
-  client: RecordLocationDeps<Document>['client'] & Pick<MEditClient, 'getReferences'>;
+  client: RecordLocationDeps<Document>['client'] & Pick<MEditClient, 'getReferencesInTrackedPlugins'>;
   reporter: Pick<Reporter, 'report'>;
 }
 
@@ -18,7 +18,7 @@ export function referencesOf<Document extends { getText(): string }>(
     const found = formKeyAt(text, offset);
     if (!found) return [];
     const { formKey } = found;
-    const rows = await client.getReferences(formKey).catch((error: unknown) => {
+    const rows = await client.getReferencesInTrackedPlugins(formKey).catch((error: unknown) => {
       reporter.report('error', `Find All References cannot list what references ${formKey}.`, errorMessage(error));
       return [];
     });

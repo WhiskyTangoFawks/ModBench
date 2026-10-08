@@ -286,7 +286,13 @@ internal sealed class RelationReads(
     public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)
     {
         using var connection = store.OpenReadConnection();
-        return GetReferences(connection, targetFormKey);
+        return GetReferences(connection, RecordScope.Active, targetFormKey);
+    }
+
+    public IReadOnlyList<ReferenceRow> GetReferencedByInEveryRegisteredPlugin(string targetFormKey)
+    {
+        using var connection = store.OpenReadConnection();
+        return GetReferences(connection, RecordScope.EveryRegisteredPlugin, targetFormKey);
     }
 
     public IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
@@ -621,13 +627,13 @@ internal sealed class RelationReads(
         return cmd.ExecuteScalar() as string;
     }
 
-    private static List<ReferenceRow> GetReferences(DuckDBConnection connection, string targetFormKey)
+    private static List<ReferenceRow> GetReferences(DuckDBConnection connection, RecordScope scope, string targetFormKey)
     {
         // WorkingTreeOverlay keeps form_references rewritten as the working tree changes, so this
         // already sees every edit without applying anything itself.
-        const string sql = """
+        var sql = $"""
             SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
-            FROM form_references fr
+            FROM {scope.Referrers}
             WHERE fr.target_form_key = $1
             """;
 

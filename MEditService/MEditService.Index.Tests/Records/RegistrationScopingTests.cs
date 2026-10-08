@@ -191,6 +191,28 @@ public class RegistrationScopingTests
     }
 
     [Fact]
+    public void AReferenceInAPluginThatIsNotActive_IsListedForEveryTrackedPlugin()
+    {
+        using var fx = Build("registration-inactive-references");
+
+        fx.Reconcile(fx.WithBetaDisabled);
+
+        var reference = Assert.Single(fx.Index.Records.GetReferencesInTrackedPlugins(fx.BetaRaceFk), r => r.FormKey == fx.BetaNpcFk);
+        Assert.Equal(BetaKey, new PluginAddress(reference.Plugin, reference.Origin));
+        Assert.Empty(fx.Index.Records.GetReferences(fx.BetaRaceFk));
+    }
+
+    [Fact]
+    public void AReferenceInAPluginAbsentFromTheSnapshot_IsListedForNoTrackedPlugin()
+    {
+        using var fx = Build("registration-absent-references");
+
+        fx.Reconcile(fx.WithoutBeta);
+
+        Assert.Empty(fx.Index.Records.GetReferencesInTrackedPlugins(fx.BetaRaceFk));
+    }
+
+    [Fact]
     public void APluginThatIsNotActive_IsInNoRelationTheSqlDoorReads()
     {
         using var fx = Build("registration-inactive-door");

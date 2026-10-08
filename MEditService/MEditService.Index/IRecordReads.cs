@@ -46,6 +46,9 @@ internal interface IRecordReads
 
     IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey);
 
+    /// <summary>The same read over every registered plugin, active or not (ADR-0012).</summary>
+    IReadOnlyList<ReferenceRow> GetReferencedByInEveryRegisteredPlugin(string targetFormKey);
+
     /// <summary>Every link an active plugin's record carries to a FormKey no active plugin holds
     /// (engine-defined FormIds exempt), with its referrer's file in the mod folder
     /// <paramref name="modOf"/> names.</summary>

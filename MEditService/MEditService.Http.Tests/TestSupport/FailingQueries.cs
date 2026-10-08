@@ -30,6 +30,7 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IRecordQue
     public IReadOnlyList<RecordTypeChoice>? GetChildRecordTypes(PluginAddress plugin, string formKey) => throw Failed();
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => throw Failed();
+    public IReadOnlyList<ReferenceResult> GetReferencesInTrackedPlugins(string targetFormKey) => throw Failed();
 
     public RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey) => throw Failed();
 
