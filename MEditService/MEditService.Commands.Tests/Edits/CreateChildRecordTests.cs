@@ -321,7 +321,7 @@ public sealed class CreateChildRecordTests : IDisposable
     {
         var result = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, "dial", _fixture.Quest.ToString());
 
-        Assert.Equal("000812:ContainerFixture.esp", result.NewFormKey);
-        Assert.Equal(0x813u, _fixture.NextObjectId());
+        Assert.Equal("000815:ContainerFixture.esp", result.NewFormKey);
+        Assert.Equal(0x816u, _fixture.NextObjectId());
     }
 }
