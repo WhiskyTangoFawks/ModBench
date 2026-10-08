@@ -63,6 +63,18 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
     }
 
     [Fact]
+    public void GetLoadOrderDiagnoses_APluginLoadedWithNoLine_IsMatchedIgnoringCase_ForACaseSensitiveFilesystemCanHoldASecondFileDifferingOnlyInCase()
+    {
+        var master = Plugin(Malformed, origin: "CleanedMasters") with { LoadedWithNoLine = true };
+        var upper = master with { Name = Malformed.ToUpperInvariant(), LoadedWithNoLine = false, Enabled = false };
+
+        using var index = Indexes.Reconciled(GameDirectory, [upper, master]);
+
+        Assert.Empty(index.Malformed.GetLoadOrderDiagnoses());
+        Assert.Equal([Malformed.ToUpperInvariant(), Malformed], index.Status.Failures.Select(f => f.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void GetLoadOrderDiagnoses_AUserPluginInTheGameFolder_IsReported_ForWhereTheFileSitsDecidesNothing()
     {
         var placed = Plugin(Malformed, origin: PluginOrigin.DataDirectory);
