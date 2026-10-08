@@ -2,6 +2,7 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -102,16 +103,22 @@ internal static class RecordEndpoints
         {
             if (path is null || !Path.IsPathFullyQualified(path))
                 return Results.Problem("Name the file by its absolute path.", statusCode: 400);
-            return svc.TryGetRecordOfFile(path, out var record, out var whyNone)
-                ? Results.Ok(Addressed(record.Value))
-                : Results.Problem(whyNone, statusCode: 422);
+            return svc.GetRecordOfFile(path) switch
+            {
+                RecordOfFile.Holds holds => Results.Ok(Addressed(holds.Record)),
+                RecordOfFile.HoldsNone => Results.NoContent(),
+                RecordOfFile.Refused refused => Results.Problem(refused.Why, statusCode: 422),
+                var other => throw new ArgumentOutOfRangeException(nameof(path), other, null),
+            };
         })
         .WithName("GetRecordOfFile")
         .WithDescription(
             "The record whose own document the file at an absolute path is, read from the file's text: its plugin and " +
-            "FormKey. A file that is no record's own document refuses, saying why.")
+            "FormKey. No content when the layout says the file holds no record. A file that cannot be read as a " +
+            "record's own document refuses, saying why.")
         .WithTags("Records")
         .Produces<RecordAddress>()
+        .Produces(204)
         .ProducesProblem(400)
         .ProducesProblem(422)
         .ProducesProblem(503);

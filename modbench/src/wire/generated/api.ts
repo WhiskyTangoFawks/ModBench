@@ -480,7 +480,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The record whose own document the file at an absolute path is, read from the file's text: its plugin and FormKey. A file that is no record's own document refuses, saying why. */
+        /** @description The record whose own document the file at an absolute path is, read from the file's text: its plugin and FormKey. No content when the layout says the file holds no record. A file that cannot be read as a record's own document refuses, saying why. */
         get: operations["GetRecordOfFile"];
         put?: never;
         post?: never;
@@ -2598,6 +2598,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RecordAddress"];
                 };
+            };
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {

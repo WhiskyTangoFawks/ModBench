@@ -64,17 +64,11 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     private LoadOrderSnapshot LoadOrder(params LoadOrderEntry[] plugins) =>
         SnapshotPlugins.Snapshot(_modFolder, null, Release, plugins.Length == 0 ? [Entry(_modFolder, Origin)] : plugins);
 
-    private RecordAt RecordOf(string path, LoadOrderSnapshot? loadOrder = null)
-    {
-        Assert.True(SourceRepository.TryRecordOfFile(loadOrder ?? LoadOrder(), path, out var record, out var whyNone), whyNone);
-        return record.Value;
-    }
+    private RecordAt RecordOf(string path, LoadOrderSnapshot? loadOrder = null) =>
+        Assert.IsType<RecordOfFile.Holds>(SourceRepository.RecordOfFile(loadOrder ?? LoadOrder(), path)).Record;
 
-    private string WhyNoRecordIn(string path)
-    {
-        Assert.False(SourceRepository.TryRecordOfFile(LoadOrder(), path, out _, out var whyNone));
-        return whyNone;
-    }
+    private string WhyRefused(string path, LoadOrderSnapshot? loadOrder = null) =>
+        Assert.IsType<RecordOfFile.Refused>(SourceRepository.RecordOfFile(loadOrder ?? LoadOrder(), path)).Why;
 
     private string RenameNpcFileByHand()
     {
@@ -162,42 +156,40 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     }
 
     [Fact]
-    public void APathUnderNoPluginsSource_HoldsNoRecord()
+    public void APathUnderNoPluginsSource_IsRefused()
     {
         var binary = Path.Combine(_modFolder, PluginName);
 
-        Assert.Equal($"{binary} is under no tracked plugin's source.", WhyNoRecordIn(binary));
+        Assert.Equal($"{binary} is under no tracked plugin's source.", WhyRefused(binary));
     }
 
     [Fact]
-    public void ASourceInAModTheLoadOrderDoesNotName_HoldsNoRecord()
+    public void ASourceInAModTheLoadOrderDoesNotName_IsRefused()
     {
         using var other = new ScratchDirectory("medit-file-of-a-record-unlisted-");
         TrackFiledIn(other);
         var npcFile = Path.Combine(other, NpcDocument);
 
-        Assert.Equal($"{npcFile} is under no tracked plugin's source.", WhyNoRecordIn(npcFile));
+        Assert.Equal($"{npcFile} is under no tracked plugin's source.", WhyRefused(npcFile));
     }
 
     [Fact]
-    public void ASourceInAModWithNoRepository_HoldsNoRecord()
+    public void ASourceInAModWithNoRepository_IsRefused()
     {
         using var untracked = new ScratchDirectory("medit-file-of-a-record-untracked-");
         var npcFile = Path.Combine(untracked, NpcDocument);
         Directory.CreateDirectory(Path.GetDirectoryName(npcFile).Require());
         File.WriteAllText(npcFile, "{\"FormKey\": \"000800:Filed.esp\", \"EditorID\": \"FiledNpc\"}");
 
-        Assert.False(SourceRepository.TryRecordOfFile(
-            LoadOrder(Entry(_modFolder, Origin) with { Winning = false }, Entry(untracked, "UntrackedMod")), npcFile, out _, out var whyNone));
-        Assert.Equal($"{npcFile} is under no tracked plugin's source.", whyNone);
+        Assert.Equal(
+            $"{npcFile} is under no tracked plugin's source.",
+            WhyRefused(npcFile, LoadOrder(Entry(_modFolder, Origin) with { Winning = false }, Entry(untracked, "UntrackedMod"))));
     }
 
     [Fact]
     public void AGroupsMetadataFile_HoldsNoRecord()
     {
-        Assert.Equal(
-            $"{Path.Combine(_modFolder, GroupMetadata)} is a group's metadata file, which holds no record.",
-            WhyNoRecordIn(Path.Combine(_modFolder, GroupMetadata)));
+        Assert.IsType<RecordOfFile.HoldsNone>(SourceRepository.RecordOfFile(LoadOrder(), Path.Combine(_modFolder, GroupMetadata)));
     }
 
     [Fact]
@@ -206,30 +198,30 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         var notes = Path.Combine(PluginSourceRoot.For(PluginName), "Npcs", "notes.txt");
         File.WriteAllText(Path.Combine(_modFolder, notes), "{\"FormKey\": \"000900:Filed.esp\"}");
 
-        Assert.Equal($"{Path.Combine(_modFolder, notes)} is no JSON document, so it holds no record.", WhyNoRecordIn(Path.Combine(_modFolder, notes)));
+        Assert.IsType<RecordOfFile.HoldsNone>(SourceRepository.RecordOfFile(LoadOrder(), Path.Combine(_modFolder, notes)));
     }
 
     [Fact]
-    public void AFileWhoseTextIsNoRecordDocument_HoldsNoRecord_InTheReadersWords()
+    public void AFileWhoseTextIsNoRecordDocument_IsRefused_InTheReadersWords()
     {
         File.WriteAllText(NpcFile, "[1, 2]");
 
-        Assert.Equal($"{NpcFile} is no record document: its root is not a JSON object.", WhyNoRecordIn(NpcFile));
+        Assert.Equal($"{NpcFile} is no record document: its root is not a JSON object.", WhyRefused(NpcFile));
     }
 
     [Fact]
-    public void AFileThatIsGone_HoldsNoRecord()
+    public void AFileThatIsGone_IsRefused()
     {
         File.Delete(NpcFile);
 
-        Assert.Equal($"{NpcFile} could not be read.", WhyNoRecordIn(NpcFile));
+        Assert.Equal($"{NpcFile} could not be read.", WhyRefused(NpcFile));
     }
 
     [Fact]
-    public void ADocumentDeclaringNoFormKey_HoldsNoRecord()
+    public void ADocumentDeclaringNoFormKey_IsRefused()
     {
         File.WriteAllText(NpcFile, "{\"EditorID\": \"FiledNpc\"}");
 
-        Assert.Equal($"{NpcFile} declares no FormKey, so it is no record's document.", WhyNoRecordIn(NpcFile));
+        Assert.Equal($"{NpcFile} declares no FormKey, so it is no record's document.", WhyRefused(NpcFile));
     }
 }

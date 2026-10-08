@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -180,36 +179,19 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         return null;
     }
 
-    internal bool TryFormKeyOfFile(
-        string pluginFileName, string fullPath,
-        [NotNullWhen(true)] out string? formKey, [NotNullWhen(false)] out string? whyNone)
+    internal RecordOfFile RecordOfFile(PluginAddress plugin, string fullPath)
     {
         var relativePath = Path.Combine(
-            SourceRepositoryLayout.RootFor(pluginFileName),
-            Path.GetRelativePath(SourceRepositoryLayout.RootIn(_modFolder, pluginFileName), fullPath));
-        var text = SourceRepositoryLayout.CarriesNoRecord(relativePath) ? null : DocumentText.ReadOrNull(fullPath);
-        var declared = text is null || NotADocument(text) is not null
-            ? null
-            : DocumentText.FormKeyDeclaredIn(text, relativePath, pluginFileName);
-        if (FormKey.TryFactory(declared, out var parsed))
-        {
-            (formKey, whyNone) = (parsed.ToString(), null);
-            return true;
-        }
+            SourceRepositoryLayout.RootFor(plugin.Name),
+            Path.GetRelativePath(SourceRepositoryLayout.RootIn(_modFolder, plugin.Name), fullPath));
+        if (SourceRepositoryLayout.CarriesNoRecord(relativePath)) return new RecordOfFile.HoldsNone();
 
-        (formKey, whyNone) = (null, WhyNoRecordIn(fullPath, text));
-        return false;
-    }
-
-    private static string WhyNoRecordIn(string fullPath, string? text)
-    {
-        if (Path.GetFileName(fullPath).Equals(SourceRepositoryLayout.GroupRecordDataFileName, StringComparison.Ordinal))
-            return $"{fullPath} is a group's metadata file, which holds no record.";
-        if (SourceRepositoryLayout.CarriesNoRecord(fullPath)) return $"{fullPath} is no JSON document, so it holds no record.";
-        if (text is null) return $"{fullPath} could not be read.";
-        return NotADocument(text) is { } why
-            ? $"{fullPath} is no record document: {why}"
-            : $"{fullPath} declares no FormKey, so it is no record's document.";
+        var text = DocumentText.ReadOrNull(fullPath);
+        if (text is null) return new RecordOfFile.Refused($"{fullPath} could not be read.");
+        if (NotADocument(text) is { } why) return new RecordOfFile.Refused($"{fullPath} is no record document: {why}");
+        return FormKey.TryFactory(DocumentText.FormKeyDeclaredIn(text, relativePath, plugin.Name), out var declared)
+            ? new RecordOfFile.Holds(new RecordAt(plugin, declared.ToString()))
+            : new RecordOfFile.Refused($"{fullPath} declares no FormKey, so it is no record's document.");
     }
 
     // Its root has to be a JSON object before any member of it can be read; anything else is a file

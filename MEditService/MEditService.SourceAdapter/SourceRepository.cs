@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -174,25 +173,16 @@ public sealed class SourceRepository
     public string? FullPathOf(PluginAddress plugin, RecordIdentity identity) =>
         Locator.Locate(plugin, identity) is { } unit && File.Exists(unit.FullPath) ? unit.FullPath : null;
 
-    /// <summary>The record whose own document the file at <paramref name="path"/> is, read from its text as the index
-    /// reads it; otherwise why the file holds none.</summary>
-    public static bool TryRecordOfFile(
-        LoadOrderSnapshot loadOrder, string path, [NotNullWhen(true)] out RecordAt? record, [NotNullWhen(false)] out string? whyNone)
+    /// <summary>What the file at <paramref name="path"/> holds, read from its text as the index reads it.</summary>
+    public static RecordOfFile RecordOfFile(LoadOrderSnapshot loadOrder, string path)
     {
-        record = null;
         var fullPath = Path.GetFullPath(path);
         if (loadOrder.Plugins.FirstOrDefault(plugin => plugin.Provider is PluginProvider.FromMod mod
                 && SourceRepositoryLocator.IsUnder(Path.GetFullPath(SourceRepositoryLayout.RootIn(mod.Folder, plugin.Name)), fullPath)
                 && SourceReads(plugin)) is not { Provider: PluginProvider.FromMod source } holder)
-        {
-            whyNone = $"{fullPath} is under no tracked plugin's source.";
-            return false;
-        }
+            return new RecordOfFile.Refused($"{fullPath} is under no tracked plugin's source.");
 
-        if (!Over(source, loadOrder.GameRelease).Locator.TryFormKeyOfFile(holder.Name, fullPath, out var formKey, out whyNone))
-            return false;
-        record = new RecordAt(holder.Key, formKey);
-        return true;
+        return Over(source, loadOrder.GameRelease).Locator.RecordOfFile(holder.Key, fullPath);
     }
 
     /// <summary>The name the layout gives the file of the record's own document.</summary>

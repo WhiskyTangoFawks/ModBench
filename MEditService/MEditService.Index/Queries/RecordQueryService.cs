@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -281,8 +280,7 @@ internal sealed class RecordQueryService(
             : null;
     }
 
-    public bool TryGetRecordOfFile(string path, [NotNullWhen(true)] out RecordAt? record, [NotNullWhen(false)] out string? whyNone) =>
-        SourceRepository.TryRecordOfFile(_loadOrder.Require(), path, out record, out whyNone);
+    public RecordOfFile GetRecordOfFile(string path) => SourceRepository.RecordOfFile(_loadOrder.Require(), path);
 
     public LoadOrderStatus GetStatus() => _index.Status;
 
