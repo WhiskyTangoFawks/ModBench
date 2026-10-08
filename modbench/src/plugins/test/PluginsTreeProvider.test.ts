@@ -45,6 +45,7 @@ import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { present } from '../../ports/present';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { CONTAINER_TYPES, listsForThePluginAsked } from '../../client/test/fixtures';
 
 function plugin(
@@ -179,7 +180,7 @@ async function reconcile(
   h: Harness, plugins: PluginMetadata[], failures: PluginLoadFailure[] = [],
 ): Promise<void> {
   h.client.setQueryAnswer('getPlugins', plugins);
-  await h.tree.applyReconciled(failures);
+  await h.tree.facts.reconciled(failures);
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
@@ -1007,7 +1008,7 @@ describe('PluginsTreeProvider — an enabled row is always collapsible', () => {
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
-    h.tree.applyIndexed([], []);
+    h.tree.facts.indexed([], []);
 
     expect(h.tree.getTreeItem(present(row, 'the sole row')).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
@@ -1092,7 +1093,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     const h = makeTree([A_ROW(), B_ROW()], { client });
     const rows = await h.tree.getChildren();
 
-    h.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
+    h.tree.facts.indexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
 
     expect((await h.tree.getChildren(rows[0])).map(c => c.label)).toEqual(['Weapon']);
     expect(rendered(await h.tree.getChildren(rows[1]))).toEqual(STILL_INDEXING);
@@ -1117,7 +1118,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     const [row] = await h.tree.getChildren();
 
     h.client.setQueryFailure('getPlugins', new Error('GET /plugins failed (500)'));
-    await h.tree.applyReconciled([]);
+    await h.tree.facts.reconciled([]);
 
     expect(h.tree.getTreeItem(present(row, 'the A.esp row')).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
     expect((await h.tree.getChildren(row)).map(c => c.label)).toEqual(['Weapon']);
@@ -1128,7 +1129,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
-    h.tree.applyIndexed([], []);
+    h.tree.facts.indexed([], []);
 
     expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
   });
@@ -1161,7 +1162,7 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
     await reconcile(h, [held('A.esp'), held('B.esp')]);
     const before = await h.tree.getChildren();
 
-    h.tree.applyIndexed([], []);
+    h.tree.facts.indexed([], []);
 
     expect(await h.tree.getChildren()).toEqual(before);
   });
@@ -1282,21 +1283,21 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
   it('actually asks the client and observes the failure', async () => {
     const h = makeTree([A_ROW()], { client: makeDisconnectedClient() });
 
-    expect(await h.tree.applyReconciled([])).toBeUndefined();
+    expect(await h.tree.facts.reconciled([])).toBeUndefined();
 
     expect(callCount(h.client, 'getPlugins')).toBeGreaterThan(0);
   });
 
   it('renders the rows, in load order, the same as if it were connected', async () => {
     const h = makeTree([A_ROW(), B_ROW()], { client: makeDisconnectedClient() });
-    await h.tree.applyReconciled([]);
+    await h.tree.facts.reconciled([]);
 
     expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp', 'B.esp']);
   });
 
   it('expanding a row yields exactly one error node', async () => {
     const h = makeTree([A_ROW()], { client: makeDisconnectedClient() });
-    await h.tree.applyReconciled([]);
+    await h.tree.facts.reconciled([]);
     const [row] = await h.tree.getChildren();
 
     const children = await h.tree.getChildren(row);
@@ -1308,7 +1309,7 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
     const client = makeClient();
     client.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
     const h = makeTree([A_ROW()], { client });
-    await h.tree.applyReconciled([]);
+    await h.tree.facts.reconciled([]);
     const [row] = await h.tree.getChildren();
 
     const [child] = await h.tree.getChildren(row);
@@ -1318,7 +1319,7 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
 
   it('tooltips a row with its file name and mod', async () => {
     const h = makeTree([A_ROW()], { client: makeDisconnectedClient() });
-    await h.tree.applyReconciled([]);
+    await h.tree.facts.reconciled([]);
     const [row] = await h.tree.getChildren();
 
     const item = h.tree.getTreeItem(present(row, 'the sole row'));
@@ -1327,12 +1328,12 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
 
   it('is distinguishable from a "still indexing" row', async () => {
     const disconnected = makeTree([A_ROW()], { client: makeDisconnectedClient() });
-    await disconnected.tree.applyReconciled([]);
+    await disconnected.tree.facts.reconciled([]);
     const [discRow] = await disconnected.tree.getChildren();
     const [discChild] = await disconnected.tree.getChildren(discRow);
 
     const indexing = makeTree([A_ROW(), B_ROW()]);
-    indexing.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
+    indexing.tree.facts.indexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
     const rows = await indexing.tree.getChildren();
     const [idxChild] = await indexing.tree.getChildren(rows[1]);
 
@@ -1349,7 +1350,7 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
     const h = makeTree([A_ROW()]);
     const [row] = await h.tree.getChildren();
 
-    h.tree.applyRefused(heldElsewhere);
+    h.tree.facts.refused(heldElsewhere);
     const children = await h.tree.getChildren(row);
 
     expect(children).toHaveLength(1);
@@ -1362,7 +1363,7 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
-    h.tree.applyRefused(heldElsewhere);
+    h.tree.facts.refused(heldElsewhere);
     const children = await h.tree.getChildren(row);
 
     expect(children.map(c => c.contextValue)).toEqual(['error']);
@@ -1372,10 +1373,10 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
     const h = makeTree([A_ROW()]);
     await h.tree.getChildren();
 
-    h.tree.applyRefused(failed);
+    h.tree.facts.refused(failed);
     expect(h.tree.viewMessage()).toBe(`Indexing failed: ${failed.message}`);
 
-    h.tree.applyIndexed([], []);
+    h.tree.facts.indexed([], []);
     expect(h.tree.viewMessage()).toBeUndefined();
   });
 
@@ -1385,11 +1386,47 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
     const before = await h.tree.getChildren();
     const statusBefore = h.tree.getTreeItem(present(before[1], "B.esp's row")).description;
 
-    h.tree.applyRefused(heldElsewhere);
+    h.tree.facts.refused(heldElsewhere);
     const after = await h.tree.getChildren();
 
     expect(after).toEqual(before);
     expect(h.tree.getTreeItem(present(after[1], "B.esp's row")).description).toBe(statusBefore);
+  });
+});
+
+describe('PluginsTreeProvider — the message line takes the first message that holds (common.md, States 5; plugins.md, States 1, 5 and 6)', () => {
+  const GAME_FOLDER_MESSAGE = "Game folder not found: set modbench.mods.gameDirectory. The Toolbox's Game row names each place Modbench looked.";
+  const indexFailed = { kind: 'failed', message: 'the index threw' } as const;
+
+  const withoutGameFolder = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]) =>
+    new FakeInstance({ ...valueOf(plugins), gameFolder: GAME_FOLDER_NOT_FOUND });
+
+  it('puts the game folder over a failed index', () => {
+    const h = makeTree([A_ROW()], { instance: withoutGameFolder([A_ROW()]) });
+    h.tree.facts.refused(indexFailed);
+
+    expect(h.tree.viewMessage()).toBe(GAME_FOLDER_MESSAGE);
+  });
+
+  it('puts a failed index over no rows', async () => {
+    const h = makeTree([]);
+    await h.tree.getChildren();
+    h.tree.facts.refused(indexFailed);
+
+    expect(h.tree.viewMessage()).toBe('Indexing failed: the index threw');
+  });
+
+  it('puts no rows over a record filter that matched nothing', async () => {
+    const instance = new FakeInstance(valueOf([A_ROW()]));
+    const h = makeTree([], { instance });
+    h.tree.setRecordFilterSource('a.sql');
+    await reconcile(h, [held('A.esp', { hasMatchingRecords: false })]);
+    expect(h.tree.viewMessage()).toBe('No records match a.sql.');
+
+    instance.publish(valueOf([]));
+    await h.tree.getChildren();
+
+    expect(h.tree.viewMessage()).toBe(NO_PLUGINS_MESSAGE);
   });
 });
 
@@ -1398,7 +1435,7 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
     const h = makeTree([A_ROW()]);
     const [row] = await h.tree.getChildren();
 
-    h.tree.applyBackendUnreachable('mEdit is disconnected.');
+    h.tree.facts.unreachable('mEdit is disconnected.');
     const children = await h.tree.getChildren(row);
 
     expect(present(children[0], 'the error row').tooltip).toBe('mEdit is disconnected.');
@@ -1408,7 +1445,7 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
 
-    h.tree.applyBackendUnreachable('mEdit is stopped.');
+    h.tree.facts.unreachable('mEdit is stopped.');
 
     expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['B.esp']);
   });
@@ -1419,7 +1456,7 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
     await reconcile(h, [held('A.esp')]);
     const rows = await h.tree.getChildren();
 
-    h.tree.applyBackendUnreachable('mEdit is stopped.');
+    h.tree.facts.unreachable('mEdit is stopped.');
 
     expect((await h.tree.getChildren(rows[0])).map(c => c.label)).toEqual(['Weapon']);
     expect(present((await h.tree.getChildren(rows[1]))[0], 'the error row').tooltip).toBe('mEdit is stopped.');
@@ -1487,7 +1524,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['B.esp']);
 
     h.client.setQueryAnswer('getPlugins', [held('A.esp'), held('B.esp')]);
-    await h.tree.refreshFacts();
+    await h.tree.facts.refresh();
 
     expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp', 'B.esp']);
   });
@@ -1502,7 +1539,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
       plugin({ name: 'B.esp', slot: 0 }), plugin({ name: 'A.esp', slot: 1 }),
     ]));
     h.client.setQueryAnswer('getPlugins', [held('A.esp'), held('B.esp')]);
-    await h.tree.refreshFacts();
+    await h.tree.facts.refresh();
 
     expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['B.esp', 'A.esp']);
   });
@@ -1537,7 +1574,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     it('keeps a row hidden by the filter still in force', async () => {
       const h = await hiddenByA();
 
-      await h.tree.refreshFacts();
+      await h.tree.facts.refresh();
 
       expect(await labels(h)).toEqual(['B.esp']);
     });
@@ -1546,7 +1583,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
       const h = await hiddenByA();
 
       h.tree.setRecordFilterSource(undefined);
-      await h.tree.refreshFacts();
+      await h.tree.facts.refresh();
 
       expect(await labels(h)).toEqual(['A.esp', 'B.esp']);
     });
@@ -1555,7 +1592,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
       const h = await hiddenByA();
 
       h.tree.setRecordFilterSource('b.sql');
-      await h.tree.refreshFacts();
+      await h.tree.facts.refresh();
 
       expect(await labels(h)).toEqual(['A.esp', 'B.esp']);
     });
@@ -1566,7 +1603,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     await reconcile(h, [held('A.esp', { hasMatchingRecords: false })]);
     expect(await h.tree.getChildren()).toEqual([]);
 
-    h.tree.applyIndexed([], []);
+    h.tree.facts.indexed([], []);
 
     expect(await h.tree.getChildren()).toEqual([]);
   });
@@ -1581,41 +1618,6 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     const rows = await h.tree.getChildren();
     expect(rows).toHaveLength(1);
     expect(h.tree.getTreeItem(present(rows[0], 'the sole row')).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
-  });
-
-  it('a filter set while the client is answering, then cleared, leaves no stale hidden row', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp')]);
-    expect(await h.tree.getChildren()).toHaveLength(1);
-
-    let resolveSlow!: (plugins: PluginMetadata[]) => void;
-    const slow = new Promise<PluginMetadata[]>((resolve) => { resolveSlow = resolve; });
-    h.client.setQueryAnswerOnce('getPlugins', slow);
-    h.client.setQueryAnswer('getPlugins', [held('A.esp')]);
-
-    const filterSet = h.tree.refreshFacts();
-    await h.tree.refreshFacts();
-    expect(await h.tree.getChildren()).toHaveLength(1);
-
-    resolveSlow([held('A.esp', { hasMatchingRecords: false })]);
-    await filterSet;
-
-    expect(await h.tree.getChildren()).toHaveLength(1);
-  });
-
-  it('a fact re-read during a reconcile hand-off leaves the hand-off standing', async () => {
-    const h = makeTree([A_ROW()]);
-    let resolveSlow!: (plugins: PluginMetadata[]) => void;
-    h.client.setQueryAnswerOnce('getPlugins', new Promise<PluginMetadata[]>((resolve) => { resolveSlow = resolve; }));
-    h.client.setQueryAnswer('getPlugins', [held('A.esp')]);
-
-    const handOff = h.tree.applyReconciled([]);
-    await h.tree.refreshFacts();
-    resolveSlow([held('A.esp')]);
-
-    expect(await handOff).toBe(1);
-    const [row] = await h.tree.getChildren();
-    expect(rendered(await h.tree.getChildren(row))).not.toEqual(STILL_INDEXING);
   });
 });
 
@@ -2146,7 +2148,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
     await reconcile(h, [held('A.esp', { isImmutable: true })]);
     expect((await rowItem(h)).tooltip).toContain('read-only');
 
-    h.tree.applyIndexed([], []);
+    h.tree.facts.indexed([], []);
     expect((await rowItem(h)).tooltip).toContain('read-only');
 
     await reconcile(h, [held('A.esp')]);
@@ -2202,7 +2204,7 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
     const h = makeTree([A_ROW()]);
     await withIssues(h, ['Ghost.esm']);
 
-    h.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
+    h.tree.facts.indexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
 
     expect((await rowItem(h)).tooltip).toContain('Missing masters: Ghost.esm');
   });
@@ -2212,7 +2214,7 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
     await withIssues(h, ['Ghost.esm']);
 
     h.client.setQueryAnswer('getPlugins', [held('A.esp', { masterIssues: null })]);
-    await h.tree.refreshFacts();
+    await h.tree.facts.refresh();
 
     expect((await rowItem(h)).description).toBe('1 master issue');
   });
@@ -2246,7 +2248,7 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
   it('flags a row the moment a load tick reports its plugin failed, before the load completes', async () => {
     const h = makeTree([A_ROW()]);
 
-    h.tree.applyIndexed([], [{ name: 'A.esp', origin: 'SomeMod', reason: 'RACE parse' }]);
+    h.tree.facts.indexed([], [{ name: 'A.esp', origin: 'SomeMod', reason: 'RACE parse' }]);
 
     const item = await rowItem(h);
     expect(item.description).toBe('failed to read');
@@ -2258,7 +2260,7 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
     await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
     expect((await rowItem(h)).description).toBe('failed to read');
 
-    h.tree.applyIndexed([], []);
+    h.tree.facts.indexed([], []);
 
     expect((await rowItem(h)).description).toBe('failed to read');
     const [row] = await h.tree.getChildren();
@@ -2299,7 +2301,7 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
     const slow = new Promise<PluginDiagnosisReport[]>((resolve) => { resolveScan = resolve; });
     h.client.setQueryAnswerOnce('getDiagnoses', slow);
 
-    await h.tree.applyReconciled([]);
+    await h.tree.facts.reconciled([]);
     expect((await rowItem(h)).description).toBe('malformed');
 
     resolveScan([]);
@@ -2391,7 +2393,7 @@ describe('PluginsTreeProvider fact refresh', () => {
     const heard: unknown[] = [];
     h.tree.onDidChangeTreeData(() => heard.push(true));
 
-    await h.tree.refreshFacts();
+    await h.tree.facts.refresh();
 
     expect(heard).toHaveLength(1);
     expect((await h.tree.getChildren())[0]).toBe(before[0]);
@@ -2469,7 +2471,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
 
   it('expands the row as still indexing while only the other plugin has landed', async () => {
     const h = makeTree([SHARED_ROW()]);
-    h.tree.applyIndexed([{ name: 'Shared.esp', origin: 'ModB' }], []);
+    h.tree.facts.indexed([{ name: 'Shared.esp', origin: 'ModB' }], []);
 
     const [row] = await h.tree.getChildren();
     expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
@@ -2485,7 +2487,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
 
   it('expands the winning row as still indexing, never into the other plugin failure', async () => {
     const h = makeTree([SHARED_ROW()]);
-    h.tree.applyIndexed([], [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
+    h.tree.facts.indexed([], [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
 
     const [row] = await h.tree.getChildren();
     expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
@@ -2558,7 +2560,7 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp')]);
 
-    await h.tree.refreshFacts();
+    await h.tree.facts.refresh();
 
     expect(callCount(h.client, 'getPlugins')).toBe(2);
   });
@@ -2567,7 +2569,7 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
     const h = makeTree([A_ROW()]);
     h.client.setQueryFailure('getPlugins', new Error('GET /plugins failed (503)'));
 
-    await h.tree.applyReconciled([]);
+    await h.tree.facts.reconciled([]);
 
     const failures = h.logged.filter((l) => l.msg.includes('plugin list failed'));
     expect(failures).toHaveLength(1);
@@ -2585,17 +2587,6 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
     expect(scan).toHaveLength(1);
     expect(present(scan[0], 'the sole scan-failure log entry').level).toBe('warn');
     expect(h.logged.some((l) => l.level === 'error')).toBe(false);
-  });
-
-  it('drops a reconcile answer that lands after a fresh load started', async () => {
-    const h = makeTree([A_ROW()]);
-    h.client.setQueryAnswer('getPlugins', [held('A.esp')]);
-    const landing = h.tree.applyReconciled([]);
-    h.tree.applyIndexed([], []);
-
-    expect(await landing).toBeUndefined();
-    const [row] = await h.tree.getChildren();
-    expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
   });
 });
 

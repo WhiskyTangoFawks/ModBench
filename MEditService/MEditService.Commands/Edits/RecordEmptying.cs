@@ -4,7 +4,6 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
@@ -18,7 +17,7 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
     internal static RecordEmptying? Of(JsonObject record, RecordTableSchema schema, ColumnSpec column, JsonElement? value)
     {
         if (RecordFlagsWrite.Of(record, schema, column, value) is not { } write) return null;
-        var partialFormable = PartialFormFlag.IsPartialFormable(schema.RecordType);
+        var partialFormable = CanBePartial.TypeDeclares(schema.RecordType);
         var makesPartialForm = partialFormable && write.Sets(PartialFormFlag.Bit);
         var deletes = !makesPartialForm && write.Sets(DeletedFlag.Bit);
         var flags = write.Next;
@@ -38,39 +37,46 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
 
     // The flags a copy a refill passes over: Deleted, and Partial Form where the type can be one.
     private static long EmptyingBits(RecordTableSchema schema) =>
-        PartialFormFlag.IsPartialFormable(schema.RecordType) ? DeletedFlag.Bit | PartialFormFlag.Bit : DeletedFlag.Bit;
+        CanBePartial.TypeDeclares(schema.RecordType) ? DeletedFlag.Bit | PartialFormFlag.Bit : DeletedFlag.Bit;
 
     /// <summary>The refusal of a refill whose nearest copy to the left cannot be read.</summary>
     internal static RecordEditResult? RefuseRefill(LeftCopy? copyOnTheLeft, RecordTableSchema schema, string? formKey, string spelled)
     {
         if (copyOnTheLeft is not LeftCopy.Unreadable unreadable) return null;
-        var neither = PartialFormFlag.IsPartialFormable(schema.RecordType) ? "neither Partial Form nor Deleted" : "not Deleted";
+        var neither = CanBePartial.TypeDeclares(schema.RecordType) ? "neither Partial Form nor Deleted" : "not Deleted";
         return unreadable.Refusal(spelled, $"{formKey}'s own fields come from its nearest copy to the left that is {neither}");
     }
 
-    /// <summary>xEdit's GetCanBePartial: a temporary exterior cell is never a Partial Form, nor a cell a
-    /// plugin other than the one the game names defines.</summary>
+    /// <summary>The refusal of a Partial Form that xEdit's GetCanBePartial denies the copy.</summary>
     internal RecordEditResult? RefuseCell(
         JsonObject record, IReadOnlyList<PathHop> prefix, RecordTableSchema schema, GameRelease release,
         LoadOrderResolution.MastersWalk masters, string spelled)
     {
-        if (!MakesPartialForm || !RecordTypeDispatch.For(release).IsCell(schema.TableName)) return null;
+        if (!MakesPartialForm) return null;
         var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
-        if (!HeldPersistent && prefix is not [.., { Name: PlacedCell.WorldspacePersistentCellMember }])
+        bool? temporaryExterior = HeldPersistent || prefix is [.., { Name: PlacedCell.WorldspacePersistentCellMember }] ? false : null;
+        var verdict = CanBePartial.Of(schema, release, formKey, temporaryExterior);
+        if (verdict is CanBePartial.Verdict.NeedsPlacement)
         {
-            var cellCopyOnTheLeft = PlacedCell.Says(record) || formKey is null ? null : masters.NearestCopy(formKey, PlacedCell.Says);
-            if (PlacedCell.SaidBy(record, cellCopyOnTheLeft?.FoundText) is not { } said)
-            {
-                if (cellCopyOnTheLeft is LeftCopy.Unreadable unreadable)
-                    return unreadable.Refusal(spelled, $"whether {formKey} can be a Partial Form depends on where it sits, which only its nearest copy to the left says");
-                return Cannot(spelled, $"whether {formKey} can be a Partial Form is unknown: it says neither that it is " +
-                    "interior nor where it sits in its worldspace, and no copy of it to its left says either");
-            }
-            if (!PlacedCell.IsInterior(said)) return Cannot(spelled, $"{formKey} is a temporary exterior cell, which xEdit never makes a Partial Form");
+            if (masters.WhereItSits(
+                record, spelled,
+                $"whether {formKey} can be a Partial Form depends on where it sits, which only its nearest copy to the left says",
+                () => Cannot(
+                    spelled,
+                    $"whether {formKey} can be a Partial Form is unknown: it says neither that it is " +
+                    "interior nor where it sits in its worldspace, and no copy of it to its left says either"),
+                out var said) is { } refusal)
+                return refusal;
+            verdict = CanBePartial.Of(schema, release, formKey, !PlacedCell.IsInterior(said));
         }
-        if (PartialFormFlag.CellsDefinedIn(release) is { } plugin && FormKey.TryFactory(formKey, out var key) && key.ModKey != plugin)
-            return Cannot(spelled, $"{key.ModKey} defines {formKey}, and xEdit makes a cell a Partial Form only where {plugin} defines it");
-        return null;
+        return verdict switch
+        {
+            CanBePartial.Verdict.TemporaryExterior =>
+                Cannot(spelled, $"{formKey} is a temporary exterior cell, which xEdit never makes a Partial Form"),
+            CanBePartial.Verdict.DefinedElsewhere(var definedBy, var only) =>
+                Cannot(spelled, $"{definedBy} defines {formKey}, and xEdit makes a cell a Partial Form only where {only} defines it"),
+            _ => null,
+        };
     }
 
     private static RecordEditResult Cannot(string spelled, string why) =>

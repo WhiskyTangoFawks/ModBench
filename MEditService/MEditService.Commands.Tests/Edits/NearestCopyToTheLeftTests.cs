@@ -515,6 +515,31 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         Assert.Contains("Middle.esp's copy of", result.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void WritesThatReadNoCopyToTheLeft_ApplyWhenTheSourceTreeNamingTheMastersCannotBeRead()
+    {
+        var rock = new PlacedObject(TheRef, Fallout4Release.Fallout4) { EditorID = "Rock" };
+        var other = new FormKey(ModKey.FromFileName("Override.esp"), 0x951);
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
+            (Plugin("Override.esp", mod =>
+            {
+                CellCopy(PartialForm, "Inside", also: cell =>
+                {
+                    cell.Flags = 0;
+                    cell.Temporary.Add(rock);
+                })(mod);
+                mod.Npcs.Add(new Npc(other, Fallout4Release.Fallout4) { EditorID = "Other" });
+            }), true));
+        _plugins.Respell(Edited, other, "npc_", "{", "[");
+
+        var placed = WriteFlags(TheRef, InitiallyDisabled);
+        var partial = WriteFlags(TheCell, PartialForm | InitiallyDisabled);
+
+        Assert.True(placed.Applied, placed.Message);
+        Assert.True(partial.Applied, partial.Message);
+    }
+
     private static CellBlock BlockOf(Cell cell)
     {
         var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };

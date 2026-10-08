@@ -31,12 +31,13 @@ public sealed class LoadOrderReloadedMidWalkTests : IDisposable
             mod.Npcs.Add(new Npc(new FormKey(mid.ModKey, 0x950), Fallout4Release.Fallout4));
             mod.Npcs.Add(new Npc(TheNpc, Fallout4Release.Fallout4) { MajorRecordFlagsRaw = Deleted });
         });
+        var master = Plugin("Fallout4.esm", mod => mod.Npcs.Add(new Npc(TheNpc, Fallout4Release.Fallout4) { EditorID = "Guy" }));
         _plugins.Load(
-            (Plugin("Fallout4.esm", mod => mod.Npcs.Add(new Npc(TheNpc, Fallout4Release.Fallout4) { EditorID = "Guy" })), false),
+            (master, false),
             (mid, false),
             (edited, true));
         var handler = new TestEditor(
-            TestEditService.Over(_plugins.Holder, adapter: new DroppingAPluginOnTheFirstRead(_plugins.Holder, Fallout4Esm.FileName))
+            TestEditService.Over(_plugins.Holder, adapter: new DroppingAPluginOnTheFirstRead(_plugins.Holder, Address(master)))
                 .GetRequiredService<EditRecordChangesHandler>(),
             _plugins.Holder);
 
@@ -65,7 +66,7 @@ public sealed class LoadOrderReloadedMidWalkTests : IDisposable
         });
         var destination = Plugin("Dest.esp", mod => mod.Statics.Add(new Static(staticKey, Fallout4Release.Fallout4) { EditorID = "DestStatic" }));
         _plugins.Load((master, false), (source, false), (destination, true));
-        var handler = TestEditService.Over(_plugins.Holder, adapter: new DroppingAPluginOnTheFirstRead(_plugins.Holder, master.ModKey.FileName))
+        var handler = TestEditService.Over(_plugins.Holder, adapter: new DroppingAPluginOnTheFirstRead(_plugins.Holder, Address(master)))
             .GetRequiredService<CopyRecordHandler>();
 
         handler.CopySync([new RecordAt(Address(source), placed.ToString())], CopyMode.Override, [Address(destination)], replace: false)

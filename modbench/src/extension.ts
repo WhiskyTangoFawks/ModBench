@@ -9,7 +9,7 @@ import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
-import { createEditor, type Editor } from './editor';
+import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage } from './sourceLanguage';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
@@ -21,7 +21,6 @@ import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance
 import { createStatusBar, type StatusBar } from './plugins/statusBar';
 import { meditConfig, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
-import { trackedRepositoriesOver } from './plugins/trackedRepositories';
 import { recordWriteOver } from './plugins/recordWrite';
 import { createPluginsView, type PluginsViewDeps } from './plugins/pluginsView';
 import { editingView } from './plugins/editingView';

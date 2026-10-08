@@ -272,7 +272,7 @@ describe('PluginFacts — which plugins mEdit holds and the record filter', () =
     facts.refreshed(answers.map((hasMatchingRecords, i) => held({ name: `P${i}.esp`, hasMatchingRecords })));
 
     expect(answers.map((_, i) => facts.hiddenByRecordFilter({ name: `P${i}.esp`, origin: 'SomeMod' }))).toEqual(hidden);
-    expect(facts.heldMessage({ ...noInputs, recordFilterSource: 'weapon' })).toBe(matchesNothing ? 'No records match weapon.' : undefined);
+    expect(facts.noRecordMatchMessage('weapon')).toBe(matchesNothing ? 'No records match weapon.' : undefined);
   });
 
   it('forgets that no plugin matched once the record filter changes', () => {
@@ -281,18 +281,17 @@ describe('PluginFacts — which plugins mEdit holds and the record filter', () =
 
     facts.forgetMatches();
 
-    expect(facts.heldMessage({ ...noInputs, recordFilterSource: 'weapon' })).toBeUndefined();
+    expect(facts.noRecordMatchMessage('weapon')).toBeUndefined();
   });
 
   it('hides nothing and matches something while mEdit has not said', () => {
     const facts = new PluginFacts();
 
     expect(facts.hiddenByRecordFilter(A)).toBe(false);
-    expect(facts.heldMessage({ ...noInputs, recordFilterSource: 'weapon' })).toBeUndefined();
+    expect(facts.noRecordMatchMessage('weapon')).toBeUndefined();
   });
 });
 
-const noInputs = { gameFolderMessage: undefined, noRowsMessage: undefined };
 const heldElsewhere = { kind: 'heldElsewhere', message: 'another window holds this instance' } as const;
 const failedIndex = { kind: 'failed', message: 'the index threw' } as const;
 const B = { name: 'B.esp', origin: 'SomeMod' };
@@ -342,35 +341,19 @@ describe('PluginFacts — what a row expands into (plugins.md, States, stories 2
   });
 });
 
-describe('PluginFacts — the view message line (plugins.md, States, stories 1, 5 and 6)', () => {
-  const none = { gameFolderMessage: undefined, noRowsMessage: undefined, recordFilterSource: undefined };
-
+describe('PluginFacts — the index failure message (plugins.md, States, story 6)', () => {
   it.each([
-    ['nothing holds', scenes(), none, undefined],
-    ['the game folder is missing', scenes(), { ...none, gameFolderMessage: 'no game folder' }, 'no game folder'],
-    ['no rows', scenes(), { ...none, noRowsMessage: 'no plugins' }, 'no plugins'],
-    ['the snapshot failed', (facts: PluginFacts) => facts.refused(failedIndex), none, 'Indexing failed: the index threw'],
-    ['another window holds the index', (facts: PluginFacts) => facts.refused(heldElsewhere), none, undefined],
-    ['another window after the failure', scenes((facts) => facts.refused(failedIndex), (facts) => facts.refused(heldElsewhere)),
-      none, undefined],
-    ['a tick after the failure', scenes((facts) => facts.refused(failedIndex), heldAOnly), none, undefined],
-    ['the hand-off after the failure', scenes((facts) => facts.refused(failedIndex), (facts) => facts.reconciled([held()], [])),
-      none, undefined],
-    ['the game folder over the failure', (facts: PluginFacts) => facts.refused(failedIndex),
-      { ...none, gameFolderMessage: 'no game folder' }, 'no game folder'],
-    ['the failure over no rows', (facts: PluginFacts) => facts.refused(failedIndex),
-      { ...none, noRowsMessage: 'no plugins' }, 'Indexing failed: the index threw'],
-    ['a filter matching nothing', (facts: PluginFacts) => facts.reconciled([held({ hasMatchingRecords: false })], []),
-      { ...none, recordFilterSource: 'weapon' }, 'No records match weapon.'],
-    ['a filter matching something', (facts: PluginFacts) => facts.reconciled([held()], []),
-      { ...none, recordFilterSource: 'weapon' }, undefined],
-    ['no rows over a filter matching nothing', (facts: PluginFacts) => facts.reconciled([held({ hasMatchingRecords: false })], []),
-      { ...none, noRowsMessage: 'no plugins', recordFilterSource: 'weapon' }, 'no plugins'],
-  ] as const)('%s', (_label, scene, inputs, message) => {
+    ['nothing holds', scenes(), undefined],
+    ['the snapshot failed', (facts: PluginFacts) => facts.refused(failedIndex), 'Indexing failed: the index threw'],
+    ['another window holds the index', (facts: PluginFacts) => facts.refused(heldElsewhere), undefined],
+    ['another window after the failure', scenes((facts) => facts.refused(failedIndex), (facts) => facts.refused(heldElsewhere)), undefined],
+    ['a tick after the failure', scenes((facts) => facts.refused(failedIndex), heldAOnly), undefined],
+    ['the hand-off after the failure', scenes((facts) => facts.refused(failedIndex), (facts) => facts.reconciled([held()], [])), undefined],
+  ] as const)('%s', (_label, scene, message) => {
     const facts = new PluginFacts();
     scene(facts);
 
-    expect(facts.heldMessage(inputs)).toBe(message);
+    expect(facts.indexFailureMessage()).toBe(message);
   });
 });
 
