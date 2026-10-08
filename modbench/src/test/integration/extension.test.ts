@@ -274,6 +274,11 @@ function createMockBackend(): http.Server {
     if (url.startsWith('/plugin-source/record?')) {
       const filePath = new URL(url, 'http://x').searchParams.get('path');
       const fsPath = filePath === null ? undefined : vscode.Uri.file(filePath).fsPath;
+      if (fsPath === METADATA_FS_PATH) {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
       const holds = fsPath === TRACKED_FS_PATH ? TRACKED_FORM_KEY : fsPath && heldIn.get(fsPath);
       res.writeHead(holds ? 200 : 422, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(holds
@@ -384,6 +389,9 @@ fs.writeFileSync(TRACKED_FILE, JSON.stringify({
   ],
 }));
 const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
+const METADATA_FILE = path.join(path.dirname(TRACKED_FILE), 'GroupRecordData.json');
+fs.writeFileSync(METADATA_FILE, JSON.stringify({ Type: 'WEAP' }));
+const METADATA_FS_PATH = vscode.Uri.file(METADATA_FILE).fsPath;
 const copyQuery = (formKey: string, plugin: string, origin: string) => `formKey=${encodeURIComponent(formKey)}&name=${plugin}&origin=${encodeURIComponent(origin)}`;
 const trackedChildUri = `modbench-child-record:${vscode.Uri.file(TRACKED_FILE).path}?${copyQuery(CHILD_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN)}`;
 const renderedUri = (formKey: string) =>
@@ -703,6 +711,22 @@ describe('a tracked copy of a record', () => {
 
     await waitFor('the file\'s tab in the record grid', () => fileTabs().length === 1);
     await waitFor('mEdit asked which record the file holds', () => requestLog.filter((line) => line === asked).length > readsBefore);
+  });
+
+  it('opens a file mEdit answers holds no record in the text editor, in place of the record grid', async () => {
+    const onMetadata = () => openTabs().filter(({ input }) =>
+      (input instanceof vscode.TabInputText || input instanceof vscode.TabInputCustom) && input.uri.fsPath === METADATA_FS_PATH);
+    const asked = `GET /plugin-source/record?path=${encodeURIComponent(METADATA_FS_PATH)}`;
+    const askedBefore = requestLog.filter((line) => line === asked).length;
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument({ content: '{}', language: 'json' }), { preview: false });
+
+    await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(METADATA_FILE));
+
+    await waitFor('mEdit asked which record the file holds', () => requestLog.filter((line) => line === asked).length > askedBefore);
+    await waitFor('the file\'s one tab, in the text editor and active', () => {
+      const tabs = onMetadata();
+      return tabs.length === 1 && tabs[0]?.input instanceof vscode.TabInputText && tabs[0].isActive;
+    });
   });
 });
 

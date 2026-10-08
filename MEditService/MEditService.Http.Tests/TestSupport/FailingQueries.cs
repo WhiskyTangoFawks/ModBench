@@ -1,7 +1,7 @@
-using System.Diagnostics.CodeAnalysis;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
 
@@ -34,8 +34,7 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IRecordQue
 
     public RecordFile? GetRecordFile(PluginAddress plugin, string formKey) => throw Failed();
 
-    public bool TryGetRecordOfFile(
-        string path, [NotNullWhen(true)] out RecordAt? record, [NotNullWhen(false)] out string? whyNone) => throw Failed();
+    public RecordOfFileAnswer GetRecordOfFile(string path) => throw Failed();
 
     public LoadOrderStatus GetStatus() => throw Failed();
 

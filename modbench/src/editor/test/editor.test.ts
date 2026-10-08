@@ -550,7 +550,7 @@ describe('a record file\'s tab', () => {
     expect(tab.title).toBe('Gun.json');
   });
 
-  it('shows "Failed to load:" and mEdit\'s reason when the file holds no record, with a line in the Output', async () => {
+  it('shows "Failed to load:" and mEdit\'s reason when mEdit refuses the file, with a line in the Output', async () => {
     const client = fileClient();
     const why = `${FILE} declares no FormKey, so it is no record's document.`;
     client.setQueryFailure('getRecordOfFile', new Error(why));
