@@ -21,7 +21,7 @@ import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance
 import { createStatusBar, type StatusBar } from './plugins/statusBar';
 import { meditConfig, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
-import { trackedRepositoriesOver } from './plugins/trackedRepositories';
+import { trackedRepositoriesOver } from './editor/trackedRepositories';
 import { recordWriteOver } from './plugins/recordWrite';
 import { createPluginsView, type PluginsViewDeps } from './plugins/pluginsView';
 import { editingView } from './plugins/editingView';
