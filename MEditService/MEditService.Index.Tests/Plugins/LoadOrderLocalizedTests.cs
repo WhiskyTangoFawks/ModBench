@@ -32,8 +32,7 @@ public sealed class LoadOrderLocalizedTests
 
             Assert.Empty(index.Status.Failures);
 
-            var reads = index.RequireReads();
-            var detail = reads.GetDocument(doorFormKey.ToString(), new PluginAddress("Fixture.esp", PluginOrigin.DataDirectory));
+            var detail = index.CopyIn(doorFormKey.ToString(), new PluginAddress("Fixture.esp", PluginOrigin.DataDirectory));
             Assert.NotNull(detail);
             Assert.Contains(detail.Fields, f => f.Value?.ToString()?.Contains("The Big Door") == true);
         }
@@ -64,8 +63,7 @@ public sealed class LoadOrderLocalizedTests
 
             Assert.Empty(index.Status.Failures);
 
-            var reads = index.RequireReads();
-            var detail = reads.GetDocument(doorFormKey.ToString(), new PluginAddress("Fixture.esp", PluginOrigin.Overwrite));
+            var detail = index.CopyIn(doorFormKey.ToString(), new PluginAddress("Fixture.esp", PluginOrigin.Overwrite));
             Assert.NotNull(detail);
             Assert.Contains(detail.Fields, f => f.Value?.ToString()?.Contains("The Overwrite Door") == true);
         }

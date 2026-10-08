@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -26,16 +27,14 @@ public class PluginDocumentsTests
         var entry = fixture.Plugins.Single();
         var key = new PluginAddress(entry.Name, entry.Origin);
         using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
         using var onDisk = Fallout4Mod.CreateFromBinaryOverlay(entry.Path, Fallout4Release.Fallout4);
 
-        var documents = reads.DocumentsOf(key);
+        var listed = index.ListedIn(key);
 
-        var majorRecordCountExcludingTheHeaderBecauseEnumerateMajorRecordsCannotCountIt = onDisk.EnumerateMajorRecords().Count();
-        Assert.Equal(majorRecordCountExcludingTheHeaderBecauseEnumerateMajorRecordsCannotCountIt + 1, documents.Count);
-        Assert.Single(documents, d => d.RecordType == PluginHeader.RecordType);
-        string? RaceFieldErrorAloneBecauseABareNpcFlagsOtherUnsetLinks(string editorId) => documents
-            .Single(d => d.EditorId == editorId).Fields
+        Assert.Equal(onDisk.EnumerateMajorRecords().Count(), listed.Count);
+        Assert.NotNull(index.CopyIn(PluginHeader.FormKeyFor(ModKey.FromFileName(entry.Name)), key));
+        string? RaceFieldErrorAloneBecauseABareNpcFlagsOtherUnsetLinks(string editorId) => index
+            .DocumentOf(listed.Single(d => d.EditorId == editorId).FormKey, key).Fields
             .Single(f => f.Metadata.Name.Equals("Race", StringComparison.OrdinalIgnoreCase))
             .CheckError;
         Assert.Null(RaceFieldErrorAloneBecauseABareNpcFlagsOtherUnsetLinks("BulkNpc"));
@@ -55,23 +54,25 @@ public class PluginDocumentsTests
             .BuildScattered();
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
-        IReadOnlyList<RecordDocument> DocumentsWhileWinning(string origin) =>
-            index.ReadsWithWinner(holder, fixture.GameDirectory, fixture.Plugins, origin)
-                .DocumentsOf(new PluginAddress("Shared.esp", origin));
+        var header = PluginHeader.FormKeyFor(ModKey.FromFileName("Shared.esp"));
+        (IReadOnlyList<RecordSummary> Records, string HeaderOrigin) ListedWhileWinning(string origin)
+        {
+            var plugin = new PluginAddress("Shared.esp", origin);
+            index.WithWinner(holder, fixture.GameDirectory, fixture.Plugins, origin);
+            return (index.ListedIn(plugin), index.DocumentOf(header, plugin).Origin);
+        }
 
-        var fromA = DocumentsWhileWinning("ModA");
-        Assert.Empty(index.RequireReads().DocumentsOf(new PluginAddress("Shared.esp", "ModB")));
-        var fromB = DocumentsWhileWinning("ModB");
-        var recordsFromA = fromA.Where(d => d.RecordType != PluginHeader.RecordType).ToList();
-        var recordsFromB = fromB.Where(d => d.RecordType != PluginHeader.RecordType).ToList();
+        var fromA = ListedWhileWinning("ModA");
+        Assert.Empty(index.ListedIn(new PluginAddress("Shared.esp", "ModB")));
+        var fromB = ListedWhileWinning("ModB");
 
-        var single = Assert.Single(recordsFromA);
+        var single = Assert.Single(fromA.Records);
         Assert.Equal("FromModA", single.EditorId);
-        Assert.Equal("ModA", single.Plugin.Origin);
-        Assert.Equal(2, recordsFromB.Count);
-        Assert.All(recordsFromB, d => Assert.Equal("ModB", d.Plugin.Origin));
+        Assert.Equal("ModA", single.Origin);
+        Assert.Equal(2, fromB.Records.Count);
+        Assert.All(fromB.Records, d => Assert.Equal("ModB", d.Origin));
 
-        Assert.Equal("ModA", Assert.Single(fromA, d => d.RecordType == PluginHeader.RecordType).Plugin.Origin);
-        Assert.Equal("ModB", Assert.Single(fromB, d => d.RecordType == PluginHeader.RecordType).Plugin.Origin);
+        Assert.Equal("ModA", fromA.HeaderOrigin);
+        Assert.Equal("ModB", fromB.HeaderOrigin);
     }
 }

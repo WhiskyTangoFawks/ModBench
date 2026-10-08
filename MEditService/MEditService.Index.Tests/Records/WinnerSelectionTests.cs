@@ -45,18 +45,15 @@ public sealed class WinnerSelectionTests : IDisposable
     private void Reconcile(IReadOnlyList<LoadOrderEntry> plugins) =>
         _index.Reconcile(_holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4);
 
-    private IRecordReads Reads => _index.RequireReads();
-
-    private PluginAddress? WinnerOf(string formKey) => Reads.GetDocument(formKey)?.Plugin;
+    private PluginAddress? WinnerOf(string formKey) =>
+        _index.Records.GetRecord(formKey) is { } winner ? new PluginAddress(winner.Plugin, winner.Origin) : null;
 
     [Fact]
     public void TheLatestParticipatingPlugin_IsTheWinner_OncePerFormKey_AndAgainAfterAReconcileOfTheSameSnapshot()
     {
         Assert.Equal(OverKey, WinnerOf(_npc));
 
-        var stack = Reads.GetOverrideStack(_npc);
-        Assert.NotNull(stack);
-        Assert.Single(stack.Entries, e => e.IsWinner);
+        Assert.Single(_index.StackOf(_npc), copy => copy.IsWinner);
 
         static string HeaderFormKeyOf(PluginAddress plugin) => PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
         PluginAddress?[] headerWinners =
@@ -67,7 +64,7 @@ public sealed class WinnerSelectionTests : IDisposable
         PluginBinaries.Touch(_fixture.Plugins.Single(p => p.Name == OverKey.Name).Path);
         _index.NextSnapshot();
         Assert.Equal(OverKey, WinnerOf(_npc));
-        Assert.Single((Reads.GetOverrideStack(_npc) ?? throw new InvalidOperationException()).Entries, e => e.IsWinner);
+        Assert.Single(_index.StackOf(_npc), copy => copy.IsWinner);
     }
 
     [Fact]
@@ -76,6 +73,6 @@ public sealed class WinnerSelectionTests : IDisposable
         Reconcile([.. _fixture.Plugins.Where(p => p.Name != OverKey.Name)]);
 
         Assert.Equal(BaseKey, WinnerOf(_npc));
-        Assert.Empty(Reads.DocumentsOf(OverKey));
+        Assert.Empty(_index.ListedIn(OverKey));
     }
 }

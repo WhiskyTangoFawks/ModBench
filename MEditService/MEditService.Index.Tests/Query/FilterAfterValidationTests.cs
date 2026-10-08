@@ -19,11 +19,11 @@ public sealed class FilterAfterValidationTests
         using var index = Indexes.Reconciled(fixture);
         index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'EditedName'", "filter.sql");
         var formKey = npc.ToString();
-        entry.HandEdit(index.RequireReads().DocumentOf(formKey, entry.KeyOf()), "\"FixtureNpc\"", "\"EditedName\"");
+        entry.HandEdit(index.DocumentOf(formKey, entry.KeyOf()), "\"FixtureNpc\"", "\"EditedName\"");
 
         index.NextSnapshot();
 
-        var listed = index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var listed = index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 100, offset: 0);
         Assert.Equal([formKey], listed.Items.Select(i => i.FormKey));
     }
 }

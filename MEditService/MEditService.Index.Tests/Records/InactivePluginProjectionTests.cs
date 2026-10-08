@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -37,33 +38,31 @@ public sealed class InactivePluginProjectionTests : IDisposable
         _fixture.Dispose();
     }
 
-    private IRecordReads Reads => _index.RequireReads();
-
     private void Reconcile(bool active) =>
         _index.Reconcile(_holder, _fixture.GameDirectory, [_mod with { Enabled = active }, _partner], GameRelease.Fallout4);
 
     [Fact]
     public void AHandEditWhileNotActive_IsTheRecordTheReadsSeeOnceActive()
     {
-        var document = Reads.DocumentOf(_npc, _mod.KeyOf());
+        var document = _index.DocumentOf(_npc, _mod.KeyOf());
         Reconcile(active: false);
 
         _mod.HandEdit(document, "\"FixtureNpc\"", "\"RenamedByHand\"");
         _index.NextSnapshot();
         Reconcile(active: true);
 
-        Assert.Equal("RenamedByHand", Reads.GetDocument(_npc, _mod.KeyOf())?.EditorId);
+        Assert.Equal("RenamedByHand", _index.CopyIn(_npc, _mod.KeyOf())?.EditorId);
     }
 
     [Fact]
     public void AHandEditWhileNotActive_IsProjectedOnce()
     {
-        var document = Reads.DocumentOf(_npc, _mod.KeyOf());
+        var document = _index.DocumentOf(_npc, _mod.KeyOf());
         Reconcile(active: false);
         _mod.HandEdit(document, "\"FixtureNpc\"", "\"RenamedByHand\"");
         _index.NextSnapshot();
 
-        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(Reads));
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
 
         Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
     }
@@ -71,11 +70,11 @@ public sealed class InactivePluginProjectionTests : IDisposable
     [Fact]
     public void ACopyGivenAsText_ReadsWhenOnlyAPluginThatIsNotActiveHoldsItsRecord()
     {
-        var text = Reads.DocumentOf(_npc, _mod.KeyOf()).Body ?? throw new InvalidOperationException("Expected a body.");
+        var text = _index.BodyOf(_npc, _mod.KeyOf());
         Reconcile(active: false);
 
-        Assert.Null(Reads.GetDocument(_npc, _mod.KeyOf()));
-        Assert.NotNull(Reads.DocumentFromText(_npc, _mod.KeyOf(), 3, text));
+        Assert.Null(_index.CopyIn(_npc, _mod.KeyOf()));
+        Assert.NotNull(_index.Records.GetCompare(_npc, new CopyText(_mod.KeyOf(), text)));
     }
 
     [Fact]
@@ -83,7 +82,9 @@ public sealed class InactivePluginProjectionTests : IDisposable
     {
         Reconcile(active: false);
 
-        Assert.Equal(DerivedFrom.SourceTree, Reads.DerivationOf(_mod.KeyOf()));
+        var row = _index.PluginRowOf(_mod.KeyOf()) ?? throw new InvalidOperationException("Expected the plugin's row.");
+        Assert.True(row.IsTracked);
+        Assert.False(row.PluginSourceUnreadable);
     }
 
     [Fact]
@@ -91,7 +92,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     {
         Reconcile(active: false);
 
-        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(Reads));
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
 
         Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
         Assert.DoesNotContain(announced, Announcements.PluginChanged(_mod));

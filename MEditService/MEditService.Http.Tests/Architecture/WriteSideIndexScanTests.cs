@@ -1,7 +1,4 @@
-using System.Reflection;
 using System.Text.RegularExpressions;
-using MEditService.Index;
-using MEditService.Queries;
 using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
@@ -33,65 +30,6 @@ public sealed class WriteSideIndexScanTests
     }
 
     private const string EndpointRoot = "MEditService.Http/Endpoints";
-
-    private static string[] IndexTypesAnEndpointCannotNameByTheirOwnWord() =>
-        [.. typeof(IQueryIndex).Assembly.GetExportedTypes().Concat(InternalTypesOfTheIndex()).Select(SourceName)
-            .Except(typeof(IRecordQueryService).Assembly.GetExportedTypes().Select(SourceName), StringComparer.Ordinal)
-            .Append("MEditService.Index")
-            .Append(@"Index\.[A-Z]\w*")
-            .Distinct(StringComparer.Ordinal)];
-
-    private static IEnumerable<Type> InternalTypesOfTheIndex() =>
-        typeof(IQueryIndex).Assembly.GetTypes().Where(t => !t.IsVisible && !t.IsNested && char.IsLetter(t.Name[0]));
-
-    private static IEnumerable<Type> SignatureTypes(Type type) =>
-        type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
-            .SelectMany(m => m.GetParameters().Select(p => p.ParameterType).Append(m.ReturnType))
-            .Concat(type.GetProperties().Select(p => p.PropertyType));
-
-    private static IEnumerable<Type> Unwrapped(Type type) =>
-        type.GetElementType() is { } element ? Unwrapped(element)
-        : type.IsGenericType ? type.GetGenericArguments().SelectMany(Unwrapped).Append(type.GetGenericTypeDefinition())
-        : [type];
-
-    private static string SourceName(Type type) => type.Name.Split('`')[0];
-
-    [Fact]
-    public void NoQueryService_HandsBackAnIndexType()
-    {
-        var leaked = typeof(IRecordQueryService).Assembly.GetExportedTypes()
-            .SelectMany(SignatureTypes)
-            .SelectMany(Unwrapped)
-            .Where(t => t.Assembly == typeof(IQueryIndex).Assembly)
-            .Select(t => t.FullName)
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToList();
-
-        Assert.True(
-            leaked.Count == 0,
-            "A query service's public surface carries an Index type. Queries hide the read model's "
-            + "types (ADR-0014): the face answers in its own:\n" + string.Join("\n", leaked));
-    }
-
-    [Fact]
-    public void NoEndpoint_NamesAnIndexType()
-    {
-        var root = ServiceProjects.SolutionDirectory();
-        var forbidden = IndexTypesAnEndpointCannotNameByTheirOwnWord();
-
-        var walked = ScannedFiles(root, [EndpointRoot], []).Count;
-        var named = Counts(root, [EndpointRoot], [], forbidden);
-
-        Assert.True(walked > 5, $"The endpoint scan walked only {walked} files under {EndpointRoot}.");
-        Assert.Contains("Indexer", forbidden);
-        Assert.True(
-            named.Count == 0,
-            "An endpoint names the Index. A route takes a gesture's handler or a query service: "
-            + "Queries are the only readers of the read model (ADR-0014), and the record index "
-            + "hides the Indexer and the Store (target-architecture.d2):\n"
-            + string.Join("\n", named));
-    }
 
     private static readonly string[] UndrawnCallees = ["SourceRepository"];
 

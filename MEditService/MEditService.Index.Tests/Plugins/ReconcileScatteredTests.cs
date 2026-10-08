@@ -25,11 +25,8 @@ public sealed class ReconcileScatteredTests
         using var index = OpenIndex(holder);
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var reads = index.RequireReads();
-        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("A.esp", PluginOrigin.DataDirectory))
-            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("B.esp", PluginOrigin.DataDirectory))
-            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
+        Assert.Equal(1, index.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, index.CountOf(new PluginAddress("B.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
@@ -49,11 +46,10 @@ public sealed class ReconcileScatteredTests
         using var index = OpenIndex(holder);
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var reads = index.RequireReads();
-        var winner = reads.GetDocument(shared.ToString());
+        var winner = index.Records.GetRecord(shared.ToString());
         Assert.NotNull(winner);
         Assert.True(winner.IsWinner);
-        Assert.Equal("Override.esp", winner.Plugin.Name);
+        Assert.Equal("Override.esp", winner.Plugin);
     }
 
     [Fact]
@@ -65,14 +61,14 @@ public sealed class ReconcileScatteredTests
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .BuildScattered();
 
-        using var index = OpenIndex(holder);
+        using var opens = new GatedPluginAdapter();
+        using var index = Indexes.Open(holder, opens);
         index.Reconcile(holder, fx.GameDirectory, [fx.Plugins[0]], GameRelease.Fallout4);
-        var firstReads = index.RequireReads();
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        Assert.Same(firstReads, index.RequireReads());
-        Assert.NotEmpty(firstReads.GetRecordTypeCounts(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+        Assert.Equal(["A.esp", "B.esp"], opens.Opened);
+        Assert.Equal(1, index.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
@@ -90,12 +86,9 @@ public sealed class ReconcileScatteredTests
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var reads = index.RequireReads();
         Assert.Contains(index.Status.Failures, f => f.Name == "Bad.esp");
-        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("Good.esp", PluginOrigin.DataDirectory))
-            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(0, reads.GetRecordTypeCounts(new PluginAddress("Bad.esp", PluginOrigin.DataDirectory))
-            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
+        Assert.Equal(1, index.CountOf(new PluginAddress("Good.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(0, index.CountOf(new PluginAddress("Bad.esp", PluginOrigin.DataDirectory), "npc_"));
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "Bad.esp");
     }
 }

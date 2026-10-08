@@ -27,23 +27,16 @@ public sealed class ReconcileDiffTests
             })
             .BuildScattered();
 
-    private static IRecordReads ReadsOf(OpenedIndex index) =>
-        index.RequireReads();
+    private static PluginAddress Key(ScatteredFixtureData fx, string name) => fx.Plugins.Single(p => p.Name == name).KeyOf();
 
-    private static RecordOverrides OverrideStackOf(OpenedIndex index, string formKey) =>
-        ReadsOf(index).GetOverrideStack(formKey)
-            ?? throw new InvalidOperationException($"Expected an override stack for '{formKey}'.");
+    private static string SharedNpc(OpenedIndex index, ScatteredFixtureData fx) =>
+        index.Records.GetRecords(["npc_"], Key(fx, "A.esm"), search: null, limit: 10, offset: 0).Items.Single().FormKey;
 
-    private static string SharedNpc(OpenedIndex index) =>
-        ReadsOf(index)
-            .Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Plugin: "A.esm", Limit: 10, Offset: 0))
-            .Items.Single().FormKey;
+    private static string WinnerOf(OpenedIndex index, string formKey) =>
+        index.StackOf(formKey).Single(copy => copy.IsWinner).Plugin;
 
-    private static string? WinnerOf(OpenedIndex index, string formKey) =>
-        OverrideStackOf(index, formKey).Entries.Single(e => e.IsWinner).Plugin.Name;
-
-    private static IReadOnlyList<(string FormKey, string? Body)> Bodies(IReadOnlyList<RecordDocument> documents) =>
-        [.. documents.Select(d => (d.FormKey, d.Body))];
+    private static IReadOnlyList<(string FormKey, string Body)> Bodies(OpenedIndex index, PluginAddress plugin) =>
+        [.. index.ListedIn(plugin).Select(row => (row.FormKey, index.BodyOf(row.FormKey, plugin)))];
 
     private static IReadOnlyList<LoadOrderEntry> With(IReadOnlyList<LoadOrderEntry> plugins, string name, Func<LoadOrderEntry, LoadOrderEntry> change) =>
         plugins.Select(p => p.Name == name ? change(p) : p).ToList();
@@ -80,13 +73,13 @@ public sealed class ReconcileDiffTests
         using var _ = index;
         using var __ = opens;
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-        var npc = SharedNpc(index);
+        var npc = SharedNpc(index, fx);
         Assert.Equal("B.esp", WinnerOf(index, npc));
         var opened = opens.OpenedTotal;
         var sequence = index.Sequence;
-        var aKey = new PluginAddress("A.esm", fx.Plugins.Single(p => p.Name == "A.esm").Origin);
-        var bKey = new PluginAddress("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
-        var bodiesBefore = (A: Bodies(ReadsOf(index).DocumentsOf(aKey)), B: Bodies(ReadsOf(index).DocumentsOf(bKey)));
+        var aKey = Key(fx, "A.esm");
+        var bKey = Key(fx, "B.esp");
+        var bodiesBefore = (A: Bodies(index, aKey), B: Bodies(index, bKey));
 
         var swapped = fx.Plugins.Select(p => p with { Slot = p.Name == "A.esm" ? 1 : 0 }).ToList();
         index.Reconcile(holder, fx.GameDirectory, swapped, GameRelease.Fallout4);
@@ -94,8 +87,8 @@ public sealed class ReconcileDiffTests
         Assert.Equal(opened, opens.OpenedTotal);
         Assert.Equal("A.esm", WinnerOf(index, npc));
         Assert.True(index.Sequence > sequence, "a reorder is a sweep, and a sweep is a projection");
-        Assert.Equal(bodiesBefore.A, Bodies(ReadsOf(index).DocumentsOf(aKey)));
-        Assert.Equal(bodiesBefore.B, Bodies(ReadsOf(index).DocumentsOf(bKey)));
+        Assert.Equal(bodiesBefore.A, Bodies(index, aKey));
+        Assert.Equal(bodiesBefore.B, Bodies(index, bKey));
     }
 
     [Fact]
@@ -107,15 +100,15 @@ public sealed class ReconcileDiffTests
         using var _ = index;
         using var __ = opens;
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-        var npc = SharedNpc(index);
+        var npc = SharedNpc(index, fx);
         var opened = opens.OpenedTotal;
-        var bKey = new PluginAddress("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
+        var bKey = Key(fx, "B.esp");
 
         index.Reconcile(holder, fx.GameDirectory, With(fx.Plugins, "B.esp", p => p with { Enabled = false }), GameRelease.Fallout4);
 
         Assert.Equal(opened, opens.OpenedTotal);
-        Assert.Empty(ReadsOf(index).DocumentsOf(bKey));
-        Assert.Contains(bKey, ReadsOf(index).OpenedPlugins.Keys);
+        Assert.Empty(index.ListedIn(bKey));
+        Assert.NotNull(index.PluginRowOf(bKey));
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
@@ -140,16 +133,16 @@ public sealed class ReconcileDiffTests
 
         var modA = new PluginAddress("Shared.esp", "ModA");
         var modB = new PluginAddress("Shared.esp", "ModB");
-        var only = Assert.Single(OverrideStackOf(index, "000800:Shared.esp").Entries);
-        Assert.Equal(modA, only.Plugin);
+        var only = Assert.Single(index.StackOf("000800:Shared.esp"));
+        Assert.Equal(modA, new PluginAddress(only.Plugin, only.Origin));
         Assert.True(only.IsWinner);
-        Assert.Contains(index.RequireReads().OpenedPlugins.Keys, k => k.Equals(modB));
+        Assert.NotNull(index.PluginRowOf(modB));
 
         var opened = opens.OpenedTotal;
         var flipped = snapshot.Select(p => p with { Winning = p.Origin == "ModB" }).ToList();
         index.Reconcile(holder, fx.GameDirectory, flipped, GameRelease.Fallout4);
-        only = Assert.Single(OverrideStackOf(index, "000800:Shared.esp").Entries);
-        Assert.Equal(modB, only.Plugin);
+        only = Assert.Single(index.StackOf("000800:Shared.esp"));
+        Assert.Equal(modB, new PluginAddress(only.Plugin, only.Origin));
         Assert.True(only.IsWinner);
         Assert.Equal(opened, opens.OpenedTotal);
     }
@@ -163,22 +156,21 @@ public sealed class ReconcileDiffTests
         using var _ = index;
         using var __ = opens;
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-        var npc = SharedNpc(index);
+        var npc = SharedNpc(index, fx);
         var opened = opens.OpenedTotal;
-        var bKey = new PluginAddress("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
+        var bKey = Key(fx, "B.esp");
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4);
 
-        var readsAfterLeaving = ReadsOf(index);
-        Assert.DoesNotContain(readsAfterLeaving.OpenedPlugins.Keys, k => k.Name == "B.esp");
-        Assert.Empty(readsAfterLeaving.DocumentsOf(bKey));
+        Assert.Null(index.PluginRowOf(bKey));
+        Assert.Empty(index.ListedIn(bKey));
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "B.esp");
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(opened, opens.OpenedTotal);
-        Assert.Contains(ReadsOf(index).OpenedPlugins.Keys, k => k.Name == "B.esp");
+        Assert.NotNull(index.PluginRowOf(bKey));
         Assert.Equal("B.esp", WinnerOf(index, npc));
     }
 
@@ -201,7 +193,7 @@ public sealed class ReconcileDiffTests
             second.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
 
             Assert.Equal(0, opens.OpenedTotal);
-            Assert.Equal("B.esp", WinnerOf(second, SharedNpc(second)));
+            Assert.Equal("B.esp", WinnerOf(second, SharedNpc(second, fx)));
             Assert.Equal(fx.Plugins.Count, second.Status.IndexedPlugins.Count);
         }
 
@@ -212,8 +204,8 @@ public sealed class ReconcileDiffTests
             third.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4, fx.InstanceRoot);
 
             Assert.Equal(0, thirdOpens.OpenedTotal);
-            Assert.Empty(ReadsOf(third).DocumentsOf(new PluginAddress("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin)));
-            Assert.Equal("A.esm", WinnerOf(third, SharedNpc(third)));
+            Assert.Empty(third.ListedIn(Key(fx, "B.esp")));
+            Assert.Equal("A.esm", WinnerOf(third, SharedNpc(third, fx)));
         }
     }
 
@@ -233,7 +225,7 @@ public sealed class ReconcileDiffTests
 
         Assert.Contains(index.Status.Failures, f => f.Name == "Bad.esp");
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.DoesNotContain(ReadsOf(index).OpenedPlugins.Keys, k => k.Name == "Bad.esp");
+        Assert.DoesNotContain(index.Records.GetPlugins(), row => row.Plugin.Name == "Bad.esp");
 
         var sequence = index.Sequence;
         PluginBinaries.Touch(fx.Plugins[0].Path);
@@ -243,7 +235,7 @@ public sealed class ReconcileDiffTests
         new Fallout4Mod(ModKey.FromFileName("Bad.esp"), Fallout4Release.Fallout4).WriteToBinary(badPath);
         index.NextSnapshotUntil(() => index.Status.Failures.Count == 0, "the status without the recovered plugin's failure");
 
-        Assert.Contains(ReadsOf(index).OpenedPlugins.Keys, k => k.Name == "Bad.esp");
+        Assert.Contains(index.Records.GetPlugins(), row => row.Plugin.Name == "Bad.esp");
     }
 
     [Fact]
@@ -255,12 +247,11 @@ public sealed class ReconcileDiffTests
         using var _ = index;
         using var __ = opens;
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
-        var first = index.RequireReads();
         var otherInstance = Directory.CreateDirectory(Path.Combine(fx.Root, "other-instance")).FullName;
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, otherInstance);
 
-        Assert.NotSame(first, index.RequireReads());
+        Assert.True(File.Exists(IndexFiles.In(otherInstance)));
         Assert.Equal(otherInstance, holder.Current.InstanceRoot);
     }
 }

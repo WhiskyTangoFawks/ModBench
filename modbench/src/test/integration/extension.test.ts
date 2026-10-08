@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { before, after, afterEach, describe, it } from 'mocha';
 import type { CompareResult, PluginMetadata, PluginProblems } from '../../client';
 import { present } from '../../ports/present';
+import { PLUGIN_SOURCE_GLOB } from '../../instanceAdapter/instanceAdapter';
 import { comparisonOf, fieldOf } from '../comparison';
 import { isRecord, requires } from '../manifest';
 
@@ -444,6 +445,28 @@ function modbenchLog(): string {
 describe('Modbench output channel', () => {
   it('writes a leveled log, as a LogOutputChannel does and a plain text channel does not', async () => {
     await waitFor('a leveled line in the Modbench log', () => /\[(trace|debug|info|warning|error)\]/.test(modbenchLog()));
+  });
+});
+
+describe('the Problems language status selector', () => {
+  const matches = async (...segments: string[]): Promise<number> => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'status-selector-'));
+    try {
+      const file = path.join(folder, ...segments);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, '{}');
+      return vscode.languages.match({ language: 'json', pattern: PLUGIN_SOURCE_GLOB }, await vscode.workspace.openTextDocument(file));
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
+  };
+
+  it('matches a JSON document under plugin source, whatever the folder\'s case', async () => {
+    assert.ok(await matches('Mod', 'Plugin-Source', 'A.esp', 'Npc.json') > 0);
+  });
+
+  it('does not match a JSON document outside plugin source', async () => {
+    assert.strictEqual(await matches('Mod', 'package.json'), 0);
   });
 });
 

@@ -3,7 +3,7 @@ import { isMEditGone, type LoadOrderProgress, type MEditClient, type PluginLoadF
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import type { PluginsViewProgress } from './pluginRowCommands';
-import type { PluginsTreeProvider } from './PluginsTreeProvider';
+import type { PluginFactsFeed } from './pluginFactsFeed';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 import { reportSkippedPlugins } from './pluginFailures';
 import { createReconcileNarrator, subscribeNarratorToLoadOrderStatus, type ReconcileNarrator } from './reconcileNarrator';
@@ -60,8 +60,7 @@ const UNREACHABLE_REASON = {
 
 interface IndexStatusDeps {
   client: Pick<MEditClient, 'onNotification' | 'onStatusChanged' | 'onReconnected' | 'getActiveFilter'>;
-  tree: Pick<PluginsTreeProvider,
-    'applyIndexed' | 'applyRefused' | 'applyReconciled' | 'applyBackendUnreachable' | 'refreshFacts'>;
+  facts: Pick<PluginFactsFeed, 'indexed' | 'refused' | 'reconciled' | 'unreachable' | 'refresh'>;
   /** The record browser a reconciled load order refreshes. */
   recordBrowser: Pick<PluginTreeProvider, 'refresh'>;
   progress: PluginsViewProgress;
@@ -76,17 +75,17 @@ interface IndexStatusDeps {
 // whoever started the reconcile. mEdit going away, or a stream reopening onto another process,
 // starts its versions over.
 export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileNarrator } & vscode.Disposable {
-  const { client, tree, recordBrowser, progress, statusBar, showRecordFilter, notifyConflictsComputed, log, reporter } = deps;
+  const { client, facts, recordBrowser, progress, statusBar, showRecordFilter, notifyConflictsComputed, log, reporter } = deps;
   const info = (m: string) => log('info', `[loadOrder] ${m}`);
   const warn = (m: string) => reporter.report('warning', m);
   const narrator = createReconcileNarrator({
     showProgress: (until) => void progress.while(() => until),
     applyIndexed: (indexedPlugins, failures) => {
-      tree.applyIndexed(indexedPlugins, failures);
+      facts.indexed(indexedPlugins, failures);
       statusBar.showMEditState();
     },
     applyRefused: (refusal) => {
-      tree.applyRefused(refusal);
+      facts.refused(refusal);
       statusBar.showMEditState();
     },
     settle: (status) => settleReconciled(status, {
@@ -103,8 +102,8 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileN
       if (!isMEditGone(status)) return;
       narrator.detached();
       // ADR-0002: the rows stay, and expand into the error row.
-      void tree.refreshFacts();
-      tree.applyBackendUnreachable(UNREACHABLE_REASON[status]);
+      void facts.refresh();
+      facts.unreachable(UNREACHABLE_REASON[status]);
     }),
     client.onReconnected(() => narrator.detached()),
   ];
@@ -112,14 +111,14 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileN
 }
 
 async function applyReconciled(
-  { tree, log, reporter }: IndexStatusDeps,
+  { facts, log, reporter }: IndexStatusDeps,
   failures: PluginLoadFailure[],
   // Carried in only to be logged next to what reached the tree. Deliberately not the snapshot's
   // plugin count: that omits the implicit masters the backend prepends, so every healthy
   // reconcile would read as short.
   totalPlugins: number,
 ): Promise<void> {
-  const held = await tree.applyReconciled(failures);
+  const held = await facts.reconciled(failures);
   if (held === undefined) {
     // Leaving every row a leaf is a safe render but not an honest one: the reconcile did land,
     // so the tree would claim editing is unavailable with nothing on screen to say why (ADR-0019).

@@ -33,7 +33,7 @@ public sealed class WarmReconcileTests
 
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
         Assert.True(warm.Status.ConflictsComputed);
-        Assert.NotEmpty(warm.RequireReads().DocumentsOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(warm.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 
     [Fact]
@@ -106,11 +106,11 @@ public sealed class WarmReconcileTests
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(["B.esp"], opens.Opened);
-        Assert.NotEmpty(warm.RequireReads().DocumentsOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(warm.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
 
-        var documents = warm.RequireReads().DocumentsOf(new PluginAddress("B.esp", PluginOrigin.DataDirectory));
-        Assert.Contains(documents, d => d.EditorId == "NpcBEdited");
-        Assert.DoesNotContain(documents, d => d.EditorId == "NpcB");
+        var rows = warm.ListedIn(new PluginAddress("B.esp", PluginOrigin.DataDirectory));
+        Assert.Contains(rows, row => row.EditorId == "NpcBEdited");
+        Assert.DoesNotContain(rows, row => row.EditorId == "NpcB");
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public sealed class WarmReconcileTests
     {
         var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("warm-new")
-            .WithPlugin("A.esp")
+            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .WithPlugin("B.esp", listed: false)
             .Build();
         using (var cold = OpenIndex(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
@@ -130,7 +130,7 @@ public sealed class WarmReconcileTests
         warm.Reconcile(holder, data.DataFolder, withB, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(["B.esp"], opens.Opened);
-        Assert.NotEmpty(warm.RequireReads().DocumentsOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(warm.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
     }
 
@@ -149,8 +149,8 @@ public sealed class WarmReconcileTests
         using (var second = OpenIndex(holder))
         {
             second.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
-            npcSourceFile = entry.SourceFileOf(
-                second.RequireReads().DocumentsOf(entry.KeyOf()).Single(d => d.EditorId == "TrackedNpc"));
+            var npc = second.ListedIn(entry.KeyOf()).Single(row => row.EditorId == "TrackedNpc");
+            npcSourceFile = entry.SourceFileOf(second.DocumentOf(npc.FormKey, entry.KeyOf()));
         }
 
         using var third = OpenIndex(holder);
@@ -164,6 +164,6 @@ public sealed class WarmReconcileTests
         using var fourth = OpenIndex(holder);
         fourth.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
         Assert.Contains(
-            fourth.RequireReads().DocumentsOf(entry.KeyOf()), d => d.EditorId == "EditedBetweenLoads");
+            fourth.ListedIn(entry.KeyOf()), row => row.EditorId == "EditedBetweenLoads");
     }
 }

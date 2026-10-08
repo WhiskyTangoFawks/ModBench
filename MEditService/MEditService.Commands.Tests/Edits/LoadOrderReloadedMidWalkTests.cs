@@ -1,12 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -23,28 +21,6 @@ public sealed class LoadOrderReloadedMidWalkTests : IDisposable
 
     public void Dispose() => _plugins.Dispose();
 
-    private sealed class DroppingFallout4OnTheFirstRead(LoadOrderHolder holder)
-        : DelegatingPluginAdapter(TestAdapters.Mutagen())
-    {
-        private bool _dropped;
-
-        public override IPluginRecordLookup OpenRecordLookup(
-            RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas)
-        {
-            if (!_dropped)
-            {
-                _dropped = true;
-                var held = holder.Current;
-                holder.Apply(new LoadOrderSnapshot(
-                    held.DataFolderPath, held.InstanceRoot, held.GameRelease,
-                    [.. held.Plugins.Where(p => p.Name != Fallout4Esm.FileName)],
-                    [.. held.Active.Where(p => p.Name != Fallout4Esm.FileName).Select(p => p.Key)],
-                    [.. held.LoadedWithNoLine.Where(p => p.Name != Fallout4Esm.FileName).Select(p => p.Key)]));
-            }
-            return base.OpenRecordLookup(plugin, gameRelease, schemas);
-        }
-    }
-
     [Fact]
     public void ClearingDeleted_WhenTheLoadOrderIsReplacedMidWalk_ReadsEveryCopyFromTheSnapshotItWalks()
     {
@@ -55,12 +31,13 @@ public sealed class LoadOrderReloadedMidWalkTests : IDisposable
             mod.Npcs.Add(new Npc(new FormKey(mid.ModKey, 0x950), Fallout4Release.Fallout4));
             mod.Npcs.Add(new Npc(TheNpc, Fallout4Release.Fallout4) { MajorRecordFlagsRaw = Deleted });
         });
+        var master = Plugin("Fallout4.esm", mod => mod.Npcs.Add(new Npc(TheNpc, Fallout4Release.Fallout4) { EditorID = "Guy" }));
         _plugins.Load(
-            (Plugin("Fallout4.esm", mod => mod.Npcs.Add(new Npc(TheNpc, Fallout4Release.Fallout4) { EditorID = "Guy" })), false),
+            (master, false),
             (mid, false),
             (edited, true));
         var handler = new TestEditor(
-            TestEditService.Over(_plugins.Holder, adapter: new DroppingFallout4OnTheFirstRead(_plugins.Holder))
+            TestEditService.Over(_plugins.Holder, adapter: new DroppingAPluginOnTheFirstRead(_plugins.Holder, Address(master)))
                 .GetRequiredService<EditRecordChangesHandler>(),
             _plugins.Holder);
 
@@ -68,5 +45,33 @@ public sealed class LoadOrderReloadedMidWalkTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal("Guy", JsonNode.Parse(_plugins.Text(edited, TheNpc))?["EditorID"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void CopyingARefWhoseCellTheDestinationLacks_WhenTheLoadOrderIsReplacedOnceTheSourceIsRead_CarriesTheCellTheSourcesLoadOrderShowsIt()
+    {
+        var cellKey = new FormKey(ModKey.FromFileName("Base.esm"), 0x800);
+        var staticKey = new FormKey(ModKey.FromFileName("Base.esm"), 0x801);
+        var master = Plugin("Base.esm", mod =>
+        {
+            mod.Cells.Records.Add(CellBlocks.Interior(new Cell(cellKey, Fallout4Release.Fallout4) { EditorID = "BaseCell" }));
+            mod.Statics.Add(new Static(staticKey, Fallout4Release.Fallout4) { EditorID = "BaseStatic" });
+        });
+        var placed = new FormKey(ModKey.FromFileName("Source.esp"), 0x900);
+        var source = Plugin("Source.esp", mod =>
+        {
+            var cell = new Cell(cellKey, Fallout4Release.Fallout4) { EditorID = "SourceCell", MajorRecordFlagsRaw = (int)PartialFormFlag.Bit };
+            cell.Persistent.Add(new PlacedObject(placed, Fallout4Release.Fallout4) { EditorID = "CopiedRef" });
+            mod.Cells.Records.Add(CellBlocks.Interior(cell));
+        });
+        var destination = Plugin("Dest.esp", mod => mod.Statics.Add(new Static(staticKey, Fallout4Release.Fallout4) { EditorID = "DestStatic" }));
+        _plugins.Load((master, false), (source, false), (destination, true));
+        var handler = TestEditService.Over(_plugins.Holder, adapter: new DroppingAPluginOnTheFirstRead(_plugins.Holder, Address(master)))
+            .GetRequiredService<CopyRecordHandler>();
+
+        handler.CopySync([new RecordAt(Address(source), placed.ToString())], CopyMode.Override, [Address(destination)], replace: false)
+            .OnlyLanded();
+
+        Assert.Equal("BaseCell", JsonNode.Parse(_plugins.Text(destination, cellKey))?["EditorID"]?.GetValue<string>());
     }
 }

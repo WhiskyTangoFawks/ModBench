@@ -9,9 +9,8 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture)
     [Fact]
     public void RealScripts_ReadTheAdapterOffTheDocument()
     {
-        var document = fixture.Reads.GetDocument("2499C4:Fallout4.esm", CutDownPluginFixture.Plugin);
+        var document = fixture.Index.DocumentOf("2499C4:Fallout4.esm", CutDownPluginFixture.Plugin);
 
-        Assert.NotNull(document);
         var adapter = Assert.Single(document.Fields, f => f.Metadata.Name == "VirtualMachineAdapter");
         var adapterValue = adapter.Value ?? throw new InvalidOperationException("Expected VirtualMachineAdapter field to carry a value.");
         using var value = JsonDocument.Parse(

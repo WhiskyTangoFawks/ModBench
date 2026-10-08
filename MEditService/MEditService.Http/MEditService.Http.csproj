@@ -21,7 +21,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MEditService.Commands\MEditService.Commands.csproj" />
-    <ProjectReference Include="..\MEditService.Queries\MEditService.Queries.csproj" />
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
     <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
