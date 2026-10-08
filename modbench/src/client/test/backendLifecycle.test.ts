@@ -21,12 +21,6 @@ function record(lifecycle: BackendLifecycle): BackendStatus[] {
   return statuses;
 }
 
-function nextRunningStatus(lifecycle: BackendLifecycle): Promise<void> {
-  return new Promise<void>((resolve) => {
-    const off = lifecycle.onStatusChanged((s) => { if (s === 'running') { off(); resolve(); } });
-  });
-}
-
 function healthCheck(state: { healthy: boolean }): () => Promise<boolean> {
   return () => Promise.resolve(state.healthy);
 }
