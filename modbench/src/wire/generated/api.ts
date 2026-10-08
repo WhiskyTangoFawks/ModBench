@@ -460,7 +460,7 @@ export interface paths {
         put?: never;
         /**
          * One record as every active plugin has it, one plugin's copy read from the document text given.
-         * @description The named plugin's column, and the conflict states, are read from the text whether or not that plugin is active. The text is the document carrying the record: its own, or an embedded child's container's. Text that is no record document, or does not carry the record, is a column that could not be parsed. Nothing is stored.
+         * @description The named plugin's column, and the conflict states, are read from the text whether or not that plugin is active. The text is the document carrying the record: its own, or an embedded child's container's. Text that is no record document, or does not carry the record, is a column that could not be parsed. Alone, that column is the only one, with no conflict state. Nothing is stored.
          */
         post: operations["CompareRecordWithText"];
         delete?: never;
@@ -839,6 +839,7 @@ export interface components {
         CopyText: {
             plugin: components["schemas"]["PluginAddress"];
             documentText: string;
+            alone: boolean;
         };
         CreatePluginRequest: {
             origin: string;

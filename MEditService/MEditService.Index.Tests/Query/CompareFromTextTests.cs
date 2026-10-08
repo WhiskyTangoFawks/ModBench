@@ -96,6 +96,19 @@ public sealed class CompareFromTextTests : IDisposable
     }
 
     [Fact]
+    public void ACopyComparedAlone_IsItsOwnColumnOnly_WithNoConflictState()
+    {
+        var compare = _index.Records.GetCompare(Chest.ToString(), new CopyText(InactivePlugin, OtherChestText, Alone: true))
+            ?? throw new InvalidOperationException("Expected the record to compare.");
+
+        Assert.Equal([InactivePlugin], compare.Overrides.Select(AddressOf));
+        Assert.Null(compare.Overrides[0].ConflictThis);
+        Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
+        Assert.All(Flatten(compare.Diffs), d => Assert.Empty(d.CellStates));
+        Assert.Contains("000901", compare.Diffs.Single(d => d.FieldName == "Items").Children?.Single().Values[InactivePlugin.Name]?.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TextThatIsNoRecordDocument_IsAColumnThatCouldNotBeParsed()
     {
         var compare = Compare(ModPlugin, "{ not json");

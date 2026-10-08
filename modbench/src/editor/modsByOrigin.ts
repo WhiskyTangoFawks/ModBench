@@ -1,10 +1,12 @@
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import type * as vscode from 'vscode';
 import type { ModRepository } from '../wire/messages';
+import type { PluginAddress } from '../wire/pluginAddress';
 
 export interface ModFacts {
   trackedMods: () => ReadonlySet<string>;
   modDirs: () => ReadonlyMap<string, string>;
+  isDisabledOrInDisabledMod: (plugin: PluginAddress) => boolean;
   onChange: (listener: () => void) => vscode.Disposable;
 }
 

@@ -127,6 +127,20 @@ public sealed class CompareRecordsApiTests : HostedTests
         Assert.False(string.IsNullOrWhiteSpace(column.GetProperty("parseDiagnosis").GetString()));
     }
 
+    [Fact]
+    public async Task OneRecordWithAPluginsTextAlone_IsThatPluginsColumnOnly()
+    {
+        var (npc, _) = await Loaded();
+
+        var response = await Client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(npc)}/compare",
+            new { plugin = new { name = WithWeapon, origin = WithWeaponMod }, documentText = "{ not json", alone = true });
+
+        response.EnsureSuccessStatusCode();
+        var column = (await response.Body()).GetProperty("overrides").EnumerateArray().Single();
+        Assert.Equal((WithWeapon, WithWeaponMod), (column.GetProperty("plugin").GetString(), column.GetProperty("origin").GetString()));
+    }
+
     private async Task<(string PlacedRef, string CellText)> TrackedACell()
     {
         var fx = Owned(new PluginFixtureBuilder("compare-child")

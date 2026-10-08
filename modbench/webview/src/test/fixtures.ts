@@ -58,6 +58,8 @@ export interface PanelOpts {
   /** The column of the copy the tab's document holds. Unstated, the winning copy's, as a record
    *  opened without a plugin opens it. */
   fileColumn?: string;
+  /** The file's copy is read with no other (editor.md, States, story 7). */
+  alone?: boolean;
   /** A whole `load` of the test's own — a rejection, or one that answers differently each call. */
   load?: RecordPanelClient['load'];
 }
@@ -89,6 +91,7 @@ export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}):
       conflictsComputed: opts.conflictsComputed ?? true,
       loadFailures: opts.loadFailures ?? [],
       fileColumn: opts.fileColumn ?? winnerColumn(compare()),
+      alone: opts.alone ?? false,
     })),
   };
 }

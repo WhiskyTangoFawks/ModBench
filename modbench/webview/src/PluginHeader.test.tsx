@@ -10,7 +10,7 @@ import { compareOverride, required } from './test/fixtures';
 
 const DIAGNOSIS = 'the PERK entry point did not have expected parameter type flag';
 
-type Facts = { override?: Partial<CompareOverride>; isImmutable?: boolean; isTracked?: boolean; sourceUnreadable?: boolean };
+type Facts = { override?: Partial<CompareOverride>; notActive?: boolean; isImmutable?: boolean; isTracked?: boolean; sourceUnreadable?: boolean };
 
 function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typeof PluginHeader>> = {}) {
   const onToggleCollapse = vi.fn();
@@ -21,6 +21,7 @@ function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typ
         override={compareOverride({
           formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', origin: 'ModA', loadIndex: '01', fields: [], ...facts.override,
         })}
+        notActive={facts.notActive ?? false}
         isImmutable={facts.isImmutable ?? false}
         isTracked={facts.isTracked ?? true}
         sourceUnreadable={facts.sourceUnreadable ?? false}
@@ -54,6 +55,8 @@ describe('PluginHeader', () => {
 
   it.each<[string, Facts, string, string]>([
     ['a copy mEdit could not read', { override: { parseDiagnosis: DIAGNOSIS } }, '(parse failure)', DIAGNOSIS],
+    ['a file whose plugin is disabled, or in a disabled mod', { notActive: true }, '(not active)',
+      'The game does not load it, so no other copy is compared.'],
     ['the game’s own plugin', { isImmutable: true }, '(read-only)', 'The game’s plugins are not edited.'],
     ['a plugin in Overwrite', { override: { isInOverwrite: true }, isTracked: false }, '(in Overwrite)',
       'Overwrite is not a mod, and a plugin moved into a mod can be tracked.'],
@@ -73,6 +76,8 @@ describe('PluginHeader', () => {
 
   it.each<[string, Facts, string, string]>([
     ['parse failure over read-only', { override: { parseDiagnosis: DIAGNOSIS }, isImmutable: true }, '(parse failure)', '(read-only)'],
+    ['parse failure over not active', { override: { parseDiagnosis: DIAGNOSIS }, notActive: true }, '(parse failure)', '(not active)'],
+    ['not active over read-only', { notActive: true, isImmutable: true }, '(not active)', '(read-only)'],
     ['read-only over in Overwrite', { override: { isInOverwrite: true }, isImmutable: true }, '(read-only)', '(in Overwrite)'],
     ['in Overwrite over untracked', { override: { isInOverwrite: true }, isTracked: false }, '(in Overwrite)', '(untracked)'],
     ['untracked over Partial Form', { override: { isPartialForm: true }, isTracked: false }, '(untracked)', '(Partial Form)'],

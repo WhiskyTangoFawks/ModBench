@@ -98,7 +98,7 @@ internal sealed class RecordQueryService(
         if (stack == null && text == null) return null;
         var snapshot = _loadOrder.Require();
 
-        var active = stack?.Entries.Select(e => e.Effective).ToList() ?? [];
+        var active = text?.Alone == true ? [] : stack?.Entries.Select(e => e.Effective).ToList() ?? [];
         var outside = new List<RecordDocument>();
         if (text is not null)
         {

@@ -20,7 +20,7 @@ function lastRequestId(): string {
 
 function answer(requestId: string, data: Record<string, unknown>): void {
   window.dispatchEvent(new MessageEvent('message', {
-    data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: {}, ...data },
+    data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: {}, alone: false, ...data },
   }));
 }
 
@@ -66,6 +66,15 @@ describe('RecordPanelClient.load', () => {
     expect(r.result?.conflictAll).toBe('OnlyOne');
     expect(r.immutableSet).toEqual(new Set([columnKey({ name: 'A.esp', origin: 'Data/' })]));
     expect(r.conflictsComputed).toBe(true);
+  });
+
+  it('says whether the file\'s copy is read alone', async () => {
+    const promise = createRecordPanelClient().load('000001:A.esp');
+    answer(lastRequestId(), {
+      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'NoConflict' }, plugins: null, conflictsComputed: false, loadFailures: [], alone: true,
+    });
+
+    expect(await promise).toMatchObject({ ok: true, alone: true });
   });
 
   it('keys immutableSet by compound identity, so two same-filename different-origin plugins stay distinct', async () => {

@@ -163,12 +163,13 @@ async function answerRecordLoad(
   const [plugins] = await Promise.allSettled([deps.meditClient.getPlugins()]);
   const listed = plugins.status === 'fulfilled' ? plugins.value : null;
   const pluginActive = listed?.some((p) => p.inLoadOrder && samePluginAddress(p, deps.plugin)) ?? false;
+  const alone = m.columns.length === 0 && !pluginActive && deps.modFacts.isDisabledOrInDisabledMod(deps.plugin);
   const [read] = await Promise.allSettled([(async (): Promise<RecordRead> => {
     const documentText = await deps.documentText(pluginActive);
     const own = { formKey: m.formKey, plugin: deps.plugin, documentText };
     if (m.columns.length === 0) {
       const compare = await deps.meditClient.getComparison(
-        m.formKey, documentText === undefined ? undefined : { plugin: deps.plugin, documentText });
+        m.formKey, documentText === undefined ? undefined : { plugin: deps.plugin, documentText, alone });
       if (compare) return { compare };
       // Only the typed answer tells a record held by no plugin from one a disabled plugin holds.
       return readOf(await deps.meditClient.getRecordsComparison([own]));
@@ -194,7 +195,7 @@ async function answerRecordLoad(
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     ...answered, plugins: listed,
     conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
-    modsByOrigin: modsByOrigin(origins, deps.modFacts),
+    modsByOrigin: modsByOrigin(origins, deps.modFacts), alone,
   });
 }
 

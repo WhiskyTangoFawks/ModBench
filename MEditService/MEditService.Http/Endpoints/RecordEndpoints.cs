@@ -81,7 +81,7 @@ internal static class RecordEndpoints
             "The named plugin's column, and the conflict states, are read from the text whether or not that plugin " +
             "is active. The text is the document carrying the record: its own, or an embedded child's container's. " +
             "Text that is no record document, or does not carry the record, is a column that could not be parsed. " +
-            "Nothing is stored.")
+            "Alone, that column is the only one, with no conflict state. Nothing is stored.")
         .WithTags("Records")
         .Produces<CompareResult>()
         .ProducesProblem(400)

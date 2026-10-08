@@ -82,7 +82,7 @@ export async function register({
     ask: vi.fn(),
     focusedView,
     recordViewIds: ['test.view'],
-    modFacts: { trackedMods: () => new Set(), modDirs: () => new Map(), onChange: () => ({ dispose: () => undefined }) },
+    modFacts: { trackedMods: () => new Set(), modDirs: () => new Map(), isDisabledOrInDisabledMod: () => false, onChange: () => ({ dispose: () => undefined }) },
     recordWrite: (command) => command(),
     refreshSourceControlFor: () => undefined,
   });

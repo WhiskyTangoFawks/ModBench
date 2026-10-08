@@ -235,6 +235,8 @@ export type RecordLoadAnswer =
       // The repository state of each origin in the comparison that names a mod, read from the
       // instance. An origin in no mod is absent.
       modsByOrigin: Record<string, ModRepository>;
+      // The file's plugin is disabled, or in a disabled mod, so its copy is read with no other (editor.md, States, story 7).
+      alone: boolean;
     } & RecordRead)
   | { ok: false; error: string };
 
@@ -408,7 +410,7 @@ function parseRead(w: { compare?: unknown; gone?: unknown; copiesLacking?: unkno
 
 function parseAnswered(w: {
   compare?: unknown; gone?: unknown; copiesLacking?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; documentPlugin?: unknown;
-  modsByOrigin?: unknown;
+  modsByOrigin?: unknown; alone?: unknown;
 }): RecordLoadAnswer {
   if (w.plugins !== null && !isPluginResponseArray(w.plugins)) {
     throw new Error('Expected "recordLoadAnswered" to carry a plugins array or null.');
@@ -421,9 +423,10 @@ function parseAnswered(w: {
   }
   if (!isPluginAddress(w.documentPlugin)) throw new Error('Expected "recordLoadAnswered" to carry the document\'s plugin.');
   if (!isModsByOrigin(w.modsByOrigin)) throw new Error('Expected "recordLoadAnswered" to carry its mods by origin.');
+  if (typeof w.alone !== 'boolean') throw new Error('Expected "recordLoadAnswered" to carry a boolean alone.');
   return {
     ok: true, ...parseRead(w), plugins: w.plugins, conflictsComputed: w.conflictsComputed,
-    loadFailures: w.loadFailures, documentPlugin: w.documentPlugin, modsByOrigin: w.modsByOrigin,
+    loadFailures: w.loadFailures, documentPlugin: w.documentPlugin, modsByOrigin: w.modsByOrigin, alone: w.alone,
   };
 }
 
@@ -436,7 +439,7 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
   const w = value as {
     type?: unknown; formKey?: unknown; requestId?: unknown;
     ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
-    documentPlugin?: unknown; text?: unknown; columns?: unknown; modsByOrigin?: unknown;
+    documentPlugin?: unknown; text?: unknown; columns?: unknown; modsByOrigin?: unknown; alone?: unknown;
   };
   switch (w.type) {
     case EXTENSION_TO_WEBVIEW.LOAD_RECORD: return parseLoadRecord(w);
