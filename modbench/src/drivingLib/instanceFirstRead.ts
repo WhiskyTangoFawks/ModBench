@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 
-// Unset until the Instance's first value lands, so an empty view before the read says nothing.
+// A view's viewsWelcome reads it, so it stays unset until the first value lands.
 const INSTANCE_READ_KEY = 'modbench.instanceRead';
 
 /** A tree's first-render gate: `settled` resolves on the first landed value or the first failed

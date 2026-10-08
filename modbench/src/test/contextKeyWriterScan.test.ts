@@ -5,7 +5,7 @@ import { tsFiles } from './tsFiles';
 import { SRC } from './scanSource';
 
 describe('each key has one writer', () => {
-  const FOLDER_OWNERS = ['toolbox/instanceCheck.ts'];
+  const FOLDER_OWNERS = ['drivingLib/instanceCheck.ts'];
   const FIRST_READ_OWNERS = ['drivingLib/instanceFirstRead.ts'];
   const production = tsFiles(SRC, { exclude: ['generated', 'test'] });
   const naming = (pattern: RegExp) =>
