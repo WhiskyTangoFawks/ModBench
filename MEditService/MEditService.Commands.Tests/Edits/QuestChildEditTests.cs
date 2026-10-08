@@ -216,7 +216,7 @@ public sealed class QuestChildEditTests : IDisposable
         result.OnlyLanded();
         var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
         Assert.NotNull(quest);
-        Assert.False(quest.Require().IsPartialForm());
+        Assert.True(quest.Require().IsPartialForm());
         Assert.Equal(ContainerCopyFixture.QuestEditorId, quest.EditorId);
         Assert.Equal(
             fixture.Scene.ToString(),
@@ -239,7 +239,7 @@ public sealed class QuestChildEditTests : IDisposable
 
         result.OnlyLanded();
         var copiedQuest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require();
-        Assert.False(copiedQuest.IsPartialForm());
+        Assert.True(copiedQuest.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.QuestEditorId, copiedQuest.EditorId);
         var topic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
         Assert.NotNull(topic);
@@ -262,11 +262,11 @@ public sealed class QuestChildEditTests : IDisposable
         result.OnlyLanded();
         var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
         Assert.NotNull(quest);
-        Assert.False(quest.Require().IsPartialForm());
+        Assert.True(quest.Require().IsPartialForm());
         Assert.Equal(ContainerCopyFixture.QuestEditorId, quest.EditorId);
         var topic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
         Assert.NotNull(topic);
-        Assert.False(topic.Require().IsPartialForm());
+        Assert.True(topic.Require().IsPartialForm());
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, topic.EditorId);
         Assert.Equal(
             fixture.DialogTopic.ToString(),
