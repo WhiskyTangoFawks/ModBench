@@ -1,91 +1,33 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
-import { pluginAddressOf, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
-import { ActiveRecordTracker } from './ActiveRecordTracker';
-import type { EditAddress, EditsInFlight } from './followRecord';
+import { pluginAddressOf, samePluginAddress } from '../wire/pluginAddress';
 import { showWebviewPage } from '../drivingLib/webviewPage';
-import { reportFailure } from '../drivingLib/reportFailure';
-import { pickRecord } from './recordPicker';
-import {
-  routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps, type TabDocument,
-} from './recordPanelMessageRouter';
-import type { FocusedCells } from './focusedCells';
-import { applyRecordEdit, oneAtATime, type RecordWriteDeps, type SourceMove } from './applyRecordEdit';
-import { ExtendedFieldDocuments } from './extendedFieldEditor';
-import { commitField, registerRecordPanelContextCommands, type FieldCommitDeps } from './recordPanelContextCommands';
-import { registerGridKeyCommands } from './gridKeyCommands';
-import {
-  registerRecordLifecycleCommands, registerRecordCopyCommands, type ViewSelections,
-} from './recordLifecycleCommands';
-import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from './notificationWiring';
-import { trackLoadOrderStatus } from './loadOrderStatusTracker';
-import type { RecordWrite } from '../drivingLib/writingGesture';
-import type { Reporter } from '../ports/reporter';
-import type { AskQuestion } from '../ports/dialog';
-import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen, type TabPlace } from './recordOpenPlan';
+import { routeRecordPanelMessage, routerDepsForTab, type SharedRecordPanelDeps, type TabDocument } from './recordPanelMessageRouter';
+import type { EditAddress, RecordTab } from './recordTab';
+import type { RecordTabs } from './recordTabs';
+import type { SourceMove } from './applyRecordEdit';
+import type { TabPlace } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
-import { inTabsPlace, inTabsStead, type TabShowOptions } from './inTabsPlace';
-import { followReportedCopies, type CopyChanged } from './recordCopy';
+import { inTabsStead, type TabShowOptions } from './inTabsPlace';
+import type { CopyChanged } from './recordCopy';
 import { fileText } from './fileText';
-import { RenderedDocuments } from './renderedDocument';
-import { ChildRecordDocuments } from './childRecordDocument';
 import {
-  CHILD_RECORD_SCHEME, RENDERED_DOCUMENT_SCHEME, copyDocument, copyOf, recordDocument, type RecordCopy, type RecordDocument,
+  CHILD_RECORD_SCHEME, RENDERED_DOCUMENT_SCHEME, copyDocument, copyOf, type RecordCopy, type RecordDocument,
 } from '../drivingLib/recordDocument';
 import { errorMessage } from '../ports/errorMessage';
-import type { ModFacts } from './modsByOrigin';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension, type ExtensionToWebview, type ViewState } from '../wire/messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension, type ViewState } from '../wire/messages';
 
-export interface EditorCommandDeps {
-  context: Pick<vscode.ExtensionContext, 'extensionUri'>;
-  // Every open record tab's panel showing a record.
-  recordPanels: Set<vscode.WebviewPanel>;
-  // Which of recordPanels is active, and what FormKey each shows — the Referenced By view
-  // retargets from it, not from a command argument.
-  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
-  // Each panel's edits in flight, which hold its reads until the answer; the one place a panel
-  // reads again.
-  editsInFlight: EditsInFlight<vscode.WebviewPanel>;
-  // Each panel's focused cell, which a field gesture from the palette acts on.
-  focusedCells: FocusedCells<vscode.WebviewPanel>;
-  meditClient: Pick<MEditClient,
-    | 'getEditChanges' | 'searchRecords'
-    | 'deleteRecords' | 'copyRecords'
-    | 'getPlugins' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations'
-    | 'getComparison' | 'getRecordsComparison' | 'onNotification' | 'onStatusChanged' | 'onReconnected' | 'getRecordOwner'
-    | 'getRecordFile' | 'getRecordOfFile' | 'getRenderedDocument'>;
-  // The rows selected in the view the user last selected in, which a palette entry acts on.
-  focusedViewSelection: () => readonly unknown[];
-  // The rows selected in the view `view` names, which a key bound in that view acts on.
-  selectionOf: (view: string) => readonly unknown[];
-  recordWrite: RecordWrite;
-  // The plugin's Source Control status, which a committed field edit redrives, lives on the session
-  // object, narrowed to a callback like focusedViewSelection.
-  refreshSourceControlFor: (plugin: PluginAddress) => void;
-  // The instance's mods, which a column header reads for its mod's repository state.
-  modFacts: ModFacts;
-  outputChannel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
-  // Kernel ports the composition root implements (target-architecture.d2, Ports).
-  reporterFor: (tag: string) => Reporter;
-  ask: AskQuestion;
-}
-const RECORD_VIEW_TYPE = 'modbench.record';
+export const RECORD_VIEW_TYPE = 'modbench.record';
 
-interface ShowRecordDeps {
+interface RecordEditorProviderDeps {
   context: Pick<vscode.ExtensionContext, 'extensionUri'>;
-  recordPanels: Set<vscode.WebviewPanel>;
-  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
-  editsInFlight: EditsInFlight<vscode.WebviewPanel>;
-  focusedCells: FocusedCells<vscode.WebviewPanel>;
+  tabs: RecordTabs;
   routerDeps: SharedRecordPanelDeps;
-}
-
-interface RecordEditorProviderDeps extends ShowRecordDeps {
   client: Pick<MEditClient, 'getRecordOwner' | 'getRecordFile' | 'getRecordOfFile' | 'getRenderedDocument'>;
   channel: Pick<vscode.LogOutputChannel, 'warn'>;
 }
 
-interface GridPage { formKey: string; columns: readonly RecordCopy[]; place?: ViewState }
+interface GridPage { columns: readonly RecordCopy[]; place?: ViewState }
 
 // What a file's tab shows once an edit moves the file.
 interface MovedTab extends RecordCopy { from?: string; columns: readonly RecordCopy[]; place: ViewState | undefined }
@@ -98,16 +40,9 @@ const movedTo = (uri: vscode.Uri, moves: readonly SourceMove[]): vscode.Uri => m
 
 // The grid as VS Code's editor for a record's file, a child's or a rendered document. A file's
 // tab restored before mEdit holds the load order asks again on each load-order status.
-class RecordEditorProvider implements vscode.CustomTextEditorProvider {
-  private readonly unread = new Map<vscode.WebviewPanel, () => Promise<void>>();
+export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   // The columns and place an open asks for, until the tab it opens takes them.
-  private readonly toShow = new Map<string, Omit<GridPage, 'formKey'>>();
-  private readonly documentOf = new Map<vscode.WebviewPanel, string>();
-  // The copy each tab's document holds, once it is shown.
-  private readonly shown = new Map<vscode.WebviewPanel, { uri: vscode.Uri; plugin: PluginAddress }>();
-  private readonly places = new Map<vscode.WebviewPanel, ViewState>();
-  // A tab's page listens once it asks its first read, so a message posted before it is lost.
-  private readonly listening = new Map<vscode.WebviewPanel, Promise<void>>();
+  private readonly toShow = new Map<string, GridPage>();
   private readonly moved = new Map<string, MovedTab>();
   // The copies mEdit reported changed while the child records' tabs were following theirs.
   private toFollow: CopyChanged | undefined;
@@ -130,12 +65,8 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     if (!untaken) return;
     // No new tab took them, so VS Code showed the document's tab already open in the group, which
     // is active now (editor.md, Opening, story 3).
-    for (const [panel, document] of this.documentOf) {
-      if (document === key && panel.active) {
-        void this.listening.get(panel)?.then(() => {
-          if (this.listening.has(panel)) void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: [...untaken] } satisfies ExtensionToWebview);
-        });
-      }
+    for (const tab of this.deps.tabs) {
+      if (tab.copy && tab.document.toString() === key && tab.panel.active) tab.postOnceListening({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: [...untaken] });
     }
   }
 
@@ -152,9 +83,9 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     try {
       for (let changed = this.takeQueued(); changed; changed = this.takeQueued()) {
         // One tab at a time, as each opens and closes tabs in its group.
-        for (const [panel, { uri, plugin }] of [...this.shown]) {
-          const formKey = this.deps.activeRecordTracker.formKeyOf(panel);
-          if (uri.scheme === CHILD_RECORD_SCHEME && formKey && changed({ formKey, plugin })) await this.follow(panel, uri, { formKey, plugin });
+        for (const tab of [...this.deps.tabs]) {
+          const { copy } = tab;
+          if (tab.document.scheme === CHILD_RECORD_SCHEME && copy && changed(copy)) await this.follow(tab, copy);
         }
       }
     } finally {
@@ -168,7 +99,8 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     return queued;
   }
 
-  private async follow(panel: vscode.WebviewPanel, uri: vscode.Uri, copy: RecordCopy): Promise<void> {
+  private async follow(tab: RecordTab, copy: RecordCopy): Promise<void> {
+    const uri = tab.document;
     const staying = `${copy.formKey}'s tab stays on ${uri.toString(true)}`;
     try {
       const carrying = await copyDocument(this.deps.client, copy);
@@ -177,13 +109,14 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
         return;
       }
       if (carrying.uri.toString() === uri.toString()) return;
-      const tab = panel.viewColumn === undefined ? undefined : recordTabAt({ document: uri.toString(), viewColumn: panel.viewColumn });
-      if (!tab) {
+      const { viewColumn } = tab.panel;
+      const shownIn = viewColumn === undefined ? undefined : recordTabAt({ document: uri.toString(), viewColumn });
+      if (!shownIn) {
         this.deps.channel.warn(`${staying}: VS Code shows the tab in no group.`);
         return;
       }
-      const [columns, place] = [this.deps.editsInFlight.columnsOf(panel), this.places.get(panel)];
-      await inTabsStead(tab, (options) => this.open(carrying.uri, columns, options, place));
+      const [columns, place] = [tab.columns, tab.place];
+      await inTabsStead(shownIn, (options) => this.open(carrying.uri, columns, options, place));
     } catch (err) {
       this.deps.channel.warn(`${staying}: ${errorMessage(err)}`);
     }
@@ -191,10 +124,9 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
 
   /** The document carrying the record: the tab's that shows it, or the one it opens as. */
   documentCarrying({ formKey, plugin }: EditAddress): Promise<RecordDocument> {
-    for (const [panel, copy] of this.shown) {
-      if (this.deps.activeRecordTracker.formKeyOf(panel) === formKey && samePluginAddress(copy.plugin, plugin)) {
-        return Promise.resolve({ uri: copy.uri });
-      }
+    for (const tab of this.deps.tabs) {
+      const { copy } = tab;
+      if (copy?.formKey === formKey && samePluginAddress(copy.plugin, plugin)) return Promise.resolve({ uri: tab.document });
     }
     return copyDocument(this.deps.client, { formKey, plugin });
   }
@@ -203,13 +135,13 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
    *  edit moved it to, with the same columns and place. Answers what undoes that for a move not made. */
   moving(moves: readonly SourceMove[], edited: EditAddress, newFormKey: string | undefined): () => void {
     const landings: string[] = [];
-    for (const [panel, { uri, plugin }] of this.shown) {
+    for (const tab of this.deps.tabs) {
+      const { document: uri, copy } = tab;
       const to = movedTo(uri, moves);
-      const formKey = this.deps.activeRecordTracker.formKeyOf(panel);
-      if (uri.scheme !== 'file' || to === uri || !formKey) continue;
-      const kept = { plugin, columns: this.deps.editsInFlight.columnsOf(panel), place: this.places.get(panel) };
-      const rekeyed = newFormKey !== undefined && formKey === edited.formKey && samePluginAddress(plugin, edited.plugin);
-      this.moved.set(to.toString(), rekeyed ? { ...kept, formKey: newFormKey, from: formKey } : { ...kept, formKey });
+      if (uri.scheme !== 'file' || to === uri || !copy) continue;
+      const kept = { plugin: copy.plugin, columns: tab.columns, place: tab.place };
+      const rekeyed = newFormKey !== undefined && copy.formKey === edited.formKey && samePluginAddress(copy.plugin, edited.plugin);
+      this.moved.set(to.toString(), rekeyed ? { ...kept, formKey: newFormKey, from: copy.formKey } : { ...kept, formKey: copy.formKey });
       landings.push(to.toString());
     }
     return () => { for (const landing of landings) this.moved.delete(landing); };
@@ -219,26 +151,25 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     const key = document.uri.toString();
     const { columns, place } = this.toShow.get(key) ?? { columns: [] };
     this.toShow.delete(key);
-    this.documentOf.set(panel, key);
-    panel.onDidDispose(() => this.documentOf.delete(panel));
+    const tab = this.deps.tabs.open(panel, document.uri);
     if (document.uri.scheme === RENDERED_DOCUMENT_SCHEME) {
-      const { formKey, plugin } = copyOf(document.uri);
+      const copy = copyOf(document.uri);
       const documentText = (pluginActive: boolean) => Promise.resolve(pluginActive ? undefined : document.getText());
-      this.show(panel, document.uri, { formKey, columns, place }, { titleFromRead: () => undefined, plugin, documentText });
+      this.show(panel, tab, copy, { columns, place }, { titleFromRead: () => undefined, plugin: copy.plugin, documentText });
       return;
     }
     if (document.uri.scheme === CHILD_RECORD_SCHEME) {
       // The file is the container's, so its name is not the child's.
-      const { formKey, plugin } = copyOf(document.uri);
-      panel.title = recordTitle(formKey, undefined);
-      this.showFile(panel, document, { formKey, plugin }, columns, (read, titled) => { panel.title = recordTitle(read, titled, plugin); }, place);
+      const copy = copyOf(document.uri);
+      panel.title = recordTitle(copy.formKey, undefined);
+      this.showFile(panel, tab, document, copy, { columns, place }, (read, titled) => { panel.title = recordTitle(read, titled, copy.plugin); });
       return;
     }
     const moved = this.moved.get(key);
     if (moved) {
       this.moved.delete(key);
-      this.showFile(panel, document, moved, moved.columns, () => undefined, moved.place);
-      if (moved.from) this.deps.editsInFlight.moved(panel, moved.plugin, moved.from, moved.formKey);
+      this.showFile(panel, tab, document, moved, moved, () => undefined);
+      if (moved.from) tab.moved(moved.plugin, moved.from, moved.formKey);
       return;
     }
     const { fsPath } = document.uri;
@@ -246,52 +177,54 @@ class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     const read = async (): Promise<void> => {
       try {
         const { formKey, ...copy } = await this.deps.client.getRecordOfFile(fsPath);
-        if (this.unread.delete(panel)) this.showFile(panel, document, { formKey, plugin: pluginAddressOf(copy) }, columns, () => undefined, place);
+        if (tab.awaitsRecord) this.showFile(panel, tab, document, { formKey, plugin: pluginAddressOf(copy) }, { columns, place }, () => undefined);
       } catch (err) {
         const reason = errorMessage(err);
-        if (reason === shownReason || !this.unread.has(panel)) return;
+        if (reason === shownReason || !tab.awaitsRecord) return;
         shownReason = reason;
         this.deps.channel.warn(`Failed to read ${fsPath}: ${reason}`);
         showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: 'main.js', globals: { mEditLoadError: reason } });
       }
     };
-    this.unread.set(panel, read);
-    panel.onDidDispose(() => this.unread.delete(panel));
-    await read();
+    await tab.askWhichRecord(read);
   }
 
   readAgain(): void {
-    for (const read of this.unread.values()) void read();
+    for (const tab of this.deps.tabs) tab.askWhichRecordAgain();
   }
 
   // Saved, the read model wins (commands.md, Principles), but mEdit compares no inactive plugin's
   // copy, nor a record an edit moved before mEdit reports it, so the file's column reads the document then.
   private showFile(
-    panel: vscode.WebviewPanel, document: vscode.TextDocument, { formKey, plugin }: RecordCopy, columns: readonly RecordCopy[],
-    titleFromRead: TabDocument['titleFromRead'], place?: ViewState,
+    panel: vscode.WebviewPanel, tab: RecordTab, document: vscode.TextDocument, copy: RecordCopy, page: GridPage,
+    titleFromRead: TabDocument['titleFromRead'],
   ): void {
     const documentText = async (pluginActive: boolean) => {
-      if (document.isDirty || this.deps.editsInFlight.waitingFor(panel)) return document.getText();
+      if (document.isDirty || tab.waitingFor()) return document.getText();
       return pluginActive ? undefined : savedText(document.uri);
     };
-    this.show(panel, document.uri, { formKey, columns, place }, { titleFromRead, plugin, documentText });
-    const following = vscode.workspace.onDidChangeTextDocument((change) => {
-      if (change.document === document && change.contentChanges.length > 0) this.deps.editsInFlight.refresh(panel);
-    });
-    panel.onDidDispose(() => { following.dispose(); });
+    this.show(panel, tab, copy, page, { titleFromRead, plugin: copy.plugin, documentText });
+    tab.own(vscode.workspace.onDidChangeTextDocument((change) => {
+      if (change.document === document && change.contentChanges.length > 0) tab.refresh();
+    }));
   }
 
-  private show(panel: vscode.WebviewPanel, uri: vscode.Uri, page: GridPage, tab: Omit<TabDocument, 'keepViewState'>): void {
-    this.shown.set(panel, { uri, plugin: tab.plugin });
-    panel.onDidDispose(() => { this.shown.delete(panel); this.places.delete(panel); this.listening.delete(panel); });
-    this.listening.set(panel, new Promise((listens) => {
-      const asked = panel.webview.onDidReceiveMessage((message: unknown) => {
-        if (!isRecordLoadRequest(message)) return;
-        asked.dispose();
-        listens();
-      });
+  private show(panel: vscode.WebviewPanel, tab: RecordTab, { formKey, plugin }: RecordCopy, { columns, place }: GridPage, document: TabDocument): void {
+    const { tabs, routerDeps, context } = this.deps;
+    tab.show({ formKey, plugin });
+    // A reply and a follow reach the one tab that asked, never a broadcast.
+    const tabRouterDeps = routerDepsForTab(routerDeps, tab, tabs, document);
+    tab.own(panel.webview.onDidReceiveMessage((message: unknown) => {
+      if (isRecordLoadRequest(message)) tab.listens();
+      void routeRecordPanelMessage(message, tabRouterDeps);
     }));
-    showRecord(this.deps, panel, uri, page, { ...tab, keepViewState: (place) => { this.places.set(panel, place); } });
+    // The FormKey is shown before the tab takes the focus, so a new tab retargets Referenced By once.
+    // A tab's view state announces only its gaining the focus: losing it is another tab's event.
+    tabs.focus(tab);
+    tab.own(panel.onDidChangeViewState(() => { if (panel.active) tabs.focus(tab); }));
+    showWebviewPage(panel.webview, context.extensionUri, {
+      script: 'main.js', globals: { mEditFormKey: formKey, mEditColumns: columns, ...(place && { mEditViewState: place }) },
+    });
   }
 }
 
@@ -314,163 +247,6 @@ async function savedText(uri: vscode.Uri): Promise<string | undefined> {
   }
 }
 
-function showRecord(
-  deps: ShowRecordDeps, panel: vscode.WebviewPanel, document: vscode.Uri, { formKey, columns, place }: GridPage, tab: TabDocument,
-): void {
-  const {
-    context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps,
-  } = deps;
-  recordPanels.add(panel);
-  panel.onDidDispose(() => recordPanels.delete(panel));
-  panel.onDidDispose(() => { editsInFlight.forget(panel); });
-
-  // FormKey is recorded before the panel is declared active, so a new panel fires the
-  // Referenced By retarget exactly once, already carrying it. onDidChangeViewState announces
-  // only *gaining* focus: losing it is another panel's event, or removePanel's job.
-  activeRecordTracker.setFormKey(panel, formKey);
-  activeRecordTracker.setActivePanel(panel);
-  focusedCells.panelFocused();
-  panel.onDidChangeViewState(() => {
-    if (!panel.active) return;
-    activeRecordTracker.setActivePanel(panel);
-    focusedCells.panelFocused();
-  });
-  panel.onDidDispose(() => {
-    focusedCells.removePanel(panel);
-    activeRecordTracker.removePanel(panel);
-  });
-
-  // A reply and a follow reach the one panel that asked, never a broadcast.
-  const panelRouterDeps = routerDepsForPanel(routerDeps, panel, focusedCells, editsInFlight, tab, document.toString());
-  panel.webview.onDidReceiveMessage((msg: unknown) => { void routeRecordPanelMessage(msg, panelRouterDeps); });
-
-  showWebviewPage(panel.webview, context.extensionUri, {
-    script: 'main.js', globals: { mEditFormKey: formKey, mEditColumns: columns, ...(place && { mEditViewState: place }) },
-  });
-}
-
-export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
-  const {
-    context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, meditClient,
-    outputChannel,
-  } = deps;
-  const selections: ViewSelections = { focused: deps.focusedViewSelection, of: deps.selectionOf };
-  // Lives for the activation, disposed with the editor commands.
-  const loadOrderStatusTracker = trackLoadOrderStatus(
-    meditClient, () => announceConflictsComputed(recordPanels, editsInFlight));
-  // The picker and the panel's name are each panel's own, added per panel below.
-  const routerDeps: SharedRecordPanelDeps = {
-    meditClient, channel: outputChannel, reporter: deps.reporterFor('recordPanel'),
-    conflictsComputed: () => loadOrderStatusTracker.current(), loadFailures: () => loadOrderStatusTracker.failures(),
-    modFacts: deps.modFacts,
-  };
-  const providerDeps = { context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps };
-  const recordEditorProvider = new RecordEditorProvider({ ...providerDeps, client: meditClient, channel: outputChannel });
-  const writeDeps: RecordWriteDeps = {
-    meditClient,
-    documentOf: (address) => recordEditorProvider.documentCarrying(address),
-    moving: (moves, edited, newFormKey) => recordEditorProvider.moving(moves, edited, newFormKey),
-    oneAtATime: oneAtATime(),
-    refreshSourceControlFor: (plugin) => { deps.refreshSourceControlFor(plugin); },
-    // Surfaces a refused edit (ADR-0019).
-    reporter: deps.reporterFor('recordPanel'),
-  };
-  const commitDeps: FieldCommitDeps = {
-    editGateOf: (address) => editsInFlight.gateShowing(recordPanels, address),
-    edit: (address, envelope) => applyRecordEdit(writeDeps, address, envelope),
-  };
-  const extendedFields = new ExtendedFieldDocuments({
-    client: meditClient, reporter: deps.reporterFor('extendedField'),
-    commit: (field, value) => commitField(commitDeps, field, value),
-  });
-  const keepsItsPlace = { webviewOptions: { retainContextWhenHidden: true } };
-
-  return [
-    { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, editsInFlight) },
-    extendedFields,
-    new RenderedDocuments(meditClient),
-    new ChildRecordDocuments(meditClient),
-    { dispose: () => { loadOrderStatusTracker.dispose(); } },
-    vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, keepsItsPlace),
-    { dispose: meditClient.onNotification('load-order-status', () => { recordEditorProvider.readAgain(); }) },
-    // A report names the records that changed, and a move of any of them can move a child's carrier.
-    followReportedCopies(meditClient, (affects) => { void recordEditorProvider.followCarried(affects); },
-      ({ plugin }) => (copy) => samePluginAddress(copy.plugin, plugin)),
-    // The native right-click menus write from here directly, with no panel in the path — the same
-    // write deps the router has, plus the extended-field documents.
-    ...registerRecordPanelContextCommands({
-      ...commitDeps, extendedFields,
-      focusedCell: () => focusedCells.current(),
-    }),
-    ...registerGridKeyCommands({
-      focusedCell: () => focusedCells.current(),
-      tellFocusedPanel: (message) => { void activeRecordTracker.activePanel()?.webview.postMessage(message); },
-    }),
-    // Editor owns the record gestures (delete/copy) — registered once, here,
-    // rather than from the Plugins-row command registration.
-    ...registerRecordLifecycleCommands(
-      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, selections, deps.recordWrite),
-    ...registerRecordCopyCommands(
-      meditClient, deps.reporterFor('recordCopy'), deps.ask, selections, deps.recordWrite),
-    vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {
-      const plan = recordOpenPlan(argument, deps.focusedViewSelection());
-      const reporter = deps.reporterFor('recordOpen');
-      if (plan.addresses.length > 0) return openRecords(meditClient, reporter, recordEditorProvider, plan);
-      if (argument !== undefined) {
-        reporter.report('error', 'Could not open a record.', 'What was given names no record.');
-        return;
-      }
-      const formKey = await pickRecord({ meditClient, reporter }, '', []);
-      if (formKey) await openRecords(meditClient, reporter, recordEditorProvider, { addresses: [{ formKey }], placement: 'active', preview: true });
-    }),
-    vscode.commands.registerCommand('modbench.record.openToSide', (row?: unknown, selection?: unknown) =>
-      vscode.commands.executeCommand('modbench.record.open', besideArgument(row, selection))),
-  ];
-}
-
-type OpenClient = Pick<MEditClient, 'getRecordOwner' | 'getRecordFile' | 'getRecordOfFile' | 'getRenderedDocument'>;
-
-// Several records open one grid: the first record's document, with the others as its columns
-// (editor.md, Opening, story 4).
-async function openRecords(
-  client: OpenClient, reporter: Reporter, grid: Pick<RecordEditorProvider, 'open'>,
-  { addresses: [first, ...others], placement, preview }: RecordOpenPlan,
-): Promise<void> {
-  if (!first) return;
-  const failMessage = `Failed to open "${recordTitle(first.formKey, undefined)}".`;
-  await reportFailure(reporter, failMessage, async () => {
-    const tab = await recordDocument(client, first) ?? noActivePluginHolds(first.formKey);
-    if ('refused' in tab) {
-      reporter.report('error', failMessage, tab.refused);
-      return;
-    }
-    const columns: RecordCopy[] = [];
-    for (const other of others) {
-      const copy = await copyToOpen(client, other);
-      if ('refused' in copy) {
-        reporter.report('error', failMessage, copy.refused);
-        return;
-      }
-      columns.push(copy);
-    }
-    const show = (options: vscode.TextDocumentShowOptions) => grid.open(tab.uri, columns, options);
-    if (typeof placement !== 'object') {
-      await show({ viewColumn: placement === 'beside' ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active, preview });
-      return;
-    }
-    const replaced = recordTabAt(placement);
-    await (replaced ? inTabsPlace(replaced, show) : show({ viewColumn: placement.viewColumn }));
-  });
-}
-
-const recordTabAt = ({ document, viewColumn }: TabPlace): vscode.Tab | undefined =>
+export const recordTabAt = ({ document, viewColumn }: TabPlace): vscode.Tab | undefined =>
   vscode.window.tabGroups.all.find((group) => group.viewColumn === viewColumn)?.tabs.find(({ input }) =>
     input instanceof vscode.TabInputCustom && input.viewType === RECORD_VIEW_TYPE && input.uri.toString() === document);
-
-const noActivePluginHolds = (formKey: string) => ({ refused: `No active plugin holds ${formKey}.` });
-
-// A record given without a plugin is its winning copy.
-async function copyToOpen(client: OpenClient, { formKey, plugin }: RecordToOpen): Promise<RecordCopy | { refused: string }> {
-  const owner = plugin ?? await client.getRecordOwner(formKey);
-  return owner ? { formKey, plugin: owner } : noActivePluginHolds(formKey);
-}

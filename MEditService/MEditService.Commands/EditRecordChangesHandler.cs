@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -64,41 +63,18 @@ public sealed class EditRecordChangesHandler
         var target = document.Identity;
         var text = document.Body;
         IReadOnlyList<PathHop> prefix = [];
-        string? cellToLookUp = null;
         if (isEmbedded)
         {
             var relativePath = repository.RelativePathOf(plugin, identity)
                 ?? throw new InvalidOperationException($"Expected the document carrying {formKey} to have been located.");
-            var ownerBytes = Encoding.UTF8.GetBytes(text);
-            var root = JsonNode.Parse(ownerBytes) as JsonObject
-                ?? throw new InvalidOperationException($"Expected '{relativePath}' to hold a JSON object.");
             var found = EmbeddedChildLocator.Find(
-                ownerBytes, RecordTypeDispatch.For(release).ConcreteFor(target.RecordType)?.Name, formKey, release);
+                Encoding.UTF8.GetBytes(text), RecordTypeDispatch.For(release).ConcreteFor(target.RecordType)?.Name, formKey, release);
             if (found is not { } span)
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound, SourceUnitNotFoundException.NotCarried(relativePath, formKey));
             }
             prefix = EmbeddedChildPath.HopsOf(span.Path);
-            cellToLookUp = CellGroupMove.CellToLookUp(root, prefix, envelope);
-        }
-
-        cellToLookUp = RecordEmptying.CellToLookUp(text, prefix, envelope, schema, release) ?? cellToLookUp;
-        var refills = RecordEmptying.RefillsFromTheLeft(text, prefix, envelope, schema);
-
-        LeftCopy? cellCopyOnTheLeft = null;
-        LeftCopy? refillCopyOnTheLeft = null;
-        if (cellToLookUp is not null || refills)
-        {
-            if (_resolution.WalkAmongMastersOf(
-                    repository, plugin, schemas, spelled, $"the copy of {formKey} read to its left", out var masters) is { } unreadable)
-                return unreadable;
-            if (cellToLookUp is not null)
-                cellCopyOnTheLeft = masters.NearestCopy(cellToLookUp, PlacedCell.Says);
-            if (refills)
-            {
-                refillCopyOnTheLeft = masters.NearestCopy(formKey, _ => true, RecordEmptying.EmptyingBits(schema));
-            }
         }
 
         Func<string, string> roundTrip = schema.IsHeader
@@ -106,7 +82,7 @@ public sealed class EditRecordChangesHandler
             : patched => _codec.RoundTrip(patched, release, document.RecordType);
 
         var request = new DocumentEditRequest(
-            text, prefix, schema, envelope, release, roundTrip, cellCopyOnTheLeft, refillCopyOnTheLeft);
+            text, prefix, schema, envelope, release, roundTrip, _resolution.WalkAmongMastersOf(repository, plugin, schemas));
 
         string newText;
         CellCrossing? crossing;

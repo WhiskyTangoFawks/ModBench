@@ -1,6 +1,6 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
-import { modOfOrigin } from '../drivingLib/modOfOrigin';
+import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { ByPluginAddress } from './pluginAddress';
 
 /** A warning on one plugin's file, as the Problems panel shows it. */
@@ -31,13 +31,6 @@ export interface PlaceFacts {
 
 /** What a plugin row expands into: its records, the error row naming why not, or the still-indexing row. */
 export type Expansion = { kind: 'records' } | { kind: 'error'; message: string } | { kind: 'indexing' };
-
-/** What the view's message line reads besides the index: the first of these that holds wins. */
-export interface HeldMessageInputs {
-  readonly gameFolderMessage: string | undefined;
-  readonly noRowsMessage: string | undefined;
-  readonly recordFilterSource: string | undefined;
-}
 
 // `everyRow`: another window holds the instance (ADR-0010). `unheldRow`: mEdit unreachable, or the
 // snapshot's index failed.
@@ -203,24 +196,20 @@ export class PluginFacts {
     return { kind: 'indexing' };
   }
 
-  /** The first message that holds: the game folder not found (common.md, States 5), a failed index
-   *  (plugins.md, States 6), no rows (States 1), a record filter matching nothing (States 5). */
-  heldMessage({ gameFolderMessage, noRowsMessage, recordFilterSource }: HeldMessageInputs): string | undefined {
-    if (gameFolderMessage !== undefined) return gameFolderMessage;
-    if (this.indexFailure !== undefined) return `Indexing failed: ${this.indexFailure}`;
-    if (noRowsMessage !== undefined) return noRowsMessage;
-    if (recordFilterSource !== undefined && this.recordFilterMatchesNothing()) return `No records match ${recordFilterSource}.`;
-    return undefined;
+  /** The failed index (plugins.md, States 6). */
+  indexFailureMessage(): string | undefined {
+    return this.indexFailure === undefined ? undefined : `Indexing failed: ${this.indexFailure}`;
+  }
+
+  /** A record filter matching nothing (common.md, States 5). */
+  noRecordMatchMessage(recordFilterSource: string): string | undefined {
+    return this.matches !== undefined && this.noMatchAnywhere ? `No records match ${recordFilterSource}.` : undefined;
   }
 
   /** Whether a record filter in force leaves the plugin with nothing; false while mEdit has not
    *  answered. `hasMatchingRecords` only ever answers false while a filter is active. */
   hiddenByRecordFilter(address: PluginAddress): boolean {
     return this.matches?.get(address) === false;
-  }
-
-  private recordFilterMatchesNothing(): boolean {
-    return this.matches !== undefined && this.noMatchAnywhere;
   }
 
   /** Whether compile applies to any plugin. */

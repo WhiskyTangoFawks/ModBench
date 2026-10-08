@@ -1,9 +1,8 @@
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { recordDocument } from '../drivingLib/recordDocument';
-import { formKeyAt } from './formKeyHover';
 import type { RecordLocation, RecordLocationDeps } from './recordLocation';
-import { formKeyMember } from './recordText';
+import { formKeyAt, formKeyMember } from './sourceText';
 
 interface DefinitionDeps<Document> extends RecordLocationDeps<Document> {
   reporter: Pick<Reporter, 'shownOnSurface'>;
