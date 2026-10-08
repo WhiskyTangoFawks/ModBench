@@ -215,6 +215,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/{plugin}/working-tree-states-beneath": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetWorkingTreeStatesBeneath"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/record-types/creatable": {
         parameters: {
             query?: never;
@@ -1248,6 +1264,15 @@ export interface components {
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";
+        WorkingTreeStatesBeneath: {
+            plugin: components["schemas"]["WorkingTreeState"][];
+            recordTypes: {
+                [key: string]: components["schemas"]["WorkingTreeState"][];
+            };
+            records: {
+                [key: string]: components["schemas"]["WorkingTreeState"][];
+            };
+        };
         WorldspaceBlockDto: {
             /** Format: int32 */
             x: number;
@@ -1743,6 +1768,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginRecordTypeCount"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetWorkingTreeStatesBeneath: {
+        parameters: {
+            query?: {
+                origin?: string;
+            };
+            header?: never;
+            path: {
+                plugin: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkingTreeStatesBeneath"];
                 };
             };
             /** @description Bad Request */

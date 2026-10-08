@@ -1253,6 +1253,7 @@ describe('HttpMEditClient — a plugin address on the wire', () => {
     ['getCellChildRecords', (c: MEditClient) => c.getCellChildRecords(plugin, '000800:Shared.esp'), { persistent: [], temporary: [] }],
     ['getInteriorCells', (c: MEditClient) => c.getInteriorCells(plugin), []],
     ['getContainerChildren', (c: MEditClient) => c.getContainerChildren(plugin, '000800:Shared.esp'), []],
+    ['getWorkingTreeStatesBeneath', (c: MEditClient) => c.getWorkingTreeStatesBeneath(plugin), { plugin: [], recordTypes: {}, records: {} }],
   ])('%s asks for the plugin by filename in the path and by origin in the query', async (_name, call, answer) => {
     const request = await requestOf(call, answer);
 

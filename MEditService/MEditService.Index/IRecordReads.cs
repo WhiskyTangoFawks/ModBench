@@ -39,6 +39,8 @@ internal interface IRecordReads
     /// per-type loop.</summary>
     IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin);
 
+    WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin);
+
     /// <summary>One response's FormKey → (record type, EditorID) lookup against the winning override,
     /// about <paramref name="formKey"/>, each distinct FormKey asked once. The store resolves the
     /// links its copies carry in one query up front.</summary>

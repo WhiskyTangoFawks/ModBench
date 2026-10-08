@@ -27,15 +27,25 @@ internal static class NavigatorSql
 
     /// <summary>Two CTEs for a <c>WITH RECURSIVE</c>: <c>held</c>, the holdings <paramref name="where"/>
     /// keeps, and <c>above_failure</c>, every record holding an unreadable one at any depth.</summary>
-    internal static string AboveAFailure(RecordScope scope, string where) => $"""
+    internal static string AboveAFailure(RecordScope scope, string where) =>
+        Above(scope, where, "above_failure", "TRUE", "f.parse_diagnosis IS NOT NULL");
+
+    /// <summary>As <see cref="AboveAFailure"/>, with <c>above_change</c>: every record holding one with
+    /// a working-tree change <paramref name="keep"/> keeps, once per state, in <c>fact</c>.</summary>
+    internal static string AboveAChange(RecordScope scope, string where, string keep) =>
+        Above(scope, where, "above_change", "f.working_tree_state",
+            $"f.working_tree_state <> '{WorkingTreeState.None.Stored()}'{keep}");
+
+    // `f` is the record the walk climbs from, so a seed's condition and fact name it.
+    private static string Above(RecordScope scope, string where, string name, string seedFact, string seedCondition) => $"""
         held AS (SELECT plugin, origin, parent, child FROM ({scope.Held}) h {where}),
-        above_failure(plugin, origin, form_key) AS (
-            SELECT held.plugin, held.origin, held.parent FROM held
+        {name}(plugin, origin, form_key, fact) AS (
+            SELECT held.plugin, held.origin, held.parent, {seedFact} FROM held
             JOIN {scope.Records} f ON f.form_key = held.child AND f.plugin = held.plugin AND f.origin = held.origin
-            WHERE f.parse_diagnosis IS NOT NULL
+            WHERE {seedCondition}
             UNION
-            SELECT held.plugin, held.origin, held.parent FROM held
-            JOIN above_failure a ON held.child = a.form_key AND held.plugin = a.plugin AND held.origin = a.origin
+            SELECT held.plugin, held.origin, held.parent, a.fact FROM held
+            JOIN {name} a ON held.child = a.form_key AND held.plugin = a.plugin AND held.origin = a.origin
         )
         """;
 
