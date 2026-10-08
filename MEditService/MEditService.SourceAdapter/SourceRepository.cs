@@ -174,13 +174,14 @@ public sealed class SourceRepository
         Locator.Locate(plugin, identity) is { } unit && File.Exists(unit.FullPath) ? unit.FullPath : null;
 
     /// <summary>What the file at <paramref name="path"/> holds, read from its text as the index reads it.</summary>
-    public static RecordOfFile RecordOfFile(LoadOrderSnapshot loadOrder, string path)
+    public static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path)
     {
         var fullPath = Path.GetFullPath(path);
+        if (SourceRepositoryLayout.CarriesNoRecord(fullPath)) return new RecordOfFileAnswer.HoldsNone();
         if (loadOrder.Plugins.FirstOrDefault(plugin => plugin.Provider is PluginProvider.FromMod mod
                 && SourceRepositoryLocator.IsUnder(Path.GetFullPath(SourceRepositoryLayout.RootIn(mod.Folder, plugin.Name)), fullPath)
                 && SourceReads(plugin)) is not { Provider: PluginProvider.FromMod source } holder)
-            return new RecordOfFile.Refused($"{fullPath} is under no tracked plugin's source.");
+            return new RecordOfFileAnswer.Refused($"{fullPath} is under no tracked plugin's source.");
 
         return Over(source, loadOrder.GameRelease).Locator.RecordOfFile(holder.Key, fullPath);
     }

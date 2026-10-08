@@ -34,7 +34,7 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IRecordQue
 
     public RecordFile? GetRecordFile(PluginAddress plugin, string formKey) => throw Failed();
 
-    public RecordOfFile GetRecordOfFile(string path) => throw Failed();
+    public RecordOfFileAnswer GetRecordOfFile(string path) => throw Failed();
 
     public LoadOrderStatus GetStatus() => throw Failed();
 

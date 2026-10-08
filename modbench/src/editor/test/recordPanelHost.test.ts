@@ -18,6 +18,22 @@ function isProvider(candidate: unknown): candidate is vscode.CustomTextEditorPro
   return typeof candidate === 'object' && candidate !== null && 'resolveCustomTextEditor' in candidate;
 }
 
+function webviewPanel() {
+  const listeners: ((message: unknown) => void)[] = [];
+  const panel = {
+    title: '', active: true, viewColumn: 1,
+    webview: {
+      html: '', options: {}, cspSource: '', asWebviewUri: () => ({ toString: () => '' }),
+      postMessage: () => Promise.resolve(true),
+      onDidReceiveMessage: (listener: (message: unknown) => void) => { listeners.push(listener); return { dispose: () => undefined }; },
+    },
+    onDidDispose: () => ({ dispose: () => undefined }),
+    onDidChangeViewState: () => ({ dispose: () => undefined }),
+  };
+  if (!isPanel(panel)) throw new Error('not a panel');
+  return { panel, tell: (message: unknown) => { for (const listener of listeners) listener(message); } };
+}
+
 beforeEach(forgetRegistrations);
 
 describe('a file\'s tab an edit moves the file of', () => {
@@ -26,23 +42,6 @@ describe('a file\'s tab an edit moves the file of', () => {
   const FILE = '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json';
   const MOVED = '/mods/ModA/plugin-source/A.esp/Npcs/Renamed.json';
   const place = { collapsedRows: ['Bounds'], collapsedColumns: ['A.esp|ModA'], focusedCell: { rowKey: 'Bounds', plugin: null }, scroll: { top: 40, left: 12 } };
-
-
-  function webviewPanel() {
-    const listeners: ((message: unknown) => void)[] = [];
-    const panel = {
-      title: '', active: true, viewColumn: 1,
-      webview: {
-        html: '', options: {}, cspSource: '', asWebviewUri: () => ({ toString: () => '' }),
-        postMessage: () => Promise.resolve(true),
-        onDidReceiveMessage: (listener: (message: unknown) => void) => { listeners.push(listener); return { dispose: () => undefined }; },
-      },
-      onDidDispose: () => ({ dispose: () => undefined }),
-      onDidChangeViewState: () => ({ dispose: () => undefined }),
-    };
-    if (!isPanel(panel)) throw new Error('not a panel');
-    return { panel, tell: (message: unknown) => { for (const listener of listeners) listener(message); } };
-  }
 
   async function shownOn(provider: vscode.CustomTextEditorProvider, path: string) {
     const tab = webviewPanel();
@@ -97,41 +96,51 @@ describe('a file mEdit answers holds no record', () => {
   const METADATA = '/mods/ModA/plugin-source/A.esp/Cells/GroupRecordData.json';
   const uri = vscode.Uri.file(METADATA);
   const reopened = () => executed().filter(([id]) => id === 'vscode.openWith');
+  const inStead = { viewColumn: 1, preview: true, preserveFocus: true, background: true };
 
-  async function opened(inAGroup: boolean) {
-    const meditClient = new InMemoryMEditClient();
-    meditClient.setQueryAnswer('getRecordOfFile', null);
+  async function opened(meditClient: InMemoryMEditClient, inAGroup = true) {
     const warn = vi.fn();
     await register({ meditClient, outputChannel: { debug: vi.fn(), info: vi.fn(), warn } });
     const provider = registerCustomEditorProvider.mock.calls.at(-1)?.[1];
     const document = { uri, getText: () => '{}', isDirty: false };
-    const panel = {
-      title: '', active: true, viewColumn: 1,
-      webview: {
-        html: '', options: {}, cspSource: '', asWebviewUri: () => ({ toString: () => '' }), postMessage: () => Promise.resolve(true),
-        onDidReceiveMessage: () => ({ dispose: () => undefined }),
-      },
-      onDidDispose: () => ({ dispose: () => undefined }),
-      onDidChangeViewState: () => ({ dispose: () => undefined }),
-    };
+    const { panel } = webviewPanel();
     const group = { viewColumn: 1, tabs: [] as unknown[] };
     group.tabs.push({ group, input: new vscode.TabInputCustom(uri, 'modbench.record'), isActive: true, isPreview: true });
     tabGroups.splice(0, tabGroups.length, ...(inAGroup ? [group] : []));
-    if (!isProvider(provider) || !isDocument(document) || !isPanel(panel)) throw new Error('no record grid registered');
+    if (!isProvider(provider) || !isDocument(document)) throw new Error('no record grid registered');
 
     await provider.resolveCustomTextEditor(document, panel, { isCancellationRequested: false, onCancellationRequested: vi.fn() });
     return { panel, warn };
   }
 
-  it('reopens in its tab\'s place in the text editor, drawing no grid', async () => {
-    const { panel } = await opened(true);
+  function answeringNone(): InMemoryMEditClient {
+    const meditClient = new InMemoryMEditClient();
+    meditClient.setQueryAnswer('getRecordOfFile', null);
+    return meditClient;
+  }
 
-    expect(reopened()).toEqual([['vscode.openWith', uri, 'default', { viewColumn: 1, preview: true }]]);
+  it('reopens in the text editor in its tab\'s stead, drawing no grid', async () => {
+    const { panel } = await opened(answeringNone());
+
+    expect(reopened()).toEqual([['vscode.openWith', uri, 'default', inStead]]);
     expect(panel.webview.html).toBe('');
   });
 
+  it('answered once mEdit holds the load order, reopens without taking the focus', async () => {
+    const meditClient = answeringNone();
+    meditClient.setQueryFailureOnce('getRecordOfFile', new Error('mEdit has not started'));
+    await opened(meditClient);
+
+    meditClient.emit({
+      kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
+      loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1 },
+    });
+
+    await vi.waitFor(() => expect(reopened()).toEqual([['vscode.openWith', uri, 'default', inStead]]));
+  });
+
   it('stays, saying why in the Output, when VS Code shows its tab in no group', async () => {
-    const { warn } = await opened(false);
+    const { warn } = await opened(answeringNone(), false);
 
     expect(warn).toHaveBeenCalledWith(`${METADATA} holds no record, but VS Code shows its tab in no group to reopen in the text editor.`);
     expect(reopened()).toEqual([]);

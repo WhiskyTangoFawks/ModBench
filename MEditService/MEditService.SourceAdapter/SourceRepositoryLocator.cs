@@ -179,19 +179,17 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         return null;
     }
 
-    internal RecordOfFile RecordOfFile(PluginAddress plugin, string fullPath)
+    internal RecordOfFileAnswer RecordOfFile(PluginAddress plugin, string fullPath)
     {
         var relativePath = Path.Combine(
             SourceRepositoryLayout.RootFor(plugin.Name),
             Path.GetRelativePath(SourceRepositoryLayout.RootIn(_modFolder, plugin.Name), fullPath));
-        if (SourceRepositoryLayout.CarriesNoRecord(relativePath)) return new RecordOfFile.HoldsNone();
-
         var text = DocumentText.ReadOrNull(fullPath);
-        if (text is null) return new RecordOfFile.Refused($"{fullPath} could not be read.");
-        if (NotADocument(text) is { } why) return new RecordOfFile.Refused($"{fullPath} is no record document: {why}");
+        if (text is null) return new RecordOfFileAnswer.Refused($"{fullPath} could not be read.");
+        if (NotADocument(text) is { } why) return new RecordOfFileAnswer.Refused($"{fullPath} is no record document: {why}");
         return FormKey.TryFactory(DocumentText.FormKeyDeclaredIn(text, relativePath, plugin.Name), out var declared)
-            ? new RecordOfFile.Holds(new RecordAt(plugin, declared.ToString()))
-            : new RecordOfFile.Refused($"{fullPath} declares no FormKey, so it is no record's document.");
+            ? new RecordOfFileAnswer.Holds(new RecordAt(plugin, declared.ToString()))
+            : new RecordOfFileAnswer.Refused($"{fullPath} declares no FormKey, so it is no record's document.");
     }
 
     // Its root has to be a JSON object before any member of it can be read; anything else is a file

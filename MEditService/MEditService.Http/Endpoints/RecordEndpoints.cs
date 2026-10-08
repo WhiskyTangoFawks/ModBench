@@ -106,16 +106,16 @@ internal static class RecordEndpoints
                 return Results.Problem("Name the file by its absolute path.", statusCode: 400);
             return svc.GetRecordOfFile(path) switch
             {
-                RecordOfFile.Holds holds => Results.Ok(Addressed(holds.Record)),
-                RecordOfFile.HoldsNone => Results.NoContent(),
-                RecordOfFile.Refused refused => Results.Problem(refused.Why, statusCode: 422),
+                RecordOfFileAnswer.Holds holds => Results.Ok(Addressed(holds.Record)),
+                RecordOfFileAnswer.HoldsNone => Results.NoContent(),
+                RecordOfFileAnswer.Refused refused => Results.Problem(refused.Why, statusCode: 422),
                 _ => throw new UnreachableException(),
             };
         })
         .WithName("GetRecordOfFile")
         .WithDescription(
             "The record whose own document the file at an absolute path is, read from the file's text: its plugin and " +
-            "FormKey. No content when the layout says the file holds no record. A file that cannot be read as a " +
+            "FormKey. No content when the file holds no record. A file that cannot be read as a " +
             "record's own document refuses, saying why.")
         .WithTags("Records")
         .Produces<RecordAddress>()

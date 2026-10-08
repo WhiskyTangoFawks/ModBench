@@ -280,7 +280,7 @@ internal sealed class RecordQueryService(
             : null;
     }
 
-    public RecordOfFile GetRecordOfFile(string path) => SourceRepository.RecordOfFile(_loadOrder.Require(), path);
+    public RecordOfFileAnswer GetRecordOfFile(string path) => SourceRepository.RecordOfFile(_loadOrder.Require(), path);
 
     public LoadOrderStatus GetStatus() => _index.Status;
 

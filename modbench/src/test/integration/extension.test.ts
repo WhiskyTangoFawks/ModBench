@@ -718,13 +718,14 @@ describe('a tracked copy of a record', () => {
       (input instanceof vscode.TabInputText || input instanceof vscode.TabInputCustom) && input.uri.fsPath === METADATA_FS_PATH);
     const asked = `GET /plugin-source/record?path=${encodeURIComponent(METADATA_FS_PATH)}`;
     const askedBefore = requestLog.filter((line) => line === asked).length;
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument({ content: '{}', language: 'json' }), { preview: false });
 
     await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(METADATA_FILE));
 
     await waitFor('mEdit asked which record the file holds', () => requestLog.filter((line) => line === asked).length > askedBefore);
-    await waitFor('the file\'s one tab, in the text editor', () => {
+    await waitFor('the file\'s one tab, in the text editor and active', () => {
       const tabs = onMetadata();
-      return tabs.length === 1 && tabs[0]?.input instanceof vscode.TabInputText;
+      return tabs.length === 1 && tabs[0]?.input instanceof vscode.TabInputText && tabs[0].isActive;
     });
   });
 });
