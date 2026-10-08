@@ -1,14 +1,13 @@
 import * as vscode from 'vscode';
-import type { DownloadFile, Instance, InstanceView } from '../instanceLoader/instance';
+import type { Instance, InstanceView } from '../instanceLoader/instance';
 import type { DownloadsAccess } from '../downloadsCommands/downloads';
-import type { InstallAccess } from '../install/install';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
 import { registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
 import {
-  installDownloadedFile, registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands,
-  registerDownloadsSingleRowCommands, registerDownloadsSortCommand, type DownloadInstallDeps,
+  registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands,
+  registerDownloadsSingleRowCommands, registerDownloadsSortCommand,
 } from './DownloadsPanel';
 import { DownloadsProvider, type DownloadsTreeNode } from './DownloadsProvider';
 import { ExcludedDownloadDecorationProvider } from './ExcludedDownloadDecorationProvider';
@@ -17,12 +16,12 @@ import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { downloadsKeyContext } from './keyContext';
 
 interface DownloadsViewDeps {
-  access: DownloadsAccess & InstallAccess;
+  access: DownloadsAccess;
   instance: InstanceView & Pick<Instance, 'refresh'>;
   reporter: Reporter;
   ask: AskQuestion;
   trash: MoveToTrash;
-  install: DownloadInstallDeps;
+  log: (line: string) => void;
   logUnresolved: (line: string) => void;
 }
 
@@ -30,12 +29,11 @@ interface DownloadsView extends vscode.Disposable {
   provider: DownloadsProvider;
   view: vscode.TreeView<DownloadsTreeNode>;
   nameFilter: NameFilter;
-  installDownloaded: (file: DownloadFile) => Promise<boolean>;
 }
 
 /** Rows come from the Instance value alone (ADR-0015). */
 export function createDownloadsView(
-  { access, instance, reporter, ask, trash, install, logUnresolved }: DownloadsViewDeps,
+  { access, instance, reporter, ask, trash, log, logUnresolved }: DownloadsViewDeps,
 ): DownloadsView {
   const provider = new DownloadsProvider({ instance }); // disposes its Instance subscriptions
   const view = vscode.window.createTreeView('modbench.downloads', {
@@ -76,14 +74,13 @@ export function createDownloadsView(
     registerDownloadsSortCommand(provider),
     ...registerDownloadsExcludedToggleCommands(provider),
     ...registerDownloadsSingleRowCommands(reporter, () => view.selection),
-    ...registerDownloadsMultiRowCommands(access, instance, reporter, ask, trash, install.log, () => view.selection),
+    ...registerDownloadsMultiRowCommands(access, instance, reporter, ask, trash, log, () => view.selection),
     nameFilter,
     view,
     provider,
   );
   return {
     provider, view, nameFilter,
-    installDownloaded: (file) => installDownloadedFile(file, access, instance, reporter, install),
     dispose: () => { disposable.dispose(); },
   };
 }
