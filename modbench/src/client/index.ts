@@ -10,4 +10,4 @@ export type {
 } from './MEditClient';
 export type { RecordEditEnvelope } from './MEditClient';
 export { isMEditGone, isRefused, UNLIMITED_RECORDS } from './MEditClient';
-export { createMEditClient } from './HttpMEditClient';
+export { createMEditClient, stopMEditClient } from './HttpMEditClient';
