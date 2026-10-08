@@ -37,8 +37,7 @@ public static class RecordIndexServices
         services.AddSingleton(sp => new PluginProblemQueryService(
             sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>()));
         services.AddSingleton(sp => new ContainerChildQueryService(
-            sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<ILogger<ContainerChildQueryService>>()));
+            sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>()));
         services.AddSingleton(sp => new ChildRecordQueryService(sp.GetRequiredService<IQueryIndex>()));
         return services;
     }

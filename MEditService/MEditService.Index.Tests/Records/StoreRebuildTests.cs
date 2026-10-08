@@ -143,7 +143,7 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [ForeignIndexHolderFact]
-    public void AFilterKeptThroughARefusedRebuild_StillClears()
+    public void AFilterClearedWhileARefusedRebuildLeavesNoStore_StaysClearedOnceTheIndexReopens()
     {
         using var otherWindow = new HoldsTheFileOnceTheRebuildClosesTheStore(() => IndexFiles.In(_fixture.InstanceRoot));
         var holder = new LoadOrderHolder();

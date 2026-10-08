@@ -9,9 +9,8 @@ internal sealed record MissingReferenceOnFile(MissingReference Reference, string
 
 internal static class SourceFilePlacement
 {
-    internal static MissingReferenceOnFile Place(MissingReference reference, SourceRepository? repository, string modFolder)
+    internal static MissingReferenceOnFile Place(MissingReference reference, SourceRepository repository, string modFolder)
     {
-        if (repository is null) return Failed(reference, $"{reference.Plugin.Name} is tracked but no mod folder provides it.");
         try
         {
             var path = repository.RelativePathOf(

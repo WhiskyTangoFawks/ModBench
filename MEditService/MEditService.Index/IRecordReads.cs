@@ -45,7 +45,7 @@ internal interface IRecordReads
 
     /// <summary>Every link an active plugin's record carries to a FormKey no active plugin holds
     /// (engine-defined FormIds exempt), with its referrer's file in the mod folder
-    /// <paramref name="modOf"/> names.</summary>
+    /// <paramref name="modOf"/> names, for the plugins it names one for.</summary>
     IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(
         Func<PluginAddress, PluginProvider.FromMod?> modOf);
 
