@@ -8,6 +8,7 @@ import {
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk, newModNameRefusal } from '../coreLib/commandRefusals';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
+export type { SelectionResult };
 
 async function changeModOrder(adapter: InstanceAdapter, profile: string, decide: DecideModOrder): Promise<CommandResult> {
   try {
