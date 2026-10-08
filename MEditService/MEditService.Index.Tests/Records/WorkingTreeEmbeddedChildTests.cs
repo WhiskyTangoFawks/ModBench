@@ -1,6 +1,5 @@
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
-using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;

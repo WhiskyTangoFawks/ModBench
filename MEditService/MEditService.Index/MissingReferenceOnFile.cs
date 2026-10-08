@@ -9,15 +9,15 @@ internal sealed record MissingReferenceOnFile(MissingReference Reference, string
 
 internal static class SourceFilePlacement
 {
-    internal static MissingReferenceOnFile Place(MissingReference reference, SourceRepository repository, string modFolder)
+    internal static MissingReferenceOnFile Place(MissingReference reference, SourceRepository repository)
     {
         try
         {
-            var path = repository.RelativePathOf(
-                reference.Plugin, new RecordIdentity(reference.FormKey, reference.RecordType, reference.EditorId));
-            // RelativePathOf answers a flat record's would-be path when its file is gone.
-            return path is not null && File.Exists(Path.Combine(modFolder, path))
-                ? new MissingReferenceOnFile(reference, path, null)
+            var identity = new RecordIdentity(reference.FormKey, reference.RecordType, reference.EditorId);
+            // RelativePathOf answers a flat record's would-be path when its file is gone; FullPathOf
+            // answers only a file that is there.
+            return repository.FullPathOf(reference.Plugin, identity) is not null
+                ? new MissingReferenceOnFile(reference, repository.RelativePathOf(reference.Plugin, identity), null)
                 : Failed(reference, $"{reference.Plugin.Name}'s source holds no file for {reference.FormKey}.");
         }
         catch (InvalidOperationException ex)

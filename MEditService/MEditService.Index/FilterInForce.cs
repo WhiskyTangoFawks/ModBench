@@ -2,28 +2,8 @@ using System.Data.Common;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
 
 namespace MEditService.Index;
-
-/// <summary>Where an index was opened: the game, its Data folder and the instance whose file holds it.</summary>
-internal readonly record struct IndexScope(GameRelease GameRelease, string DataFolderPath, string? InstanceRoot)
-{
-    internal static IndexScope Of(HeldPlugins held) => new(held.GameRelease, held.DataFolderPath, held.InstanceRoot);
-
-    internal bool Matches(LoadOrderSnapshot snapshot) =>
-        GameRelease == snapshot.GameRelease
-        && SamePath(DataFolderPath, snapshot.DataFolderPath)
-        && (InstanceRoot, snapshot.InstanceRoot) switch
-        {
-            (null, null) => true,
-            ({ } a, { } b) => SamePath(a, b),
-            _ => false,
-        };
-
-    private static bool SamePath(string a, string b) =>
-        string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
-}
 
 /// <summary>The record filter in force and the source its SQL came from. It clears on purpose or when it
 /// cannot apply again (plugins.md, States, story 7): a rebuild of its scope keeps it, another scope drops it.</summary>

@@ -2,7 +2,6 @@ using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
@@ -262,7 +261,7 @@ internal sealed class RelationReads(
                     repository = SourceRepository.Over(mod, store.Release);
                     repositories[reference.Plugin] = repository;
                 }
-                return [SourceFilePlacement.Place(reference, repository, mod.Folder)];
+                return [SourceFilePlacement.Place(reference, repository)];
             }),
         ];
     }
