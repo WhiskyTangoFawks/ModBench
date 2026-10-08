@@ -107,7 +107,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
 
         var compiled = (await CompileAndReparse()).MaterialObjects.Single(m => m.FormKey == _fixture.MaterialObject);
         using var document = JsonDocument.Parse(new RecordTextCodec(NullLogger<RecordTextCodec>.Instance).SerializeToText(compiled, GameRelease.Fallout4));
-        var color = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["mato"].RecordColumns.Single(c => c.Name == "SinglePassColor").ToFieldMetadata();
+        var color = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["mato"].RecordColumns.Single(c => c.Name == "SinglePassColor").Field;
 
         Assert.Equal("#01FE7F", ColorReading.Of(DocumentNodes.StringValueOf(document.RootElement.GetProperty("SinglePassColor")), color.HoldsAlpha));
     }

@@ -167,7 +167,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
     private static (ColumnSpec Column, FieldMetadata Meta)[] GesturableColumnsOf(RecordTableSchema schema) =>
         [.. schema.RecordColumns
             .Where(c => c.Synthetic == null)
-            .Select(c => (c, c.ToFieldMetadata()))
+            .Select(c => (c, c.Field))
             .Where(column => column.Item2.IsArray && column.Item2.ReadOnlyReason == null)];
 
     private static IEnumerable<string> Strays(string gesture, string before, string after, string path)

@@ -226,9 +226,9 @@ public sealed class RecordDocumentEditTests : IDisposable
         var after = Applied(formKey, AddAt(Member("Conditions")));
 
         AssertOnlyChanged(before, after, "Conditions[2]");
-        var elementSpec = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec
+        var elementSpec = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementType
             ?? throw new InvalidOperationException("Expected 'Conditions' to be an array of a struct element.");
-        var subFields = elementSpec.SubFields
+        var subFields = elementSpec.Fields
             ?? throw new InvalidOperationException("Expected the array element to declare its own fields.");
         var leaf = subFields.Single(f => f.IsDiscriminator).EnumMembers[0].Value;
         Assert.Equal(leaf, Node(after, "Conditions")[2].Require()["MutagenObjectType"].Require().GetValue<string>());

@@ -20,7 +20,7 @@ public sealed class DocumentWireSchemaTests
     {
         foreach (var (table, schema) in Schemas)
             foreach (var column in schema.RecordColumns)
-                foreach (var found in Walk($"{table}.{column.Name}", column.ToFieldMetadata()))
+                foreach (var found in Walk($"{table}.{column.Name}", column.Field))
                     yield return found;
     }
 
@@ -36,7 +36,7 @@ public sealed class DocumentWireSchemaTests
     }
 
     private static FieldMetadata Column(string table, string name) =>
-        Schemas[table].RecordColumns.Single(c => c.Name == name).ToFieldMetadata();
+        Schemas[table].RecordColumns.Single(c => c.Name == name).Field;
 
     private static FieldMetadata Member(FieldMetadata owner, string name) => RequireFields(owner).Single(f => f.Name == name);
 
