@@ -412,12 +412,9 @@ internal sealed class Store : IDisposable
     // in-between state.
     private readonly Lock _projectionLock = new();
 
-    // Per projection, never store-wide: a source batch and a reconcile hold different gates, so a
-    // shared counter would let one swallow the other's advance. Flow-local, so nesting is seen and
-    // concurrency is not.
+    // Flow-local, so nesting is seen and concurrency is not.
     private readonly AsyncLocal<ProjectionScope?> _openProjection = new();
 
-    /// <summary>Opened by <see cref="DuckDbRecordIndex.Commit{T}"/> alone.</summary>
     internal ProjectionScope BeginProjection()
     {
         var scope = new ProjectionScope(EndProjection, _openProjection.Value);
@@ -429,7 +426,6 @@ internal sealed class Store : IDisposable
         _openProjection.Value
         ?? throw new InvalidOperationException("A row change outside DuckDbRecordIndex.Commit skips the filter and the announcement.");
 
-    // Deferred, landing after the last commit of the outermost projection.
     public void BumpSequence()
     {
         var scope = OpenProjection;

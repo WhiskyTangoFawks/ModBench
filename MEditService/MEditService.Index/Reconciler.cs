@@ -613,7 +613,7 @@ internal sealed class Reconciler(
             scope.Index.Schemas,
             new PluginStrings(LoadOrderSnapshot.FileFolderOf(plugin.Path), scope.Held.DataFolderPath));
 
-    // ADR-0015: one commit for everything this validate re-derives.
+    // ADR-0015.
     private void ValidateIndex(CancellationToken token)
     {
         var scope = RequireScope();
@@ -735,13 +735,10 @@ internal sealed class Reconciler(
         var key = plugin.Key;
         try
         {
-            // ADR-0015: a whole plugin re-derived has too many rows to name, so the announcement
-            // names the plugin.
             scope.Index.Commit(projection =>
             {
                 scope.Failed.Read(plugin.Registered, state => IndexOnePlugin(scope, plugin, state, CancellationToken.None));
-                projection.SweepWinners();
-                projection.Announce(sequence => new PluginChangedNotification(key, sequence));
+                projection.PluginChanged(key);
             });
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

@@ -52,7 +52,9 @@ public sealed class ContainerChildQueryService
         var result = new List<ContainerChildSummary>(rows.Count);
         foreach (var row in rows)
         {
-            var record = byFormKey[row.ChildFormKey];
+            // The two reads are two snapshots: a child a commit took between them is gone, and that
+            // commit's announcement asks for this listing again.
+            if (!byFormKey.TryGetValue(row.ChildFormKey, out var record)) continue;
             result.Add(new ContainerChildSummary(
                 record.FormKey, record.EditorId, record.Plugin, record.Origin,
                 record.LoadOrderIndex, record.IsWinner, record.WorkingTreeState, SlotRecordTypes[row.SlotName],

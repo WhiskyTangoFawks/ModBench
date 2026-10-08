@@ -1,7 +1,5 @@
 namespace MEditService.Index;
 
-public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
-
 // ADR-0012.
 public record RecordSummary(
     string FormKey,

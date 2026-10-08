@@ -3,6 +3,7 @@ using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Records;
@@ -50,7 +51,14 @@ public sealed class FilterBeforeAnnouncementTests
     }
 
     [Fact]
-    public void ATrackedPluginEditedWhileOutOfTheLoadOrder_AnnouncesItsRowsOnReturn_OnlyOnceTheRecordFilterHoldsThem()
+    public void ATrackedPluginEditedWhileOutOfTheLoadOrder_AnnouncesItsRowsOnReturn_OnlyOnceTheRecordFilterHoldsThem() =>
+        ATrackedPluginReturnsEditedWhileAway(failingAfter: null);
+
+    [Fact]
+    public void ARefreshThatLandsBeforeItsPluginsReadFails_IsAnnouncedOnlyOnceTheRecordFilterHoldsIt() =>
+        ATrackedPluginReturnsEditedWhileAway(failingAfter: $"Registering {Arriving}");
+
+    private static void ATrackedPluginReturnsEditedWhileAway(string? failingAfter)
     {
         string npc = "";
         using var fixture = new PluginFixtureBuilder("filter-before-rows-changed")
@@ -61,9 +69,16 @@ public sealed class FilterBeforeAnnouncementTests
         TrackedMods.Track(tracked, fixture.GameDirectory);
         var probe = new FilteredNpcsAtEachAnnouncement(n => n is RowsChangedNotification rows && rows.Keys.Contains(npc));
         var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, notifications: probe);
+        var armed = false;
+        using var loggers = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider([], entry =>
+        {
+            if (armed && failingAfter is not null && entry.Message.StartsWith(failingAfter, StringComparison.Ordinal))
+                throw new IOException("the read failed after its refresh landed");
+        })));
+        using var index = Indexes.Open(holder, loggerFactory: loggers, notifications: probe);
         probe.Index = index;
         index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4);
+        armed = true;
         var document = index.DocumentOf(npc, tracked.KeyOf());
         index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'EditedWhileAway'", "filter.sql");
         index.Reconcile(holder, fixture.GameDirectory, [.. fixture.Plugins.Where(p => p.Name == Resident)], GameRelease.Fallout4);

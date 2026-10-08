@@ -55,20 +55,25 @@ internal sealed class DuckDbRecordIndex : IDisposable
         });
     }
 
-    /// <summary>The one way the rows change (ADR-0015). Once the outermost commit's writes are in:
-    /// the winner sweep they owe, the filter again, one advance, then their announcements. A write
-    /// that throws owes only the advance.</summary>
+    /// <summary>The one way the rows change (ADR-0015). Once the outermost commit's writes are in,
+    /// thrown or not: the winner sweep they owe, the filter again, one advance, then their
+    /// announcements.</summary>
     public T Commit<T>(Func<Projection, T> write)
     {
         using var held = _gate.Enter();
         using var scope = _store.BeginProjection();
-        var written = write(_projection);
-        if (scope.Parent is null)
+        try
         {
-            if (scope.SweepOwed) SweepWinners();
-            _filter.Reapply(this);
+            return write(_projection);
         }
-        return written;
+        finally
+        {
+            if (scope.Parent is null)
+            {
+                if (scope.SweepOwed) SweepWinners();
+                _filter.Reapply(this);
+            }
+        }
     }
 
     public void Commit(Action<Projection> write) => Commit(projection =>
@@ -85,6 +90,14 @@ internal sealed class DuckDbRecordIndex : IDisposable
 
         public void Announce(Func<long, INotification> announcement) =>
             index._store.Announce(() => index._notifications?.Publish(announcement(index.Sequence)));
+
+        /// <summary>ADR-0015: a whole plugin re-derived or removed has too many rows to name, and can
+        /// move the winner of every FormKey it holds.</summary>
+        public void PluginChanged(PluginAddress key)
+        {
+            SweepWinners();
+            Announce(sequence => new PluginChangedNotification(key, sequence));
+        }
     }
 
     public GameRelease Release => _store.Release;
@@ -146,8 +159,7 @@ internal sealed class DuckDbRecordIndex : IDisposable
     public void Unindex(PluginAddress key) => Commit(projection =>
     {
         DeleteEveryTraceOf(key.Name, key.Origin);
-        projection.SweepWinners();
-        projection.Announce(sequence => new PluginChangedNotification(key, sequence));
+        projection.PluginChanged(key);
     });
 
     // The `registrations` row is dropped last: while it exists this (origin, plugin) is still a
@@ -303,20 +315,15 @@ internal sealed class DuckDbRecordIndex : IDisposable
     {
         if (deltas.Count == 0) return [];
 
-        List<string> touched;
-        using (var tx = Connection.BeginTransaction())
-        {
-            // Only a delta that added or removed a row can move winner status. Re-swept for the whole
-            // load order rather than per FormKey because UpdateWinners is the one definition of winning
-            // (measured at 18 ms over 48k records).
-            var projected = _workingTreeOverlay.ProjectDocuments(key, deltas);
-            if (projected.Structural) UpdateWinnersCore();
-            touched = projected.Touched;
-            _store.BumpSequence();
-            tx.Commit();
-        }
-
-        return touched;
+        using var tx = Connection.BeginTransaction();
+        var projected = _workingTreeOverlay.ProjectDocuments(key, deltas);
+        _store.BumpSequence();
+        tx.Commit();
+        // Only a delta that added or removed a row can move winner status. Re-swept for the whole
+        // load order rather than per FormKey because UpdateWinners is the one definition of winning
+        // (measured at 18 ms over 48k records).
+        if (projected.Structural) _store.OweSweep();
+        return projected.Touched;
     }
 
     /// <summary>Sets each listed row to the state it is now in (ADR-0007), in one advance.</summary>
