@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using Serilog;
 
@@ -75,8 +76,7 @@ internal static class GitCli
 
     private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string[] args)
     {
-        using var process = Process.Start(StartInfo(gitDir, workTree, args))
-            ?? throw new InvalidOperationException("Failed to start the git process.");
+        using var process = Start(StartInfo(gitDir, workTree, args));
         // Closed at once: git otherwise inherits this process's stdin, and a socket never reaches EOF.
         process.StandardInput.Close();
 
@@ -90,6 +90,19 @@ internal static class GitCli
 
         process.WaitForExit();
         return (process.ExitCode, stdout, stderr);
+    }
+
+    // Process.Start throws Win32Exception when the executable cannot be found or run, on Windows and POSIX alike.
+    private static Process Start(ProcessStartInfo startInfo)
+    {
+        try
+        {
+            return Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start the git process.");
+        }
+        catch (Win32Exception ex)
+        {
+            throw new GitUnavailableException(ex);
+        }
     }
 }
 

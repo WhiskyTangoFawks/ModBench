@@ -35,7 +35,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
             return ReplaceEmbeddedChildInPlace(source.Plugin, existing, landing, destination, release);
         }
 
-        var appended = AppendEmbeddedChild(source, container, landing, destination, release, SourceChanges.None);
+        var appended = SourceTransaction.Atomically(
+            destination.Repository, transaction => AppendEmbeddedChild(transaction, source, container, landing, destination, release));
 
         if (appended.Applied && logger.IsEnabled(LogLevel.Information))
         {
@@ -49,17 +50,16 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     }
 
     /// <summary>The container rule: the child lands at the end of its slot in the destination's copy
-    /// of its container, which is copied in with its own fields when absent, transitively.
-    /// <paramref name="alongside"/> lands with it.</summary>
+    /// of its container, which is copied in with its own fields when absent, transitively.</summary>
     internal RecordEditResult AppendEmbeddedChild(
-        CopySource source, DocumentContainment container, SourceDocument child,
-        Destination destination, GameRelease release, SourceChanges alongside)
+        SourceTransaction transaction, CopySource source, DocumentContainment container, SourceDocument child,
+        Destination destination, GameRelease release)
     {
         var containerFormKey = container.ParentFormKey;
         if (destination.Repository.Get(destination.Plugin, containerFormKey, schemaReflector.GetSchemas(release))
             is not { } containerDocument)
         {
-            return CopyContainerInAround(source, container, child, destination, release, alongside);
+            return CopyContainerInAround(transaction, source, container, child, destination, release);
         }
 
         // The container may itself be embedded (a topic inside its quest's document); its put lands
@@ -70,15 +70,15 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
             ?? throw new InvalidOperationException(
                 $"{containerFormKey} was found, but its own text does not carry it.");
 
-        destination.Repository.Put(destination.Plugin, containerDocument with { Body = withChild }, alongside);
+        transaction.Apply(destination.Repository.ChangesToPut(destination.Plugin, containerDocument with { Body = withChild }));
         return RecordEditResult.Success();
     }
 
     // A container the destination lacks is copied in around the child: itself a child lands in its
     // own container's slot by the same rule, a top-level one at a placement.
     private RecordEditResult CopyContainerInAround(
-        CopySource source, DocumentContainment container, SourceDocument child,
-        Destination destination, GameRelease release, SourceChanges alongside)
+        SourceTransaction transaction, CopySource source, DocumentContainment container, SourceDocument child,
+        Destination destination, GameRelease release)
     {
         var containerFormKey = container.ParentFormKey;
         var sourceContainer = HeldBy(source, containerFormKey);
@@ -93,8 +93,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         };
 
         var landed = source.ContainerOf(sourceContainer) is { } ownParent
-            ? AppendEmbeddedChild(source, ownParent, withChild, destination, release, alongside)
-            : PlaceContainer(source, withChild, destination, release, alongside);
+            ? AppendEmbeddedChild(transaction, source, ownParent, withChild, destination, release)
+            : PlaceContainer(transaction, source, withChild, destination, release);
 
         if (landed.Applied && logger.IsEnabled(LogLevel.Information))
         {
@@ -135,16 +135,16 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     // A top-level container the destination lacks: an exterior cell lands through the spatial mint
     // with its worldspace; everything else is a put, which places it.
     private RecordEditResult PlaceContainer(
-        CopySource source, SourceDocument container, Destination destination, GameRelease release, SourceChanges alongside)
+        SourceTransaction transaction, CopySource source, SourceDocument container, Destination destination, GameRelease release)
     {
         var formKey = container.FormKey;
         var sourceCell = RecordTypeDispatch.For(release).IsCell(container.RecordType) ? source.Identity(formKey) : null;
         if (sourceCell is { } cell && source.WorldspaceOf(cell) is { } worldspace)
         {
-            return PlaceExteriorCell(source, worldspace, container, destination, release, alongside);
+            return PlaceExteriorCell(transaction, source, worldspace, container, destination, release);
         }
 
-        destination.Repository.Put(destination.Plugin, container, alongside);
+        transaction.Apply(destination.Repository.ChangesToPut(destination.Plugin, container));
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -157,11 +157,11 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     }
 
     /// <summary>Lands an exterior CELL in <paramref name="worldspaceFormKey"/>, copying the WRLD in with
-    /// its own fields first when the destination has none, since a cell's put refuses without its
-    /// worldspace. <paramref name="alongside"/> lands with it.</summary>
+    /// its own fields first when the destination has none: the put of a cell whose worldspace is
+    /// absent refuses.</summary>
     internal RecordEditResult PlaceExteriorCell(
-        CopySource source, string worldspaceFormKey, SourceDocument cell, Destination destination, GameRelease release,
-        SourceChanges alongside)
+        SourceTransaction transaction, CopySource source, string worldspaceFormKey, SourceDocument cell,
+        Destination destination, GameRelease release)
     {
         var cellFormKey = cell.FormKey;
         if (destination.Repository.FormKeysUsed(destination.Plugin).Contains(cellFormKey))
@@ -180,12 +180,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
                 $"{source.Plugin.Name} does not hold {cellFormKey} — its own worldspace named it.");
         var landing = WithGridFrom(source.Body(sourceCell), cell with { RecordType = sourceCell.RecordType }, release);
         var (repository, plugin) = destination;
-        SourceTransaction.Atomically(repository, transaction =>
-        {
-            if (worldspaceCopy is not null) transaction.Apply(repository.ChangesToPut(plugin, worldspaceCopy));
-            transaction.Apply(repository.ChangesToPutInWorldspace(plugin, landing, worldspaceFormKey));
-            transaction.Apply(alongside);
-        });
+        if (worldspaceCopy is not null) transaction.Apply(repository.ChangesToPut(plugin, worldspaceCopy));
+        transaction.Apply(repository.ChangesToPutInWorldspace(plugin, landing, worldspaceFormKey));
         return RecordEditResult.Success();
     }
 

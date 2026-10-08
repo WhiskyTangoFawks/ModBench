@@ -256,35 +256,27 @@ public sealed class SourceRepository
         PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         LastCommitComparison.Of(_modFolder, _release, _git, Locator, plugin, schemas);
 
-    /// <summary>Creates or replaces the record's document, placing an absent one from its identity alone.
-    /// A record another document carries is replaced at its own slot. <paramref name="alongside"/> lands
-    /// with it; a failure writes nothing.</summary>
-    public void Put(PluginAddress plugin, SourceDocument document, SourceChanges? alongside = null) =>
-        Write(plugin, document, () => ChangesToPut(plugin, document), alongside);
+    /// <summary>Creates or replaces the record's document, placing an absent one from its identity
+    /// alone with the levels above it. A record another document carries is replaced at its own slot.
+    /// A failure writes nothing.</summary>
+    public void Put(PluginAddress plugin, SourceDocument document) =>
+        SourceTransaction.Atomically(this, transaction => transaction.Apply(ChangesToPut(plugin, document)));
 
     /// <summary>The put of an exterior cell, which lands in the block its own grid falls in inside
     /// <paramref name="worldspace"/>'s directory. A held cell is replaced where it is. A failure writes nothing.</summary>
-    public void PutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace, SourceChanges? alongside = null) =>
-        Write(plugin, cell, () => ChangesToPutInWorldspace(plugin, cell, worldspace), alongside);
+    public void PutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
+        SourceTransaction.Atomically(this, transaction => transaction.Apply(ChangesToPutInWorldspace(plugin, cell, worldspace)));
 
-    private void Write(PluginAddress plugin, SourceDocument document, Func<SourceChanges> changes, SourceChanges? alongside)
-    {
-        Writes.RefuseOverwritingWhatIsNoDocument(plugin, document);
-        SourceTransaction.Atomically(this, transaction =>
-        {
-            transaction.Apply(changes());
-            transaction.Apply(alongside ?? SourceChanges.None);
-        });
-    }
-
-    /// <summary>What <see cref="Put"/> changes, written nowhere.</summary>
+    /// <summary>What <see cref="Put"/> changes, written nowhere. A file at its path that is no document throws
+    /// as unreadable.</summary>
     public SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document) => Writes.ChangesToPut(plugin, document);
 
     /// <summary>What rewriting a document the tree holds changes, written nowhere. One no document holds
     /// throws: an edit never creates.</summary>
     public SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) => Writes.ChangesToRewrite(plugin, document);
 
-    /// <summary>What <see cref="PutInWorldspace"/> changes, written nowhere.</summary>
+    /// <summary>What <see cref="PutInWorldspace"/> changes, written nowhere. A file at its path that is no
+    /// document throws as unreadable.</summary>
     public SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
         Writes.ChangesToPutInWorldspace(plugin, cell, worldspace);
 

@@ -48,9 +48,9 @@ internal sealed class NewRecordCopy
 
         return CopyUnderNextFormKey(
             copy, destinationPlugin,
-            (duplicate, counter) =>
+            (transaction, duplicate) =>
             {
-                destination.Repository.Put(destinationPlugin, duplicate, counter);
+                transaction.Apply(destination.Repository.ChangesToPut(destinationPlugin, duplicate));
                 return RecordEditResult.Success();
             },
             "new working-tree source document");
@@ -60,11 +60,12 @@ internal sealed class NewRecordCopy
         WriteTargets.CopyTarget copy, DocumentContainment container, PluginAddress destinationPlugin) =>
         CopyUnderNextFormKey(
             copy, destinationPlugin,
-            (duplicate, counter) => _recordCopy.AppendEmbeddedChild(copy.Source, container, duplicate, copy.Destination, copy.Release, counter),
+            (transaction, duplicate) => _recordCopy.AppendEmbeddedChild(
+                transaction, copy.Source, container, duplicate, copy.Destination, copy.Release),
             $"inside {container.ParentFormKey}'s {container.SlotName} slot");
 
     private RecordEditResult CopyUnderNextFormKey(
-        WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, Func<SourceDocument, SourceChanges, RecordEditResult> land,
+        WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, Func<SourceTransaction, SourceDocument, RecordEditResult> land,
         string landedAt)
     {
         var (source, identity, destination, release, body) = copy;
@@ -74,7 +75,13 @@ internal sealed class NewRecordCopy
         var named = RecordDocumentEdits.DuplicatedWithoutChildren(
             _codec, body, release, identity.RecordType, targetFormKey,
             EditorIdDeriver(destination.Repository.EditorIdsHeld(destinationPlugin)));
-        var landed = land(new SourceDocument(targetFormKey, identity.RecordType, named.EditorId, named.Text), allocator.CounterChanges());
+        var duplicate = new SourceDocument(targetFormKey, identity.RecordType, named.EditorId, named.Text);
+        var landed = SourceTransaction.Atomically(destination.Repository, transaction =>
+        {
+            var landing = land(transaction, duplicate);
+            if (landing.Applied) transaction.Apply(allocator.HeaderChanges());
+            return landing;
+        });
         if (!landed.Applied) return landed;
 
         if (_logger.IsEnabled(LogLevel.Information))

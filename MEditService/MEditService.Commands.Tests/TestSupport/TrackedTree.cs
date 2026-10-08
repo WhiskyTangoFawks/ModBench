@@ -96,17 +96,16 @@ internal static class TrackedTree
 
     internal static uint NextObjectId(string modFolder, PluginAddress plugin) =>
         HeaderDocument.NextObjectId(Encoding.UTF8.GetBytes(
-            Document(modFolder, plugin, PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name))).Require().Body));
+            Document(modFolder, plugin, PluginHeader.IdentityOf(plugin.Name).FormKey).Require().Body));
 
     internal static string HeaderDocumentFile(string modFolder, PluginAddress plugin) =>
-        DocumentFile(modFolder, plugin, PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name))).Require();
+        DocumentFile(modFolder, plugin, PluginHeader.IdentityOf(plugin.Name).FormKey).Require();
 
     /// <summary>The header's Next Object ID set to <paramref name="nextObjectId"/>, as an edit of the header would.</summary>
     internal static void SetNextObjectId(string modFolder, PluginAddress plugin, uint nextObjectId)
     {
         var repository = Repository(modFolder);
-        var header = repository.Get(
-                plugin, new RecordIdentity(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), PluginHeader.RecordType, null))
+        var header = repository.Get(plugin, PluginHeader.IdentityOf(plugin.Name))
             ?? throw new InvalidOperationException($"Expected {plugin.Name}'s tree to hold its header document.");
         var moved = HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), nextObjectId);
         repository.Put(plugin, header with { Body = Encoding.UTF8.GetString(moved) });

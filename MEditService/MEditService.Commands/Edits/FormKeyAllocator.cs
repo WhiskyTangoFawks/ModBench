@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands.Edits;
 
 /// <summary>The one place a new FormKey is drawn (plugins.md, Create record, stories 2 and 3). One gesture
-/// draws all its keys from one allocator and writes <see cref="CounterChanges"/> with them.</summary>
+/// draws all its keys from one allocator and writes <see cref="HeaderChanges"/> with them.</summary>
 internal sealed class FormKeyAllocator
 {
     private readonly SourceRepository _repository;
@@ -21,14 +21,14 @@ internal sealed class FormKeyAllocator
     private readonly bool _isLight;
     private readonly bool _eslFlagIsRemovable;
     private readonly IReadOnlySet<string> _used;
-    private readonly uint _counterHeld;
-    private uint _counter;
+    private readonly uint _nextObjectIdHeld;
+    private uint _nextObjectId;
 
     private FormKeyAllocator(SourceRepository repository, PluginAddress plugin, GameRelease release, SourceDocument? header)
     {
         (_repository, _plugin, _release, _header) = (repository, plugin, release, header);
         var headerBody = header is null ? null : Encoding.UTF8.GetBytes(header.Body);
-        _counterHeld = _counter = headerBody is null ? 0 : HeaderDocument.NextObjectId(headerBody);
+        _nextObjectIdHeld = _nextObjectId = headerBody is null ? 0 : HeaderDocument.NextObjectId(headerBody);
         // The working tree's header document decides (ADR-0007), so a flag flipped this session caps
         // minting immediately.
         _eslFlagIsRemovable = headerBody is not null && HeaderDocument.IsLight(headerBody);
@@ -37,8 +37,7 @@ internal sealed class FormKeyAllocator
     }
 
     internal static FormKeyAllocator Over(SourceRepository repository, PluginAddress plugin, GameRelease release) =>
-        new(repository, plugin, release, repository.Get(
-            plugin, new RecordIdentity(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), PluginHeader.RecordType, null)));
+        new(repository, plugin, release, repository.Get(plugin, PluginHeader.IdentityOf(plugin.Name)));
 
     /// <summary>The first FormKey at or above the Next Object ID that no record uses. Non-null is the
     /// refusal, and <paramref name="formKey"/> is "" then.</summary>
@@ -55,7 +54,7 @@ internal sealed class FormKeyAllocator
         }
 
         formKey = KeyOf(free);
-        _counter = free + 1;
+        _nextObjectId = free + 1;
         return null;
     }
 
@@ -74,17 +73,17 @@ internal sealed class FormKeyAllocator
         }
 
         formKey = requestedFormKey;
-        _counter = Math.Max(_counter, FormKey.Factory(requestedFormKey).ID + 1);
+        _nextObjectId = Math.Max(_nextObjectId, FormKey.Factory(requestedFormKey).ID + 1);
         return null;
     }
 
     /// <summary>The header document's rewrite that moves its Next Object ID past every FormKey drawn or
     /// claimed, written nowhere. None when nothing passed it.</summary>
-    internal SourceChanges CounterChanges() =>
-        _header is { } header && _counter > _counterHeld
+    internal SourceChanges HeaderChanges() =>
+        _header is { } header && _nextObjectId > _nextObjectIdHeld
             ? _repository.ChangesToRewrite(_plugin, header with
             {
-                Body = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), _counter)),
+                Body = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), _nextObjectId)),
             })
             : SourceChanges.None;
 
@@ -98,7 +97,7 @@ internal sealed class FormKeyAllocator
 
     private uint FirstFreeId()
     {
-        var id = Math.Max(_counter, PluginFlagPredicates.HighRangeFormIdFloor(_release));
+        var id = Math.Max(_nextObjectId, PluginFlagPredicates.HighRangeFormIdFloor(_release));
         var taken = _used.Where(IsNative).Select(LocalId).Where(used => used >= id).ToHashSet();
         while (taken.Contains(id)) id++;
         return id;

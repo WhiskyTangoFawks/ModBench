@@ -62,7 +62,7 @@ internal sealed class FormKeyChange(RecordTextCodec codec, ILogger logger)
             repository.ChangesToRekey(plugin, carrying, identity, targetFormKey, new DocumentRekey(
                 (document, newKey) => Read(() => RecordDocumentEdits.WithFormKey(codec, document.Body, release, document.RecordType, newKey)),
                 (owner, oldKey, newKey) => Read(() => RecordDocumentEdits.WithEmbeddedChildFormKey(
-                    codec, owner.Body, release, owner.RecordType, oldKey, newKey)))).Then(allocator.CounterChanges())),
+                    codec, owner.Body, release, owner.RecordType, oldKey, newKey)))).Then(allocator.HeaderChanges())),
             refused => refused, failed, logger);
     }
 

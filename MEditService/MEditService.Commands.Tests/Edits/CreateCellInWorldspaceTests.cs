@@ -215,6 +215,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     {
         var result = CreateCellAt(7, 7);
 
-        Assert.Equal(FormKey.Factory(result.NewFormKey.Require()).ID + 1, TrackedTree.NextObjectId(_plugins.FolderOf(_edited), Edited));
+        Assert.Equal("000802:Override.esp", result.NewFormKey);
+        Assert.Equal(0x803u, TrackedTree.NextObjectId(_plugins.FolderOf(_edited), Edited));
     }
 }

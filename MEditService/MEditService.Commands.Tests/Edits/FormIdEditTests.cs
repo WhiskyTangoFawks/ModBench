@@ -216,4 +216,17 @@ public sealed class FormIdEditTests
         Assert.True(result.Applied, result.Message);
         Assert.Equal(0xF01u, mod.NextObjectId());
     }
+
+    [Fact]
+    public void EditingTheFormId_OnATreeWithNoHeaderDocument_RefusesAsUnreadable_AndWritesNothing()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        File.Delete(Path.Combine(mod.ModFolder, TreeTampering.HeaderDocumentOf(mod.Plugin.Name)));
+        var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
+
+        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), FreeFormKey);
+
+        Assert.Equal(RecordEditRefusal.PluginSourceUnreadable, result.Refusal);
+        Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
+    }
 }

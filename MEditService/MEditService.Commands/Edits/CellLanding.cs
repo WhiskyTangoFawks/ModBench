@@ -13,12 +13,12 @@ namespace MEditService.Commands.Edits;
 /// cell the plugin lacks is copied in from the nearest of its masters to hold it, or created, as xEdit's Add does.</summary>
 internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCodec codec, SchemaReflector schemaReflector, ILogger logger)
 {
-    // The cell document that takes the record in, the worldspace a new one goes in, and the move of the
-    // Next Object ID past a cell minted for it.
-    private sealed record Landed(SourceDocument Cell, string? NewInWorldspace, SourceChanges Counter);
+    // The cell document that takes the record in, the worldspace a new one goes in, and the header's
+    // changes that move its Next Object ID past a cell minted for it.
+    private sealed record Landed(SourceDocument Cell, string? NewInWorldspace, SourceChanges HeaderChanges);
 
-    // A cell copied in or minted, and the move of the Next Object ID past a minted one.
-    private sealed record CellIn(JsonObject Cell, SourceChanges Counter);
+    // A cell copied in or minted, and the header's changes a minted one needs.
+    private sealed record CellIn(JsonObject Cell, SourceChanges HeaderChanges);
 
     private sealed record Move(
         PluginAddress Plugin, SourceRepository Repository, GameRelease Release, RecordIdentity Moved, string Worldspace,
@@ -86,7 +86,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
             RecordEditResult.Success(),
             repository.ChangesToRewrite(plugin, given).Then(landed.NewInWorldspace is { } into
                 ? repository.ChangesToPutInWorldspace(plugin, landed.Cell, into)
-                : repository.ChangesToRewrite(plugin, landed.Cell)).Then(landed.Counter)));
+                : repository.ChangesToRewrite(plugin, landed.Cell)).Then(landed.HeaderChanges)));
     }
 
     private Step<Landed> IntoPersistentCell(Move move, JsonNode record)
@@ -116,7 +116,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
             TakeIn(landing.Cell, PersistentFlag.PersistentGroup, record);
             return new Step<Landed>.Done(new(
                 Document(document.Identity, codec.RoundTrip(worldspace.ToJsonString(), move.Release, document.RecordType)), null,
-                landing.Counter));
+                landing.HeaderChanges));
         });
     }
 
@@ -141,7 +141,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
                 var text = codec.RoundTrip(landing.Cell.ToJsonString(), move.Release, move.CellType);
                 return new Step<Landed>.Done(new(
                     new SourceDocument(GridCellHolder.FormKeyOf(landing.Cell), move.CellType, EditorIds.In(text), text),
-                    move.Worldspace, landing.Counter));
+                    move.Worldspace, landing.HeaderChanges));
             });
     }
 
@@ -178,7 +178,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, RecordTextCode
                 out var cell) is { } exhausted)
             return new Step<CellIn>.Refused(exhausted with { Path = move.Spelled });
         if (flags != 0) cell[RecordHeaderFlags.Member] = flags;
-        return new Step<CellIn>.Done(new(cell, allocator.CounterChanges()));
+        return new Step<CellIn>.Done(new(cell, allocator.HeaderChanges()));
     }
 
     private static void TakeIn(JsonObject cell, string group, JsonNode record)

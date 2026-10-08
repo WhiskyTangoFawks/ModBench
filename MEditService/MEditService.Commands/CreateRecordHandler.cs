@@ -85,7 +85,11 @@ public sealed class CreateRecordHandler
         var body = RecordMint.BareDocument(_codec, schema, release, targetFormKey, editorId: null);
         if (RecordTypeDispatch.For(release).IsCell(recordType)) body = AsInteriorCell(body);
 
-        repository.Put(plugin, new SourceDocument(targetFormKey, recordType, null, body), allocator.CounterChanges());
+        SourceTransaction.Atomically(repository, transaction =>
+        {
+            transaction.Apply(repository.ChangesToPut(plugin, new SourceDocument(targetFormKey, recordType, null, body)));
+            transaction.Apply(allocator.HeaderChanges());
+        });
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -171,7 +175,11 @@ public sealed class CreateRecordHandler
         if (GridCells.Mint(allocator, _codec, schemas[recordType], release, grid, out var cell) is { } exhausted) return exhausted;
         var formKey = GridCellHolder.FormKeyOf(cell);
         var text = _codec.RoundTrip(cell.ToJsonString(), release, recordType);
-        repository.PutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace, allocator.CounterChanges());
+        SourceTransaction.Atomically(repository, transaction =>
+        {
+            transaction.Apply(repository.ChangesToPutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace));
+            transaction.Apply(allocator.HeaderChanges());
+        });
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -201,7 +209,7 @@ public sealed class CreateRecordHandler
         SourceTransaction.Atomically(repository, transaction =>
         {
             transaction.Apply(repository.ChangesToRewrite(plugin, container with { Body = withChild }));
-            transaction.Apply(allocator.CounterChanges());
+            transaction.Apply(allocator.HeaderChanges());
         });
 
         if (_logger.IsEnabled(LogLevel.Information))

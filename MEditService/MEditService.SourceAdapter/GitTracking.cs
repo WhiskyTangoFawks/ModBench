@@ -13,7 +13,6 @@ internal static class GitTracking
     internal static IReadOnlyList<(string Plugin, string Reason)> Track(
         string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin)> plugins)
     {
-        GitCli.EnsureOnPath();
         if (SourceRepositoryGit.IsTracked(modFolder) || SourceRepositoryGit.HoldsAnotherRepository(modFolder))
             throw new InvalidOperationException($"'{modFolder}' already holds a repository.");
 

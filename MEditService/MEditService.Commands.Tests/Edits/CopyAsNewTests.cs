@@ -3,7 +3,6 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -186,6 +185,7 @@ public sealed class CopyAsNewTests
 
         var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
 
-        Assert.Equal(FormKey.Factory(result.OnlyLanded().Require()).ID + 1, mod.NextObjectId(mod.DestinationPlugin));
+        Assert.Equal("000801:Destination.esp", result.OnlyLanded());
+        Assert.Equal(0x802u, mod.NextObjectId(mod.DestinationPlugin));
     }
 }

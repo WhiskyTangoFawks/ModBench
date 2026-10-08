@@ -402,19 +402,4 @@ public sealed class SourceTransactionTests : IDisposable
         At(failAt, () => Rekey(transaction, "wrld", "Other", "000902", "000903"));
         return act;
     }
-
-    [Fact]
-    public void Put_WhenWhatItWritesAlongsideFails_WritesNeitherTheDocumentNorThat()
-    {
-        Seed(Fk("000800"), "npc_", "Npc");
-        const string blocked = "Blocked.json";
-        BlockTheWriteWithADirectoryAtTheDocumentsPath(Path.Combine(_root, blocked));
-        var before = TreeSnapshot.Of(_root);
-
-        Assert.ThrowsAny<IOException>(() => Repo.Put(
-            Plugin, new SourceDocument(Fk("000801"), "npc_", "Added", Body(Fk("000801"), "Added")),
-            new SourceChanges([], [new DocumentChange(blocked, "{}")])));
-
-        Assert.Equal(before, TreeSnapshot.Of(_root));
-    }
 }
