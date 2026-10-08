@@ -353,7 +353,6 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
 
     private const string NpcWithNoWinnerYet = "000800:Base.esm";
 
-    // Between a reconcile registering plugins and its winner sweep, no copy of the record is flagged winner.
     private async Task WhileNoCopyIsFlaggedWinner(Action<OpenedIndex> asked)
     {
         var fixture = Built(new PluginFixtureBuilder("record-query")
