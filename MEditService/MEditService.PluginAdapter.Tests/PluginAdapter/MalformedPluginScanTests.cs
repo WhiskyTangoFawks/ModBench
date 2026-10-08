@@ -9,14 +9,12 @@ namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 public sealed class MalformedPluginScanTests
 {
     [Fact]
-    public void TrueStorms_ShortRegnRdat_IsDiagnosedByExactClassAndText()
+    public void ShortRegnRdat_IsDiagnosedByExactClassAndText()
     {
-        var bytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "TestData", "LitR - TrueStorms.esp"));
-
-        var diagnoses = Scan(bytes);
+        var diagnoses = Scan(ShortRdatRegionPlugin.Plugin.Bytes);
 
         var d = Assert.Single(diagnoses, d => d.DefectClass == "fixed-size-subrecord-short");
-        Assert.Equal("REGN 001D2AF4 (DowntownRegion)", d.Anchor);
+        Assert.Equal("REGN 01000800 (HarborRegion)", d.Anchor);
         Assert.Equal("repairable (lossless)", d.Tail);
         Assert.Equal("RDAT is 6 bytes; a REGN RDAT is always 8", d.Message);
     }

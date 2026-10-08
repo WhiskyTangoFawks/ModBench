@@ -7,13 +7,10 @@ namespace MEditService.Commands.Tests.RealData;
 
 public sealed class SubrecordInventoryRoundTripGateTests
 {
-    private const string FixtureFileName = "LitR - TrueStorms.esp";
-    private static string FixturePath => Path.Combine(AppContext.BaseDirectory, "TestData", FixtureFileName);
-
     [Fact]
-    public async Task TrackAsync_OfTheRealTrueStormsFixture_RefusesNamingTheRegionItsDroppedSignaturesAndTheDiagnosisOfTheMalformedSubrecord()
+    public async Task TrackAsync_OfAShortRdatRegionPlugin_RefusesNamingTheRegionItsDroppedSignaturesAndTheDiagnosisOfTheMalformedSubrecord()
     {
-        using var scratch = new TrueStormsScratch();
+        using var scratch = new ShortRdatScratch();
 
         var result = await scratch.TrackAsync();
 
@@ -21,7 +18,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains("REGN", result.Message);
-        Assert.Contains("001D2AF4", result.Message);
+        Assert.Contains("01000800", result.Message);
         Assert.Contains("RDMP", result.Message);
         Assert.Contains("ANAM", result.Message);
         Assert.Contains("RDMO", result.Message);
@@ -32,23 +29,24 @@ public sealed class SubrecordInventoryRoundTripGateTests
         Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
     }
 
-    private sealed class TrueStormsScratch : IDisposable
+    private sealed class ShortRdatScratch : IDisposable
     {
-        private readonly ScratchDirectory _gameDirectory = new("medit-truestorms-game-");
+        private readonly ScratchDirectory _gameDirectory = new("medit-shortrdat-game-");
         private readonly LoadOrderSnapshot _loadOrder;
 
-        public ScratchDirectory ModFolder { get; } = new("medit-truestorms-");
+        public ScratchDirectory ModFolder { get; } = new("medit-shortrdat-");
 
-        public TrueStormsScratch()
+        public ShortRdatScratch()
         {
-            var pluginPath = Path.Combine(ModFolder, FixtureFileName);
-            File.Copy(FixturePath, pluginPath);
+            var plugin = ShortRdatRegionPlugin.Plugin;
+            plugin.WriteInto(ModFolder);
+            var pluginPath = Path.Combine(ModFolder, plugin.FileName);
 
-            _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, "TrueStormsMod", _gameDirectory);
+            _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, "ShortRdatMod", _gameDirectory);
         }
 
         public async Task<PluginTrack> TrackAsync() =>
-            (await TrackEveryPluginOf.ModAsync(_loadOrder, "TrueStormsMod")).Only();
+            (await TrackEveryPluginOf.ModAsync(_loadOrder, "ShortRdatMod")).Only();
 
         public void Dispose()
         {
