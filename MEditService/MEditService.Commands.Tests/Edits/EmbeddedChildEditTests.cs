@@ -66,18 +66,27 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void APlacedRefsPosition_IsRefused_AsItDecidesWhichCellHoldsIt()
+    public void APlacedRefsPosition_Edits_AsAnyField()
     {
-        var before = _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body;
-
         var result = EditService().Set(
-            _fixture.Plugin, _fixture.TemporaryRef.ToString(), "Position", Json("""{"X": 99.0, "Y": 88.0, "Z": 77.0}"""));
+            _fixture.Plugin, _fixture.TemporaryRef.ToString(), "Position", Json("\"99, 88, 77\""));
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Contains("which cell holds", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body);
-        Assert.Empty(_fixture.ChangedFormKeys());
+        Assert.True(result.Applied, result.Message);
+        Assert.Contains("\"Position\": \"99, 88, 77\"", WorkingTreeCell(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnExteriorTemporaryRefMovedOutsideItsCellsGrid_StaysInItsOwnCellsDocument()
+    {
+        var outsideGrid = "\"90000, -90000, 0\"";
+
+        var result = EditService().Set(_fixture.Plugin, _fixture.ExteriorRef.ToString(), "Position", Json(outsideGrid));
+
+        Assert.True(result.Applied, result.Message);
+        var owner = _fixture.DocumentCarrying("ExteriorCell").Body;
+        Assert.Contains("\"EditorID\": \"ExteriorRef\"", owner, StringComparison.Ordinal);
+        Assert.Contains("\"Position\": \"90000, -90000, 0\"", owner, StringComparison.Ordinal);
+        Assert.Contains(_fixture.ExteriorCell.ToString(), _fixture.ChangedFormKeys());
     }
 
     [Fact]
