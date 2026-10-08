@@ -16,11 +16,13 @@ internal sealed class ConflictClassifier(ILogger logger)
         GameRelease release,
         Func<string, RecordLookupEntry?> resolveFormKey,
         Func<string, uint?> loadOrderFormIds,
+        bool winnersFinal,
         IReadOnlyList<RecordDetail>? outsideTheComparison = null)
     {
-        // The fallback for a field no column carries; a lone override is its own winner whatever
-        // its IsWinner flag says.
+        // The fallback for a field no column carries; a lone override is its own winner. Until the
+        // sweep has run none is flagged, so the last in load order stands in.
         var winner = conflictingRecords.Count == 1 ? 0 : conflictingRecords.ToList().FindIndex(o => o.IsWinner);
+        if (winner < 0 && !winnersFinal) winner = conflictingRecords.Count - 1;
         if (winner < 0)
             throw new InvalidOperationException(
                 $"No winner in {conflictingRecords.Count} overrides for FormKey '{conflictingRecords[0].FormKey}'");

@@ -86,7 +86,7 @@ internal sealed class RecordQueryService(
 
     public RecordDetail? GetRecord(string formKey)
     {
-        var document = RequireReads().GetDocument(formKey);
+        var document = _index.RequireWholeSetReads().GetDocument(formKey);
         return document == null ? null : ToRecordDetail(document);
     }
 
@@ -130,7 +130,7 @@ internal sealed class RecordQueryService(
 
     public CompareResult? GetCompareRecords(IReadOnlyList<RecordCopy> copies)
     {
-        var reads = RequireReads();
+        var reads = _index.RequireWholeSetReads();
         var snapshot = _loadOrder.Require();
 
         var documents = new List<RecordDocument>(copies.Count);
@@ -196,7 +196,8 @@ internal sealed class RecordQueryService(
         var release = _loadOrder.Require().GameRelease;
         // With no active copy there is nothing to compare: the copy outside it stands alone.
         var classification = committedOverrides.Count > 0
-            ? _conflictClassifier.Classify(committedOverrides, release, resolveFormKey, loadOrderFormIds, outsideTheComparison)
+            ? _conflictClassifier.Classify(
+                committedOverrides, release, resolveFormKey, loadOrderFormIds, _index.Status.State == LoadOrderState.Ready, outsideTheComparison)
             : new ClassifyResult(
                 ConflictAll.NoConflict, new Dictionary<string, ConflictThis>(),
                 _conflictClassifier.Align(

@@ -49,6 +49,8 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     /// the Index has opened no store to read.</summary>
     public IRecordReads RequireReads() => _reconciler.RequireReads();
 
+    public IRecordReads RequireWholeSetReads() => _reconciler.RequireWholeSetReads();
+
     public IReadOnlyList<SourceFileFailure> SourceFileFailures => _reconciler.SourceFileFailures;
 
     /// <summary>The filter in force and the source its SQL came from, read together so a

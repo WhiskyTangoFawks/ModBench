@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.Ports;
 
 namespace MEditService.Index.Queries;
 
@@ -20,13 +19,11 @@ public sealed class PluginDependantsQueryService
         _loadOrder = loadOrder;
     }
 
-    /// <summary>Null until the index is ready: a plugin it has not opened would read as no dependant.</summary>
-    public PluginDependants? GetDependants(PluginAddress plugin)
+    /// <summary>A plugin the index has not opened would read as no dependant.</summary>
+    public PluginDependants GetDependants(PluginAddress plugin)
     {
         var held = _loadOrder.Require();
-        if (_index.Status.State != LoadOrderState.Ready) return null;
-
-        var opened = _index.RequireReads().OpenedPlugins;
+        var opened = _index.RequireWholeSetReads().OpenedPlugins;
         var others = held.Plugins.Where(other => !PluginAddress.Comparer.Equals(other.Key, plugin)).ToList();
         return new PluginDependants(
             [.. others.Where(other => opened.TryGetValue(other.Key, out var content)

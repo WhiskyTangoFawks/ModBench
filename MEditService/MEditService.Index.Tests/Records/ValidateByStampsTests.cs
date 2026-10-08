@@ -44,7 +44,19 @@ public sealed class ValidateByStampsTests : IDisposable
     private void Validate() => _index.NextSnapshot();
 
     private void ValidateUntilEditorId(string editorId) =>
-        _index.NextSnapshotUntil(() => _index.CopyIn(_npc, _mod.KeyOf())?.EditorId == editorId, $"the record named {editorId}");
+        _index.NextSnapshotUntil(() => NpcNamed(editorId), $"the record named {editorId}");
+
+    private bool NpcNamed(string editorId)
+    {
+        try
+        {
+            return _index.CopyIn(_npc, _mod.KeyOf())?.EditorId == editorId;
+        }
+        catch (IndexNotReadyException)
+        {
+            return false;
+        }
+    }
 
     private void ValidateUntilSourceUnreadable() =>
         _index.NextSnapshotUntil(() => SourceUnreadable, "the plugin file read in place of its source");

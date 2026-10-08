@@ -1,7 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
-using MEditService.Ports;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index.Queries;
@@ -28,14 +27,12 @@ public sealed class PluginProblemQueryService
         _loadOrder = loadOrder;
     }
 
-    /// <summary>Null until the index is ready: a plugin it has not reached holds no record yet, so
-    /// every link into it would read as a missing record.</summary>
-    public IReadOnlyList<PluginProblems>? GetProblems()
+    /// <summary>A plugin the index has not reached holds no record yet, so every link into it would
+    /// read as a missing record.</summary>
+    public IReadOnlyList<PluginProblems> GetProblems()
     {
         var snapshot = _loadOrder.Require();
-        if (_index.Status.State != LoadOrderState.Ready) return null;
-
-        var reads = _index.RequireReads();
+        var reads = _index.RequireWholeSetReads();
         var derivations = reads.GetDerivations();
         var stopped = _index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
         var held = snapshot.Plugins.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);

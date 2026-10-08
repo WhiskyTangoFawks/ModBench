@@ -25,9 +25,15 @@ internal interface IQueryIndex
     /// throw, when <paramref name="timeout"/> elapses first.</summary>
     Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout);
 
-    /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: with no load order held the
-    /// Index has no store to read.</summary>
+    /// <summary>The reads that are correct for the plugins already indexed. Throws
+    /// <see cref="NoLoadOrderException"/>, never null: with no load order held the Index has no
+    /// store to read.</summary>
     IRecordReads RequireReads();
+
+    /// <summary>The reads for a query derived from the whole plugin set. Throws
+    /// <see cref="IndexNotReadyException"/> until the Status is Ready: a partial set answers wrong,
+    /// not smaller.</summary>
+    IRecordReads RequireWholeSetReads();
 
     /// <summary>The source files each plugin's last failed read stopped at, while it fails. Empty with
     /// no load order held.</summary>
