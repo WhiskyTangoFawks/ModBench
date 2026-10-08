@@ -292,7 +292,7 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
 });
 
 describe('a separator row (mods.md, A row, Separator)', () => {
-  it('has the URI the dot is drawn on, and no icon from the file icon theme', async () => {
+  it('has the URI its indicators are drawn on, and no icon from the file icon theme', async () => {
     const row = (await new ModListProvider({ instance: new FakeInstance(await groupedMiddleOfThree()) }).getChildren())
       .find((node) => node instanceof SeparatorNode && node.separator.name === 'Section');
 
