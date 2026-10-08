@@ -55,7 +55,7 @@ public sealed class SourceTransactionTests : IDisposable
             ?? throw new InvalidOperationException($"Expected '{documentPath}' to have a parent directory.");
     }
 
-    private static void BlockTheWriteThenRenameWithADirectoryAtTheDestinationsTmpName(string path) => Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(path).Require(), ".medit_tmp_" + Path.GetFileName(path) + ".tmp"));
+    private static void BlockTheWriteWithADirectoryAtTheDocumentsPath(string path) => Directory.CreateDirectory(path);
 
     [Fact]
     public void Rollback_PutsBackADocumentMovedToTheLeafNameItsNewEditorIdGivesIt()
@@ -237,15 +237,14 @@ public sealed class SourceTransactionTests : IDisposable
     [Fact]
     public void Rollback_SaysNothingAboutAPutThatChangedNothing()
     {
-        Seed(Fk("000800"), "npc_", "Untouched");
-        var file = FlatFile(Fk("000800"), "npc_", "Untouched");
-        BlockTheWriteThenRenameWithADirectoryAtTheDestinationsTmpName(file);
+        BlockTheWriteWithADirectoryAtTheDocumentsPath(FlatFile(Fk("000800"), "npc_", "Fresh"));
+        var before = TreeSnapshot.Of(_root);
 
         var left = RolledBack(transaction => Assert.ThrowsAny<Exception>(() => transaction.Put(
-            Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Untouched", Body(Fk("000800"), "Rewritten")))));
+            Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Fresh", Body(Fk("000800"), "Rewritten")))));
 
         Assert.Null(left);
-        Assert.Equal(Body(Fk("000800"), "Untouched"), File.ReadAllText(file));
+        Assert.Equal(before, TreeSnapshot.Of(_root));
     }
 
     [Fact]
@@ -340,7 +339,7 @@ public sealed class SourceTransactionTests : IDisposable
         Seed(Fk("000900"), "wrld", "Home");
         var directory = ContainerDirectory(Fk("000900"), "wrld", "Home");
         var movedDirectory = Path.Combine(Path.GetDirectoryName(directory).Require(), Path.GetFileName(directory).Replace("000900", "000901", StringComparison.Ordinal));
-        BlockTheWriteThenRenameWithADirectoryAtTheDestinationsTmpName(
+        BlockTheWriteWithADirectoryAtTheDocumentsPath(
             Path.Combine(directory, Path.GetFileName(PluginSourceRoot.ContainerDocument(movedDirectory))));
         var before = TreeSnapshot.Of(_root);
 
