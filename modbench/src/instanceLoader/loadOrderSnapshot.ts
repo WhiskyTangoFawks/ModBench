@@ -1,7 +1,7 @@
 // ADR-0013's snapshot. A plugins.txt line no mod provides names the Data folder's plugin.
 
 import {
-  foldPath, isRootLevel, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex, type FileWinners,
+  foldPath, isRootLevel, type FileConflictIndex, type FileWinners,
 } from './fileConflictIndex';
 import {
   fileInFolder, isPluginFile, OVERWRITE_ORIGIN, type DataFolderPlugins, type GameFolder, type ModFolders, type OriginFile,
@@ -10,7 +10,7 @@ import {
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { dataFolderFile, dataFolderOf } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
-import { DATA_DIRECTORY_ORIGIN, pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
+import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 
 export { OVERWRITE_ORIGIN };
 export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
@@ -97,42 +97,37 @@ export function providedPluginsOf(files: FileWinners): Map<string, string> {
 }
 
 /** The plugins the game loads with no line (ADR-0013), in load order: its masters,
- *  then its Creation Club plugins, each from the mod providing it, else the game folder. */
+ *  then its Creation Club plugins, each from the mod providing it, else the game folder, at the
+ *  spelling of the plugin it is among `plugins`. */
 export function pluginsLoadedWithNoLineOf(
   gameMasters: readonly string[], creationClub: readonly string[], inData: DataFolderPlugins,
   plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[],
 ): PluginAddress[] | undefined {
   if (inData.kind !== 'listed') return undefined;
-  const providerOf = new Map(plugins
-    .filter((p) => p.path !== undefined && p.winning && p.origin !== DATA_DIRECTORY_ORIGIN)
-    .map((p) => [foldPath(p.name), p.origin] as const));
+  const winnerOf = new Map(plugins.filter((p) => p.path !== undefined && p.winning).map((p) => [foldPath(p.name), p] as const));
   const seen = new Set<string>();
   return [...gameMasters, ...creationClub].flatMap((name) => {
     const folded = foldPath(name);
-    const origin = providerOf.get(folded) ?? (inData.names.has(folded) ? DATA_DIRECTORY_ORIGIN : undefined);
-    if (seen.has(folded) || origin === undefined) return [];
+    const winner = winnerOf.get(folded);
+    const provided = winner?.origin === DATA_DIRECTORY_ORIGIN ? undefined : winner;
+    const plugin = provided ?? (inData.names.has(folded) ? { name: winner?.name ?? name, origin: DATA_DIRECTORY_ORIGIN } : undefined);
+    if (seen.has(folded) || plugin === undefined) return [];
     seen.add(folded);
-    return [{ name, origin }];
+    return [{ name: plugin.name, origin: plugin.origin }];
   });
 }
 
-// Keyed by lowercased name, since plugins.txt casing is not authoritative.
-function resolvePluginPaths(
-  names: readonly string[],
-  index: FileConflictIndex,
-  gameFolder: GameFolder,
-): Map<string, string> {
-  const winnerByName = rootLevelWinners(index);
-  const entries = names
-    .map((name): [string, string | undefined] => [name, winnerByName.get(name.toLowerCase()) ?? dataFolderFile(gameFolder, name)])
-    .filter((entry): entry is [string, string] => entry[1] !== undefined);
-  return new Map(entries);
-}
+type PluginFile = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'>;
 
-// The files the game wrote at run time win over every mod, so a plugin among them wins path
-// resolution too. Only their root holds plugins, and an excluded file provides none.
-function overwriteRootFiles(runtimeOutput: readonly OriginFile[]): Map<string, OriginFile> {
-  return new Map(runtimeOutput.filter((file) => !file.excluded && isRootLevel(file.relativePath)).map((file) => [foldPath(file.relativePath), file]));
+// The plugin each name resolves to by the Mod override order, at its file's own spelling: a line's
+// spelling is not authoritative (ADR-0012).
+function winningPlugins(files: FileWinners): Map<string, PluginFile> {
+  const winners = [...files].filter((entry) => isRootLevel(entry.relativePath)).map((entry) => ({
+    name: entry.relativePath,
+    path: entry.winner,
+    origin: entry.winnerOrigin.kind === 'mod' ? entry.winnerOrigin.name : OVERWRITE_ORIGIN,
+  }));
+  return new Map(winners.map((winner) => [foldPath(winner.name), winner]));
 }
 
 /** A disabled plugins.txt line is still sent (ADR-0013), `enabled: false`. A listed
@@ -144,55 +139,40 @@ export function buildLoadOrderRows(
   runtimeOutput: readonly OriginFile[],
   gameFolder: GameFolder,
 ): (LoadOrderPlugin | LoadOrderPluginLine)[] {
-  const names = pluginOrder.map((line) => line.name);
-  const overwriteFiles = overwriteRootFiles(runtimeOutput);
-  const pathByName = resolvePluginPaths(names, index, gameFolder);
-  const winnerModByName = rootLevelWinnerMods(index);
-  // Case-folded, like every other name comparison here: plugins.txt casing is not authoritative,
-  // and a case difference must not read as "disabled" or as "a second plugin".
+  const winners = winningPlugins(index.files);
+  // The game matches a line to a file without case, so a case difference must not read as
+  // "disabled".
   const enabledNames = new Set(pluginOrder.filter((line) => line.enabled).map((line) => foldPath(line.name)));
   const lineByName = new Map<string, number>();
-  names.forEach((name, line) => lineByName.set(foldPath(name), line));
-
-  const listed = names.map((name, line) => {
-    const overwriteFile = overwriteFiles.get(foldPath(name));
-    const enabledLine = enabledNames.has(foldPath(name));
-    if (overwriteFile !== undefined) {
-      return { name, path: overwriteFile.sourcePath, origin: OVERWRITE_ORIGIN, line, enabled: enabledLine, winning: true };
-    }
-    return {
-      name,
-      path: pathByName.get(name),
-      origin: winnerModByName.get(foldPath(name)) ?? DATA_DIRECTORY_ORIGIN,
-      line,
-      enabled: enabledLine,
-      winning: true,
-    };
+  const firstSpelling = new Map<string, string>();
+  pluginOrder.forEach(({ name }, line) => {
+    lineByName.set(foldPath(name), line);
+    if (!firstSpelling.has(foldPath(name))) firstSpelling.set(foldPath(name), name);
   });
 
-  // `winning` is the Mod override order's own answer, independent of listing: an unlisted
-  // file's sole provider is still the plugin the name resolves to.
-  const isWinning = (plugin: { name: string; origin: string }) =>
-    !overwriteFiles.has(foldPath(plugin.name))
-    && foldPath(winnerModByName.get(foldPath(plugin.name)) ?? '') === foldPath(plugin.origin);
-  const outside = findPluginsOutsideLoadOrder(index, listed.map((p) => ({ name: p.name, origin: p.origin })))
+  const listed = pluginOrder.map(({ name }, line) => {
+    const folded = foldPath(name);
+    // The Data folder's files are listed without their spelling, so its plugin takes the first
+    // line's.
+    const dataName = firstSpelling.get(folded) ?? name;
+    const plugin = winners.get(folded) ?? { name: dataName, path: dataFolderFile(gameFolder, dataName), origin: DATA_DIRECTORY_ORIGIN };
+    return { ...plugin, line, enabled: enabledNames.has(folded), winning: true };
+  });
+
+  const isWinning = ({ name, origin }: PluginFile) => {
+    const winner = winners.get(foldPath(name));
+    return winner?.name === name && winner.origin === origin;
+  };
+  const overwriteFiles = runtimeOutput.filter((file) => !file.excluded);
+  const outside = findPluginsOutsideLoadOrder([...index.filesByMod, [OVERWRITE_ORIGIN, overwriteFiles]], listed)
     .map((plugin) => ({
-      name: plugin.name,
-      path: plugin.path,
-      origin: plugin.origin,
+      ...plugin,
       line: lineByName.get(foldPath(plugin.name)) ?? null,
       enabled: enabledNames.has(foldPath(plugin.name)),
       winning: isWinning(plugin),
     }));
 
-  // overwrite/'s own unlisted plugins — winning-most, but no line names them.
-  const strays = [...overwriteFiles]
-    .filter(([folded, file]) => !lineByName.has(folded) && isPluginFile(file.relativePath))
-    .map(([, file]) => ({
-      name: file.relativePath, path: file.sourcePath, origin: OVERWRITE_ORIGIN, line: null, enabled: false, winning: true,
-    }));
-
-  return [...listed, ...outside, ...strays];
+  return [...listed, ...outside];
 }
 
 /** ADR-0013's snapshot: none without a listable game folder, a refusal while a mod's plugin has no mod
@@ -209,7 +189,7 @@ export function loadOrderSnapshotOf(value: {
   const { dataFolder } = value.gameFolder;
   // The filter states a found game folder's own guarantee, never an unchecked cast.
   const rows = value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined);
-  const rowAt = new Map(rows.map((p) => [pluginAddressKey(p), p] as const));
+  const rowAt = new Map(rows.map((p) => [exactPluginAddressKey(p), p] as const));
   const whatProvides = (origin: string) => byOrigin<SnapshotProvider | undefined>(origin, {
     overwrite: { kind: 'None' },
     data: { kind: 'Game' },
@@ -219,7 +199,7 @@ export function loadOrderSnapshotOf(value: {
     },
   });
   const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p) =>
-    rowAt.get(pluginAddressKey(p)) ?? { ...p, path: fileInFolder(dataFolder, p.name), line: null, winning: true });
+    rowAt.get(exactPluginAddressKey(p)) ?? { ...p, path: fileInFolder(dataFolder, p.name), line: null, winning: true });
   const placed = new Set(loadedWithNoLine.map((p) => foldPath(p.name)));
   const fromLines = rows
     .filter((p): p is LoadOrderPlugin & { line: number } => p.line !== null && p.enabled && p.winning)
@@ -238,7 +218,7 @@ export function loadOrderSnapshotOf(value: {
       unprovided.set(origin, [...unprovided.get(origin) ?? [], name]);
       continue;
     }
-    const key = pluginAddressKey({ name, origin });
+    const key = exactPluginAddressKey({ name, origin });
     if (!sent.has(key)) sent.set(key, { name, path, origin, provider, line, lineNamesIt: line !== null && winning });
   }
   if (unprovided.size > 0) return { refusal: refusalOf(unprovided) };
