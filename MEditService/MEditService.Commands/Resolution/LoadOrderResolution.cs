@@ -47,7 +47,7 @@ internal sealed class LoadOrderResolution(
 
     /// <summary>xEdit's HighestOverrideVisibleForFile: the source's copy stands unless it is Partial Form
     /// or a master of the destination loads after it. <paramref name="text"/> is that master's copy,
-    /// null when the source's stands. It reads the load order the source was read from.</summary>
+    /// null when the source's stands.</summary>
     internal RecordEditResult? HighestOverrideVisibleToTheDestination(
         CopySource source, RecordIdentity identity, SourceRepository destinationRepository, PluginAddress destinationPlugin,
         out string? text)
