@@ -60,7 +60,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   // Lives for the activation, disposed with the editor commands.
   const loadOrderStatusTracker = trackLoadOrderStatus(
     meditClient, () => { announceConflictsComputed(tabs); });
-  // The picker and the panel's name are each panel's own, added per panel below.
+  // The picker and the title are each tab's own, which the record grid adds per tab.
   const routerDeps: SharedRecordPanelDeps = {
     meditClient, channel: outputChannel, reporter: deps.reporterFor('recordPanel'),
     conflictsComputed: () => loadOrderStatusTracker.current(), loadFailures: () => loadOrderStatusTracker.failures(),
@@ -107,8 +107,6 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       focusedCell: () => tabs.focusedCell(),
       tellFocusedPanel: (message) => { tabs.activeTab()?.post(message); },
     }),
-    // Editor owns the record gestures (delete/copy) — registered once, here,
-    // rather than from the Plugins-row command registration.
     ...registerRecordLifecycleCommands(
       meditClient, deps.reporterFor('recordLifecycle'), deps.ask, selections, deps.recordWrite),
     ...registerRecordCopyCommands(

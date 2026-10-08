@@ -55,7 +55,7 @@ export class RecordTabs implements Iterable<RecordTab> {
   }
 
   setCell(tab: RecordTab, cell: FocusedCellContext | undefined, userFocus: boolean): void {
-    tab.cell = cell;
+    tab.focusCell(cell);
     if (tab === this.active) this.showCell(cell);
     if (userFocus) this.entered();
   }
@@ -84,7 +84,7 @@ export class RecordTabs implements Iterable<RecordTab> {
       this.active = undefined;
       this.showCell(undefined);
     }
-    if (tab.formKey !== undefined && [...this.tabs].every((open) => open.formKey === undefined)) this.fire(undefined);
+    if (this.lastFired !== undefined && [...this.tabs].every((open) => open.formKey === undefined)) this.fire(undefined);
   }
 
   private fire(formKey: string | undefined): void {

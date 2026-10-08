@@ -1148,6 +1148,28 @@ describe('several records opened at once', () => {
     expect(columnsPosted(tab)).toHaveLength(1);
   });
 
+  it('leave alone a file\'s tab that shows no record yet, whose page asks its first read only once it does', async () => {
+    const GUN_FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+    const client = severalClient();
+    client.setQueryAnswer('getRecordFile', { path: GUN_FILE });
+    client.setQueryFailureOnce('getRecordOfFile', new Error('mEdit has not started'));
+    client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
+    const { openDocument } = makeEditor(client);
+    const tab = await openDocument(fakeUri(GUN_FILE));
+
+    await openSeveral();
+    client.emit({
+      kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
+      loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1 },
+    });
+    await settle();
+    tab.receive(firstRead);
+    await settle();
+
+    expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
+    expect(columnsPosted(tab)).toEqual([]);
+  });
+
   it('leave the tab they opened to show every active plugin\'s copy again when its record is opened alone onto it', async () => {
     const { vsCodeOpensTabs } = makeEditor(severalClient());
     const tabOn = vsCodeOpensTabs();

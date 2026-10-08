@@ -15,21 +15,18 @@ export type EditGate = (address: EditAddress, write: (formKey: string) => Promis
 
 interface InFlight { writes: number; reported: Set<string>; refreshed: boolean }
 
-// One plugin's record moved by an edit of its FormID. `asked` is whether the tab was told to read
-// `to`. `readAt` is when that read was answered: an address taken after it names what it means.
-interface Move { plugin: PluginAddress; from: string; to: string; asked: boolean; readAt: number | undefined }
+interface Move { plugin: PluginAddress; from: string; to: string; toldToRead: boolean; readAnsweredAt: number | undefined }
 
 interface TabEvents { retargeted(tab: RecordTab): void; closed(tab: RecordTab): void }
 
 /** One open record tab, and the one place it reads again: with an edit in flight, a read waits for
  *  the answer, then reads once under the FormKey the tab then shows. Closed, it acts on nothing. */
 export class RecordTab {
-  /** The read that shows a file's tab, until mEdit says which record the file holds. */
-  unread: (() => Promise<void>) | undefined;
-  place: ViewState | undefined;
-  cell: FocusedCellContext | undefined;
-  origins: readonly string[] = [];
-  private shown: { formKey: string; plugin: PluginAddress } | undefined;
+  private shown: EditAddress | undefined;
+  private fileRead: (() => Promise<void>) | undefined;
+  private placeKept: ViewState | undefined;
+  private focused: FocusedCellContext | undefined;
+  private originsRead: readonly string[] = [];
   private columnsRead: readonly ColumnCopy[] = [];
   private inFlight: InFlight | undefined;
   private readonly moves: Move[] = [];
@@ -46,18 +43,42 @@ export class RecordTab {
 
   get isOpen(): boolean { return this.open; }
 
-  get formKey(): string | undefined { return this.shown?.formKey; }
+  /** The copy the tab's document holds, while it is open and shown. */
+  get copy(): EditAddress | undefined { return this.open && this.shown ? { ...this.shown } : undefined; }
 
-  /** The copy the tab's document holds, once it is shown. */
-  get copy(): { formKey: string; plugin: PluginAddress } | undefined { return this.shown && { ...this.shown }; }
+  get formKey(): string | undefined { return this.copy?.formKey; }
+
+  /** Open, and waiting for mEdit to say which record its file holds. */
+  get awaitsRecord(): boolean { return this.open && !this.shown; }
+
+  get place(): ViewState | undefined { return this.placeKept; }
+
+  get cell(): FocusedCellContext | undefined { return this.focused; }
+
+  get origins(): readonly string[] { return this.originsRead; }
 
   /** The records the tab's last answered read showed beside its own. */
   get columns(): readonly ColumnCopy[] { return this.columnsRead; }
 
-  show(formKey: string, plugin: PluginAddress): void {
-    this.unread = undefined;
+  show({ formKey, plugin }: EditAddress): void {
     this.shown = { formKey, plugin };
   }
+
+  /** Reads which record the tab's file holds, now and again on each `readFileAgain` until it shows one. */
+  readFile(read: () => Promise<void>): Promise<void> {
+    this.fileRead = read;
+    return read();
+  }
+
+  readFileAgain(): void {
+    if (this.awaitsRecord) void this.fileRead?.();
+  }
+
+  keepPlace(place: ViewState): void { this.placeKept = place; }
+
+  focusCell(cell: FocusedCellContext | undefined): void { this.focused = cell; }
+
+  showOrigins(origins: readonly string[]): void { this.originsRead = origins; }
 
   /** Disposed when the tab closes. */
   own(disposable: vscode.Disposable): void {
@@ -86,7 +107,7 @@ export class RecordTab {
    *  it shows it under the key it moved to. */
   gateShowing(address: EditAddress): EditGate | undefined {
     const addressedAt = ++this.clock;
-    if (this.formKey !== this.targetOf(address, addressedAt)) return undefined;
+    if (this.formKey !== this.keyNow(address, addressedAt)) return undefined;
     return (edited, write) => this.edit(edited, addressedAt, write);
   }
 
@@ -99,7 +120,7 @@ export class RecordTab {
     }
     const shown = this.formKey;
     if (!shown || !this.shows(shown, keys)) return;
-    for (const move of this.moves) if (move.to === shown) move.asked = true;
+    for (const move of this.moves) if (move.to === shown) move.toldToRead = true;
     this.read(shown);
   }
 
@@ -128,12 +149,12 @@ export class RecordTab {
    *  beside it. Reading a chain's last key ends every move in it, back to the key the tab last read. */
   answered(formKey: string, columns: readonly ColumnCopy[]): void {
     this.columnsRead = columns;
-    const readAt = ++this.clock;
-    let ended = this.moves.filter(move => move.readAt === undefined && move.to === formKey);
+    const answeredAt = ++this.clock;
+    let ended = this.moves.filter(move => move.readAnsweredAt === undefined && move.to === formKey);
     while (ended.length > 0) {
-      for (const move of ended) move.readAt = readAt;
+      for (const move of ended) move.readAnsweredAt = answeredAt;
       const reached = ended;
-      ended = this.moves.filter(move => move.readAt === undefined && reached.some(later =>
+      ended = this.moves.filter(move => move.readAnsweredAt === undefined && reached.some(later =>
         later.from === move.to && samePluginAddress(later.plugin, move.plugin)));
     }
   }
@@ -141,18 +162,17 @@ export class RecordTab {
   /** An edit moved the plugin's record from `from` to `to`, which the tab shows: it reads `to` once
    *  mEdit reports it. */
   moved(plugin: PluginAddress, from: string, to: string): void {
-    this.moves.push({ plugin, from, to, asked: false, readAt: undefined });
+    this.moves.push({ plugin, from, to, toldToRead: false, readAnsweredAt: undefined });
   }
 
   private close(): void {
     this.open = false;
-    this.unread = undefined;
     for (const disposable of this.owned.splice(0)) disposable.dispose();
     this.events.closed(this);
   }
 
   private async edit(address: EditAddress, addressedAt: number, write: (formKey: string) => Promise<string | undefined>): Promise<void> {
-    const target = { ...address, formKey: this.targetOf(address, addressedAt) };
+    const target = { ...address, formKey: this.keyNow(address, addressedAt) };
     const entry = this.inFlight ?? { writes: 0, reported: new Set<string>(), refreshed: false };
     entry.writes += 1;
     this.inFlight = entry;
@@ -165,21 +185,20 @@ export class RecordTab {
     }
     if (!this.open) return;
     if (newFormKey) this.follow(target, newFormKey);
-    if (entry.writes === 0) this.settle(entry);
+    if (entry.writes === 0) this.readWhatWasHeld(entry);
   }
 
   // An edit of the FormID moves its own plugin's record, and the tab goes with it (editor.md,
   // The record header, story 2).
   private follow(target: EditAddress, newFormKey: string): void {
     this.moved(target.plugin, target.formKey, newFormKey);
-    if (!this.shown || this.shown.formKey !== target.formKey) return;
-    this.shown.formKey = newFormKey;
+    if (this.shown?.formKey !== target.formKey) return;
+    this.shown = { ...this.shown, formKey: newFormKey };
     if (this.panel.title === target.formKey) this.panel.title = newFormKey;
     this.events.retargeted(this);
   }
 
-  // The last answer in: what the held reports and refreshes asked for, once.
-  private settle(entry: InFlight): void {
+  private readWhatWasHeld(entry: InFlight): void {
     const shown = this.formKey;
     if (shown && this.shows(shown, [...entry.reported])) this.reported([...entry.reported]);
     else if (entry.refreshed) this.refresh();
@@ -190,16 +209,15 @@ export class RecordTab {
   }
 
   private awaitsReport(): boolean {
-    return this.moves.some(move => move.to === this.formKey && !move.asked);
+    return this.moves.some(move => move.to === this.formKey && !move.toldToRead);
   }
 
-  // The same plugin's record, addressed before the tab read where it moved to, is where it
-  // moved to.
-  private targetOf(address: EditAddress, addressedAt: number): string {
+  private keyNow(address: EditAddress, addressedAt: number): string {
     let formKey = address.formKey;
     for (const move of this.moves) {
       const samePlugin = samePluginAddress(move.plugin, address.plugin);
-      if (samePlugin && move.from === formKey && (move.readAt === undefined || addressedAt < move.readAt)) formKey = move.to;
+      const addressedBeforeItsRead = move.readAnsweredAt === undefined || addressedAt < move.readAnsweredAt;
+      if (samePlugin && move.from === formKey && addressedBeforeItsRead) formKey = move.to;
     }
     return formKey;
   }

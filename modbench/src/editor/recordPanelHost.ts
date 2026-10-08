@@ -66,7 +66,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     // No new tab took them, so VS Code showed the document's tab already open in the group, which
     // is active now (editor.md, Opening, story 3).
     for (const tab of this.deps.tabs) {
-      if (tab.document.toString() === key && tab.panel.active) tab.postOnceListening({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: [...untaken] });
+      if (tab.copy && tab.document.toString() === key && tab.panel.active) tab.postOnceListening({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: [...untaken] });
     }
   }
 
@@ -177,21 +177,20 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     const read = async (): Promise<void> => {
       try {
         const { formKey, ...copy } = await this.deps.client.getRecordOfFile(fsPath);
-        if (tab.unread) this.showFile(panel, tab, document, { formKey, plugin: pluginAddressOf(copy) }, { columns, place }, () => undefined);
+        if (tab.awaitsRecord) this.showFile(panel, tab, document, { formKey, plugin: pluginAddressOf(copy) }, { columns, place }, () => undefined);
       } catch (err) {
         const reason = errorMessage(err);
-        if (reason === shownReason || !tab.unread) return;
+        if (reason === shownReason || !tab.awaitsRecord) return;
         shownReason = reason;
         this.deps.channel.warn(`Failed to read ${fsPath}: ${reason}`);
         showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: 'main.js', globals: { mEditLoadError: reason } });
       }
     };
-    tab.unread = read;
-    await read();
+    await tab.readFile(read);
   }
 
   readAgain(): void {
-    for (const tab of this.deps.tabs) void tab.unread?.();
+    for (const tab of this.deps.tabs) tab.readFileAgain();
   }
 
   // Saved, the read model wins (commands.md, Principles), but mEdit compares no inactive plugin's
@@ -212,7 +211,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
 
   private show(panel: vscode.WebviewPanel, tab: RecordTab, { formKey, plugin }: RecordCopy, { columns, place }: GridPage, document: TabDocument): void {
     const { tabs, routerDeps, context } = this.deps;
-    tab.show(formKey, plugin);
+    tab.show({ formKey, plugin });
     // A reply and a follow reach the one tab that asked, never a broadcast.
     const tabRouterDeps = routerDepsForTab(routerDeps, tab, tabs, document);
     tab.own(panel.webview.onDidReceiveMessage((message: unknown) => {

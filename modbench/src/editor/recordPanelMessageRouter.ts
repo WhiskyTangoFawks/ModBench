@@ -71,10 +71,10 @@ export function routerDepsForTab(
     formKeyPicker: { meditClient: shared.meditClient, reporter: shared.reporter, reply },
     focusCell: (context, userFocus) => { tabs.setCell(tab, context, userFocus); },
     reply,
-    originsShown: (shown) => { tab.origins = shown; },
+    originsShown: (shown) => { tab.showOrigins(shown); },
     ...document,
     titleFromRead: (formKey, columns) => { if (tab.isOpen) document.titleFromRead(formKey, columns); },
-    keepViewState: (state) => { tab.place = state; },
+    keepViewState: (state) => { tab.keepPlace(state); },
     readAnswered: (formKey, columns) => { tab.answered(formKey, columns); },
     tabPlace: () => (tab.panel.viewColumn === undefined ? undefined : { document: tab.document.toString(), viewColumn: tab.panel.viewColumn }),
   };

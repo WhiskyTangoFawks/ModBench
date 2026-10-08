@@ -40,7 +40,7 @@ function heard(client: InMemoryMEditClient) {
 function showing(tabs: RecordTabs, formKey: string, title = 'MovedNpc') {
   const panel = fakePanel(title);
   const tab = tabs.open(panel, fakeUri(`/${formKey}.json`));
-  tab.show(formKey, EDITED_MOD_ESP_FROM_MODA.plugin);
+  tab.show({ formKey, plugin: EDITED_MOD_ESP_FROM_MODA.plugin });
   return { panel, tab };
 }
 
@@ -131,8 +131,8 @@ describe('a record tab going with the record to its new FormKey and reading it t
     expect(loadsOf(elsewhere.panel)).toEqual([]);
   });
 
-  it('reads nothing into a tab closed while its edit was in flight, nor follows it to the new FormKey', async () => {
-    const { client, panel, tab } = openOn('000800:Mod.esp');
+  it('reads nothing into a tab closed while its edit was in flight, nor retitles it with the new FormKey', async () => {
+    const { client, panel, tab } = openOn('000800:Mod.esp', '000800:Mod.esp');
     const { write, answer } = writeAnsweredWhenTheTestChooses();
     const editing = tab.gate()(EDITED_MOD_ESP_FROM_MODA, write);
     client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
@@ -142,7 +142,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     await editing;
 
     expect(loadsOf(panel)).toEqual([]);
-    expect(tab.formKey).toBe('000800:Mod.esp');
+    expect(panel.title).toBe('000800:Mod.esp');
   });
 
   it('holds only the tab whose edit is in flight', async () => {
@@ -241,19 +241,14 @@ describe('a record tab going with the record to its new FormKey and reading it t
     });
   });
 
-  it('leaves the open tabs once closed: no report or refresh reaches it, and an edit fired with no tab neither holds nor follows it', async () => {
-    const client = new InMemoryMEditClient();
-    const tabs = heard(client);
-    const [closed, open] = [showing(tabs, '000800:Mod.esp'), showing(tabs, '000800:Mod.esp')];
+  it('is no longer among the open tabs once closed, and shows no record', () => {
+    const tabs = heard(new InMemoryMEditClient());
+    const [closed, open] = [showing(tabs, '000800:Mod.esp'), showing(tabs, '000801:Mod.esp')];
 
     closed.panel.close();
-    client.emit(rowsChanged(['000800:Mod.esp']));
-    announceConflictsComputed(tabs);
-    await tabs.gateShowing(EDITED_MOD_ESP_FROM_MODA)(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
-    expect(loadsOf(closed.panel)).toEqual([]);
-    expect(closed.tab.formKey).toBe('000800:Mod.esp');
-    expect(open.tab.formKey).toBe('000900:Mod.esp');
+    expect([...tabs]).toEqual([open.tab]);
+    expect(closed.tab.copy).toBeUndefined();
   });
 
   describe('on the stream\'s reconnect, a tab waiting for its new FormKey, since a report missed while the stream was down would leave it waiting for ever', () => {
