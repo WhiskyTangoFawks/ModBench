@@ -51,36 +51,37 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
     refreshMatchingPlugins();
   };
 
-  let requested: string | undefined;
+  let lastRequested: string | undefined;
+  let reads = 0;
 
-  const apply = async (filter: RecordFilter): Promise<void> => {
-    requested = filter.source;
-    const error = await client.setFilter(filter);
-    if (error !== null) {
-      reporter.report('error', `Filter failed — ${error}`);
-      return;
-    }
-    await showHeld(() => undefined);
-  };
-
-  // Replies and clearings can arrive in any order, so what mEdit holds decides what shows.
-  const showHeld = async (say: (viewChanged: boolean) => void, shownBefore = showRecordFilter.shownSource()): Promise<void> => {
+  // Replies and clearings can arrive in any order, so what mEdit holds decides what shows, and
+  // only the latest read may show it.
+  const showHeld = async (): Promise<void> => {
+    const read = ++reads;
     try {
-      show(await client.getActiveFilter());
-      say(showRecordFilter.shownSource() !== shownBefore);
+      const held = await client.getActiveFilter();
+      if (read === reads) show(held);
     } catch (e) {
-      say(false);
       reporter.report('error', 'Could not read the record filter', errorMessage(e));
     }
   };
 
+  const apply = async (filter: RecordFilter): Promise<void> => {
+    lastRequested = filter.source;
+    const error = await client.setFilter(filter);
+    if (error !== null) reporter.report('error', `Filter failed — ${error}`);
+    await showHeld();
+  };
+
   const onCleared = async ({ source, reason }: { source: string; reason: string }): Promise<void> => {
     const shownBefore = showRecordFilter.shownSource();
+    await showHeld();
     const message = `The record filter ${source} was cleared`;
-    await showHeld((viewChanged) => {
-      if (viewChanged || requested === source || shownBefore === source) reporter.report('warning', message, reason);
-      else reporter.shownOnSurface('warning', message, reason);
-    }, shownBefore);
+    if (showRecordFilter.shownSource() !== shownBefore || lastRequested === source || shownBefore === source) {
+      reporter.report('warning', message, reason);
+    } else {
+      reporter.shownOnSurface('warning', message, reason);
+    }
   };
 
   // catalog `filter`, Option "query source": a document the caller names, or the input box.
@@ -110,11 +111,8 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
       source === undefined ? fromPick() : fromDocument(source)),
     vscode.commands.registerCommand('modbench.record.clearFilter', async () => {
       const error = await client.clearFilter();
-      if (error !== null) {
-        reporter.report('error', `Could not clear the record filter — ${error}`);
-        return;
-      }
-      show(null);
+      if (error !== null) reporter.report('error', `Could not clear the record filter — ${error}`);
+      await showHeld();
     }),
   ];
 }
