@@ -4,13 +4,12 @@ using MEditService.LoadOrder;
 namespace MEditService.Commands.Edits;
 
 /// <summary>Copy's mode Option (commands.md, Record, `copy`): the record under its own FormKey, or a
-/// duplicate under the destination's next free one, or the record with all its child records under its own FormKey.</summary>
+/// duplicate under the destination's next free one.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum CopyMode
 {
     New,
     Override,
-    DeepOverride,
 }
 
 /// <summary>One record into one destination: the unit a copy lands or is refused by.</summary>

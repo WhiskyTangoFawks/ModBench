@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -102,16 +104,22 @@ internal static class RecordEndpoints
         {
             if (path is null || !Path.IsPathFullyQualified(path))
                 return Results.Problem("Name the file by its absolute path.", statusCode: 400);
-            return svc.TryGetRecordOfFile(path, out var record, out var whyNone)
-                ? Results.Ok(Addressed(record.Value))
-                : Results.Problem(whyNone, statusCode: 422);
+            return svc.GetRecordOfFile(path) switch
+            {
+                RecordOfFileAnswer.Holds holds => Results.Ok(Addressed(holds.Record)),
+                RecordOfFileAnswer.HoldsNone => Results.NoContent(),
+                RecordOfFileAnswer.Refused refused => Results.Problem(refused.Why, statusCode: 422),
+                _ => throw new UnreachableException(),
+            };
         })
         .WithName("GetRecordOfFile")
         .WithDescription(
             "The record whose own document the file at an absolute path is, read from the file's text: its plugin and " +
-            "FormKey. A file that is no record's own document refuses, saying why.")
+            "FormKey. No content when the file holds no record. A file that cannot be read as a " +
+            "record's own document refuses, saying why.")
         .WithTags("Records")
         .Produces<RecordAddress>()
+        .Produces(204)
         .ProducesProblem(400)
         .ProducesProblem(422)
         .ProducesProblem(503);
@@ -168,16 +176,12 @@ internal static class RecordEndpoints
         .WithDescription(
             "Override: the source record's own text lands verbatim in the destination under the same " +
             "FormKey, without its child records; the master dependency is derived at compile (ADR-0008). " +
-            "DeepOverride: the same for a record with child records, and every child record at any depth " +
-            "lands with it; a record with none copies as Override. New: a duplicate without its child " +
-            "records under the destination's next free FormID, with an EditorID derived from the source's, " +
+            "New: a duplicate without its child records under the destination's next free FormID, with an EditorID derived from the source's, " +
             "and a self-reference follows the copy. A cell or a worldspace is refused as New. In every " +
-            "mode, a container the destination lacks is copied in as an override. Replace applies to Override and DeepOverride only. Under " +
-            "Override, a destination that already holds the record is refused unless replace is given, and " +
+            "mode, a container the destination lacks is copied in as an override. Replace applies to Override only. " +
+            "Under Override, a destination that already holds the record is refused unless replace is given, and " +
             "a replacement changes the record's own fields only, keeping the children the destination's " +
-            "copy carries. Under DeepOverride, replace overwrites each child record the destination " +
-            "holds and keeps its copy of the record itself; a child record the destination holds and the " +
-            "source lacks stays. Each record and destination is applied or refused on its own, and the " +
+            "copy carries. Each record and destination is applied or refused on its own, and the " +
             "answer names both.")
         .WithTags("Records")
         .Produces<RecordCopyResponse>()

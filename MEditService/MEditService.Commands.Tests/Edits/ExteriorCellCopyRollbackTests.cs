@@ -11,7 +11,6 @@ public sealed class ExteriorCellCopyRollbackTests
     [Theory]
     [InlineData(CopyMode.Override, false)]
     [InlineData(CopyMode.Override, true)]
-    [InlineData(CopyMode.DeepOverride, false)]
     [InlineData(CopyMode.New, true)]
     public void ACopyThatMintsTheWorldspace_AndFailsOnTheCell_LeavesTheDestinationTreeAsItWas(CopyMode mode, bool ofAPlacedReference)
     {

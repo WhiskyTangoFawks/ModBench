@@ -237,8 +237,9 @@ export interface MEditClient {
   getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null>;
   /** Null: the plugin holds no such record. No path: the plugin is untracked, so its copy has no file. */
   getRecordFile(plugin: PluginAddress, formKey: string): Promise<RecordFile | null>;
-  /** The record whose own document the file at the absolute `path` is. Rejects with mEdit's reason when it is none. */
-  getRecordOfFile(path: string): Promise<RecordAddress>;
+  /** The record whose own document the file at the absolute `path` is; null when mEdit answers the file holds
+   *  no record. Rejects with mEdit's reason when it cannot read the file. */
+  getRecordOfFile(path: string): Promise<RecordAddress | null>;
   /** `text` is the current text of the document carrying the record; mEdit writes nothing. */
   getEditChanges(
     formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope, text: string,
@@ -257,6 +258,16 @@ export interface MEditClient {
   /** A listener handed its kind's payload. A frame missing its kind's payload
    *  reaches no listener. */
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void;
+
+  /** The latest load-order status; undefined before the first, and again when a held status
+   *  resets: mEdit has gone, or the stream has reopened onto a process that may be another. */
+  readonly loadOrderStatus: LoadOrderStatus | undefined;
+  /** Each status as it arrives, and undefined when a held status resets. */
+  onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void;
+  /** A reconcile settled: a ready status newer than the last settled one, even when its picture
+   *  repeats the last, and a status whose failures differ from those held. A reset starts the
+   *  versions over and tells nothing. */
+  onLoadOrderSettled(listener: (status: LoadOrderStatus) => void): () => void;
 
   /** Launches mEdit when it is not running. One snapshot is put at a time, and the newest lands. */
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;

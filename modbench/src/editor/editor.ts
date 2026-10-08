@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { RecordTabs } from './recordTabs';
 import { GRID_VIEW, publishFocusedCell, gridCopyValueText } from './focusedCells';
-import { announceConflictsComputed } from './notificationWiring';
 import { registerEditorCommands, type EditorCommandDeps } from './editorCommands';
 import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './ReferencedByTreeProvider';
 import { createReferencedByView } from './referencedByView';
@@ -20,7 +19,6 @@ type EditorDeps = Omit<EditorCommandDeps,
 };
 
 export interface Editor extends vscode.Disposable {
-  announceConflictsComputed(): void;
   nameFilters: ReadonlyMap<string, Pick<NameFilter, 'open' | 'clear'>>;
   copyValue: readonly CopyValueAdapter[];
 }
@@ -53,7 +51,6 @@ export function createEditor(deps: EditorDeps): Editor {
   }).forEach(own);
 
   return {
-    announceConflictsComputed: () => { announceConflictsComputed(tabs); },
     nameFilters: new Map([[REFERENCED_BY_VIEW, referencedBy.filter]]),
     copyValue: [
       { text: gridCopyValueText(() => tabs.focusedCell()), reporterTag: 'recordGrid.copy' },

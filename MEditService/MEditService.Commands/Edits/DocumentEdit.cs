@@ -72,7 +72,7 @@ internal static class DocumentEdit
                 _ => Move(cursor, envelope.Value, spelled, out edited, out editedMeta),
             };
         if (patched is { } refused) return refused;
-        ClearAliases(record, cursor.Column);
+        RecordEmptying.ClearAliases(record, cursor.Column);
         emptying?.Apply(record, request.Schema, left);
         var prefix = into == null ? move?.Apply(root) ?? request.Prefix : request.Prefix;
 
@@ -652,14 +652,6 @@ internal static class DocumentEdit
     }
 
     // A column's aliases sit beside the member they spell again, so they clear in that member's owner.
-    private static void ClearAliases(JsonObject record, ColumnSpec column)
-    {
-        JsonNode? owner = record;
-        foreach (var segment in (column.Synthetic?.BackingPath ?? column.PropertyName).Split('.')[..^1]) owner = owner?[segment];
-        if (owner is not JsonObject members) return;
-        foreach (var alias in column.Aliases) members.Remove(alias);
-    }
-
     // ── walking ─────────────────────────────────────────────────────────────
 
     private static JsonObject WalkPrefix(JsonObject root, IReadOnlyList<PathHop> prefix) =>

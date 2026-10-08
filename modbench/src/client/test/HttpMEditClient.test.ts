@@ -93,6 +93,23 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
   });
 });
 
+describe('HttpMEditClient — the load-order status', () => {
+  it('is the latest tick the stream carried, and is gone once mEdit is stopped', async () => {
+    const { response, push } = pushableStreamResponse();
+    const client = makeClient(routedFetch([['/notifications/stream', () => Promise.resolve(response)]]));
+    const changes: (boolean | undefined)[] = [];
+    client.onLoadOrderStatus((status) => changes.push(status?.conflictsComputed));
+    await client.start();
+
+    push(readyTickThatSettlesPutLoadOrder());
+    await vi.waitFor(() => expect(client.loadOrderStatus?.conflictsComputed).toBe(true));
+    await client.stop();
+
+    expect(client.loadOrderStatus).toBeUndefined();
+    expect(changes).toEqual([true, undefined]);
+  });
+});
+
 describe('HttpMEditClient — the notification stream follows the status', () => {
   beforeEach(() => { vi.resetAllMocks(); });
   afterEach(() => { vi.restoreAllMocks(); });
@@ -1181,8 +1198,15 @@ describe('HttpMEditClient — the record a file holds', () => {
     expect(url.searchParams.get('path')).toBe(path);
   });
 
-  it('rejects with mEdit\'s reason when the file holds no record', async () => {
-    const detail = 'plugin-source/Shared.esp/Cells/GroupRecordData.json is a group\'s metadata file, which holds no record.';
+  it('answers null when mEdit answers the file holds no record', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 204 })));
+    const client = makeClient(fetch);
+
+    await expect(client.getRecordOfFile(path)).resolves.toBeNull();
+  });
+
+  it('rejects with mEdit\'s reason when it cannot read the file', async () => {
+    const detail = `${path} declares no FormKey, so it is no record's document.`;
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { detail })));
     const client = makeClient(fetch);
 

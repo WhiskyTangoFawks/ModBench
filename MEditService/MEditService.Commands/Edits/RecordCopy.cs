@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -9,42 +10,32 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The container half of both copy modes: a child lands inside its container's document,
-/// copied in as an override with its own fields when the destination lacks it. One write path with
-/// the write side (ADR-0007).</summary>
+/// <summary>The container half of both copy modes: a child lands inside its container's document, the
+/// container copied in when absent, as a Partial Form where the game allows (ADR-0007).</summary>
 internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger, RecordTextCodec codec)
 {
     /// <summary>The tracked plugin a copy lands in: its repository and its key. No folder — every
     /// write here is a put, and the repository decides where a document goes.</summary>
     internal readonly record struct Destination(SourceRepository Repository, PluginAddress Plugin);
 
-    /// <summary>Own fields only unless <paramref name="withChildren"/>, as every plain Copy as
-    /// Override: a copied topic lands with no responses.</summary>
+    /// <summary>Own fields only, as every Copy as Override: a copied topic lands with no responses.</summary>
     internal RecordEditResult CopyEmbeddedChildAsOverride(
         CopySource source, SourceDocument child, DocumentContainment container,
-        Destination destination, GameRelease release, bool replace, bool withChildren)
+        Destination destination, GameRelease release, bool replace)
     {
         var formKey = child.FormKey;
-        var landing = withChildren
-            ? child
-            : child with { Body = ContainerDocumentEdits.WithoutChildren(codec, child.Body, release, child.RecordType) };
+        var landing = child with { Body = ContainerDocumentEdits.WithoutChildren(codec, child.Body, release, child.RecordType) };
 
         if (destination.Repository.FormKeysUsed(destination.Plugin).Contains(formKey))
         {
             if (Identity(destination, formKey, release) is not { } existing) return RefuseKeyWithNoDocument(destination, formKey);
-            if (withChildren) return MergeChildrenIntoHeldCopy(source.Plugin, existing, child.Body, child.RecordType, destination, release);
             if (!replace) return RefuseHeldWithoutReplace(formKey, destination.Plugin);
 
             // Replaced in place, never duplicated.
             return ReplaceEmbeddedChildInPlace(source.Plugin, existing, landing, destination, release);
         }
 
-        var elsewhere = withChildren
-            ? FindHeldElsewhere(destination, child.Body, child.RecordType, null, release)
-            : HeldElsewhere.None;
-        landing = landing with { Body = CarryingHeldElsewhere(elsewhere, landing.Body, landing.RecordType, release) };
-        var appended = LandWithoutHeldElsewhere(
-            destination, elsewhere, () => AppendEmbeddedChild(source, container, landing, destination, release));
+        var appended = AppendEmbeddedChild(source, container, landing, destination, release);
 
         if (appended.Applied && logger.IsEnabled(LogLevel.Information))
         {
@@ -91,10 +82,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     {
         var containerFormKey = container.ParentFormKey;
         var sourceContainer = HeldBy(source, containerFormKey);
-        if (resolution.HighestOverrideVisibleToTheDestination(
-                source, sourceContainer, destination.Repository, destination.Plugin, out var visibleText) is { } refused)
-            return refused;
-        var ownFields = OwnFieldsOf(source, sourceContainer, visibleText, release);
+        if (!TryCopyIn(source, sourceContainer, destination, release, out var ownFields, out var refused)) return refused;
         var withChild = ownFields with
         {
             Body = ContainerDocumentEdits.WithChildAppended(
@@ -112,53 +100,10 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         {
             logger.LogInformation(
                 "Landed {FormKey} in {DestinationPlugin} ({DestinationOrigin}) — copied in its container {ContainerFormKey} " +
-                "as an override around it",
+                "around it",
                 child.FormKey, destination.Plugin.Name, destination.Plugin.Origin, containerFormKey);
         }
         return landed;
-    }
-
-    /// <summary>A deep copy overwrites the child records a destination holds, so it asks first.</summary>
-    internal static RecordEditResult? RefuseIfHoldsChildRecords(
-        Destination destination, string formKey, IEnumerable<string> childKeys)
-    {
-        var used = destination.Repository.FormKeysUsed(destination.Plugin);
-        var held = childKeys.FirstOrDefault(used.Contains);
-        return held is null
-            ? null
-            : RecordEditResult.Refused(
-                RecordEditRefusal.DestinationHoldsRecord,
-                $"{destination.Plugin.Name} ({destination.Plugin.Origin}) already holds {held}, a child record of " +
-                $"{formKey}. Copy it again and confirm the replacement to overwrite the child records it holds.");
-    }
-
-    /// <summary>The destination keeps its own copy of the record: each child record it holds is
-    /// overwritten, the others are added, and the ones only it holds stay.</summary>
-    internal RecordEditResult MergeChildrenIntoHeldCopy(
-        PluginAddress sourcePlugin, RecordIdentity existing, string sourceBody, string sourceRecordType,
-        Destination destination, GameRelease release)
-    {
-        var existingDocument = DocumentOf(destination, existing);
-
-        var elsewhere = FindHeldElsewhere(destination, sourceBody, sourceRecordType, existingDocument, release);
-        var withChildren = ContainerDocumentEdits.WithChildRecordsMerged(
-            codec, existingDocument.Body, existing.RecordType, sourceBody, sourceRecordType, release, elsewhere.Carried);
-
-        LandWithoutHeldElsewhere(destination, elsewhere, () =>
-        {
-            destination.Repository.Put(
-                destination.Plugin, new SourceDocument(existing.FormKey, existing.RecordType, existing.EditorId, withChildren));
-            return RecordEditResult.Success();
-        });
-
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
-                "({DestinationOrigin}) — kept the copy it held and merged the child records into it",
-                existing.FormKey, sourcePlugin.Name, sourcePlugin.Origin, destination.Plugin.Name, destination.Plugin.Origin);
-        }
-        return RecordEditResult.Success();
     }
 
     // A GRUP's element order is binary-format position, so a replace must land at the record's
@@ -225,10 +170,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         if (Identity(destination, worldspaceFormKey, release) is null)
         {
             var worldspace = HeldBy(source, worldspaceFormKey);
-            if (resolution.HighestOverrideVisibleToTheDestination(
-                source, worldspace, destination.Repository, destination.Plugin, out var visibleText) is { } refused)
-                return refused;
-            worldspaceCopy = OwnFieldsOf(source, worldspace, visibleText, release);
+            if (!TryCopyIn(source, worldspace, destination, release, out var copied, out var refused)) return refused;
+            worldspaceCopy = copied;
         }
 
         var sourceCell = source.Identity(cellFormKey)
@@ -244,113 +187,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         return RecordEditResult.Success();
     }
 
-    /// <summary>The put alone, which is what each cell of a worldspace needs: no read of the
-    /// destination's tree to ask whether the cell or its worldspace is there. The grid is the one
-    /// <paramref name="sourceCellText"/> carries.</summary>
-    internal void PutExteriorCell(
-        string worldspaceFormKey, SourceDocument cell, string sourceCellText, Destination destination, GameRelease release) =>
-        destination.Repository.PutInWorldspace(
-            destination.Plugin, WithGridFrom(sourceCellText, cell, release), worldspaceFormKey);
-
-    /// <summary>A cell the destination holds takes the source's own fields, its children kept and the
-    /// source's merged into them, at the place it already has.</summary>
-    internal void OverwriteHeldCell(
-        SourceDocument sourceCell, Destination destination, GameRelease release)
-    {
-        var existing = Identity(destination, sourceCell.FormKey, release)
-            ?? throw NoDocumentCarries(destination.Plugin, sourceCell.FormKey);
-        var existingDocument = DocumentOf(destination, existing);
-
-        var overwritten = ContainerDocumentEdits.WithRecordOverwritten(
-            codec, existingDocument.Body, existing.RecordType, sourceCell.Body, sourceCell.RecordType, release);
-        var elsewhere = FindHeldElsewhere(destination, sourceCell.Body, sourceCell.RecordType, existingDocument, release);
-        LandWithoutHeldElsewhere(destination, elsewhere, () =>
-        {
-            destination.Repository.Put(
-                destination.Plugin, new SourceDocument(sourceCell.FormKey, existing.RecordType, overwritten.EditorId, overwritten.Text));
-            return RecordEditResult.Success();
-        });
-    }
-
     private static SourceDocument DocumentOf(Destination destination, RecordIdentity existing) =>
         destination.Repository.Get(destination.Plugin, existing) ?? throw NoDocumentCarries(destination.Plugin, existing.FormKey);
-
-    /// <summary>The child records the destination holds in another document leave it, and the copy
-    /// lands each where the source has it. <c>Carried</c> is the text of those with children.</summary>
-    internal sealed record HeldElsewhere(
-        IReadOnlyList<RecordIdentity> Records, IReadOnlyList<(string Text, string? RecordType)> Carried,
-        IReadOnlyList<SourceDocument> Owners)
-    {
-        internal static readonly HeldElsewhere None = new([], [], []);
-    }
-
-    internal HeldElsewhere FindHeldElsewhere(
-        Destination destination, string sourceBody, string sourceRecordType, SourceDocument? destinationUnit, GameRelease release)
-    {
-        var used = destination.Repository.FormKeysUsed(destination.Plugin);
-        var inUnit = destinationUnit is null
-            ? new HashSet<string>()
-            : ContainerDocumentEdits.ChildFormKeys(codec, destinationUnit.Body, release, destinationUnit.RecordType).ToHashSet();
-        var schemas = schemaReflector.GetSchemas(release);
-        var records = new List<RecordIdentity>();
-        var carried = new List<(string Text, string? RecordType)>();
-        foreach (var key in ContainerDocumentEdits.ChildFormKeys(codec, sourceBody, release, sourceRecordType).Where(used.Contains))
-        {
-            if (inUnit.Contains(key) || Identity(destination, key, release) is not { } elsewhere) continue;
-            if (!ContainerChildFields.HasChildFields(elsewhere.RecordType, release)) records.Add(elsewhere);
-            else if (destination.Repository.ContainerOf(destination.Plugin, elsewhere, schemas) is not null)
-            {
-                records.Add(elsewhere);
-                carried.Add((DocumentOf(destination, elsewhere).Body, elsewhere.RecordType));
-            }
-        }
-        var owners = records
-            .Select(record => destination.Repository.ContainerDocument(destination.Plugin, record, schemas))
-            .OfType<SourceDocument>()
-            .DistinctBy(owner => owner.FormKey)
-            .ToList();
-        return new HeldElsewhere(records, carried, owners);
-    }
-
-    /// <summary><paramref name="body"/> with the records held elsewhere overwritten by its own.</summary>
-    internal string CarryingHeldElsewhere(HeldElsewhere elsewhere, string body, string recordType, GameRelease release) =>
-        elsewhere.Carried.Count == 0
-            ? body
-            : ContainerDocumentEdits.WithChildRecordsMerged(
-                codec, ContainerDocumentEdits.WithoutChildren(codec, body, release, recordType), recordType, body, recordType, release,
-                elsewhere.Carried);
-
-    /// <summary>The records held elsewhere leave their documents first, since the tree refuses a key two
-    /// documents hold. A landing that refuses or fails puts those documents back.</summary>
-    internal static RecordEditResult LandWithoutHeldElsewhere(
-        Destination destination, HeldElsewhere elsewhere, Func<RecordEditResult> land)
-    {
-        try
-        {
-            foreach (var record in elsewhere.Records)
-            {
-                if (destination.Repository.Remove(destination.Plugin, record) == SourceRemoval.OwnerDoesNotCarryIt)
-                {
-                    throw new InvalidOperationException(
-                        $"{destination.Plugin.Name}'s document holding {record.FormKey} does not carry it.");
-                }
-            }
-
-            var landed = land();
-            if (!landed.Applied) PutBack(destination, elsewhere);
-            return landed;
-        }
-        catch
-        {
-            PutBack(destination, elsewhere);
-            throw;
-        }
-    }
-
-    private static void PutBack(Destination destination, HeldElsewhere elsewhere)
-    {
-        foreach (var owner in elsewhere.Owners) destination.Repository.Put(destination.Plugin, owner);
-    }
 
     private static JsonNode RequireParsed(string text) =>
         JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a document's text to parse as JSON.");
@@ -401,6 +239,44 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         source.Identity(containerFormKey)
         ?? throw new InvalidOperationException(
             $"{source.Plugin.Name} does not hold {containerFormKey}, which a copied record names as its container.");
+
+    private bool TryCopyIn(
+        CopySource source, RecordIdentity container, Destination destination, GameRelease release,
+        [NotNullWhen(true)] out SourceDocument? copy, [NotNullWhen(false)] out RecordEditResult? refused)
+    {
+        refused = null;
+        var schema = schemaReflector.GetSchemas(release)[container.RecordType];
+        if (CanBePartial.Of(schema, release, container.FormKey, TemporaryExterior(source, container, release)) is CanBePartial.Verdict.Can)
+        {
+            copy = PartialFormOf(source.Document(container), schema, release);
+            return true;
+        }
+
+        copy = null;
+        if (resolution.HighestOverrideVisibleToTheDestination(
+                source, container, destination.Repository, destination.Plugin, out var visibleText) is { } visibleRefusal)
+        {
+            refused = visibleRefusal;
+            return false;
+        }
+        copy = OwnFieldsOf(source, container, visibleText, release);
+        return true;
+    }
+
+    private static bool? TemporaryExterior(CopySource source, RecordIdentity container, GameRelease release) =>
+        CanBePartial.TemporaryExterior(
+            (source.RecordFlags(container) & PersistentFlag.Bit) != 0,
+            source.ContainerOf(container) is not null,
+            RecordTypeDispatch.For(release).IsCell(container.RecordType) ? source.WorldspaceOf(container) is null : null);
+
+    private SourceDocument PartialFormOf(SourceDocument container, RecordTableSchema schema, GameRelease release)
+    {
+        var body = ContainerDocumentEdits.WithoutChildren(codec, container.Body, release, container.RecordType);
+        var record = RequireParsed(body).AsObject();
+        return RecordEmptying.MakePartialForm(record, schema)
+            ? container with { Body = codec.RoundTrip(record.ToJsonString(), release, container.RecordType) }
+            : container with { Body = body };
+    }
 
     // The container as xEdit copies it in: the copy the destination can see, its own fields only.
     private SourceDocument OwnFieldsOf(CopySource source, RecordIdentity container, string? visibleText, GameRelease release)
