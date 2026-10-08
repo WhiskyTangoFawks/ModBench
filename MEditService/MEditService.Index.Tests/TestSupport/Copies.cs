@@ -8,8 +8,17 @@ internal static class Copies
 {
     /// <summary>The copy <paramref name="plugin"/> holds, as a comparison of it alone answers it; null
     /// when the plugin holds none.</summary>
-    internal static RecordDetail? CopyIn(this OpenedIndex index, string formKey, PluginAddress plugin) =>
-        index.Records.GetCompareRecords([new RecordCopy(formKey, plugin)])?.Overrides.Single();
+    internal static RecordDetail? CopyIn(this OpenedIndex index, string formKey, PluginAddress plugin)
+    {
+        try
+        {
+            return index.Records.GetCompareRecords([new RecordCopy(formKey, plugin)]).Overrides.Single();
+        }
+        catch (RecordCopiesMissingException)
+        {
+            return null;
+        }
+    }
 
     internal static RecordDetail DocumentOf(this OpenedIndex index, string formKey, PluginAddress plugin) =>
         index.CopyIn(formKey, plugin)
