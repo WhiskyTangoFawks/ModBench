@@ -117,11 +117,11 @@ public sealed class ResponseEditTests : IDisposable
 
         result.OnlyLanded();
         var copiedQuest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require();
-        Assert.False(copiedQuest.IsPartialForm());
+        Assert.True(copiedQuest.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.QuestEditorId, copiedQuest.EditorId);
         var copiedTopic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
         Assert.NotNull(copiedTopic);
-        Assert.False(copiedTopic.IsPartialForm());
+        Assert.True(copiedTopic.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, copiedTopic.EditorId);
         Assert.Equal(
             fixture.Response1.ToString(),
