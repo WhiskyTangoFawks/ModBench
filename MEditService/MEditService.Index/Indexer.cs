@@ -80,8 +80,8 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     }
 
     /// <summary>ADR-0010: drops the index file, floors its sequence at what this process
-    /// handed out, and refills it off the caller's thread; a file another window holds, or a read
-    /// that never ended, is refused, and the refusal returned.</summary>
+    /// handed out, and refills it off the caller's thread. A file another window holds, or a read
+    /// that never ended, is refused.</summary>
     public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
         var previousSequence = Sequence;
