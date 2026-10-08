@@ -1,5 +1,6 @@
 using System.Globalization;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Queries;

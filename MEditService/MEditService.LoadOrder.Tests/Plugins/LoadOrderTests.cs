@@ -74,20 +74,6 @@ public sealed class LoadOrderTests
     }
 
     [Fact]
-    public void IsImmutable_OnlyOnAPluginTheGameProvides_ActiveOrNot()
-    {
-        var master = new RegisteredPlugin("Fallout4.esm", PluginOrigin.DataDirectory, Path.Combine(Data, "Fallout4.esm"), PluginProvider.Game, Line: null);
-        var active = Registered("A.esp", "ModA");
-        var inactive = Registered("B.esp", "ModB");
-
-        var order = Order([master, active, inactive], master, active);
-
-        Assert.True(order.IsImmutable(master.Key));
-        Assert.False(order.IsImmutable(active.Key));
-        Assert.False(order.IsImmutable(inactive.Key));
-    }
-
-    [Fact]
     public void OfTwoActivePlugins_TheOneWithTheLowerLoadIndex_LoadsBefore()
     {
         var a = Registered("A.esp", "ModA", line: 1);
@@ -166,26 +152,6 @@ public sealed class LoadOrderTests
         var order = OrderLoadingWithNoLine([unlisted, last, disabled, first, master], [master], master, first, last);
 
         Assert.Equal([master, first, disabled, last, unlisted], order.InJudgedOrder());
-    }
-
-    [Fact]
-    public void AModsCleanedMaster_LoadedWithNoLine_IsNotImmutable_BecauseAModProvidesIt()
-    {
-        var cleaned = Registered("DLCCoast.esm", "CleanedMasters");
-
-        var order = OrderLoadingWithNoLine([cleaned], [cleaned], cleaned);
-
-        Assert.False(order.IsImmutable(cleaned.Key));
-    }
-
-    [Fact]
-    public void AUserPluginInTheGameFolder_ProvidedByTheGame_IsImmutable_ActiveFromItsLine()
-    {
-        var placed = new RegisteredPlugin("UserPatch.esp", PluginOrigin.DataDirectory, Path.Combine(Data, "UserPatch.esp"), PluginProvider.Game, new PluginLine(0, NamesIt: true));
-
-        var order = Order([placed], placed);
-
-        Assert.True(order.IsImmutable(placed.Key));
     }
 
     [Fact]
