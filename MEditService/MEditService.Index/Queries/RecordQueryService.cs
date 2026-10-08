@@ -39,7 +39,7 @@ internal sealed class RecordQueryService(
         PluginRow ToRow(RegisteredPlugin plugin, bool hasMatchingRecords)
         {
             DerivedFrom? derivedFrom = derivations.TryGetValue(plugin.Key, out var stamped) ? stamped : null;
-            return new(plugin, snapshot.LoadOrderIndex(plugin.Key), snapshot.IsImmutable(plugin.Key), opened[plugin.Key],
+            return new(plugin, snapshot.LoadOrderIndex(plugin.Key), IsImmutable: snapshot.ProviderOf(plugin.Key) == PluginProvider.Game, opened[plugin.Key],
                 masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
                 parseFailures.Contains(plugin.Key),
                 IsTracked: derivedFrom?.IsTracked() ?? false,

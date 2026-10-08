@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.Ports;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

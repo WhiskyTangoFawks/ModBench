@@ -150,7 +150,7 @@ public sealed class ArchitectureTests
             .ToList();
 
         Assert.Contains("LoadOrderSnapshot.cs", walked);
-        Assert.Contains("Registration.cs", walked);
+        Assert.Contains("PluginAddress.cs", walked);
     }
 
     internal static List<string> HolderWrites(string root, IReadOnlyList<string> projects, string verb) =>

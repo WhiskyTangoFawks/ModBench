@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Index;
