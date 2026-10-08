@@ -50,6 +50,7 @@ interface ModsView extends vscode.Disposable {
  *  the loser silently vanishes. */
 export function createModsView(deps: ModsViewDeps): ModsView {
   const { instance, access, log, modSync, reporterFor, ask, trash } = deps;
+  const { adapter } = access;
   const provider = new ModListProvider({ instance });
   const view = vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: provider,
@@ -90,15 +91,15 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     view.onDidChangeCheckboxState(onModCheckboxChanged),
     ...registerModDecorations(instance, vscode.workspace),
     ...registerModContextCommands({
-      adapter: access.adapter, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
+      adapter, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
       log,
     }),
-    ...registerModEnableCommands(access.adapter, instance, () => view.selection, reporterFor('mod.enableDisable')),
-    ...registerFileExclusionCommands(access.adapter, instance, () => view.selection, reporterFor('mod.excludeFile')),
+    ...registerModEnableCommands(adapter, instance, () => view.selection, reporterFor('mod.enableDisable')),
+    ...registerFileExclusionCommands(adapter, instance, () => view.selection, reporterFor('mod.excludeFile')),
     registerModMoveCommand(
-      access.adapter, instance, { selection: () => view.selection, direction: () => provider.viewDirection() }, reporterFor('mod.move')),
-    ...registerSeparatorCommands(access.adapter, instance, reporterFor('separator'), ask, trash, () => view.selection),
-    registerCreateEmptyModCommand(access.adapter, instance, reporterFor('mod.createEmpty')),
+      adapter, instance, { selection: () => view.selection, direction: () => provider.viewDirection() }, reporterFor('mod.move')),
+    ...registerSeparatorCommands(adapter, instance, reporterFor('separator'), ask, trash, () => view.selection),
+    registerCreateEmptyModCommand(adapter, instance, reporterFor('mod.createEmpty')),
     registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => view.selection),
     registerGoToModCommand(instance, reporterFor('mod.goToMod'), {
       selection: () => view.selection,

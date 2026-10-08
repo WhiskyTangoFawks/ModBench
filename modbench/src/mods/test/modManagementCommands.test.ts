@@ -58,6 +58,7 @@ import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/s
 import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { adapterOver } from '../../test/mo2/adapterOver';
+import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import type { ModlistEntry } from '../../instanceLoader/instance';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
@@ -70,7 +71,7 @@ const adapter = adapterOver('/instance');
 
 const folderOf = (entry: Pick<ModlistEntry, 'kind' | 'name'>) => ({ ...entry, path: `/instance/mods/${entry.name}` });
 
-function adapterHolding(listed: readonly ModlistEntry[], folders: readonly Pick<ModlistEntry, 'kind' | 'name'>[] = []): ReturnType<typeof adapterOver> {
+function adapterHolding(listed: readonly ModlistEntry[], folders: readonly Pick<ModlistEntry, 'kind' | 'name'>[] = []): InstanceAdapter {
   const named = (kind: ModlistEntry['kind'], name: string) =>
     (e: Pick<ModlistEntry, 'kind' | 'name'>) => e.kind === kind && e.name.toLowerCase() === name.toLowerCase();
   return {
@@ -1459,7 +1460,7 @@ describe('rename mod refuses in its prompt', () => {
   };
   const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
 
-  async function validatorOver(modAdapter: ReturnType<typeof adapterOver>): Promise<(value: string) => unknown> {
+  async function validatorOver(modAdapter: InstanceAdapter): Promise<(value: string) => unknown> {
     showInputBox.mockResolvedValueOnce(undefined);
     registerModContextCommands({
       adapter: modAdapter, instance, viewSelection: () => [], reporter: recordingReporter(),

@@ -4,7 +4,6 @@ import { refuse } from '../ports/refuse';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
-
 /** Refuses a name the value's `profiles` does not hold: selecting a profile whose directory is
  *  not there points the whole instance at files that do not exist, which no later read can tell
  *  from a corrupt ini. */

@@ -8,7 +8,9 @@
     "types": ["node", "vscode"]
   },
   "references": [
+    { "path": "../coreLib" },
     { "path": "../drivingLib" },
+    { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
     { "path": "../install" },
     { "path": "../modlist" },

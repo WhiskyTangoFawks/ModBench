@@ -33,7 +33,7 @@ import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { SelectionResult } from '../coreLib/commandResult';
 import { FILE_MARKS, fileLabel } from './modFiles';
 import { endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
-import { installNameRefusal } from '../install/install';
+import { newModNameRefusal } from '../coreLib/commandRefusals';
 import { errorMessage } from '../ports/errorMessage';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { reportFailure } from '../drivingLib/reportFailure';
@@ -294,7 +294,7 @@ export function registerCreateEmptyModCommand(
   return vscode.commands.registerCommand('modbench.mod.createEmpty', async () => {
     const name = await vscode.window.showInputBox({
       prompt: 'New mod name', placeHolder: 'My New Mod',
-      validateInput: (value) => installNameRefusal(adapter, value),
+      validateInput: (value) => newModNameRefusal(adapter, value),
     });
     if (!name) return;
     await runModsWriting(instance, async () => {

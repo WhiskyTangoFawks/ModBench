@@ -47,10 +47,6 @@ export function defaultModNameForFolder(folder: string): string {
   return basename(folder);
 }
 
-/** Why a new mod may not take `name`, in the words install refuses it with. */
-export const installNameRefusal = (adapter: InstanceAdapter, name: string): Promise<string | undefined> =>
-  newModNameRefusal(adapter, name);
-
 /** Which install this is, settled by the caller: the folder on disk is checked against this
  *  claim, never consulted to decide it. */
 export type InstallTarget =

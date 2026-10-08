@@ -1,5 +1,6 @@
 import type { Instance } from '../instanceLoader/instance';
-import { installFromArchive, installNameRefusal, type InstallAccess } from '../install/install';
+import { installFromArchive, type InstallAccess } from '../install/install';
+import { newModNameRefusal } from '../coreLib/commandRefusals';
 import { chooseInstallTarget } from './installTarget';
 import { promptModName } from '../drivingLib/promptModName';
 import { reportFailure } from '../drivingLib/reportFailure';
@@ -24,7 +25,7 @@ export async function installDownloadedFile(
     const row = downloads.kind === 'listed' ? downloads.rows.find((listed) => listed.name === argument.row.name) : undefined;
     if (!row) throw new Error(`"${argument.row.name}" is gone from Downloads.`);
     const target = await chooseInstallTarget(
-      row, (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access.adapter, name)));
+      row, (defaultName) => promptModName(defaultName, (name) => newModNameRefusal(access.adapter, name)));
     if (!target) return;
     const outcome = await runWritingGesture(deps.progressViewId, instance, () => installFromArchive(access, target, row.path, {
       gameName: instance.value.gameName, modID: row.modID, fileID: row.fileID, version: row.version,
