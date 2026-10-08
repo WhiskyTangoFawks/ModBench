@@ -237,7 +237,7 @@ describe('the Plugins view registers its own gestures', () => {
 describe('the Plugins view\'s move from the palette', () => {
   it('offers above each row outside the selection, then the bottom of the view', async () => {
     const { rows } = pluginsView(instanceValueFixture({
-      plugins: ['A.esp', 'B.esp', 'C.esp'].map((name, slot) => ({ name, path: `/fixture/${name}`, origin: 'SomeMod', slot, enabled: true, winning: true })),
+      plugins: ['A.esp', 'B.esp', 'C.esp'].map((name, line) => ({ name, path: `/fixture/${name}`, origin: 'SomeMod', line, enabled: true, winning: true })),
       gameFolder: FOUND,
     }));
     const [, b] = await rows();
@@ -252,7 +252,7 @@ describe('the Plugins view\'s move from the palette', () => {
 describe('the Plugins view\'s selection for a key', () => {
   it('still holds a selected row the rebuilt tree shows, though VS Code reports none until the tree hands its rows back', async () => {
     const { plugins, view, rows } = pluginsView(instanceValueFixture({
-      plugins: [{ name: 'A.esp', path: '/fixture/A.esp', origin: 'SomeMod', slot: 0, enabled: true, winning: true }], gameFolder: FOUND,
+      plugins: [{ name: 'A.esp', path: '/fixture/A.esp', origin: 'SomeMod', line: 0, enabled: true, winning: true }], gameFolder: FOUND,
     }));
     const focused = createFocusedView();
     focused.follow('modbench.pluginListTree', plugins.followed);
@@ -342,7 +342,7 @@ describe('the Plugins view\'s Problems', () => {
   it('puts a plugin changed outside Modbench on its row\'s own file, at the name it has on disk', () => {
     const onDisk = '/instance/mods/ModA/test.ESP';
     const { client } = pluginsView(instanceValueFixture({
-      plugins: [{ name: 'Test.esp', path: onDisk, origin: 'ModA', slot: 0, enabled: true, winning: true }],
+      plugins: [{ name: 'Test.esp', path: onDisk, origin: 'ModA', line: 0, enabled: true, winning: true }],
     }));
 
     client.emit({ ...rowsChanged, kind: 'external-change', changedPlugins: [{ name: 'Test.esp', bytesSha256: 'ab12' }] });
@@ -750,7 +750,7 @@ describe('the record filter, from the commands that set and clear it', () => {
 
 describe('the Plugins view\'s message line and name filter', () => {
   const loadOrderPlugin = (name: string): LoadOrderPlugin | LoadOrderPluginLine => (
-    { name, path: `/fixture/${name}`, origin: 'SomeMod', slot: 0, enabled: true, winning: true });
+    { name, path: `/fixture/${name}`, origin: 'SomeMod', line: 0, enabled: true, winning: true });
   const found = (...names: string[]): InstanceValue => instanceValueFixture({ plugins: names.map(loadOrderPlugin), gameFolder: FOUND });
   const notFound = (...names: string[]): InstanceValue =>
     instanceValueFixture({ plugins: names.map(loadOrderPlugin), gameFolder: GAME_FOLDER_NOT_FOUND });
@@ -1008,7 +1008,7 @@ describe('the Plugins view\'s message line and name filter', () => {
 describe('a collapsed row\'s badge, from the states beneath it', () => {
   it('is a dot on a plugin row with changes beneath it, only while the row is collapsed', async () => {
     const { client, rows } = pluginsView(instanceValueFixture({
-      plugins: [{ name: 'A.esp', path: '/fixture/A.esp', origin: 'SomeMod', slot: 0, enabled: true, winning: true }],
+      plugins: [{ name: 'A.esp', path: '/fixture/A.esp', origin: 'SomeMod', line: 0, enabled: true, winning: true }],
       gameFolder: FOUND,
     }));
     client.setQueryAnswer('getWorkingTreeStatesBeneath', { plugin: ['Modified'], recordTypes: {}, records: {} });
@@ -1028,7 +1028,7 @@ describe('a collapsed row\'s badge, from the states beneath it', () => {
 
   it('puts a failed read of the states beneath on the view\'s message line', async () => {
     const { client, rows, view } = pluginsView(instanceValueFixture({
-      plugins: [{ name: 'A.esp', path: '/fixture/A.esp', origin: 'SomeMod', slot: 0, enabled: true, winning: true }],
+      plugins: [{ name: 'A.esp', path: '/fixture/A.esp', origin: 'SomeMod', line: 0, enabled: true, winning: true }],
       gameFolder: FOUND,
     }));
     client.setQueryFailure('getWorkingTreeStatesBeneath', new Error('boom'));

@@ -52,7 +52,7 @@ beforeEach(() => {
 });
 
 const plugin = (name: string, origin: string, path: string): LoadOrderPlugin =>
-  ({ name, origin, path, slot: null, enabled: false, winning: true });
+  ({ name, origin, path, line: null, enabled: false, winning: true });
 
 function makeMo2() {
   return {
@@ -309,7 +309,7 @@ describe('registerCreatePluginCommand', () => {
 
     instance.publish(instanceValueFixture({
       ...mo2.instance.value,
-      plugins: [{ name: 'MyPatch.esp', path: '/instance/overwrite/MyPatch.esp', origin: 'overwrite/', slot: 0, enabled: true, winning: true }],
+      plugins: [{ name: 'MyPatch.esp', path: '/instance/overwrite/MyPatch.esp', origin: 'overwrite/', line: 0, enabled: true, winning: true }],
     }));
 
     expect(changes).toBeGreaterThan(0);

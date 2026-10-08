@@ -75,7 +75,7 @@ public sealed class LoadOrderTests
     [Fact]
     public void IsImmutable_OnlyOnAPluginTheGameProvides_ActiveOrNot()
     {
-        var master = new RegisteredPlugin("Fallout4.esm", PluginOrigin.DataDirectory, Path.Combine(Data, "Fallout4.esm"), PluginProvider.Game);
+        var master = new RegisteredPlugin("Fallout4.esm", PluginOrigin.DataDirectory, Path.Combine(Data, "Fallout4.esm"), PluginProvider.Game, Line: null);
         var active = Registered("A.esp", "ModA");
         var inactive = Registered("B.esp", "ModB");
 
@@ -141,11 +141,17 @@ public sealed class LoadOrderTests
     }
 
     [Fact]
-    public void SamePlugins_ADisabledLineMoved_AreDifferentValues()
+    public void InJudgedOrder_PlacesEachPluginAsLoadsBeforeJudges_AndThoseWithNoLineLast()
     {
-        var a = Registered("A.esp", "ModA", line: 0);
+        var master = Registered("Fallout4.esm", "Masters");
+        var unlisted = Registered("U.esp", "ModU");
+        var last = Registered("C.esp", "ModC", line: 2);
+        var disabled = Registered("B.esp", "ModB", line: 1);
+        var first = Registered("A.esp", "ModA", line: 0);
 
-        Assert.NotEqual(Order([a, Registered("B.esp", "ModB", line: 1)], a), Order([a, Registered("B.esp", "ModB", line: 2)], a));
+        var order = OrderLoadingWithNoLine([unlisted, last, disabled, first, master], [master], master, first, last);
+
+        Assert.Equal([master, first, disabled, last, unlisted], order.InJudgedOrder());
     }
 
     [Fact]
@@ -161,7 +167,7 @@ public sealed class LoadOrderTests
     [Fact]
     public void AUserPluginInTheGameFolder_ProvidedByTheGame_IsImmutable_ActiveFromItsLine()
     {
-        var placed = new RegisteredPlugin("UserPatch.esp", PluginOrigin.DataDirectory, Path.Combine(Data, "UserPatch.esp"), PluginProvider.Game, 0);
+        var placed = new RegisteredPlugin("UserPatch.esp", PluginOrigin.DataDirectory, Path.Combine(Data, "UserPatch.esp"), PluginProvider.Game, Line: 0);
 
         var order = Order([placed], placed);
 
@@ -263,10 +269,10 @@ public sealed class LoadOrderTests
     [Fact]
     public void ProviderOf_IsWhatTheSnapshotNamed_WhateverTheOriginOrThePath()
     {
-        var game = new RegisteredPlugin("Vanilla.esp", "ModA", @"C:\Elsewhere\Vanilla.esp", PluginProvider.Game);
-        var stray = new RegisteredPlugin("Stray.esp", "ModA", @"C:\Elsewhere\Stray.esp", PluginProvider.NoMod);
+        var game = new RegisteredPlugin("Vanilla.esp", "ModA", @"C:\Elsewhere\Vanilla.esp", PluginProvider.Game, Line: null);
+        var stray = new RegisteredPlugin("Stray.esp", "ModA", @"C:\Elsewhere\Stray.esp", PluginProvider.NoMod, Line: null);
         var inFolder = new PluginProvider.FromMod("ModA", @"C:\MO2\mods\ModA");
-        var mod = new RegisteredPlugin("A.esp", "ModA", @"C:\MO2\mods\ModA\deep\A.esp", inFolder);
+        var mod = new RegisteredPlugin("A.esp", "ModA", @"C:\MO2\mods\ModA\deep\A.esp", inFolder, Line: null);
 
         var order = Order([game, stray, mod]);
 

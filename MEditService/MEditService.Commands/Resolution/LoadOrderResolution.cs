@@ -36,11 +36,11 @@ internal sealed class LoadOrderResolution(
     {
         var current = loadOrder.Current;
 
-        // A FormKey carries only a filename, so with two plugins that share a filename (ADR-0012) the
-        // active one is the origin.
+        // A FormKey carries only a filename, and every plugin of that filename shares its line (ADR-0012).
         var originName = FormKey.Factory(formKey).ModKey.FileName.String;
-        var origin = current.Active.FirstOrDefault(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase));
-        return origin is not null && current.LoadsBefore(destination, origin.Key) == true ? originName : null;
+        var judged = current.Plugins.Where(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase))
+            .Select(origin => current.LoadsBefore(destination, origin.Key)).FirstOrDefault(loadsBefore => loadsBefore is not null);
+        return judged == true ? originName : null;
     }
 
     /// <summary>xEdit's HighestOverrideVisibleForFile: the source's copy stands unless it is Partial Form

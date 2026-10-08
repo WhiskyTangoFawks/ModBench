@@ -37,7 +37,7 @@ import { present } from '../../ports/present';
 import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
 
 const held = (name: string, origin: string): LoadOrderPlugin =>
-  ({ name, origin, path: `/instance/mods/${origin}/${name}`, slot: null, enabled: true, winning: true });
+  ({ name, origin, path: `/instance/mods/${origin}/${name}`, line: null, enabled: true, winning: true });
 
 const PLUGIN = { name: 'Patch.esp', origin: 'ModA' };
 

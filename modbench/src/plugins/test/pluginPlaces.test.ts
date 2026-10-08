@@ -5,7 +5,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
 
 const plugin = (name: string, origin: string, path: string): LoadOrderPlugin =>
-  ({ name, origin, path, slot: null, enabled: false, winning: true });
+  ({ name, origin, path, line: null, enabled: false, winning: true });
 
 const value = instanceValueFixture({
   mods: [

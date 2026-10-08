@@ -21,7 +21,8 @@ public record PluginMetadata(
 {
     public PluginAddress Key => new(Name, Origin);
 
-    public RegisteredPlugin Registered => new(Name, Origin, Path, Provider);
+    // What the Index reads of a held plugin is its path and provider, never its line.
+    public RegisteredPlugin Registered => new(Name, Origin, Path, Provider, Line: null);
 
     public Registration Registration => new(LoadOrderIndex);
 

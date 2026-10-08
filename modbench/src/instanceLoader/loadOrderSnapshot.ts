@@ -25,8 +25,8 @@ export interface LoadOrderPlugin {
   /** The mod folder that provided this plugin, or a reserved origin value above (ADR-0012). */
   origin: string;
   /** The name's plugins.txt line index, or null when no line names it. An overridden plugin of a
-   *  listed name carries the same slot as the winning one. */
-  slot: number | null;
+   *  listed name carries the same line as the winning one. */
+  line: number | null;
   /** The line's `*` prefix; false when no line names the file. */
   enabled: boolean;
   /** This plugin is the one the Mod override order resolves the name to — overwrite/ first, then
@@ -36,8 +36,7 @@ export interface LoadOrderPlugin {
 
 type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string } | { kind: 'Game' } | { kind: 'None' };
 
-// `line`: the slot, at which Editing judges a plugin that is not active (commands.md, Principles).
-type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'> & { provider: SnapshotProvider; line: number | null };
+type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin' | 'line'> & { provider: SnapshotProvider };
 
 /** The snapshot was not built, and why: the user is told once (common.md, Reporting). */
 export interface LoadOrderSnapshotRefusal {
@@ -53,7 +52,7 @@ export interface LoadOrderSnapshotValue {
 }
 
 /** A plugins.txt line with no resolvable plugin file: no mod or overwrite/ provides it, and
- *  there is no Data/ to fall back to. Existence, slot and enabled still come from plugins.txt. */
+ *  there is no Data/ to fall back to. Existence, line and enabled still come from plugins.txt. */
 export interface LoadOrderPluginLine extends Omit<LoadOrderPlugin, 'path'> {
   readonly path: undefined;
 }
@@ -151,20 +150,20 @@ export function buildLoadOrderRows(
   // Case-folded, like every other name comparison here: plugins.txt casing is not authoritative,
   // and a case difference must not read as "disabled" or as "a second plugin".
   const enabledNames = new Set(pluginOrder.filter((line) => line.enabled).map((line) => foldPath(line.name)));
-  const slotByName = new Map<string, number>();
-  names.forEach((name, slot) => slotByName.set(foldPath(name), slot));
+  const lineByName = new Map<string, number>();
+  names.forEach((name, line) => lineByName.set(foldPath(name), line));
 
-  const listed = names.map((name, slot) => {
+  const listed = names.map((name, line) => {
     const overwriteFile = overwriteFiles.get(foldPath(name));
     const enabledLine = enabledNames.has(foldPath(name));
     if (overwriteFile !== undefined) {
-      return { name, path: overwriteFile.sourcePath, origin: OVERWRITE_ORIGIN, slot, enabled: enabledLine, winning: true };
+      return { name, path: overwriteFile.sourcePath, origin: OVERWRITE_ORIGIN, line, enabled: enabledLine, winning: true };
     }
     return {
       name,
       path: pathByName.get(name),
       origin: winnerModByName.get(foldPath(name)) ?? DATA_DIRECTORY_ORIGIN,
-      slot,
+      line,
       enabled: enabledLine,
       winning: true,
     };
@@ -180,16 +179,16 @@ export function buildLoadOrderRows(
       name: plugin.name,
       path: plugin.path,
       origin: plugin.origin,
-      slot: slotByName.get(foldPath(plugin.name)) ?? null,
+      line: lineByName.get(foldPath(plugin.name)) ?? null,
       enabled: enabledNames.has(foldPath(plugin.name)),
       winning: isWinning(plugin),
     }));
 
   // overwrite/'s own unlisted plugins — winning-most, but no line names them.
   const strays = [...overwriteFiles]
-    .filter(([folded, file]) => !slotByName.has(folded) && isPluginFile(file.relativePath))
+    .filter(([folded, file]) => !lineByName.has(folded) && isPluginFile(file.relativePath))
     .map(([, file]) => ({
-      name: file.relativePath, path: file.sourcePath, origin: OVERWRITE_ORIGIN, slot: null, enabled: false, winning: true,
+      name: file.relativePath, path: file.sourcePath, origin: OVERWRITE_ORIGIN, line: null, enabled: false, winning: true,
     }));
 
   return [...listed, ...outside, ...strays];
@@ -219,11 +218,11 @@ export function loadOrderSnapshotOf(value: {
     },
   });
   const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p) =>
-    rowAt.get(pluginAddressKey(p)) ?? { ...p, path: fileInFolder(dataFolder, p.name), slot: null });
+    rowAt.get(pluginAddressKey(p)) ?? { ...p, path: fileInFolder(dataFolder, p.name), line: null });
   const placed = new Set(loadedWithNoLine.map((p) => foldPath(p.name)));
   const fromLines = rows
-    .filter((p): p is LoadOrderPlugin & { slot: number } => p.slot !== null && p.enabled && p.winning)
-    .sort((a, b) => a.slot - b.slot)
+    .filter((p): p is LoadOrderPlugin & { line: number } => p.line !== null && p.enabled && p.winning)
+    .sort((a, b) => a.line - b.line)
     .filter((p) => {
       const folded = foldPath(p.name);
       if (placed.has(folded)) return false;
@@ -232,14 +231,14 @@ export function loadOrderSnapshotOf(value: {
     });
   const sent = new Map<string, SnapshotPlugin>();
   const unprovided = new Map<string, string[]>();
-  for (const { name, path, origin, slot } of [...loadedWithNoLine, ...rows]) {
+  for (const { name, path, origin, line } of [...loadedWithNoLine, ...rows]) {
     const provider = whatProvides(origin);
     if (provider === undefined) {
       unprovided.set(origin, [...unprovided.get(origin) ?? [], name]);
       continue;
     }
     const key = pluginAddressKey({ name, origin });
-    if (!sent.has(key)) sent.set(key, { name, path, origin, provider, line: slot });
+    if (!sent.has(key)) sent.set(key, { name, path, origin, provider, line });
   }
   if (unprovided.size > 0) return { refusal: refusalOf(unprovided) };
   return {

@@ -106,6 +106,21 @@ public sealed class LoadOrderHolderTests
     }
 
     [Fact]
+    public void Apply_ASnapshotThatMovedOnlyADisabledLine_IsHeld()
+    {
+        var holder = new LoadOrderHolder();
+        var active = Registered("A.esp") with { Line = 0 };
+        LoadOrderSnapshot DisabledLineAt(int line) => new(
+            @"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [active, Registered("B.esp") with { Line = line }], [active.Key], []);
+        holder.Apply(DisabledLineAt(1));
+        var moved = DisabledLineAt(2);
+
+        holder.Apply(moved);
+
+        Assert.Same(moved, holder.Require());
+    }
+
+    [Fact]
     public void Held_IsNothingBeforeAnArrival_ThenTheSnapshotWithTheVersionItArrivedAs()
     {
         var holder = new LoadOrderHolder();
@@ -117,7 +132,7 @@ public sealed class LoadOrderHolderTests
         Assert.Equal((applied, version), holder.Held);
     }
 
-    private static RegisteredPlugin Registered(string name) => new(name, "ModA", $@"C:\MO2\Fallout4\mods\ModA\{name}", new PluginProvider.FromMod("ModA", @"C:\MO2\Fallout4\mods\ModA"));
+    private static RegisteredPlugin Registered(string name) => new(name, "ModA", $@"C:\MO2\Fallout4\mods\ModA\{name}", new PluginProvider.FromMod("ModA", @"C:\MO2\Fallout4\mods\ModA"), Line: null);
 
     private static LoadOrderSnapshot SnapshotActivatingInTheOrderGiven(string? instanceRoot, params string[] active) =>
         new(@"C:\Games\Fallout4\Data", instanceRoot, GameRelease.Fallout4,

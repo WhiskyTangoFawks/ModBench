@@ -1,10 +1,13 @@
 using Mutagen.Bethesda;
+// Where a judgement sees a plugin. One that is not active sits just before the active plugin with as
+// many active plugins before it, as false orders before true.
+using Place = (int ActivePluginsBefore, bool IsActive);
 
 namespace MEditService.LoadOrder;
 
 /// <summary>One plugin file in the instance (ADR-0013). <paramref name="Line"/>: the place of the
 /// <c>plugins.txt</c> line naming its filename, null when no line names it.</summary>
-public sealed record RegisteredPlugin(string Name, string Origin, string Path, PluginProvider Provider, int? Line = null)
+public sealed record RegisteredPlugin(string Name, string Origin, string Path, PluginProvider Provider, int? Line)
 {
     public PluginAddress Key => new(Name, Origin);
 }
@@ -18,9 +21,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 
     private readonly Dictionary<PluginAddress, int> _loadOrderIndex;
 
-    // Odd for an active plugin, twice its load index plus one. Even for one judged at its line, just
-    // before the first active plugin whose line follows it. None for a plugin with neither.
-    private readonly Dictionary<PluginAddress, int> _rank;
+    private readonly Dictionary<PluginAddress, Place> _places;
 
     public string DataFolderPath { get; }
 
@@ -53,20 +54,21 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
             .ToDictionary(a => a.address, a => a.index, PluginAddress.Comparer);
         Active = [.. active.Select(PluginRefusalOfVouchesFor)];
         LoadedWithNoLine = [.. loadedWithNoLine.Select(PluginRefusalOfVouchesFor)];
-        _rank = RanksOf(Plugins, Active, LoadedWithNoLine);
+        _places = PlacesOf(Plugins, Active, LoadedWithNoLine);
     }
 
-    private static Dictionary<PluginAddress, int> RanksOf(
+    // A plugin with no line that is not active has no place.
+    private static Dictionary<PluginAddress, Place> PlacesOf(
         IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<RegisteredPlugin> active, IReadOnlyList<RegisteredPlugin> loadedWithNoLine)
     {
-        var ranks = active.Select((plugin, index) => (plugin.Key, Rank: 2 * index + 1))
-            .ToDictionary(a => a.Key, a => a.Rank, PluginAddress.Comparer);
+        var places = active.Select((plugin, index) => (plugin.Key, Place: (index, true)))
+            .ToDictionary(a => a.Key, a => (Place)a.Place, PluginAddress.Comparer);
         var activeLines = active.Select(plugin => loadedWithNoLine.Contains(plugin) ? int.MinValue : plugin.Line ?? int.MaxValue).ToList();
         foreach (var plugin in plugins)
         {
-            if (plugin.Line is { } line) ranks.TryAdd(plugin.Key, 2 * activeLines.Count(activeLine => activeLine <= line));
+            if (plugin.Line is { } line) places.TryAdd(plugin.Key, (activeLines.Count(activeLine => activeLine <= line), false));
         }
-        return ranks;
+        return places;
     }
 
     private RegisteredPlugin PluginRefusalOfVouchesFor(PluginAddress address) => Plugin(address)
@@ -106,7 +108,12 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// <summary>Whether <paramref name="plugin"/> loads before <paramref name="other"/>. A plugin that is
     /// not active is judged at its <c>plugins.txt</c> line; with none, null (commands.md § Principles).</summary>
     public bool? LoadsBefore(PluginAddress plugin, PluginAddress other) =>
-        _rank.TryGetValue(plugin, out var rank) && _rank.TryGetValue(other, out var otherRank) ? rank < otherRank : null;
+        _places.TryGetValue(plugin, out var place) && _places.TryGetValue(other, out var otherPlace) ? place.CompareTo(otherPlace) < 0 : null;
+
+    /// <summary>Every plugin in the order <see cref="LoadsBefore"/> judges, those it does not judge last.</summary>
+    public IEnumerable<RegisteredPlugin> InJudgedOrder() =>
+        Plugins.Where(plugin => _places.ContainsKey(plugin.Key)).OrderBy(plugin => _places[plugin.Key])
+            .Concat(Plugins.Where(plugin => !_places.ContainsKey(plugin.Key)));
 
     /// <summary>What provides the plugin, or null for a plugin none registered here names.</summary>
     public PluginProvider? ProviderOf(PluginAddress plugin) => Plugin(plugin)?.Provider;

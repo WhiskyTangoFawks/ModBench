@@ -16,7 +16,7 @@ public sealed class PluginReadabilityTests : IDisposable
     private string PluginPath => Path.Combine(_data.DataFolder, PluginName);
 
     private static RegisteredPlugin PluginAt(string path) =>
-        new(Path.GetFileName(path), PluginOrigin.DataDirectory, path, PluginProvider.Game);
+        new(Path.GetFileName(path), PluginOrigin.DataDirectory, path, PluginProvider.Game, Line: null);
 
     public void Dispose() => _data.Dispose();
 

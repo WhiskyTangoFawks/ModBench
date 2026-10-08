@@ -75,7 +75,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     }
 
     private static RegisteredPlugin Registered(string name, string origin, string folder) =>
-        new(name, origin, Path.Combine(folder, name), new PluginProvider.FromMod(origin, folder));
+        new(name, origin, Path.Combine(folder, name), new PluginProvider.FromMod(origin, folder), Line: null);
 
     [Fact]
     public async Task CreatePlugin_IntoATrackedMod_LandsItsSourceAsWorkingTreeChanges_AndLeavesTheOthersAsTheyWere()

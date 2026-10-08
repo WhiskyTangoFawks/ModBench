@@ -30,6 +30,7 @@ export function copyDestinationItems(
     .map((p) => ({
       label: p.name,
       description: p.loadOrderIndex === null || p.loadOrderIndex === undefined ? '(not active)' : `[${p.loadOrderIndex}]`,
+      detail: p.origin,
       plugin: { name: p.name, origin: p.origin },
     }));
 }

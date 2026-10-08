@@ -67,7 +67,7 @@ public sealed class PluginTreeReadTests
     private static async Task<IReadOnlyList<TreeFile>> ReadTreeFiles(PluginFixtureData data, string pluginName)
     {
         var (files, _) = await Adapter.ReadSourceOfAsync(
-            new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, Path.Combine(data.DataFolder, pluginName), PluginProvider.Game),
+            new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, Path.Combine(data.DataFolder, pluginName), PluginProvider.Game, Line: null),
             GameRelease.Fallout4,
             new PluginStrings(null, data.DataFolder));
         return files;

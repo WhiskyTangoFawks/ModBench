@@ -54,7 +54,7 @@ public sealed class TrackHandlerTests : IDisposable
         var result = await handler.TrackAsync([Origin]);
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Landed).Outcome.Tracked);
-        Assert.True(SourceRepository.SourceReads(new RegisteredPlugin(PluginName, Origin, "", new PluginProvider.FromMod(Origin, _modFolder))));
+        Assert.True(SourceRepository.SourceReads(new RegisteredPlugin(PluginName, Origin, "", new PluginProvider.FromMod(Origin, _modFolder), Line: null)));
     }
 
     [Fact]

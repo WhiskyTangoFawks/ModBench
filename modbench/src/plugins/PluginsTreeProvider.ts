@@ -23,12 +23,12 @@ export type PluginsInstance = InstanceView & Pick<Instance, 'refresh'>;
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
 // One entry per plugins.txt line: the winning plugin of every listed name, in file order
-// (plugins.md, The tree, stories 1 and 3). An overridden plugin carries the same slot and is
+// (plugins.md, The tree, stories 1 and 3). An overridden plugin carries the same line and is
 // excluded.
-function listedPlugins(value: InstanceValue): (InstanceValue['plugins'][number] & { slot: number })[] {
+function listedPlugins(value: InstanceValue): (InstanceValue['plugins'][number] & { line: number })[] {
   return value.plugins
-    .filter((p): p is InstanceValue['plugins'][number] & { slot: number } => p.slot !== null && p.winning)
-    .sort((a, b) => a.slot - b.slot);
+    .filter((p): p is InstanceValue['plugins'][number] & { line: number } => p.line !== null && p.winning)
+    .sort((a, b) => a.line - b.line);
 }
 
 // `DataTransferItem.value` is `any`, so a dropped payload is checked, not trusted.
@@ -50,7 +50,7 @@ export type RecordBrowserFacet = Pick<
 >;
 
 interface PluginsTreeProviderOptions {
-  /** Name, origin, slot, enabled and winning for every plugin: the row input. */
+  /** Name, origin, line, enabled and winning for every plugin: the row input. */
   instance: PluginsInstance;
   /** A row's children. */
   records: RecordBrowserFacet;

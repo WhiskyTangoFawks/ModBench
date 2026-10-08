@@ -42,6 +42,17 @@ describe('the destination pick', () => {
       .toEqual([{ label: 'Disabled.esp', description: '(not active)' }]);
   });
 
+  it('names each plugin\'s origin in its detail, so two plugins that share a file name are two rows apart', () => {
+    const winning = plugin('Shared.esp', 'WinningMod', 4);
+    const overridden = plugin('Shared.esp', 'OverriddenMod', null, { inLoadOrder: false });
+
+    expect(copyDestinationItems([winning, overridden], 'New', [npc]).map(({ label, description, detail }) => ({ label, description, detail })))
+      .toEqual([
+        { label: 'Shared.esp', description: '[4]', detail: 'WinningMod' },
+        { label: 'Shared.esp', description: '(not active)', detail: 'OverriddenMod' },
+      ]);
+  });
+
   it('carries each plugin as (name, origin)', () => {
     expect(copyDestinationItems(plugins, 'New', [npc]).map((item) => item.plugin)).toContainEqual({ name: 'Patch.esp', origin: 'PatchMod' });
   });

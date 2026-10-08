@@ -55,7 +55,7 @@ function plugin(
   return {
     path: `/fixture/${overrides.name}`,
     origin: 'SomeMod',
-    slot: 0,
+    line: 0,
     enabled: true,
     winning: true,
     ...overrides,
@@ -195,7 +195,7 @@ function callCount(client: InMemoryMEditClient, method: string): number {
   return client.calls.filter((c) => c.method === method).length;
 }
 
-describe('ImplicitMasterNode — leading slot', () => {
+describe('ImplicitMasterNode — leading line', () => {
   it('renders a lock icon, not a checkbox, as VS Code has no non-interactive checkbox variant', () => {
     const node = new ImplicitMasterNode('Fallout4.esm', 'Data/');
     expect(node.iconPath).toEqual({ id: 'lock' });
@@ -265,8 +265,8 @@ describe('PluginNode', () => {
 describe('PluginsTreeProvider — rows come from the Instance value', () => {
   it('builds one row per plugins.txt line, in Plugin load order, with the enabled checkbox', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'A.esp', slot: 0, enabled: false }),
-      plugin({ name: 'B.esp', slot: 1, enabled: true }),
+      plugin({ name: 'A.esp', line: 0, enabled: false }),
+      plugin({ name: 'B.esp', line: 1, enabled: true }),
     ]);
     const rows = await tree.getChildren();
 
@@ -297,14 +297,14 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     const { tree } = makeTree([], { instance });
     await tree.getChildren();
 
-    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
+    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0 })]));
     await tree.getChildren();
 
     expect(tree.viewMessage()).toBeUndefined();
   });
 
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 })]));
     const { tree } = makeTree([], { instance });
     await tree.getChildren();
     const fired: unknown[] = [];
@@ -314,14 +314,14 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
     expect(tree.viewMessage()).toBe('Showing the last good read: EACCES plugins.txt');
     expect(fired).toHaveLength(1);
-    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
+    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0 })]));
     expect(tree.viewMessage()).toBeUndefined();
   });
 
   it('rows exactly match the fixture value, in file order — not a re-derivation', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'Zed.esp', slot: 0, enabled: true }),
-      plugin({ name: 'Aardvark.esp', slot: 1, enabled: false }),
+      plugin({ name: 'Zed.esp', line: 0, enabled: true }),
+      plugin({ name: 'Aardvark.esp', line: 1, enabled: false }),
     ]);
     const rows = await tree.getChildren();
     expect(rows.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Zed.esp', 'Aardvark.esp']);
@@ -329,8 +329,8 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
   it('carries each row\'s own origin from the Instance value', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'A.esp', slot: 0, origin: 'ModA' }),
-      plugin({ name: 'B.esp', slot: 1, origin: 'overwrite/' }),
+      plugin({ name: 'A.esp', line: 0, origin: 'ModA' }),
+      plugin({ name: 'B.esp', line: 1, origin: 'overwrite/' }),
     ]);
     const rows = expectInstancesOf(await tree.getChildren(), PluginNode);
     expect(rows.map((r) => r.origin)).toEqual(['ModA', 'overwrite/']);
@@ -338,17 +338,17 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
   it('an overridden plugin of a listed name renders no row of its own', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'Base.esp', slot: 0, origin: 'Winner', winning: true }),
-      plugin({ name: 'Base.esp', slot: 0, origin: 'Loser', winning: false }),
+      plugin({ name: 'Base.esp', line: 0, origin: 'Winner', winning: true }),
+      plugin({ name: 'Base.esp', line: 0, origin: 'Loser', winning: false }),
     ]);
     const rows = (await tree.getChildren()).filter((n) => n instanceof PluginNode);
     expect(rows).toHaveLength(1);
   });
 
-  it('an unlisted plugin (slot: null) gets no row', async () => {
+  it('an unlisted plugin (line: null) gets no row', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'Base.esp', slot: 0 }),
-      plugin({ name: 'Unlisted.esp', slot: null, winning: true }),
+      plugin({ name: 'Base.esp', line: 0 }),
+      plugin({ name: 'Unlisted.esp', line: null, winning: true }),
     ]);
     const rows = (await tree.getChildren()).filter((n): n is PluginNode => n instanceof PluginNode);
     expect(rows.map((n) => n.plugin.name)).toEqual(['Base.esp']);
@@ -356,8 +356,8 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
   it('still renders a row for a listed name no mod provides, when the Data folder is unresolved', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data/', path: '/unresolved/Fallout4.esm' }),
-      plugin({ name: 'Mod.esp', slot: 1, origin: 'SomeMod' }),
+      plugin({ name: 'Fallout4.esm', line: 0, origin: 'Data/', path: '/unresolved/Fallout4.esm' }),
+      plugin({ name: 'Mod.esp', line: 1, origin: 'SomeMod' }),
     ], { dataFolderFile: () => undefined });
 
     const rows = (await tree.getChildren()).filter((n): n is PluginNode => n instanceof PluginNode);
@@ -366,25 +366,25 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
   it('renders a row for a LoadOrderPluginLine (path: undefined)', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data/', path: undefined }),
+      plugin({ name: 'Fallout4.esm', line: 0, origin: 'Data/', path: undefined }),
     ]);
     const rows = (await tree.getChildren()).filter((n): n is PluginNode => n instanceof PluginNode);
     expect(rows.map((n) => n.plugin.name)).toEqual(['Fallout4.esm']);
   });
 
   it('resolvePluginPath returns undefined for a LoadOrderPluginLine, never "undefined" as text', async () => {
-    const { tree } = makeTree([plugin({ name: 'Fallout4.esm', slot: 0, path: undefined })]);
+    const { tree } = makeTree([plugin({ name: 'Fallout4.esm', line: 0, path: undefined })]);
     expect(await tree.resolvePluginPath(new PluginNode({ name: 'Fallout4.esm', enabled: true }, 'SomeMod'))).toBeUndefined();
   });
 
   it('re-renders on a new value published after construction', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 })]));
     const { tree } = makeTree([], { instance });
     expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp']);
 
     let fired = false;
     tree.onDidChangeTreeData(() => { fired = true; });
-    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 }), plugin({ name: 'B.esp', slot: 1 })]));
+    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 })]));
 
     expect(fired).toBe(true);
     expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp', 'B.esp']);
@@ -395,7 +395,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     const { tree } = makeTree([], { instance });
 
     const pending = tree.getChildren();
-    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 }), plugin({ name: 'B.esp', slot: 1 })]));
+    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 })]));
     const rendered = await pending;
 
     expect(rendered.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp', 'B.esp']);
@@ -416,7 +416,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(error.tooltip).toBe('EISDIR: illegal operation on a directory, read plugins.txt');
     expect(error.iconPath).toEqual(new ThemeIcon('error'));
 
-    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
+    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0 })]));
     const after = await failIfNotSettledWithin(tree.getChildren(), 500);
 
     expect(after.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp']);
@@ -440,11 +440,11 @@ describe('PluginsTreeProvider — a plugin row is identified by its kind and (or
     (await tree.getChildren()).map((row) => row.id);
 
   it('keeps each row\'s identity across a rebuild that moves it', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', slot: 0 }), plugin({ name: 'B.esp', slot: 1 })]));
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 })]));
     const { tree } = makeTree([], { instance });
     const [a, b] = await idsOf(tree);
 
-    instance.publish(valueOf([plugin({ name: 'B.esp', slot: 0 }), plugin({ name: 'A.esp', slot: 1 })]));
+    instance.publish(valueOf([plugin({ name: 'B.esp', line: 0 }), plugin({ name: 'A.esp', line: 1 })]));
 
     expect(await idsOf(tree)).toEqual([b, a]);
     expect(a).toBeDefined();
@@ -452,11 +452,11 @@ describe('PluginsTreeProvider — a plugin row is identified by its kind and (or
   });
 
   it('gives the plugin of the same name from another origin another identity', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', slot: 0, origin: 'ModA' })]));
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0, origin: 'ModA' })]));
     const { tree } = makeTree([], { instance });
     const [fromModA] = await idsOf(tree);
 
-    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0, origin: 'ModB' })]));
+    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0, origin: 'ModB' })]));
 
     const [fromModB] = await idsOf(tree);
     expect(fromModB).toBeDefined();
@@ -464,7 +464,7 @@ describe('PluginsTreeProvider — a plugin row is identified by its kind and (or
   });
 
   it('gives a locked row an identity of its own kind, never a plugin row\'s', async () => {
-    const withLine = makeTree([plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data/' })]).tree;
+    const withLine = makeTree([plugin({ name: 'Fallout4.esm', line: 0, origin: 'Data/' })]).tree;
     const locked = makeTree([], { loadedWithNoLine: ['Fallout4.esm'] }).tree;
 
     const [lineId] = await idsOf(withLine);
@@ -476,7 +476,7 @@ describe('PluginsTreeProvider — a plugin row is identified by its kind and (or
 
   it('renders a plugin plugins.txt names twice as one row, at its first line', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'A.esp', slot: 0 }), plugin({ name: 'B.esp', slot: 1 }), plugin({ name: 'a.ESP', slot: 2 }),
+      plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 }), plugin({ name: 'a.ESP', line: 2 }),
     ]);
 
     const rows = expectInstancesOf(await tree.getChildren(), PluginNode);
@@ -488,9 +488,9 @@ describe('PluginsTreeProvider — a plugin row is identified by its kind and (or
 describe('PluginsTreeProvider — name filter', () => {
   it('narrows rows to plugins whose filename contains the text, case-insensitively', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'Alpha.esp', slot: 0 }),
-      plugin({ name: 'Beta.esp', slot: 1 }),
-      plugin({ name: 'AlphaExtra.esp', slot: 2 }),
+      plugin({ name: 'Alpha.esp', line: 0 }),
+      plugin({ name: 'Beta.esp', line: 1 }),
+      plugin({ name: 'AlphaExtra.esp', line: 2 }),
     ]);
     tree.setFilter('ALPHA');
     const rows = await tree.getChildren();
@@ -499,7 +499,7 @@ describe('PluginsTreeProvider — name filter', () => {
   });
 
   it('finds the row it shows under the id of a row VS Code holds from before a rebuild', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]));
+    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]));
     const { tree } = makeTree([], { instance });
     const [held] = expectInstancesOf(await tree.getChildren(), PluginNode);
     await instance.refresh();
@@ -511,16 +511,16 @@ describe('PluginsTreeProvider — name filter', () => {
   });
 
   it('finds no row for a plugin the instance does not hold now', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]));
+    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]));
     const { tree } = makeTree([], { instance });
     const [alpha] = expectInstancesOf(await tree.getChildren(), PluginNode);
-    instance.publish(valueOf([plugin({ name: 'Beta.esp', slot: 0 })]));
+    instance.publish(valueOf([plugin({ name: 'Beta.esp', line: 0 })]));
 
     expect(tree.shownRow(expectInstanceOf(alpha, PluginNode))).toBeUndefined();
   });
 
   it('finds no row for a plugin the name filter hides', async () => {
-    const { tree } = makeTree([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]);
+    const { tree } = makeTree([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]);
     const [alpha] = expectInstancesOf(await tree.getChildren(), PluginNode);
     tree.setFilter('beta');
 
@@ -528,7 +528,7 @@ describe('PluginsTreeProvider — name filter', () => {
   });
 
   it('restores the full list when the filter is cleared', async () => {
-    const { tree } = makeTree([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]);
+    const { tree } = makeTree([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]);
     tree.setFilter('alpha');
     expect(await tree.getChildren()).toHaveLength(1);
 
@@ -537,7 +537,7 @@ describe('PluginsTreeProvider — name filter', () => {
   });
 
   it('returns an empty list, and no empty-list message, when the filter matches nothing', async () => {
-    const { tree } = makeTree([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]);
+    const { tree } = makeTree([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]);
     tree.setFilter('nomatch');
     const rows = await tree.getChildren();
 
@@ -546,20 +546,20 @@ describe('PluginsTreeProvider — name filter', () => {
   });
 
   it('survives an instance value change, narrowing whatever it turns up', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]));
+    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]));
     const { tree } = makeTree([], { instance });
     tree.setFilter('alpha');
     expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp']);
 
     instance.publish(valueOf([
-      plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 }), plugin({ name: 'AlphaTwo.esp', slot: 2 }),
+      plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 }), plugin({ name: 'AlphaTwo.esp', line: 2 }),
     ]));
 
     expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp', 'AlphaTwo.esp']);
   });
 
   it('narrowing a rendered tree asks it to render again, and its rows come back narrowed', async () => {
-    const { tree } = makeTree([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]);
+    const { tree } = makeTree([plugin({ name: 'Alpha.esp', line: 0 }), plugin({ name: 'Beta.esp', line: 1 })]);
     await tree.getChildren();
     let askedToRerender = false;
     tree.onDidChangeTreeData(() => { askedToRerender = true; });
@@ -579,7 +579,7 @@ function payloadOf(item: unknown): unknown {
 
 describe('PluginsTreeProvider — drag-and-drop reorder', () => {
   const ORDER = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
-  const fixturePlugins = (names: string[] = ORDER) => names.map((name, slot) => plugin({ name, slot }));
+  const fixturePlugins = (names: string[] = ORDER) => names.map((name, line) => plugin({ name, line }));
   const node = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
 
   async function drag(moved: string[], target: string | undefined, names: string[] = ORDER) {
@@ -721,8 +721,8 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
 describe('PluginsTreeProvider — isEnabled', () => {
   it('answers from the Instance value, matching the row\'s file name and origin without case', () => {
     const { tree } = makeTree([
-      plugin({ name: 'Mod.esp', slot: 0, origin: 'ModA', enabled: true }),
-      plugin({ name: 'Off.esp', slot: 1, origin: 'ModA', enabled: false }),
+      plugin({ name: 'Mod.esp', line: 0, origin: 'ModA', enabled: true }),
+      plugin({ name: 'Off.esp', line: 1, origin: 'ModA', enabled: false }),
     ]);
 
     expect(tree.isEnabled(new PluginNode({ name: 'mod.ESP', enabled: false }, 'moda'))).toBe(true);
@@ -730,7 +730,7 @@ describe('PluginsTreeProvider — isEnabled', () => {
   });
 
   it('answers false for a row of the same file name at another origin', () => {
-    const { tree } = makeTree([plugin({ name: 'Mod.esp', slot: 0, origin: 'ModA', enabled: true })]);
+    const { tree } = makeTree([plugin({ name: 'Mod.esp', line: 0, origin: 'ModA', enabled: true })]);
 
     expect(tree.isEnabled(new PluginNode({ name: 'Mod.esp', enabled: true }, 'ModB'))).toBe(false);
   });
@@ -742,21 +742,21 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
 
   it('resolves a plugin row to its own plugin\'s file, by origin and file name', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'Base.esp', slot: 0, origin: 'Winner', path: '/data/mods/Winner/Base.esp', winning: true }),
-      plugin({ name: 'Base.esp', slot: 0, origin: 'Loser', path: '/data/mods/Loser/Base.esp', winning: false }),
+      plugin({ name: 'Base.esp', line: 0, origin: 'Winner', path: '/data/mods/Winner/Base.esp', winning: true }),
+      plugin({ name: 'Base.esp', line: 0, origin: 'Loser', path: '/data/mods/Loser/Base.esp', winning: false }),
     ]);
     expect(await tree.resolvePluginPath(new PluginNode({ name: 'base.esp', enabled: true }, 'Loser'))).toBe('/data/mods/Loser/Base.esp');
   });
 
   it('returns undefined when no plugin has the row\'s origin and file name', async () => {
     const { tree } = makeTree(
-      [plugin({ name: 'Base.esp', slot: 0, origin: 'OtherMod' })], { dataFolderFile: (name) => `/game/Data/${name}` });
+      [plugin({ name: 'Base.esp', line: 0, origin: 'OtherMod' })], { dataFolderFile: (name) => `/game/Data/${name}` });
     expect(await tree.resolvePluginPath(new PluginNode({ name: 'Base.esp', enabled: true }, 'SomeMod'))).toBeUndefined();
   });
 
   it('resolves a locked row the game loads from a mod to that mod\'s copy, not the game folder\'s', async () => {
     const { tree } = makeTree(
-      [plugin({ name: 'Fallout4.esm', slot: 0, origin: 'SomeMod', path: '/instance/mods/SomeMod/Fallout4.esm' })],
+      [plugin({ name: 'Fallout4.esm', line: 0, origin: 'SomeMod', path: '/instance/mods/SomeMod/Fallout4.esm' })],
       { dataFolderFile: (name) => `/game/Data/${name}`, loadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'SomeMod' }] });
     const locked = await lockedRowOf(tree);
 
@@ -766,7 +766,7 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
 
   it('resolves a locked row no mod provides to the game folder\'s copy', async () => {
     const { tree } = makeTree(
-      [plugin({ name: 'Mod.esp', slot: 0 })],
+      [plugin({ name: 'Mod.esp', line: 0 })],
       { dataFolderFile: (name) => `/game/Data/${name}`, loadedWithNoLine: ['Fallout4.esm'] });
 
     expect(await tree.resolvePluginPath(await lockedRowOf(tree))).toBe('/game/Data/Fallout4.esm');
@@ -789,7 +789,7 @@ describe('PluginsTreeProvider — implicit master rows', () => {
 
   it('renders the backend names as ImplicitMasterNode rows preceding plugins.txt rows, in the order given, not sorted (DLCCoast.esm would sort ahead of Fallout4.esm), with no checkbox and contextValue pluginImplicit', async () => {
     const rows = await treeFor(
-      [plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm', 'DLCCoast.esm'],
+      [plugin({ name: 'Mod.esp', line: 0 })], ['Fallout4.esm', 'DLCCoast.esm'],
     ).getChildren();
 
     expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm', 'DLCCoast.esm', 'Mod.esp']);
@@ -802,8 +802,8 @@ describe('PluginsTreeProvider — implicit master rows', () => {
 
   it('a name the backend calls implicit which plugins.txt also lists renders exactly once, as the implicit row (an .esl the game loads on its own)', async () => {
     const rows = await treeFor([
-      plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data/' }),
-      plugin({ name: 'ccBGSFO4044-HellfirePowerArmor.esl', slot: 1, origin: 'Data/' }),
+      plugin({ name: 'Fallout4.esm', line: 0, origin: 'Data/' }),
+      plugin({ name: 'ccBGSFO4044-HellfirePowerArmor.esl', line: 1, origin: 'Data/' }),
     ], ['Fallout4.esm', 'ccBGSFO4044-HellfirePowerArmor.esl']).getChildren();
 
     const labels = rows.map((r) => r.label);
@@ -812,24 +812,24 @@ describe('PluginsTreeProvider — implicit master rows', () => {
   });
 
   it('renders a plugins.txt line of the same filename from another origin as its own row (ADR-0012)', async () => {
-    const rows = await treeFor([plugin({ name: 'Fallout4.esm', slot: 0, origin: 'SomeMod' })], ['Fallout4.esm']).getChildren();
+    const rows = await treeFor([plugin({ name: 'Fallout4.esm', line: 0, origin: 'SomeMod' })], ['Fallout4.esm']).getChildren();
     expect(rows.map((r) => r.kind)).toEqual(['implicitMaster', 'plugin']);
   });
 
   it('matches a plugins.txt line to an implicit name case-insensitively', async () => {
-    const rows = await treeFor([plugin({ name: 'FALLOUT4.ESM', slot: 0, origin: 'Data/' })], ['Fallout4.esm']).getChildren();
+    const rows = await treeFor([plugin({ name: 'FALLOUT4.ESM', line: 0, origin: 'Data/' })], ['Fallout4.esm']).getChildren();
     expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm']);
   });
 
   it('publishes each locked row\'s URI, for the graying decoration provider', async () => {
-    const tree = treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm']);
+    const tree = treeFor([plugin({ name: 'Mod.esp', line: 0 })], ['Fallout4.esm']);
     const [locked] = await tree.getChildren();
     const rowUri = present(expectInstanceOf(locked, ImplicitMasterNode).resourceUri, 'the locked row\'s URI');
     expect([...tree.lockedRowUris()]).toEqual([rowUri.toString()]);
   });
 
   it('renders no implicit row, and every plugins.txt line, when the value cannot say', async () => {
-    const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT).getChildren();
+    const rows = await treeFor([plugin({ name: 'Mod.esp', line: 0 })], ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT).getChildren();
 
     expect(rows.some((r) => r instanceof ImplicitMasterNode)).toBe(false);
     expect(rows.map((r) => r.label)).toEqual(['Mod.esp']);
@@ -842,7 +842,7 @@ describe('PluginsTreeProvider — implicit master rows', () => {
   });
 
   it('handleDrag still filters to only PluginNode rows, excluding implicit rows for free', async () => {
-    const tree = treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm']);
+    const tree = treeFor([plugin({ name: 'Mod.esp', line: 0 })], ['Fallout4.esm']);
     const rows = await tree.getChildren();
     const dt = new DataTransfer();
     tree.handleDrag(rows, dt, IGNORED_TOKEN);
@@ -853,7 +853,7 @@ describe('PluginsTreeProvider — implicit master rows', () => {
 
 describe('PluginsTreeProvider — the sort direction', () => {
   const LOCKED = ['Fallout4.esm', 'DLCRobot.esm'];
-  const LINES = () => [plugin({ name: 'A.esp', slot: 0 }), plugin({ name: 'B.esp', slot: 1 }), plugin({ name: 'C.esp', slot: 2 })];
+  const LINES = () => [plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 }), plugin({ name: 'C.esp', line: 2 })];
   const labelsOf = async (tree: PluginsTreeProvider) => (await tree.getChildren()).map((row) => row.label);
 
   it('lists losing at the top until told otherwise', async () => {
@@ -911,7 +911,7 @@ describe('PluginsTreeProvider — the sort direction', () => {
   });
 
   it('narrows the flipped rows by the name filter', async () => {
-    const { tree } = makeTree([...LINES(), plugin({ name: 'AB.esp', slot: 3 })]);
+    const { tree } = makeTree([...LINES(), plugin({ name: 'AB.esp', line: 3 })]);
 
     tree.setViewDirection('winningAtTop');
     tree.setFilter('a');
@@ -934,7 +934,7 @@ describe('PluginsTreeProvider — a drop asks for the place it is shown, in eith
     { direction: 'winningAtTop', moved: ['E.esp'], where: 'below the last row', target: undefined, drop: { kind: 'losingEnd' } },
     { direction: 'winningAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED_ROW, drop: { kind: 'losingEnd' } },
   ] as const)('$direction: $moved dropped on $where asks for $drop', async ({ direction, moved, target, drop }) => {
-    const tree = pluginsTreeOver(new FakeInstance(valueOf(LINES.map((name, slot) => plugin({ name, slot })), ['Fallout4.esm'])));
+    const tree = pluginsTreeOver(new FakeInstance(valueOf(LINES.map((name, line) => plugin({ name, line })), ['Fallout4.esm'])));
     tree.setViewDirection(direction);
     await tree.getChildren();
     const dt = new DataTransfer();
@@ -948,7 +948,7 @@ describe('PluginsTreeProvider — a drop asks for the place it is shown, in eith
 
 describe('PluginsTreeProvider — the places a move offers are the drops on its rows', () => {
   const LINES = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
-  const treeOfLines = () => pluginsTreeOver(new FakeInstance(valueOf(LINES.map((name, slot) => plugin({ name, slot })), ['Fallout4.esm'])));
+  const treeOfLines = () => pluginsTreeOver(new FakeInstance(valueOf(LINES.map((name, line) => plugin({ name, line })), ['Fallout4.esm'])));
 
   it('losing at the top: above each row outside the selection, as shown, then the bottom of the view at the winning end', () => {
     const tree = treeOfLines();
@@ -982,7 +982,7 @@ describe('PluginsTreeProvider — the places a move offers are the drops on its 
 });
 
 describe('PluginsTreeProvider — the locked plugins follow the instance value', () => {
-  const LINES = () => [plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data/' }), plugin({ name: 'Mod.esp', slot: 1 })];
+  const LINES = () => [plugin({ name: 'Fallout4.esm', line: 0, origin: 'Data/' }), plugin({ name: 'Mod.esp', line: 1 })];
   const shapeOf = async (tree: PluginsTreeProvider) => (await tree.getChildren())
     .map((row) => (row instanceof PluginNode || row instanceof ImplicitMasterNode ? `${row.kind} ${row.kind === 'plugin' ? row.plugin.name : row.name}` : row.kind));
 
@@ -997,8 +997,8 @@ describe('PluginsTreeProvider — the locked plugins follow the instance value',
   });
 });
 
-const A_ROW = () => plugin({ name: 'A.esp', slot: 0, origin: 'SomeMod' });
-const B_ROW = () => plugin({ name: 'B.esp', slot: 1, origin: 'SomeMod' });
+const A_ROW = () => plugin({ name: 'A.esp', line: 0, origin: 'SomeMod' });
+const B_ROW = () => plugin({ name: 'B.esp', line: 1, origin: 'SomeMod' });
 
 function makeDisconnectedClient(): InMemoryMEditClient {
   return disconnect(makeClient());
@@ -1046,14 +1046,14 @@ describe('PluginsTreeProvider — an enabled row is always collapsible', () => {
 
 describe('PluginsTreeProvider — a disabled plugin row has no expander', () => {
   it('renders TreeItemCollapsibleState.None for a disabled plugin, before any reconcile', async () => {
-    const { tree } = makeTree([plugin({ name: 'A.esp', slot: 0, enabled: false })]);
+    const { tree } = makeTree([plugin({ name: 'A.esp', line: 0, enabled: false })]);
     const [row] = await tree.getChildren();
 
     expect(tree.getTreeItem(present(row, 'the sole row')).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
   });
 
   it('stays None once mEdit holds the plugin — enabling is what would give it a chevron, not indexing', async () => {
-    const h = makeTree([plugin({ name: 'A.esp', slot: 0, enabled: false })]);
+    const h = makeTree([plugin({ name: 'A.esp', line: 0, enabled: false })]);
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
@@ -1062,8 +1062,8 @@ describe('PluginsTreeProvider — a disabled plugin row has no expander', () => 
 
   it('an enabled row beside it still gets a chevron', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'A.esp', slot: 0, enabled: false }),
-      plugin({ name: 'B.esp', slot: 1, enabled: true }),
+      plugin({ name: 'A.esp', line: 0, enabled: false }),
+      plugin({ name: 'B.esp', line: 1, enabled: true }),
     ]);
     const rows = await tree.getChildren();
 
@@ -1197,7 +1197,7 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
       recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
       records: { items: [recordSummary({ plugin: 'Shared.esp', formKey: '000001:Shared.esp', origin: 'ModB' })], total: 1 },
     });
-    const h = makeTree([plugin({ name: 'Shared.esp', slot: 0, origin: 'ModB' })], { client });
+    const h = makeTree([plugin({ name: 'Shared.esp', line: 0, origin: 'ModB' })], { client });
     await reconcile(h, answer);
 
     const [row] = await h.tree.getChildren();
@@ -1222,7 +1222,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
 
   it('states an override record under a tracked, editable plugin tracked and editable', async () => {
     const client = weaponOf(recordSummary({ formKey: '000001:Fallout4.esm' }));
-    const h = makeTree([plugin({ name: 'A.esp', slot: 0 })], { client });
+    const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
     await reconcile(h, [held('A.esp', { isTracked: true }), held('Fallout4.esm', { origin: 'Data/', isImmutable: true })]);
 
     const [row] = await h.tree.getChildren();
@@ -1233,7 +1233,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
 
   it('states every row of a plugin whose plugin source is unreadable tracked and not editable, and says why on the plugin row', async () => {
     const client = weaponOf(recordSummary());
-    const h = makeTree([plugin({ name: 'A.esp', slot: 0 })], { client });
+    const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
     await reconcile(h, [held('A.esp', { isTracked: true, pluginSourceUnreadable: true })]);
 
     const [row] = await h.tree.getChildren();
@@ -1245,7 +1245,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
 
   it('flips a record row on the reconcile that tracks its plugin, from the rows already read', async () => {
     const client = weaponOf(recordSummary());
-    const h = makeTree([plugin({ name: 'A.esp', slot: 0 })], { client });
+    const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
     expect((await firstRecordUnder(h, present(row, 'the A.esp row'))).record.contextValue).toBe('record untracked editable');
@@ -1261,7 +1261,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
   const DATA_COPY = held('Fallout4.esm', { origin: 'Data/', isImmutable: true });
   const MOD_COPY = held('Fallout4.esm', { origin: 'ModA', isTracked: true });
   const lockedTree = (modCopyWins: boolean) => makeTree(
-    [plugin({ name: 'Fallout4.esm', slot: null, origin: 'ModA', winning: modCopyWins }), plugin({ name: 'A.esp', slot: 0 })],
+    [plugin({ name: 'Fallout4.esm', line: null, origin: 'ModA', winning: modCopyWins }), plugin({ name: 'A.esp', line: 0 })],
     { client: weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data/' })),
       loadedWithNoLine: [{ name: 'Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data/' }] });
 
@@ -1526,7 +1526,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     ['shows', 'matches', 'last', [modCopy(false), ownCopy(true)], 1],
   ] as const)('%s a locked row whose own copy %s, with its own copy listed %s', async (_verb, _match, _order, answer, rows) => {
     const h = makeTree(
-      [plugin({ name: 'Fallout4.esm', slot: null, origin: 'ModA', winning: false })],
+      [plugin({ name: 'Fallout4.esm', line: null, origin: 'ModA', winning: false })],
       { loadedWithNoLine: ['Fallout4.esm'] });
     await reconcile(h, [...answer]);
 
@@ -1534,7 +1534,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
   });
 
   it('hides no row by the answer for another plugin of its name, when mEdit names none at its origin', async () => {
-    const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'RenamedMod' })]);
+    const h = makeTree([plugin({ name: 'A.esp', line: 0, origin: 'RenamedMod' })]);
     await reconcile(h, [held('A.esp', { origin: 'SomeOtherMod', hasMatchingRecords: false })]);
 
     expect(await h.tree.getChildren()).toHaveLength(1);
@@ -1558,7 +1558,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['B.esp']);
 
     instance.publish(valueOf([
-      plugin({ name: 'B.esp', slot: 0 }), plugin({ name: 'A.esp', slot: 1 }),
+      plugin({ name: 'B.esp', line: 0 }), plugin({ name: 'A.esp', line: 1 }),
     ]));
     h.client.setQueryAnswer('getPlugins', [held('A.esp'), held('B.esp')]);
     await h.tree.facts.refresh();
@@ -1664,8 +1664,8 @@ describe('PluginsTreeProvider — a row expands into the record browser children
       records: { items: [recordSummary({ plugin: 'Shared.esp', formKey: '000001:Shared.esp', origin: 'ModB' })], total: 1 },
     });
     const h = makeTree([
-      plugin({ name: 'Shared.esp', slot: 0, origin: 'ModA', winning: false }),
-      plugin({ name: 'Shared.esp', slot: 0, origin: 'ModB' }),
+      plugin({ name: 'Shared.esp', line: 0, origin: 'ModA', winning: false }),
+      plugin({ name: 'Shared.esp', line: 0, origin: 'ModB' }),
     ], { client });
     await reconcile(h, [held('Shared.esp', { origin: 'ModA' }), held('Shared.esp', { origin: 'ModB' })]);
     const [row] = await h.tree.getChildren();
@@ -1849,7 +1849,7 @@ describe('PluginsTreeProvider — a record row is identified by its kind, its pl
   });
 
   it('builds every row, at every level, collapsed', async () => {
-    const { tree } = await heldTree([A_ROW(), plugin({ name: 'Off.esp', slot: 1, enabled: false })]);
+    const { tree } = await heldTree([A_ROW(), plugin({ name: 'Off.esp', line: 1, enabled: false })]);
 
     const rows = await everyRow(tree);
     const states = rows.map((row) => tree.getTreeItem(row).collapsibleState);
@@ -1870,12 +1870,12 @@ describe('PluginsTreeProvider — a record row is identified by its kind, its pl
   });
 
   it('gives a record under the plugin of the same name from another origin another identity', async () => {
-    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', slot: 0, origin: 'ModA' })]));
-    const h = await heldTree([plugin({ name: 'A.esp', slot: 0, origin: 'ModA' })], instance);
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0, origin: 'ModA' })]));
+    const h = await heldTree([plugin({ name: 'A.esp', line: 0, origin: 'ModA' })], instance);
     const { tree } = h;
     const fromModA = recordRows(await everyRow(tree)).map((row) => row.id);
 
-    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0, origin: 'ModB' })]));
+    instance.publish(valueOf([plugin({ name: 'A.esp', line: 0, origin: 'ModB' })]));
     await reconcile(h, [held('A.esp', { origin: 'ModB' })]);
     const fromModB = recordRows(await everyRow(tree)).map((row) => row.id);
 
@@ -2119,7 +2119,7 @@ describe('PluginsTreeProvider — the row states its conditions', () => {
   });
 
   it('states a disabled line', async () => {
-    const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'SomeMod', enabled: false })]);
+    const h = makeTree([plugin({ name: 'A.esp', line: 0, origin: 'SomeMod', enabled: false })]);
     await reconcile(h, [held('A.esp')]);
 
     expect(await flags(h)).toEqual(['plugin', 'disabled', 'inUntrackedMod', 'untracked', 'editable']);
@@ -2140,7 +2140,7 @@ describe('PluginsTreeProvider — a plugin row\'s click', () => {
   });
 
   it('does nothing on a disabled plugin but select it', async () => {
-    const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'SomeMod', enabled: false })]);
+    const h = makeTree([plugin({ name: 'A.esp', line: 0, origin: 'SomeMod', enabled: false })]);
 
     expect((await rowItem(h)).command).toBeUndefined();
   });
@@ -2199,7 +2199,7 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
     expect(item.tooltip).toContain('Missing masters: Ghost.esm');
   });
 
-  it('never touches collapsibleState — AC2, and the leading slot stays the checkbox alone', async () => {
+  it('never touches collapsibleState — AC2, and the leading line stays the checkbox alone', async () => {
     const h = makeTree([A_ROW()]);
     await withIssues(h, ['Ghost.esm']);
 
@@ -2423,7 +2423,7 @@ describe('PluginsTreeProvider fact refresh', () => {
 });
 
 describe('PluginsTreeProvider — a name under two origins joins to the row own origin, replies listing the row\'s own plugin first so a name-only join would answer with the other', () => {
-  const SHARED_ROW = () => plugin({ name: 'Shared.esp', slot: 0, origin: 'ModA' });
+  const SHARED_ROW = () => plugin({ name: 'Shared.esp', line: 0, origin: 'ModA' });
 
   it('badges the row from its own plugin master issues, not the other plugin', async () => {
     const h = makeTree([SHARED_ROW()]);
@@ -2479,7 +2479,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
   });
 
   it('leaves the winning row clean when the other plugin is the one that failed to read', async () => {
-    const h = makeTree([SHARED_ROW(), plugin({ name: 'Shared.esp', slot: 0, origin: 'ModB', winning: false })]);
+    const h = makeTree([SHARED_ROW(), plugin({ name: 'Shared.esp', line: 0, origin: 'ModB', winning: false })]);
     await reconcile(h, [held('Shared.esp', { origin: 'ModA' })],
       [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
 
@@ -2524,7 +2524,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
   });
 
   it('joins case-insensitively on the origin as well as the name', async () => {
-    const h = makeTree([plugin({ name: 'Shared.esp', slot: 0, origin: 'MODA' })]);
+    const h = makeTree([plugin({ name: 'Shared.esp', line: 0, origin: 'MODA' })]);
     await reconcile(h, [
       held('Shared.esp', { origin: 'moda', masterIssues: ['AMaster.esm'] }),
       held('Shared.esp', { origin: 'ModB' }),
@@ -2534,7 +2534,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
   });
 
   it('states nothing of another plugin of the name when the row origin matches no plugin the answer names', async () => {
-    const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'RenamedMod' })]);
+    const h = makeTree([plugin({ name: 'A.esp', line: 0, origin: 'RenamedMod' })]);
     await reconcile(h, [held('A.esp', {
       origin: 'SomeOtherMod', isImmutable: true, masterIssues: ['Ghost.esm'],
     })]);
@@ -2545,7 +2545,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
 
 describe('PluginsTreeProvider — the facts are pulled once and held', () => {
   it('reads the plugin list once per reconcile, not once per rendered row', async () => {
-    const h = makeTree([A_ROW(), B_ROW(), plugin({ name: 'C.esp', slot: 2 })]);
+    const h = makeTree([A_ROW(), B_ROW(), plugin({ name: 'C.esp', line: 2 })]);
     await reconcile(h, [held('A.esp'), held('B.esp'), held('C.esp')]);
     expect(callCount(h.client, 'getPlugins')).toBe(1);
 
