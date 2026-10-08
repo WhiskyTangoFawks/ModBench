@@ -15,8 +15,7 @@ internal static class LinkResolutions
         var document = JsonNode.Parse(index.BodyOf(npc, plugin))?.AsObject()
             ?? throw new InvalidOperationException($"Expected {npc}'s document to be an object.");
         document["Race"] = target;
-        var compare = index.Records.GetCompareRecords([new RecordCopy(npc, plugin, document.ToJsonString())])
-            ?? throw new InvalidOperationException($"Expected {npc} to compare.");
+        var compare = index.Records.GetCompareRecords([new RecordCopy(npc, plugin, document.ToJsonString())]);
         return compare.Diffs.Single(diff => diff.FieldName == "Race").Resolutions?.Values.Single()
             ?? throw new InvalidOperationException($"Expected the link to {target} to resolve or not.");
     }

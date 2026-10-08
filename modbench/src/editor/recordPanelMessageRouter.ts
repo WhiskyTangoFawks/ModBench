@@ -165,9 +165,16 @@ async function answerRecordLoad(
   const pluginActive = listed?.some((p) => p.inLoadOrder && samePluginAddress(p, deps.plugin)) ?? false;
   const [compare] = await Promise.allSettled([(async () => {
     const documentText = await deps.documentText(pluginActive);
-    return m.columns.length > 0
-      ? deps.meditClient.getRecordsComparison([{ formKey: m.formKey, plugin: deps.plugin, documentText }, ...m.columns])
-      : deps.meditClient.getComparison(m.formKey, documentText === undefined ? undefined : { plugin: deps.plugin, documentText });
+    const own = () => deps.meditClient.getComparison(
+      m.formKey, documentText === undefined ? undefined : { plugin: deps.plugin, documentText });
+    if (m.columns.length === 0) return own();
+    try {
+      return await deps.meditClient.getRecordsComparison([{ formKey: m.formKey, plugin: deps.plugin, documentText }, ...m.columns]);
+    } catch (refused) {
+      // A record held by no plugin is gone (editor.md, States 4), not a copy missing from the plugin named.
+      if (await own().catch(() => undefined) === null) return null;
+      throw refused;
+    }
   })()]);
   if (compare.status === 'rejected') {
     deps.channel.warn(`Failed to read ${m.formKey}: ${errorMessage(compare.reason)}`);

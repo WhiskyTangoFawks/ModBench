@@ -234,8 +234,9 @@ export interface MEditClient {
    *  from it, outside the conflict states if inactive. */
   getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null>;
   /** Several records side by side: one column per copy, in the order given, with no conflict
-   *  state on any cell or row. Null is a copy no plugin holds and no `documentText` gives. */
-  getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult | null>;
+   *  state on any cell or row. Rejects when a copy is held by no plugin and given no `documentText`;
+   *  the detail names each. */
+  getRecordsComparison(copies: RecordCopy[]): Promise<CompareResult>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
   /** The referrers of the active plugins and of the inactive tracked ones. */
   getReferencesInActiveOrTrackedPlugins(formKey: string): Promise<ReferenceResult[]>;
