@@ -92,12 +92,12 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
 
   it('the raw walk reaches the Plugins view', () => {
     const reached = tsFiles(SRC).map((p) => relative(SRC, p));
-    expect(reached).toEqual(expect.arrayContaining([join('plugins', 'PluginsTreeProvider.ts'), join('plugins', 'PluginTreeProvider.ts')]));
+    expect(reached).toEqual(expect.arrayContaining([join('plugins', 'PluginsTreeProvider.ts'), join('plugins', 'RecordBrowser.ts')]));
   });
 
   it('the Plugins view is skipped by a stated exclusion', () => {
     expect(isExcluded(join('plugins', 'PluginsTreeProvider.ts'))).toBe(true);
-    expect(isExcluded(join('plugins', 'PluginTreeProvider.ts'))).toBe(true);
+    expect(isExcluded(join('plugins', 'RecordBrowser.ts'))).toBe(true);
   });
 
   it('the editor folder is skipped by a stated exclusion, the same as Plugins', () => {
@@ -222,9 +222,9 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
         mkdirSync(join(root, 'plugins'), { recursive: true });
         const planted = "import type { FormKey } from '../wire/ApiClient';\n";
         writeFileSync(join(root, 'mods', 'ModListProvider.ts'), planted);
-        writeFileSync(join(root, 'plugins', 'PluginTreeProvider.ts'), planted);
+        writeFileSync(join(root, 'plugins', 'RecordBrowser.ts'), planted);
         const reached = tsFiles(root).map((p) => relative(root, p));
-        expect(reached).toEqual(expect.arrayContaining([join('plugins', 'PluginTreeProvider.ts')]));
+        expect(reached).toEqual(expect.arrayContaining([join('plugins', 'RecordBrowser.ts')]));
         expect(findOffenders(root)).toEqual([join('mods', 'ModListProvider.ts')]);
       });
     });

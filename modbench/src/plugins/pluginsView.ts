@@ -12,7 +12,7 @@ import { reportSyncFailures, type SyncChannel, type SyncFailureReport } from '..
 import type { PluginSync } from './pluginSync';
 import { PluginsTreeProvider, type PluginsInstance, type PluginsTreeNode } from './PluginsTreeProvider';
 import type { PluginFactsClient } from './pluginFactsFeed';
-import type { PluginTreeProvider } from './PluginTreeProvider';
+import type { RecordBrowser } from './RecordBrowser';
 import { publishPluginWarnings } from './loadDiagnostics';
 import { pluginsKeyContext } from './gestureEntry';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
@@ -45,7 +45,7 @@ export interface PluginsViewDeps {
   instance: PluginsInstance & Pick<Instance, 'quiet'>;
   access: PluginsAccess;
   /** The record browser that supplies a plugin row's children. */
-  recordBrowser: PluginTreeProvider;
+  recordBrowser: RecordBrowser;
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the index
    *  status. */
   client: PluginFactsClient & RenamePluginDeps['client'] & TrackDeps['client'] & DecompileDeps['client'] & CompileDeps['client']

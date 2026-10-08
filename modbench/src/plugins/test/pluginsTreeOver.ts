@@ -1,5 +1,5 @@
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { PluginTreeProvider } from '../PluginTreeProvider';
+import { RecordBrowser } from '../RecordBrowser';
 import { PluginsTreeProvider } from '../PluginsTreeProvider';
 
 type PluginsTreeProviderOptions = ConstructorParameters<typeof PluginsTreeProvider>[0];
@@ -12,7 +12,7 @@ export function pluginsTreeOver(
   return new PluginsTreeProvider({
     instance,
     client,
-    records: new PluginTreeProvider(client),
+    records: new RecordBrowser(client),
     publishDiagnoses: () => undefined,
     publishChangedOutside: () => undefined,
     log: () => undefined,

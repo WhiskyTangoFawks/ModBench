@@ -39,7 +39,7 @@ import {
   PluginsTreeProvider, PluginNode, ImplicitMasterNode, NO_PLUGINS_MESSAGE,
   type PluginsTreeNode,
 } from '../PluginsTreeProvider';
-import { PluginTreeProvider } from '../PluginTreeProvider';
+import { RecordBrowser } from '../RecordBrowser';
 import { pluginsTreeOver } from './pluginsTreeOver';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -146,7 +146,7 @@ function makeClient(overrides: Partial<{
 interface Harness {
   tree: PluginsTreeProvider;
   client: InMemoryMEditClient;
-  records: PluginTreeProvider;
+  records: RecordBrowser;
   instance: FakeInstance;
   logged: { level: string; msg: string }[];
 }
@@ -164,7 +164,7 @@ function makeTree(
 ): Harness {
   const instance = extra.instance ?? new FakeInstance(valueOf(plugins, extra.loadedWithNoLine));
   const client = extra.client ?? makeClient();
-  const records = new PluginTreeProvider(client);
+  const records = new RecordBrowser(client);
   const logged: { level: string; msg: string }[] = [];
   const tree = pluginsTreeOver(instance, {
     client, records,

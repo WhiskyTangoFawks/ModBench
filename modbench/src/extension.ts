@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import { createMEditClient, type MEditClient } from './client';
-import { PluginTreeProvider } from './plugins/PluginTreeProvider';
+import { RecordBrowser } from './plugins/RecordBrowser';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
@@ -53,7 +53,7 @@ type ViewsClient = Pick<MEditClient,
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
   client: ViewsClient;
-  recordBrowser: PluginTreeProvider;
+  recordBrowser: RecordBrowser;
   pluginFacts: PluginsViewDeps['client'];
   statusBar: StatusBar;
   conflictsComputed: () => Promise<void>;
@@ -231,7 +231,7 @@ export function activate(context: vscode.ExtensionContext): void {
   activeClient = meditClient; // deactivate()'s only way to reach it
   const statusBar = createStatusBar(meditClient);
   context.subscriptions.push(statusBar);
-  const treeProvider = new PluginTreeProvider(meditClient, log);
+  const treeProvider = new RecordBrowser(meditClient, log);
   const focusedView = createFocusedView();
 
   const modFacts = {
