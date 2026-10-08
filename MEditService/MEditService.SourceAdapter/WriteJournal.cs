@@ -28,9 +28,8 @@ internal enum UnrestoredReason
     RestoreFailed,
 }
 
-/// <summary>One thing a rollback left standing (ADR-0019): a path relative to the mod folder as the Source
-/// Control panel lists it, or a <paramref name="Description"/> of a change outside the file tree. The
-/// <paramref name="Detail"/> is the operating system's reason when a restore was refused.</summary>
+/// <summary>One thing a rollback left standing (ADR-0019): a path relative to the mod folder, or a
+/// description of a change outside the file tree. Detail is the operating system's reason for a refusal.</summary>
 internal sealed record Unrestored(
     UnrestoredReason Reason, string? RelativePath = null, string? Description = null, string? Detail = null);
 
@@ -154,10 +153,8 @@ internal sealed class WriteJournal(string modFolder)
         return unrestored;
     }
 
-    /// <summary>The failure to throw once a rollback has run: none when it left nothing and the cause stands
-    /// as it is. A failed write with leftovers is an <see cref="IOException"/> naming them. Any other cause
-    /// is a defect and must not read as a refusal, so it travels inside an <see cref="AggregateException"/>
-    /// that names them.</summary>
+    /// <summary>None when the rollback left nothing. Otherwise an IOException naming what it left when the
+    /// cause is a failed write, else an AggregateException so no refusal handler catches a defect.</summary>
     internal Exception? Report(Exception cause, List<Unrestored> unrestored)
     {
         if (unrestored.Count == 0) return null;
