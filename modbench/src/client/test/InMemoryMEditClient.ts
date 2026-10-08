@@ -7,7 +7,7 @@ import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
 type QueryMethod =
-  | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
+  | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
   | 'getRecords' | 'searchRecords'
   | 'getRecordOwner' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrTrackedPlugins'
   | 'getRenderedDocument' | 'getRecordFile' | 'getRecordOfFile'
@@ -296,6 +296,11 @@ export class InMemoryMEditClient implements MEditClient {
   getPluginProblems(): ReturnType<MEditClient['getPluginProblems']> { return this.query('getPluginProblems', []); }
   getRecordTypes(...args: Parameters<MEditClient['getRecordTypes']>): ReturnType<MEditClient['getRecordTypes']> {
     return this.query('getRecordTypes', args);
+  }
+  getWorkingTreeStatesBeneath(
+    ...args: Parameters<MEditClient['getWorkingTreeStatesBeneath']>
+  ): ReturnType<MEditClient['getWorkingTreeStatesBeneath']> {
+    return this.query('getWorkingTreeStatesBeneath', args);
   }
 
   getCreatableRecordTypes(): ReturnType<MEditClient['getCreatableRecordTypes']> {

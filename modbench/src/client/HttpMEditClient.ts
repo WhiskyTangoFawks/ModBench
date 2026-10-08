@@ -18,7 +18,7 @@ import {
   type RebuildIndexOutcome, type CopyItem, type CopyMode, type RecordChildHolders,
   type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditChangesOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
-  type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
+  type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
@@ -511,6 +511,18 @@ class HttpMEditClient implements MEditClient {
       });
       this.ensureOk(`getRecordTypes(${plugin})`, response, error);
       return data ?? [];
+    });
+  }
+
+  async getWorkingTreeStatesBeneath({ name: plugin, origin }: PluginAddress): Promise<WorkingTreeStatesBeneath> {
+    return this.withTimeout(`getWorkingTreeStatesBeneath(${plugin})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/working-tree-states-beneath', {
+        params: { path: { plugin }, query: { origin } },
+        signal,
+      });
+      this.ensureOk(`getWorkingTreeStatesBeneath(${plugin})`, response, error);
+      if (data === undefined) throw new Error(`mEdit gave no answer for getWorkingTreeStatesBeneath(${plugin})`);
+      return data;
     });
   }
 

@@ -25,6 +25,8 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IRecordQue
 
     public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(PluginAddress plugin) => throw Failed();
 
+    public WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin) => throw Failed();
+
     public IReadOnlyList<RecordTypeChoice> GetCreatableRecordTypes() => throw Failed();
 
     public IReadOnlyList<RecordTypeChoice>? GetChildRecordTypes(PluginAddress plugin, string formKey) => throw Failed();

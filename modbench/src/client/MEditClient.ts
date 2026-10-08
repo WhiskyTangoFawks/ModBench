@@ -126,6 +126,7 @@ export type PluginDependants = components['schemas']['PluginDependantsResponse']
  *  record and its source file relative to the mod folder. */
 export type PluginProblems = components['schemas']['PluginProblems'];
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
+export type WorkingTreeStatesBeneath = components['schemas']['WorkingTreeStatesBeneath'];
 export type RecordTypeChoice = components['schemas']['RecordTypeChoice'];
 export type RenderedDocument = components['schemas']['RenderedDocument'];
 export type RecordFile = components['schemas']['RecordFile'];
@@ -208,6 +209,7 @@ export interface MEditClient {
   // Rejects while mEdit has not finished indexing: a plugin it has not reached would read as clean.
   getPluginProblems(): Promise<PluginProblems[]>;
   getRecordTypes(plugin: PluginAddress): Promise<PluginRecordTypeCount[]>;
+  getWorkingTreeStatesBeneath(plugin: PluginAddress): Promise<WorkingTreeStatesBeneath>;
   // The game's, not a plugin's: every plugin of the load order shares it.
   getCreatableRecordTypes(): Promise<RecordTypeChoice[]>;
   /** The types the plugin's copy of a container record can hold, in name order. */

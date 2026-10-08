@@ -1,5 +1,6 @@
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Index;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
@@ -65,6 +66,17 @@ internal static class PluginEndpoints
             .WithName("GetPluginRecordTypes")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginRecordTypeCount>>()
+            .ProducesProblem(400)
+            .ProducesProblem(503);
+
+        app.MapGet("/plugins/{plugin}/working-tree-states-beneath", (string plugin, string? origin, IRecordQueryService svc) =>
+        {
+            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
+            return Results.Ok(svc.GetWorkingTreeStatesBeneath(WriteEndpointMapping.PluginAddressOf(plugin, origin)));
+        })
+            .WithName("GetWorkingTreeStatesBeneath")
+            .WithTags(Tag)
+            .Produces<WorkingTreeStatesBeneath>()
             .ProducesProblem(400)
             .ProducesProblem(503);
 

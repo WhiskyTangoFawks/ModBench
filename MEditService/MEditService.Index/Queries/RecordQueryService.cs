@@ -57,6 +57,8 @@ internal sealed class RecordQueryService(
 
     // The header is not a browsable record type: it stays a schemas.Keys entry so GetRecord/
     // GetCompare resolve it by FormKey, but both browse paths below exclude it.
+    private static bool IsGroup(string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        recordType != PluginHeader.RecordType && schemas.ContainsKey(recordType);
 
     public PagedResult<RecordSummary> GetRecords(
         IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset)
@@ -65,7 +67,7 @@ internal sealed class RecordQueryService(
         var schemas = RequireSchemas();
 
         IReadOnlyList<string> recordTypes = types is null
-            ? [.. schemas.Keys.Where(t => t != PluginHeader.RecordType)]
+            ? [.. schemas.Keys.Where(t => IsGroup(t, schemas))]
             : [.. types.Where(schemas.ContainsKey)];
         if (recordTypes.Count == 0)
             return new PagedResult<RecordSummary>([], 0);
@@ -209,16 +211,17 @@ internal sealed class RecordQueryService(
         var schemas = RequireSchemas();
         var release = _loadOrder.Require().GameRelease;
 
-        // The header is one `records` row per plugin, so this exclusion has to be real; without it
-        // "Main File Header" appears as a browsable record-type node under every plugin.
         return [.. reads.GetRecordTypeCounts(plugin)
-            .Where(c => c.Type != PluginHeader.RecordType && schemas.ContainsKey(c.Type))
+            .Where(c => IsGroup(c.Type, schemas))
             .Select(c => new PluginRecordTypeCount(
                 c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure,
                 CreatableRecordTypes.Includes(c.Type, release), ContainerChildFields.HasChildFields(c.Type, release)))
             .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }
+
+    public WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin) =>
+        RequireReads().GetWorkingTreeStatesBeneath(plugin);
 
     public IReadOnlyList<RecordTypeChoice> GetCreatableRecordTypes()
     {

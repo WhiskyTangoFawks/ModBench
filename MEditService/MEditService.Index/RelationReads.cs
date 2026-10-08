@@ -221,6 +221,40 @@ internal sealed class RelationReads(
         return types;
     }
 
+    // A group holds its listed records' own states and what is beneath them; a record only what is
+    // beneath it. The header lists in no group.
+    public WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin)
+    {
+        var scope = RecordScope.Active;
+        using var connection = store.OpenReadConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"""
+            WITH RECURSIVE {NavigatorSql.AboveAChange(scope, "WHERE h.plugin = $1 AND h.origin = $2", store.Filter.AlsoKeeps("f"))}
+            SELECT FALSE AS is_group, form_key AS row_key, fact AS state FROM above_change
+            UNION
+            SELECT TRUE, r.record_type, r.working_tree_state FROM {scope.Records} r
+            WHERE r.plugin = $1 AND r.origin = $2 AND r.working_tree_state <> '{WorkingTreeState.None.Stored()}'
+              AND r.record_type <> '{PluginHeader.RecordType}' AND {NavigatorSql.NotHeld("r")}{store.Filter.AlsoKeeps("r")}
+            UNION
+            SELECT TRUE, r.record_type, a.fact FROM above_change a
+            JOIN {scope.Records} r ON r.form_key = a.form_key AND r.plugin = a.plugin AND r.origin = a.origin
+            WHERE {NavigatorSql.NotHeld("r")}
+            """;
+        DuckDbSql.AddParams(cmd, [plugin.Name, plugin.Origin]);
+        using var reader = cmd.ExecuteReader();
+
+        var byRecordType = new Dictionary<string, IReadOnlyList<WorkingTreeState>>(StringComparer.OrdinalIgnoreCase);
+        var byRecord = new Dictionary<string, IReadOnlyList<WorkingTreeState>>(StringComparer.Ordinal);
+        while (reader.Read())
+        {
+            var rows = reader.GetBoolean(0) ? byRecordType : byRecord;
+            var key = reader.GetString(1);
+            rows[key] = [.. rows.GetValueOrDefault(key, []).Append(WorkingTreeStates.FromStored(reader.GetString(2))).Order()];
+        }
+        return new WorkingTreeStatesBeneath(
+            [.. byRecordType.Values.SelectMany(states => states).Distinct().Order()], byRecordType, byRecord);
+    }
+
     private RecordLookupEntry? Resolve(string formKey)
     {
         using var connection = store.OpenReadConnection();
