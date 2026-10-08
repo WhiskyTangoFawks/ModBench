@@ -12,6 +12,8 @@ const h = vi.hoisted(() => ({
   contextKeys: new Map<string, unknown>(),
   executed: [] as unknown[][],
   editorProviders: new Map<string, unknown>(),
+  fileSystems: new Map<string, unknown>(),
+  openedDocuments: [] as unknown[],
   editorProviderDisposals: 0,
   editorProviderOptions: new Map<string, unknown>(),
   treeViews: [] as FakeTreeView[],
@@ -31,7 +33,10 @@ vi.mock('vscode', () => ({
       value: () => `${parts.scheme}:${parts.path}?${parts.query ?? ''}`,
     }),
     joinPath: (...parts: unknown[]) => parts.join('/'),
-    file: (fsPath: string) => fakeUri(fsPath),
+    file: (fsPath: string) => {
+      const file = fakeUri(fsPath);
+      return Object.assign(file, { with: (change: object) => Object.assign({}, file, change) });
+    },
   },
   ViewColumn: { Active: -1, One: 1, Beside: -2 },
   commands: {
@@ -46,7 +51,10 @@ vi.mock('vscode', () => ({
     },
   },
   workspace: {
-    registerFileSystemProvider: () => ({ dispose: () => undefined }),
+    registerFileSystemProvider: (scheme: string, provider: unknown) => {
+      h.fileSystems.set(scheme, provider);
+      return { dispose: () => undefined };
+    },
     registerTextDocumentContentProvider: () => ({ dispose: () => undefined }),
     textDocuments: [],
     fs: {
@@ -57,13 +65,17 @@ vi.mock('vscode', () => ({
       },
     },
     onDidCloseTextDocument: () => ({ dispose: () => undefined }),
-    openTextDocument: (uri: unknown) => Promise.resolve({ uri, getText: () => '{}' }),
+    openTextDocument: (uri: unknown) => {
+      h.openedDocuments.push(uri);
+      return Promise.resolve({ uri, getText: () => '{}' });
+    },
     onDidChangeTextDocument: (listener: (event: { document: unknown; contentChanges: unknown[] }) => void) => {
       h.documentChanges.add(listener);
       return { dispose: () => h.documentChanges.delete(listener) };
     },
   },
   window: {
+    showTextDocument: () => Promise.resolve(),
     createQuickPick: () => {
       const hidden: (() => void)[] = [];
       return {
@@ -107,6 +119,7 @@ import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { comparisonOf } from '../../test/comparison';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
+import { columnKey } from '../../wire/columnKey';
 
 const COPY_PLUGIN = { name: 'A.esp', origin: 'ModA' };
 const renderedUri = (formKey: string, fileName: string) => vscode.Uri.from({
@@ -205,6 +218,8 @@ beforeEach(() => {
   h.commands.clear();
   h.contextKeys.clear();
   h.executed.length = 0;
+  h.fileSystems.clear();
+  h.openedDocuments.length = 0;
 });
 
 const rowsOf = ({ options }: FakeTreeView): ReferencedByTreeProvider =>
@@ -539,6 +554,77 @@ describe('a record gesture from the palette', () => {
 
     expect(h.contextKeys.get('modbench.record.selectionIn')).toBe('modbench.pluginListTree');
     expect(opened()).toEqual([renderedUri('000803:A.esp', 'Placed.json')]);
+  });
+});
+
+describe('the Editor\'s file systems', () => {
+  const FORM_KEY = '000803:A.esp';
+  const CELL_FILE = '/mods/ModA/plugin-source/A.esp/Cells/Cell.json';
+  const plugin = { name: 'A.esp', origin: 'ModA' };
+
+  interface ReadableFileSystem { readFile(uri: unknown): Promise<Uint8Array> }
+  const isReadable = (value: unknown): value is ReadableFileSystem =>
+    typeof value === 'object' && value !== null && 'readFile' in value && typeof value.readFile === 'function';
+
+  const hasScheme = (value: unknown): value is { scheme: string } =>
+    typeof value === 'object' && value !== null && 'scheme' in value && typeof value.scheme === 'string';
+
+  const documentIn = (uri: unknown): { scheme: string } => {
+    if (!hasScheme(uri)) throw new Error('no document opened');
+    return uri;
+  };
+
+  async function readThrough(uri: { scheme: string }): Promise<string> {
+    const files = h.fileSystems.get(uri.scheme);
+    if (!isReadable(files)) throw new Error(`no file system registered on ${uri.scheme}`);
+    return new TextDecoder().decode(await files.readFile(uri));
+  }
+
+  const fieldClient = () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getComparison', {
+      ...comparisonOf(FORM_KEY, [{ plugin: 'A.esp', origin: 'ModA', isWinner: true }]),
+      diffs: [{
+        fieldName: 'Description', values: { [columnKey(plugin)]: 'a long description' },
+        winnerColumn: '', cellStates: {}, conflictAll: 'NoConflict',
+      }],
+    });
+    return client;
+  };
+
+  async function openedField(readOnly: boolean): Promise<{ scheme: string }> {
+    makeEditor(fieldClient());
+    await h.commands.get('modbench.record.openFieldValue')?.({
+      webviewSection: 'stringValue', formKey: FORM_KEY, plugin: plugin.name, origin: plugin.origin, recordLabel: 'Cell [000803:A.esp]',
+      fieldName: 'Description', value: 'a long description', readOnly, path: [{ kind: 'member', name: 'Description' }],
+    });
+    return documentIn(h.openedDocuments.at(-1));
+  }
+
+  it('read a field value through the editable scheme', async () => {
+    const uri = await openedField(false);
+
+    expect(uri.scheme).toBe('modbench-field');
+    expect(await readThrough(uri)).toBe('a long description');
+  });
+
+  it('read a field value through the read-only scheme', async () => {
+    const uri = await openedField(true);
+
+    expect(uri.scheme).toBe('modbench-field-readonly');
+    expect(await readThrough(uri)).toBe('a long description');
+  });
+
+  it('read a child record through its container\'s file', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getRecordFile', { path: CELL_FILE });
+    client.setQueryAnswer('getRecordOfFile', null);
+    makeEditor(client);
+    h.disk.set(CELL_FILE, '{ "EditorID": "Cell" }');
+    await h.commands.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: FORM_KEY, plugin } });
+    const [uri] = opened();
+
+    expect(await readThrough(documentIn(uri))).toBe('{ "EditorID": "Cell" }');
   });
 });
 
