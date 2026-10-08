@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
   contextKeys: new Map<string, unknown>(),
   executed: [] as unknown[][],
   editorProviders: new Map<string, unknown>(),
+  fileSystemSchemes: [] as string[],
   editorProviderDisposals: 0,
   editorProviderOptions: new Map<string, unknown>(),
   treeViews: [] as FakeTreeView[],
@@ -46,7 +47,10 @@ vi.mock('vscode', () => ({
     },
   },
   workspace: {
-    registerFileSystemProvider: () => ({ dispose: () => undefined }),
+    registerFileSystemProvider: (scheme: string) => {
+      h.fileSystemSchemes.push(scheme);
+      return { dispose: () => undefined };
+    },
     registerTextDocumentContentProvider: () => ({ dispose: () => undefined }),
     textDocuments: [],
     fs: {
@@ -539,6 +543,16 @@ describe('a record gesture from the palette', () => {
 
     expect(h.contextKeys.get('modbench.record.selectionIn')).toBe('modbench.pluginListTree');
     expect(opened()).toEqual([renderedUri('000803:A.esp', 'Placed.json')]);
+  });
+});
+
+describe('the Editor\'s file systems', () => {
+  it('serve the child record and field schemes a document opens on', () => {
+    h.fileSystemSchemes.length = 0;
+
+    makeEditor();
+
+    expect(h.fileSystemSchemes.sort()).toEqual(['modbench-child-record', 'modbench-field', 'modbench-field-readonly']);
   });
 });
 
