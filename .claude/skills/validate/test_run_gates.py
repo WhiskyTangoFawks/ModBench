@@ -1,5 +1,6 @@
 """Observes run-gates.sh's refusal: a run gates the tree that will land, so a branch behind main
-is refused before any gate runs."""
+is refused before any gate runs. Also observes what a slotted gate run is handed."""
+import os
 import pathlib
 import shutil
 import subprocess
@@ -47,6 +48,22 @@ class BehindMain(unittest.TestCase):
         run = self.gates("--comments")
         self.assertNotIn(REFUSAL, run.stdout)
         self.assertIn("Gate 1", run.stdout)
+
+
+class InASlot(unittest.TestCase):
+    def test_a_slotted_gate_run_neither_lends_nor_borrows_an_msbuild_node(self):
+        repo = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, repo)
+        validate = pathlib.Path(repo, ".claude/skills/validate")
+        validate.mkdir(parents=True)
+        shutil.copy(SCRIPT, validate)
+        (validate / "slot.sh").write_text('in_slot() { echo "node reuse off: $MSBUILDDISABLENODEREUSE"; }\n')
+        git(repo, "init", "-q", "-b", "main")
+        git(repo, "commit", "-q", "--allow-empty", "-m", "base")
+        env = {k: v for k, v in os.environ.items() if k not in ("MSBUILDDISABLENODEREUSE", "GATE_SLOT")}
+        run = subprocess.run(["bash", str(validate / "run-gates.sh"), "--backend"],
+                             capture_output=True, text=True, timeout=60, env=env)
+        self.assertIn("node reuse off: 1", run.stdout)
 
 
 if __name__ == '__main__':

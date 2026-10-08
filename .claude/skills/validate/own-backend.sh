@@ -4,6 +4,8 @@
 # group and delete that directory, and nothing else, because concurrent worktrees each run their
 # own backend beside a developer's and a test run's.
 
+source "${BASH_SOURCE[0]%/*}/stop-group.sh"
+
 OWN_BACKEND_BOOT_TIMEOUT_S=180
 OWN_BACKEND_PGID=
 OWN_BACKEND_DIR=
@@ -11,12 +13,7 @@ OWN_BACKEND_URL=
 
 stop_own_backend() {
   if [[ -n $OWN_BACKEND_PGID ]]; then
-    kill -TERM -- "-$OWN_BACKEND_PGID" 2>/dev/null
-    for _ in $(seq 1 50); do
-      kill -0 -- "-$OWN_BACKEND_PGID" 2>/dev/null || break
-      sleep 0.1
-    done
-    kill -KILL -- "-$OWN_BACKEND_PGID" 2>/dev/null
+    stop_group "$OWN_BACKEND_PGID" 5
     OWN_BACKEND_PGID=
   fi
   [[ -n $OWN_BACKEND_DIR ]] && rm -rf "$OWN_BACKEND_DIR"
