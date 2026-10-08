@@ -438,6 +438,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       filter: (...args: unknown[]) => present(h.commands.get('modbench.record.filter'), 'the modbench.record.filter handler')(...args),
       clearFilter: () => present(h.commands.get('modbench.record.clearFilter'), 'the modbench.record.clearFilter handler')(),
       setCalls: () => client.calls.filter((call) => call.method === 'setFilter'),
+      holds: (source: string) => client.setQueryAnswer('getActiveFilter', { sql: ARMOR_SQL, source }),
     };
   }
 
@@ -467,6 +468,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       h.files.set('armor.sql', ARMOR_SQL);
       h.pick = (items) => items[0];
       const view = filtering();
+      view.holds('armor.sql');
 
       await view.filter();
 
@@ -497,6 +499,7 @@ describe('the record filter, from the commands that set and clear it', () => {
     it('applies the document\'s text, named by the document, without asking', async () => {
       h.document = { uri: untitled, fileName: 'Untitled-1', getText: () => ARMOR_SQL };
       const view = filtering();
+      view.holds('Untitled-1');
 
       await view.filter(untitled);
 
@@ -505,20 +508,30 @@ describe('the record filter, from the commands that set and clear it', () => {
       expect(view.description()).toBe('records: Untitled-1');
     });
 
-    it('reports a refused set and touches nothing else', async () => {
+    it('reports a refused set and shows what mEdit holds', async () => {
       h.document = { uri: untitled, fileName: 'Untitled-1', getText: () => 'SELECT editor_id FROM "npc_"' };
       const view = filtering();
       view.client.setQueryAnswer('setFilter', 'Filter SQL must return a form_key column');
+      view.holds('older.sql');
 
       await view.filter(untitled);
 
       expect(view.reporter.reports).toEqual([
         { severity: 'error', message: 'Filter failed — Filter SQL must return a form_key column', detail: undefined },
       ]);
+      expect(view.description()).toBe('records: older.sql');
+    });
+
+    it('reports a read of what mEdit holds that fails after a set that succeeded, and keeps the view', async () => {
+      h.document = { uri: untitled, fileName: 'Untitled-1', getText: () => ARMOR_SQL };
+      const view = filtering();
+      view.client.setQueryFailure('getActiveFilter', new Error('boom'));
+
+      await view.filter(untitled);
+
+      expect(view.reporter.reports).toEqual([{ severity: 'error', message: 'Could not read the record filter', detail: 'boom' }]);
       expect(view.description()).toBeUndefined();
       expect(view.filterActive()).toEqual([]);
-      expect(view.recordBrowserRefreshes).toEqual([]);
-      expect(await view.pluginFactsReread()).toBe(false);
     });
   });
 
@@ -532,6 +545,7 @@ describe('the record filter, from the commands that set and clear it', () => {
     async function showingA() {
       h.document = { uri: { scheme: 'untitled', path: 'a' }, fileName: 'a', getText: () => ARMOR_SQL };
       const view = filtering();
+      view.holds('a');
       await view.filter({ scheme: 'untitled', path: 'a' });
       view.recordBrowserRefreshes.length = 0;
       return view;
@@ -594,8 +608,69 @@ describe('the record filter, from the commands that set and clear it', () => {
       await flushed();
 
       expect(view.description()).toBeUndefined();
-      expect(view.filterActive()).toEqual([false]);
+      expect(view.filterActive()).toEqual([false, false]);
       expect(view.reporter.reports).toEqual(warned);
+    });
+  });
+
+  describe('overlapping applies', () => {
+    const documentNamed = (name: string) => {
+      h.document = { uri: { scheme: 'untitled', path: name }, fileName: name, getText: () => ARMOR_SQL };
+      return { scheme: 'untitled', path: name };
+    };
+
+    it('shows what mEdit holds when the earlier apply\'s reply arrives last', async () => {
+      const view = filtering();
+      let repliedToA!: (error: string | null) => void;
+      view.client.setQueryAnswerOnce('setFilter', new Promise<string | null>((resolve) => { repliedToA = resolve; }));
+      view.holds('b');
+      const applyingA = view.filter(documentNamed('a'));
+      await flushed();
+      view.client.setQueryAnswerOnce('setFilter', null);
+      await view.filter(documentNamed('b'));
+
+      repliedToA(null);
+      await applyingA;
+      await flushed();
+
+      expect(view.description()).toBe('records: b');
+    });
+
+    it('shows the later read when an earlier read of what mEdit holds is handled after it', async () => {
+      const view = filtering();
+      let readForA!: (held: { sql: string; source: string }) => void;
+      view.client.setQueryAnswerOnce('getActiveFilter', new Promise((resolve) => { readForA = resolve; }));
+      view.holds('b');
+      const applyingA = view.filter(documentNamed('a'));
+      await flushed();
+      await view.filter(documentNamed('b'));
+
+      readForA({ sql: ARMOR_SQL, source: 'a' });
+      await applyingA;
+
+      expect(view.description()).toBe('records: b');
+    });
+
+    it('shows the new copy when the clearing of the old copy of the same source arrives during the re-apply', async () => {
+      h.document = { uri: { scheme: 'untitled', path: 'a' }, fileName: 'a', getText: () => ARMOR_SQL };
+      const view = filtering();
+      view.holds('a');
+      await view.filter({ scheme: 'untitled', path: 'a' });
+      let replied!: (error: string | null) => void;
+      view.client.setQueryAnswerOnce('setFilter', new Promise<string | null>((resolve) => { replied = resolve; }));
+      const reapplying = view.filter({ scheme: 'untitled', path: 'a' });
+      await flushed();
+
+      view.client.emit({
+        kind: 'record-filter-cleared', plugin: '', origin: '', keys: [], sequence: 0,
+        recordFilterCleared: { source: 'a', reason: 'Conversion Error' },
+      });
+      await flushed();
+      replied(null);
+      await reapplying;
+      await flushed();
+
+      expect(view.description()).toBe('records: a');
     });
   });
 
@@ -604,6 +679,7 @@ describe('the record filter, from the commands that set and clear it', () => {
     const applied = async () => {
       h.document = { uri: source, fileName: 'a', getText: () => ARMOR_SQL };
       const view = filtering();
+      view.holds('a');
       await view.filter(source);
       view.recordBrowserRefreshes.length = 0;
       return view;
@@ -611,6 +687,7 @@ describe('the record filter, from the commands that set and clear it', () => {
 
     it('shows no filter and re-reads the records, as a set does', async () => {
       const view = await applied();
+      view.client.setQueryAnswer('getActiveFilter', null);
 
       await view.clearFilter();
 
@@ -642,8 +719,20 @@ describe('the record filter, from the commands that set and clear it', () => {
         { severity: 'error', message: 'Could not clear the record filter — No load order has been received yet.', detail: undefined },
       ]);
       expect(view.description()).toBe('records: a');
-      expect(view.filterActive()).toEqual([true]);
-      expect(view.recordBrowserRefreshes).toEqual([]);
+    });
+
+    it('shows what mEdit holds after a clear whose reply arrives last', async () => {
+      const view = await applied();
+      let replied!: (error: string | null) => void;
+      view.client.setQueryAnswerOnce('clearFilter', new Promise<string | null>((resolve) => { replied = resolve; }));
+      const clearing = view.clearFilter();
+      await flushed();
+      view.holds('b');
+      await view.filter(source);
+      replied(null);
+      await clearing;
+
+      expect(view.description()).toBe('records: b');
     });
   });
 });
@@ -671,6 +760,7 @@ describe('the Plugins view\'s message line and name filter', () => {
       client.emit(rowsChanged);
     } else {
       client.setQueryAnswer('setFilter', null);
+      client.setQueryAnswer('getActiveFilter', { sql: ARMOR_SQL, source });
       h.files.set(source, ARMOR_SQL);
       await present(h.commands.get('modbench.record.filter'), 'the modbench.record.filter handler')(workspaceUri(source));
     }
