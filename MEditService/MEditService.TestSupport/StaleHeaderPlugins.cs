@@ -22,7 +22,7 @@ public static class StaleHeaderPlugins
     private static readonly byte[] Padding = Encoding.ASCII.GetBytes(
         string.Concat(Enumerable.Range(0, 400).Select(i => (i * 7919 % 97).ToString(CultureInfo.InvariantCulture))) + "\0");
 
-        public static StaleHeaderPlugin Named(string fileName) => new[] { Settings, Sierra, Hitech }.Single(p => p.FileName == fileName);
+    public static StaleHeaderPlugin Named(string fileName) => new[] { Settings, Sierra, Hitech }.Single(p => p.FileName == fileName);
 
     public static StaleHeaderPlugin Settings
     {
