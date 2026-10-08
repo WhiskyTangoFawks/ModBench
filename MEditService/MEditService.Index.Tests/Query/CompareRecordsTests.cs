@@ -165,7 +165,9 @@ public sealed class CompareRecordsTests : IDisposable
         var refusal = Assert.Throws<RecordCopiesMissingException>(
             () => Compare(Copy(_chest, BasePlugin), swordInBase, nowhere));
 
-        Assert.Equal([nowhere.FormKey], refusal.GoneFormKeys);
+        Assert.Equal(
+            [(nowhere.FormKey, CopyMissingReason.RecordGone), (swordInBase.FormKey, CopyMissingReason.NotInPlugin)],
+            refusal.Missing.OrderBy(m => m.Reason == CopyMissingReason.NotInPlugin).Select(m => (m.Copy.FormKey, m.Reason)));
     }
 
     [Fact]
@@ -173,7 +175,7 @@ public sealed class CompareRecordsTests : IDisposable
     {
         var refusal = Assert.Throws<RecordCopiesMissingException>(() => Compare(Copy(_dagger, BasePlugin)));
 
-        Assert.Empty(refusal.GoneFormKeys);
+        Assert.Equal(CopyMissingReason.NotInPlugin, Assert.Single(refusal.Missing).Reason);
     }
 
     [Fact]

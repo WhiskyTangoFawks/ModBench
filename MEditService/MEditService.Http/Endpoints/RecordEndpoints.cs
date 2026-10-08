@@ -336,11 +336,8 @@ internal static class RecordEndpoints
     private static RecordAddress Addressed(RecordAt record) =>
         new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);
 
-    private static CopyMissing MissingCopy(RecordCopy copy, IReadOnlyList<string> gone) =>
-        gone.Contains(copy.FormKey)
-            ? new CopyMissing(copy.FormKey, copy.Plugin, CopyMissingReason.RecordGone, $"{copy.FormKey} is held by no plugin.")
-            : new CopyMissing(copy.FormKey, copy.Plugin, CopyMissingReason.NotInPlugin,
-                $"{copy.FormKey} is not in {copy.Plugin.Name} ({copy.Plugin.Origin}).");
+    private static CopyMissing Wire(MissingCopy missing) =>
+        new(missing.Copy.FormKey, missing.Copy.Plugin, missing.Reason, missing.Message);
 
     internal static IResult CompareRecords(IReadOnlyList<RecordCopy> copies, IRecordQueryService svc)
     {
@@ -355,7 +352,7 @@ internal static class RecordEndpoints
         }
         catch (RecordCopiesMissingException refusal)
         {
-            return Results.Ok(new CompareRecordsResponse(null, [.. refusal.Missing.Select(c => MissingCopy(c, refusal.GoneFormKeys))]));
+            return Results.Ok(new CompareRecordsResponse(null, [.. refusal.Missing.Select(Wire)]));
         }
     }
 

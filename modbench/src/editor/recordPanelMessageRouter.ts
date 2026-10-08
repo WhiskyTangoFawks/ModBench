@@ -165,12 +165,15 @@ async function answerRecordLoad(
   const pluginActive = listed?.some((p) => p.inLoadOrder && samePluginAddress(p, deps.plugin)) ?? false;
   const [read] = await Promise.allSettled([(async (): Promise<RecordRead> => {
     const documentText = await deps.documentText(pluginActive);
+    const own = { formKey: m.formKey, plugin: deps.plugin, documentText };
     if (m.columns.length === 0) {
       const compare = await deps.meditClient.getComparison(
         m.formKey, documentText === undefined ? undefined : { plugin: deps.plugin, documentText });
-      return compare ? { compare } : { compare: null, gone: [m.formKey], copiesLacking: [] };
+      if (compare) return { compare };
+      // Only the typed answer tells a record held by no plugin from one a disabled plugin holds.
+      return readOf(await deps.meditClient.getRecordsComparison([own]));
     }
-    return readOf(await deps.meditClient.getRecordsComparison([{ formKey: m.formKey, plugin: deps.plugin, documentText }, ...m.columns]));
+    return readOf(await deps.meditClient.getRecordsComparison([own, ...m.columns]));
   })()]);
   if (read.status === 'rejected') {
     deps.channel.warn(`Failed to read ${m.formKey}: ${errorMessage(read.reason)}`);
@@ -181,7 +184,7 @@ async function answerRecordLoad(
     return;
   }
   const answered = read.value;
-  if (answered.compare === null) deps.channel.warn(`Held by no plugin: ${answered.gone.join(', ')}`);
+  if (answered.compare === null) deps.channel.warn([`Held by no plugin: ${answered.gone.join(', ')}.`, ...answered.copiesLacking].join(' '));
   const overrides = answered.compare?.overrides;
   const origins = (overrides ?? []).map((o) => o.origin);
   deps.originsShown(origins);

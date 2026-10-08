@@ -129,6 +129,11 @@ internal sealed class RecordQueryService(
         return new CompareResult(annotated, classification.Diffs, conflictAll, RequireSchemas().DisplayNameFor(recordType));
     }
 
+    private static MissingCopy MissingCopyOf(IRecordReads reads, RecordCopy copy) =>
+        reads.IsHeldByAnyPlugin(copy.FormKey)
+            ? new MissingCopy(copy, CopyMissingReason.NotInPlugin, $"{copy.FormKey} is not in {copy.Plugin.Name} ({copy.Plugin.Origin}).")
+            : new MissingCopy(copy, CopyMissingReason.RecordGone, $"{copy.FormKey} is held by no plugin.");
+
     public CompareResult GetCompareRecords(IReadOnlyList<RecordCopy> copies)
     {
         var reads = _index.RequireWholeSetReads();
@@ -145,10 +150,7 @@ internal sealed class RecordQueryService(
             else documents.Add(document);
         }
         if (missing.Count > 0)
-        {
-            var gone = missing.Select(c => c.FormKey).Distinct().Where(k => !reads.IsHeldByAnyPlugin(k)).ToList();
-            throw new RecordCopiesMissingException(missing, gone);
-        }
+            throw new RecordCopiesMissingException([.. missing.Select(c => MissingCopyOf(reads, c))]);
 
         var records = documents.ConvertAll(ToRecordDetail);
         // Two copies may come from one plugin, so a column is named by its place as well.

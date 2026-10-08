@@ -497,6 +497,7 @@ describe('a record tab whose record an edit of its FormID moved', () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', null);
+    client.setQueryAnswer('getRecordsComparison', { compare: null, missing: [{ formKey: OLD, plugin: COPY_PLUGIN, reason: 'RecordGone', message: 'gone' }] });
     client.setQueryAnswer('getPlugins', activeA);
     client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
     client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
@@ -524,6 +525,7 @@ describe('an edit of a FormID, fired with no panel', () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', null);
+    client.setQueryAnswer('getRecordsComparison', { compare: null, missing: [{ formKey: OLD, plugin: COPY_PLUGIN, reason: 'RecordGone', message: 'gone' }] });
     client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
     client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
     client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], documents: [] });
@@ -984,16 +986,38 @@ describe('what a record tab\'s webview posts', () => {
       expect(comparisonsAsked(mEdit)).toEqual([[GUN, undefined]]);
     });
 
-    it('is answered with a null comparison, not a failure, for a record no active plugin holds', async () => {
-      const mEdit = client();
-      mEdit.setQueryAnswer('getComparison', null);
-      const { open } = makeEditor(mEdit);
-      const tab = open(GUN);
+    describe('for a record no active plugin holds', () => {
+      const gone: { formKey: string; plugin: { name: string; origin: string }; reason: 'RecordGone' | 'NotInPlugin'; message: string } = { formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' }, reason: 'RecordGone', message: `${GUN} is held by no plugin.` };
+      const answeredFor = async (answer: { compare: typeof compare | null; missing: (typeof gone)[] }) => {
+        const mEdit = client();
+        mEdit.setQueryAnswer('getComparison', null);
+        mEdit.setQueryAnswer('getRecordsComparison', answer);
+        const { open, outputChannel } = makeEditor(mEdit);
+        const tab = open(GUN);
 
-      tab.receive(loadRequest);
-      await settle();
+        tab.receive(loadRequest);
+        await settle();
+        return { tab, outputChannel };
+      };
 
-      expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare: null, gone: [GUN], copiesLacking: [], conflictsComputed: false, loadFailures: [] })]);
+      it('is answered gone, naming it, when no registered plugin holds it', async () => {
+        const { tab, outputChannel } = await answeredFor({ compare: null, missing: [gone] });
+
+        expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare: null, gone: [GUN], copiesLacking: [], conflictsComputed: false, loadFailures: [] })]);
+        expect(outputChannel.warn).toHaveBeenCalledWith(expect.stringContaining(GUN));
+      });
+
+      it('is answered with the copy a disabled plugin holds, and not as gone', async () => {
+        const { tab } = await answeredFor({ compare, missing: [] });
+
+        expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare })]);
+      });
+
+      it('is refused, not gone, when only a plugin other than the tab\'s holds it', async () => {
+        const { tab } = await answeredFor({ compare: null, missing: [{ ...gone, reason: 'NotInPlugin', message: `${GUN} is not in A.esp (ModA).` }] });
+
+        expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ ok: false, error: `${GUN} is not in A.esp (ModA).` }));
+      });
     });
 
     it('is answered with a null plugin list, rather than failed, when only the list fails', async () => {
@@ -1350,9 +1374,10 @@ describe('several records opened at once', () => {
     });
 
     it('write the gone records to the Output', async () => {
-      const { channel } = await loadWithAColumn(missing(AMMO, 'RecordGone'));
+      const { channel } = await loadWithAColumn(missing(AMMO, 'RecordGone'), missing(KNIFE, 'NotInPlugin'));
 
       expect(channel.warn).toHaveBeenCalledWith(expect.stringContaining(AMMO));
+      expect(channel.warn).toHaveBeenCalledWith(expect.stringContaining(`${KNIFE} is not in B.esp (ModB).`));
     });
   });
 
