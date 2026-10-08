@@ -2230,16 +2230,6 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
 
     expect((await rowItem(h)).tooltip).toContain('Missing masters: Ghost.esm');
   });
-
-  it('keeps the last master issues through a read taken before the next snapshot is indexed', async () => {
-    const h = makeTree([A_ROW()]);
-    await withIssues(h, ['Ghost.esm']);
-
-    h.client.setQueryAnswer('getPlugins', [held('A.esp', { masterIssues: null })]);
-    await h.tree.facts.refresh();
-
-    expect((await rowItem(h)).description).toBe('1 master issue');
-  });
 });
 
 describe('PluginsTreeProvider — load-failure decoration', () => {

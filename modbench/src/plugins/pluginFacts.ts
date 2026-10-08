@@ -142,8 +142,7 @@ export class PluginFacts {
     this.refreshed(plugins);
   }
 
-  /** The facts alone, leaving which plugins are held as they are. No `masterIssues` means not
-   *  yet checked, so the last answer stays until one lands. */
+  /** The facts alone, leaving which plugins are held as they are. */
   refreshed(plugins: readonly PluginMetadata[]): void {
     const reads = new ByPluginAddress<PluginRead>();
     const matches = new ByPluginAddress<boolean>();
@@ -151,7 +150,7 @@ export class PluginFacts {
       reads.set(p, {
         readOnly: p.isImmutable || p.pluginSourceUnreadable, tracked: p.isTracked,
         sourceUnreadable: p.pluginSourceUnreadable, parseFailure: p.hasParseFailure,
-        masterIssues: p.masterIssues ?? this.reads.get(p)?.masterIssues,
+        masterIssues: p.masterIssues,
       });
       matches.set(p, p.hasMatchingRecords);
     }
