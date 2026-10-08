@@ -296,12 +296,14 @@ internal sealed class Reconciler(
     private OpenScope? EnsureScope(LoadOrderSnapshot snapshot, out string? heldElsewhere)
     {
         heldElsewhere = null;
+        OpenScope? leaving;
         lock (_lock)
         {
             if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot)) return current;
-            DisposeCurrent();
+            leaving = DetachCurrent();
             filter.DropWhenOutside(snapshot);
         }
+        leaving?.Index.Dispose();
 
         logger.LogDebug("Initializing DuckDB record index");
         var createTimer = Stopwatch.StartNew();
@@ -792,17 +794,26 @@ internal sealed class Reconciler(
     }
 
     /// <summary>Drops the scope: the plugins it has open and the store's connection. Cancels an in-flight
-    /// reconcile and waits for it to stop first; the load order is its own and is untouched.</summary>
-    public void Close()
+    /// reconcile and waits for it to stop first. False when a read outlived
+    /// <see cref="Store.EndReads"/>.</summary>
+    public bool Close()
     {
         // Cancels an in-flight reconcile and waits for it to stop *before* disposing anything,
         // the teardown half of the cancellation. Disposing while the loop still holds the
         // index is a native crash, not a catchable one.
         EnterExclusive();
-        try { lock (_lock) DisposeCurrent(); }
+        bool readsEnded;
+        try
+        {
+            OpenScope? closing;
+            lock (_lock) closing = DetachCurrent();
+            readsEnded = closing?.Index.EndReads() ?? true;
+            closing?.Index.Dispose();
+        }
         finally { ExitExclusive(); }
 
         PublishStatus();
+        return readsEnded;
     }
 
     public void Dispose()
@@ -818,21 +829,25 @@ internal sealed class Reconciler(
         EnterExclusive();
         try
         {
+            OpenScope? closing;
             lock (_lock)
             {
-                DisposeCurrent();
+                closing = DetachCurrent();
                 // EndReconcile already clears this on every reconcile's own exit path; this is the
                 // exclusive-holder's own backstop, not the common case.
                 _reconcileCancellation?.Dispose();
                 _reconcileCancellation = null;
             }
+            closing?.Index.Dispose();
         }
         finally { ExitExclusive(); }
     }
 
-    private void DisposeCurrent()
+    // Disposing the scope waits out its reads, so its caller does that outside _lock, which every
+    // Status and read takes.
+    private OpenScope? DetachCurrent()
     {
-        _scope?.Index.Dispose();
+        var detached = _scope;
         _scope = null;
         _indexed.Clear();
         _conflictsComputed = false;
@@ -842,5 +857,6 @@ internal sealed class Reconciler(
         _collisionFailures = [];
         _heldElsewhereMessage = null;
         _failureMessage = null;
+        return detached;
     }
 }

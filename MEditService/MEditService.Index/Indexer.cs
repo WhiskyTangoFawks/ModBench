@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
@@ -79,13 +80,19 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     }
 
     /// <summary>ADR-0010: drops the index file, floors its sequence at what this process
-    /// handed out, and refills it off the caller's thread; a file another window holds is refused,
-    /// and the refusal returned.</summary>
-    public string? RebuildStore(GameRelease gameRelease, string instanceRoot)
+    /// handed out, and refills it off the caller's thread; a file another window holds, or a read
+    /// that never ended, is refused, and the refusal returned.</summary>
+    public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
         var previousSequence = Sequence;
-        _reconciler.Close();
-        if (_indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence) is { } refusal) return refusal;
+        if (!_reconciler.Close())
+        {
+            _reconciler.StartReconcile();
+            return new(StoreRebuildRefusal.StillServingReads,
+                $"mEdit's index was not rebuilt: a read of it was still open after {IndexWriteGate.HoldLimit.TotalSeconds:0}s. It is reopened as it was.");
+        }
+        if (_indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence) is { } heldElsewhere)
+            return new(StoreRebuildRefusal.HeldByAnotherWindow, heldElsewhere);
         _reconciler.StartReconcile();
         return null;
     }

@@ -109,7 +109,7 @@ internal sealed class Store : IDisposable
     {
         lock (_readsGate)
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
+            ObjectDisposedException.ThrowIf(_closedToReads, this);
             var connection = _databasePath == null ? Connection.Duplicate() : new DuckDBConnection($"DataSource={_databasePath}");
             connection.Open();
             _readsInFlight++;
@@ -123,26 +123,36 @@ internal sealed class Store : IDisposable
     // deleted the file.
     private readonly object _readsGate = new();
     private int _readsInFlight;
-    private bool _disposed;
+    private bool _closedToReads;
 
-    /// <summary>Waits for the reads in flight, bounded for the reason IndexWriteGate.HoldLimit gives:
-    /// a read connection never disposed would otherwise wedge the store's closing, with nothing said.
+    /// <summary>Closes the store to new reads. False when a read is still open once
+    /// IndexWriteGate.HoldLimit has passed: a read never disposed would otherwise wedge the closing.
     /// </summary>
-    public void Dispose()
+    public bool EndReads()
     {
         lock (_readsGate)
         {
-            _disposed = true;
+            _closedToReads = true;
             var deadline = _timeProvider.GetUtcNow() + IndexWriteGate.HoldLimit;
-            while (_readsInFlight > 0)
+            var aReadEnded = true;
+            while (_readsInFlight > 0 && aReadEnded)
             {
                 var remaining = deadline - _timeProvider.GetUtcNow();
-                if (remaining > TimeSpan.Zero && Monitor.Wait(_readsGate, remaining)) continue;
-                _logger.LogError(
-                    "The index at {Path} still serves {Reads} reads after {Seconds}s and closes under them; the next index opened on it may answer its old rows",
-                    _databasePath, _readsInFlight, IndexWriteGate.HoldLimit.TotalSeconds);
-                break;
+                aReadEnded = remaining > TimeSpan.Zero && Monitor.Wait(_readsGate, remaining);
             }
+            return _readsInFlight == 0;
+        }
+    }
+
+    public void Dispose()
+    {
+        bool closedToReads;
+        lock (_readsGate) closedToReads = _closedToReads;
+        if (!closedToReads && !EndReads())
+        {
+            _logger.LogError(
+                "The index at {Path} closes under a read still open after {Seconds}s; the next index opened on it may answer its old rows",
+                _databasePath, IndexWriteGate.HoldLimit.TotalSeconds);
         }
         _connection?.Dispose();
     }
