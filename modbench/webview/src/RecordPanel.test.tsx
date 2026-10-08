@@ -1161,8 +1161,8 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
   });
 });
 
-const loaded = (result: CompareResult | null, conflictsComputed = true, gone = ['000001:Fallout4.esm'], notInPlugin: string[] = []) => ({
-  ok: true as const, ...(result === null ? { result, gone, notInPlugin } : { result }), immutableSet: new Set<string>(), trackedSet: new Set<string>(), sourceUnreadableSet: new Set<string>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
+const loaded = (result: CompareResult | null, conflictsComputed = true, gone = ['000001:Fallout4.esm'], copiesLacking: string[] = []) => ({
+  ok: true as const, ...(result === null ? { result, gone, copiesLacking } : { result }), immutableSet: new Set<string>(), trackedSet: new Set<string>(), sourceUnreadableSet: new Set<string>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
 });
 
 function deferred<T>() {

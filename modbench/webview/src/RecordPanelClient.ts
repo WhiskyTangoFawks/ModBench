@@ -16,7 +16,7 @@ type LoadResult =
 // Null is records held by no plugin at all, which `gone` names (editor.md, States, story 4).
 export type PanelRead =
   | { result: CompareResult }
-  | { result: null; gone: string[]; notInPlugin: string[] };
+  | { result: null; gone: string[]; copiesLacking: string[] };
 
 interface LoadedPanel {
   ok: true; immutableSet: Set<ColumnKey> | null;
@@ -68,7 +68,7 @@ export function createRecordPanelClient(): RecordPanelClient {
       // origin's plugin of the same filename.
       const pluginList = answer.plugins;
       const read: PanelRead = answer.compare === null
-        ? { result: null, gone: answer.gone, notInPlugin: answer.notInPlugin }
+        ? { result: null, gone: answer.gone, copiesLacking: answer.copiesLacking }
         : { result: parseCompareResult(answer.compare) };
       const result = read.result;
       // Several records compared put the document's copy first, so the first match is it.

@@ -993,7 +993,7 @@ describe('what a record tab\'s webview posts', () => {
       tab.receive(loadRequest);
       await settle();
 
-      expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare: null, gone: [GUN], notInPlugin: [], conflictsComputed: false, loadFailures: [] })]);
+      expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare: null, gone: [GUN], copiesLacking: [], conflictsComputed: false, loadFailures: [] })]);
     });
 
     it('is answered with a null plugin list, rather than failed, when only the list fails', async () => {
@@ -1325,7 +1325,7 @@ describe('several records opened at once', () => {
       const { tab, client } = await loadWithAColumn(missing(AMMO, 'RecordGone'));
 
       expect(tab.webview.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'recordLoadAnswered', ok: true, compare: null, gone: [AMMO], notInPlugin: [] }));
+        expect.objectContaining({ type: 'recordLoadAnswered', ok: true, compare: null, gone: [AMMO], copiesLacking: [] }));
       expect(comparisonsAsked(client)).toEqual([]);
     });
 
@@ -1345,7 +1345,7 @@ describe('several records opened at once', () => {
       const { tab } = await loadWithAColumn(missing(AMMO, 'RecordGone'), missing(KNIFE, 'NotInPlugin'));
 
       expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({
-        ok: true, compare: null, gone: [AMMO], notInPlugin: [`${KNIFE} is not in B.esp (ModB).`],
+        ok: true, compare: null, gone: [AMMO], copiesLacking: [`${KNIFE} is not in B.esp (ModB).`],
       }));
     });
 

@@ -242,7 +242,7 @@ export type RecordLoadAnswer =
  *  with mEdit's word on each copy only the plugin it names lacks (story 2). */
 export type RecordRead =
   | { compare: components['schemas']['CompareResult'] }
-  | { compare: null; gone: string[]; notInPlugin: string[] };
+  | { compare: null; gone: string[]; copiesLacking: string[] };
 
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
@@ -383,7 +383,7 @@ function parseFormKeyPicked(w: { requestId?: unknown; formKey?: unknown }): Exte
 }
 
 function parseRecordLoadAnswer(w: {
-  requestId?: unknown; ok?: unknown; compare?: unknown; gone?: unknown; notInPlugin?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
+  requestId?: unknown; ok?: unknown; compare?: unknown; gone?: unknown; copiesLacking?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
   documentPlugin?: unknown; modsByOrigin?: unknown;
 }): { requestId: string } & RecordLoadAnswer {
   if (!isString(w.requestId)) throw new Error('Expected "recordLoadAnswered" to carry a string requestId.');
@@ -395,19 +395,19 @@ function parseRecordLoadAnswer(w: {
   return { requestId: w.requestId, ...parseAnswered(w) };
 }
 
-function parseRead(w: { compare?: unknown; gone?: unknown; notInPlugin?: unknown }): RecordRead {
+function parseRead(w: { compare?: unknown; gone?: unknown; copiesLacking?: unknown }): RecordRead {
   if (w.compare !== null) {
     if (!isCompareResultShape(w.compare)) throw new Error('Expected an answered "recordLoadAnswered" to carry a compare object or null.');
     return { compare: w.compare };
   }
-  if (!isStringArray(w.gone) || w.gone.length === 0 || !isStringArray(w.notInPlugin)) {
+  if (!isStringArray(w.gone) || w.gone.length === 0 || !isStringArray(w.copiesLacking)) {
     throw new Error('Expected an answered "recordLoadAnswered" with no compare to name the records that are gone.');
   }
-  return { compare: null, gone: w.gone, notInPlugin: w.notInPlugin };
+  return { compare: null, gone: w.gone, copiesLacking: w.copiesLacking };
 }
 
 function parseAnswered(w: {
-  compare?: unknown; gone?: unknown; notInPlugin?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; documentPlugin?: unknown;
+  compare?: unknown; gone?: unknown; copiesLacking?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; documentPlugin?: unknown;
   modsByOrigin?: unknown;
 }): RecordLoadAnswer {
   if (w.plugins !== null && !isPluginResponseArray(w.plugins)) {

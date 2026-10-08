@@ -168,7 +168,7 @@ async function answerRecordLoad(
     if (m.columns.length === 0) {
       const compare = await deps.meditClient.getComparison(
         m.formKey, documentText === undefined ? undefined : { plugin: deps.plugin, documentText });
-      return compare ? { compare } : { compare: null, gone: [m.formKey], notInPlugin: [] };
+      return compare ? { compare } : { compare: null, gone: [m.formKey], copiesLacking: [] };
     }
     return readOf(await deps.meditClient.getRecordsComparison([{ formKey: m.formKey, plugin: deps.plugin, documentText }, ...m.columns]));
   })()]);
@@ -199,7 +199,7 @@ async function answerRecordLoad(
 function readOf({ compare, missing }: CompareRecordsResponse): RecordRead {
   if (compare) return { compare };
   const gone = [...new Set(missing.filter((c) => c.reason === 'RecordGone').map((c) => c.formKey))];
-  const notInPlugin = missing.filter((c) => c.reason === 'NotInPlugin').map((c) => c.message);
-  if (gone.length === 0) throw new Error(notInPlugin.join(' '));
-  return { compare: null, gone, notInPlugin };
+  const copiesLacking = missing.filter((c) => c.reason === 'NotInPlugin').map((c) => c.message);
+  if (gone.length === 0) throw new Error(copiesLacking.join(' '));
+  return { compare: null, gone, copiesLacking };
 }
