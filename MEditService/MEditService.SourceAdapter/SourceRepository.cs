@@ -256,9 +256,9 @@ public sealed class SourceRepository
         PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         LastCommitComparison.Of(_modFolder, _release, _git, Locator, plugin, schemas);
 
-    /// <summary>Creates or replaces the record's document, placing an absent one from its identity
-    /// alone with the levels above it. A record another document carries is replaced at its own slot.
-    /// <paramref name="alongside"/> is written in the same transaction. A failure writes nothing.</summary>
+    /// <summary>Creates or replaces the record's document, placing an absent one from its identity alone
+    /// with the levels above it. A record another document carries is replaced at its own slot.
+    /// <paramref name="alongside"/> lands with it. A failure writes nothing.</summary>
     public void Put(PluginAddress plugin, SourceDocument document, SourceChanges? alongside = null) =>
         Write(plugin, document, () => ChangesToPut(plugin, document), alongside);
 

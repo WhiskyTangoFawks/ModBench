@@ -50,7 +50,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
 
     /// <summary>The container rule: the child lands at the end of its slot in the destination's copy
     /// of the container's document, the container copied in with its own fields when absent,
-    /// transitively. <paramref name="alongside"/> is written in the same transaction.</summary>
+    /// transitively. <paramref name="alongside"/> lands with it.</summary>
     internal RecordEditResult AppendEmbeddedChild(
         CopySource source, DocumentContainment container, SourceDocument child,
         Destination destination, GameRelease release, SourceChanges alongside)
@@ -157,8 +157,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     }
 
     /// <summary>Lands an exterior CELL in <paramref name="worldspaceFormKey"/>, copying the WRLD in with
-    /// its own fields first when the destination has none: the put of a cell whose worldspace is
-    /// absent refuses. <paramref name="alongside"/> is written in the same transaction.</summary>
+    /// its own fields first when the destination has none, since a cell's put refuses without its
+    /// worldspace. <paramref name="alongside"/> lands with it.</summary>
     internal RecordEditResult PlaceExteriorCell(
         CopySource source, string worldspaceFormKey, SourceDocument cell, Destination destination, GameRelease release,
         SourceChanges alongside)
