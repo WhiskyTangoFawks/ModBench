@@ -14,7 +14,6 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class CopyContainerPartialFormTests : IDisposable
 {
     private const float WaterHeight = 5f;
-    private const int Compressed = 0x40000;
 
     private readonly LoadOrderOfPlugins _plugins = new();
 
@@ -41,7 +40,7 @@ public sealed class CopyContainerPartialFormTests : IDisposable
         FormKey cell = default, placed = default;
         var source = Plugin("Fallout4.esm", mod =>
         {
-            var interior = Cell(mod, "InteriorCell", Compressed);
+            var interior = Cell(mod, "InteriorCell", CompressedFlag.Bit);
             var reference = Placed(mod);
             interior.Persistent.Add(reference);
             mod.Cells.Records.Add(CellBlocks.Interior(interior));
@@ -54,7 +53,7 @@ public sealed class CopyContainerPartialFormTests : IDisposable
         Assert.False(copied.ContainsKey("WaterHeight"));
         var flags = copied["MajorRecordFlagsRaw"].Require().GetValue<int>();
         Assert.NotEqual(0, flags & PartialFormFlag.Bit);
-        Assert.Equal(0, flags & Compressed);
+        Assert.Equal(0, flags & CompressedFlag.Bit);
         Assert.Equal(placed.ToString(), Assert.Single(copied["Persistent"].Require().AsArray()).Require()["FormKey"].Require().GetValue<string>());
     }
 
@@ -98,6 +97,29 @@ public sealed class CopyContainerPartialFormTests : IDisposable
 
         var copied = CopyIn(source, placed, cell);
 
+        Assert.False(copied.ContainsKey("WaterHeight"));
+        Assert.NotEqual(0, copied["MajorRecordFlagsRaw"].Require().GetValue<int>() & PartialFormFlag.Bit);
+    }
+
+    [Fact]
+    public void AWorldspacesPersistentCellOfFallout4EsmWithoutThePersistentFlag_CopiedInAroundAChild_IsAPartialForm()
+    {
+        FormKey topCell = default, placed = default;
+        FormKey worldspaceKey = default;
+        var source = Plugin("Fallout4.esm", mod =>
+        {
+            var worldspace = new Worldspace(mod) { EditorID = "World" };
+            var top = Cell(mod, "TopCell");
+            var reference = Placed(mod);
+            top.Temporary.Add(reference);
+            worldspace.TopCell = top;
+            mod.Worldspaces.Add(worldspace);
+            (topCell, placed, worldspaceKey) = (top.FormKey, reference.FormKey, worldspace.FormKey);
+        });
+
+        var copied = CopyIn(source, placed, worldspaceKey)["TopCell"].Require().AsObject();
+
+        Assert.Equal(topCell.ToString(), copied["FormKey"].Require().GetValue<string>());
         Assert.False(copied.ContainsKey("WaterHeight"));
         Assert.NotEqual(0, copied["MajorRecordFlagsRaw"].Require().GetValue<int>() & PartialFormFlag.Bit);
     }

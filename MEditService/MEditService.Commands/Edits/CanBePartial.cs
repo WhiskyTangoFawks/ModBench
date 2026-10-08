@@ -23,6 +23,14 @@ internal static class CanBePartial
             : new Verdict.Can();
     }
 
+    /// <summary>Whether a cell is a temporary exterior one: never when persistent or in its worldspace's
+    /// persistent slot, otherwise as <paramref name="interior"/> says. Null while its placement is not known.</summary>
+    internal static bool? TemporaryExterior(bool persistent, bool inPersistentSlot, bool? interior)
+    {
+        if (persistent || inPersistentSlot) return false;
+        return interior is { } inside ? !inside : null;
+    }
+
     internal abstract record Verdict
     {
         private Verdict()

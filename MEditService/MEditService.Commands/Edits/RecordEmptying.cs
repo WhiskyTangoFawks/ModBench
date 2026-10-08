@@ -54,8 +54,8 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
     {
         if (!MakesPartialForm) return null;
         var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
-        bool? temporaryExterior = HeldPersistent || prefix is [.., { Name: PlacedCell.WorldspacePersistentCellMember }] ? false : null;
-        var verdict = CanBePartial.Of(schema, release, formKey, temporaryExterior);
+        var inPersistentSlot = prefix is [.., { Name: PlacedCell.WorldspacePersistentCellMember }];
+        var verdict = CanBePartial.Of(schema, release, formKey, CanBePartial.TemporaryExterior(HeldPersistent, inPersistentSlot, interior: null));
         if (verdict is CanBePartial.Verdict.NeedsPlacement)
         {
             if (masters.WhereItSits(
@@ -67,7 +67,8 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
                     "interior nor where it sits in its worldspace, and no copy of it to its left says either"),
                 out var said) is { } refusal)
                 return refusal;
-            verdict = CanBePartial.Of(schema, release, formKey, !PlacedCell.IsInterior(said));
+            verdict = CanBePartial.Of(
+                schema, release, formKey, CanBePartial.TemporaryExterior(HeldPersistent, inPersistentSlot, PlacedCell.IsInterior(said)));
         }
         return verdict switch
         {
@@ -113,6 +114,27 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
         schema.RecordColumns
             .Select(c => c.PropertyName)
             .Where(member => member is RecordMembers.VersionControlInfo1 or RecordMembers.VersionControlInfo2);
+
+    /// <summary>Makes <paramref name="record"/> a Partial Form as the record-flag edit does. False, changing
+    /// nothing, when it already is one.</summary>
+    internal static bool MakePartialForm(JsonObject record, RecordTableSchema schema)
+    {
+        var flags = schema.RecordColumns.Single(c => c.Name == RecordHeaderFlags.Member);
+        var write = JsonSerializer.SerializeToElement(RecordFlagsWrite.HeldBy(record) | PartialFormFlag.Bit);
+        if (Of(record, schema, flags, write) is not { } emptying) return false;
+        ClearAliases(record, flags);
+        emptying.Apply(record, schema, left: null);
+        record[RecordHeaderFlags.Member] = JsonNode.Parse(emptying.FlagsWith(left: null).GetRawText());
+        return true;
+    }
+
+    internal static void ClearAliases(JsonObject record, ColumnSpec column)
+    {
+        JsonNode? owner = record;
+        foreach (var segment in (column.Synthetic?.BackingPath ?? column.PropertyName).Split('.')[..^1]) owner = owner?[segment];
+        if (owner is not JsonObject members) return;
+        foreach (var alias in column.Aliases) members.Remove(alias);
+    }
 
     internal static JsonObject? LeftOf(LeftCopy? copyOnTheLeft) =>
         copyOnTheLeft?.FoundText is { } text ? JsonNode.Parse(text) as JsonObject : null;
