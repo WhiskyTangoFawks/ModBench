@@ -1072,7 +1072,7 @@ describe('what a record tab\'s webview posts', () => {
 });
 
 describe('a click on a column\'s header', () => {
-  it('opens the records it names as a preview, in no place of the tab it was clicked in', async () => {
+  it('opens the records it names through the open command, with no placement', async () => {
     const gun = { formKey: '000801:A.esp', plugin: COPY_PLUGIN };
     const { openDocument } = makeEditor();
     const tab = await openDocument(renderedUri(gun.formKey, 'Gun.json'));
@@ -1081,7 +1081,7 @@ describe('a click on a column\'s header', () => {
     tab.receive({ type: 'openColumns', records: [knife] });
 
     expect(h.executed.filter(([id]) => id === 'modbench.record.open'))
-      .toEqual([['modbench.record.open', [{ argument: { kind: 'record', ...knife }, placement: 'preview' }]]]);
+      .toEqual([['modbench.record.open', [{ argument: { kind: 'record', ...knife } }]]]);
   });
 });
 

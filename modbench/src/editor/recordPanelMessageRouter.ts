@@ -96,7 +96,7 @@ const HANDLERS: {
   [WEBVIEW_TO_EXTENSION.FOCUS_CELL]: (deps, m) => { deps.focusCell(m.context ?? undefined, m.entered); },
   [WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD]: answerRecordLoad,
   [WEBVIEW_TO_EXTENSION.OPEN_COLUMNS]: async (_deps, m) => {
-    await vscode.commands.executeCommand('modbench.record.open', m.records.map((record) => ({ argument: { kind: 'record', ...record }, placement: 'preview' })));
+    await vscode.commands.executeCommand('modbench.record.open', m.records.map((record) => ({ argument: { kind: 'record', ...record } })));
   },
   [WEBVIEW_TO_EXTENSION.VIEW_STATE]: (deps, m) => { deps.keepViewState(m.state); },
 };

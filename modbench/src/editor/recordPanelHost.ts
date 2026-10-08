@@ -7,7 +7,7 @@ import type { EditAddress, RecordTab } from './recordTab';
 import type { RecordTabs } from './recordTabs';
 import type { SourceMove } from './applyRecordEdit';
 import { recordTitle } from './recordTitle';
-import { inTabsStead, type TabShowOptions } from './inTabsPlace';
+import { inTabsStead, type TabShowOptions } from './inTabsStead';
 import type { CopyChanged } from './recordCopy';
 import { fileText } from './fileText';
 import {
@@ -263,8 +263,5 @@ async function savedText(uri: vscode.Uri): Promise<string | undefined> {
 }
 
 const vsCodeTabOf = ({ document, panel: { viewColumn } }: RecordTab): vscode.Tab | undefined =>
-  viewColumn === undefined ? undefined : recordTabAt({ document: document.toString(), viewColumn });
-
-const recordTabAt = ({ document, viewColumn }: { document: string; viewColumn: vscode.ViewColumn }): vscode.Tab | undefined =>
   vscode.window.tabGroups.all.find((group) => group.viewColumn === viewColumn)?.tabs.find(({ input }) =>
-    input instanceof vscode.TabInputCustom && input.viewType === RECORD_VIEW_TYPE && input.uri.toString() === document);
+    input instanceof vscode.TabInputCustom && input.viewType === RECORD_VIEW_TYPE && input.uri.toString() === document.toString());

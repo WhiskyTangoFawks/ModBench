@@ -995,27 +995,28 @@ describe('a record opened from a column\'s header', () => {
     await openTab(formKey);
     await vscode.commands.executeCommand('workbench.action.keepEditor');
   };
-  const openFromHeader = (formKey: string) => openRecord([{ ...copyOf(formKey), placement: 'preview' }]);
+  const openFromHeader = (...formKeys: string[]) => openRecord(formKeys.map(copyOf));
   const tabsAre = (labels: string[]) => waitFor(`the tabs ${labels.join(', ')}`, () => JSON.stringify(shown()) === JSON.stringify([labels]));
 
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
 
-  it('replaces the preview tab it was clicked in, as a preview', async () => {
+  it('opens a grid of several records as one preview beside the pinned tab it was clicked in', async () => {
     await openPinned('Fallout4.esm:000080');
-    await openTab('Fallout4.esm:000081');
 
-    await openFromHeader('Fallout4.esm:000083');
+    await openFromHeader('Fallout4.esm:000083', 'Fallout4.esm:000084');
 
     await tabsAre([renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000083')} (preview)`]);
   });
 
-  it('opens a preview beside a pinned tab it was clicked in, leaving that tab', async () => {
+  it('shows the tab of a column\'s file already open, and opens no second', async () => {
     await openPinned('Fallout4.esm:000080');
+    await openTab('Fallout4.esm:000081');
 
-    await openFromHeader('Fallout4.esm:000083');
+    await openFromHeader('Fallout4.esm:000080');
 
-    await tabsAre([renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000083')} (preview)`]);
+    await waitFor('the pinned tab active', () => vscode.window.tabGroups.activeTabGroup.activeTab?.label === renderedName('Fallout4.esm:000080'));
+    await tabsAre([renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000081')} (preview)`]);
   });
 });
 

@@ -36,8 +36,8 @@ export const WEBVIEW_TO_EXTENSION = {
   // RecordPanelClient's own read, asked of the host's mEdit client rather than fetched by the
   // webview itself. `requestId` pairs the reply.
   REQUEST_RECORD_LOAD: 'requestRecordLoad',
-  // A click on a column's header (editor.md, Columns, story 8): the records the tab opens on in its
-  // own place, the first as the file.
+  // A click on a column's header (editor.md, Columns, story 8): the records the tab opens, the first as
+  // the file.
   OPEN_COLUMNS: 'openColumns',
   // The grid's place, which the tab an edit's move of its file opens shows again (editor.md, States,
   // story 5).

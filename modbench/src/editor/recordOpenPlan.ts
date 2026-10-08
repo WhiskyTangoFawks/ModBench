@@ -28,8 +28,7 @@ export function recordOpenPlan(argument: unknown, focusedSelection: readonly unk
   const addresses = subjects.flatMap((s) => addressOf(s) ?? []);
   const placements = subjects.map(placementOf);
   const placement = placements.includes('beside') ? 'beside' : 'active';
-  const preview = placement === 'active' && (addresses.length === 1 || placements.includes('preview'));
-  return { addresses, placement, preview };
+  return { addresses, placement, preview: placement === 'active' };
 }
 
 /** What a menu's open to the side hands to open: the menu's selection, else its clicked row. */

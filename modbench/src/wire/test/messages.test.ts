@@ -111,7 +111,7 @@ describe('the record load request the webview asks of the host, because nothing 
     expect(() => parseExtensionToWebview({ ...answered, modsByOrigin: { ModA: 'untracked' } })).not.toThrow();
   });
 
-  it('carries the records a column\'s header opens in its tab\'s place, and rejects one that names no plugin whole', () => {
+  it('carries the records a column\'s header opens, and rejects one that names no plugin whole', () => {
     const records = [{ formKey: '000002:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } }];
 
     expect(parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.OPEN_COLUMNS, records }))
