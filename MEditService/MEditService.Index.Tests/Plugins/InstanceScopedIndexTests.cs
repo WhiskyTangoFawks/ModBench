@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -38,9 +37,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
         [new(Plugin, Path.Combine(instanceRoot, "mods", Origin, Plugin), Origin, Slot: 0, Enabled: true, Winning: true)];
 
     private static IReadOnlyList<string?> EditorIdsIn(OpenedIndex index) =>
-        [.. index.RequireReads().DocumentsOf(Key)
-            .Where(d => d.RecordType != PluginHeader.RecordType)
-            .Select(d => d.EditorId)];
+        [.. index.ListedIn(Key).Select(row => row.EditorId)];
 
     [Fact]
     public void TwoInstancesOverOneGameDirectory_WithSameNamedModFolders_NeverSeeEachOthersRows_OnTheWarmLoadToo()
