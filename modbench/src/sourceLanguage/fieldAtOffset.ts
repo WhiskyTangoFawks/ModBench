@@ -1,5 +1,6 @@
-import { findNodeAtLocation, findNodeAtOffset, getNodePath, parseTree, type Node, type Segment } from 'jsonc-parser';
+import { findNodeAtLocation, getNodePath, type Node, type Segment } from 'jsonc-parser';
 import type { CompareResult } from '../client';
+import { ownFormKey, stringAt } from './sourceText';
 
 type Field = CompareResult['overrides'][number]['fields'][number];
 type FieldMetadata = Field['metadata'];
@@ -14,11 +15,9 @@ export interface FieldAtOffset {
   path: Segment[];
 }
 
-const isPropertyName = (node: Node): boolean => node.parent?.type === 'property' && node.parent.children?.[0] === node;
-
 function recordAbove(node: Node): { record: Node; formKey: string } | undefined {
   for (let ancestor = node.parent; ancestor; ancestor = ancestor.parent) {
-    const formKey: unknown = ancestor.type === 'object' ? findNodeAtLocation(ancestor, ['FormKey'])?.value : undefined;
+    const formKey: unknown = ownFormKey(ancestor)?.value;
     if (typeof formKey === 'string') return { record: ancestor, formKey };
   }
   return undefined;
@@ -26,11 +25,9 @@ function recordAbove(node: Node): { record: Node; formKey: string } | undefined 
 
 /** The field of a record that a string value at `offset` of a plugin source document sits in. */
 export function fieldAtOffset(text: string, offset: number): FieldAtOffset | undefined {
-  const root = parseTree(text);
-  const node = root && findNodeAtOffset(root, offset);
-  if (!node || node.type !== 'string' || isPropertyName(node)) return undefined;
-  const owner = recordAbove(node);
-  return owner && { node, record: owner.record, recordFormKey: owner.formKey, path: getNodePath(node).slice(getNodePath(owner.record).length) };
+  const node = stringAt(text, offset);
+  const owner = node && recordAbove(node);
+  return node && owner && { node, record: owner.record, recordFormKey: owner.formKey, path: getNodePath(node).slice(getNodePath(owner.record).length) };
 }
 
 function memberOf(owner: Pick<FieldMetadata, 'fields'>, ownerNode: Node | undefined, name: string): FieldMetadata | undefined {

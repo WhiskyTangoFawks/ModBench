@@ -4,9 +4,8 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { pluginAddressOf } from '../wire/pluginAddress';
 import type { RecordCopy } from '../drivingLib/recordDocument';
-import { formKeyAt } from './formKeyHover';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
-import { ownFormKey, recordObject, type TextSpan } from './recordText';
+import { formKeyAt, ownFormKey, recordObject, type TextSpan } from './sourceText';
 
 const valuesOf = (node: Node): Node[] => (node.type === 'property' ? node.children?.slice(1) : node.children) ?? [];
 
