@@ -9,9 +9,9 @@ namespace MEditService.Commands.Tests.RealData;
 public sealed class PluginDiagnosisRoundTripGateTests
 {
     [Fact]
-    public async Task TrackAsync_OfPlasmaAutocannonFixture_NamesThePerkRecordClassUnknown()
+    public async Task TrackAsync_OfAMisshapedPerkPlugin_NamesThePerkRecordClassUnknown()
     {
-        using var scratch = new RealFixtureScratch(new GeneratedPlugin("SKI_PlasmaAutocannon.esp", File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "TestData", "SKI_PlasmaAutocannon.esp"))));
+        using var scratch = new RealFixtureScratch(MisshapedPerkPlugin.Plugin);
 
         var result = await scratch.TrackAsync();
 
@@ -19,8 +19,8 @@ public sealed class PluginDiagnosisRoundTripGateTests
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains("Perk", result.Message);
-        Assert.Contains("0000EF:SKI_PlasmaAutocannon.esp", result.Message);
-        Assert.Contains("T6M_QuickReload_ReloadVATs", result.Message);
+        Assert.Contains(MisshapedPerkPlugin.FormKey, result.Message);
+        Assert.Contains(MisshapedPerkPlugin.EditorId, result.Message);
         Assert.Contains(PluginDiagnosis.UnknownClass, result.Message);
         Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
     }
