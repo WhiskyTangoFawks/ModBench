@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
-import { ActiveRecordTracker } from './ActiveRecordTracker';
-import { EditsInFlight } from './followRecord';
-import { FocusedCells, GRID_VIEW, publishFocusedCell, gridCopyValueText } from './focusedCells';
+import { RecordTabs } from './recordTabs';
+import { GRID_VIEW, publishFocusedCell, gridCopyValueText } from './focusedCells';
 import { announceConflictsComputed } from './notificationWiring';
-import { registerEditorCommands, type EditorCommandDeps } from './recordPanelHost';
+import { registerEditorCommands, type EditorCommandDeps } from './editorCommands';
 import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './ReferencedByTreeProvider';
 import { createReferencedByView } from './referencedByView';
 import { registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
@@ -12,7 +11,7 @@ import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { FocusedView } from '../drivingLib/focusedView';
 
 type EditorDeps = Omit<EditorCommandDeps,
-  'recordPanels' | 'activeRecordTracker' | 'editsInFlight' | 'focusedCells' | 'focusedViewSelection' | 'selectionOf' | 'meditClient'
+  'tabs' | 'focusedViewSelection' | 'selectionOf' | 'meditClient'
 > & {
   meditClient: EditorCommandDeps['meditClient'] & Parameters<typeof createReferencedByView>[0];
   focusedView: FocusedView;
@@ -37,13 +36,7 @@ export function createEditor(deps: EditorDeps): Editor {
     owned.push(disposable);
     return disposable;
   };
-  const recordPanels = new Set<vscode.WebviewPanel>();
-  const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
-  const editsInFlight = new EditsInFlight(activeRecordTracker);
-  const focusedCells = new FocusedCells<vscode.WebviewPanel>(
-    () => activeRecordTracker.activePanel(),
-    (cell) => { publishFocusedCell(cell, setContext); },
-    () => focusedView.enter(GRID_VIEW));
+  const tabs = new RecordTabs((cell) => { publishFocusedCell(cell, setContext); }, () => focusedView.enter(GRID_VIEW));
 
   const referencedBy = own(createReferencedByView(deps.meditClient, (msg) => deps.outputChannel.info(msg), registerNameFilter));
   const { provider: referencedByTree, view: referencedByView } = referencedBy;
@@ -51,19 +44,19 @@ export function createEditor(deps: EditorDeps): Editor {
   own(referencedByView.onDidChangeSelection(() => {
     setContext('modbench.referencedBy.allHolders', allHolders(referencedByView.selection));
   }));
-  own(activeRecordTracker.onDidChangeActiveRecord((formKey) => referencedByTree.showFor(formKey)));
-  referencedByTree.showFor(activeRecordTracker.current());
+  own(tabs.onDidChangeActiveRecord((formKey) => referencedByTree.showFor(formKey)));
+  referencedByTree.showFor(tabs.activeRecord());
 
   registerEditorCommands({
-    ...deps, recordPanels, activeRecordTracker, editsInFlight, focusedCells, selectionOf: (view) => focusedView.selectionOf(view),
+    ...deps, tabs, selectionOf: (view) => focusedView.selectionOf(view),
     focusedViewSelection: selectionInFocusedView(own, focusedView, [REFERENCED_BY_VIEW, ...deps.recordViewIds], 'modbench.record.selectionIn'),
   }).forEach(own);
 
   return {
-    announceConflictsComputed: () => { announceConflictsComputed(recordPanels, editsInFlight); },
+    announceConflictsComputed: () => { announceConflictsComputed(tabs); },
     nameFilters: new Map([[REFERENCED_BY_VIEW, referencedBy.filter]]),
     copyValue: [
-      { text: gridCopyValueText(() => focusedCells.current()), reporterTag: 'recordGrid.copy' },
+      { text: gridCopyValueText(() => tabs.focusedCell()), reporterTag: 'recordGrid.copy' },
       { text: (clicked, allSelected) => referencedByCopyValueText(referencedByView, clicked, allSelected), reporterTag: 'referencedByTree.copy' },
     ],
     dispose: () => { owned.splice(0).reverse().forEach((disposable) => { disposable.dispose(); }); },

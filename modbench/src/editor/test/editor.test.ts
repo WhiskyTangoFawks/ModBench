@@ -704,6 +704,52 @@ describe('a record tab closed while its read is in flight', () => {
   });
 });
 
+describe('a record tab closed', () => {
+  const GUN = '000801:A.esp';
+  const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+  const holding = { formKey: GUN, plugin: 'A.esp', origin: 'ModA' };
+
+  it('before mEdit says which record its file holds shows nothing when the answer lands, nor is followed by Referenced By', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', []);
+    let land: (answer: typeof holding) => void = () => undefined;
+    client.setQueryAnswerOnce('getRecordOfFile', new Promise<typeof holding>((resolve) => { land = resolve; }));
+    const { editor, referencedBy } = makeEditor(client);
+    const provider = h.editorProviders.get('modbench.record');
+    if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
+    const tab = fakePanel();
+    const resolving = provider.resolveCustomTextEditor({ uri: { scheme: 'file', fsPath: FILE } }, tab);
+
+    tab.close();
+    land(holding);
+    await resolving;
+    editor.announceConflictsComputed();
+
+    expect(pageGlobal(tab, 'mEditFormKey')).toBeUndefined();
+    expect(tab.webview.postMessage).not.toHaveBeenCalled();
+    expect((await recordOf(referencedBy)).message).toBe('Open a record to see what references it.');
+  });
+
+  it('lets go of what it listened to: its document\'s changes and the instance\'s mods', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getRecordOfFile', holding);
+    const modsHeard = new Set<object>();
+    const modFacts: ModFacts = { ...NO_MODS, onChange: () => {
+      const heard = {};
+      modsHeard.add(heard);
+      return { dispose: () => { modsHeard.delete(heard); } };
+    } };
+    const { openFile } = makeEditor(client, [], modFacts);
+    const documentsHeard = h.documentChanges.size;
+    const tab = await openFile(FILE);
+    expect([modsHeard.size, h.documentChanges.size]).toEqual([1, documentsHeard + 1]);
+
+    tab.close();
+
+    expect([modsHeard.size, h.documentChanges.size]).toEqual([0, documentsHeard]);
+  });
+});
+
 describe('what a record tab\'s webview posts', () => {
   const GUN = '000801:A.esp';
   const compare = comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]);
@@ -1100,6 +1146,28 @@ describe('several records opened at once', () => {
     tab?.receive(firstRead);
     await settle();
     expect(columnsPosted(tab)).toHaveLength(1);
+  });
+
+  it('leave alone a file\'s tab that shows no record yet, whose page asks its first read only once it does', async () => {
+    const GUN_FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
+    const client = severalClient();
+    client.setQueryAnswer('getRecordFile', { path: GUN_FILE });
+    client.setQueryFailureOnce('getRecordOfFile', new Error('mEdit has not started'));
+    client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
+    const { openDocument } = makeEditor(client);
+    const tab = await openDocument(fakeUri(GUN_FILE));
+
+    await openSeveral();
+    client.emit({
+      kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
+      loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1 },
+    });
+    await settle();
+    tab.receive(firstRead);
+    await settle();
+
+    expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
+    expect(columnsPosted(tab)).toEqual([]);
   });
 
   it('leave the tab they opened to show every active plugin\'s copy again when its record is opened alone onto it', async () => {

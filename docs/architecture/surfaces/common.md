@@ -16,6 +16,8 @@ As a user, I want:
 6. Every list to let me select several rows, and a gesture to act on the whole selection unless it only makes sense for one row, which its Argument in the catalog says.
 7. Every list to reverse its order from its title bar. The direction never changes what the order means, such as which item wins. Source: CONTEXT.md, Sort direction
 8. Ctrl+C, or the menu's copy value, to copy the selection as text, one item to a line, each as its surface says it copies. Source: catalog `copy value`
+9. A copy of a record to open as one document, whichever view or VS Code feature opens it: one tab for one copy, and a tab restored after a restart opens the same copy again. Source: VS Code's interaction; ADR-0012
+10. The record panel and the conflict table to be pages that take VS Code's theme, so they look as the rest of VS Code does. Source: VS Code's interaction
 
 ## The name filter
 
