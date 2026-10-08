@@ -5,7 +5,6 @@ using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Resolution;
 
@@ -30,18 +29,25 @@ internal sealed class LoadOrderResolution(
         IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         new(this, snapshot, plugin, new Lazy<IReadOnlySet<string>>(() => RequiredMasters.InTheTree(repository, plugin, schemas)));
 
-    /// <summary>The name of the plugin originating <paramref name="formKey"/> when <paramref name="destination"/>
-    /// loads before it, so a copy there would be an underride. Null when it loads after, or either is not judged.</summary>
-    internal string? OriginLoadingAfter(string formKey, PluginAddress destination)
+    /// <summary>The first master a copy of <paramref name="identity"/> needs that <paramref name="destination"/>
+    /// loads before, so the copy there would be an underride: its origin, then each plugin holding a record
+    /// <paramref name="body"/> references (ADR-0008; xEdit's required masters). Null when it loads after
+    /// every one it judges.</summary>
+    internal string? MasterLoadingAfter(RecordIdentity identity, string body, PluginAddress destination)
     {
         var current = loadOrder.Current;
-
-        // A FormKey carries only a filename, and every plugin of that filename shares its line (ADR-0012).
-        var originName = FormKey.Factory(formKey).ModKey.FileName.String;
-        var judged = current.Plugins.Where(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase))
-            .Select(origin => current.LoadsBefore(destination, origin.Key)).FirstOrDefault(loadsBefore => loadsBefore is not null);
-        return judged == true ? originName : null;
+        var required = new RequiredMasters(destination);
+        required.Add(new PluginDocument(identity.RecordType, identity.FormKey, body), schemaReflector.GetSchemas(current.GameRelease)[identity.RecordType]);
+        var originName = RequiredMasters.PluginNameIn(identity.FormKey);
+        return required.Masters
+            .OrderBy(master => !master.Equals(originName, StringComparison.OrdinalIgnoreCase))
+            .FirstOrDefault(master => LoadsBeforeThePluginNamed(current, destination, master));
     }
+
+    // A FormKey carries only a filename, and every plugin of that filename shares its line (ADR-0012).
+    private static bool LoadsBeforeThePluginNamed(LoadOrderSnapshot snapshot, PluginAddress plugin, string name) =>
+        snapshot.Plugins.Where(named => named.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            .Select(named => snapshot.LoadsBefore(plugin, named.Key)).FirstOrDefault(loadsBefore => loadsBefore is not null) == true;
 
     /// <summary>xEdit's HighestOverrideVisibleForFile: the source's copy stands unless it is Partial Form
     /// or a master of the destination loads after it. <paramref name="text"/> is that master's copy,
