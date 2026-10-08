@@ -2,7 +2,7 @@ namespace MEditService.Index;
 
 public sealed class IndexNotReadyException : Exception
 {
-    internal IndexNotReadyException() : base("mEdit's index is not ready.")
+    internal IndexNotReadyException()
     {
     }
 

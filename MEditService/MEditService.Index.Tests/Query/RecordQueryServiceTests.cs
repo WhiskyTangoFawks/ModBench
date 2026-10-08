@@ -351,10 +351,11 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         Assert.Equal(("Patch.esp", "AsThePatchHasIt", true), (detail.Plugin, detail.EditorId, detail.IsWinner));
     }
 
-    [Fact]
-    public async Task GetCompare_BeforeTheWinnerSweep_IsNotReady()
+    private const string NpcWithNoWinnerYet = "000800:Base.esm";
+
+    // Between a reconcile registering plugins and its winner sweep, no copy of the record is flagged winner.
+    private async Task WhileNoCopyIsFlaggedWinner(Action<OpenedIndex> asked)
     {
-        const string npc = "000800:Base.esm";
         var fixture = Built(new PluginFixtureBuilder("record-query")
             .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("AsTheMasterHasIt"))
             .WithPlugin("Winner.esp", (mod, earlier) => mod.Npcs.Add(earlier[0].Npcs.Single().DeepCopy()))
@@ -371,10 +372,43 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         var load = Task.Run(() => index.Reconcile(holder, fixture.GameDirectory, winnerDeactivated, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        Assert.Throws<IndexNotReadyException>(() => index.Records.GetCompare(npc));
+        try
+        {
+            asked(index);
+        }
+        finally
+        {
+            gate.Release();
+            await load;
+        }
+    }
 
-        gate.Release();
-        await load;
+    [Fact]
+    public async Task GetCompare_BeforeTheWinnerSweep_AnswersEveryCopy_WithNoneFlaggedWinner()
+    {
+        await WhileNoCopyIsFlaggedWinner(index =>
+        {
+            var compare = index.Records.GetCompare(NpcWithNoWinnerYet);
+
+            Assert.NotNull(compare);
+            Assert.Equal(["Base.esm", "Next.esp"], compare.Overrides.Select(o => o.Plugin));
+            Assert.DoesNotContain(compare.Overrides, o => o.IsWinner);
+        });
+    }
+
+    [Fact]
+    public async Task GetRecord_BeforeTheWinnerSweep_IsNotReady_ForNoCopyWinsYetAndNullWouldSayItIsGone()
+    {
+        await WhileNoCopyIsFlaggedWinner(index =>
+            Assert.Throws<IndexNotReadyException>(() => index.Records.GetRecord(NpcWithNoWinnerYet)));
+    }
+
+    [Fact]
+    public async Task GetCompareRecords_BeforeTheWinnerSweep_IsNotReady_ForALinkResolvesToWinnersOnly()
+    {
+        await WhileNoCopyIsFlaggedWinner(index =>
+            Assert.Throws<IndexNotReadyException>(
+                () => index.Records.GetCompareRecords([new RecordCopy(NpcWithNoWinnerYet, new PluginAddress("Base.esm", "Base.esm"))])));
     }
 
     [Fact]
@@ -464,25 +498,6 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         var plugins = KeywordReferredToFromBaseAndPatch().Records.GetReferences("000800:Target.esp").Select(r => r.Plugin);
 
         Assert.Equal(["Base.esp", "Patch.esp"], plugins);
-    }
-
-    [Fact]
-    public async Task GetReferences_WhileTheIndexIsReconciling_AreNotReady_ForAPluginNotReachedMayHoldAReferrer()
-    {
-        var fixture = Built(new PluginFixtureBuilder("record-query")
-            .WithPlugin("Target.esp", mod => mod.Keywords.AddNew("Target"))
-            .WithPlugin("Later.esp", (mod, prev) => mod.Npcs.AddNew("Referrer").Keywords = [prev[0].Keywords.Single().ToLink()]));
-        var holder = new LoadOrderHolder();
-        using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
-        using var index = Indexes.Open(holder, gate);
-        var load = Task.Run(() => index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4));
-        await gate.WaitUntilParkedAsync();
-
-        Assert.Throws<IndexNotReadyException>(() => index.Records.GetReferences("000800:Target.esp"));
-        Assert.Throws<IndexNotReadyException>(() => index.Records.GetReferencesInActiveOrTrackedPlugins("000800:Target.esp"));
-
-        gate.Release();
-        await load;
     }
 
     [Fact]

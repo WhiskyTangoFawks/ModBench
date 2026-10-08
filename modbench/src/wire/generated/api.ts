@@ -1059,7 +1059,7 @@ export interface components {
             recordCount: number;
             isImmutable: boolean;
             origin: string;
-            masterIssues?: string[] | null;
+            masterIssues: string[];
             inLoadOrder: boolean;
             hasMatchingRecords: boolean;
             isTracked: boolean;

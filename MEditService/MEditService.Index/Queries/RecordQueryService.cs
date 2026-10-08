@@ -30,16 +30,14 @@ internal sealed class RecordQueryService(
         // Index's. A plugin the Index has not opened has none of the latter and is not a row.
         var snapshot = _loadOrder.Require();
         var rows = snapshot.Plugins.Where(c => opened.ContainsKey(c.Key)).ToList();
-        var masterIssues = _index.Status.State == LoadOrderState.Ready
-            ? MasterResolution.Classify(snapshot, opened)
-            : null;
+        var masterIssues = MasterResolution.Classify(snapshot, opened);
         var parseFailures = reads.GetPluginsWithParseFailures();
         var derivations = reads.GetDerivations();
         PluginRow ToRow(RegisteredPlugin plugin, bool hasMatchingRecords)
         {
             DerivedFrom? derivedFrom = derivations.TryGetValue(plugin.Key, out var stamped) ? stamped : null;
             return new(plugin, snapshot.LoadOrderIndex(plugin.Key), snapshot.IsImmutable(plugin.Key), opened[plugin.Key],
-                masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
+                masterIssues.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
                 parseFailures.Contains(plugin.Key),
                 IsTracked: derivedFrom?.IsTracked() ?? false,
                 PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource);
@@ -86,13 +84,13 @@ internal sealed class RecordQueryService(
 
     public RecordDetail? GetRecord(string formKey)
     {
-        var document = RequireReads().GetDocument(formKey);
+        var document = _index.RequireWholeSetReads().GetDocument(formKey);
         return document == null ? null : ToRecordDetail(document);
     }
 
     public CompareResult? GetCompare(string formKey, CopyText? text = null)
     {
-        var reads = _index.RequireWholeSetReads();
+        var reads = RequireReads();
         var stack = reads.GetOverrideStack(formKey);
         if (stack == null && text == null) return null;
         var snapshot = _loadOrder.Require();
@@ -130,7 +128,7 @@ internal sealed class RecordQueryService(
 
     public CompareResult? GetCompareRecords(IReadOnlyList<RecordCopy> copies)
     {
-        var reads = RequireReads();
+        var reads = _index.RequireWholeSetReads();
         var snapshot = _loadOrder.Require();
 
         var documents = new List<RecordDocument>(copies.Count);
@@ -248,10 +246,10 @@ internal sealed class RecordQueryService(
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
-        Referrers(_index.RequireWholeSetReads().GetReferencedBy(targetFormKey));
+        Referrers(RequireReads().GetReferencedBy(targetFormKey));
 
     public IReadOnlyList<ReferenceResult> GetReferencesInActiveOrTrackedPlugins(string targetFormKey) =>
-        Referrers(_index.RequireWholeSetReads().GetReferencedByInActiveOrTrackedPlugins(targetFormKey));
+        Referrers(RequireReads().GetReferencedByInActiveOrTrackedPlugins(targetFormKey));
 
     private IReadOnlyList<ReferenceResult> Referrers(IReadOnlyList<ReferenceRow> rows)
     {

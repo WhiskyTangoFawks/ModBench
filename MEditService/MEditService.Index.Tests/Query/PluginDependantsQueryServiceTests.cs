@@ -96,7 +96,7 @@ public sealed class PluginDependantsQueryServiceTests
     }
 
     [Fact]
-    public async Task GetDependants_WhileTheIndexIsReconciling_AnswersNothing_ForAPluginNotYetOpenedWouldReadAsNoDependant()
+    public async Task GetDependants_WhileTheIndexIsReconciling_IsNotReady_ForAPluginNotYetOpenedWouldReadAsNoDependant()
     {
         var child = new Plugin("Child.esp", Masters: "Base.esm");
         using var fixture = Fixture(Base, child);
@@ -113,7 +113,7 @@ public sealed class PluginDependantsQueryServiceTests
     }
 
     [Fact]
-    public void GetDependants_WhenTheIndexFailed_AnswersNothing_ForAPluginNotYetOpenedWouldReadAsNoDependant()
+    public void GetDependants_WhenTheIndexFailed_IsNotReady_ForAPluginNotYetOpenedWouldReadAsNoDependant()
     {
         using var fixture = Fixture(Base, new Plugin("Child.esp", Masters: "Base.esm"));
         var holder = new LoadOrderHolder();

@@ -19,11 +19,10 @@ internal sealed class ConflictClassifier(ILogger logger)
         IReadOnlyList<RecordDetail>? outsideTheComparison = null)
     {
         // The fallback for a field no column carries; a lone override is its own winner whatever
-        // its IsWinner flag says.
-        var winner = conflictingRecords.Count == 1 ? 0 : conflictingRecords.ToList().FindIndex(o => o.IsWinner);
-        if (winner < 0)
-            throw new InvalidOperationException(
-                $"No winner in {conflictingRecords.Count} overrides for FormKey '{conflictingRecords[0].FormKey}'");
+        // its IsWinner flag says. Before the winner sweep none is flagged, so the last in load
+        // order stands in and the colours are not final.
+        var flagged = conflictingRecords.ToList().FindIndex(o => o.IsWinner);
+        var winner = flagged >= 0 ? flagged : conflictingRecords.Count - 1;
 
         var columns = conflictingRecords.Select(Column).ToList();
         var shown = conflictingRecords.Concat(outsideTheComparison ?? []).ToList();

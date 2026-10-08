@@ -72,9 +72,11 @@ internal sealed class Reconciler(
 
     public IRecordReads RequireWholeSetReads()
     {
-        if (Status.State == LoadOrderState.Ready) return RequireReads();
-        holder.Require();
-        throw new IndexNotReadyException();
+        var status = Status;
+        if (status.State == LoadOrderState.Ready) return RequireReads();
+        if (holder.Held is null) throw new NoLoadOrderException();
+        throw new IndexNotReadyException(
+            status.Message is { } reason ? $"mEdit's index is not ready: {reason}" : "mEdit's index is not ready.");
     }
 
     public IReadOnlyList<SourceFileFailure> SourceFileFailures
