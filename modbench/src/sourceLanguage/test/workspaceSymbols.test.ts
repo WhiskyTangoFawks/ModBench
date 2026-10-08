@@ -77,7 +77,7 @@ describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story
     ]);
   });
 
-  it('searches the active tracked plugins alone (ADR-0012)', async () => {
+  it('searches every tracked plugin, active or not (ADR-0012)', async () => {
     const untracked = { name: 'A.esp', origin: 'ModC' };
     const inactive = { name: 'D.esp', origin: 'ModD' };
     const { client, symbolsFor } = symbols(
@@ -85,7 +85,7 @@ describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story
 
     await symbolsFor('Rusty');
 
-    expect(vi.mocked(client.searchRecords).mock.calls.map(([, , scope]) => [scope?.name, scope?.origin])).toEqual([['A.esp', 'ModA']]);
+    expect(vi.mocked(client.searchRecords).mock.calls.map(([, , scope]) => [scope?.name, scope?.origin])).toEqual([['A.esp', 'ModA'], ['D.esp', 'ModD']]);
   });
 
   it('lists nothing for an empty query, without asking mEdit', async () => {

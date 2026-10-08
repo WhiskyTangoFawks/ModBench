@@ -6,18 +6,20 @@ internal static class NavigatorSql
 {
     /// <summary>One row per record a record holds in the same plugin: a topic in its quest, a
     /// response in its topic, a placed reference in its cell, an exterior cell in its worldspace.</summary>
-    internal const string Held = """
+    internal static readonly string Held = HeldIn("");
+
+    internal static string HeldIn(string schema) => $"""
         SELECT plugin, origin, parent_form_key AS parent, child_form_key AS child,
-               CAST(NULL AS VARCHAR) AS placement_group FROM container_child
+               CAST(NULL AS VARCHAR) AS placement_group FROM {schema}container_child
         UNION ALL
-        SELECT plugin, origin, parent_cell, form_key, placement_group FROM placement
+        SELECT plugin, origin, parent_cell, form_key, placement_group FROM {schema}placement
         UNION ALL
-        SELECT plugin, origin, parent_worldspace, cell_form_key, NULL FROM cell_location WHERE parent_worldspace IS NOT NULL
+        SELECT plugin, origin, parent_worldspace, cell_form_key, NULL FROM {schema}cell_location WHERE parent_worldspace IS NOT NULL
         """;
 
     /// <summary>What a cell holds, by <c>parent_cell</c>: a record held outside a placement group,
     /// such as its landscape or a navmesh, lists among the temporary ones as xEdit lists it.</summary>
-    internal const string CellChildren = $"""
+    internal static readonly string CellChildren = $"""
         SELECT plugin, origin, parent AS parent_cell, child AS form_key,
                COALESCE(placement_group, 'temporary') AS placement_group
         FROM ({Held})
@@ -25,11 +27,11 @@ internal static class NavigatorSql
 
     /// <summary>Two CTEs for a <c>WITH RECURSIVE</c>: <c>held</c>, the holdings <paramref name="where"/>
     /// keeps, and <c>above_failure</c>, every record holding an unreadable one at any depth.</summary>
-    internal static string AboveAFailure(string records, string where) => $"""
-        held AS (SELECT plugin, origin, parent, child FROM ({Held}) h {where}),
+    internal static string AboveAFailure(RecordScope scope, string where) => $"""
+        held AS (SELECT plugin, origin, parent, child FROM ({scope.Held}) h {where}),
         above_failure(plugin, origin, form_key) AS (
             SELECT held.plugin, held.origin, held.parent FROM held
-            JOIN {records} f ON f.form_key = held.child AND f.plugin = held.plugin AND f.origin = held.origin
+            JOIN {scope.Records} f ON f.form_key = held.child AND f.plugin = held.plugin AND f.origin = held.origin
             WHERE f.parse_diagnosis IS NOT NULL
             UNION
             SELECT held.plugin, held.origin, held.parent FROM held

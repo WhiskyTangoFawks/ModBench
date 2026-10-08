@@ -80,6 +80,21 @@ public sealed class DiagnosedContainerTests : IDisposable
         Assert.DoesNotContain(index.Records.GetPluginRecordTypes(Key), group => group.Type == "dial");
     }
 
+    private RecordSummary SearchedInAPluginThatIsNotActive(string formKey)
+    {
+        var inactive = _fixture.Plugins.Select(p => p with { Enabled = false }).ToList();
+        using var index = Indexes.Reconciled(_fixture.DataFolder, inactive, adapter: new StubbedDocumentsAdapter(null));
+        return Assert.Single(index.Records.GetRecords(types: null, Key, search: formKey, limit: 50, offset: 0).Items);
+    }
+
+    [Fact]
+    public void AQuestHoldingATopic_ReportsItsChildren_WhenItsPluginIsNotActive() =>
+        Assert.True(SearchedInAPluginThatIsNotActive(Quest).HasContainerChildren);
+
+    [Fact]
+    public void ARefusedNavmesh_MarksTheCellAboveIt_WhenItsPluginIsNotActive() =>
+        Assert.True(SearchedInAPluginThatIsNotActive(CellFormKey).HasParseFailure);
+
     [Fact]
     public void ARefusedNavmesh_MarksTheReadableCellAboveIt_WhichCarriesNoDiagnosisOfItsOwn()
     {

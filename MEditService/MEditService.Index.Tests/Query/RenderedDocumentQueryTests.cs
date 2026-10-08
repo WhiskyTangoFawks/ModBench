@@ -61,7 +61,7 @@ public sealed class RenderedDocumentQueryTests : IDisposable
 
         Assert.Contains("held by ModB", text, StringComparison.Ordinal);
         Assert.DoesNotContain("held by ModA", text, StringComparison.Ordinal);
-        Assert.Null(_index.Records.GetRenderedDocument(ModA, Npc));
+        Assert.Contains("held by ModA", _index.Records.GetRenderedDocument(ModA, Npc)?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
