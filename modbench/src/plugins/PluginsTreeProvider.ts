@@ -523,8 +523,8 @@ export class PluginsTreeProvider
     await vscode.commands.executeCommand('modbench.plugin.move', plugins, drop);
   }
 
-  /** plugins.md, Move: the block lands as a drop there lands. A block never lands above a plugin
-   *  the game loads with no line, so its row is no place to offer. */
+  /** plugins.md, Move: the block lands as a drop there lands. A drop on the row of a plugin the
+   *  game loads with no line does not land directly above it, so that row is no place to offer. */
   movePlaces(names: readonly string[]): { label: string; drop: PluginsDrop }[] {
     const lineRows = this.rowsInViewOrder().filter((row): row is PluginNode => row instanceof PluginNode);
     const targets = [...lineRows.map((row) => [row.plugin.name, row] as const), [BOTTOM_OF_THE_VIEW, undefined] as const];

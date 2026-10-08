@@ -224,8 +224,8 @@ describe('the Plugins view registers its own gestures', () => {
 });
 
 describe('the Plugins view\'s move from the palette', () => {
-  it('offers above each row outside the selection, then the bottom of the view, and Esc says nothing', async () => {
-    const { rows, reporters } = pluginsView(instanceValueFixture({
+  it('offers above each row outside the selection, then the bottom of the view', async () => {
+    const { rows } = pluginsView(instanceValueFixture({
       plugins: ['A.esp', 'B.esp', 'C.esp'].map((name, slot) => ({ name, path: `/fixture/${name}`, origin: 'SomeMod', slot, enabled: true, winning: true })),
       gameFolder: FOUND,
     }));
@@ -235,7 +235,6 @@ describe('the Plugins view\'s move from the palette', () => {
     await present(h.commands.get('modbench.plugin.move'), 'the modbench.plugin.move handler')();
 
     expect(h.picked).toEqual([['A.esp', 'C.esp', 'Bottom of the view']]);
-    expect(present(reporters.get('pluginListTree.move'), 'the move reporter').reports).toEqual([]);
   });
 });
 

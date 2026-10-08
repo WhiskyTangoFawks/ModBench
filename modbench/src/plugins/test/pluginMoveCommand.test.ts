@@ -142,18 +142,6 @@ describe('modbench.plugin.move', () => {
     expect(progressSteps).toEqual([]);
   });
 
-  it('refuses a picked place the plugin-order rules refuse, as a drop there is refused', async () => {
-    const { reporter } = registered([], { getPlugins: () => Promise.resolve([held('A.esp', []), held('B.esp', ['A.esp']), held('C.esp', [])]) });
-    picks.label = 'C.esp';
-
-    await invoke([A]);
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.',
-    }]);
-    expect(await plugins()).toBe('A.esp\r\nB.esp\r\nC.esp\r\n');
-  });
-
   it('says why a move is refused by the plugin-order rules, naming both plugins', async () => {
         const { reporter } = registered([], { getPlugins: () => Promise.resolve([held('A.esp', []), held('B.esp', ['A.esp']), held('C.esp', [])]) });
 

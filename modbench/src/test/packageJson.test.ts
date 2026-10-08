@@ -1077,6 +1077,7 @@ describe('package.json Plugins palette entries', () => {
   describePaletteGate('modbench.pluginListTree', [
     ['modbench.plugin.reveal', { 'modbench.plugin.singlePlugin': true }],
     ['modbench.plugin.rename', { 'modbench.plugin.singleTracked': true }],
+    ['modbench.plugin.move', { 'modbench.plugin.holdsPluginLine': true }],
     ['modbench.plugin.decompile', { 'modbench.plugin.allInTrackedMod': true }],
     ['modbench.record.create', { 'modbench.plugin.singleCreatable': true }],
     ['modbench.record.delete', { 'modbench.plugin.allDeletableRecords': true, ...IN_PLUGINS }],
