@@ -1,12 +1,13 @@
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
-namespace MEditService.Commands.Edits;
+namespace MEditService.Commands.Resolution;
 
 /// <summary>What a copy reads of the record it is copying (ADR-0015). One per gesture,
 /// not thread-safe.</summary>

@@ -1,21 +1,18 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The write side's shared concerns (target-architecture.d2 medit_core.commands): target resolution and its pre-write refusals.
+/// <summary>The write side's target gate (target-architecture.d2 medit_core.commands): which plugin and record a gesture may write, and its pre-write refusals.
 /// An internal seam, tested through the gestures.</summary>
 internal sealed class WriteTargets(
     LoadOrderHolder loadOrder,
-    IPluginAdapter adapter,
-    RecordTextCodec codec,
+    LoadOrderResolution resolution,
     SchemaReflector schemaReflector)
 {
     internal readonly record struct EditTarget(GameRelease Release, RecordIdentity Identity, SourceRepository Repository);
@@ -128,7 +125,7 @@ internal sealed class WriteTargets(
             ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
 
         var release = loadOrder.Current.GameRelease;
-        var source = new CopySource(sourcePlugin, loadOrder.Current, adapter, codec, schemaReflector);
+        var source = resolution.SourceOf(sourcePlugin);
         CopySource? owned = source;
         try
         {
@@ -167,27 +164,6 @@ internal sealed class WriteTargets(
     /// worldspace, refuses naming that document.</summary>
     internal static RecordEditResult RefuseUnreadableSourceTree(string formKey, string why) =>
         RecordEditResult.Refused(RecordEditRefusal.RecordParseFailed, $"{formKey} cannot be copied: {why} Nothing was written.");
-
-    /// <summary>The masters <paramref name="plugin"/>'s source tree requires, or the refusal of a tree that
-    /// cannot be read.</summary>
-    internal static RecordEditResult? MastersOf(
-        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        string spelled, string readFromAMaster, out IReadOnlySet<string> masters)
-    {
-        masters = new HashSet<string>();
-        try
-        {
-            masters = RequiredMasters.InTheTree(repository, plugin, schemas);
-            return null;
-        }
-        catch (UnreadableSourceDocumentException ex)
-        {
-            return RecordEditResult.RefusedAt(
-                RecordEditRefusal.RecordParseFailed, spelled,
-                $"'{spelled}': {readFromAMaster} comes only from a master of {plugin.Name}, " +
-                $"which its source tree names, and that tree cannot be read: {ex.Message.TrimEnd('.')}. Nothing was written.");
-        }
-    }
 
     // The six record gestures enter here first.
     internal RecordEditResult? RefuseUnlessEditable(PluginAddress plugin, out SourceRepository? repository)
@@ -243,96 +219,8 @@ internal sealed class WriteTargets(
             : $"{plugin.Name} is a base-game plugin with no mod folder, so it cannot be tracked. " +
               "Author a patch plugin and edit the override there.";
 
-    /// <summary>The EditorID a written document's own text names, which the put names the unit by.</summary>
-    internal static string? EditorIdOf(string text)
-    {
-        using var document = JsonDocument.Parse(text);
-        return DocumentNodes.EditorIdOf(document.RootElement).EditorId;
-    }
-
     // The codec's own words are the reason (ADR-0015).
     internal static RecordEditResult RefuseUnreadable(string formKey, string why, string? spelled = null) =>
         new(false, RecordEditRefusal.RecordParseFailed,
             $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);
-
-    /// <summary>xEdit's HighestOverrideVisibleForFile: the source's copy stands unless it is Partial Form
-    /// or a master of the destination loads after it. <paramref name="text"/> is that master's copy,
-    /// null when the source's stands.</summary>
-    internal RecordEditResult? HighestOverrideVisibleToTheDestination(
-        CopySource source, RecordIdentity identity, RecordCopy.Destination destination, out string? text)
-    {
-        text = null;
-        var current = loadOrder.Current;
-        int IndexOf(PluginAddress plugin) => current.LoadOrderIndex(plugin) ?? current.Active.Count;
-        var sourcePartial = source.IsPartialForm(identity);
-        if (!sourcePartial && IndexOf(destination.Plugin) <= IndexOf(source.Plugin)) return null;
-
-        var spelled = identity.FormKey;
-        if (MastersOf(
-                destination.Repository, destination.Plugin, schemaReflector.GetSchemas(current.GameRelease), spelled,
-                "the copy of a container the destination can see", out var masters) is { } refused) return refused;
-
-        switch (NearestCopyToTheLeft(destination.Plugin, identity.FormKey, _ => true, PartialFormFlag.Bit, masters))
-        {
-            case LeftCopy.Unreadable unreadable:
-                return unreadable.Refusal(spelled, "the copy of a container the destination can see is carried in");
-            case LeftCopy.Found found when sourcePartial || IndexOf(found.Plugin) > IndexOf(source.Plugin):
-                text = found.Text;
-                return null;
-            default:
-                return null;
-        }
-    }
-
-    /// <summary>The nearest copy left of <paramref name="plugin"/>, among <paramref name="among"/> if given,
-    /// that <paramref name="says"/> accepts, passing over one whose header holds a flag of
-    /// <paramref name="passOver"/>. An unreadable copy ends the walk.</summary>
-    internal LeftCopy NearestCopyToTheLeft(
-        PluginAddress plugin, string formKey, Func<JsonObject, bool> says, long passOver = 0, IReadOnlySet<string>? among = null) =>
-        NearestToTheLeft(plugin, formKey, among, source =>
-        {
-            if (source.Identity(formKey) is not { } identity) return null;
-            if (passOver != 0 && (source.RecordFlags(identity) & passOver) != 0) return null;
-            var body = source.Body(identity);
-            return JsonNode.Parse(body) is JsonObject copy && says(copy) ? body : null;
-        });
-
-    /// <summary>The nearest copy left of <paramref name="plugin"/>, among <paramref name="among"/>, of the
-    /// exterior cell at grid (<paramref name="x"/>, <paramref name="y"/>) of <paramref name="worldspace"/>.</summary>
-    internal LeftCopy NearestCellToTheLeft(PluginAddress plugin, string worldspace, int x, int y, IReadOnlySet<string> among) =>
-        NearestToTheLeft(plugin, worldspace, among, source =>
-            source.CellAt(worldspace, x, y) is { } identity ? source.Body(identity) : null);
-
-    // The plugins left of this one, nearest first, until one answers a text. An unreadable one ends the
-    // walk, named by what it was asked about.
-    private LeftCopy NearestToTheLeft(
-        PluginAddress plugin, string askedAbout, IReadOnlySet<string>? among, Func<CopySource, string?> answer)
-    {
-        var current = loadOrder.Current;
-        var index = current.LoadOrderIndex(plugin) ?? current.Active.Count;
-        var asked = current.Active.Take(index).Reverse().Select(registered => registered.Key)
-            .Where(left => among?.Contains(left.Name) ?? true);
-        foreach (var left in asked)
-        {
-            using var source = new CopySource(left, current, adapter, codec, schemaReflector);
-            try
-            {
-                if (answer(source) is { } text) return new LeftCopy.Found(text, left);
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                return new LeftCopy.Unreadable(left.Name, askedAbout, source.Diagnose(ex));
-            }
-        }
-        return new LeftCopy.None();
-    }
-
-    // Refused before any write. Not folded into ResolveEditTarget because Edit reaches the
-    // header deliberately.
-    internal static RecordEditResult? RefuseIfHeader(string recordType) =>
-        recordType == PluginHeader.RecordType
-            ? RecordEditResult.Refused(
-                RecordEditRefusal.HeaderDeleteNotSupported,
-                "The plugin header cannot be deleted — it is not an ordinary record.")
-            : null;
 }

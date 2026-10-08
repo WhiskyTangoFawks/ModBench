@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -13,18 +14,18 @@ internal sealed class OverrideCopy
 {
     private readonly WriteTargets _targets;
     private readonly RecordCopy _recordCopy;
-    private readonly LoadOrderHolder _loadOrder;
+    private readonly LoadOrderResolution _resolution;
     private readonly RecordTextCodec _codec;
     private readonly ILogger _logger;
 
     internal OverrideCopy(
         WriteTargets targets,
         RecordCopy recordCopy,
-        LoadOrderHolder loadOrder,
+        LoadOrderResolution resolution,
         RecordTextCodec codec,
         ILogger logger)
     {
-        (_targets, _recordCopy, _loadOrder, _codec, _logger) = (targets, recordCopy, loadOrder, codec, logger);
+        (_targets, _recordCopy, _resolution, _codec, _logger) = (targets, recordCopy, resolution, codec, logger);
     }
 
     /// <summary>An unreadable source record refuses rather than landing as a stub.
@@ -265,27 +266,15 @@ internal sealed class OverrideCopy
         return RecordEditResult.Success();
     }
 
-    // A destination loading before the origin would be an underride, silently
-    // beaten at runtime. A plugin the load order does not place passes.
-    private RecordEditResult? RefuseIfUnderride(string formKey, PluginAddress destinationPlugin)
-    {
-        var loadOrder = _loadOrder.Current;
-
-        // A FormKey carries only a filename, so with two plugins that share a filename (ADR-0012) the
-        // active one is the origin.
-        var originName = FormKey.Factory(formKey).ModKey.FileName.String;
-        var origin = loadOrder.Active.FirstOrDefault(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase));
-        var originIndex = origin is null ? null : loadOrder.LoadOrderIndex(origin.Key);
-        var destinationIndex = loadOrder.LoadOrderIndex(destinationPlugin);
-        if (originIndex is not { } originAt || destinationIndex is not { } destinationAt || destinationAt >= originAt)
-            return null;
-
-        return RecordEditResult.Refused(
-            RecordEditRefusal.UnderrideDestination,
-            $"{destinationPlugin.Name} loads before {originName}, which originates {formKey} — copying it " +
-            "there would be an underride, not an override: the origin's copy would still win at runtime. " +
-            "Pick a destination that loads after the origin.");
-    }
+    // A plugin the load order does not place passes.
+    private RecordEditResult? RefuseIfUnderride(string formKey, PluginAddress destinationPlugin) =>
+        _resolution.OriginLoadingAfter(formKey, destinationPlugin) is { } originName
+            ? RecordEditResult.Refused(
+                RecordEditRefusal.UnderrideDestination,
+                $"{destinationPlugin.Name} loads before {originName}, which originates {formKey} — copying it " +
+                "there would be an underride, not an override: the origin's copy would still win at runtime. " +
+                "Pick a destination that loads after the origin.")
+            : null;
 
     private string StripEmbeddedChildrenForShallowCopy(string body, string recordType, GameRelease release) =>
         ContainerDocumentEdits.WithoutChildren(_codec, body, release, recordType);

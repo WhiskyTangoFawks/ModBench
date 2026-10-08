@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
@@ -31,11 +32,19 @@ public sealed class DeleteRecordHandler
             _logger);
     }
 
+    // Not folded into ResolveEditTarget because Edit reaches the header deliberately.
+    private static RecordEditResult? RefuseIfHeader(string recordType) =>
+        recordType == PluginHeader.RecordType
+            ? RecordEditResult.Refused(
+                RecordEditRefusal.HeaderDeleteNotSupported,
+                "The plugin header cannot be deleted — it is not an ordinary record.")
+            : null;
+
     private RecordEditResult Delete(PluginAddress plugin, string formKey)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
         var (_, identity, repository) = target;
-        if (WriteTargets.RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
+        if (RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
 
         // Read before the removal, so what the messages and the log name is the document it took from.
         var relativePath = repository.RelativePathOf(plugin, identity);
