@@ -116,9 +116,9 @@ internal sealed class LoadOrderResolution(
                 return JsonNode.Parse(body) is JsonObject copy && says(copy) ? body : null;
             });
 
-        /// <summary>The copy that says where <paramref name="cell"/> sits: its own, or else its nearest copy to
-        /// the left, which xEdit reads as the highest override visible to the file. Null when neither says, with
-        /// <paramref name="unreadable"/> set when the walk could not read.</summary>
+        /// <summary>The copy that says where <paramref name="cell"/> sits: its own, else its nearest copy to the
+        /// left (xEdit's highest override visible to the file). Null when neither says; <paramref name="unreadable"/>
+        /// is set when the walk could not read.</summary>
         internal JsonObject? WhereItSits(JsonObject cell, out LeftCopy.Unreadable? unreadable)
         {
             var copy = PlacedCell.Says(cell) || cell[RecordMembers.FormKey]?.GetValue<string>() is not { } formKey
