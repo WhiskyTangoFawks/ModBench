@@ -304,8 +304,8 @@ internal sealed class RecordQueryService(
 
     public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
-        if (!SourceRepository.InstanceRootExists(instanceRoot))
-            return new(StoreRebuildRefusal.InstanceRootNotFound, $"Instance root not found: {instanceRoot}");
+        if (SourceRepository.InstanceRootNotFound(instanceRoot) is { } notFound)
+            return new(StoreRebuildRefusal.InstanceRootNotFound, notFound);
         return _index.RebuildStore(gameRelease, instanceRoot) is { } heldElsewhere
             ? new(StoreRebuildRefusal.HeldByAnotherWindow, heldElsewhere)
             : null;

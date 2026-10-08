@@ -26,7 +26,7 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
 
     public virtual bool CanRead(RegisteredPlugin plugin) => inner.CanRead(plugin);
 
-    public virtual bool GameFolderExists(string? gameFolder) => inner.GameFolderExists(gameFolder);
+    public virtual bool GameFolderExists(string gameFolder) => inner.GameFolderExists(gameFolder);
 
     public virtual LinkAnswers LinkTargets(
         LoadOrderSnapshot loadOrder, RegisteredPlugin compiled,

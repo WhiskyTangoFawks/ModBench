@@ -36,7 +36,5 @@ public interface IRecordQueryService
     (string Sql, string Source)? GetFilter();
     void SetFilter(string sql, string source);
     void ClearFilter();
-    // The refusal (ADR-0010, ADR-0019) when the instance root is gone or another window holds this
-    // instance's index; null when it rebuilt.
     StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot);
 }

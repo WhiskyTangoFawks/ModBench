@@ -27,8 +27,8 @@ public sealed class PutLoadOrderHandler
     {
         if (!_plugins.GameFolderExists(dataFolder))
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.GameDirectoryNotFound, $"Game directory not found: {dataFolder}");
-        if (!SourceRepository.InstanceRootExists(instanceRoot))
-            return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InstanceRootNotFound, $"Instance root not found: {instanceRoot}");
+        if (SourceRepository.InstanceRootNotFound(instanceRoot) is { } notFound)
+            return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InstanceRootNotFound, notFound);
 
         // Discovered here, synchronously, never inside a reconcile the caller cannot see — the
         // schema this warms is what the reconcile that follows Apply needs anyway.

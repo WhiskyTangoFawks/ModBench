@@ -50,7 +50,9 @@ public sealed class SourceRepository
 
     public static bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.Folder);
 
-    public static bool InstanceRootExists(string? instanceRoot) => Directory.Exists(instanceRoot);
+    /// <summary>The refusal naming the instance root when it is not there; null when it is.</summary>
+    public static string? InstanceRootNotFound(string? instanceRoot) =>
+        Directory.Exists(instanceRoot) ? null : $"Instance root not found: {instanceRoot}";
 
     /// <summary>Whether the plugin's source reads: its mod is tracked and holds the plugin's tree. A tracked mod
     /// can hold none for a plugin another tool put there, or whose source was deleted.</summary>

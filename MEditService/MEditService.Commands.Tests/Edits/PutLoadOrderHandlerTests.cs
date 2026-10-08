@@ -76,14 +76,22 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
         Assert.Null(_holder.Held);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Put_AnInstanceRootThatIsNotThere_RefusesWithoutApplying(bool named)
+    [Fact]
+    public void Put_AnInstanceRootThatIsNotThere_RefusesWithoutApplying()
     {
         var gone = Path.Combine(_instanceRoot, "no-such-instance");
 
-        var result = Handler.Put(_dataFolder, named ? gone : null, GameRelease.Fallout4, [Plugin("A.esp")], [], []);
+        var result = Handler.Put(_dataFolder, gone, GameRelease.Fallout4, [Plugin("A.esp")], [], []);
+
+        Assert.Equal(PutLoadOrderRefusal.InstanceRootNotFound, result.Refusal);
+        Assert.Contains(gone, result.Message, StringComparison.Ordinal);
+        Assert.Null(_holder.Held);
+    }
+
+    [Fact]
+    public void Put_NoInstanceRoot_RefusesWithoutApplying()
+    {
+        var result = Handler.Put(_dataFolder, null, GameRelease.Fallout4, [Plugin("A.esp")], [], []);
 
         Assert.Equal(PutLoadOrderRefusal.InstanceRootNotFound, result.Refusal);
         Assert.Null(_holder.Held);
