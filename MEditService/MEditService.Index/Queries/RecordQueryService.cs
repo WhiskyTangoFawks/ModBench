@@ -94,11 +94,11 @@ internal sealed class RecordQueryService(
     public CompareResult? GetCompare(string formKey, CopyText? text = null)
     {
         var reads = RequireReads();
-        var stack = reads.GetOverrideStack(formKey);
+        var stack = text?.Alone == true ? null : reads.GetOverrideStack(formKey);
         if (stack == null && text == null) return null;
         var snapshot = _loadOrder.Require();
 
-        var active = text?.Alone == true ? [] : stack?.Entries.Select(e => e.Effective).ToList() ?? [];
+        var active = stack?.Entries.Select(e => e.Effective).ToList() ?? [];
         var outside = new List<RecordDocument>();
         if (text is not null)
         {

@@ -808,10 +808,13 @@ describe('a file whose plugin is disabled, or in a disabled mod', () => {
   const GUN = '000801:A.esp';
   const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
   const typed = { plugin: COPY_PLUGIN, documentText: '{ "EditorID": "Typed" }' };
+  const typedFile = { isDirty: true, getText: () => typed.documentText };
   const disabledA: ModFacts = { ...NO_MODS, isDisabledOrInDisabledMod: (plugin) => samePluginAddress(plugin, COPY_PLUGIN) };
   const isAnswer = (message: unknown) => typeof message === 'object' && message !== null && Reflect.get(message, 'type') === 'recordLoadAnswered';
+  type Opening = (editor: ReturnType<typeof makeEditor>) => Promise<FakePanel>;
+  const openTyped: Opening = ({ openFile }) => openFile(FILE, typedFile);
 
-  async function loaded(modFacts: ModFacts, plugins = inactiveA, columns: unknown[] = []) {
+  async function loaded(modFacts: ModFacts, { plugins = inactiveA, columns = [] as unknown[], open = openTyped } = {}) {
     const client = new InMemoryMEditClient();
     const copy = comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModA', isWinner: false, editorId: 'Gun' }]);
     client.setQueryAnswer('getReferences', []);
@@ -819,28 +822,61 @@ describe('a file whose plugin is disabled, or in a disabled mod', () => {
     client.setQueryAnswer('getComparison', copy);
     client.setQueryAnswer('getRecordsComparison', { compare: copy, missing: [] });
     client.setQueryAnswer('getPlugins', plugins);
-    const { openFile } = makeEditor(client, [], modFacts);
-    const tab = await openFile(FILE, { isDirty: true, getText: () => typed.documentText });
+    const tab = await open(makeEditor(client, [], modFacts));
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns });
     await settle();
     const answers: unknown[] = tab.webview.postMessage.mock.calls.map((call: unknown[]) => call[0]).filter(isAnswer);
-    return { asked: comparisonsAsked(client), alone: answers.map((answer): unknown => Reflect.get(Object(answer), 'alone')) };
+    return { asked: comparisonsAsked(client), told: answers.map((answer): unknown => Reflect.get(Object(answer), 'fileCopyAlone')) };
   }
 
   it('is read alone from its text, and its tab told so', async () => {
-    expect(await loaded(disabledA)).toEqual({ asked: [[GUN, { ...typed, alone: true }]], alone: [true] });
+    expect(await loaded(disabledA)).toEqual({ asked: [[GUN, { ...typed, alone: true }]], told: [true] });
+  });
+
+  it('is read alone from its rendered document, as a file is', async () => {
+    const rendered = { isDirty: false, getText: () => '{ "EditorID": "Rendered" }' };
+    expect(await loaded(disabledA, { open: ({ openDocument }) => openDocument(renderedUri(GUN, 'Gun.json'), rendered) }))
+      .toEqual({ asked: [[GUN, { plugin: COPY_PLUGIN, documentText: '{ "EditorID": "Rendered" }', alone: true }]], told: [true] });
+  });
+
+  it('is read in the comparison, its tab told so, once its saved file is gone from disk and no text is left to read alone', async () => {
+    const saved = { isDirty: false, getText: () => '{}' };
+    expect(await loaded(disabledA, { open: ({ openFile }) => openFile(FILE, saved) })).toEqual({ asked: [[GUN, undefined]], told: [false] });
   });
 
   it('is read in the comparison while mEdit still has its plugin active', async () => {
-    expect(await loaded(disabledA, activeA)).toEqual({ asked: [[GUN, { ...typed, alone: false }]], alone: [false] });
+    expect(await loaded(disabledA, { plugins: activeA })).toEqual({ asked: [[GUN, { ...typed, alone: false }]], told: [false] });
   });
 
   it('is not read alone when its plugin is overridden', async () => {
-    expect(await loaded(NO_MODS)).toEqual({ asked: [[GUN, { ...typed, alone: false }]], alone: [false] });
+    expect(await loaded(NO_MODS)).toEqual({ asked: [[GUN, { ...typed, alone: false }]], told: [false] });
+  });
+
+  it('is read again when the instance changes whether its plugin is disabled, and not when the instance changes otherwise', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getReferences', []);
+    client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: 'A.esp', origin: 'ModA' });
+    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModA', isWinner: false, editorId: 'Gun' }]));
+    client.setQueryAnswer('getPlugins', inactiveA);
+    let disabled = true;
+    const changed: (() => void)[] = [];
+    const modFacts: ModFacts = {
+      ...NO_MODS, isDisabledOrInDisabledMod: () => disabled,
+      onChange: (listener) => { changed.push(listener); return { dispose: () => undefined }; },
+    };
+    const tab = await makeEditor(client, [], modFacts).openFile(FILE, typedFile);
+    const reads = () => tab.webview.postMessage.mock.calls.filter(([message]: unknown[]) => Reflect.get(Object(message), 'type') === 'loadRecord');
+
+    changed.forEach((listener) => { listener(); });
+    expect(reads()).toEqual([]);
+    disabled = false;
+    changed.forEach((listener) => { listener(); });
+
+    expect(reads()).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
   });
 
   it('is not read alone beside the other records its tab shows', async () => {
-    expect((await loaded(disabledA, inactiveA, [{ formKey: '000900:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } }])).alone).toEqual([false]);
+    expect((await loaded(disabledA, { columns: [{ formKey: '000900:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } }] })).told).toEqual([false]);
   });
 });
 
@@ -1024,7 +1060,7 @@ describe('what a record tab\'s webview posts', () => {
 
       expect(loadAnswered(tab)).toEqual([{
         type: 'recordLoadAnswered', requestId: 'r1', ok: true, compare, plugins: activeA, conflictsComputed: true,
-        loadFailures: [failure], documentPlugin: COPY_PLUGIN, modsByOrigin: {}, alone: false,
+        loadFailures: [failure], documentPlugin: COPY_PLUGIN, modsByOrigin: {}, fileCopyAlone: false,
       }]);
       expect(comparisonsAsked(mEdit)).toEqual([[GUN, undefined]]);
     });

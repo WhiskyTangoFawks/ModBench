@@ -56,18 +56,18 @@ describe('the record load request the webview asks of the host, because nothing 
     const compare = { overrides: [], diffs: [], conflictAll: 'OnlyOne' };
     const plugins = [{ name: 'A.esp', isImmutable: true, loadOrderIndex: 0 }];
     expect(parseExtensionToWebview({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: { ModA: 'tracked' }, alone: true,
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: { ModA: 'tracked' }, fileCopyAlone: true,
     })).toEqual({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: { ModA: 'tracked' }, alone: true,
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: { ModA: 'tracked' }, fileCopyAlone: true,
     });
   });
 
   it('carries null plugins when that read failed, and a string error when the load itself did', () => {
     const compare = { overrides: [], diffs: [], conflictAll: 'OnlyOne' };
     expect(parseExtensionToWebview({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: { ModA: 'tracked' }, alone: false,
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: { ModA: 'tracked' }, fileCopyAlone: false,
     })).toEqual({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: { ModA: 'tracked' }, alone: false,
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: { ModA: 'tracked' }, fileCopyAlone: false,
     });
 
     expect(parseExtensionToWebview({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: false, error: 'HTTP 404' }))
@@ -80,14 +80,14 @@ describe('the record load request the webview asks of the host, because nothing 
       conflictsComputed: true, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: {},
     };
 
-    expect(() => parseExtensionToWebview(answered)).toThrow(/alone/);
-    expect(() => parseExtensionToWebview({ ...answered, alone: 'yes' })).toThrow(/alone/);
+    expect(() => parseExtensionToWebview(answered)).toThrow(/fileCopyAlone/);
+    expect(() => parseExtensionToWebview({ ...answered, fileCopyAlone: 'yes' })).toThrow(/fileCopyAlone/);
   });
 
   it('carries the plugins mEdit cannot read, and rejects an answer without them', () => {
     const compare = { overrides: [], diffs: [], conflictAll: 'OnlyOne' };
     const loadFailures = [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }];
-    const answered = { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: true, documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: { ModA: 'tracked' }, alone: false };
+    const answered = { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: true, documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: { ModA: 'tracked' }, fileCopyAlone: false };
 
     expect(parseExtensionToWebview({ ...answered, loadFailures })).toEqual({ ...answered, loadFailures });
     expect(() => parseExtensionToWebview(answered)).toThrow();
@@ -96,7 +96,7 @@ describe('the record load request the webview asks of the host, because nothing 
   it('rejects an answer with no comparison that names no record as gone, and carries the ones it names', () => {
     const answered = {
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, plugins: null, conflictsComputed: true,
-      loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: {}, alone: false, copiesLacking: [],
+      loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: {}, fileCopyAlone: false, copiesLacking: [],
     };
 
     expect(() => parseExtensionToWebview(answered)).toThrow(/gone/);
@@ -125,7 +125,7 @@ describe('the record load request the webview asks of the host, because nothing 
   it('rejects an answer whose mods by origin are missing or name a state other than tracked or untracked', () => {
     const answered = {
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, gone: ['000001:A.esp'], copiesLacking: [], plugins: null, conflictsComputed: true,
-      loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, alone: false,
+      loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, fileCopyAlone: false,
     };
 
     expect(() => parseExtensionToWebview(answered)).toThrow();

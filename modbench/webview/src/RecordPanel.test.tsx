@@ -321,7 +321,7 @@ describe('RecordPanel — a file whose plugin is disabled, or in a disabled mod'
     overrides: [compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'File Name' }] })],
     diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp|ModA': 'File Name' }, winnerColumn: 'MyMod.esp|ModA' })],
   });
-  const opts: PanelOpts = { plugins: [{ name: 'MyMod.esp', origin: 'ModA', isTracked: true }], fileColumn: 'MyMod.esp|ModA', alone: true };
+  const opts: PanelOpts = { plugins: [{ name: 'MyMod.esp', origin: 'ModA', isTracked: true }], fileColumn: 'MyMod.esp|ModA', fileCopyAlone: true };
 
   beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
   afterEach(() => vi.unstubAllGlobals());
@@ -344,7 +344,7 @@ describe('RecordPanel — a file whose plugin is disabled, or in a disabled mod'
   });
 
   it('says nothing of a plugin not active when its file is in the comparison', async () => {
-    renderPanel(alone, { ...opts, alone: false });
+    renderPanel(alone, { ...opts, fileCopyAlone: false });
     await waitFor(() => expect(screen.getByText('File Name')).toBeInTheDocument());
 
     expect(screen.queryByText(NOT_ACTIVE)).not.toBeInTheDocument();

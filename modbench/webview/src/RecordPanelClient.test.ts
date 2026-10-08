@@ -20,7 +20,7 @@ function lastRequestId(): string {
 
 function answer(requestId: string, data: Record<string, unknown>): void {
   window.dispatchEvent(new MessageEvent('message', {
-    data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: {}, alone: false, ...data },
+    data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: {}, fileCopyAlone: false, ...data },
   }));
 }
 
@@ -71,10 +71,10 @@ describe('RecordPanelClient.load', () => {
   it('says whether the file\'s copy is read alone', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer(lastRequestId(), {
-      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'NoConflict' }, plugins: null, conflictsComputed: false, loadFailures: [], alone: true,
+      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'NoConflict' }, plugins: null, conflictsComputed: false, loadFailures: [], fileCopyAlone: true,
     });
 
-    expect(await promise).toMatchObject({ ok: true, alone: true });
+    expect(await promise).toMatchObject({ ok: true, fileCopyAlone: true });
   });
 
   it('keys immutableSet by compound identity, so two same-filename different-origin plugins stay distinct', async () => {

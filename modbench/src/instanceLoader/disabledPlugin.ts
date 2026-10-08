@@ -1,8 +1,7 @@
 import type { InstanceValue } from './instance';
 import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 
-/** No enabled `plugins.txt` line names the plugin and the game does not load it with no line, or the
- *  mod providing it is disabled. An overridden plugin is neither. */
+/** An overridden plugin is neither. */
 export function isDisabledOrInDisabledMod(
   value: Pick<InstanceValue, 'mods' | 'plugins' | 'pluginsLoadedWithNoLine'>, plugin: PluginAddress,
 ): boolean {

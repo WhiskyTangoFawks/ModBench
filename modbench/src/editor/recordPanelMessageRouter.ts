@@ -60,8 +60,13 @@ export function routerDepsForTab(
   shared: SharedRecordPanelDeps, tab: RecordTab, tabs: Pick<RecordTabs, 'setCell'>, document: TabDocument,
 ): RouteRecordPanelMessageDeps {
   const reply = (m: ExtensionToWebview) => { tab.post(m); };
+  let disabled = shared.modFacts.isDisabledOrInDisabledMod(document.plugin);
   tab.own(shared.modFacts.onChange(() => {
     reply({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: modsByOrigin(tab.origins, shared.modFacts) });
+    const now = shared.modFacts.isDisabledOrInDisabledMod(document.plugin);
+    if (now === disabled) return;
+    disabled = now;
+    tab.refresh();
   }));
   return {
     ...shared,
@@ -163,18 +168,16 @@ async function answerRecordLoad(
   const [plugins] = await Promise.allSettled([deps.meditClient.getPlugins()]);
   const listed = plugins.status === 'fulfilled' ? plugins.value : null;
   const pluginActive = listed?.some((p) => p.inLoadOrder && samePluginAddress(p, deps.plugin)) ?? false;
-  const alone = m.columns.length === 0 && !pluginActive && deps.modFacts.isDisabledOrInDisabledMod(deps.plugin);
-  const [read] = await Promise.allSettled([(async (): Promise<RecordRead> => {
+  const [read] = await Promise.allSettled([(async (): Promise<RecordRead & { fileCopyAlone: boolean }> => {
     const documentText = await deps.documentText(pluginActive);
     const own = { formKey: m.formKey, plugin: deps.plugin, documentText };
-    if (m.columns.length === 0) {
-      const compare = await deps.meditClient.getComparison(
-        m.formKey, documentText === undefined ? undefined : { plugin: deps.plugin, documentText, alone });
-      if (compare) return { compare };
-      // Only the typed answer tells a record held by no plugin from one a disabled plugin holds.
-      return readOf(await deps.meditClient.getRecordsComparison([own]));
-    }
-    return readOf(await deps.meditClient.getRecordsComparison([own, ...m.columns]));
+    if (m.columns.length > 0) return { ...readOf(await deps.meditClient.getRecordsComparison([own, ...m.columns])), fileCopyAlone: false };
+    const text = documentText === undefined ? undefined
+      : { plugin: deps.plugin, documentText, alone: !pluginActive && deps.modFacts.isDisabledOrInDisabledMod(deps.plugin) };
+    const compare = await deps.meditClient.getComparison(m.formKey, text);
+    if (compare) return { compare, fileCopyAlone: text?.alone ?? false };
+    // Only the typed answer tells a record held by no plugin from one a disabled plugin holds.
+    return { ...readOf(await deps.meditClient.getRecordsComparison([own])), fileCopyAlone: false };
   })()]);
   if (read.status === 'rejected') {
     deps.channel.warn(`Failed to read ${m.formKey}: ${errorMessage(read.reason)}`);
@@ -195,7 +198,7 @@ async function answerRecordLoad(
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     ...answered, plugins: listed,
     conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
-    modsByOrigin: modsByOrigin(origins, deps.modFacts), alone,
+    modsByOrigin: modsByOrigin(origins, deps.modFacts),
   });
 }
 
