@@ -10,7 +10,7 @@ import type {
 import { LABEL_COLUMN } from './labelColumn';
 import { columnKey, copyColumnKey } from '../../src/wire/columnKey';
 import { pluginAddressOf } from '../../src/wire/pluginAddress';
-import { addElement, editField, focusCell, keepViewState, openInPlace } from './nativeBridge';
+import { addElement, editField, focusCell, keepViewState, openColumns } from './nativeBridge';
 import { openEditor } from './DiskCell';
 import { EditorMounted } from './cellEditor';
 import { pastedValue } from './modelValue';
@@ -294,7 +294,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   function openColumn(opened: CompareOverride) {
     const copyOf = (o: CompareOverride): ColumnCopy => ({ formKey: o.formKey, plugin: pluginAddressOf(o) });
-    openInPlace([opened, ...(severalRecords ? overrides.filter(o => o !== opened) : [])].map(copyOf));
+    openColumns([opened, ...(severalRecords ? overrides.filter(o => o !== opened) : [])].map(copyOf));
   }
 
   const navColumns = columns.filter(c => !collapsedColumns.has(c.key)).map(c => c.key);

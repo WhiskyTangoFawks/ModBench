@@ -20,14 +20,14 @@ describe('modbench.record.open from the palette, with no Argument', () => {
     return { meditClient };
   };
 
-  it('opens the records selected in the focused view as one grid, pinned, on the first record\'s document', async () => {
+  it('opens the records selected in the focused view as one grid, a preview, on the first record\'s document', async () => {
     await register({ selection: () => [rowOf('000801:A.esp'), rowOf('000802:A.esp')], ...renderingTheWinner() });
 
     await open();
 
     expect(executed().filter(([id]) => id === 'vscode.openWith')).toEqual([[
       'vscode.openWith', '/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record',
-      { viewColumn: -1, preview: false },
+      { viewColumn: -1, preview: true },
     ]]);
   });
 

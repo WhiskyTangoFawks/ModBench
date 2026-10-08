@@ -80,8 +80,8 @@ export function editField(formKey: string, plugin: string, origin: string, envel
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey, plugin, origin, envelope });
 }
 
-export function openInPlace(records: ColumnCopy[]): void {
-  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records });
+export function openColumns(records: ColumnCopy[]): void {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_COLUMNS, records });
 }
 
 export function addElement(context: ArrayParentContext, value: unknown): void {
