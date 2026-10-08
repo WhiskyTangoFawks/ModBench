@@ -300,7 +300,7 @@ function createMockBackend(): http.Server {
         const copies = typeof parsed === 'object' && parsed !== null && 'copies' in parsed && Array.isArray(parsed.copies) ? parsed.copies : [];
         comparedSideBySide.push(copies);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(comparisonOf('Fallout4.esm:000001', [{ plugin: 'Fallout4.esm', isWinner: true }])));
+        res.end(JSON.stringify({ compare: comparisonOf('Fallout4.esm:000001', [{ plugin: 'Fallout4.esm', isWinner: true }]), missing: [] }));
       });
       return;
     }

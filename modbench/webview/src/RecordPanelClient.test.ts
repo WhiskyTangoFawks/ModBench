@@ -48,9 +48,9 @@ describe('RecordPanelClient.load', () => {
 
   it('reads a record held by no active plugin as a null result, not a failure', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
-    answer(lastRequestId(), { ok: true, compare: null, plugins: null, conflictsComputed: true, loadFailures: [] });
+    answer(lastRequestId(), { ok: true, compare: null, gone: ['000002:A.esp'], copiesLacking: ['mEdit said so'], plugins: null, conflictsComputed: true, loadFailures: [] });
 
-    expect(await promise).toMatchObject({ ok: true, result: null });
+    expect(await promise).toMatchObject({ ok: true, result: null, gone: ['000002:A.esp'], copiesLacking: ['mEdit said so'] });
   });
 
   it('returns a composite view on success', async () => {

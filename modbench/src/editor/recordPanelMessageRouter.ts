@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension,
-  type ColumnCopy, type ExtensionToWebview, type ViewState, type WebviewToExtension,
+  type ColumnCopy, type ExtensionToWebview, type RecordRead, type ViewState, type WebviewToExtension,
 } from '../wire/messages';
-import type { MEditClient, PluginLoadFailure } from '../client';
+import type { CompareRecordsResponse, MEditClient, PluginLoadFailure } from '../client';
 import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
 import { pickRecord, type RecordPickerDeps } from './recordPicker';
@@ -163,35 +163,46 @@ async function answerRecordLoad(
   const [plugins] = await Promise.allSettled([deps.meditClient.getPlugins()]);
   const listed = plugins.status === 'fulfilled' ? plugins.value : null;
   const pluginActive = listed?.some((p) => p.inLoadOrder && samePluginAddress(p, deps.plugin)) ?? false;
-  const [compare] = await Promise.allSettled([(async () => {
+  const [read] = await Promise.allSettled([(async (): Promise<RecordRead> => {
     const documentText = await deps.documentText(pluginActive);
-    const own = () => deps.meditClient.getComparison(
-      m.formKey, documentText === undefined ? undefined : { plugin: deps.plugin, documentText });
-    if (m.columns.length === 0) return own();
-    try {
-      return await deps.meditClient.getRecordsComparison([{ formKey: m.formKey, plugin: deps.plugin, documentText }, ...m.columns]);
-    } catch (refused) {
-      // A record held by no plugin is gone (editor.md, States 4), not a copy missing from the plugin named.
-      if (await own().catch(() => undefined) === null) return null;
-      throw refused;
+    const own = { formKey: m.formKey, plugin: deps.plugin, documentText };
+    if (m.columns.length === 0) {
+      const compare = await deps.meditClient.getComparison(
+        m.formKey, documentText === undefined ? undefined : { plugin: deps.plugin, documentText });
+      if (compare) return { compare };
+      // Only the typed answer tells a record held by no plugin from one a disabled plugin holds.
+      return readOf(await deps.meditClient.getRecordsComparison([own]));
     }
+    return readOf(await deps.meditClient.getRecordsComparison([own, ...m.columns]));
   })()]);
-  if (compare.status === 'rejected') {
-    deps.channel.warn(`Failed to read ${m.formKey}: ${errorMessage(compare.reason)}`);
+  if (read.status === 'rejected') {
+    deps.channel.warn(`Failed to read ${m.formKey}: ${errorMessage(read.reason)}`);
     deps.reply({
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId,
-      ok: false, error: errorMessage(compare.reason),
+      ok: false, error: errorMessage(read.reason),
     });
     return;
   }
-  const origins = (compare.value?.overrides ?? []).map((o) => o.origin);
+  const answered = read.value;
+  if (answered.compare === null) deps.channel.warn([`Held by no plugin: ${answered.gone.join(', ')}.`, ...answered.copiesLacking].join(' '));
+  const overrides = answered.compare?.overrides;
+  const origins = (overrides ?? []).map((o) => o.origin);
   deps.originsShown(origins);
-  deps.titleFromRead(m.formKey, compare.value?.overrides);
+  deps.titleFromRead(m.formKey, overrides);
   deps.readAnswered(m.formKey, m.columns);
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
-    compare: compare.value, plugins: listed,
+    ...answered, plugins: listed,
     conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
     modsByOrigin: modsByOrigin(origins, deps.modFacts),
   });
+}
+
+// Only a record no plugin holds is gone; a copy its plugin alone lacks refuses the read (editor.md, States, stories 2 and 4).
+function readOf({ compare, missing }: CompareRecordsResponse): RecordRead {
+  if (compare) return { compare };
+  const gone = [...new Set(missing.filter((c) => c.reason === 'RecordGone').map((c) => c.formKey))];
+  const copiesLacking = missing.filter((c) => c.reason === 'NotInPlugin').map((c) => c.message);
+  if (gone.length === 0) throw new Error(copiesLacking.join(' '));
+  return { compare: null, gone, copiesLacking };
 }
