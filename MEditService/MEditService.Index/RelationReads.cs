@@ -253,15 +253,15 @@ internal sealed class RelationReads(
         var repositories = new Dictionary<PluginAddress, SourceRepository>(PluginAddress.Comparer);
         return
         [
-            .. GetReferencesToMissingRecords().SelectMany(reference =>
+            .. GetReferencesToMissingRecords().Select(reference =>
             {
-                if (modOf(reference.Plugin) is not { } mod) return (IEnumerable<MissingReferenceOnFile>)[];
+                if (modOf(reference.Plugin) is not { } mod) return SourceFilePlacement.Unprovided(reference);
                 if (!repositories.TryGetValue(reference.Plugin, out var repository))
                 {
                     repository = SourceRepository.Over(mod, store.Release);
                     repositories[reference.Plugin] = repository;
                 }
-                return [SourceFilePlacement.Place(reference, repository)];
+                return SourceFilePlacement.Place(reference, repository);
             }),
         ];
     }

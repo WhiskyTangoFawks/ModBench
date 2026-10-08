@@ -5,88 +5,138 @@ using MEditService.Ports;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-public sealed class FilterBeforeAnnouncementTests
+public sealed class FilterBeforeAnnouncementTests : IDisposable
 {
     private const string Resident = "Resident.esp";
     private const string Arriving = "Arriving.esp";
+    private const string Tracked = "Tracked.esp";
 
-    private sealed class FilteredNpcsAtEachAnnouncement(Predicate<INotification> announces) : INotificationPublisher
+    private readonly ScatteredFixtureData _fixture;
+    private readonly string _trackedNpc;
+    private readonly LoadOrderHolder _holder = new();
+    private readonly FilteredNpcsAtEachAnnouncement _probe = new();
+    private readonly ILoggerFactory _loggers;
+    private readonly OpenedIndex _index;
+    private string? _failingAt;
+
+    public FilterBeforeAnnouncementTests()
+    {
+        var trackedNpc = "";
+        _fixture = new PluginFixtureBuilder("filter-before-announcement")
+            .WithPlugin(Resident, mod => mod.Npcs.AddNew("ResidentNpc"))
+            .WithPlugin(Tracked, mod => trackedNpc = mod.Npcs.AddNew("TrackedNpc").FormKey.ToString(), origin: "TrackedMod")
+            .WithPlugin(Arriving, mod => mod.Npcs.AddNew("ArrivingNpc"))
+            .BuildScattered();
+        _trackedNpc = trackedNpc;
+        TrackedMods.Track(Entry(Tracked), _fixture.GameDirectory);
+        _loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider([], entry =>
+        {
+            if (_failingAt is { } logged && entry.Message.StartsWith(logged, StringComparison.Ordinal))
+                throw new IOException($"failed at \"{logged}\"");
+        })));
+        _index = Indexes.Open(_holder, loggerFactory: _loggers, notifications: _probe);
+        _probe.Index = _index;
+    }
+
+    public void Dispose()
+    {
+        _index.Dispose();
+        _loggers.Dispose();
+        _fixture.Dispose();
+    }
+
+    private sealed class FilteredNpcsAtEachAnnouncement : INotificationPublisher
     {
         private readonly ConcurrentQueue<int> _listed = new();
 
         internal OpenedIndex? Index { get; set; }
 
+        internal Predicate<INotification> Announces { get; set; } = _ => false;
+
         internal IReadOnlyList<int> Listed => [.. _listed];
 
         public void Publish(INotification notification)
         {
-            if (Index is { } index && announces(notification))
+            if (Index is { } index && Announces(notification))
                 _listed.Enqueue(index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Total);
         }
+    }
+
+    private LoadOrderEntry Entry(string name) => _fixture.Plugins.Single(p => p.Name == name);
+
+    private void Reconcile(params string[] names) =>
+        _index.Reconcile(_holder, _fixture.GameDirectory, [.. _fixture.Plugins.Where(p => names.Contains(p.Name))], GameRelease.Fallout4);
+
+    private void TrackedNpcEditedWhileOutOfTheLoadOrder_ToMatchTheFilter()
+    {
+        Reconcile(Resident, Tracked);
+        var document = _index.DocumentOf(_trackedNpc, Entry(Tracked).KeyOf());
+        _index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'EditedWhileAway'", "filter.sql");
+        Reconcile(Resident);
+        Entry(Tracked).HandEdit(document, "\"TrackedNpc\"", "\"EditedWhileAway\"");
+        _probe.Announces = n => n is RowsChangedNotification rows && rows.Keys.Contains(_trackedNpc);
+    }
+
+    private void AssertEveryAnnouncementFoundTheOneMatch()
+    {
+        Assert.NotEmpty(_probe.Listed);
+        Assert.All(_probe.Listed, listed => Assert.Equal(1, listed));
     }
 
     [Fact]
     public void AnArrivingPlugin_IsAnnouncedAsIndexed_OnlyOnceTheRecordFilterHoldsItsMatches()
     {
-        using var fixture = new PluginFixtureBuilder("filter-before-arrival")
-            .WithPlugin(Resident, mod => mod.Npcs.AddNew("ResidentNpc"))
-            .WithPlugin(Arriving, mod => mod.Npcs.AddNew("ArrivingNpc"))
-            .BuildScattered();
-        var arriving = fixture.Plugins.Single(p => p.Name == Arriving).KeyOf();
-        var probe = new FilteredNpcsAtEachAnnouncement(n =>
-            n is LoadOrderStatusNotification status && status.Status.IndexedPlugins.Contains(arriving, PluginAddress.Comparer));
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, notifications: probe);
-        probe.Index = index;
-        index.Reconcile(holder, fixture.GameDirectory, [.. fixture.Plugins.Where(p => p.Name == Resident)], GameRelease.Fallout4);
-        index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'ArrivingNpc'", "filter.sql");
+        Reconcile(Resident);
+        _index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'ArrivingNpc'", "filter.sql");
+        var arriving = Entry(Arriving).KeyOf();
+        _probe.Announces = n =>
+            n is LoadOrderStatusNotification status && status.Status.IndexedPlugins.Contains(arriving, PluginAddress.Comparer);
 
-        index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4);
+        Reconcile(Resident, Arriving);
 
-        Assert.NotEmpty(probe.Listed);
-        Assert.All(probe.Listed, listed => Assert.Equal(1, listed));
+        AssertEveryAnnouncementFoundTheOneMatch();
     }
 
     [Fact]
-    public void ATrackedPluginEditedWhileOutOfTheLoadOrder_AnnouncesItsRowsOnReturn_OnlyOnceTheRecordFilterHoldsThem() =>
-        ATrackedPluginReturnsEditedWhileAway(failingAfter: null);
+    public void ATrackedPluginEditedWhileOutOfTheLoadOrder_AnnouncesItsRowsOnReturn_OnlyOnceTheRecordFilterHoldsThem()
+    {
+        TrackedNpcEditedWhileOutOfTheLoadOrder_ToMatchTheFilter();
+
+        Reconcile(Resident, Tracked);
+
+        AssertEveryAnnouncementFoundTheOneMatch();
+    }
 
     [Fact]
-    public void ARefreshThatLandsBeforeItsPluginsReadFails_IsAnnouncedOnlyOnceTheRecordFilterHoldsIt() =>
-        ATrackedPluginReturnsEditedWhileAway(failingAfter: $"Registering {Arriving}");
-
-    private static void ATrackedPluginReturnsEditedWhileAway(string? failingAfter)
+    public void ARefreshThatLandsBeforeItsPluginsReadFails_IsAnnouncedOnlyOnceTheRecordFilterHoldsIt()
     {
-        string npc = "";
-        using var fixture = new PluginFixtureBuilder("filter-before-rows-changed")
-            .WithPlugin(Resident, mod => mod.Npcs.AddNew("ResidentNpc"))
-            .WithPlugin(Arriving, mod => npc = mod.Npcs.AddNew("TrackedNpc").FormKey.ToString(), origin: "TrackedMod")
-            .BuildScattered();
-        var tracked = fixture.Plugins.Single(p => p.Name == Arriving);
-        TrackedMods.Track(tracked, fixture.GameDirectory);
-        var probe = new FilteredNpcsAtEachAnnouncement(n => n is RowsChangedNotification rows && rows.Keys.Contains(npc));
-        var holder = new LoadOrderHolder();
-        var armed = false;
-        using var loggers = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider([], entry =>
-        {
-            if (armed && failingAfter is not null && entry.Message.StartsWith(failingAfter, StringComparison.Ordinal))
-                throw new IOException("the read failed after its refresh landed");
-        })));
-        using var index = Indexes.Open(holder, loggerFactory: loggers, notifications: probe);
-        probe.Index = index;
-        index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4);
-        armed = true;
-        var document = index.DocumentOf(npc, tracked.KeyOf());
-        index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'EditedWhileAway'", "filter.sql");
-        index.Reconcile(holder, fixture.GameDirectory, [.. fixture.Plugins.Where(p => p.Name == Resident)], GameRelease.Fallout4);
-        tracked.HandEdit(document, "\"TrackedNpc\"", "\"EditedWhileAway\"");
+        TrackedNpcEditedWhileOutOfTheLoadOrder_ToMatchTheFilter();
+        _failingAt = $"Registering {Tracked}";
 
-        index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4);
+        Reconcile(Resident, Tracked);
 
-        Assert.NotEmpty(probe.Listed);
-        Assert.All(probe.Listed, listed => Assert.Equal(1, listed));
+        AssertEveryAnnouncementFoundTheOneMatch();
+    }
+
+    [Fact]
+    public void AWinnerSweepThatFails_StillLeavesTheRecordFilterHoldingThePluginItAnnounces()
+    {
+        Reconcile(Resident, Tracked);
+        _index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'RenamedOnDisk'", "filter.sql");
+        var resident = Entry(Resident);
+        var renamed = new Fallout4Mod(ModKey.FromFileName(Resident), Fallout4Release.Fallout4);
+        renamed.Npcs.AddNew("RenamedOnDisk");
+        renamed.WriteToBinary(resident.Path);
+        _probe.Announces = n => n is PluginChangedNotification changed && changed.Plugin.Equals(resident.KeyOf());
+        _failingAt = "Swept winners";
+
+        _index.NextSnapshotUnsettledUntil(() => _probe.Listed.Count > 0, "the plugin's announcement");
+
+        AssertEveryAnnouncementFoundTheOneMatch();
     }
 }

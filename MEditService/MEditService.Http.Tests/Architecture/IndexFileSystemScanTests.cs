@@ -7,7 +7,7 @@ public sealed class IndexFileSystemScanTests
 {
     private const string IndexRoot = "MEditService.Index";
 
-    private static readonly string[] FilesOfTheStoreAndTheReconcile =
+    private static readonly string[] FilesThatNameTheFileSystem =
     [
         "MEditService.Index/Store.cs",
         "MEditService.Index/IndexFile.cs",
@@ -33,7 +33,7 @@ public sealed class IndexFileSystemScanTests
         var root = ServiceProjects.SolutionDirectory();
 
         var walked = ScannedFiles(root, IndexRoot)
-            .Where(file => !FilesOfTheStoreAndTheReconcile.Contains(Relative(root, file), StringComparer.Ordinal))
+            .Where(file => !FilesThatNameTheFileSystem.Contains(Relative(root, file), StringComparer.Ordinal))
             .ToList();
         var named = Sites(root, walked, FileSystemNeedlesWhoseStaticsAreAnchoredAgainstAMemberAccessOfTheSameName);
 

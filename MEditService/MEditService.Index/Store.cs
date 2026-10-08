@@ -334,10 +334,16 @@ internal sealed class Store : IDisposable
     /// <summary>Restates which truth <paramref name="key"/>'s rows read as, leaving the file claim
     /// beside it: a refresh re-derives the rows in place, and the binary they were stamped against
     /// is still the file on disk.</summary>
-    internal void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom) =>
-        DuckDbSql.ExecuteFor(Connection,
-            $"UPDATE {PluginDerivationRelation} SET derived_from = $1 WHERE plugin = $2 AND origin = $3",
-            derivedFrom.ToString(), key.Name, key.Origin);
+    internal void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom)
+    {
+        using var tx = Connection.BeginTransaction();
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText =
+            $"UPDATE {PluginDerivationRelation} SET derived_from = $1 WHERE plugin = $2 AND origin = $3 AND derived_from <> $1";
+        DuckDbSql.AddParams(cmd, [derivedFrom.ToString(), key.Name, key.Origin]);
+        if (cmd.ExecuteNonQuery() > 0) BumpSequence();
+        tx.Commit();
+    }
 
     /// <summary>The hash of the file <paramref name="key"/>'s rows were built from, or null when none.</summary>
     public string? IndexedContentHash(PluginAddress key)
@@ -432,7 +438,7 @@ internal sealed class Store : IDisposable
         lock (_projectionLock) scope.BumpOwed = true;
     }
 
-    internal void OweSweep()
+    internal void OweWinnerSweep()
     {
         var scope = OpenProjection;
         lock (_projectionLock) scope.SweepOwed = true;

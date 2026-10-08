@@ -56,8 +56,8 @@ internal sealed class DuckDbRecordIndex : IDisposable
     }
 
     /// <summary>The one way the rows change (ADR-0015). Once the outermost commit's writes are in,
-    /// thrown or not: the winner sweep they owe, the filter again, one advance, then their
-    /// announcements.</summary>
+    /// thrown or not, a sweep included: the winner sweep they owe, the filter again, one advance,
+    /// then their announcements.</summary>
     public T Commit<T>(Func<Projection, T> write)
     {
         using var held = _gate.Enter();
@@ -68,11 +68,7 @@ internal sealed class DuckDbRecordIndex : IDisposable
         }
         finally
         {
-            if (scope.Parent is null)
-            {
-                if (scope.SweepOwed) SweepWinners();
-                _filter.Reapply(this);
-            }
+            if (scope.Parent is null) Land(scope.SweepOwed);
         }
     }
 
@@ -82,11 +78,24 @@ internal sealed class DuckDbRecordIndex : IDisposable
         return true;
     });
 
+    private void Land(bool sweepOwed)
+    {
+        try
+        {
+            if (sweepOwed) SweepWinners();
+        }
+        finally
+        {
+            _filter.Reapply(this);
+        }
+    }
+
     /// <summary>What one commit owes beyond its rows.</summary>
     internal sealed class Projection(DuckDbRecordIndex index)
     {
-        /// <summary>Owed by rows that moved which record wins a FormKey.</summary>
-        public void SweepWinners() => index._store.OweSweep();
+        /// <summary>Owed by rows that moved which record wins a FormKey; the outermost commit sweeps
+        /// once for all of them.</summary>
+        public void OweWinnerSweep() => index._store.OweWinnerSweep();
 
         public void Announce(Func<long, INotification> announcement) =>
             index._store.Announce(() => index._notifications?.Publish(announcement(index.Sequence)));
@@ -95,7 +104,7 @@ internal sealed class DuckDbRecordIndex : IDisposable
         /// move the winner of every FormKey it holds.</summary>
         public void PluginChanged(PluginAddress key)
         {
-            SweepWinners();
+            OweWinnerSweep();
             Announce(sequence => new PluginChangedNotification(key, sequence));
         }
     }
@@ -263,10 +272,15 @@ internal sealed class DuckDbRecordIndex : IDisposable
     // are active cannot change here, so the set the last sweep was handed still holds.
     private void SweepWinners()
     {
-        using var tx = Connection.BeginTransaction();
-        UpdateWinnersCore();
-        _store.BumpSequence();
-        tx.Commit();
+        var timer = Stopwatch.StartNew();
+        using (var tx = Connection.BeginTransaction())
+        {
+            UpdateWinnersCore();
+            _store.BumpSequence();
+            tx.Commit();
+        }
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Swept winners in {ElapsedMs} ms", timer.ElapsedMilliseconds);
     }
 
     // Replaced whole, never diffed (ADR-0013).
@@ -322,7 +336,7 @@ internal sealed class DuckDbRecordIndex : IDisposable
         // Only a delta that added or removed a row can move winner status. Re-swept for the whole
         // load order rather than per FormKey because UpdateWinners is the one definition of winning
         // (measured at 18 ms over 48k records).
-        if (projected.Structural) _store.OweSweep();
+        if (projected.Structural) _projection.OweWinnerSweep();
         return projected.Touched;
     }
 

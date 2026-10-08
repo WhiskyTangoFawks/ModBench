@@ -173,7 +173,7 @@ internal sealed class Projector(
         var before = index.EffectiveContentHashes(key);
         var statesBefore = index.HeldWorkingTreeStates(key);
         Ingest(plugin);
-        projection.SweepWinners();
+        projection.OweWinnerSweep();
         var after = index.EffectiveContentHashes(key);
         var statesAfter = index.HeldWorkingTreeStates(key);
 
