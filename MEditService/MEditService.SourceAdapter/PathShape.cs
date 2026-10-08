@@ -1,7 +1,7 @@
-namespace MEditService.RepositoriesLib;
+namespace MEditService.SourceAdapter;
 
 /// <summary>The folder a path sits in, for a path the caller already knows names a file.</summary>
-public static class PathShape
+internal static class PathShape
 {
     /// <summary>The parent directory of <paramref name="path"/>. Throws when it has none — the
     /// caller's claim that the path names a file was false.</summary>
