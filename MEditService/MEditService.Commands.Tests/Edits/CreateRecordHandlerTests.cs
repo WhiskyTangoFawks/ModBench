@@ -339,15 +339,17 @@ public sealed class CreateRecordHandlerTests
     }
 
     [Fact]
-    public void CreateRecord_OnAPlainEslPlugin_Refuses_WhenTheEslRangeIsExhausted()
+    public void CreateRecord_OnAnEslPlugin_WithNoFormKeyFreeAtOrAboveTheNextObjectId_NamesNoRemedy_SinceItsExtensionKeepsItLight()
     {
         using var mod = SourceEditFixture.TrackedLight("Fixture.esl");
         TakeTheNextObjectId(mod, "000FFF:Fixture.esl");
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
-        Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
+        Assert.Equal(
+            "Fixture.esl has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address.",
+            result.Message);
     }
 
     [Fact]

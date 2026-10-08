@@ -19,6 +19,7 @@ internal sealed class FormKeyAllocator
     private readonly GameRelease _release;
     private readonly SourceDocument? _header;
     private readonly bool _isLight;
+    private readonly bool _lightByFlagAlone;
     private readonly IReadOnlySet<string> _used;
     private readonly uint _nextObjectIdHeld;
     private uint _nextObjectId;
@@ -30,7 +31,9 @@ internal sealed class FormKeyAllocator
         _nextObjectIdHeld = _nextObjectId = headerBody is null ? 0 : HeaderDocument.NextObjectId(headerBody);
         // The working tree's header document decides (ADR-0007), so a flag flipped this session caps
         // minting immediately.
-        _isLight = (headerBody is not null && HeaderDocument.IsLight(headerBody)) || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
+        var lightByExtension = plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
+        _lightByFlagAlone = !lightByExtension && headerBody is not null && HeaderDocument.IsLight(headerBody);
+        _isLight = lightByExtension || _lightByFlagAlone;
         _used = repository.FormKeysUsed(plugin);
     }
 
@@ -130,11 +133,14 @@ internal sealed class FormKeyAllocator
         return null;
     }
 
-    private string ExhaustedMessage() =>
-        _isLight
-            ? $"{_plugin.Name} has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can " +
-              "address. Clear the light flag in the header to draw above it."
-            : $"{_plugin.Name} has no FormKey free at or above its Next Object ID, up to 0xFFFFFF.";
+    // Clearing the flag cannot make a .esl full, so only a plugin the flag alone makes light is told to.
+    private string ExhaustedMessage()
+    {
+        var noneFree = $"{_plugin.Name} has no FormKey free at or above its Next Object ID";
+        if (!_isLight) return $"{noneFree}, up to 0xFFFFFF.";
+        var lightRange = $"{noneFree}, up to 0xFFF, the last a light plugin can address.";
+        return _lightByFlagAlone ? $"{lightRange} Clear the light flag in the header to draw above it." : lightRange;
+    }
 
     private static uint LocalId(string formKey) =>
         uint.Parse(formKey[..formKey.IndexOf(':')], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
