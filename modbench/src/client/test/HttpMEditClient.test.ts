@@ -451,21 +451,25 @@ describe('HttpMEditClient — getRecordsComparison', () => {
   ];
 
   it('posts the copies in order and returns the comparison untransformed', async () => {
-    const comparison = { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Weapon' };
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, comparison)));
+    const answer = { compare: { overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Weapon' }, missing: [] };
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, answer)));
     const client = makeClient(fetch);
 
-    expect(await client.getRecordsComparison(copies)).toEqual(comparison);
+    expect(await client.getRecordsComparison(copies)).toEqual(answer);
     const request = fetch.mock.calls[0]?.[0];
     expect(request?.method).toBe('POST');
     expect(request?.url).toMatch(/\/records\/compare$/);
     expect(await request?.json()).toEqual({ copies });
   });
 
-  it('rejects with the backend\'s detail on a 404, a copy no plugin holds', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(404, { detail: 'Copies not found: 000801:A.esp in A.esp (AMod).' })));
+  it('returns the copies no plugin gave, each with its reason, and no comparison', async () => {
+    const answer = {
+      compare: null,
+      missing: [{ formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'AMod' }, reason: 'RecordGone', message: 'held by no plugin' }],
+    };
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, answer)));
 
-    await expect(makeClient(fetch).getRecordsComparison(copies)).rejects.toThrow(/failed \(404\): Copies not found: 000801:A.esp in A.esp \(AMod\)\./);
+    expect(await makeClient(fetch).getRecordsComparison(copies)).toEqual(answer);
   });
 
   it('rejects on any other non-OK answer', async () => {

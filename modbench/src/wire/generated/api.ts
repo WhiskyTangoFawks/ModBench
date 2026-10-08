@@ -771,6 +771,10 @@ export interface components {
         CompareRecordsRequest: {
             copies: components["schemas"]["RecordCopy"][];
         };
+        CompareRecordsResponse: {
+            compare?: components["schemas"]["CompareResult"] | null;
+            missing: components["schemas"]["CopyMissing"][];
+        };
         CompareResult: {
             overrides: components["schemas"]["CompareOverride"][];
             diffs: components["schemas"]["FieldDiff"][];
@@ -822,6 +826,14 @@ export interface components {
         };
         /** @enum {string} */
         CopyDocumentKind: "OwnFile" | "ContainersFile" | "Rendered";
+        CopyMissing: {
+            formKey: string;
+            plugin: components["schemas"]["PluginAddress"];
+            reason: components["schemas"]["CopyMissingReason"];
+            message: string;
+        };
+        /** @enum {string} */
+        CopyMissingReason: "RecordGone" | "NotInPlugin";
         /** @enum {string} */
         CopyMode: "New" | "Override";
         CopyText: {
@@ -2636,20 +2648,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CompareResult"];
+                    "application/json": components["schemas"]["CompareRecordsResponse"];
                 };
             };
             /** @description Bad Request */
             400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };
