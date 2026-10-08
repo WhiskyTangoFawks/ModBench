@@ -36,8 +36,7 @@ export interface LoadOrderPlugin {
 
 type SnapshotProvider = { kind: 'Mod'; mod: string; folder: string } | { kind: 'Game' } | { kind: 'None' };
 
-/** `line`: the plugin's slot, which a judgement against other plugins reads for a plugin that is not
- *  active (commands.md, Principles). */
+// `line`: the slot, at which Editing judges a plugin that is not active (commands.md, Principles).
 type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'> & { provider: SnapshotProvider; line: number | null };
 
 /** The snapshot was not built, and why: the user is told once (common.md, Reporting). */

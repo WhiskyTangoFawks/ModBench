@@ -24,7 +24,6 @@ public sealed class LoadOrderTests
 
         var order = Order([plugin]);
 
-        Assert.False(order.IsActive(plugin.Key));
         Assert.Null(order.LoadOrderIndex(plugin.Key));
         Assert.Empty(order.Active);
         Assert.Equal(plugin, order.Plugin(plugin.Key));
@@ -52,8 +51,8 @@ public sealed class LoadOrderTests
 
         var order = Order([overridden, winner], winner);
 
-        Assert.True(order.IsActive(winner.Key));
-        Assert.False(order.IsActive(overridden.Key));
+        Assert.NotNull(order.LoadOrderIndex(winner.Key));
+        Assert.Null(order.LoadOrderIndex(overridden.Key));
     }
 
     [Fact]
@@ -194,7 +193,7 @@ public sealed class LoadOrderTests
 
         Assert.Empty(order.Active);
         Assert.Null(order.Plugin(new PluginAddress("A.esp", "ModA")));
-        Assert.False(order.IsActive(new PluginAddress("A.esp", "ModA")));
+        Assert.Null(order.LoadOrderIndex(new PluginAddress("A.esp", "ModA")));
     }
 
     [Fact]

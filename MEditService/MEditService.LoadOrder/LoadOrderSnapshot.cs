@@ -93,8 +93,6 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
               $"{string.Join(", ", contested.Select(a => a.Origin))}. The game loads one file per name.";
     }
 
-    public bool IsActive(PluginAddress address) => _loadOrderIndex.ContainsKey(address);
-
     /// <summary>The plugin's place among the active plugins, or null when it is not active.</summary>
     public int? LoadOrderIndex(PluginAddress address) =>
         _loadOrderIndex.TryGetValue(address, out var index) ? index : null;
@@ -106,8 +104,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     public bool IsImmutable(PluginAddress address) => ProviderOf(address) == PluginProvider.Game;
 
     /// <summary>Whether <paramref name="plugin"/> loads before <paramref name="other"/>. A plugin that is
-    /// not active is judged at its line in <c>plugins.txt</c>; with no line it is not judged, and the
-    /// answer is null (commands.md § Principles).</summary>
+    /// not active is judged at its <c>plugins.txt</c> line; with none, null (commands.md § Principles).</summary>
     public bool? LoadsBefore(PluginAddress plugin, PluginAddress other) =>
         _rank.TryGetValue(plugin, out var rank) && _rank.TryGetValue(other, out var otherRank) ? rank < otherRank : null;
 
