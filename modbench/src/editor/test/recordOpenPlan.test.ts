@@ -22,10 +22,9 @@ describe('recordOpenPlan', () => {
       .toEqual({ addresses: [A, B], placement: 'beside', preview: false });
   });
 
-  it('records that each name a tab\'s place open in it', () => {
-    const place = { document: 'modbench-rendered:/Data/A.esp/Gun.json', viewColumn: 2 };
-    expect(recordOpenPlan([{ ...ofRecord(A), placement: place }, { ...ofRecord(B), placement: place }], []))
-      .toEqual({ addresses: [A, B], placement: place, preview: false });
+  it('a record asked as a preview opens as a preview, though several open one grid', () => {
+    expect(recordOpenPlan([{ ...ofRecord(A), placement: 'preview' }, { ...ofRecord(B), placement: 'preview' }], []))
+      .toEqual({ addresses: [A, B], placement: 'active', preview: true });
   });
 
   it('several records without a placement each open pinned', () => {

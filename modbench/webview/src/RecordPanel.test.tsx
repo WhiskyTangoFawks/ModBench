@@ -364,10 +364,10 @@ describe('RecordPanel — the file\'s column', () => {
     fireEvent.keyDown(headerOf('Other.esp'), { key: 'Enter' });
     fireEvent.keyDown(headerOf('Other.esp'), { key: ' ' });
 
-    expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE)).toHaveLength(2);
+    expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_COLUMNS)).toHaveLength(2);
   });
 
-  it('opens another column\'s copy in this tab on a click on its header, and nothing on a click on its own or on a collapse control', async () => {
+  it('opens another column\'s copy on a click on its header, and nothing on a click on its own or on a collapse control', async () => {
     renderPanel(twoTracked, { plugins: bothTracked, fileColumn: 'MyMod.esp|ModA' });
     await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
     vi.mocked(vscode.postMessage).mockClear();
@@ -376,8 +376,8 @@ describe('RecordPanel — the file\'s column', () => {
     fireEvent.click(within(headerOf('Other.esp')).getByRole('button'));
     fireEvent.click(headerOf('Other.esp'));
 
-    expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE)).toEqual([[{
-      type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: [{ formKey: '000001:Fallout4.esm', plugin: { name: 'Other.esp', origin: 'ModB' } }],
+    expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_COLUMNS)).toEqual([[{
+      type: WEBVIEW_TO_EXTENSION.OPEN_COLUMNS, records: [{ formKey: '000001:Fallout4.esm', plugin: { name: 'Other.esp', origin: 'ModB' } }],
     }]]);
   });
 });
@@ -2520,8 +2520,8 @@ describe('RecordPanel — several records side by side', () => {
     fireEvent.click(required(screen.getByText('B.esp').closest('th'), 'the Knife column\'s header'));
 
     const A = { name: 'A.esp', origin: 'Data/' };
-    expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE)).toEqual([[{
-      type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE,
+    expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_COLUMNS)).toEqual([[{
+      type: WEBVIEW_TO_EXTENSION.OPEN_COLUMNS,
       records: [{ formKey: KNIFE, plugin: { name: 'B.esp', origin: 'ModB' } }, { formKey: GUN, plugin: A }, { formKey: AMMO, plugin: A }],
     }]]);
   });

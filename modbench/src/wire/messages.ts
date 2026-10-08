@@ -38,7 +38,7 @@ export const WEBVIEW_TO_EXTENSION = {
   REQUEST_RECORD_LOAD: 'requestRecordLoad',
   // A click on a column's header (editor.md, Columns, story 8): the records the tab opens on in its
   // own place, the first as the file.
-  OPEN_IN_PLACE: 'openInPlace',
+  OPEN_COLUMNS: 'openColumns',
   // The grid's place, which the tab an edit's move of its file opens shows again (editor.md, States,
   // story 5).
   VIEW_STATE: 'viewState',
@@ -61,7 +61,7 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null; entered: boolean }
   | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string; columns: ColumnCopy[] }
-  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE; records: ColumnCopy[] }
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_COLUMNS; records: ColumnCopy[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.VIEW_STATE; state: ViewState };
 
 /** A record's copy the grid shows beside its document's own (editor.md, Columns, story 7). */
@@ -316,9 +316,9 @@ function parseRequestRecordLoad(w: WebviewToExtensionWitness): WebviewToExtensio
   return { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: w.requestId, formKey: w.formKey, columns: w.columns };
 }
 
-function parseOpenInPlace(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isColumnCopies(w.records)) throw new Error('Expected "openInPlace" to carry its records, each a FormKey and a plugin.');
-  return { type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE, records: w.records };
+function parseOpenColumns(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isColumnCopies(w.records)) throw new Error('Expected "openColumns" to carry its records, each a FormKey and a plugin.');
+  return { type: WEBVIEW_TO_EXTENSION.OPEN_COLUMNS, records: w.records };
 }
 
 function parseViewState(w: WebviewToExtensionWitness): WebviewToExtension {
@@ -340,7 +340,7 @@ export function parseWebviewToExtension(value: unknown): WebviewToExtension {
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return parseOpenFormKeyPicker(w);
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return parseFocusCell(w);
     case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return parseRequestRecordLoad(w);
-    case WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE: return parseOpenInPlace(w);
+    case WEBVIEW_TO_EXTENSION.OPEN_COLUMNS: return parseOpenColumns(w);
     case WEBVIEW_TO_EXTENSION.VIEW_STATE: return parseViewState(w);
     default:
       throw new Error(`Unknown webview-to-extension message type: ${String(w.type)}.`);

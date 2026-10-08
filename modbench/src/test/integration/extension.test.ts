@@ -984,7 +984,7 @@ describe('an edit in a tracked copy\'s grid', () => {
   });
 });
 
-describe('a record opened from a column\'s header, in its tab\'s place', () => {
+describe('a record opened from a column\'s header', () => {
   const copyOf = (formKey: string) => ({ formKey, plugin: { name: 'Fallout4.esm', origin: 'Data/' } });
   const shown = () => vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => `${t.label}${t.isPreview ? ' (preview)' : ''}`));
   const openTab = async (formKey: string) => {
@@ -995,64 +995,27 @@ describe('a record opened from a column\'s header, in its tab\'s place', () => {
     await openTab(formKey);
     await vscode.commands.executeCommand('workbench.action.keepEditor');
   };
-  const placeOf = (formKey: string) => {
-    const group = vscode.window.tabGroups.all.find((g) => g.tabs.some((t) => t.label === renderedName(formKey)));
-    const input = group?.tabs.find((t) => t.label === renderedName(formKey))?.input;
-    if (!group || !(input instanceof vscode.TabInputCustom)) throw new Error(`expected ${formKey}'s record tab`);
-    return { document: input.uri.toString(), viewColumn: group.viewColumn };
-  };
-  const openInPlaceOf = (replaced: string, formKey: string) =>
-    openRecord([{ ...copyOf(formKey), placement: placeOf(replaced) }]);
-  const openInPlace = (formKey: string) => {
-    const active = vscode.window.tabGroups.activeTabGroup.activeTab?.label;
-    const replaced = ['80', '81', '82', '83', '84'].map((n) => `Fallout4.esm:0000${n}`).find((f) => renderedName(f) === active);
-    if (!replaced) throw new Error('expected a record tab active');
-    return openInPlaceOf(replaced, formKey);
-  };
+  const openFromHeader = (formKey: string) => openRecord([{ ...copyOf(formKey), placement: 'preview' }]);
   const tabsAre = (labels: string[]) => waitFor(`the tabs ${labels.join(', ')}`, () => JSON.stringify(shown()) === JSON.stringify([labels]));
 
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
 
-  it('takes a pinned tab\'s place, pinned, whichever side of the active tab VS Code opens a new one on', async () => {
-    const positioning = vscode.workspace.getConfiguration('workbench.editor');
-    await positioning.update('openPositioning', 'last', vscode.ConfigurationTarget.Workspace);
-    try {
-      for (const formKey of ['Fallout4.esm:000080', 'Fallout4.esm:000081', 'Fallout4.esm:000082']) await openPinned(formKey);
-      await openTab('Fallout4.esm:000081');
-
-      await openInPlace('Fallout4.esm:000083');
-
-      await tabsAre(['Fallout4.esm:000080', 'Fallout4.esm:000083', 'Fallout4.esm:000082'].map(renderedName));
-    } finally {
-      await positioning.update('openPositioning', undefined, vscode.ConfigurationTarget.Workspace);
-    }
-  });
-
-  it('takes a preview tab\'s place, as a preview', async () => {
+  it('replaces the preview tab it was clicked in, as a preview', async () => {
     await openPinned('Fallout4.esm:000080');
     await openTab('Fallout4.esm:000081');
 
-    await openInPlace('Fallout4.esm:000083');
+    await openFromHeader('Fallout4.esm:000083');
 
     await tabsAre([renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000083')} (preview)`]);
   });
 
-  it('takes the tab\'s place with a record already open in a tab left of it, which moves there', async () => {
-    for (const n of ['80', '81', '82', '83', '84']) await openPinned(`Fallout4.esm:0000${n}`);
-    await openTab('Fallout4.esm:000083');
+  it('opens a preview beside a pinned tab it was clicked in, leaving that tab', async () => {
+    await openPinned('Fallout4.esm:000080');
 
-    await openInPlace('Fallout4.esm:000081');
+    await openFromHeader('Fallout4.esm:000083');
 
-    await tabsAre(['80', '82', '81', '84'].map((n) => renderedName(`Fallout4.esm:0000${n}`)));
-  });
-
-  it('takes the place of the tab it was asked from, though another tab is active by the time it opens', async () => {
-    for (const n of ['80', '81', '82']) await openPinned(`Fallout4.esm:0000${n}`);
-
-    await openInPlaceOf('Fallout4.esm:000081', 'Fallout4.esm:000083');
-
-    await tabsAre(['80', '83', '82'].map((n) => renderedName(`Fallout4.esm:0000${n}`)));
+    await tabsAre([renderedName('Fallout4.esm:000080'), `${renderedName('Fallout4.esm:000083')} (preview)`]);
   });
 });
 

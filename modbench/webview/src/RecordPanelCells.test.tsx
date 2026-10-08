@@ -340,7 +340,7 @@ describe('RecordPanel — a string cell\'s right-click menu, the extended editor
     await screen.findByText('Name');
     fireEvent.doubleClick(within(cellAt('Name', 2)).getByText('disk-value'));
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
-    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.OPEN_IN_PLACE }));
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.OPEN_COLUMNS }));
   });
 });
 

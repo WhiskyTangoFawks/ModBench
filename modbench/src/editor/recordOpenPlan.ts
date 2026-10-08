@@ -1,13 +1,10 @@
 import { recordArgumentOf } from '../drivingLib/recordArgument';
-import type { ViewColumn } from 'vscode';
 import type { PluginAddress } from '../wire/pluginAddress';
 
 /** A record to open: a copy when it names its plugin, else its winning copy. */
 export interface RecordToOpen { formKey: string; plugin?: PluginAddress }
 
-export interface TabPlace { document: string; viewColumn: ViewColumn }
-
-type Placement = 'active' | 'beside' | TabPlace;
+type Placement = 'active' | 'beside';
 
 export interface RecordOpenPlan {
   addresses: RecordToOpen[];
@@ -23,10 +20,6 @@ function addressOf(node: unknown): RecordToOpen | undefined {
 const placementOf = (argument: unknown): unknown =>
   (typeof argument === 'object' && argument !== null && 'placement' in argument ? argument.placement : undefined);
 
-const isTabPlace = (value: unknown): value is TabPlace =>
-  typeof value === 'object' && value !== null && 'document' in value && typeof value.document === 'string'
-  && 'viewColumn' in value && typeof value.viewColumn === 'number';
-
 /** A palette entry or key hands over no Argument, so it takes the focused view's selection
  *  (commands.md, Principles). */
 export function recordOpenPlan(argument: unknown, focusedSelection: readonly unknown[]): RecordOpenPlan {
@@ -34,8 +27,9 @@ export function recordOpenPlan(argument: unknown, focusedSelection: readonly unk
     : Array.isArray(argument) ? argument : [argument];
   const addresses = subjects.flatMap((s) => addressOf(s) ?? []);
   const placements = subjects.map(placementOf);
-  const placement = placements.includes('beside') ? 'beside' : placements.find(isTabPlace) ?? 'active';
-  return { addresses, placement, preview: placement === 'active' && addresses.length === 1 };
+  const placement = placements.includes('beside') ? 'beside' : 'active';
+  const preview = placement === 'active' && (addresses.length === 1 || placements.includes('preview'));
+  return { addresses, placement, preview };
 }
 
 /** What a menu's open to the side hands to open: the menu's selection, else its clicked row. */
