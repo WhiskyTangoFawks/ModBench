@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -8,21 +9,27 @@ namespace MEditService.Index.Tests.Query;
 [Collection(TestPluginFixtureCollection.Name)]
 public class FilterTests(TestPluginFixture fixture)
 {
+    private static readonly PluginAddress Plugin = new(TestPluginFixture.PluginName, PluginOrigin.DataDirectory);
+
     private readonly TestPluginFixture _fixture = fixture;
 
     private OpenedIndex LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
+
+    private static PagedResult<RecordSummary> NpcListing(OpenedIndex index) =>
+        index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 100, offset: 0);
+
+    private static IEnumerable<PluginAddress> PluginsWithMatches(OpenedIndex index) =>
+        index.Records.GetPlugins().Where(row => row.HasMatchingRecords).Select(row => row.Plugin.Key);
 
     [Fact]
     public void SetFilter_ValidSqlWithExtraColumns_FiltersByFormKey()
     {
         using var index = LoadedIndex();
-        var reads = index.RequireReads();
-        var all = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
-        var firstFormKey = all.Items[0].FormKey;
+        var firstFormKey = NpcListing(index).Items[0].FormKey;
 
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key, 'x' AS plugin", "filter.sql");
 
-        var filtered = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var filtered = NpcListing(index);
         Assert.Equal(1, filtered.Total);
         Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
     }
@@ -47,14 +54,13 @@ public class FilterTests(TestPluginFixture fixture)
     public void AnActiveFilter_NarrowsTheListingToItsMatches()
     {
         using var index = LoadedIndex();
-        var reads = index.RequireReads();
-        var all = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var all = NpcListing(index);
         Assert.Equal(TestPluginFixture.RecordCount, all.Total);
 
         var firstFormKey = all.Items[0].FormKey;
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
 
-        var filtered = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var filtered = NpcListing(index);
         Assert.Equal(1, filtered.Total);
         Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
     }
@@ -63,25 +69,21 @@ public class FilterTests(TestPluginFixture fixture)
     public void ClearingTheFilter_RestoresTheFullListing()
     {
         using var index = LoadedIndex();
-        var reads = index.RequireReads();
-        var all = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
-        var firstFormKey = all.Items[0].FormKey;
+        var firstFormKey = NpcListing(index).Items[0].FormKey;
 
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
         index.ClearFilter();
 
-        var restored = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
-        Assert.Equal(TestPluginFixture.RecordCount, restored.Total);
+        Assert.Equal(TestPluginFixture.RecordCount, NpcListing(index).Total);
     }
 
     [Fact]
     public void ASearch_IsNotNarrowedByTheRecordFilter()
     {
         using var index = LoadedIndex();
-        var reads = index.RequireReads();
         index.SetFilter($"SELECT '{_fixture.Npc1FormKey}' AS form_key", "filter.sql");
 
-        var found = reads.Search(new RecordQuery(RecordQueryScope.Search, RecordTypes: ["NPC_"], Search: "TestNPC02", Limit: 100));
+        var found = index.Records.GetRecords(["npc_"], plugin: null, search: "TestNPC02", limit: 100, offset: 0);
 
         Assert.Equal(["TestNPC02"], found.Items.Select(r => r.EditorId));
     }
@@ -90,27 +92,22 @@ public class FilterTests(TestPluginFixture fixture)
     public void AnActiveFilter_NarrowsAPluginsCountToItsMatches()
     {
         using var index = LoadedIndex();
-        var reads = index.RequireReads();
-        var all = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
-        var firstFormKey = all.Items[0].FormKey;
+        var firstFormKey = NpcListing(index).Items[0].FormKey;
 
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
 
-        Assert.Equal(1, reads.CountOf(new PluginAddress(TestPluginFixture.PluginName, PluginOrigin.DataDirectory), "NPC_"));
+        Assert.Equal(1, index.CountOf(Plugin, "npc_"));
     }
 
     [Fact]
     public void AnActiveFilter_ListsThePluginsWithMatches()
     {
         using var index = LoadedIndex();
-        var reads = index.RequireReads();
-        var all = reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
-        var firstFormKey = all.Items[0].FormKey;
+        var firstFormKey = NpcListing(index).Items[0].FormKey;
 
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
 
-        var plugins = reads.GetPluginsWithMatchingRecords(["NPC_"]);
-        Assert.Contains(new PluginAddress(TestPluginFixture.PluginName, PluginOrigin.DataDirectory), plugins);
+        Assert.Contains(Plugin, PluginsWithMatches(index));
     }
 
     [Fact]
@@ -128,9 +125,7 @@ public class FilterTests(TestPluginFixture fixture)
 
         index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'OnlyInModB'", "filter.sql");
 
-        Assert.Equal(
-            [new PluginAddress("Shared.esp", "ModB")],
-            index.RequireReads().GetPluginsWithMatchingRecords(["npc_"]));
+        Assert.Equal([new PluginAddress("Shared.esp", "ModB")], PluginsWithMatches(index));
     }
 
     [Fact]
@@ -139,17 +134,6 @@ public class FilterTests(TestPluginFixture fixture)
         using var index = LoadedIndex();
         index.SetFilter("SELECT 'NonExistentFormKey:000000' AS form_key", "filter.sql");
 
-        var plugins = index.RequireReads().GetPluginsWithMatchingRecords(["NPC_"]);
-        Assert.Empty(plugins);
-    }
-
-    [Fact]
-    public void NoTables_ListsNoPlugin()
-    {
-        using var index = LoadedIndex();
-        index.SetFilter($"SELECT form_key FROM \"NPC_\"", "filter.sql");
-
-        var plugins = index.RequireReads().GetPluginsWithMatchingRecords([]);
-        Assert.Empty(plugins);
+        Assert.Empty(PluginsWithMatches(index));
     }
 }

@@ -35,8 +35,7 @@ public sealed class StoreRebuildTests : IDisposable
     {
         _index.Reconcile(_holder, _fixture.GameDirectory, [], GameRelease.Fallout4);
 
-        var result = _index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 1, Offset: 0));
-        Assert.Equal(0, result.Total);
+        Assert.Equal(0, _index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 1, offset: 0).Total);
     }
 
     [Fact]
@@ -53,19 +52,27 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public async Task Rebuild_ReadsThePluginAgain_AgainstTheLoadOrderHeld()
+    public void Rebuild_ReadsThePluginAgain_AgainstTheLoadOrderHeld()
     {
         Reconcile(_fixture.InstanceRoot);
         Assert.Equal(1, _opens.OpenedTotal);
         var held = _holder.Held?.Version;
 
-        await _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot).Refill;
+        Rebuilt(_index, _fixture.InstanceRoot);
 
         Assert.Equal(2, _opens.OpenedTotal);
-        Assert.Equal(LoadOrderState.Ready, _index.Status.State);
         Assert.Equal(held, _index.Status.Version);
-        Assert.NotEmpty(_index.RequireReads().DocumentsOf(Key));
+        Assert.NotEmpty(_index.ListedIn(Key));
     }
+
+    private static void Rebuilt(OpenedIndex index, string instanceRoot)
+    {
+        Assert.Null(index.Records.RebuildStore(GameRelease.Fallout4, instanceRoot));
+        AwaitRefill(index);
+    }
+
+    private static void AwaitRefill(OpenedIndex index) =>
+        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the refill");
 
     private const string MatchesNpcA = "SELECT form_key FROM npc_ WHERE editor_id = 'NpcA'";
 
@@ -75,10 +82,10 @@ public sealed class StoreRebuildTests : IDisposable
         .Build();
 
     private static string[] ListedNpcs(OpenedIndex index) =>
-        [.. index.RequireReads().Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Items.Select(i => i.EditorId ?? "")];
+        [.. index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Items.Select(i => i.EditorId ?? "")];
 
     [Fact]
-    public async Task Rebuild_KeepsTheRecordFilter_AndTheRefilledRowsAnswerThroughIt()
+    public void Rebuild_KeepsTheRecordFilter_AndTheRefilledRowsAnswerThroughIt()
     {
         using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-kept");
         var holder = new LoadOrderHolder();
@@ -86,9 +93,9 @@ public sealed class StoreRebuildTests : IDisposable
         index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         index.SetFilter(MatchesNpcA, "npc-a.sql");
 
-        await index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot).Refill;
+        Rebuilt(index, data.InstanceRoot);
 
-        Assert.Equal((MatchesNpcA, "npc-a.sql"), index.ActiveFilter);
+        Assert.Equal((MatchesNpcA, "npc-a.sql"), index.Records.GetFilter());
         Assert.Equal(["NpcA"], ListedNpcs(index));
     }
 
@@ -103,11 +110,11 @@ public sealed class StoreRebuildTests : IDisposable
         index.SetFilter(MatchesNpcA, "npc-a.sql");
         gate.ParkNextOpenOf("B.esp");
 
-        var refill = index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot).Refill;
+        Assert.Null(index.Records.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
         await gate.WaitUntilParkedAsync();
         var midRefill = ListedNpcs(index);
         gate.Release();
-        await refill;
+        AwaitRefill(index);
 
         Assert.Equal(["NpcA"], midRefill);
         Assert.Equal(["NpcA"], ListedNpcs(index));
@@ -123,14 +130,15 @@ public sealed class StoreRebuildTests : IDisposable
         index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         index.SetFilter(MatchesNpcA, "npc-a.sql");
         gate.ParkNextOpenOf("B.esp");
-        var refill = index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot).Refill;
+        Assert.Null(index.Records.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
         await gate.WaitUntilParkedAsync();
 
         var clear = Task.Run(index.ClearFilter);
         gate.Release();
-        await Task.WhenAll(refill, clear).WaitAsync(Waits.Patience);
+        await clear.WaitAsync(Waits.Patience);
+        AwaitRefill(index);
 
-        Assert.Null(index.ActiveFilter);
+        Assert.Null(index.Records.GetFilter());
         Assert.Equal(["NpcA", "NpcB", "NpcOther"], ListedNpcs(index).Order());
     }
 
@@ -144,12 +152,13 @@ public sealed class StoreRebuildTests : IDisposable
         index.SetFilter(MatchesNpcA, "npc-a.sql");
         otherWindow.Armed = true;
 
-        var rebuild = index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
-        Assert.NotNull(rebuild.Refusal);
-        Assert.NotNull(index.ActiveFilter);
+        Assert.NotNull(index.Records.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
         index.ClearFilter();
+        otherWindow.Dispose();
+        index.NextSnapshot();
 
-        Assert.Null(index.ActiveFilter);
+        Assert.Null(index.Records.GetFilter());
+        Assert.Equal(["NpcBeforeRebuild"], ListedNpcs(index));
     }
 
     private sealed class HoldsTheFileOnceTheRebuildClosesTheStore(Func<string> indexPath) : INotificationPublisher, IDisposable
@@ -168,14 +177,14 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public async Task Rebuild_WithNoLoadOrderHeld_LeavesTheStoreEmpty_AndReportsNothing()
+    public void Rebuild_WithNoLoadOrderHeld_LeavesTheStoreEmpty_AndReportsNothing()
     {
-        await _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot).Refill;
+        Assert.Null(_index.Records.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
 
         Assert.Equal(0, _opens.OpenedTotal);
         Assert.Equal(LoadOrderState.None, _index.Status.State);
         Assert.Null(_index.Status.Message);
-        Assert.Throws<NoLoadOrderException>(() => _index.RequireReads());
+        Assert.Throws<NoLoadOrderException>(() => _index.Records.GetFilter());
     }
 
     [Fact]
@@ -187,26 +196,25 @@ public sealed class StoreRebuildTests : IDisposable
         using var index = Indexes.Open(holder, gate);
         index.Reconcile(holder, data.DataFolder, [data.Plugins[0]], GameRelease.Fallout4, data.InstanceRoot);
 
-        var refill = index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot).Refill;
+        Assert.Null(index.Records.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
         var version = holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
         await gate.WaitUntilParkedAsync();
         gate.Release();
-        await refill.WaitAsync(Waits.Patience);
         index.AwaitVersion(version);
+        AwaitRefill(index);
 
         Assert.Equal(version, index.Status.Version);
-        Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.True(index.RequireReads().OpenedPlugins.ContainsKey(data.Plugins[1].KeyOf()), "the rebuild ended on the newer load order");
+        Assert.NotNull(index.PluginRowOf(data.Plugins[1].KeyOf()));
     }
 
     [Fact]
-    public async Task Rebuild_SeedsTheSequence_AtLeastTheValueAlreadyHandedOut()
+    public void Rebuild_SeedsTheSequence_AtLeastTheValueAlreadyHandedOut()
     {
         Reconcile(_fixture.InstanceRoot);
         var priorSequence = _index.Sequence;
         Assert.True(priorSequence > 0, "sanity: indexing must have advanced the sequence past 0");
 
-        await _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot).Refill;
+        Rebuilt(_index, _fixture.InstanceRoot);
 
         Assert.True(_index.Sequence > priorSequence,
             $"rebuilt sequence {_index.Sequence} regressed below the prior process value {priorSequence}");
@@ -222,9 +230,9 @@ public sealed class StoreRebuildTests : IDisposable
         var bytesBeforeHold = File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);
         using var otherWindow = ForeignIndexHolder.Hold(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);
 
-        var rebuild = _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
+        var refusal = _index.Records.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
 
-        Assert.Contains(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex, rebuild.Refusal);
+        Assert.Contains(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex, refusal);
 
         Assert.True(File.Exists(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex), "the file must still exist — a refusal must never delete it");
         Assert.Equal(bytesBeforeHold, File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex));
@@ -245,7 +253,7 @@ public sealed class StoreRebuildTests : IDisposable
             {
                 try
                 {
-                    if (_index.RequireReads().DocumentsOf(Key) is { Count: > 0 }) Interlocked.Increment(ref answered);
+                    if (_index.ListedIn(Key) is { Count: > 0 }) Interlocked.Increment(ref answered);
                 }
                 catch (Exception ex) when (ScopeClosedUnderTheReadSoTheAnswerIsNoStore(ex))
                 {
@@ -254,7 +262,7 @@ public sealed class StoreRebuildTests : IDisposable
         })).ToArray();
 
         Assert.True(await Waits.Until(() => Volatile.Read(ref answered) > 0), "no read ever landed before the rebuild");
-        await _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot).Refill;
+        Rebuilt(_index, _fixture.InstanceRoot);
         await rebuilding.CancelAsync();
         await Task.WhenAll(readers);
         Assert.Equal(2, _opens.OpenedTotal);

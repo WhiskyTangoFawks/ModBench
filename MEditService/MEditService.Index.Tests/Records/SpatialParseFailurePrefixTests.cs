@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -19,8 +20,8 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.PlacedFormKey);
 
-        var placed = world.Reads.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey);
-        var cells = world.Reads.GetWorldspaceCells(SpatialWorld.Plugin, world.WorldspaceFormKey);
+        var placed = world.Index.Worldspaces.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey);
+        var cells = world.ExteriorCells();
 
         Assert.True(placed.Persistent.Single().HasParseFailure);
         Assert.True(cells.Single().HasParseFailure);
@@ -33,7 +34,7 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.ResponseFormKey);
 
-        Assert.True(world.Row("dial").HasParseFailure);
+        Assert.True(Assert.Single(world.Index.Containers.GetChildren(SpatialWorld.Plugin, world.QuestFormKey)).HasParseFailure);
         Assert.True(world.Row("qust").HasParseFailure);
     }
 
@@ -43,7 +44,7 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.PlacedFormKey);
 
-        var groups = world.Reads.GetRecordTypeCounts(SpatialWorld.Plugin).ToDictionary(g => g.Type, g => g.HasParseFailure);
+        var groups = world.Index.Records.GetPluginRecordTypes(SpatialWorld.Plugin).ToDictionary(g => g.Type, g => g.HasParseFailure);
 
         Assert.True(groups["wrld"]);
         Assert.False(groups["cell"]);
@@ -55,8 +56,8 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.PlacedFormKey);
 
-        var placed = world.Reads.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey);
-        var cells = world.Reads.GetWorldspaceCells(SpatialWorld.Plugin, world.WorldspaceFormKey);
+        var placed = world.Index.Worldspaces.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey);
+        var cells = world.ExteriorCells();
 
         Assert.Equal("could not be read", placed.Persistent.Single().ParseDiagnosis);
         Assert.Null(cells.Single().ParseDiagnosis);
@@ -68,7 +69,7 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.CellFormKey);
 
-        var cells = world.Reads.GetWorldspaceCells(SpatialWorld.Plugin, world.WorldspaceFormKey);
+        var cells = world.ExteriorCells();
 
         Assert.Equal("could not be read", cells.Single().ParseDiagnosis);
     }
@@ -78,8 +79,8 @@ public sealed class SpatialParseFailurePrefixTests
     {
         using var world = new SpatialWorld();
 
-        var placed = world.Reads.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey);
-        var cells = world.Reads.GetWorldspaceCells(SpatialWorld.Plugin, world.WorldspaceFormKey);
+        var placed = world.Index.Worldspaces.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey);
+        var cells = world.ExteriorCells();
 
         Assert.False(placed.Persistent.Single().HasParseFailure);
         Assert.False(cells.Single().HasParseFailure);
@@ -92,13 +93,8 @@ public sealed class SpatialParseFailurePrefixTests
     {
         using var world = new SpatialWorld();
 
-        var worldspaces = world.Reads
-            .Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["wrld"], Plugin: SpatialWorld.PluginName, Limit: 100)).Items;
-
-        Assert.Equal(world.WorldspaceFormKey, Assert.Single(worldspaces).FormKey);
-        Assert.Equal(
-            world.CellFormKey,
-            Assert.Single(world.Reads.GetWorldspaceCells(SpatialWorld.Plugin, world.WorldspaceFormKey)).FormKey);
+        Assert.Equal(world.WorldspaceFormKey, world.Row("wrld").FormKey);
+        Assert.Equal(world.CellFormKey, Assert.Single(world.ExteriorCells()).FormKey);
     }
 
     [Fact]
@@ -107,9 +103,9 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.InteriorCellFormKey);
 
-        var interiors = world.Reads.GetInteriorCells(SpatialWorld.Plugin);
-
-        var interior = interiors.Single(c => c.FormKey == world.InteriorCellFormKey);
+        var interior = world.Index.Worldspaces.GetInteriorCells(SpatialWorld.Plugin)
+            .SelectMany(block => block.SubBlocks).SelectMany(subBlock => subBlock.Cells)
+            .Single(c => c.FormKey == world.InteriorCellFormKey);
         Assert.True(interior.HasParseFailure);
         Assert.Equal("could not be read", interior.ParseDiagnosis);
     }
@@ -124,17 +120,21 @@ public sealed class SpatialParseFailurePrefixTests
         private readonly ScratchDirectory _dataFolder = new("medit-spatial-");
         private readonly string _path;
         private readonly DiagnosingAdapter _adapter = new();
-        private readonly OpenedIndex _index;
 
         internal string WorldspaceFormKey { get; }
         internal string CellFormKey { get; }
         internal string PlacedFormKey { get; }
         internal string InteriorCellFormKey { get; }
         internal string ResponseFormKey { get; }
-        internal IRecordReads Reads => _index.RequireReads();
+        internal string QuestFormKey { get; }
+        internal OpenedIndex Index { get; }
 
         internal RecordSummary Row(string recordType) =>
-            Assert.Single(Reads.Search(new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [recordType], Plugin: PluginName, Limit: 100)).Items);
+            Assert.Single(Index.Records.GetRecords([recordType], Plugin, search: null, limit: 100, offset: 0).Items);
+
+        internal IReadOnlyList<CellSummary> ExteriorCells() =>
+            [.. Index.Worldspaces.GetWorldspaceBlocks(Plugin, WorldspaceFormKey).Blocks
+                .SelectMany(block => block.SubBlocks).SelectMany(subBlock => subBlock.Cells)];
 
         internal SpatialWorld()
         {
@@ -165,6 +165,7 @@ public sealed class SpatialParseFailurePrefixTests
 
             WorldspaceFormKey = wrld.FormKey.ToString();
             ResponseFormKey = response.FormKey.ToString();
+            QuestFormKey = quest.FormKey.ToString();
             CellFormKey = cell.FormKey.ToString();
             PlacedFormKey = placed.FormKey.ToString();
             InteriorCellFormKey = interior.FormKey.ToString();
@@ -172,7 +173,7 @@ public sealed class SpatialParseFailurePrefixTests
             _path = Path.Combine(_dataFolder, PluginName);
             mod.WriteToBinary(_path);
 
-            _index = Indexes.Reconciled(
+            Index = Indexes.Reconciled(
                 _dataFolder,
                 [new LoadOrderEntry(PluginName, _path, Origin, Slot: 0, Enabled: true, Winning: true)],
                 adapter: _adapter);
@@ -182,12 +183,12 @@ public sealed class SpatialParseFailurePrefixTests
         {
             _adapter.Unreadable = formKey;
             PluginBinaries.Touch(_path);
-            _index.NextSnapshot();
+            Index.NextSnapshot();
         }
 
         public void Dispose()
         {
-            _index.Dispose();
+            Index.Dispose();
             _dataFolder.Dispose();
         }
     }
