@@ -33,6 +33,7 @@ internal sealed class Reconciler(
     private bool _validating;
     private int _plannedCount;
     private int _activeCount;
+    private IReadOnlyList<PluginLoadFailure> _collisionFailures = [];
     // Set only by the reconcile door's own catch, cleared at the top of every attempt: a repeated
     // refusal re-sets it a moment later, a successful one leaves it clear.
     private string? _heldElsewhereMessage;
@@ -121,7 +122,7 @@ internal sealed class Reconciler(
                 else
                 {
                     var state = _conflictsComputed && !_validating ? LoadOrderState.Ready : LoadOrderState.Reconciling;
-                    held = new LoadOrderStatus(state, _plannedCount, _activeCount, [.. _indexed], _conflictsComputed, _scope.Held.Failures, Version: _version);
+                    held = new LoadOrderStatus(state, _plannedCount, _activeCount, [.. _indexed], _conflictsComputed, [.. _scope.Held.Failures, .. _collisionFailures], Version: _version);
                 }
 
                 if (_heldElsewhereMessage is { } heldElsewhere)
@@ -329,6 +330,7 @@ internal sealed class Reconciler(
             _conflictsComputed = false;
             _plannedCount = 0;
             _activeCount = 0;
+            _collisionFailures = [];
             _scope = scope;
             filter.Reapply(scope.Index);
         }
@@ -345,10 +347,9 @@ internal sealed class Reconciler(
     private bool ReconcileProgressively(OpenScope scope, LoadOrderSnapshot snapshot, CancellationToken token)
     {
         var (held, index) = (scope.Held, scope.Index);
-        var collided = CaseOnlyCollisions(snapshot.Plugins);
-        var resolved = snapshot.Plugins.Except(collided.Keys).ToList();
+        FailCollisions(snapshot.CaseOnlyCollisions);
+        var resolved = snapshot.Plugins;
         var wanted = resolved.ToDictionary(r => r.Key, PluginAddress.Comparer);
-        var named = snapshot.Plugins.Select(r => r.Key).ToHashSet();
         var open = held.Plugins.ToDictionary(p => p.Key, PluginAddress.Comparer);
 
         // Registered, held, or held only as a failure row: a plugin the snapshot has stopped naming
@@ -358,7 +359,6 @@ internal sealed class Reconciler(
             .Concat(scope.Failed.Keys)
             .Where(k => !wanted.ContainsKey(k))
             .Distinct(PluginAddress.Comparer)
-            .Concat(held.Failures.Select(f => new PluginAddress(f.Name, f.Origin)).Where(k => !named.Contains(k)))
             .ToList();
         var moved = resolved
             .Select(r => r.Key)
@@ -375,9 +375,7 @@ internal sealed class Reconciler(
 
         bool conflictsComputed;
         lock (_lock) conflictsComputed = _conflictsComputed;
-        var unreported = collided.Where(c => !held.Failures.Contains(CollisionFailure(c.Key, c.Value))).ToList();
-        if (leaving.Count == 0 && moved.Count == 0 && arriving.Count == 0 && reDerived.Count == 0 && unreported.Count == 0
-            && conflictsComputed)
+        if (leaving.Count == 0 && moved.Count == 0 && arriving.Count == 0 && reDerived.Count == 0 && conflictsComputed)
         {
             logger.LogDebug("Load order snapshot is identical to what is held; nothing to reconcile");
             return false;
@@ -387,7 +385,7 @@ internal sealed class Reconciler(
         {
             _conflictsComputed = false;
             _validating = true;
-            _plannedCount = snapshot.Plugins.Count;
+            _plannedCount = resolved.Count;
             _activeCount = snapshot.Active.Count;
         }
         // Reconciling begins here, with the total known: the first status a subscriber sees for
@@ -401,7 +399,6 @@ internal sealed class Reconciler(
             lock (_lock) _indexed.RemoveAll(i => PluginAddress.Comparer.Equals(new PluginAddress(i.Name, i.Origin), key));
             scope.Failed.Forget(key);
         }
-        foreach (var (plugin, other) in collided) FailRead(scope, plugin.Key, CollisionFailure(plugin, other).Reason);
         if (leaving.Count > 0) PublishStatus();
 
         // ADR-0012.
@@ -491,17 +488,33 @@ internal sealed class Reconciler(
         }
     }
 
-    // A key that ignores case cannot tell which of the names the game loads, so none of them is read
-    // and each names another it collides with. Windows cannot hold such a pair; Linux can.
-    private static Dictionary<RegisteredPlugin, RegisteredPlugin> CaseOnlyCollisions(IReadOnlyList<RegisteredPlugin> plugins) =>
-        plugins.GroupBy(p => p.Key, PluginAddress.Comparer)
-            .Where(group => group.Count() > 1)
-            .SelectMany(group => group.Select(p => (Plugin: p, Other: group.First(o => o != p))))
-            .ToDictionary(pair => pair.Plugin, pair => pair.Other);
-
-    private static PluginLoadFailure CollisionFailure(RegisteredPlugin plugin, RegisteredPlugin other) =>
-        new(plugin.Name, plugin.Origin,
-            $"Could not tell this plugin from {other.Name}, whose name differs only in case. Neither is read.");
+    // plugins.md, A row, Plugin: each plugin of a case-only collision is that row's "Failed to read".
+    private void FailCollisions(IReadOnlyList<RegisteredPlugin> collided)
+    {
+        IReadOnlyList<PluginLoadFailure> failures =
+        [
+            .. collided.GroupBy(p => p.Key, PluginAddress.Comparer).SelectMany(twins => twins.Select(plugin =>
+            {
+                var others = twins.Where(other => other != plugin).ToList();
+                var differing = (others.Any(o => o.Name != plugin.Name), others.Any(o => o.Origin != plugin.Origin)) switch
+                {
+                    (true, true) => "name and origin",
+                    (true, false) => "name",
+                    _ => "origin",
+                };
+                return new PluginLoadFailure(plugin.Name, plugin.Origin,
+                    $"Its {differing} differs only in case from {string.Join(", ", others.Select(o => $"{o.Name} from {o.Origin}"))}, "
+                    + "so no one can tell which the game loads. None is read.");
+            })),
+        ];
+        lock (_lock)
+        {
+            if (failures.SequenceEqual(_collisionFailures)) return;
+            _collisionFailures = failures;
+        }
+        foreach (var failure in failures)
+            logger.LogWarning("Could not read {Plugin} ({Origin}): {Reason}", failure.Name, failure.Origin, failure.Reason);
+    }
 
     // common.md, Errors (ADR-0019): the rows a failed read leaves stand, and the reason says whose they are.
     private static string ReadFailure(Exception ex, DerivedFrom? rowsFrom) =>
@@ -824,6 +837,7 @@ internal sealed class Reconciler(
         _validating = false;
         _plannedCount = 0;
         _activeCount = 0;
+        _collisionFailures = [];
         _heldElsewhereMessage = null;
         _failureMessage = null;
     }

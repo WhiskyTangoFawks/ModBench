@@ -17,7 +17,9 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
 
     private LoadOrderEntry Named(string name) => _fixture.Plugins.Single(p => p.Name == name);
 
-    private LoadOrderEntry Twin => Named("Dup.esp") with { Name = "dup.esp", Winning = false };
+    private LoadOrderEntry Inactive(string name) => Named("Dup.esp") with { Name = name, Winning = false };
+
+    private LoadOrderEntry Twin => Inactive("dup.esp");
 
     private OpenedIndex Reconciled(params LoadOrderEntry[] plugins) =>
         Indexes.Reconciled(_fixture.GameDirectory, plugins, _fixture.InstanceRoot);
@@ -28,15 +30,47 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     private static string[] IndexedNames(OpenedIndex index) =>
         [.. index.Records.GetPlugins().Select(row => row.Plugin.Name).Order(StringComparer.Ordinal)];
 
+    private static string[] FailedNames(OpenedIndex index) =>
+        [.. index.Status.Failures.Select(f => f.Name).Order(StringComparer.Ordinal)];
+
     [Fact]
     public void Reconcile_TwoNamesDifferingOnlyInCase_FailsBothNamingTheOtherAndIndexesTheRest()
     {
         using var index = Reconciled(Named("Dup.esp"), Twin, Named("Fine.esp"));
 
         var failures = index.Status.Failures;
-        Assert.Equal(["Dup.esp", "dup.esp"], failures.Select(f => f.Name).Order(StringComparer.Ordinal));
-        Assert.Contains("dup.esp", failures.Single(f => f.Name == "Dup.esp").Reason);
-        Assert.Contains("Dup.esp", failures.Single(f => f.Name == "dup.esp").Reason);
+        Assert.Equal(["Dup.esp", "dup.esp"], FailedNames(index));
+        Assert.Equal(
+            "Its name differs only in case from dup.esp from ModA, so no one can tell which the game loads. None is read.",
+            failures.Single(f => f.Name == "Dup.esp").Reason);
+        Assert.Equal(
+            "Its name differs only in case from Dup.esp from ModA, so no one can tell which the game loads. None is read.",
+            failures.Single(f => f.Name == "dup.esp").Reason);
+        Assert.Equal(["Fine.esp"], IndexedNames(index));
+    }
+
+    [Fact]
+    public void Reconcile_TwoOriginsDifferingOnlyInCase_FailsBothSayingTheOriginCollides()
+    {
+        var upper = Named("Dup.esp");
+        var lower = upper with { Origin = Origin.ToLowerInvariant(), Winning = false };
+
+        using var index = Reconciled(upper, lower, Named("Fine.esp"));
+
+        Assert.All(index.Status.Failures, f => Assert.StartsWith("Its origin differs only in case from ", f.Reason));
+        Assert.Equal(2, index.Status.Failures.Count);
+        Assert.Equal(["Fine.esp"], IndexedNames(index));
+    }
+
+    [Fact]
+    public void Reconcile_ThreeNamesDifferingOnlyInCase_FailsEachNamingBothOthers()
+    {
+        using var index = Reconciled(Named("Dup.esp"), Twin, Inactive("DUP.esp"), Named("Fine.esp"));
+
+        Assert.Equal(["DUP.esp", "Dup.esp", "dup.esp"], FailedNames(index));
+        Assert.Equal(
+            "Its name differs only in case from Dup.esp from ModA, DUP.esp from ModA, so no one can tell which the game loads. None is read.",
+            index.Status.Failures.Single(f => f.Name == "dup.esp").Reason);
         Assert.Equal(["Fine.esp"], IndexedNames(index));
     }
 
@@ -48,7 +82,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
 
         Arrive(index, Named("Dup.esp"), Twin, Named("Fine.esp"));
 
-        Assert.Equal(2, index.Status.Failures.Count);
+        Assert.Equal(["Dup.esp", "dup.esp"], FailedNames(index));
         Assert.Equal(["Fine.esp"], IndexedNames(index));
     }
 
@@ -57,9 +91,9 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     {
         using var index = Reconciled(Named("Fine.esp"));
 
-        Arrive(index, Named("Fine.esp"), Named("Dup.esp") with { Winning = false }, Twin);
+        Arrive(index, Named("Fine.esp"), Inactive("Dup.esp"), Twin);
 
-        Assert.Equal(2, index.Status.Failures.Count);
+        Assert.Equal(["Dup.esp", "dup.esp"], FailedNames(index));
     }
 
     [Fact]
@@ -82,5 +116,36 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
 
         Assert.Empty(index.Status.Failures);
         Assert.Equal(["Fine.esp", "dup.esp"], IndexedNames(index));
+    }
+
+    [Fact]
+    public void Reconcile_ACollisionWithAnActiveTwin_ReadsNeitherAndItsActiveStatusIsNotHeld()
+    {
+        var active = Named("Dup.esp") with { Name = "dup.esp" };
+
+        using var index = Reconciled(Inactive("Dup.esp"), active, Named("Fine.esp"));
+
+        Assert.Equal(["Dup.esp", "dup.esp"], FailedNames(index));
+        Assert.Equal(["Fine.esp"], IndexedNames(index));
+    }
+
+    [Fact]
+    public void GetProblems_WithACollidingPair_AnswersForTheRest()
+    {
+        using var index = Reconciled(Named("Dup.esp"), Twin, Named("Fine.esp"));
+
+        Assert.DoesNotContain(index.Problems.GetProblems(), p => p.Plugin.Name.Equals("Dup.esp", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Reconcile_AFailedPluginWhoseOriginChangesOnlyInCase_KeepsOneFailureRow()
+    {
+        var missing = Named("Fine.esp") with { Path = Path.Combine(_fixture.GameDirectory, "Missing.esp") };
+        using var index = Reconciled(missing);
+        Assert.Equal(["Fine.esp"], FailedNames(index));
+
+        Arrive(index, missing with { Origin = Origin.ToLowerInvariant() });
+
+        Assert.Equal(["Fine.esp"], FailedNames(index));
     }
 }

@@ -18,7 +18,7 @@ internal sealed class HeldPlugins
     private readonly ILogger _logger;
 
     // ADR-0012.
-    private readonly Dictionary<PluginAddress, PluginLoadFailure> _loadFailures = [];
+    private readonly Dictionary<PluginAddress, PluginLoadFailure> _loadFailures = new(PluginAddress.Comparer);
 
     // What is open is read while it is being reconciled, so readers see an immutable snapshot.
     // Copy-on-write, not copy-on-read: opens are a few hundred per cold reconcile, while reads walk
