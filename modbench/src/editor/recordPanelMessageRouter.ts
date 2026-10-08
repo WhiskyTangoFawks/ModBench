@@ -1,3 +1,4 @@
+import type { PluginStanding } from '../instanceLoader/pluginStanding';
 import * as vscode from 'vscode';
 import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension,
@@ -60,14 +61,11 @@ export function routerDepsForTab(
   shared: SharedRecordPanelDeps, tab: RecordTab, tabs: Pick<RecordTabs, 'setCell'>, document: TabDocument,
 ): RouteRecordPanelMessageDeps {
   const reply = (m: ExtensionToWebview) => { tab.post(m); };
-  const standing = () => JSON.stringify([
-    shared.modFacts.isDisabledOrInDisabledMod(document.plugin), shared.modFacts.overridingOrigin(document.plugin),
-  ]);
-  let read = standing();
+  let read = shared.modFacts.standingOf(document.plugin);
   tab.own(shared.modFacts.onChange(() => {
     reply({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: modsByOrigin(tab.origins, shared.modFacts) });
-    const now = standing();
-    if (now === read) return;
+    const now = shared.modFacts.standingOf(document.plugin);
+    if (sameStanding(now, read)) return;
     read = now;
     tab.refresh();
   }));
@@ -162,6 +160,9 @@ async function editField(
   );
 }
 
+const sameStanding = (a: PluginStanding, b: PluginStanding) =>
+  a.kind === b.kind && (a.kind !== 'overridden' || (b.kind === 'overridden' && a.by === b.by));
+
 // A failed comparison fails the whole load; a failed plugin list degrades to null, and reads the
 // tab's plugin as inactive, so its own column shows either way.
 async function answerRecordLoad(
@@ -176,7 +177,7 @@ async function answerRecordLoad(
     const own = { formKey: m.formKey, plugin: deps.plugin, documentText };
     if (m.columns.length > 0) return { ...readOf(await deps.meditClient.getRecordsComparison([own, ...m.columns])), fileCopyAlone: false };
     const text = documentText === undefined ? undefined
-      : { plugin: deps.plugin, documentText, alone: !pluginActive && deps.modFacts.isDisabledOrInDisabledMod(deps.plugin) };
+      : { plugin: deps.plugin, documentText, alone: !pluginActive && deps.modFacts.standingOf(deps.plugin).kind === 'disabled' };
     const compare = await deps.meditClient.getComparison(m.formKey, text);
     if (compare) return { compare, fileCopyAlone: text?.alone ?? false };
     // Only the typed answer tells a record held by no plugin from one a disabled plugin holds.
@@ -197,8 +198,8 @@ async function answerRecordLoad(
   deps.originsShown(origins);
   deps.titleFromRead(m.formKey, overrides);
   deps.readAnswered(m.formKey, m.columns);
-  const fileOverriddenBy = pluginActive || m.columns.length > 0 || answered.fileCopyAlone
-    ? null : deps.modFacts.overridingOrigin(deps.plugin) ?? null;
+  const standing = deps.modFacts.standingOf(deps.plugin);
+  const fileOverriddenBy = !pluginActive && m.columns.length === 0 && standing.kind === 'overridden' ? standing.by : null;
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     ...answered, plugins: listed,

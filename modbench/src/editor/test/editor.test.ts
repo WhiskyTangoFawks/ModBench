@@ -167,8 +167,7 @@ const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =
   typeof value === 'object' && value !== null && 'resolveCustomTextEditor' in value;
 
 const NO_MODS: ModFacts = {
-  trackedMods: () => new Set<string>(), modDirs: () => new Map<string, string>(), isDisabledOrInDisabledMod: () => false,
-  overridingOrigin: () => undefined,
+  trackedMods: () => new Set<string>(), modDirs: () => new Map<string, string>(), standingOf: () => ({ kind: 'enabled' }),
   onChange: () => ({ dispose: () => undefined }),
 };
 
@@ -810,7 +809,7 @@ describe('a file whose plugin is disabled, or in a disabled mod', () => {
   const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
   const typed = { plugin: COPY_PLUGIN, documentText: '{ "EditorID": "Typed" }' };
   const typedFile = { isDirty: true, getText: () => typed.documentText };
-  const disabledA: ModFacts = { ...NO_MODS, isDisabledOrInDisabledMod: (plugin) => samePluginAddress(plugin, COPY_PLUGIN) };
+  const disabledA: ModFacts = { ...NO_MODS, standingOf: (plugin) => ({ kind: samePluginAddress(plugin, COPY_PLUGIN) ? 'disabled' : 'enabled' }) };
   const isAnswer = (message: unknown) => typeof message === 'object' && message !== null && Reflect.get(message, 'type') === 'recordLoadAnswered';
   type Opening = (editor: ReturnType<typeof makeEditor>) => Promise<FakePanel>;
   const openTyped: Opening = ({ openFile }) => openFile(FILE, typedFile);
@@ -862,7 +861,7 @@ describe('a file whose plugin is disabled, or in a disabled mod', () => {
     let disabled = true;
     const changed: (() => void)[] = [];
     const modFacts: ModFacts = {
-      ...NO_MODS, isDisabledOrInDisabledMod: () => disabled,
+      ...NO_MODS, standingOf: () => ({ kind: disabled ? 'disabled' : 'enabled' }),
       onChange: (listener) => { changed.push(listener); return { dispose: () => undefined }; },
     };
     const tab = await makeEditor(client, [], modFacts).openFile(FILE, typedFile);
@@ -885,7 +884,7 @@ describe('a file whose plugin is overridden', () => {
   const GUN = '000801:A.esp';
   const FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
   const typedFile = { isDirty: true, getText: () => '{ "EditorID": "Typed" }' };
-  const overriddenBy = (origin: string | undefined): ModFacts => ({ ...NO_MODS, overridingOrigin: () => origin });
+  const overriddenBy = (by: string | undefined): ModFacts => ({ ...NO_MODS, standingOf: () => (by === undefined ? { kind: 'enabled' } : { kind: 'overridden', by }) });
 
   function clientFor(plugins: typeof inactiveA) {
     const client = new InMemoryMEditClient();
@@ -913,15 +912,19 @@ describe('a file whose plugin is overridden', () => {
     expect(await told(overriddenBy(undefined))).toEqual([null]);
   });
 
+  it('has its tab told no mod when its plugin is disabled', async () => {
+    expect(await told({ ...NO_MODS, standingOf: () => ({ kind: 'disabled' }) })).toEqual([null]);
+  });
+
   it('has its tab told no mod while mEdit has its plugin active', async () => {
     expect(await told(overriddenBy('ModB'), activeA)).toEqual([null]);
   });
 
   it('is read again when the instance changes the mod that overrides it', async () => {
-    let origin: string | undefined = 'ModB';
+    let origin = 'ModB';
     const changed: (() => void)[] = [];
     const modFacts: ModFacts = {
-      ...NO_MODS, overridingOrigin: () => origin,
+      ...NO_MODS, standingOf: () => ({ kind: 'overridden', by: origin }),
       onChange: (listener) => { changed.push(listener); return { dispose: () => undefined }; },
     };
     const tab = await makeEditor(clientFor(inactiveA), [], modFacts).openFile(FILE, typedFile);

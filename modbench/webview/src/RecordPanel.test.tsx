@@ -390,6 +390,12 @@ describe('RecordPanel — a file whose plugin another mod\'s file overrides', ()
     expect(screen.queryByText('This file\'s plugin is not active: no other copy is compared.')).not.toBeInTheDocument();
   });
 
+  it('still says the comparison is incomplete while mEdit indexes', async () => {
+    renderPanel(overridden, { ...opts, conflictsComputed: false });
+
+    await waitFor(() => expect(screen.getByText(required(recordPanelIncompleteMessage(false), 'the incomplete message'))).toBeInTheDocument());
+  });
+
   it('is no (overridden) column when nothing overrides its plugin', async () => {
     renderPanel(overridden, { ...opts, fileOverriddenBy: null });
     await waitFor(() => expect(screen.getByText('File Name')).toBeInTheDocument());

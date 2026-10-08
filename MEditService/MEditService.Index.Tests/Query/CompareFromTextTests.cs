@@ -108,6 +108,7 @@ public sealed class CompareFromTextTests : IDisposable
         Assert.Equal([BasePlugin, overridden, ModPlugin], compare.Overrides.Select(AddressOf));
         Assert.Null(compare.Overrides[1].ConflictThis);
         Assert.Equal(without.ConflictAll, compare.ConflictAll);
+        Assert.All(Flatten(compare.Diffs), d => Assert.DoesNotContain(overridden.Origin, d.WinnerColumn, StringComparison.Ordinal));
         Assert.All(Flatten(compare.Diffs), d => Assert.DoesNotContain(d.CellStates.Keys, key => key.Contains(overridden.Origin, StringComparison.Ordinal)));
     }
 

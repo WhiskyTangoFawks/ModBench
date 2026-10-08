@@ -110,7 +110,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       && o.parseDiagnosis == null),
     [result, fileColumn, immutableSet, trackedSet, sourceUnreadableSet]);
 
-  // editor.md, A column's header: a Partial Form column is dimmed, header and cells alike. One
+  // editor.md, A column's header: a Partial Form or overridden column is dimmed, header and cells alike. One
   // definition of a column's look, so the header and the cells cannot disagree.
   const partialFormColumns = useMemo(() => columnKeysWhere(result?.overrides, o => o.isPartialForm), [result]);
   const dimmedColumns = useMemo(
