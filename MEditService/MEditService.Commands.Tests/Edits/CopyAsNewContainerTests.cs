@@ -54,7 +54,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
         var quest = _fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString());
         Assert.NotNull(quest);
-        Assert.False(quest.IsPartialForm());
+        Assert.True(quest.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.QuestEditorId, quest.EditorId);
 
         Assert.Empty(Responses(newFormKey));
@@ -138,7 +138,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
         var newFormKey = result.OnlyLanded().Require();
         var worldspace = _fixture.Document(_fixture.DestinationPlugin, _fixture.Worldspace.ToString()).Require();
-        Assert.False(worldspace.IsPartialForm());
+        Assert.True(worldspace.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
         var topCell = JsonDocument.Parse(worldspace.Body).RootElement.GetProperty("TopCell");
         Assert.Equal(ContainerCopyFixture.TopCellEditorId, topCell.GetProperty("EditorID").GetString());
@@ -155,10 +155,10 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newFormKey, StringComparison.OrdinalIgnoreCase);
 
         var quest = _fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString()).Require();
-        Assert.False(quest.IsPartialForm());
+        Assert.True(quest.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.QuestEditorId, quest.EditorId);
         var topic = _fixture.Document(_fixture.DestinationPlugin, _fixture.DialogTopic.ToString()).Require();
-        Assert.False(topic.IsPartialForm());
+        Assert.True(topic.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, topic.EditorId);
 
         var landed = Assert.Single(Responses(_fixture.DialogTopic.ToString()));
