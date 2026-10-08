@@ -10,9 +10,8 @@ namespace MEditService.Index.Tests.Records;
 
 public sealed class ParseFailedRecordTests
 {
-    private const string Fixture = "SKI_PlasmaAutocannon.esp";
     private const string Origin = "ParseFailedFixtureMod";
-    private const string PerkWhoseEntryPointParameterFlagsMutagenRefuses = "0000EF:SKI_PlasmaAutocannon.esp";
+    private static readonly string PerkWhoseEntryPointParameterFlagsMutagenRefuses = MisshapedPerkPlugin.FormKey;
     private const string Diagnosis = "did not have expected parameter type flag";
     private const string DeletedNpcPluginName = "DeletedNpc.esp";
     private const string DeletedNpc = "000800:DeletedNpc.esp";
@@ -20,7 +19,7 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void Reconcile_KeepsTheUnreadableRecordInTheIndexWithItsDiagnosis()
     {
-        using var scratch = new Scratch(Fixture);
+        using var scratch = Scratch.Misshaped();
 
         var perk = Perks(scratch).Single(r => r.FormKey == PerkWhoseEntryPointParameterFlagsMutagenRefuses);
 
@@ -31,7 +30,7 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void Reconcile_IndexesTheRestOfThePluginAroundTheUnreadableRecord()
     {
-        using var scratch = new Scratch(Fixture);
+        using var scratch = Scratch.Misshaped();
 
         var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin);
 
@@ -42,7 +41,7 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void Reconcile_LeavesEveryReadableRecordWithoutADiagnosis()
     {
-        using var scratch = new Scratch(Fixture);
+        using var scratch = Scratch.Misshaped();
 
         var readable = Perks(scratch).Where(r => r.FormKey != PerkWhoseEntryPointParameterFlagsMutagenRefuses).ToList();
 
@@ -53,9 +52,9 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void Search_ListsEveryMajorRecordThePluginHolds()
     {
-        using var scratch = new Scratch(Fixture);
+        using var scratch = Scratch.Misshaped();
         using var overlay = Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName(Fixture), scratch.PluginPath), Fallout4Release.Fallout4);
+            new ModPath(ModKey.FromFileName(MisshapedPerkPlugin.FileName), scratch.PluginPath), Fallout4Release.Fallout4);
         var inThePlugin = overlay.EnumerateMajorRecords().Count();
 
         var listed = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin).Sum(c => c.Count);
@@ -66,7 +65,7 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void TheRecordTypeCounts_MarkOnlyTheSubtreeHoldingTheUnreadableRecord()
     {
-        using var scratch = new Scratch(Fixture);
+        using var scratch = Scratch.Misshaped();
 
         var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin);
 
@@ -77,7 +76,7 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void OnlyThePluginHoldingTheUnreadableRecord_HasAParseFailure()
     {
-        using var scratch = new Scratch(Fixture);
+        using var scratch = Scratch.Misshaped();
 
         var plugins = scratch.Index.Records.GetPlugins();
 
@@ -89,7 +88,7 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void AParseFailure_IsNamedForAPluginThatIsNotActive()
     {
-        using var scratch = new Scratch(Fixture, active: false);
+        using var scratch = Scratch.Misshaped(active: false);
 
         Assert.True(scratch.Index.PluginRowOf(scratch.Plugin)?.HasParseFailure);
     }
@@ -97,17 +96,17 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void TheCompare_ReadsTheUnreadableRecordBackFromItsStoredBody()
     {
-        using var scratch = new Scratch(Fixture);
+        using var scratch = Scratch.Misshaped();
 
         var document = Assert.Single(scratch.Index.StackOf(PerkWhoseEntryPointParameterFlagsMutagenRefuses));
         Assert.Equal(PerkWhoseEntryPointParameterFlagsMutagenRefuses, document.FormKey);
-        Assert.Equal("T6M_QuickReload_ReloadVATs", document.EditorId);
+        Assert.Equal(MisshapedPerkPlugin.EditorId, document.EditorId);
     }
 
     [Fact]
     public void TheCompare_CarriesTheDiagnosisOnTheUnreadableRecordsDocument()
     {
-        using var scratch = new Scratch(Fixture);
+        using var scratch = Scratch.Misshaped();
 
         var document = Assert.Single(scratch.Index.StackOf(PerkWhoseEntryPointParameterFlagsMutagenRefuses));
 
@@ -118,7 +117,7 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void TheCompare_LeavesAReadableRecordsDocumentWithoutADiagnosis()
     {
-        using var scratch = new Scratch(Fixture);
+        using var scratch = Scratch.Misshaped();
         var readable = Perks(scratch).First(r => r.FormKey != PerkWhoseEntryPointParameterFlagsMutagenRefuses);
 
         var document = Assert.Single(scratch.Index.StackOf(readable.FormKey));
@@ -177,9 +176,9 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void Reconcile_OfAPluginThatCannotBeOpenedAtAllStillReportsAPluginLoadFailure()
     {
-        using var scratch = new Scratch(Fixture, corruptWholeFile: true);
+        using var scratch = Scratch.Misshaped(corruptWholeFile: true);
 
-        Assert.Contains(scratch.Index.Status.Failures, f => f.Name == Fixture);
+        Assert.Contains(scratch.Index.Status.Failures, f => f.Name == MisshapedPerkPlugin.FileName);
     }
 
     private static IReadOnlyList<RecordSummary> Perks(Scratch scratch) =>
@@ -226,9 +225,11 @@ public sealed class ParseFailedRecordTests
         public PluginAddress Plugin { get; }
         public string PluginPath { get; }
 
-        public Scratch(string fixtureFileName, bool corruptWholeFile = false, bool active = true)
-            : this(Path.Combine(AppContext.BaseDirectory, "TestData", fixtureFileName), fixtureFileName, corruptWholeFile, active)
+        internal static Scratch Misshaped(bool corruptWholeFile = false, bool active = true)
         {
+            using var sources = new ScratchDirectory("medit-parsefail-source-");
+            MisshapedPerkPlugin.Plugin.WriteInto(sources.Path);
+            return new Scratch(Path.Combine(sources.Path, MisshapedPerkPlugin.FileName), MisshapedPerkPlugin.FileName, corruptWholeFile, active);
         }
 
         public Scratch(string sourcePath, string fixtureFileName, bool corruptWholeFile = false, bool active = true)
