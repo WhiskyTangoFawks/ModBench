@@ -50,6 +50,8 @@ vi.mock('vscode', () => ({
           return { dispose: () => undefined };
         },
         onDidChangeCheckboxState: () => ({ dispose: () => undefined }),
+        onDidExpandElement: () => ({ dispose: () => undefined }),
+        onDidCollapseElement: () => ({ dispose: () => undefined }),
         reveal: (element: { label: unknown }, revealOptions: unknown) => {
           if (h.revealRefusal.value) return Promise.reject(h.revealRefusal.value);
           h.reveals.push({ label: element.label, options: revealOptions });

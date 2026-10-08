@@ -12,11 +12,11 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import type { InstanceValue } from '../../instanceLoader/instance';
+import type { InstanceValue, ModlistEntry } from '../../instanceLoader/instance';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { present } from '../../ports/present';
-import { ModListProvider, ModNode } from '../ModListProvider';
-import { indicatorSetting, MOD_INDICATORS, ModIndicatorDecorations, modRowUri, type ModIndicator } from '../modIndicators';
+import { ModListProvider, ModNode, SeparatorNode } from '../ModListProvider';
+import { indicatorSetting, MOD_INDICATORS, ModIndicatorDecorations, modRowUri, separatorRowUri, type ModIndicator } from '../modIndicators';
 import { file, indexedValueOf, mod } from './indexedValue';
 
 const carriedBy = (value: InstanceValue, name: string): ModIndicator[] =>
@@ -185,7 +185,7 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
     expect(decorationsOn(decorations, uri)).toEqual([undefined, undefined, undefined, undefined]);
   });
 
-  it('asks VS Code to decorate again only for the indicator whose setting changed', async () => {
+  it('asks VS Code to decorate again, for every indicator, when any indicator setting changes, since a separator\'s dot follows them all', async () => {
     const { settings, changed } = settingsOf(allOn);
     const decorations = new ModIndicatorDecorations(new FakeInstance(await middleOfThree()), settings);
     const fired = decorations.providers.map((provider) => {
@@ -198,6 +198,81 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
     changed.fire({ affectsConfiguration: (key) => key === 'modbench.something' });
     changed.fire({ affectsConfiguration: changing('redundant') });
 
-    expect(fired.map((listener) => listener.mock.calls.length)).toEqual([0, 0, 1, 0]);
+    expect(fired.map((listener) => listener.mock.calls.length)).toEqual([1, 1, 1, 1]);
+  });
+});
+
+const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });
+
+const groupedMiddleOfThree = () => indexedValueOf([mod('High'), mod('Middle'), mod('Low'), separator('Section'), mod('Alone'), separator('Quiet')], {
+  High: { files: [file('High', 'a.dds')] },
+  Middle: { files: [file('Middle', 'a.dds'), file('Middle', 'own.dds'), file('Middle', 'b.dds', true)] },
+  Low: { files: [file('Low', 'a.dds')] },
+  Alone: { files: [file('Alone', 'only.dds')] },
+});
+
+describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', () => {
+  const dot = (colour: string) => ({ badge: '•', color: new ThemeColor(colour), tooltip: 'Contains emphasized items' });
+
+  it('carries one dot for the mods beneath it, in the colour of the first indicator they hold', async () => {
+    const decorations = new ModIndicatorDecorations(new FakeInstance(await groupedMiddleOfThree()), settingsOf(allOn).settings);
+
+    expect(decorationsOn(decorations, separatorRowUri('Section'))).toEqual([
+      dot('modbench.modOverwritesLooseFiles'), undefined, undefined, undefined,
+    ]);
+  });
+
+  it('carries none while it is expanded, and again once it collapses', async () => {
+    const decorations = new ModIndicatorDecorations(new FakeInstance(await groupedMiddleOfThree()), settingsOf(allOn).settings);
+    const fired = vi.fn();
+    decorations.providers[0]?.onDidChangeFileDecorations(fired);
+
+    decorations.expandedRow(separatorRowUri('Section'));
+    const expanded = decorationsOn(decorations, separatorRowUri('Section'));
+    decorations.collapsedRow(separatorRowUri('Section'));
+
+    expect(expanded).toEqual([undefined, undefined, undefined, undefined]);
+    expect(decorationsOn(decorations, separatorRowUri('Section'))[0]).toBeDefined();
+    expect(fired).toHaveBeenCalledTimes(2);
+  });
+
+  it('carries none when no mod beneath holds an indicator that is switched on', async () => {
+    const value = await groupedMiddleOfThree();
+    const quiet = new ModIndicatorDecorations(new FakeInstance(value), settingsOf(allOn).settings);
+    const off = new ModIndicatorDecorations(new FakeInstance(value), settingsOf({}).settings);
+
+    expect(decorationsOn(quiet, separatorRowUri('Quiet'))).toEqual([undefined, undefined, undefined, undefined]);
+    expect(decorationsOn(off, separatorRowUri('Section'))).toEqual([undefined, undefined, undefined, undefined]);
+  });
+
+  it('speaks for the first indicator beneath that shows anything, and carries the dot without its colour when only the badge is on', async () => {
+    const decorations = new ModIndicatorDecorations(new FakeInstance(await groupedMiddleOfThree()), settingsOf({
+      [indicatorSetting('overwrittenLooseFiles', 'badge')]: true,
+    }).settings);
+
+    expect(decorationsOn(decorations, separatorRowUri('Section'))).toEqual([
+      undefined, { badge: '•', color: undefined, tooltip: 'Contains emphasized items' }, undefined, undefined,
+    ]);
+  });
+
+  it('forgets a separator that left the list, so one added later under its name starts collapsed', async () => {
+    const instance = new FakeInstance(await groupedMiddleOfThree());
+    const decorations = new ModIndicatorDecorations(instance, settingsOf(allOn).settings);
+    decorations.expandedRow(separatorRowUri('Section'));
+
+    instance.publish(await indexedValueOf([mod('Low')], { Low: { files: [file('Low', 'a.dds')] } }));
+    instance.publish(await groupedMiddleOfThree());
+
+    expect(decorationsOn(decorations, separatorRowUri('Section'))[0]).toBeDefined();
+  });
+});
+
+describe('a separator row (mods.md, A row, Separator)', () => {
+  it('has the URI the dot is drawn on, and no icon from the file icon theme', async () => {
+    const row = (await new ModListProvider({ instance: new FakeInstance(await groupedMiddleOfThree()) }).getChildren())
+      .find((node) => node instanceof SeparatorNode && node.separator.name === 'Section');
+
+    expect(row?.resourceUri?.toString()).toBe(separatorRowUri('Section').toString());
+    expect(row?.iconPath).toEqual(new ThemeIcon('blank'));
   });
 });

@@ -11,7 +11,7 @@ import {
   type ChildrenShown,
 } from './modFiles';
 import type { ModArgument } from '../drivingLib/argument';
-import { modRowUri } from './modIndicators';
+import { modRowUri, separatorRowUri } from './modIndicators';
 import { filesInConflict } from './conflictTable';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 
@@ -63,6 +63,8 @@ export class SeparatorNode extends vscode.TreeItem {
   ) {
     super(separator.name, expanderOver(mods, shown));
     this.id = rowIdentity(this.kind, separator.name);
+    this.resourceUri = separatorRowUri(separator.name);
+    this.iconPath = new vscode.ThemeIcon('blank');
     this.contextValue = 'separator';
   }
 }
