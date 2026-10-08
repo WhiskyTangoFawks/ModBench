@@ -15,7 +15,7 @@ export const MOD_INDICATORS = [
   { id: 'containsExcludedFiles', name: 'Contains excluded files', badge: '\u2298', colour: 'modbench.modContainsExcludedFiles' },
 ] as const;
 
-export type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
+type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 
 type IndicatorsValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod'>;
 

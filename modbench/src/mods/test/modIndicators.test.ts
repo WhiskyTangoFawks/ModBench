@@ -16,8 +16,10 @@ import type { InstanceValue, ModlistEntry } from '../../instanceLoader/instance'
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { present } from '../../ports/present';
 import { ModListProvider, ModNode, SeparatorNode } from '../ModListProvider';
-import { indicatorSetting, MOD_INDICATORS, ModIndicatorDecorations, modRowUri, separatorRowUri, type ModIndicator } from '../modIndicators';
+import { indicatorSetting, MOD_INDICATORS, ModIndicatorDecorations, modRowUri, separatorRowUri } from '../modIndicators';
 import { file, indexedValueOf, mod } from './indexedValue';
+
+type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 
 const carriedBy = (value: InstanceValue, name: string): ModIndicator[] =>
   decorationsOn(new ModIndicatorDecorations(new FakeInstance(value), settingsOf(allOn).settings), modRowUri(name))
