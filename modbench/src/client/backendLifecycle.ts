@@ -10,7 +10,7 @@ export type BackendStream = 'stdout' | 'stderr';
 interface BackendProcess {
   /** Optional signal so stop() can send SIGTERM then escalate to SIGKILL. */
   kill(signal?: NodeJS.Signals): void;
-  on(event: 'exit', cb: (code: number | null) => void): void;
+  on(event: 'exit', cb: (code: number | null, signal: NodeJS.Signals | null) => void): void;
   on(event: 'error', cb: (err: Error) => void): void;
   /** Present when spawned with piped stdio; absent on 'ignore'. */
   stdout?: NodeJS.ReadableStream | null;
@@ -42,7 +42,7 @@ export interface BackendLifecycleOptions {
    *  .NET's Generic Host shutdown budget (HostOptions.ShutdownTimeout). */
   stopGracePeriodMs?: number;
   /** Polled at `pollIntervalMs` while attaching/starting; defaults to a real GET `/health`
-   *  against `port`. Injectable so a test drives attach/restart timing without a real socket. */
+   *  against `port`. Injectable so a test drives attach timing without a real socket. */
   checkHealth?: () => Promise<boolean>;
 }
 
@@ -119,8 +119,8 @@ export class BackendLifecycle {
         ...(this.serilogLevelArgs?.() ?? []),
       ]);
       this.child = child;
-      child.on('error', (err) => this.log(`[backend] spawn error: ${err.message}`));
-      child.on('exit', (code) => this.handleExit(code));
+      child.on('error', (err) => this.handleEnd(`failed to start: ${err.message}`));
+      child.on('exit', (code, signal) => this.handleEnd(`exited unexpectedly (${signal ? `signal ${signal}` : `code ${code}`})`));
       this.forwardOutput(child);
     }
 
@@ -143,13 +143,12 @@ export class BackendLifecycle {
   async stop(): Promise<void> {
     this.expectedAlive = false;
     this.generation++; // cancels an in-flight doStart()/connect()
-    const wasRunning = this.child !== undefined || this._status === 'running';
     const child = this.child;
     this.child = undefined;
     if (child) {
       await this.killAndConfirmExit(child);
     }
-    if (wasRunning) this.setStatus('stopped');
+    if (this._status !== 'stopped') this.setStatus('stopped');
   }
 
   // A backend mid a long synchronous request won't notice SIGTERM, so this escalates to SIGKILL
@@ -173,11 +172,11 @@ export class BackendLifecycle {
     });
   }
 
-  private handleExit(code: number | null): void {
+  private handleEnd(why: string): void {
     this.child = undefined;
     if (!this.expectedAlive) return; // stop() already handled it
     this.expectedAlive = false;
-    this.log(`[backend] mEdit exited unexpectedly (code ${code})`);
+    this.log(`[backend] mEdit ${why}`);
     this.setStatus('stopped');
   }
 

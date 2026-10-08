@@ -15,6 +15,7 @@ export interface EditingViewDeps {
   };
   reportPut: (message: string) => void;
   reportEntry: (message: string) => void;
+  reportExit: (message: string) => void;
   reportLaunch: (message: string, reason: string) => void;
   log: { info(message: string): void; error(message: string): void };
   revealLog: () => void;
@@ -25,7 +26,7 @@ export interface EditingViewDeps {
 const STOPPED = 'mEdit stopped. Reload the window to start it again.';
 
 export function editingView(deps: EditingViewDeps) {
-  const { narrator, progress, reportPut, reportEntry, reportLaunch, log, revealLog, loadOrderPut } = deps;
+  const { narrator, progress, reportPut, reportEntry, reportExit, reportLaunch, log, revealLog, loadOrderPut } = deps;
 
   const around = (entry: () => Promise<void>): Promise<void> => progress.while(async () => {
     revealLog();
@@ -40,8 +41,10 @@ export function editingView(deps: EditingViewDeps) {
         reportLaunch(STOPPED, told.reason);
         return;
       case 'backendFailed':
-      case 'exited':
         reportEntry(STOPPED);
+        return;
+      case 'exited':
+        reportExit(STOPPED);
         return;
       case 'put':
         await tellPut(told.put);

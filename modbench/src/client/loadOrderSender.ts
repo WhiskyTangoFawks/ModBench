@@ -19,7 +19,6 @@ export interface LoadOrderSender {
   latest(): Promise<LoadOrderOutcome | undefined>;
   onResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void;
-  /** mEdit went away outside a launch and not by a stop: nothing starts it again. */
   onExit(listener: () => void): () => void;
   launch(): Promise<LaunchOutcome>;
   stop(): Promise<void>;
@@ -157,7 +156,6 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     return launched;
   };
 
-  // A launch under way holds a snapshot until mEdit runs. Once mEdit is gone nothing starts it again.
   const hand = (snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> => {
     if (launcher.stopped()) return Promise.resolve(ABANDONED);
     if (isMEditGone(wire.status()) && !launcher.launching()) return Promise.resolve(BACKEND_FAILED);

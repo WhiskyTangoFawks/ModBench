@@ -269,12 +269,12 @@ export interface MEditClient {
    *  versions over and tells nothing. */
   onLoadOrderSettled(listener: (status: LoadOrderStatus) => void): () => void;
 
-  /** Launches mEdit when it is not running. One snapshot is put at a time, and the newest lands. */
+  /** One snapshot is put at a time, and the newest lands. Answers `backendFailed` once mEdit is gone. */
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
   /** The newest snapshot's outcome, following a superseding one. Undefined when none was sent. */
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined>;
-  /** Each put of the newest snapshot that no send asked for: after a reconnect, or once a
-   *  restarted mEdit runs, since either process may hold nothing sent before. */
+  /** Each put of the newest snapshot that no send asked for: after a reconnect, since the process
+   *  behind the stream may hold nothing sent before. */
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
 
   // The backend process: today's four values, read as a current value and observed through a

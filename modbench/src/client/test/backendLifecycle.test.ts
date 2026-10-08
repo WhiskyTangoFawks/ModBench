@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { createServer, type Server } from 'node:http';
+import { spawn as nodeSpawn } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
 
 import { BackendLifecycle } from '../backendLifecycle';
@@ -246,7 +247,7 @@ describe('BackendLifecycle output forwarding', () => {
   });
 });
 
-describe('BackendLifecycle crash-restart / stop', () => {
+describe('BackendLifecycle exit / stop', () => {
   beforeEach(() => { vi.resetAllMocks(); });
   afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
@@ -283,6 +284,58 @@ describe('BackendLifecycle crash-restart / stop', () => {
 
     expect(lifecycle.status).toBe('stopped');
     expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs the signal that ended the backend when it has no exit code', async () => {
+    const children: ReturnType<typeof makeChild>[] = [];
+    const logged: string[] = [];
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 5, executablePath: '/x', checkHealth: () => Promise.resolve(true),
+      spawn: () => { const c = makeChild(); children.push(c); return c; }, log: (line) => logged.push(line),
+    });
+    await lifecycle.start();
+
+    present(children[0], 'the first spawned child').emit('exit', null, 'SIGSEGV');
+
+    expect(logged).toContain('[backend] mEdit exited unexpectedly (signal SIGSEGV)');
+  });
+
+  it('is stopped, logging why, when the backend cannot be spawned at all', async () => {
+    const logged: string[] = [];
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 5, pollTimeoutMs: 10_000, executablePath: '/nonexistent/backend',
+      checkHealth: () => Promise.resolve(false), log: (line) => logged.push(line),
+      spawn: (exe, args) => nodeSpawn(exe, args, { stdio: 'pipe' }),
+    });
+
+    await lifecycle.start();
+
+    expect(lifecycle.status).toBe('stopped');
+    expect(logged.some((line) => line.startsWith('[backend] mEdit failed to start: spawn /nonexistent/backend ENOENT'))).toBe(true);
+  });
+
+  it.each([
+    ['claiming a port throws', { freePort: () => Promise.reject(new Error('no port')) }],
+    ['the spawn throws', { freePort: () => Promise.resolve(5172), spawn: () => { throw new Error('no spawn'); } }],
+  ])('is stopped by the stop after a start that threw, %s', async (_name, options) => {
+    const lifecycle = new BackendLifecycle({ executablePath: '/x', checkHealth: () => Promise.resolve(true), ...options });
+    await lifecycle.start().catch(() => undefined);
+
+    await lifecycle.stop();
+
+    expect(lifecycle.status).toBe('stopped');
+  });
+
+  it('is stopped by the stop after an attach that timed out, so the item agrees with the failed launch', async () => {
+    const lifecycle = new BackendLifecycle({
+      attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(false),
+    });
+    await lifecycle.start();
+    expect(lifecycle.status).toBe('disconnected');
+
+    await lifecycle.stop();
+
+    expect(lifecycle.status).toBe('stopped');
   });
 
   it('does not double-spawn when start() is called concurrently', async () => {
@@ -339,7 +392,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
     expect(children).toHaveLength(1);
   });
 
-  it('stop() kills the child, suppresses restart, and does not report "stopped" until exit is confirmed, so deactivate() awaiting it keeps a reload from building a replacement client before the old child is gone', async () => {
+  it('stop() kills the child, and does not report "stopped" until exit is confirmed, so deactivate() awaiting it keeps a reload from building a replacement client before the old child is gone', async () => {
     const state = { healthy: false };
     const child = makeChild();
     const spawn = vi.fn(() => { state.healthy = true; return child; });

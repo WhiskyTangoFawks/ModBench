@@ -209,7 +209,7 @@ describe('mEdit exiting', () => {
 
 describe('a tell that threw', () => {
   it('reaches the Output once, and the entries after it still end', async () => {
-    const { flow, toldCount, land, logged, failNextTell } = wired();
+    const { flow, toldCount, land, logged, failNextTell, around } = wired();
     failNextTell(new Error('boom'));
     land(valueWith('A.esp'));
     await toldCount(1);
@@ -217,6 +217,7 @@ describe('a tell that threw', () => {
     await flow.enter(Promise.resolve().then(() => { land(valueWith('B.esp')); }));
 
     expect(logged).toEqual(['[loadOrder] handing mEdit the load order threw: boom']);
+    expect(around.settled).toBe(true);
   });
 });
 

@@ -136,6 +136,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     narrator: plugins.narrator, progress: plugins.progress, log: outputChannel, revealLog: () => outputChannel.show(true), loadOrderPut: plugins.loadOrderPut,
     reportPut: (message) => reporterFor('loadOrder').report('error', message),
     reportEntry: (message) => reporterFor('enterEditing').report('error', message),
+    reportExit: (message) => reporterFor('mEditExit').report('error', message),
     reportLaunch: (message, reason) => reporterFor('launch').report('error', message, reason),
   });
   const editing = own(editingFlow({

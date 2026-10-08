@@ -141,13 +141,13 @@ describe('HttpMEditClient — the notification stream follows the status', () =>
     expect(sawSignal?.aborted).toBe(true);
   });
 
-  it('closes the stream when the backend goes disconnected', async () => {
+  it('closes the stream when the backend does not come up', async () => {
     const fetch = vi.fn(() => Promise.resolve(new Response(new ReadableStream({ start: () => {} }), { status: 200 })));
     const client = makeClient(fetch, { health: 'down' });
 
     await client.start();
 
-    expect(client.status).toBe('disconnected');
+    expect(client.status).toBe('stopped');
     expect(fetch).not.toHaveBeenCalled();
   });
 });
@@ -900,6 +900,20 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     expect(launches).toEqual([]);
     expect(kills).toEqual([]);
     expect(children).toHaveLength(1);
+  });
+
+  it.each([
+    ['claiming a port throws', { freePort: () => Promise.reject(new Error('no port')) }],
+    ['the spawn throws', { freePort: () => Promise.resolve(5172), spawn: () => { throw new Error('no spawn'); } }],
+  ])('is stopped when the launch fails because %s', async (_name, backend) => {
+    const client = createMEditClient({
+      backend: { executablePath: '/x/backend', pollIntervalMs: 3, checkHealth: () => Promise.resolve(true), ...backend },
+      backendLog: fakeLogChannel(), fetch: routedFetch([]),
+    });
+
+    await client.start();
+
+    expect(client.status).toBe('stopped');
   });
 
   it('answers a snapshot backendFailed after a launch whose child exited before it answered, and launches nothing again', async () => {

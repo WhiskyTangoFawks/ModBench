@@ -23,6 +23,7 @@ function wired() {
   const said: string[] = [];
   const putReports: string[] = [];
   const entryReports: string[] = [];
+  const exitReports: string[] = [];
   const launchReports: [string, string][] = [];
   const logged: { info: string[]; error: string[] } = { info: [], error: [] };
   const revealed = { count: 0 };
@@ -38,10 +39,11 @@ function wired() {
     narrator, progress, log, loadOrderPut,
     reportPut: (message) => { putReports.push(message); },
     reportEntry: (message) => { entryReports.push(message); },
+    reportExit: (message) => { exitReports.push(message); },
     reportLaunch: (message, reason) => { launchReports.push([message, reason]); },
     revealLog: () => { revealed.count++; },
   });
-  return { view, handed, said, putReports, entryReports, launchReports, logged, revealed, loadOrderPut, lines };
+  return { view, handed, said, putReports, entryReports, exitReports, launchReports, logged, revealed, loadOrderPut, lines };
 }
 
 describe('the entry shown', () => {
@@ -54,13 +56,22 @@ describe('the entry shown', () => {
     expect(ran).toEqual(['after Starting backend… and 1 reveal']);
   });
 
-  it.each(['backendFailed', 'exited'] as const)('tells %s as mEdit stopped, and that reloading the window starts it again', async (kind) => {
-    const { view, entryReports, putReports } = wired();
+  it('tells a backend that did not come up as mEdit stopped, and that reloading the window starts it again', async () => {
+    const { view, entryReports, exitReports, putReports } = wired();
 
-    await view.tell({ kind });
+    await view.tell({ kind: 'backendFailed' });
 
     expect(entryReports).toEqual(['mEdit stopped. Reload the window to start it again.']);
-    expect(putReports).toEqual([]);
+    expect([...exitReports, ...putReports]).toEqual([]);
+  });
+
+  it('tells an exit as mEdit stopped under its own report, not the entry\'s', async () => {
+    const { view, entryReports, exitReports } = wired();
+
+    await view.tell({ kind: 'exited' });
+
+    expect(exitReports).toEqual(['mEdit stopped. Reload the window to start it again.']);
+    expect(entryReports).toEqual([]);
   });
 
   it('tells a launch that threw as mEdit stopped, with its reason', async () => {
