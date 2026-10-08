@@ -1,7 +1,7 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 
-namespace MEditService.Index.Tests.Query;
+namespace MEditService.Codec.Tests.Schema;
 
 public class ElementKeyTextTests
 {
