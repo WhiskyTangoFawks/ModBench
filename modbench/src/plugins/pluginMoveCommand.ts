@@ -20,9 +20,9 @@ interface MoveView extends Pick<PluginsTreeProvider, 'movePlaces'> {
   selection: () => readonly PluginsTreeNode[];
 }
 
-/** `modbench.plugin.move`: the plugins as `(origin, filename)` addresses, and the drop that says
- *  where they land. With no plugins named it takes the view's selection, and with no drop it asks
- *  for one. A drop in the Plugins tree is one entry point into it. */
+/** `modbench.plugin.move`: the plugins as `(origin, filename)` addresses, and the drop where they
+ *  land. Left out, the plugins are the view's selection and the drop is picked. A tree drop is
+ *  one entry point into it. */
 export function registerPluginMoveCommand(
   access: PluginsAccess, masters: Pick<MEditClient, 'getPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
   view: MoveView, reporter: Reporter,
