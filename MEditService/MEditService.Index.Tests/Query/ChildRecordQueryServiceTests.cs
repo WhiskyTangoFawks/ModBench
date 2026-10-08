@@ -76,7 +76,7 @@ public sealed class ChildRecordQueryServiceTests : IDisposable
         var load = Task.Run(() => index.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        Assert.Throws<NoLoadOrderException>(() => index.ChildRecords.DestinationsHoldingChildRecords([_quest], [Holder]));
+        Assert.Throws<IndexNotReadyException>(() => index.ChildRecords.DestinationsHoldingChildRecords([_quest], [Holder]));
 
         gate.Release();
         await load;

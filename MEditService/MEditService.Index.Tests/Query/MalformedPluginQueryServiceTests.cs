@@ -131,7 +131,7 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task GetLoadOrderDiagnoses_WhileReconciling_AnswersNothing_ForAPluginTheProjectionHasNotReachedHasNoRowsYetAndWouldReadClean()
+    public async Task GetLoadOrderDiagnoses_WhileReconciling_IsNotReady_ForAPluginTheProjectionHasNotReachedHasNoRowsYetAndWouldReadClean()
     {
         LoadOrderEntry[] plugins = [Plugin(Malformed), Clean("Later.esp", slot: 1)];
         var holder = new LoadOrderHolder();
@@ -140,7 +140,7 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
         var load = Task.Run(() => index.Reconcile(holder, GameDirectory, plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        Assert.Empty(index.Malformed.GetLoadOrderDiagnoses());
+        Assert.Throws<IndexNotReadyException>(index.Malformed.GetLoadOrderDiagnoses);
 
         gate.Release();
         await load;

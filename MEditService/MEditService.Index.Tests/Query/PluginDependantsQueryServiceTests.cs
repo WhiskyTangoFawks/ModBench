@@ -44,7 +44,7 @@ public sealed class PluginDependantsQueryServiceTests
     {
         using var fixture = Fixture(plugins);
         using var index = Indexes.Reconciled(fixture);
-        return index.Dependants.GetDependants(Renamed) ?? throw new InvalidOperationException("The index was ready.");
+        return index.Dependants.GetDependants(Renamed);
     }
 
     [Fact]
@@ -89,14 +89,14 @@ public sealed class PluginDependantsQueryServiceTests
         File.WriteAllBytes(fixture.Plugins.Single(p => p.Name == unread.Name).Path, truncatedBelowATes4Header);
         using var index = Indexes.Reconciled(fixture);
 
-        var answer = index.Dependants.GetDependants(Renamed) ?? throw new InvalidOperationException("The index was ready.");
+        var answer = index.Dependants.GetDependants(Renamed);
 
         Assert.Equal([unread.Key], answer.Unreadable);
         Assert.Empty(answer.Plugins);
     }
 
     [Fact]
-    public async Task GetDependants_WhileTheIndexIsReconciling_AnswersNothing_ForAPluginNotYetOpenedWouldReadAsNoDependant()
+    public async Task GetDependants_WhileTheIndexIsReconciling_IsNotReady_ForAPluginNotYetOpenedWouldReadAsNoDependant()
     {
         var child = new Plugin("Child.esp", Masters: "Base.esm");
         using var fixture = Fixture(Base, child);
@@ -106,14 +106,14 @@ public sealed class PluginDependantsQueryServiceTests
         var load = Task.Run(() => index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        Assert.Null(index.Dependants.GetDependants(Renamed));
+        Assert.Throws<IndexNotReadyException>(() => index.Dependants.GetDependants(Renamed));
 
         gate.Release();
         await load;
     }
 
     [Fact]
-    public void GetDependants_WhenTheIndexFailed_AnswersNothing_ForAPluginNotYetOpenedWouldReadAsNoDependant()
+    public void GetDependants_WhenTheIndexFailed_IsNotReady_ForAPluginNotYetOpenedWouldReadAsNoDependant()
     {
         using var fixture = Fixture(Base, new Plugin("Child.esp", Masters: "Base.esm"));
         var holder = new LoadOrderHolder();
@@ -121,7 +121,7 @@ public sealed class PluginDependantsQueryServiceTests
         index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.SkyrimSE);
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
 
-        Assert.Null(index.Dependants.GetDependants(Renamed));
+        Assert.Throws<IndexNotReadyException>(() => index.Dependants.GetDependants(Renamed));
     }
 
     [Fact]

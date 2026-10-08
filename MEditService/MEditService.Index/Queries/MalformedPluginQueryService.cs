@@ -1,6 +1,5 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.Ports;
 
 namespace MEditService.Index.Queries;
 
@@ -17,13 +16,11 @@ public sealed class MalformedPluginQueryService
         _loadOrder = loadOrder;
     }
 
+    /// <summary>A plugin the index has not reached holds no rows yet and would read clean.</summary>
     public IReadOnlyList<PluginDiagnosisReport> GetLoadOrderDiagnoses()
     {
-        var reads = _index.RequireReads();
+        var reads = _index.RequireWholeSetReads();
         var held = _loadOrder.Require();
-        // Derived from the whole plugin set, so a partial projection answers nothing: a plugin it has
-        // not reached holds no rows yet and would read clean.
-        if (_index.Status.State != LoadOrderState.Ready) return [];
 
         var byPlugin = reads.GetPluginDiagnoses().ToLookup(row => row.Plugin, PluginAddress.Comparer);
         var loadedWithNoLine = held.LoadedWithNoLine.Select(plugin => plugin.Key).ToHashSet(PluginAddress.Comparer);

@@ -31,9 +31,7 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapGet("/plugins/problems", (PluginProblemQueryService svc) =>
-            svc.GetProblems() is { } problems
-                ? Results.Ok(problems)
-                : Results.Problem("mEdit's index is not ready, so what is wrong in the plugins' source is not known yet.", statusCode: 503))
+            Results.Ok(svc.GetProblems()))
             .WithName("GetPluginProblems")
             .WithTags(Tag)
             .WithDescription(
@@ -45,9 +43,8 @@ internal static class PluginEndpoints
         app.MapGet("/plugins/{plugin}/dependants", (string plugin, string? origin, PluginDependantsQueryService svc) =>
         {
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            return svc.GetDependants(WriteEndpointMapping.PluginAddressOf(plugin, origin)) is { } dependants
-                ? Results.Ok(new PluginDependantsResponse(dependants.Plugins, dependants.Unreadable))
-                : Results.Problem("mEdit has not finished indexing the plugins.", statusCode: 503);
+            var dependants = svc.GetDependants(WriteEndpointMapping.PluginAddressOf(plugin, origin));
+            return Results.Ok(new PluginDependantsResponse(dependants.Plugins, dependants.Unreadable));
         })
             .WithName("GetPluginDependants")
             .WithTags(Tag)
