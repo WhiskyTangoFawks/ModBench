@@ -109,8 +109,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
         return;
       }
       if (carrying.uri.toString() === uri.toString()) return;
-      const { viewColumn } = tab.panel;
-      const shownIn = viewColumn === undefined ? undefined : recordTabAt({ document: uri.toString(), viewColumn });
+      const shownIn = vsCodeTabOf(tab);
       if (!shownIn) {
         this.deps.channel.warn(`${staying}: VS Code shows the tab in no group.`);
         return;
@@ -176,8 +175,14 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     let shownReason: string | undefined;
     const read = async (): Promise<void> => {
       try {
-        const { formKey, ...copy } = await this.deps.client.getRecordOfFile(fsPath);
-        if (tab.awaitsRecord) this.showFile(panel, tab, document, { formKey, plugin: pluginAddressOf(copy) }, { columns, place }, () => undefined);
+        const record = await this.deps.client.getRecordOfFile(fsPath);
+        if (!tab.awaitsRecord) return;
+        if (record === null) {
+          await this.reopenAsText(tab);
+          return;
+        }
+        const { formKey, ...copy } = record;
+        this.showFile(panel, tab, document, { formKey, plugin: pluginAddressOf(copy) }, { columns, place }, () => undefined);
       } catch (err) {
         const reason = errorMessage(err);
         if (reason === shownReason || !tab.awaitsRecord) return;
@@ -187,6 +192,17 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
       }
     };
     await tab.askWhichRecord(read);
+  }
+
+  // A file that holds no record opens as any JSON file does (editor.md, Opening, story 11).
+  private async reopenAsText(tab: RecordTab): Promise<void> {
+    const { document } = tab;
+    const shownIn = vsCodeTabOf(tab);
+    if (!shownIn) {
+      this.deps.channel.warn(`${document.fsPath} holds no record, but VS Code shows its tab in no group to reopen in the text editor.`);
+      return;
+    }
+    await inTabsStead(shownIn, async (options) => { await vscode.commands.executeCommand('vscode.openWith', document, 'default', options); });
   }
 
   readAgain(): void {
@@ -246,6 +262,9 @@ async function savedText(uri: vscode.Uri): Promise<string | undefined> {
     throw err;
   }
 }
+
+const vsCodeTabOf = ({ document, panel: { viewColumn } }: RecordTab): vscode.Tab | undefined =>
+  viewColumn === undefined ? undefined : recordTabAt({ document: document.toString(), viewColumn });
 
 export const recordTabAt = ({ document, viewColumn }: TabPlace): vscode.Tab | undefined =>
   vscode.window.tabGroups.all.find((group) => group.viewColumn === viewColumn)?.tabs.find(({ input }) =>

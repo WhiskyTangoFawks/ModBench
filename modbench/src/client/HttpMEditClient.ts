@@ -634,9 +634,10 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getRecordOfFile(path: string): Promise<RecordAddress> {
+  async getRecordOfFile(path: string): Promise<RecordAddress | null> {
     return this.withTimeout(`getRecordOfFile(${path})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugin-source/record', { params: { query: { path } }, signal });
+      if (response.status === 204) return null;
       this.ensureOk(`getRecordOfFile(${path})`, response, error);
       if (!data) throw new Error(`getRecordOfFile(${path}): ok response carried no body`);
       return data;

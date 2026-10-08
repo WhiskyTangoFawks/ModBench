@@ -116,13 +116,24 @@ public sealed class RecordFileApiTests : HostedTests
     }
 
     [Fact]
-    public async Task AFileThatHoldsNoRecord_Is422_SayingWhy()
+    public async Task AGroupsMetadataFile_HoldsNoRecord_Is204()
+    {
+        var fx = await Tracked();
+        var metadata = Path.Combine(Path.GetDirectoryName(NpcFile(fx)).Require(), "GroupRecordData.json");
+        await File.WriteAllTextAsync(metadata, "{}");
+
+        Assert.Equal(HttpStatusCode.NoContent, (await RecordOf(metadata)).StatusCode);
+    }
+
+    [Fact]
+    public async Task AFileUnderNoTrackedSource_Is422_SayingWhy()
     {
         var fx = await Untracked();
+        var loose = Path.Combine(Path.GetDirectoryName(fx.Plugins.Single().Path).Require(), "Loose.json");
 
-        var refused = await (await RecordOf(fx.Plugins.Single().Path)).AssertIsProblem(HttpStatusCode.UnprocessableEntity);
+        var refused = await (await RecordOf(loose)).AssertIsProblem(HttpStatusCode.UnprocessableEntity);
 
-        Assert.Equal($"{fx.Plugins.Single().Path} is under no tracked plugin's source.", refused.GetProperty("detail").GetString());
+        Assert.Equal($"{loose} is under no tracked plugin's source.", refused.GetProperty("detail").GetString());
     }
 
     [Fact]
