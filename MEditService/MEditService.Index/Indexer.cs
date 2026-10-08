@@ -8,8 +8,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>ADR-0014: the Index's other half (target-architecture.d2 medit_readmodel.index.indexer).
-/// The face Queries sees: status, filter, rebuild and reads, over the reconcile that fills the Store.</summary>
+/// <summary>The record index's Indexer (target-architecture.d2 medit_readmodel.index.indexer): status,
+/// filter, rebuild and reads, over the reconcile that fills the Store.</summary>
 internal sealed class Indexer : IQueryIndex, IDisposable
 {
     private readonly LoadOrderHolder _holder;
