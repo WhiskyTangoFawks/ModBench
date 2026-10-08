@@ -24,7 +24,7 @@ public sealed class CopyRecordHandler
         (_override, _new, _loadOrder, _resolution, _logger) = (overrideCopy, newRecordCopy, loadOrder, resolution, logger);
 
     /// <summary>Each record lands in each destination or is refused on its own, a record after the
-    /// records containing it; <paramref name="replace"/> lets an override copy over a held one.
+    /// containing it; <paramref name="replace"/> lets an override copy over a held one.
     /// Throws <see cref="NoLoadOrderException"/> with no load order held.</summary>
     public async Task<SelectionResult<CopyItem, RecordEditRefusal, string?>> Copy(
         IReadOnlyList<RecordAt> records, CopyMode mode, IReadOnlyList<PluginAddress> destinations, bool replace)
