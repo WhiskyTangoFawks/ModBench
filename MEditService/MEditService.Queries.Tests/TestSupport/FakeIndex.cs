@@ -131,7 +131,9 @@ internal sealed class FakeReads(
 
     public IReadOnlyDictionary<string, RecordLookupEntry>? Lookups { get; init; }
 
-    public RecordLookupEntry? Resolve(string formKey) =>
+    public Func<string, RecordLookupEntry?> LinkResolver(string formKey) => Resolve;
+
+    private RecordLookupEntry? Resolve(string formKey) =>
         Lookups is not null && Lookups.TryGetValue(formKey, out var entry) ? entry :
         GetDocument(formKey) is { } winner ? new(winner.RecordType, winner.EditorId) : null;
 

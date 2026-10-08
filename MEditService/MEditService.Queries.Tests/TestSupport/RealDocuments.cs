@@ -25,7 +25,7 @@ internal static class RealDocuments
         var schemas = SharedSchemaReflector.Instance.GetSchemas(release);
         return FromBody(
             record.FormKey.ToString(), plugin, loadOrderIndex, record.EditorID, BodyOf(record, release),
-            schemas[RecordTableName.Of(record, schemas)], resolveFormKey ?? (_ => null), release, parseDiagnosis: null);
+            schemas[RecordTableName.Of(record.GetType(), schemas)], resolveFormKey ?? (_ => null), release, parseDiagnosis: null);
     }
 
     internal static RecordDocument FromText(
@@ -33,10 +33,23 @@ internal static class RealDocuments
         Func<string, RecordLookupEntry?> resolveFormKey)
     {
         var release = GameRelease.Fallout4;
-        var (body, editorId, parseDiagnosis) = CallerText.Read(text);
+        var (body, editorId, parseDiagnosis) = Read(text);
         return FromBody(
             formKey, plugin, loadOrderIndex, editorId, body,
             SharedSchemaReflector.Instance.GetSchemas(release)[recordType], resolveFormKey, release, parseDiagnosis);
+    }
+
+    private static (string Body, string? EditorId, string? ParseDiagnosis) Read(string text)
+    {
+        try
+        {
+            using var parsed = JsonDocument.Parse(text);
+            return (text, parsed.RootElement.TryGetProperty("EditorID", out var editorId) ? editorId.GetString() : null, null);
+        }
+        catch (JsonException ex)
+        {
+            return (CallerText.NoBody, null, ex.Message);
+        }
     }
 
     private static RecordDocument FromBody(

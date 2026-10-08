@@ -309,7 +309,7 @@ internal sealed class PluginIngest
     internal static List<FormReferenceRow> Rows(
         ContainerDocuments containers, JsonElement root, RecordTableSchema schema,
         string sourceFormKey, string? sourceEditorId, string recordType) =>
-        [.. containers.OwnReferences(recordType, FormReferences.Collect(root, schema))
+        [.. containers.OwnReferences(recordType, FormReferences.Collect(root, schema.RecordColumns))
             .Select(r => new FormReferenceRow(sourceFormKey, r.TargetFormKey, r.FieldPath, recordType, sourceEditorId))];
 
     // Shared by ingest and the per-record working-tree rederivation so the two paths cannot append

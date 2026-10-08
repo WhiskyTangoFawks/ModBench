@@ -7,7 +7,7 @@ namespace MEditService.Http.Notifications;
 
 /// <summary>The notification port's transport adapter (ADR-0014). A subscriber that falls behind is dropped: a
 /// missed event is recoverable, an unbounded queue behind a stalled client is not.</summary>
-public sealed class SseNotificationPublisher : INotificationPublisher
+internal sealed class SseNotificationPublisher : INotificationPublisher
 {
     private static readonly JsonSerializerOptions WireOptions = new(JsonSerializerDefaults.Web);
 
@@ -60,7 +60,7 @@ public sealed class SseNotificationPublisher : INotificationPublisher
 
 /// <summary>The one wire shape every notification kind serializes to. Kind is the SSE event name and the
 /// discriminator; the trailing groups are null except for the one kind that fills them.</summary>
-public sealed record NotificationEvent(
+internal sealed record NotificationEvent(
     string Kind, string Plugin, string Origin, IReadOnlyList<string> Keys, long Sequence,
     LoadOrderStatus? LoadOrderStatus = null,
     TrackProgress? TrackProgress = null,

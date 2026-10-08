@@ -156,7 +156,6 @@ public sealed class SchemaReflector
         return new RecordTableSchema
         {
             TableName = tableName,
-            DisplayName = RecordDisplayNames.For(tableName),
             RecordType = getterType,
             RecordColumns = [.. columns.Select(column => ContainmentReadOnly.Marked(column, tableName, siblingGetterTypes, game.Annotations))],
         };
@@ -171,15 +170,15 @@ public sealed class UnsupportedGameReleaseException : Exception
     // RCS1194: the three standard exception constructors, for well-behaved rethrow/serialization
     // callers generally — not how SchemaReflector itself throws this (see the release-based
     // constructor below), which builds a specific, actionable message naming the missing assembly.
-    public UnsupportedGameReleaseException()
+    internal UnsupportedGameReleaseException()
     {
     }
 
-    public UnsupportedGameReleaseException(string message) : base(message)
+    internal UnsupportedGameReleaseException(string message) : base(message)
     {
     }
 
-    public UnsupportedGameReleaseException(string message, Exception innerException) : base(message, innerException)
+    internal UnsupportedGameReleaseException(string message, Exception innerException) : base(message, innerException)
     {
     }
 
@@ -189,5 +188,5 @@ public sealed class UnsupportedGameReleaseException : Exception
         Release = release;
     }
 
-    public GameRelease Release { get; }
+    internal GameRelease Release { get; }
 }

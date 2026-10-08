@@ -29,19 +29,26 @@ public class RecordTextCodecTests
         };
 
     [Fact]
-    public void RoundTrip_IsFieldFaithful_BecauseTheOmitCustomizationsAreVerifiedNoOpsForAStandaloneWeaponBothTargetingOnlyGroupCellWorldspaceFieldsItDoesNotHave()
+    public void RoundTrip_GivesAWeaponsTextBackUnchanged_SoTheGoldenBytesBelowPinWhatAReadKeeps()
     {
         var codec = Codec();
+        var text = codec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
+
+        Assert.Equal(text, codec.RoundTrip(text, GameRelease.Fallout4, "weap"));
+    }
+
+    [Fact]
+    public async Task AWeapon_ReadsBackFieldFaithful_BecauseTheOmitCustomizationsAreVerifiedNoOpsForAStandaloneWeaponBothTargetingOnlyGroupCellWorldspaceFieldsItDoesNotHave()
+    {
         var original = MakeWeapon();
+        var mod = new Fallout4Mod(original.FormKey.ModKey, Fallout4Release.Fallout4);
+        mod.Weapons.Add(original);
 
-        var roundTripped = ReadBack.Of<Weapon>(codec, original, GameRelease.Fallout4, "weap");
+        var readBack = await ReadBack.ThroughTheWholeModDoor<IWeaponGetter>(mod, original);
 
-        var mask = original.GetEqualsMask(roundTripped);
-        var leaves = MaskInspector.CountLeaves(mask).ToList();
-        var divergent = leaves.Where(l => !l.Value).Select(l => l.Path).ToList();
-
+        var leaves = MaskInspector.CountLeaves(original.GetEqualsMask(readBack)).ToList();
         Assert.Equal(81, leaves.Count);
-        Assert.Empty(divergent);
+        Assert.Empty(leaves.Where(l => !l.Value).Select(l => l.Path));
     }
 
     [Fact]

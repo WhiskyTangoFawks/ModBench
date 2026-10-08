@@ -23,7 +23,7 @@ public sealed class ChildRecordTypesTests
 
     private static string[] Of(IMajorRecordGetter container, CellPlace? place = null) =>
         [.. ChildRecordTypes.Of(
-                RecordTableName.Of(container, Schemas), Codec.SerializeToText(container, GameRelease.Fallout4), place,
+                RecordTableName.Of(container.GetType(), Schemas), Codec.SerializeToText(container, GameRelease.Fallout4), place,
                 Schemas, GameRelease.Fallout4)
             .Order(StringComparer.Ordinal)];
 

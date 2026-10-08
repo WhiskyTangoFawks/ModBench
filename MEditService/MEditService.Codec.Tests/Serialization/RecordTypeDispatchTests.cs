@@ -37,14 +37,41 @@ public class RecordTypeDispatchTests
         var original = MakeNpc();
 
         IMajorRecordGetter callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne = original;
-        var roundTripped = ReadBack.Of<Npc>(codec, callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne, GameRelease.Fallout4, "npc_");
+        var text = codec.SerializeToText(callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne, GameRelease.Fallout4);
 
-        var mask = original.GetEqualsMask(roundTripped);
-        var leaves = MaskInspector.CountLeaves(mask).ToList();
-        var divergent = leaves.Where(l => !l.Value).Select(l => l.Path).ToList();
+        Assert.Contains("\"Test NPC Name\"", text, StringComparison.Ordinal);
+        Assert.Equal(text, codec.RoundTrip(text, GameRelease.Fallout4, "npc_"));
+    }
 
-        Assert.NotEmpty(leaves);
-        Assert.Empty(divergent);
+    [Fact]
+    public async Task AnNpc_ReadsBackFieldFaithful()
+    {
+        var original = MakeNpc();
+        var mod = new Fallout4Mod(original.FormKey.ModKey, Fallout4Release.Fallout4);
+        mod.Npcs.Add(original);
+
+        AssertFieldFaithful(MaskInspector.CountLeaves(original.GetEqualsMask(await ReadBack.ThroughTheWholeModDoor<INpcGetter>(mod, original))));
+    }
+
+    [Fact]
+    public async Task ACell_ReadsBackFieldFaithful()
+    {
+        var original = MakeCell();
+        var mod = new Fallout4Mod(original.FormKey.ModKey, Fallout4Release.Fallout4);
+        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+        subBlock.Cells.Add(original);
+        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+        block.SubBlocks.Add(subBlock);
+        mod.Cells.Records.Add(block);
+
+        AssertFieldFaithful(MaskInspector.CountLeaves(original.GetEqualsMask(await ReadBack.ThroughTheWholeModDoor<ICellGetter>(mod, original))));
+    }
+
+    private static void AssertFieldFaithful(IEnumerable<(string Path, bool Value)> leaves)
+    {
+        var all = leaves.ToList();
+        Assert.NotEmpty(all);
+        Assert.Empty(all.Where(l => !l.Value).Select(l => l.Path));
     }
 
     [Fact]
@@ -53,18 +80,14 @@ public class RecordTypeDispatchTests
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var original = MakeCell();
 
-        var roundTripped = ReadBack.Of<Cell>(codec, original, GameRelease.Fallout4, "Cell");
+        var text = codec.SerializeToText(original, GameRelease.Fallout4);
 
-        var mask = original.GetEqualsMask(roundTripped);
-        var leaves = MaskInspector.CountLeaves(mask).ToList();
-        var divergent = leaves.Where(l => !l.Value).Select(l => l.Path).ToList();
-
-        Assert.NotEmpty(leaves);
-        Assert.Empty(divergent);
+        Assert.Contains("\"TestCell\"", text, StringComparison.Ordinal);
+        Assert.Equal(text, codec.RoundTrip(text, GameRelease.Fallout4, "Cell"));
     }
 
     [Fact]
-    public void RoundTrip_ForTextNamingAnUnknownType_ThrowsNamedException_NotABareNullReferenceExceptionBecauseARecordTypeTheSchemaDoesNotKnowMeansExpectTheDocumentToNameItself()
+    public void RoundTrip_ForTextNamingAnUnknownType_ThrowsNotSupportedNamingTheMember_NotABareNullReferenceExceptionBecauseARecordTypeTheSchemaDoesNotKnowMeansExpectTheDocumentToNameItself()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var globalFloatNotAnNpcBecauseOnlyPathAmbiguousTypesSelfDescribeSoAnNpcDocumentHasNoDiscriminatorToCorrupt = MakeGlobalFloat();
@@ -74,7 +97,7 @@ public class RecordTypeDispatchTests
         var corrupted =
             text.Replace("\"MutagenObjectType\": \"GlobalFloat\"", "\"MutagenObjectType\": \"NotARecordType\"", StringComparison.Ordinal);
 
-        var ex = Assert.Throws<RecordTypeSerializationUnsupportedException>(
+        var ex = Assert.Throws<NotSupportedException>(
             () => codec.RoundTrip(corrupted, GameRelease.Fallout4, "glob"));
 
         const string TheMemberNameNotTheOffendingValueBecauseTheKernelDiscardsItOnThisRouteSoRequiringItWouldPinAnUpstreamDetail = "MutagenObjectType";

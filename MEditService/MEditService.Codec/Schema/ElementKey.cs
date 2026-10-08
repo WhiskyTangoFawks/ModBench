@@ -23,14 +23,14 @@ public readonly record struct ElementKey(IReadOnlyList<(double? Number, string T
 
     /// <summary>The write path holds a mutable JsonNode tree; one re-serialize reaches the same
     /// reader rather than a second copy of what a key reads as.</summary>
-    public static ElementKey Of(JsonNode? node, IReadOnlyList<string> keyMembers, FieldMetadata? elementMeta = null) =>
+    internal static ElementKey Of(JsonNode? node, IReadOnlyList<string> keyMembers, FieldMetadata? elementMeta = null) =>
         Of(JsonSerializer.SerializeToElement(node), keyMembers, elementMeta);
 
     /// <summary>xEdit's extended sort key: the key, then what a wbStructExSK adds to it.</summary>
     public static ElementKey SortKeyOf(JsonElement element, FieldMetadata array, Func<string, uint?>? loadOrderFormIds = null) =>
         Of(element, SortMembers(array), array.ElementType, loadOrderFormIds);
 
-    public static ElementKey SortKeyOf(JsonNode? node, FieldMetadata array) =>
+    internal static ElementKey SortKeyOf(JsonNode? node, FieldMetadata array) =>
         Of(node, SortMembers(array), array.ElementType);
 
     private static IReadOnlyList<string> SortMembers(FieldMetadata array) =>
@@ -45,7 +45,7 @@ public readonly record struct ElementKey(IReadOnlyList<(double? Number, string T
 
     public static IComparer<ElementKey> Order { get; } = Comparer<ElementKey>.Create((a, b) => a.CompareTo(b));
 
-    public int CompareTo(ElementKey other)
+    internal int CompareTo(ElementKey other)
     {
         for (var i = 0; i < Math.Min(Segments.Count, other.Segments.Count); i++)
         {

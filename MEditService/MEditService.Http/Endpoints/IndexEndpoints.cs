@@ -5,7 +5,7 @@ namespace MEditService.Http.Endpoints;
 
 /// <summary>The load order's status, sequence and record filter, and the index's rebuild, each one
 /// Queries call and the wire translation of its answer (ADR-0014).</summary>
-public static class IndexEndpoints
+internal static class IndexEndpoints
 {
     private const string LoadOrderTag = "LoadOrder";
 

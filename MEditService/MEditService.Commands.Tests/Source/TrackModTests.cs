@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -62,8 +63,8 @@ public sealed class TrackModTests
 
     private sealed class LockedPluginAdapter(string lockedName) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override bool CanRead(ModPath modPath) =>
-            !modPath.ModKey.FileName.String.Equals(lockedName, StringComparison.OrdinalIgnoreCase) && base.CanRead(modPath);
+        public override bool CanRead(RegisteredPlugin plugin) =>
+            !plugin.Name.Equals(lockedName, StringComparison.OrdinalIgnoreCase) && base.CanRead(plugin);
 
         public override Task WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
@@ -95,8 +96,8 @@ public sealed class TrackModTests
         Assert.Equal("FirstNpc", first.EditorId);
         Assert.Equal("SecondNpc", second.EditorId);
 
-        var roundTripped = (Npc)RecordTextCodec.DeserializeText(typeof(Npc), first.Body, GameRelease.Fallout4);
-        Assert.Equal(npc1.FormKey, roundTripped.FormKey);
+        using var roundTripped = JsonDocument.Parse(SourceEdits.Codec.RoundTrip(first.Body, GameRelease.Fallout4, "npc_"));
+        Assert.Equal(npc1.FormKey.ToString(), roundTripped.RootElement.GetProperty("FormKey").GetString());
 
         Assert.DoesNotContain(
             TreeDocuments.Of(SourceRepository.Open(TestMod.In(modFolder), GameRelease.Fallout4).Require(), plugin),

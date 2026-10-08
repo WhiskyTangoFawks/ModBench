@@ -16,7 +16,7 @@ public sealed record LinkAnswers(
     IReadOnlyDictionary<string, ResolvedFormKey> Targets,
     IReadOnlyList<UnreadablePlugin> UnreadableFiles)
 {
-    public static readonly LinkAnswers None =
+    internal static readonly LinkAnswers None =
         new(new Dictionary<string, ResolvedFormKey>(StringComparer.OrdinalIgnoreCase), []);
 }
 
@@ -72,7 +72,7 @@ internal static class LoadOrderLinks
             // A malformed FormKey is an editor's raw input: it names nothing and throws nothing.
             if (!FormKey.TryFactory(formKey, out var parsed)) continue;
             if (!cache.TryResolve<IMajorRecordGetter>(parsed, out var record)) continue;
-            targets[formKey] = new ResolvedFormKey(RecordTableName.Of(record, schemas), record.EditorID);
+            targets[formKey] = new ResolvedFormKey(RecordTableName.Of(record.GetType(), schemas), record.EditorID);
         }
         return targets;
     }

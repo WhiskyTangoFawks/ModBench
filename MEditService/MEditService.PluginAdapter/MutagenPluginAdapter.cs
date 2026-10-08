@@ -46,10 +46,11 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     }
 
     public IPluginRecordLookup OpenRecordLookup(
-        ModPath modPath,
+        RegisteredPlugin plugin,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
+        var modPath = new ModPath(plugin.Path);
         ILoadedMod? loaded = OpenForRead(modPath, gameRelease);
         try
         {
@@ -65,11 +66,11 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
 
     // FileMode.Open, FileAccess.Read, FileShare.Read: what File.OpenRead gives, and what every
     // read below opens the same file with, so this answers for the read that follows it.
-    public bool CanRead(ModPath modPath)
+    public bool CanRead(RegisteredPlugin plugin)
     {
         try
         {
-            using (File.OpenRead(modPath.Path)) return true;
+            using (File.OpenRead(plugin.Path)) return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -90,11 +91,24 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     }
 
     public LinkAnswers LinkTargets(
-        IReadOnlyList<ModPath> loadOrder,
-        GameRelease gameRelease,
+        LoadOrderSnapshot loadOrder,
+        RegisteredPlugin compiled,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        IReadOnlyCollection<string> formKeys) =>
-        LoadOrderLinks.Targets(loadOrder, gameRelease, schemas, formKeys);
+        IReadOnlyCollection<string> formKeys)
+    {
+        // One mod per filename, because that is what a link cache can hold: the plugin being compiled
+        // stands in for its own filename, at whatever slot the load order gives that name.
+        var files = loadOrder.Active
+            .Select(plugin => SameFile(plugin, compiled) ? compiled : plugin)
+            .Append(compiled)
+            .DistinctBy(plugin => plugin.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(plugin => new ModPath(plugin.Path))
+            .ToList();
+        return LoadOrderLinks.Targets(files, loadOrder.GameRelease, schemas, formKeys);
+    }
+
+    private static bool SameFile(RegisteredPlugin plugin, RegisteredPlugin other) =>
+        plugin.Name.Equals(other.Name, StringComparison.OrdinalIgnoreCase);
 
     public Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files,
@@ -108,14 +122,15 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         CancellationToken cancel = default) =>
         PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
 
-    public Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceAsync(
-        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
-        CancellationToken cancel = default) =>
-        PluginTrees.ReadAsync(modPath, registeredName, gameRelease, strings, cancel);
+    public Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceOfAsync(
+        RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
+        PluginTrees.ReadAsync(
+            new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), plugin.Name, gameRelease, strings, cancel);
 
-    public string? DivergenceBetween(
-        ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
-        PluginTrees.DivergenceBetween(modPath, recompiledPath, gameRelease, strings)?.Describe();
+    public string? DivergenceFrom(
+        string pluginFileName, string pluginFilePath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
+        PluginTrees.DivergenceBetween(
+            new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, gameRelease, strings)?.Describe();
 
     public async Task<PluginByteComparison> CompareBytesAsync(
         string originalPath, string recompiledPath, CancellationToken cancel = default)

@@ -2,7 +2,7 @@ using MEditService.Http.Notifications;
 
 namespace MEditService.Http.Endpoints;
 
-public static class NotificationEndpoints
+internal static class NotificationEndpoints
 {
     public static IEndpointRouteBuilder MapNotificationEndpoints(this IEndpointRouteBuilder app)
     {

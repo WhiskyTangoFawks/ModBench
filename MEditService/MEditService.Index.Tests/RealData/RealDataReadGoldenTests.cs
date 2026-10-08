@@ -119,7 +119,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
                         .ThenBy(x => x.FieldPath, StringComparer.Ordinal)
                         .Take(5).ToList(),
                 }),
-            Resolved = allFormKeys.ToDictionary(fk => fk, _repo.Resolve),
+            Resolved = allFormKeys.ToDictionary(fk => fk, fk => _repo.LinkResolver(fk)(fk)),
         };
 
         Assert.NotEmpty(captured.ReferencedBy);

@@ -133,8 +133,13 @@ public abstract record ChildSlot
     public sealed record Filled(string Slot, string HeldFormKey) : ChildSlot;
 
     /// <summary>More than one member takes it.</summary>
-    public sealed record Several(IReadOnlyList<string> Slots) : ChildSlot;
+    internal sealed record Several(IReadOnlyList<string> Slots) : ChildSlot;
 
     /// <summary>xEdit's Add offers no such record on the container where it sits.</summary>
-    public sealed record NotHeld : ChildSlot;
+    public sealed record NotHeld : ChildSlot
+    {
+        internal NotHeld()
+        {
+        }
+    }
 }

@@ -33,7 +33,7 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
                 ?? throw new InvalidOperationException($"Expected ICustomize<{customized.Name}> to declare CustomizeFor.");
             customizeFor.Invoke(Activator.CreateInstance(found.Type), [recorder]);
 
-            var parent = ContainerChildFields.NormalizedTypeName(customized);
+            var parent = customized.IsInterface ? customized.Name[1..^"Getter".Length] : customized.Name;
             foreach (var member in recorder.Embedded) yield return (parent, member);
         }
     }

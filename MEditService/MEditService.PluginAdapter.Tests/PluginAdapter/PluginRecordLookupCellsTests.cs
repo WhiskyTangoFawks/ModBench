@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -46,7 +47,9 @@ public sealed class PluginRecordLookupCellsTests
             })
             .Build();
 
-        using var lookup = Adapter.OpenRecordLookup(new ModPath(ModKey.FromFileName(PluginName), Path.Combine(data.DataFolder, PluginName)), GameRelease.Fallout4, new Dictionary<string, RecordTableSchema>());
+        using var lookup = Adapter.OpenRecordLookup(
+            new RegisteredPlugin(PluginName, PluginOrigin.DataDirectory, Path.Combine(data.DataFolder, PluginName), PluginProvider.Game),
+            GameRelease.Fallout4, new Dictionary<string, RecordTableSchema>());
 
         Assert.Equal(
             expected.Select(key => key.ToString()).Order(StringComparer.Ordinal),

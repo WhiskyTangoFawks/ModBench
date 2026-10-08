@@ -4,7 +4,7 @@ namespace MEditService.Http.Endpoints;
 
 /// <summary>Its own file rather than part of <see cref="WorldspaceEndpoints"/>: that file is about
 /// spatial containment, while the container-child query is container-type-agnostic.</summary>
-public static class ContainerChildEndpoints
+internal static class ContainerChildEndpoints
 {
     public static IEndpointRouteBuilder MapContainerChildEndpoints(this IEndpointRouteBuilder app, ILoggerFactory loggerFactory)
     {

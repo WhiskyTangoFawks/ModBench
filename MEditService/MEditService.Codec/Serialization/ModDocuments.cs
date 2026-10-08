@@ -106,7 +106,7 @@ internal sealed class MutagenModDocuments(
     // Mutagen's enumeration by one placed-trap variant (a placed arrow, hazard, missile...) yields
     // every variant a cell holds.
     private bool IsOf(string tableName, RecordTableSchema schema, IMajorRecordGetter record) =>
-        schema.RecordType.IsInstanceOfType(record) || RecordTableName.Of(record, schemas) == tableName;
+        schema.RecordType.IsInstanceOfType(record) || RecordTableName.Of(record.GetType(), schemas) == tableName;
 
     private PluginDocument Document(string tableName, RecordTableSchema schema, IMajorRecordGetter record)
     {

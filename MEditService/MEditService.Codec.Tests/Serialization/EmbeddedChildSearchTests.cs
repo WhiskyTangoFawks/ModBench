@@ -22,7 +22,7 @@ public sealed class EmbeddedChildSearchTests
     private static string? RekeyedViaRecordDocumentEditsBecauseTheSearchIsCodecInternal(IMajorRecordGetter owner, string formKey) =>
         RecordDocumentEdits.WithEmbeddedChildFormKey(
             Codec, Codec.SerializeToText(owner, GameRelease.Fallout4), GameRelease.Fallout4,
-            RecordTableName.Of(owner, Schemas), formKey, NewFormKey);
+            RecordTableName.Of(owner.GetType(), Schemas), formKey, NewFormKey);
 
     private static void AssertRekeyed(string? text, string formKey)
     {

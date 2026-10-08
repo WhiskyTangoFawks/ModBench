@@ -45,11 +45,12 @@ public sealed class RegionDataDocumentTests
     [Fact]
     public void ARegionsDataEntries_ReadBackWithTheirLodAndOcclusionValues()
     {
-        var read = ReadBack.Of<Region>(Codec, RegionWithEveryDataEntry(), GameRelease.Fallout4, "regn");
+        var read = ReadBack.Of(Codec, RegionWithEveryDataEntry(), GameRelease.Fallout4, "regn");
 
         Assert.Equal(
             [(1f, 11f), (2f, 12f), (3f, 13f), (4f, 14f), (5f, 15f), (6f, 16f)],
-            new IRegionDataGetter?[] { read.Objects, read.Weather, read.Map, read.Land, read.Grasses, read.Sounds }
-                .Select(d => (d?.LodDisplayDistanceMultiplier, d?.OcclusionAccuracyDist)));
+            new[] { "Objects", "Weather", "Map", "Land", "Grasses", "Sounds" }
+                .Select(entry => read.GetProperty(entry))
+                .Select(d => (d.GetProperty("LodDisplayDistanceMultiplier").GetSingle(), d.GetProperty("OcclusionAccuracyDist").GetSingle())));
     }
 }

@@ -5,7 +5,7 @@ using MEditService.Queries;
 
 namespace MEditService.Http.Endpoints;
 
-public static class RecordEndpoints
+internal static class RecordEndpoints
 {
     public static IEndpointRouteBuilder MapRecordEndpoints(this IEndpointRouteBuilder app, ILoggerFactory loggerFactory)
     {

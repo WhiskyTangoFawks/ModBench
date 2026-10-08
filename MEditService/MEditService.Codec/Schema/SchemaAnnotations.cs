@@ -7,9 +7,9 @@ namespace MEditService.Codec.Schema;
 
 /// <summary>What one known Mutagen defect does to the schema and to a gesture: the member it is
 /// keyed to, and the reason the user is shown.</summary>
-public sealed record KnownDefect(string TypeName, string MemberName, KnownDefectEffect Effect, string Reason);
+internal sealed record KnownDefect(string TypeName, string MemberName, KnownDefectEffect Effect, string Reason);
 
-public enum KnownDefectEffect
+internal enum KnownDefectEffect
 {
     /// <summary>The schema names the member and carries the reason; the write path refuses any
     /// path reaching it.</summary>

@@ -157,7 +157,7 @@ public sealed class RecordHeaderSchemaTests
         Assert.Equal(
             ["Record Flags", "FormID", "Version Control Info 1", "Form Version", "Version Control Info 2"],
             header.Select(c => c.Field.DisplayLabel));
-        Assert.NotNull(header.Single(c => c.Name == "FormID").ReadOnlyReason);
+        Assert.NotNull(header.Single(c => c.Name == "FormID").Field.ReadOnlyReason);
         Assert.Contains(new EnumMember("Master", "1", "ESM"), header.Single(c => c.Name == "Flags").Field.EnumMembers);
     }
 }

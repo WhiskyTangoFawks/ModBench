@@ -299,7 +299,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 /// swallowed: the caller degrades to the binary and records the reason.</summary>
 public sealed class UnreadableSourceDocumentException : InvalidOperationException
 {
-    public UnreadableSourceDocumentException() : base("A source document could not be read.")
+    internal UnreadableSourceDocumentException() : base("A source document could not be read.")
     {
     }
 

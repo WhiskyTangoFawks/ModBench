@@ -14,10 +14,10 @@ public static class FormReferences
 {
     /// <summary>Every link the document holds, in the schema's column order. A target named at two
     /// members is answered twice, once under each path, because a path is what names it.</summary>
-    public static List<FormReference> Collect(JsonElement document, RecordTableSchema schema)
+    public static List<FormReference> Collect(JsonElement document, IReadOnlyList<ColumnSpec> columns)
     {
         var refs = new List<FormReference>();
-        foreach (var col in schema.RecordColumns)
+        foreach (var col in columns)
             Walk(col, document, (path, fk) => refs.Add(new FormReference(fk, path)));
         return refs;
     }

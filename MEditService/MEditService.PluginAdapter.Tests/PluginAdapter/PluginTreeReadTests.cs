@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -65,8 +66,9 @@ public sealed class PluginTreeReadTests
 
     private static async Task<IReadOnlyList<TreeFile>> ReadTreeFiles(PluginFixtureData data, string pluginName)
     {
-        var (files, _) = await Adapter.ReadSourceAsync(
-            new ModPath(Path.Combine(data.DataFolder, pluginName)), pluginName, GameRelease.Fallout4,
+        var (files, _) = await Adapter.ReadSourceOfAsync(
+            new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, Path.Combine(data.DataFolder, pluginName), PluginProvider.Game),
+            GameRelease.Fallout4,
             new PluginStrings(null, data.DataFolder));
         return files;
     }

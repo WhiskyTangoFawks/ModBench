@@ -1,22 +1,11 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Tests.Schema;
 
 public class FormReferenceCollectorTests
 {
     private static ColumnSpec Column(SubFieldSpec field) => new(field, field.Name, "JSON");
-
-    private static RecordTableSchema SchemaOf(params ColumnSpec[] columns) =>
-        new()
-        {
-            TableName = "test",
-            DisplayName = "Test",
-            RecordType = typeof(IMajorRecordGetter),
-            RecordColumns = columns,
-        };
 
     private static ColumnSpec ScalarFormKeyCol(string name) =>
         new(new SubFieldSpec(name, "formKey", [], []), name, "VARCHAR");
@@ -39,7 +28,7 @@ public class FormReferenceCollectorTests
             _ => JsonSerializer.Serialize(value),
         };
         using var root = JsonDocument.Parse($"{{\"{col.PropertyName}\": {member}}}");
-        results.AddRange(FormReferences.Collect(root.RootElement, SchemaOf(col)).Select(r => (r.FieldPath, r.TargetFormKey)));
+        results.AddRange(FormReferences.Collect(root.RootElement, [col]).Select(r => (r.FieldPath, r.TargetFormKey)));
         return results;
     }
 
@@ -211,7 +200,7 @@ public class FormReferenceCollectorTests
             }
             """);
 
-        var refs = FormReferences.Collect(document.RootElement, SchemaOf(nested, list, union));
+        var refs = FormReferences.Collect(document.RootElement, [nested, list, union]);
 
         Assert.Equal(
             [("Ownership.Owner.Faction", "000001:A.esp"),

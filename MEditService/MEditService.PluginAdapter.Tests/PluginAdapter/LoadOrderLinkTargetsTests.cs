@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -29,18 +30,24 @@ public sealed class LoadOrderLinkTargetsTests
                     "RenamedByPatch")
             .Build();
 
-    private static IReadOnlyList<ModPath> Paths(PluginFixtureData data, params string[] names) =>
-        [.. names.Select(name => new ModPath(ModKey.FromFileName(name), Path.Combine(data.DataFolder, name)))];
+    private static RegisteredPlugin Plugin(PluginFixtureData data, string name) =>
+        new(name, PluginOrigin.DataDirectory, Path.Combine(data.DataFolder, name), PluginProvider.Game);
 
-    private static LinkAnswers Answers(IReadOnlyList<ModPath> loadOrder, params string[] formKeys) =>
+    private static IReadOnlyList<RegisteredPlugin> Paths(PluginFixtureData data, params string[] names) =>
+        [.. names.Select(name => Plugin(data, name))];
+
+    private static LinkAnswers Answers(IReadOnlyList<RegisteredPlugin> loadOrder, params string[] formKeys) =>
         Adapter.LinkTargets(
-            loadOrder,
-            GameRelease.Fallout4,
+            new LoadOrderSnapshot(
+                DataFolderOf(loadOrder[0]), null, GameRelease.Fallout4, loadOrder, [.. loadOrder.Select(plugin => plugin.Key)], []),
+            loadOrder[^1],
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
             formKeys);
 
+    private static string DataFolderOf(RegisteredPlugin plugin) => Path.GetDirectoryName(plugin.Path) ?? plugin.Path;
+
     private static IReadOnlyDictionary<string, ResolvedFormKey> Targets(
-        IReadOnlyList<ModPath> loadOrder, params string[] formKeys) =>
+        IReadOnlyList<RegisteredPlugin> loadOrder, params string[] formKeys) =>
         Answers(loadOrder, formKeys).Targets;
 
     [Fact]
@@ -79,7 +86,7 @@ public sealed class LoadOrderLinkTargetsTests
     public void AFileTheLoadOrderNamesButDiskDoesNotHold_IsNamedAsUnread_AndLeavesTheRestAnswered()
     {
         using var data = TwoPluginLoadOrder("link-targets-missing-file");
-        var missing = new ModPath(ModKey.FromFileName("Absent.esp"), Path.Combine(data.DataFolder, "Absent.esp"));
+        var missing = Plugin(data, "Absent.esp");
         var absentKey = $"000801:Absent.esp";
 
         var answers = Answers([.. Paths(data, BaseName), missing], _keyword.ToString(), absentKey);

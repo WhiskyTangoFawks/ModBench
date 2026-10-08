@@ -3,15 +3,22 @@ namespace MEditService.PluginAdapter;
 
 /// <summary>An uncommitted plugin write: temp-written binary and strings files. Commit renames them
 /// into place; Dispose discards the temp state either way.</summary>
-public sealed class PreparedPluginSave(
-    string tmpPath,
-    string finalPath,
-    IReadOnlyList<(string TempPath, string FinalPath)>? stringsFiles = null) : IDisposable
+public sealed class PreparedPluginSave : IDisposable
 {
-    private readonly IReadOnlyList<(string TempPath, string FinalPath)> _stringsFiles = stringsFiles ?? [];
+    private readonly string _tmpPath;
+    private readonly string _finalPath;
+    private readonly IReadOnlyList<(string TempPath, string FinalPath)> _stringsFiles;
+
+    internal PreparedPluginSave(
+        string tmpPath, string finalPath, IReadOnlyList<(string TempPath, string FinalPath)>? stringsFiles = null)
+    {
+        _tmpPath = tmpPath;
+        _finalPath = finalPath;
+        _stringsFiles = stringsFiles ?? [];
+    }
 
     /// <summary>The hash of the binary Commit puts in place, spelled as the commit trailers spell it.</summary>
-    public string BinarySha256() => PluginBinaryHash.TrailerFormOfFile(tmpPath);
+    public string BinarySha256() => PluginBinaryHash.TrailerFormOfFile(_tmpPath);
 
     /// <summary>The strings first and the binary last, each by one rename over the old file, so an
     /// interrupted commit leaves the old binary or the new one (plugins.md, Compile, story 5).</summary>
@@ -22,14 +29,14 @@ public sealed class PreparedPluginSave(
             Directory.CreateDirectory(PathShape.DirectoryOf(finalStringsPath));
             File.Move(tempStringsPath, finalStringsPath, overwrite: true);
         }
-        File.Move(tmpPath, finalPath, overwrite: true);
+        File.Move(_tmpPath, _finalPath, overwrite: true);
     }
 
     public void Dispose()
     {
         try
         {
-            var tmpDir = PathShape.DirectoryOf(tmpPath);
+            var tmpDir = PathShape.DirectoryOf(_tmpPath);
             // Recursive: tmpDir can still hold the Strings/ temp subfolder, whole after an uncommitted
             // Dispose, part-drained after a Commit that threw partway through the strings.
             if (Directory.Exists(tmpDir))

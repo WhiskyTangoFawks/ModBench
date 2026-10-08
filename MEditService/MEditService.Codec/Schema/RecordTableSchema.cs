@@ -31,10 +31,6 @@ public sealed record ColumnSpec(
     /// <summary>The wire's own name for the leaf kind, which decides how a view projects it.</summary>
     public string ApiType => Field.ApiType;
 
-    /// <summary>Why a write reaching this column is refused, or null. The field's own, so a column
-    /// and a nested member state it once.</summary>
-    public string? ReadOnlyReason => Field.ReadOnlyReason;
-
     /// <summary>Scalar leaves with one DuckDB type only: arrays and structs have no scalar rendering,
     /// a column varying by record class no single type, a synthetic member no document node. "No
     /// column" beats "a column with broken semantics".</summary>
@@ -47,13 +43,17 @@ public sealed record ColumnSpec(
 
 public sealed class RecordTableSchema
 {
+    internal RecordTableSchema()
+    {
+    }
+
     public required string TableName { get; init; }
     public required Type RecordType { get; init; }
     public required IReadOnlyList<ColumnSpec> RecordColumns { get; init; }
 
     /// <summary>The xEdit display name ("Activator" for <c>acti</c>); <see cref="TableName"/> stays
     /// the key everywhere else.</summary>
-    public required string DisplayName { get; init; }
+    internal string DisplayName => RecordDisplayNames.For(TableName);
 
     /// <summary>True for the plugin header, whose document is the whole mod's root RecordData.json
     /// rather than a major record's, so its columns sit under a nested path and it carries no

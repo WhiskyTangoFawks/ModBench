@@ -35,9 +35,9 @@ public sealed class LeafLabelTests
     [Fact]
     public void AQuestAliasUnion_DropsTheWordTheBaseAndLeafShareAtTheStart()
     {
-        var aliases = Schemas["qust"].RecordColumns.Single(c => c.Name == "Aliases").Field.ElementSpec
-            ?? throw new InvalidOperationException("Expected 'qust.Aliases' to have an array element spec.");
-        var labels = DiscriminatorLabels(aliases.ToFieldMetadata());
+        var aliases = Schemas["qust"].RecordColumns.Single(c => c.Name == "Aliases").ToFieldMetadata().ElementType
+            ?? throw new InvalidOperationException("Expected 'qust.Aliases' to have an array element type.");
+        var labels = DiscriminatorLabels(aliases);
 
         Assert.Equal("Reference", labels["QuestReferenceAlias"]);
         Assert.Equal("Collection", labels["QuestCollectionAlias"]);

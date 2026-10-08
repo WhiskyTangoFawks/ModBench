@@ -9,9 +9,6 @@ namespace MEditService.Codec.Serialization;
 /// signature the schema names tables after.</summary>
 public static class RecordTableName
 {
-    public static string Of(IMajorRecordGetter record, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        Of(record.GetType(), schemas);
-
     public static string Of(Type concrete, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         foreach (var (tableName, schema) in schemas)
@@ -27,7 +24,7 @@ public static class RecordTableName
     }
 
     /// <summary>The record signature a table is named after: the table is its lowercase.</summary>
-    public static string SignatureOf(string table) => table.ToUpperInvariant();
+    internal static string SignatureOf(string table) => table.ToUpperInvariant();
 
     private const string OverlaySuffix = "BinaryOverlay";
 

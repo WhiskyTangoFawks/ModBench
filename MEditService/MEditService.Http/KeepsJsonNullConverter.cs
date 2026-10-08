@@ -5,7 +5,7 @@ namespace MEditService.Http;
 
 /// <summary>Reads a JSON null as the null element rather than as an absent value, so a request can
 /// tell "clear this" from "no value given".</summary>
-public sealed class KeepsJsonNullConverter : JsonConverter<JsonElement?>
+internal sealed class KeepsJsonNullConverter : JsonConverter<JsonElement?>
 {
     public override bool HandleNull => true;
 

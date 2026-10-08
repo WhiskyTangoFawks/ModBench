@@ -127,7 +127,7 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
 
     /// <summary>Every child a document carries inline, at any depth: a worldspace's own document
     /// holds its top cell, which holds its placed references.</summary>
-    public IEnumerable<ChildDocument> EmbeddedDescendantsOf(string ownerRecordType, JsonElement ownerRoot)
+    internal IEnumerable<ChildDocument> EmbeddedDescendantsOf(string ownerRecordType, JsonElement ownerRoot)
     {
         var ownerType = ContainerTypeOf(ownerRecordType);
         foreach (var child in ChildrenOf(ownerRecordType, ownerRoot))
