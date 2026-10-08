@@ -20,7 +20,7 @@ public sealed class MasterPruningRoundTripGateTests
     public async Task TrackAsync_OfAGeneratedPluginWithUnusedMasters_AcceptsDespiteThePrunedMaster(string fileName)
     {
         var generated = UnusedMasterPlugins.Named(fileName);
-        using var scratch = new PrunedMasterScratch(fileName, "UnusedMasterMod", generated.WriteInto);
+        using var scratch = new PrunedMasterScratch(generated, "UnusedMasterMod");
         Assert.Equal(generated.Masters, scratch.DeclaredMasters());
 
         await scratch.TrackAsync();
@@ -31,7 +31,7 @@ public sealed class MasterPruningRoundTripGateTests
     [Fact]
     public async Task TrackAsync_OfTheRealSpaDiaAMRFixture_RefusesNamingTheQuestAndThePrunedMaster()
     {
-        using var scratch = new PrunedMasterScratch(SpaDiaAmrFixtureFileName, "SpaDiaAMRMod", folder => File.Copy(PathTo(SpaDiaAmrFixtureFileName), Path.Combine(folder, SpaDiaAmrFixtureFileName)));
+        using var scratch = new PrunedMasterScratch(new GeneratedPlugin(SpaDiaAmrFixtureFileName, File.ReadAllBytes(PathTo(SpaDiaAmrFixtureFileName))), "SpaDiaAMRMod");
 
         var result = await scratch.TrackAsync();
 
@@ -53,11 +53,11 @@ public sealed class MasterPruningRoundTripGateTests
 
         public ScratchDirectory ModFolder { get; } = new("medit-masterprune-");
 
-        public PrunedMasterScratch(string fixtureFileName, string origin, Action<string> placeInto)
+        public PrunedMasterScratch(GeneratedPlugin plugin, string origin)
         {
-            _fixtureFileName = fixtureFileName;
+            _fixtureFileName = plugin.FileName;
             _origin = origin;
-            placeInto(ModFolder);
+            plugin.WriteInto(ModFolder);
 
             _loadOrder = EmptyMasterStubs.LoadOrderOver(Path.Combine(ModFolder, _fixtureFileName), _origin, _gameDirectory);
         }

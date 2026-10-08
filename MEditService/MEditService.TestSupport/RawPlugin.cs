@@ -21,6 +21,12 @@ public static class RawPlugin
         return bytes;
     }
 
+    public static byte[] EditorId(string editorId) => Subrecord("EDID", Encoding.ASCII.GetBytes(editorId + "\0"));
+
+    public static byte[] Misc(uint formId, string editorId) => Record("MISC", formId, EditorId(editorId));
+
+    public static uint NewRecordId(int masterCount, uint objectId) => ((uint)masterCount << 24) | objectId;
+
     public static byte[] Record(string type, uint formId, params byte[][] subrecords) =>
         Record(type, formId, 0, Fallout4FormVersion, subrecords);
 
