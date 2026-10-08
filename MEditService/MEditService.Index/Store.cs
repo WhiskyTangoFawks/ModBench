@@ -107,42 +107,53 @@ internal sealed class Store : IDisposable
     // this process's database instance. Either way the read gets its own transaction context.
     public DuckDBConnection OpenReadConnection()
     {
-        lock (_rebuildGate)
+        lock (_readsGate)
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            WaitWhile(() => _rebuilding, "being rebuilt");
+            ObjectDisposedException.ThrowIf(_closedToReads, this);
             var connection = _databasePath == null ? Connection.Duplicate() : new DuckDBConnection($"DataSource={_databasePath}");
             connection.Open();
             _readsInFlight++;
-            connection.Disposed += (_, _) => { lock (_rebuildGate) { _readsInFlight--; Monitor.PulseAll(_rebuildGate); } };
+            connection.Disposed += (_, _) => { lock (_readsGate) { _readsInFlight--; Monitor.PulseAll(_readsGate); } };
             return connection;
         }
     }
 
-    // A reopen while a read connection is open gets DuckDB.NET's cached instance of the file the
-    // rebuild just deleted, so a rebuild waits for reads in flight.
-    private readonly object _rebuildGate = new();
+    // DuckDB.NET keeps one database instance per path while any connection on it is open, so a read
+    // outliving its store hands the next store on the path the old rows, even after a rebuild
+    // deleted the file.
+    private readonly object _readsGate = new();
     private int _readsInFlight;
-    private bool _rebuilding;
-    private bool _disposed;
+    private bool _closedToReads;
 
-    // Called under _rebuildGate. Bounded for the reason IndexWriteGate.HoldLimit gives: a read
-    // connection that is never disposed would otherwise wedge every later rebuild and read behind
-    // it, with nothing said.
-    private void WaitWhile(Func<bool> pending, string what)
+    /// <summary>Closes the store to new reads. False when a read is still open once
+    /// IndexWriteGate.HoldLimit has passed: a read never disposed would otherwise wedge the closing.
+    /// </summary>
+    public bool EndReads()
     {
-        var deadline = _timeProvider.GetUtcNow() + IndexWriteGate.HoldLimit;
-        while (pending())
+        lock (_readsGate)
         {
-            var remaining = deadline - _timeProvider.GetUtcNow();
-            if (remaining <= TimeSpan.Zero || !Monitor.Wait(_rebuildGate, remaining))
-                throw new TimeoutException($"The index is still {what} after {IndexWriteGate.HoldLimit.TotalSeconds:0.###}s.");
+            _closedToReads = true;
+            var deadline = _timeProvider.GetUtcNow() + IndexWriteGate.HoldLimit;
+            var aReadEnded = true;
+            while (_readsInFlight > 0 && aReadEnded)
+            {
+                var remaining = deadline - _timeProvider.GetUtcNow();
+                aReadEnded = remaining > TimeSpan.Zero && Monitor.Wait(_readsGate, remaining);
+            }
+            return _readsInFlight == 0;
         }
     }
 
     public void Dispose()
     {
-        lock (_rebuildGate) _disposed = true;
+        bool closedToReads;
+        lock (_readsGate) closedToReads = _closedToReads;
+        if (!closedToReads && !EndReads())
+        {
+            _logger.LogError(
+                "The index at {Path} closes under a read still open after {Seconds}s; the next index opened on it may answer its old rows",
+                _databasePath, IndexWriteGate.HoldLimit.TotalSeconds);
+        }
         _connection?.Dispose();
     }
 
@@ -219,23 +230,10 @@ internal sealed class Store : IDisposable
     // delete-and-reopen.
     internal void RebuildFile()
     {
-        lock (_rebuildGate)
-        {
-            _rebuilding = true;
-            try
-            {
-                WaitWhile(() => _readsInFlight > 0, "serving reads");
-                Connection.Dispose();
-                File.Delete(_databasePath
-                    ?? throw new InvalidOperationException("An in-memory index has no file to rebuild."));
-                _connection = OpenFile(_databasePath);
-            }
-            finally
-            {
-                _rebuilding = false;
-                Monitor.PulseAll(_rebuildGate);
-            }
-        }
+        Connection.Dispose();
+        File.Delete(_databasePath
+            ?? throw new InvalidOperationException("An in-memory index has no file to rebuild."));
+        _connection = OpenFile(_databasePath);
     }
 
     /// <summary>ADR-0003: the indexed plugins whose file is gone or differs from its hash, for the
