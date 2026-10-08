@@ -2,7 +2,7 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { createMEditClient, type MEditClient } from './client';
+import { createMEditClient, stopMEditClient, type MEditClient } from './client';
 import { RecordBrowser } from './plugins/RecordBrowser';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
@@ -15,7 +15,8 @@ import { registerFilterCommands as registerNameFilterCommands } from './drivingL
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
 import type { RecordWrite } from './drivingLib/writingGesture';
 import { Instance } from './instanceLoader/instance';
-import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
+import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
+import { originFiles, NO_ORIGIN_FILES, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { createStatusBar, type StatusBar } from './plugins/statusBar';
@@ -67,13 +68,6 @@ interface ViewsDeps {
   editor: Pick<Editor, 'nameFilters' | 'copyValue'>;
 }
 
-interface InstanceFacts {
-  trackedMods: () => ReadonlySet<string>;
-  modDirs: () => ReadonlyMap<string, string>;
-  onChange: (listener: () => void) => vscode.Disposable;
-  refresh: () => Promise<void>;
-}
-
 interface InstanceSide {
   /** Absent together, on the path with no instance to read. */
   instance?: Instance;
@@ -87,14 +81,14 @@ interface InstanceSide {
 type Views = InstanceSide & vscode.Disposable;
 
 const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
-  disposables.forEach((disposable) => own(disposable));
+  own(vscode.Disposable.from(...disposables));
 };
 
 function buildBareSide(own: Own): InstanceSide {
   return {
     toolboxProvider: own(new ToolboxProvider({ instance: undefined })),
-    facts: { trackedMods: () => new Set(), modDirs: () => new Map(), onChange: () => ({ dispose: () => undefined }), refresh: () => Promise.resolve() },
-    originFiles: () => undefined,
+    facts: NO_INSTANCE_FACTS,
+    originFiles: NO_ORIGIN_FILES,
     copyValue: [], downloadsSelection: () => [],
   };
 }
@@ -111,10 +105,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     adapter, window: vscode.window, log, logReadFailure: (line) => outputChannel.error(line),
   }));
   own(markFirstReadLanded(instance));
-  // Fire-and-forget: watchers alone leave the value at its EMPTY sentinel until a change, so
-  // this kicks off the first real read. The Plugins tree's own `sequence === 0` guard is
-  // what keeps activation from being blocking here.
-  void instance.refresh();
   const refreshIndex = () => refresh(client, instanceRoot, instance.value);
   const { modSync, pluginSync } = own(instanceSyncs({
     instance, syncMods: modSyncOver(access), syncPlugins: pluginSyncOver(access), channel: outputChannel,
@@ -173,8 +163,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   }));
   return {
     instance, toolboxProvider,
-    facts: { trackedMods: () => instance.value.trackedMods, modDirs: () => instance.value.paths.modDirs,
-      onChange: (listener) => instance.subscribe(() => { listener(); }), refresh: () => instance.refresh() },
+    facts: factsOf(instance),
     originFiles: (origin) => originFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue],
     downloadsSelection: () => downloadsView.selection,
@@ -213,8 +202,7 @@ function buildViews(deps: ViewsDeps): Views {
   return {
     ...side,
     dispose: () => {
-      owned.reverse().forEach((disposable) => { disposable.dispose(); });
-      owned.length = 0;
+      vscode.Disposable.from(...owned.splice(0).reverse()).dispose();
     },
   };
 }
@@ -228,7 +216,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ADR-0002.
   const meditClient = createMEditClient({ backend: { attachPort }, backendLog: outputChannel, log });
-  activeClient = meditClient; // deactivate()'s only way to reach it
   const statusBar = createStatusBar(meditClient);
   context.subscriptions.push(statusBar);
   const treeProvider = new RecordBrowser(meditClient, log);
@@ -276,13 +263,9 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
-// VS Code's own `deactivate()` takes no arguments, so it has no way to receive what `activate()`
-// built — this module-level reference exists solely to bridge that gap.
-let activeClient: MEditClient | undefined;
-
 // Async so VS Code awaits confirmed-dead-child teardown before the extension host finishes
 // tearing down — otherwise a reload's replacement client is structurally unable to ever clean up
 // this instance's spawned child.
 export async function deactivate(): Promise<void> {
-  await activeClient?.stop();
+  await stopMEditClient();
 }
