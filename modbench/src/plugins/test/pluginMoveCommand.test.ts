@@ -12,7 +12,7 @@ const { handlers, registerCommand, picks } = vi.hoisted(() => {
   };
 });
 
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, uriFrom } from '../../test/vscodeMock';
 
 vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
@@ -22,7 +22,7 @@ vi.mock('vscode', async () => {
       withProgress: recordedWithProgress,
       showQuickPick: (items: { label: string }[]) => Promise.resolve(items.find(({ label }) => label === picks.label)),
     },
-    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
+    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, Uri: { from: uriFrom },
   };
 });
 

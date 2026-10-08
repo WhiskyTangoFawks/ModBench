@@ -16,7 +16,7 @@ import { present } from '../../ports/present';
 const PLUGIN: PluginAddress = { name: 'Plugin0.esp', origin: 'Data/' };
 
 function badgeOf(provider: RecordBrowser, row: RecordBrowserNode): string | undefined {
-  const badges = new RecordDecorationProvider(provider);
+  const badges = new RecordDecorationProvider(provider, () => new Set());
   return badges.provideFileDecoration(present(row.resourceUri, 'the row\'s resourceUri'))?.badge;
 }
 

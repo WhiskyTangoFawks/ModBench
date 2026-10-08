@@ -11,14 +11,14 @@ const { handlers, registerCommand } = vi.hoisted(() => {
   };
 });
 
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, uriFrom } from '../../test/vscodeMock';
 
 vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
   return {
     commands: { registerCommand },
     window: { withProgress: recordedWithProgress },
-    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
+    TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, Uri: { from: uriFrom },
   };
 });
 

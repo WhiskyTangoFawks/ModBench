@@ -115,7 +115,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   };
   showKeyContext();
   const keyContextSubscriptions = [view.onDidChangeSelection(showKeyContext), tree.onDidChangeTreeData(showKeyContext)];
-  const nameFilter = registerPluginsNameFilter(view, tree, joinSyncMessages(pluginSync, loadOrderPut));
+  const nameFilter = registerPluginsNameFilter(view, tree, joinSyncMessages(pluginSync, loadOrderPut, recordBrowser.beneathFailure));
   const lens = new FilterCodeLensProvider();
   const showRecordFilter = makeShowRecordFilter(lens, { pluginsNameFilter: nameFilter, pluginsTree: tree });
   const progress = pluginsViewProgress(view, nameFilter);
@@ -127,10 +127,12 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const compileProblems = new CompileProblems(compileDiagnostics);
   const unsubscribe = subscribeTreeToNotifications(client, recordBrowser, () => { void tree.facts.refresh(); });
   // Disposed in order: what reads the tree and the view goes before them.
-  const recordDecorations = new RecordDecorationProvider(recordBrowser);
+  const recordDecorations = new RecordDecorationProvider(recordBrowser, () => tree.lockedRowUris());
   const disposable = vscode.Disposable.from(
     indexStatus,
     recordDecorations,
+    view.onDidExpandElement(({ element }) => { if (element.resourceUri) recordBrowser.expandedRow(element.resourceUri); }),
+    view.onDidCollapseElement(({ element }) => { if (element.resourceUri) recordBrowser.collapsedRow(element.resourceUri); }),
     vscode.window.registerFileDecorationProvider(recordDecorations),
     { dispose: unsubscribe },
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, lens),
