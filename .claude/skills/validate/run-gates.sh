@@ -49,6 +49,9 @@ if [[ ${#GATE_ARGS[@]} -eq 0 ]]; then
 fi
 
 source "$ROOT/.claude/skills/validate/slot.sh"
+# MSBuild lends a run's worker nodes to any build of the same user, so a gate run its slot owner
+# stops would take another worktree's build down with it.
+export MSBUILDDISABLENODEREUSE=1
 
 # Two backend gate runs per machine, measured: a third leaves no memory headroom. api-drift
 # builds and boots a backend, and docs builds the backend tests, so each takes a slot too.
