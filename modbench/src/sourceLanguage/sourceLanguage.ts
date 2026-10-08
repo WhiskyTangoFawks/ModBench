@@ -33,9 +33,16 @@ function sourceProblems(deps: SourceLanguageDeps): vscode.Disposable {
     collection.clear();
     collection.set([...problems].map(([file, onFile]) => [vscode.Uri.file(file), onFile.map(diagnosticOf)]));
   };
+  let status: vscode.LanguageStatusItem | undefined;
+  const languageStatus = (text: string | undefined) => {
+    if (text === undefined) { status?.dispose(); status = undefined; return; }
+    status ??= vscode.languages.createLanguageStatusItem('modbench.sourceProblems', pluginSource);
+    status.severity = vscode.LanguageStatusSeverity.Warning;
+    status.text = text;
+  };
   const readText = async (file: string) => (await vscode.workspace.openTextDocument(vscode.Uri.file(file))).getText();
-  const unsubscribe = feedSourceProblems({ ...deps, readText, publish });
-  return new vscode.Disposable(() => { unsubscribe(); collection.dispose(); });
+  const unsubscribe = feedSourceProblems({ ...deps, readText, publish, languageStatus });
+  return new vscode.Disposable(() => { unsubscribe(); collection.dispose(); status?.dispose(); });
 }
 
 export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposable {

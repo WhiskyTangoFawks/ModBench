@@ -25,13 +25,15 @@ function feed(files: Record<string, string>, originFiles = modFolders, answeredA
   const client = new InMemoryMEditClient();
   if (answeredAtSubscribe) client.setQueryAnswerOnce('getPluginProblems', answeredAtSubscribe);
   const published: ProblemsByFile[] = [];
-  const reporter = { report: vi.fn(), shownOnSurface: vi.fn() };
+  const reporter = { shownOnSurface: vi.fn() };
+  const status: (string | undefined)[] = [];
   feedSourceProblems({
     client,
     originFiles,
     readText: (path) => path in files ? Promise.resolve(files[path] ?? '') : Promise.reject(new Error(`no ${path}`)),
     reporter,
     publish: (problems) => published.push(problems),
+    languageStatus: (text) => status.push(text),
   });
   const answered = async (answer: PluginProblems[], event: NotificationEvent = ready): Promise<ProblemsByFile> => {
     const before = published.length;
@@ -40,7 +42,7 @@ function feed(files: Record<string, string>, originFiles = modFolders, answeredA
     await vi.waitFor(() => { expect(published.length).toBeGreaterThan(before); });
     return published[published.length - 1] ?? new Map();
   };
-  return { client, reporter, published, answered };
+  return { client, reporter, published, status, answered };
 }
 
 describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', () => {
@@ -201,7 +203,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     await answered(failed('Refers.esp\'s source holds no file for 000800:Refers.esp.'));
     await answered(failed('Refers.esp is tracked but no mod folder provides it.'));
 
-    expect(reporter.report.mock.calls).toEqual([
+    expect(reporter.shownOnSurface.mock.calls).toEqual([
       ['warning', 'The Problems panel cannot show "Refers.esp"\'s problems.', 'Refers.esp\'s source holds no file for 000800:Refers.esp.'],
       ['warning', 'The Problems panel cannot show "Refers.esp"\'s problems.', 'Refers.esp is tracked but no mod folder provides it.'],
     ]);
@@ -214,7 +216,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     const shown = await answered([{ plugin: PLUGIN, problems: [stray], failure: 'Refers.esp\'s source could not place 000800:Refers.esp.' }]);
 
     expect([...shown.keys()]).toEqual(['/mods/ReferringMod/Refers.esp/Stray.json']);
-    expect(reporter.report.mock.calls).toEqual([
+    expect(reporter.shownOnSurface.mock.calls).toEqual([
       ['warning', 'The Problems panel cannot show "Refers.esp"\'s problems.', 'Refers.esp\'s source could not place 000800:Refers.esp.'],
     ]);
   });
@@ -224,7 +226,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
 
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
-    expect(reporter.report.mock.calls).toEqual([
+    expect(reporter.shownOnSurface.mock.calls).toEqual([
       ['warning', 'The Problems panel cannot show "Refers.esp"\'s problems.', 'The instance holds no folder for ReferringMod.'],
     ]);
   });
@@ -284,5 +286,44 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     older([{ plugin: PLUGIN, problems: [problem()] }]);
 
     await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1]); });
+  });
+
+  it('says in the language status that it shows the last good read, and why, until the next good answer clears it', async () => {
+    const { client, answered, status } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+    client.setQueryFailureOnce('getPluginProblems', new Error('getPluginProblems timed out after 30000ms'));
+    client.emit(ready);
+    await vi.waitFor(() => { expect(status.at(-1)).toBe('Showing the last good read: getPluginProblems timed out after 30000ms'); });
+
+    await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+
+    expect(status.at(-1)).toBeUndefined();
+  });
+
+  it('keeps the problems of a plugin mEdit cannot place while the rest publishes, and says so in the language status', async () => {
+    const other = { name: 'Other.esp', origin: 'OtherMod' };
+    const files = { '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"`, '/mods/OtherMod/Other.esp/Npc.json': `"${MISSING}"` };
+    const { answered, status } = feed(files);
+    await answered([{ plugin: PLUGIN, problems: [problem()] }, { plugin: other, problems: [] }]);
+    const why = 'Refers.esp is tracked but no mod folder provides it.';
+
+    const shown = await answered([
+      { plugin: PLUGIN, problems: [], failure: why },
+      { plugin: other, problems: [problem({ sourceRelativePath: 'Other.esp/Npc.json' })] },
+    ]);
+
+    expect([...shown.keys()].sort()).toEqual(['/mods/OtherMod/Other.esp/Npc.json', '/mods/ReferringMod/Refers.esp/Npc.json']);
+    expect(status.at(-1)).toBe(`Showing the last good read: "Refers.esp": ${why}`);
+  });
+
+  it('drops the kept problems of a plugin once mEdit places it again', async () => {
+    const { answered, status } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+    await answered([{ plugin: PLUGIN, problems: [], failure: 'unplaced' }]);
+
+    const shown = await answered([{ plugin: PLUGIN, problems: [] }]);
+
+    expect([...shown]).toEqual([]);
+    expect(status.at(-1)).toBeUndefined();
   });
 });

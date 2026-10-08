@@ -16,9 +16,11 @@ export interface SourceProblemsDeps {
   client: Pick<MEditClient, 'getPluginProblems' | 'onNotification' | 'onReconnected'>;
   originFiles: OriginFilesOf;
   readText: (path: string) => Promise<string>;
-  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
+  reporter: Pick<Reporter, 'shownOnSurface'>;
   /** Replaces every problem published before. */
   publish: (problems: ProblemsByFile) => void;
+  /** Says why the Problems panel shows the last good read, and undefined once it no longer does. */
+  languageStatus: (text: string | undefined) => void;
 }
 
 const FIRST_LINE = { line: 0, character: 0 };
@@ -45,43 +47,53 @@ function tellingOnce(say: (message: string, why: string) => void): (standing: To
   };
 }
 
-async function placed(answer: PluginProblems[], { originFiles, readText }: SourceProblemsDeps): Promise<{ byFile: ProblemsByFile; unplaced: Told[]; unread: Told[] }> {
-  const unplaced: Told[] = [];
+type OnFiles = Map<string, ProblemOnFile[]>;
+interface Unplaced extends Told { plugin: string }
+interface Placed { ofPlugin: Map<string, OnFiles>; unplaced: Unplaced[]; unread: Told[] }
+
+async function placed(answer: PluginProblems[], { originFiles, readText }: SourceProblemsDeps): Promise<Placed> {
+  const unplaced: Unplaced[] = [];
+  const unread: Told[] = [];
   const cannotShow = (name: string) => `The Problems panel cannot show "${name}"'s problems.`;
-  const byPath = new Map<string, SourceProblem[]>();
-  for (const { plugin, problems, failure } of answer) {
+  const ofPlugin = new Map(await Promise.all(answer.map(async ({ plugin, problems, failure }) => {
     const files = originFiles(plugin.origin);
     const key = pluginAddressKey(plugin);
     const why = files === undefined ? `The instance holds no folder for ${plugin.origin}.` : failure;
-    if (why != null) unplaced.push({ key, message: cannotShow(plugin.name), why });
-    if (files !== undefined) for (const problem of problems) {
+    if (why != null) unplaced.push({ key, message: cannotShow(plugin.name), why, plugin: plugin.name });
+    const onFiles: OnFiles = new Map();
+    if (files === undefined) return [key, onFiles] as const;
+    const byPath = new Map<string, SourceProblem[]>();
+    for (const problem of problems) {
       const path = files.file(problem.sourceRelativePath);
       byPath.set(path, [...(byPath.get(path) ?? []), problem]);
     }
-  }
-  const unread: Told[] = [];
-  const byFile = new Map(await Promise.all([...byPath].map(async ([path, onPath]) => {
-    const text = await readText(path).catch((error: unknown) => {
-      unread.push({ key: path, message: `The Problems panel shows the problems of "${path}" on its first line.`, why: errorMessage(error) });
-      return '';
-    });
-    return [path, onPath.map((problem) => onText(text, problem))] as const;
+    await Promise.all([...byPath].map(async ([path, onPath]) => {
+      const text = await readText(path).catch((error: unknown) => {
+        unread.push({ key: path, message: `The Problems panel shows the problems of "${path}" on its first line.`, why: errorMessage(error) });
+        return '';
+      });
+      onFiles.set(path, onPath.map((problem) => onText(text, problem)));
+    }));
+    return [key, onFiles] as const;
   })));
-  return { byFile, unplaced, unread };
+  return { ofPlugin, unplaced, unread };
 }
 
 /** Publishes what mEdit answers is wrong in each tracked active plugin's source whenever a save,
- *  a re-read plugin or a new active set can change it, and tells of an unplaced plugin once per
- *  reason (common.md, Reporting). */
+ *  a re-read plugin or a new active set can change it. A plugin mEdit cannot answer for keeps the
+ *  problems it last had, and the language status says why (plugin-source.md, In the text editor, story 6). */
 export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
-  const { client, reporter, publish } = deps;
-  const tellUnplaced = tellingOnce((message, why) => { reporter.report('warning', message, why); });
+  const { client, reporter, publish, languageStatus } = deps;
+  const tellUnplaced = tellingOnce((message, why) => { reporter.shownOnSurface('warning', message, why); });
   const tellUnread = tellingOnce((message, why) => { reporter.shownOnSurface('warning', message, why); });
+  const lastRead = (why: string) => `Showing the last good read: ${why}`;
+  let held = new Map<string, OnFiles>();
   let unanswered: string | undefined;
   const keepLastAnswer = (error: unknown) => {
     const why = errorMessage(error);
     if (why !== unanswered) reporter.shownOnSurface('warning', 'The Problems panel shows mEdit\'s last answer.', why);
     unanswered = why;
+    languageStatus(lastRead(why));
   };
   // Unknown until a load-order-status says, or mEdit answers the ask made at subscribe.
   let ready: boolean | undefined;
@@ -90,12 +102,15 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const ask = async (atSubscribe = false) => {
     const mine = ++latest;
     try {
-      const { byFile, unplaced, unread } = await placed(await client.getPluginProblems(), deps);
+      const { ofPlugin, unplaced, unread } = await placed(await client.getPluginProblems(), deps);
       if (atSubscribe) ready ??= true;
       if (mine < shown) return;
       shown = mine;
       unanswered = undefined;
-      publish(byFile);
+      const kept = new Set(unplaced.map(({ key }) => key));
+      held = new Map([...ofPlugin].map(([key, onFiles]) => [key, kept.has(key) ? new Map([...held.get(key) ?? [], ...onFiles]) : onFiles]));
+      publish(new Map([...held.values()].flatMap((onFiles) => [...onFiles])));
+      languageStatus(unplaced.length > 0 ? lastRead(unplaced.map(({ plugin, why }) => `"${plugin}": ${why}`).join(' ')) : undefined);
       tellUnplaced(unplaced);
       tellUnread(unread);
     } catch (error) {
