@@ -172,7 +172,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description What is wrong in each tracked active plugin's source, on the file that holds the record: a reference to a record no active plugin holds. Answers only once the index is ready. */
+        /** @description What is wrong in each tracked plugin's source, on the file that holds the record: a reference to a record neither it nor an active plugin holds. Answers only once the index is ready. */
         get: operations["GetPluginProblems"];
         put?: never;
         post?: never;
