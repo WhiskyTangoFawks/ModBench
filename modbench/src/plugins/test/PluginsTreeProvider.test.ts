@@ -2187,7 +2187,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
 });
 
 describe('PluginsTreeProvider — master-issue decoration', () => {
-  const withIssues = (h: Harness, issues: string[]) => reconcile(h, [held('A.esp', { masterIssues: issues })]);
+  const withIssues = (h: Harness, issues: string[] | null) => reconcile(h, [held('A.esp', { masterIssues: issues })]);
 
   it('flags a row with a master that is not active, in the Problems panel\'s red', async () => {
     const h = makeTree([A_ROW()]);
@@ -2229,6 +2229,16 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
     h.tree.facts.indexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
 
     expect((await rowItem(h)).tooltip).toContain('Missing masters: Ghost.esm');
+  });
+
+  it('keeps the last master issues through a read taken before the next snapshot is indexed', async () => {
+    const h = makeTree([A_ROW()]);
+    await withIssues(h, ['Ghost.esm']);
+
+    h.client.setQueryAnswer('getPlugins', [held('A.esp', { masterIssues: null })]);
+    await h.tree.facts.refresh();
+
+    expect((await rowItem(h)).description).toBe('1 master issue');
   });
 });
 

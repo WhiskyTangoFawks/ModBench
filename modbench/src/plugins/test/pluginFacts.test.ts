@@ -106,6 +106,36 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
 });
 
 describe('PluginFacts — which statuses stay and which land (plugins.md, A row, bullets)', () => {
+  it('shows no master status while mEdit has not checked, which is not no issues', () => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ masterIssues: null })], []);
+
+    expect(facts.description(A)).toBeUndefined();
+  });
+
+  it.each([
+    ['unchecked', null, 'Missing masters: Ghost.esm'],
+    ['checked and clean', [], undefined],
+    ['checked and changed', ['Other.esm'], 'Missing masters: Other.esm'],
+  ])('keeps the last master issues until a snapshot is indexed: a re-read that is %s', (_label, next, line) => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ masterIssues: ['Ghost.esm'] })], []);
+
+    facts.refreshed([held({ masterIssues: next })]);
+
+    expect(facts.tooltipLines(A).slice(2)).toEqual(line === undefined ? [] : [line]);
+  });
+
+  it('forgets the last master issues of a plugin a re-read omits', () => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ masterIssues: ['Ghost.esm'] })], []);
+
+    facts.refreshed([]);
+    facts.refreshed([held({ masterIssues: null })]);
+
+    expect(facts.description(A)).toBeUndefined();
+  });
+
   it('keeps a failed plugin failed through a tick that does not name it, until a reconcile lands', () => {
     const facts = new PluginFacts();
     facts.reconciled([], [failure('Malformed record')]);

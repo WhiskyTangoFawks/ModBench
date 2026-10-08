@@ -127,7 +127,7 @@ public class MasterResolutionTests
     }
 
     [Fact]
-    public async Task WhileTheLoadOrderIsStillIndexing_AnOpenedPluginsMasterIssuesAreAlreadyKnown()
+    public async Task WhileTheLoadOrderIsStillIndexing_MasterIssuesAreNotYetCheckedNull_NotAnEmptyListMeaningNoIssues()
     {
         using var fixture = Plugins(Plugin("A.esp", "Ghost.esm"), Plugin("B.esp")).Build();
         using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
@@ -147,6 +147,6 @@ public class MasterResolutionTests
         }
         await load;
 
-        Assert.Equal(["Ghost.esm"], rows.Single(r => r.Plugin.Name == "A.esp").MasterIssues);
+        Assert.Null(rows.Single(r => r.Plugin.Name == "A.esp").MasterIssues);
     }
 }
