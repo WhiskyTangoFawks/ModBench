@@ -1209,14 +1209,14 @@ describe('several records opened at once', () => {
     return client;
   }
 
-  it('open one grid, pinned: the first record\'s document, with the others as its columns in the order given, each without a plugin its winning copy', async () => {
+  it('open one grid, a preview: the first record\'s document, with the others as its columns in the order given, each without a plugin its winning copy', async () => {
     const { vsCodeOpensTabs } = makeEditor(severalClient());
     const tabOn = vsCodeOpensTabs();
 
     await openSeveral();
 
     expect(h.executed.filter(([id]) => id === 'vscode.openWith'))
-      .toEqual([['vscode.openWith', gunDocument, 'modbench.record', { viewColumn: -1, preview: false }]]);
+      .toEqual([['vscode.openWith', gunDocument, 'modbench.record', { viewColumn: -1, preview: true }]]);
     const tab = tabOn(gunDocument);
     expect(pageGlobal(tab ?? fakePanel(), 'mEditColumns'))
       .toEqual([{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }]);
