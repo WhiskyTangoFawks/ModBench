@@ -1,4 +1,5 @@
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -147,5 +148,46 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
         Arrive(index, missing with { Origin = Origin.ToLowerInvariant() });
 
         Assert.Equal(["Fine.esp"], FailedNames(index));
+    }
+
+    [Fact]
+    public void Reconcile_APluginRespelledOnlyInCase_IsNamedAsSpelledNowEverywhere()
+    {
+        var fine = Named("Fine.esp");
+        using var index = Reconciled(fine);
+
+        Arrive(index, fine with { Name = "fine.esp", Origin = Origin.ToLowerInvariant() });
+
+        var now = new PluginAddress("fine.esp", Origin.ToLowerInvariant());
+        Assert.Equal([now], index.Status.IndexedPlugins);
+        Assert.Equal([now], index.Records.GetPlugins().Select(row => new PluginAddress(row.Plugin.Name, row.Plugin.Origin)));
+        var record = index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Items.Single();
+        Assert.Equal(("fine.esp", "moda"), (record.Plugin, record.Origin));
+    }
+
+    [Fact]
+    public void Reconcile_AFailedPluginRespelledOnlyInCase_IsNamedAsSpelledNow()
+    {
+        var missing = Named("Fine.esp") with { Path = Path.Combine(_fixture.GameDirectory, "Missing.esp") };
+        using var index = Reconciled(missing);
+
+        Arrive(index, missing with { Name = "fine.esp" });
+
+        Assert.Equal(["fine.esp"], FailedNames(index));
+    }
+
+    [PosixFact]
+    public void Reconcile_AFileRenamedOnDiskOnlyInCase_KeepsItsRowsUnderTheNewSpelling()
+    {
+        var fine = Named("Fine.esp");
+        using var index = Reconciled(fine);
+        var renamed = Path.Combine(Path.GetDirectoryName(fine.Path).Require(), "fine.esp");
+        File.Move(fine.Path, renamed);
+
+        Arrive(index, fine with { Name = "fine.esp", Path = renamed });
+
+        Assert.Empty(index.Status.Failures);
+        var record = index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Items.Single();
+        Assert.Equal(("fine.esp", "FromFine"), (record.Plugin, record.EditorId));
     }
 }

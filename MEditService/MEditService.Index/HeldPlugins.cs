@@ -158,9 +158,9 @@ internal sealed class HeldPlugins
 
     /// <summary>Nothing here opens or re-reads the file: the load index is no property of its
     /// content, and re-deriving anything else would let a reconcile silently re-read.</summary>
-    public PluginMetadata Update(PluginMetadata previous, Registration registration)
+    public PluginMetadata Update(PluginMetadata previous, RegisteredPlugin now, Registration registration)
     {
-        var metadata = previous with { LoadOrderIndex = registration.LoadOrderIndex };
+        var metadata = previous with { Name = now.Name, Origin = now.Origin, Path = now.Path, LoadOrderIndex = registration.LoadOrderIndex };
 
         lock (_mutation)
         {
@@ -178,6 +178,29 @@ internal sealed class HeldPlugins
                 previous.Name, previous.Origin, registration.LoadOrderIndex);
         }
         return metadata;
+    }
+
+    /// <summary>Whether the plugin, or a failure recorded for it, stands under a spelling other than
+    /// <paramref name="now"/>.</summary>
+    public bool IsSpelledOtherwise(PluginAddress now)
+    {
+        lock (_mutation)
+        {
+            return _plugins.Exists(p => PluginAddress.Comparer.Equals(p.Key, now) && p.Key != now)
+                   || _loadFailures.Keys.Any(key => PluginAddress.Comparer.Equals(key, now) && key != now);
+        }
+    }
+
+    public void RespellFailure(PluginAddress now)
+    {
+        lock (_mutation)
+        {
+            if (!_loadFailures.Keys.Any(key => PluginAddress.Comparer.Equals(key, now) && key != now)) return;
+            var failure = _loadFailures[now];
+            _loadFailures.Remove(now);
+            _loadFailures[now] = failure with { Name = now.Name, Origin = now.Origin };
+            Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
+        }
     }
 
     /// <summary>Lets the Indexer report a post-open failure (an indexing throw from malformed record

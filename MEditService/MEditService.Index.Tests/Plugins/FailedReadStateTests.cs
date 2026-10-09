@@ -195,6 +195,23 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
+    public void AStandingFailureOfAPluginRespelledOnlyInCase_IsNamedAsSpelledNowAndNotReadAgain()
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        ClaimedTwice();
+        using var index = Reconciled(new FailsToOpen(new InvalidOperationException("injected read failure"), atOpen: _ => true));
+        Assert.True(Failed(index));
+        var readsBefore = TreeReads();
+
+        index.Reconcile(index.Holder, _fixture.GameDirectory, [Plugin with { Origin = Plugin.Origin.ToLowerInvariant() }],
+            GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        var failure = Assert.Single(index.Status.Failures);
+        Assert.Equal((PluginName, Plugin.Origin.ToLowerInvariant()), (failure.Name, failure.Origin));
+        Assert.Equal(readsBefore, TreeReads());
+    }
+
+    [Fact]
     public void ATreeMendedWhileItsBinaryStoodInForIt_IsReadAgain()
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);

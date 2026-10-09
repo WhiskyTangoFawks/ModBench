@@ -1098,18 +1098,6 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     expect(callCount(client, 'getPlugins')).toBe(0);
   });
 
-  it('matches the load order case-insensitively when deciding a row is held', async () => {
-    const client = makeClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
-    const h = makeTree([A_ROW()], { client });
-    await reconcile(h, [held('a.ESP')]);
-    const [row] = await h.tree.getChildren();
-
-    const children = await h.tree.getChildren(row);
-
-    expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: [{ name: 'A.esp', origin: 'SomeMod' }] });
-    expect(children.map(c => c.label)).toEqual(['Weapon']);
-  });
-
   it('a plugin the load order does not hold yet expands to a "still indexing" node', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp')]);
@@ -2332,7 +2320,7 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
 
   it('decorates a plugin whose only status is malformed with the warning icon, the word malformed and the diagnosis text', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.ESP', REGN)]);
+    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', REGN)]);
     await reconcile(h, [held('A.esp')]);
 
     const item = await rowItem(h);
@@ -2549,16 +2537,6 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
       [{ name: 'Shared.esp', origin: 'ModA', reason: 'Malformed record' }]);
 
     expect((await rowItem(h)).description).toBe('failed to read');
-  });
-
-  it('joins case-insensitively on the origin as well as the name', async () => {
-    const h = makeTree([plugin({ name: 'Shared.esp', line: 0, origin: 'MODA' })]);
-    await reconcile(h, [
-      held('Shared.esp', { origin: 'moda', masterIssues: ['AMaster.esm'] }),
-      held('Shared.esp', { origin: 'ModB' }),
-    ]);
-
-    expect((await rowItem(h)).tooltip).toContain('AMaster.esm');
   });
 
   it('states nothing of another plugin of the name when the row origin matches no plugin the answer names', async () => {

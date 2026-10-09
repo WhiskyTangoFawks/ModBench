@@ -90,19 +90,6 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
 
     expect(facts.description(address)).toBeUndefined();
   });
-
-  it.each([
-    ['load failure', (facts: PluginFacts) => facts.reconciled([], [failure('x', { name: 'A.ESP', origin: 'SOMEMOD' })])],
-    ['master issues', (facts: PluginFacts) => facts.reconciled([held({ name: 'a.ESP', origin: 'somemod', masterIssues: ['G.esm'] })], [])],
-    ['parse failure', (facts: PluginFacts) => facts.reconciled([held({ name: 'a.ESP', origin: 'somemod', hasParseFailure: true })], [])],
-    ['changed outside', (facts: PluginFacts) => changedOutside(facts, 'SOMEMOD', 'a.ESP')],
-    ['diagnosis', (facts: PluginFacts) => facts.diagnosed([diagnosis('x', { name: 'A.ESP', origin: 'SOMEMOD' })])],
-  ])('joins a %s to the plugin by name and origin without case', (_label, scene) => {
-    const facts = new PluginFacts();
-    scene(facts);
-
-    expect(facts.description(A)).toBeDefined();
-  });
 });
 
 describe('PluginFacts — plugins that differ only in case', () => {
