@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -39,17 +41,16 @@ public sealed class RecordTypeAmbiguityTests
     }
 
     [Theory]
-    [InlineData("glob", true)]
-    [InlineData("globalfloat", true)]
-    [InlineData("gmst", true)]
-    [InlineData("weap", false)]
-    [InlineData("npc_", false)]
-    [InlineData("cell", false)]
-    [InlineData("wrld", false)]
-    [InlineData("refr", false)]
+    [InlineData("GlobalFloat", true)]
+    [InlineData("GameSettingInt", true)]
+    [InlineData("Weapon", false)]
+    [InlineData("Npc", false)]
+    [InlineData("Cell", false)]
+    [InlineData("Worldspace", false)]
+    [InlineData("PlacedObject", false)]
     [InlineData("Landscape", false)]
-    public void IsPathAmbiguous_MatchesTheWholeModDoorsOwnPolicy(string recordType, bool expected) =>
-        Assert.Equal(expected, Dispatch.IsPathAmbiguous(recordType));
+    public void ARecordIsWrittenNamingItsType_WhenItsPathDoesNotSay(string className, bool expected) =>
+        Assert.Equal(expected, NamesItsType(ConcreteMajorRecordTypes().Single(t => t.Name == className)));
 
     [Fact]
     public void TheAbstractGroupElementRule_AgreesWithSignaturesThatSeveralConcreteTypesShare()
@@ -60,12 +61,21 @@ public sealed class RecordTypeAmbiguityTests
 
         var shared = bySignature.Where(g => g.Count() > 1).Select(g => g.Key).OrderBy(k => k, StringComparer.Ordinal);
         var ambiguous = bySignature
-            .Where(g => g.Any(t => Dispatch.IsPathAmbiguous(t.Name)))
+            .Where(g => g.Any(NamesItsType))
             .Select(g => g.Key)
             .OrderBy(k => k, StringComparer.Ordinal);
 
         Assert.NotEmpty(shared);
         Assert.Equal(shared, ambiguous);
+    }
+
+    private static bool NamesItsType(Type recordClass)
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Ambiguity.esp"), Fallout4Release.Fallout4);
+        var record = (IMajorRecordGetter)(System.Activator.CreateInstance(recordClass, mod)
+            ?? throw new InvalidOperationException($"Expected '{recordClass.Name}' to construct."));
+        using var written = JsonDocument.Parse(RecordTextCodec.SerializeToText(record, GameRelease.Fallout4));
+        return written.RootElement.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out _);
     }
 
     private static List<Type> ConcreteMajorRecordTypes() =>
