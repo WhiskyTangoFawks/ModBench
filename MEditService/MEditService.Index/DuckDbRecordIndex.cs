@@ -210,9 +210,33 @@ internal sealed class DuckDbRecordIndex : IDisposable
     public void Register(PluginMetadata registered)
     {
         using var tx = Connection.BeginTransaction();
+        Respell(registered.Key, registered.Path);
         UpsertRegistration(registered);
         _store.BumpSequence();
         tx.Commit();
+    }
+
+    // Every table compares plugin names without case, so rows spelled before a case-only change still
+    // belong to the plugin; they are renamed to the file's spelling now, with no re-read.
+    private void Respell(PluginAddress now, string path)
+    {
+        using (var cmd = Connection.CreateCommand())
+        {
+            cmd.CommandText = $"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2";
+            cmd.Parameters.Add(new DuckDBParameter { Value = now.Name });
+            cmd.Parameters.Add(new DuckDBParameter { Value = now.Origin });
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read() || new PluginAddress(reader.GetString(0), reader.GetString(1)) == now) return;
+        }
+
+        foreach (var (relation, pluginColumn, originColumn) in TableDdlBuilder.MirroredPluginNames)
+        {
+            DuckDbSql.ExecuteFor(Connection, $"""
+                UPDATE {relation} SET {pluginColumn} = $1, {originColumn} = $2
+                WHERE {pluginColumn} = $1 AND {originColumn} = $2
+                """, now.Name, now.Origin);
+        }
+        _store.PointFileClaimAt(now, path);
     }
 
     /// <summary>Removes <paramref name="key"/>'s <c>registrations</c> row and nothing else: its rows

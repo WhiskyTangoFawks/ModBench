@@ -400,6 +400,10 @@ internal sealed class Store : IDisposable
         }
     }
 
+    public void PointFileClaimAt(PluginAddress plugin, string filePath) =>
+        DuckDbSql.ExecuteFor(Connection, $"UPDATE {FilesRelation} SET file_path = $3 WHERE plugin = $1 AND origin = $2",
+            plugin.Name, plugin.Origin, Path.GetFullPath(filePath));
+
     /// <summary>The file claim, the derivation and the diagnoses go together: every one of them is
     /// about the rows this plugin holds, and Unindex is the verb that drops those.</summary>
     public void DeletePluginFacts(string plugin, string origin)

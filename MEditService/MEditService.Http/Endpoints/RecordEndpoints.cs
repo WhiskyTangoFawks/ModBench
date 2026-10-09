@@ -198,35 +198,6 @@ internal static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        app.MapPost("/records/with-children", (RecordsWithChildrenRequest request, ChildRecordQueryService svc) =>
-            OverRecords(request.Records ?? [], validateOptions: () => null, answer: addressed =>
-                Task.FromResult(Results.Ok(
-                    svc.WithChildRecords(addressed).Select(Addressed)))))
-        .WithName("GetRecordsWithChildren")
-        .WithSummary("Which of the records have child records in their own plugin.")
-        .WithTags("Records")
-        .Produces<IReadOnlyList<RecordAddress>>()
-        .ProducesProblem(400)
-        .ProducesProblem(503);
-
-        app.MapPost("/records/children-in-destinations", (ChildrenInDestinationsRequest request, ChildRecordQueryService svc) =>
-        {
-            var destinations = request.Destinations ?? [];
-            return OverRecords(request.Records ?? [], validateOptions: () =>
-                    destinations.Any(d => string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.Origin))
-                        ? Results.Problem("Every destination needs a name and an origin.", statusCode: 400)
-                        : null,
-                answer: addressed => Task.FromResult(Results.Ok(
-                    svc.DestinationsHoldingChildRecords(addressed, destinations)
-                        .Select(h => new RecordChildHolders(Addressed(h.Record), h.Destinations)))));
-        })
-        .WithName("GetChildrenInDestinations")
-        .WithSummary("For each record, the destination plugins that hold any of its child records, at any depth.")
-        .WithTags("Records")
-        .Produces<IReadOnlyList<RecordChildHolders>>()
-        .ProducesProblem(400)
-        .ProducesProblem(503);
-
         return app;
     }
 

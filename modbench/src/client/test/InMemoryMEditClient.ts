@@ -9,7 +9,7 @@ import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
   | 'getRecords' | 'searchRecords'
-  | 'getRecordOwner' | 'getRecordHolders' | 'getRecordsWithChildren' | 'getChildrenInDestinations' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrTrackedPlugins'
+  | 'getRecordOwner' | 'getRecordHolders' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrTrackedPlugins'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
@@ -323,16 +323,6 @@ export class InMemoryMEditClient implements MEditClient {
   }
   getRecordHolders(...args: Parameters<MEditClient['getRecordHolders']>): ReturnType<MEditClient['getRecordHolders']> {
     return this.query('getRecordHolders', args);
-  }
-  getRecordsWithChildren(
-    ...args: Parameters<MEditClient['getRecordsWithChildren']>
-  ): ReturnType<MEditClient['getRecordsWithChildren']> {
-    return this.query('getRecordsWithChildren', args);
-  }
-  getChildrenInDestinations(
-    ...args: Parameters<MEditClient['getChildrenInDestinations']>
-  ): ReturnType<MEditClient['getChildrenInDestinations']> {
-    return this.query('getChildrenInDestinations', args);
   }
   getRenderedDocument(...args: Parameters<MEditClient['getRenderedDocument']>): ReturnType<MEditClient['getRenderedDocument']> {
     return this.query('getRenderedDocument', args);

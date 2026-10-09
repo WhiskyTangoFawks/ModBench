@@ -38,6 +38,12 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         new(PluginDiagnosisTable, "plugin", "origin", HoldsRecords: false, DerivesLoadOrder: false, DerivesWinner: false),
     ];
 
+    /// <summary>Every mirror table that names a plugin, with the columns that do.</summary>
+    internal static IEnumerable<(string Relation, string PluginColumn, string OriginColumn)> MirroredPluginNames =>
+        PublicViews
+            .Select(view => ($"{MirrorSchema}.\"{view.Table}\"", view.PluginColumn, view.OriginColumn))
+            .Append(($"{MirrorSchema}.files", "plugin", "origin"));
+
     /// <summary>One row per indexed plugin naming which truth its rows came from, its source tree or
     /// its binary: tracked-ness as a row, in the mirror because it is the rows' own fact.</summary>
     internal const string PluginDerivationTable = "plugin_derivation";
