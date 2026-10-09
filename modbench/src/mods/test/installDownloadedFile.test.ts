@@ -21,11 +21,6 @@ vi.mock('vscode', () => ({
 
 const { installFromArchive } = vi.hoisted(() => ({ installFromArchive: vi.fn() }));
 
-vi.mock('../../install/install', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../install/install')>()),
-  installFromArchive,
-}));
-
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -35,7 +30,10 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import type { UpgradeCandidate } from '../../instanceLoader/instance';
 import { accessTo } from '../../test/mo2/adapterOver';
+import { installCommands } from '../../install/install';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+
+const installOver = (root: string) => ({ ...installCommands(accessTo(root)), installFromArchive });
 
 const fakeInstance = (rows: readonly DownloadFile[] = []): Pick<Instance, 'value' | 'refresh'> => ({
   value: instanceValueFixture({ gameName: 'Fallout 4', downloads: { kind: 'listed', rows } }),
@@ -52,7 +50,7 @@ const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDe
 
 const installRow = (root: string, deps: DownloadInstallDeps, row: Partial<DownloadRow> = {}): Promise<boolean> => {
   const file = downloadRowFixture('foo.7z', row, root);
-  return installDownloadedFile({ kind: 'download', row: file }, accessTo(root), fakeInstance([file]), deps);
+  return installDownloadedFile({ kind: 'download', row: file }, installOver(root), fakeInstance([file]), deps);
 };
 
 const afterAMacrotaskNotAMicrotask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -99,7 +97,7 @@ describe('installDownloadedFile', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
+        { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout 4', modID: undefined, fileID: undefined, version: undefined });
     });
   });
@@ -113,7 +111,7 @@ describe('installDownloadedFile', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
+        { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout 4', modID: '123', fileID: '456', version: '2.0' });
     });
   });
@@ -129,7 +127,7 @@ describe('installDownloadedFile', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
+        { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout 4', modID: undefined, fileID: undefined, version: undefined });
     });
     expect(await readFile(meta, 'utf8')).toBe(before);
@@ -151,7 +149,7 @@ describe('installDownloadedFile', () => {
     expect(report.reports).toEqual([]);
     expect(report.shownFailures).toEqual([]);
     expect(installFromArchive).toHaveBeenCalledWith(
-      expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
+      { kind: 'new', name: 'foo' }, archive,
       { gameName: 'Fallout 4', modID: undefined, fileID: undefined, version: undefined });
   });
 
@@ -254,7 +252,7 @@ describe('installDownloadedFile: the pick among the upgrades the Instance value 
       (d) => d.accept({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } }));
 
     expect(installFromArchive).toHaveBeenCalledWith(
-      expect.objectContaining({ instanceRoot: root }), { kind: 'upgrade', name: 'Harder VATS' }, archive,
+      { kind: 'upgrade', name: 'Harder VATS' }, archive,
       { gameName: 'Fallout 4', modID: '111', fileID: '999', version: undefined },
     );
     expect(showInputBox).not.toHaveBeenCalled();
@@ -266,7 +264,7 @@ describe('installDownloadedFile: the pick among the upgrades the Instance value 
     const { root, archive } = await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(NEW_MOD_ITEM));
 
     expect(installFromArchive).toHaveBeenCalledWith(
-      expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
+      { kind: 'new', name: 'foo' }, archive,
       { gameName: 'Fallout 4', modID: '111', fileID: '999', version: undefined },
     );
   });
@@ -283,7 +281,7 @@ describe('installDownloadedFile: the pick among the upgrades the Instance value 
     const report = recordingReporter();
 
     const installed = await installDownloadedFile(
-      { kind: 'download', row: downloadRowFixture('foo.7z', {}, root) }, accessTo(root), fakeInstance(), installDeps({ reporter: report }));
+      { kind: 'download', row: downloadRowFixture('foo.7z', {}, root) }, installOver(root), fakeInstance(), installDeps({ reporter: report }));
 
     expect(installed).toBe(false);
     expect(installFromArchive).not.toHaveBeenCalled();
@@ -298,7 +296,7 @@ describe('installDownloadedFile: the pick among the upgrades the Instance value 
     await installRow(root, installDeps({ reporter: recordingReporter() }));
 
     expect(installFromArchive).toHaveBeenCalledWith(
-      expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
+      { kind: 'new', name: 'foo' }, archive,
       { gameName: 'Fallout 4', modID: undefined, fileID: undefined, version: undefined },
     );
     expect(createQuickPick).not.toHaveBeenCalled();

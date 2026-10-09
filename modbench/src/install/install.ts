@@ -2,10 +2,10 @@
 // so its identity and every watcher armed on it survive the release.
 
 import { basename } from 'node:path';
-import { ARCHIVE_EXTENSIONS } from './archiveExtensions';
 import { detectRoot } from './detectRoot';
 import { extractArchive, type Runner } from './extractArchive';
 import { markDownloadInstalled } from './installedMark';
+import type { TailOf } from '../coreLib/boundCommand';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import {
@@ -26,29 +26,8 @@ interface InstallMeta {
   installedFiles?: readonly InstalledFileId[];
 }
 
-export { ARCHIVE_EXTENSIONS };
-
-const archiveExtensionPattern = new RegExp(String.raw`\.(${ARCHIVE_EXTENSIONS.join('|')})$`, 'i');
-
-/** Whether install can extract a file of this name. */
-export function isArchiveName(name: string): boolean {
-  return archiveExtensionPattern.test(name);
-}
-
-/** What a new mod is called before the user says otherwise: the archive's own name, stripped of
- *  the extension install knows how to extract. */
-export function defaultModName(archivePath: string): string {
-  return basename(archivePath).replace(archiveExtensionPattern, '');
-}
-
-/** What a new mod installed from a folder is called before the user says otherwise: the
- *  folder's own name. */
-export function defaultModNameForFolder(folder: string): string {
-  return basename(folder);
-}
-
 /** Why a new mod may not take `name`, in the words install refuses it with. */
-export const installNameRefusal = (adapter: InstanceAdapter, name: string): Promise<string | undefined> =>
+const installNameRefusal = (adapter: InstanceAdapter, name: string): Promise<string | undefined> =>
   newModNameRefusal(adapter, name);
 
 /** Which install this is, settled by the caller: the folder on disk is checked against this
@@ -160,7 +139,7 @@ function metaFor(base: InstallMeta, opts: InstallOptions): InstallMeta {
 
 /** Extracts into the mod's own folder, then marks the downloaded file the archive is, if it is
  *  one — a failed mark is reported beside the landed install, never instead of it. */
-export async function installFromArchive(
+async function installFromArchive(
   access: InstallAccess, target: InstallTarget, archivePath: string, opts: InstallOptions,
 ): Promise<InstallCommandResult> {
   try {
@@ -177,7 +156,7 @@ export async function installFromArchive(
 }
 
 /** Copies the folder in: the source belongs to the user, so it is never the thing moved. */
-export async function installFromFolder(
+async function installFromFolder(
   access: InstallAccess, target: InstallTarget, folderPath: string, opts: InstallOptions,
 ): Promise<InstallCommandResult> {
   try {
@@ -186,3 +165,14 @@ export async function installFromFolder(
     return refuse(err);
   }
 }
+
+/** Install's commands, bound to one instance: each takes the gesture's arguments only. */
+export function installCommands(access: InstallAccess) {
+  return {
+    installFromArchive: (...args: TailOf<typeof installFromArchive>) => installFromArchive(access, ...args),
+    installFromFolder: (...args: TailOf<typeof installFromFolder>) => installFromFolder(access, ...args),
+    installNameRefusal: (...args: TailOf<typeof installNameRefusal>) => installNameRefusal(access.adapter, ...args),
+  };
+}
+
+export type InstallCommands = ReturnType<typeof installCommands>;

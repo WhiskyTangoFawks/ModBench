@@ -6,6 +6,7 @@ import type { SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import type { DownloadedFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
+import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult } from '../coreLib/commandResult';
 
 // `metadataLeftBehind` is delete's own: the file trashed but its metadata didn't.
@@ -31,11 +32,11 @@ function includeDownload(adapter: InstanceAdapter, name: string): Promise<Downlo
 
 const bareName = (name: string): string => name;
 
-export function excludeDownloads(adapter: InstanceAdapter, names: readonly string[]): Promise<SelectionOutcome<string>> {
+function excludeDownloads(adapter: InstanceAdapter, names: readonly string[]): Promise<SelectionOutcome<string>> {
   return selectionOutcomeOf(names, (name) => excludeDownload(adapter, name), bareName);
 }
 
-export function includeDownloads(adapter: InstanceAdapter, names: readonly string[]): Promise<SelectionOutcome<string>> {
+function includeDownloads(adapter: InstanceAdapter, names: readonly string[]): Promise<SelectionOutcome<string>> {
   return selectionOutcomeOf(names, (name) => includeDownload(adapter, name), bareName);
 }
 
@@ -53,7 +54,7 @@ const toDeletedDownload = ({ name }: DownloadToDelete, landed?: { metadataLeftBe
   landed?.metadataLeftBehind === undefined ? { name } : { name, metadataLeftBehind: landed.metadataLeftBehind };
 
 /** Never touches the mod installed from any of them. */
-export function deleteDownloads(
+function deleteDownloads(
   adapter: InstanceAdapter, files: readonly DownloadToDelete[], trash: MoveToTrash,
 ): Promise<SelectionOutcome<DeletedDownload>> {
   return selectionOutcomeOf(files, (file) => deleteDownload(adapter, file, trash), toDeletedDownload);
@@ -76,3 +77,14 @@ async function deleteDownload(
   }
   return { applied: true, wrote: true };
 }
+
+/** The downloads' commands, bound to one instance: each takes the gesture's arguments only. */
+export function downloadsCommands(adapter: InstanceAdapter) {
+  return {
+    excludeDownloads: (...args: TailOf<typeof excludeDownloads>) => excludeDownloads(adapter, ...args),
+    includeDownloads: (...args: TailOf<typeof includeDownloads>) => includeDownloads(adapter, ...args),
+    deleteDownloads: (...args: TailOf<typeof deleteDownloads>) => deleteDownloads(adapter, ...args),
+  };
+}
+
+export type DownloadsCommands = ReturnType<typeof downloadsCommands>;

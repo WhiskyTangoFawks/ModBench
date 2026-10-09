@@ -2,7 +2,7 @@
 // none of it belongs to the codec that parsed one.
 
 import type { DownloadRow } from '../instanceLoader/instance';
-import { isArchiveName } from '../install/install';
+import { isArchiveName } from '../install/archiveNames';
 
 /** The columns the reference tool's own Downloads pane sorts by. `name` means the label
  *  (downloads.md, Order and view state, story 2), so it reads `displayName`, not the row's `name`

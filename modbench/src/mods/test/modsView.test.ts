@@ -94,6 +94,7 @@ import { createModSync } from '../modSync';
 import { rowLabelOf } from '../../drivingLib/argument';
 import { present } from '../../ports/present';
 import { modlistCommands } from '../../modlist/modlist';
+import { installCommands } from '../../install/install';
 import { accessTo, adapterOver } from '../../test/mo2/adapterOver';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -105,7 +106,7 @@ const shownRows = async () => (await present(h.providers.get('modbench.modList')
 const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row));
 
 const otherDeps = () => ({
-  access: accessTo('/instance'), commands: modlistCommands(adapterOver('/instance')), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
+  install: installCommands(accessTo('/instance')), commands: modlistCommands(adapterOver('/instance')), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
   extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), downloadInstall: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
 });
 
