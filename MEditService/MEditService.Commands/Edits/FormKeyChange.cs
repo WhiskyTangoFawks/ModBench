@@ -21,7 +21,7 @@ internal sealed class FormKeyChange(ILogger logger)
 
     /// <summary>The record's file or folder moved to its new key, or its owner's text, read from
     /// <paramref name="carrying"/>.</summary>
-    internal SourceAnswer<RecordEditChanges> Change(
+    internal SourceAnswer<RecordEditResult> Change(
         PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, SourceDocument carrying, JsonElement? value)
     {
         var (release, identity, repository) = editTarget;
@@ -58,9 +58,11 @@ internal sealed class FormKeyChange(ILogger logger)
 
         var failed = $"Changing the FormID of {formKey} to {targetFormKey} failed";
         return WriteFailure.Refused(
-            RecordEditChanges.Making(
-                RecordEditResult.Success(targetFormKey),
-                repository.ChangesToRekey(plugin, carrying, identity, targetFormKey).Then(allocator.HeaderChanges())),
+            RecordEditResult.Making(RecordEditResult.Success(targetFormKey), repository, transaction =>
+            {
+                transaction.Apply(repository.ChangesToRekey(plugin, carrying, identity, targetFormKey));
+                transaction.Apply(allocator.HeaderChanges());
+            }),
             refused => refused, failed, logger);
     }
 }

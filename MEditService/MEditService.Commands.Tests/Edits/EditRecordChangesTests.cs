@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -16,6 +17,7 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class EditRecordChangesTests : IDisposable
 {
     private const int Persistent = 0x0400;
+    private const int PartialForm = 0x4000;
     private const float CellWidth = 4096f;
 
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
@@ -195,12 +197,113 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.DoesNotContain("\"Mover\"", arrived.Text, StringComparison.Ordinal);
     }
 
-    private static SourceModFixture WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out Dictionary<string, FormKey> keys)
+    [Fact]
+    public void AChildRecordsEdit_ChangesOnlyItsOwnTextInTheTextItIsGiven()
+    {
+        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
+        var given = TextOf(world, world.Plugin, keys["Mover"].ToString())
+            .Replace("\"EditorID\": \"Wanderer\"", "\"EditorID\":\"Wanderer\"", StringComparison.Ordinal);
+
+        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Set("EditorID", "\"Renamed\""), given);
+
+        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
+        Assert.Equal(
+            given.Replace("\"EditorID\": \"Mover\"", "\"EditorID\": \"Renamed\"", StringComparison.Ordinal),
+            Assert.Single(answer.Changes.Documents).Text);
+    }
+
+    [Fact]
+    public void AChildRecordsEdit_BesideASiblingTheCodecCannotRead_IsMade_AndKeepsTheSiblingAsGiven()
+    {
+        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
+        var given = TextOf(world, world.Plugin, keys["Mover"].ToString())
+            .Replace("\"EditorID\": \"Wanderer\"", "\"EditorID\": \"Wanderer\", \"Scale\": { \"x\": 1 }", StringComparison.Ordinal);
+
+        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Set("EditorID", "\"Renamed\""), given);
+
+        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
+        Assert.Equal(
+            given.Replace("\"EditorID\": \"Mover\"", "\"EditorID\": \"Renamed\"", StringComparison.Ordinal),
+            Assert.Single(answer.Changes.Documents).Text);
+    }
+
+    [Fact]
+    public void APlacedRecordCrossingIntoAnotherCell_LeavesTheRestOfTheTextItIsGivenAsItWas()
+    {
+        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
+        var leaving = Path.Combine(world.ModFolder, TrackedTree.DocumentFile(world.ModFolder, world.Plugin, keys["Mover"].ToString()).Require());
+        var given = TextOf(world, world.Plugin, keys["Mover"].ToString())
+            .Replace("\"EditorID\": \"Here\"", "\"EditorID\":\"Here\"", StringComparison.Ordinal);
+
+        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Wanderer"].ToString(), Flags(0), given);
+
+        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
+        var left = Assert.Single(answer.Changes.Documents, document => document.Path == leaving).Text;
+        Assert.Contains("\"EditorID\":\"Here\"", left, StringComparison.Ordinal);
+        Assert.DoesNotContain("Wanderer", left, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APlacedRecordLandingInThePersistentCell_LeavesTheRestOfItsWorldspacesDocumentAsItWas()
+    {
+        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys, withAPersistentCell: true);
+        var worldspace = Path.Combine(world.ModFolder, TrackedTree.DocumentFile(world.ModFolder, world.Plugin, keys["World"].ToString()).Require());
+        File.WriteAllText(
+            worldspace, File.ReadAllText(worldspace).Replace("\"EditorID\": \"World\"", "\"EditorID\":\"World\"", StringComparison.Ordinal));
+
+        var answer = Changes(world, world.Plugin, keys["Mover"].ToString(), Flags(Persistent));
+
+        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
+        var landed = Assert.Single(answer.Changes.Documents, document => document.Path == worldspace).Text;
+        Assert.Contains("\"EditorID\":\"World\"", landed, StringComparison.Ordinal);
+        Assert.Contains("\"Mover\"", landed, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThePlacedRecordsGroup_IsTheOneTheTextItIsGivenHoldsItIn()
+    {
+        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
+        var cell = JsonNode.Parse(TextOf(world, world.Plugin, keys["Mover"].ToString())).Require().AsObject();
+        var mover = cell["Temporary"].Require().AsArray()[0].Require().DeepClone();
+        cell.Remove("Temporary");
+        mover["MajorRecordFlagsRaw"] = Persistent;
+        cell["Persistent"].Require().AsArray().Add(mover);
+
+        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Flags(0), cell.ToJsonString());
+
+        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
+        var written = JsonNode.Parse(Assert.Single(answer.Changes.Documents).Text).Require();
+        Assert.Equal(["Mover"], EditorIdsIn(written, "Temporary"));
+        Assert.Equal(["Wanderer"], EditorIdsIn(written, "Persistent"));
+    }
+
+    private static List<string> EditorIdsIn(JsonNode cell, string group) =>
+        [.. cell[group].Require().AsArray().Select(placed => placed.Require()["EditorID"].Require().GetValue<string>())];
+
+    [Fact]
+    public void APersistentCellsPartialForm_IsJudgedByThePluginDefiningIt_NeverByWhereItSits()
+    {
+        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys, withAPersistentCell: true);
+
+        var answer = Changes(world, world.Plugin, keys["PersistentCell"].ToString(), Flags(PartialForm));
+
+        Assert.Equal(RecordEditRefusal.CannotBePartialForm, answer.Outcome.Refusal);
+        Assert.Contains("xEdit makes a cell a Partial Form only where Fallout4.esm defines it", answer.Outcome.Message, StringComparison.Ordinal);
+    }
+
+    private static SourceModFixture WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(
+        out Dictionary<string, FormKey> keys, bool withAPersistentCell = false)
     {
         var held = new Dictionary<string, FormKey>();
         var fixture = SourceModFixture.Tracked("World.esp", "WorldMod", mod =>
         {
             var world = new Worldspace(mod) { EditorID = "World" };
+            held["World"] = world.FormKey;
+            if (withAPersistentCell)
+            {
+                world.TopCell = new Cell(mod) { EditorID = "PersistentCell" };
+                held["PersistentCell"] = world.TopCell.FormKey;
+            }
             var here = new Cell(mod) { EditorID = "Here", Grid = new CellGrid { Point = new P2Int(0, 0) } };
             here.Temporary.Add(Placed(mod, held, "Mover", 0, 0.5f));
             here.Persistent.Add(Placed(mod, held, "Wanderer", Persistent, 9.5f));

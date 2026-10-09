@@ -37,28 +37,21 @@ public sealed class EditRecordChangesHandler
     private SourceAnswer<RecordEditChanges> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
-        if (!_targets.TryResolveEditTarget(plugin, formKey, given, out var onDisk, out var document, out var blocked)) return blocked;
+        if (!_targets.TryResolveEditTarget(plugin, formKey, given, out var onDisk, out var carrying, out var blocked)) return blocked;
         if (!onDisk.Repository.DocumentOf(plugin, onDisk.Identity).Holds(out var file, out var unread)) return unread;
-        var carrying = file ?? throw new InvalidOperationException($"Expected the document carrying {formKey} to have been located.");
+        var carryingFile = file ?? throw new InvalidOperationException($"Expected the document carrying {formKey} to have been located.");
 
-        var batch = SourceBatch.Over(onDisk.Repository, [new DocumentChange(carrying.Path, given)]);
-        var editTarget = onDisk with { Repository = batch.Repository };
-        return SourceTransaction.Atomically(batch.Repository, transaction =>
-                EditDocument(plugin, formKey, envelope, editTarget, document).Then(edit =>
-                {
-                    transaction.Apply(SourceAnswer.Of(edit.Changes));
-                    return SourceAnswer.Of(edit.Outcome);
-                }))
+        var batch = SourceBatch.Over(onDisk.Repository, [new DocumentChange(carryingFile.Path, given)]);
+        return Edit(plugin, formKey, envelope, onDisk with { Repository = batch.Repository }, carrying)
             .Then(outcome => SourceAnswer.Of(new RecordEditChanges(outcome, batch.Changes)));
     }
 
-    private SourceAnswer<RecordEditChanges> EditDocument(
-        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteTargets.EditTarget editTarget, SourceDocument document)
+    private SourceAnswer<RecordEditResult> Edit(
+        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteTargets.EditTarget editTarget, SourceDocument carrying)
     {
         var (release, identity, repository) = editTarget;
+        if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, carrying, envelope.Value);
         var schemas = _schemaReflector.GetSchemas(release);
-        if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, document, envelope.Value);
-        var isEmbedded = !document.FormKey.Equals(identity.FormKey, StringComparison.Ordinal);
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
 
         if (!schemas.TryGetValue(identity.RecordType, out var schema))
@@ -67,39 +60,23 @@ public sealed class EditRecordChangesHandler
                 RecordEditRefusal.FieldNotFound, spelled, $"'{identity.RecordType}' is not an editable record type.");
         }
 
-        // The parent is what the file holds and what the codec reads, so every untouched byte of it
-        // comes back intact.
-        var target = document.Identity;
-        var text = document.Body;
-        IReadOnlyList<PathHop> prefix = [];
-        if (isEmbedded)
-        {
-            if (!repository.RelativePathOf(plugin, identity).Holds(out var located, out var unread)) return unread;
-            var relativePath = located
-                ?? throw new InvalidOperationException($"Expected the document carrying {formKey} to have been located.");
-            var found = EmbeddedChildLocator.Find(
-                Encoding.UTF8.GetBytes(text), target.RecordType, formKey, release);
-            if (found is not { } span)
-            {
-                return RecordEditResult.Refused(
-                    RecordEditRefusal.SourceUnitNotFound, SourceFailure.NotCarried.FoundButNotCarried(relativePath, formKey));
-            }
-            prefix = EmbeddedChildPath.HopsOf(span.Path);
-        }
+        if (!repository.RecordOf(plugin, identity).Holds(out var own, out var unread)) return unread;
+        var text = (own ?? throw new InvalidOperationException($"Expected the text given for {formKey} to carry it.")).Body;
+        if (!HeldIn.Of(repository, plugin, identity).Holds(out var held, out unread)) return unread;
 
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
-            : patched => RecordTextCodec.RoundTrip(patched, release, document.RecordType);
+            : patched => RecordTextCodec.RoundTrip(patched, release, identity.RecordType);
 
         var request = new DocumentEditRequest(
-            text, prefix, schema, envelope, release, roundTrip, _resolution.WalkAmongMastersOf(repository, plugin, schemas));
+            text, held, schema, envelope, release, roundTrip, _resolution.WalkAmongMastersOf(repository, plugin, schemas));
 
         string newText;
-        CellCrossing? crossing;
+        CellGroupMove? move;
         RecordEditResult? refused;
         try
         {
-            refused = DocumentEdit.Patch(request, out newText, out crossing);
+            refused = DocumentEdit.Patch(request, out newText, out move);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -112,15 +89,24 @@ public sealed class EditRecordChangesHandler
         if (refused is { Refusal: RecordEditRefusal.CodecRejected } && Unreadable(roundTrip, text) is { } why)
             return WriteTargets.RefuseUnreadable(formKey, why, spelled);
         if (refused is { } rejected) return rejected;
-        if (crossing is { } leaving) return _cellLanding.Land(plugin, editTarget, target, newText, leaving, spelled);
 
-        // The document already said this (a value set to itself): nothing to commit, so no dirty file
+        var written = new SourceDocument(identity.FormKey, identity.RecordType, EditorIds.In(newText), newText);
+        if (move is { Into: { } into }) return _cellLanding.Land(plugin, editTarget, move.From, written, into, spelled);
+        if (move is { StaysInItsCell: true })
+        {
+            return RecordEditResult.Making(RecordEditResult.Success(), repository, transaction =>
+            {
+                transaction.Apply(repository.ChangesToRemove(plugin, identity));
+                transaction.Apply(repository.ChangesToPutChild(plugin, move.From.Container.Identity, move.Destination, written));
+            });
+        }
+
+        // The record already said this (a value set to itself): nothing to commit, so no dirty file
         // or history entry.
         if (string.Equals(newText, text, StringComparison.Ordinal)) return RecordEditResult.Success();
 
-        return RecordEditChanges.Making(
-            RecordEditResult.Success(),
-            repository.ChangesToRewrite(plugin, new SourceDocument(target.FormKey, target.RecordType, EditorIds.In(newText), newText)));
+        return RecordEditResult.Making(
+            RecordEditResult.Success(), repository, transaction => transaction.Apply(repository.ChangesToRewrite(plugin, written)));
     }
 
     private static string? Unreadable(Func<string, string> roundTrip, string text)

@@ -49,12 +49,12 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
 
     /// <summary>The refusal of a Partial Form that xEdit's GetCanBePartial denies the copy.</summary>
     internal RecordEditResult? RefuseCell(
-        JsonObject record, IReadOnlyList<PathHop> prefix, RecordTableSchema schema, GameRelease release,
+        JsonObject record, HeldIn? held, RecordTableSchema schema, GameRelease release,
         LoadOrderResolution.MastersWalk masters, string spelled)
     {
         if (!MakesPartialForm) return null;
         var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
-        var inPersistentSlot = prefix is [.., { Name: PlacedCell.WorldspacePersistentCellMember }];
+        var inPersistentSlot = held is { IsThePersistentCell: true };
         var verdict = CanBePartial.Of(schema, release, formKey, CanBePartial.TemporaryExterior(HeldPersistent, inPersistentSlot, interior: null));
         if (verdict is CanBePartial.Verdict.NeedsPlacement)
         {

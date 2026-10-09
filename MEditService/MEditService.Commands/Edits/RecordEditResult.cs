@@ -154,6 +154,12 @@ public sealed record RecordEditResult(
     internal static RecordEditResult RefusedAt(RecordEditRefusal refusal, string path, string message) =>
         new(false, refusal, message, Path: path);
 
+    /// <summary>The edit that lands as <paramref name="outcome"/> by making <paramref name="writes"/> through
+    /// <paramref name="repository"/> all together, or why they could not be made.</summary>
+    internal static SourceAnswer<RecordEditResult> Making(
+        RecordEditResult outcome, SourceRepository repository, Action<SourceTransaction> writes) =>
+        SourceTransaction.Atomically(repository, writes) is { } failure ? failure : outcome;
+
     public static implicit operator SourceAnswer<RecordEditChanges>(RecordEditResult outcome) =>
         SourceAnswer.Of<RecordEditChanges>(outcome);
 }
@@ -163,9 +169,4 @@ public sealed record RecordEditResult(
 public sealed record RecordEditChanges(RecordEditResult Outcome, SourceChanges Changes)
 {
     public static implicit operator RecordEditChanges(RecordEditResult outcome) => new(outcome, SourceChanges.None);
-
-    /// <summary>The edit that lands as <paramref name="outcome"/> by making <paramref name="changes"/>, or why
-    /// they could not be made.</summary>
-    internal static SourceAnswer<RecordEditChanges> Making(RecordEditResult outcome, SourceAnswer<SourceChanges> changes) =>
-        changes.Then(made => SourceAnswer.Of(new RecordEditChanges(outcome, made)));
 }
