@@ -361,6 +361,29 @@ describe('PluginFacts — the index failure message (plugins.md, States, story 6
   });
 });
 
+describe('PluginFacts — a later read that failed (common.md, States, story 6)', () => {
+  const failing = held({ laterReadFailure: [{ sourceRelativePath: 'A.esp/Npc.json', message: 'Unexpected end at 12.' }, { sourceRelativePath: 'A.esp/Cell.json', message: 'Duplicate FormKey.' }] });
+
+  it('says every failure, naming the plugin and each file and message', () => {
+    const facts = new PluginFacts();
+    facts.refreshed([failing, held({ name: 'B.esp', laterReadFailure: [{ sourceRelativePath: 'B.esp/X.json', message: 'bad' }] })]);
+
+    expect(facts.laterReadFailureMessage()).toBe(
+      'Showing the last good read: "A.esp" (SomeMod): A.esp/Npc.json: Unexpected end at 12.; A.esp/Cell.json: Duplicate FormKey.; "B.esp" (SomeMod): B.esp/X.json: bad',
+    );
+  });
+
+  it.each([[null], [undefined]])('says nothing once the next read answers %s', (answer) => {
+    const facts = new PluginFacts();
+    facts.refreshed([failing]);
+
+    facts.refreshed([held({ laterReadFailure: answer })]);
+
+    expect(facts.laterReadFailureMessage()).toBeUndefined();
+    expect(facts.laterReadFailures().size).toBe(0);
+  });
+});
+
 describe('placeOf — where a plugin lives, from the instance value', () => {
   const modDirs = new Map([['SomeMod', '/mods/SomeMod'], ['TrackedMod', '/mods/TrackedMod']]);
   const trackedMods = new Set(['TrackedMod']);

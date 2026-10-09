@@ -319,6 +319,19 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(tree.viewMessage()).toBeUndefined();
   });
 
+  it('says the later read that failed on the message line, and not once the next read answers', async () => {
+    const h = makeTree([plugin({ name: 'A.esp', line: 0 })]);
+    await h.tree.getChildren();
+    const failing = held('A.esp', { laterReadFailure: [{ sourceRelativePath: 'A.esp/Npc.json', message: 'bad' }] });
+
+    await reconcile(h, [failing]);
+    expect(h.tree.viewMessage()).toContain('Showing the last good read: "A.esp"');
+    expect(h.tree.lastGoodReadMessage()).toContain('A.esp/Npc.json: bad');
+
+    await reconcile(h, [held('A.esp')]);
+    expect(h.tree.viewMessage()).toBeUndefined();
+  });
+
   it('rows exactly match the fixture value, in file order — not a re-derivation', async () => {
     const { tree } = makeTree([
       plugin({ name: 'Zed.esp', line: 0, enabled: true }),

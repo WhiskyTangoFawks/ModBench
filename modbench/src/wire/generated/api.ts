@@ -1057,6 +1057,7 @@ export interface components {
             plugin: components["schemas"]["PluginAddress"];
             problems: components["schemas"]["SourceProblem"][];
             failure?: string | null;
+            failureKind?: components["schemas"]["ProblemsFailureKind"] | null;
         };
         /** @enum {string} */
         PluginProviderKind: "Mod" | "Game" | "None";
@@ -1109,6 +1110,8 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** @enum {string} */
+        ProblemsFailureKind: "Placement" | "LaterRead";
         RebuildIndexRequest: {
             instanceRoot: string;
             gameRelease: string;
