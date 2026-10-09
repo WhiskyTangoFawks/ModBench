@@ -40,8 +40,8 @@ function includeDownloads(adapter: InstanceAdapter, names: readonly string[]): P
   return selectionOutcomeOf(names, (name) => includeDownload(adapter, name), bareName);
 }
 
-/** A downloaded file to delete: its name, and the path it is trashed from. */
-export type DownloadToDelete = Pick<DownloadedFile, 'name' | 'path'>;
+// A downloaded file to delete: its name, and the path it is trashed from.
+type DownloadToDelete = Pick<DownloadedFile, 'name' | 'path'>;
 
 /** A landed delete: `metadataLeftBehind` is set only when the file's own trash landed but its
  *  metadata's then failed — the delete still applied, so a caller logs this, not a refusal. */
