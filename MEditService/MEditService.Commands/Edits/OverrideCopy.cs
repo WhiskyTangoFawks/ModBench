@@ -62,8 +62,8 @@ internal sealed class OverrideCopy
             return ReplaceHeldCopy(source, identity, body, existingTarget, destination, release);
         }
 
-        // A record a container's document carries, a worldspace's persistent cell among them, lands
-        // inside the destination's copy of that document (the container rule).
+        // A record with a container, a worldspace's persistent cell among them, lands in the
+        // destination's copy of that container (the container rule).
         if (!source.ContainerOf(identity).Holds(out var container, out var why)) return WriteTargets.RefuseUnreadableSource(formKey, why);
         return container is { } carrier
             ? _recordCopy.CopyNewEmbeddedChildAsOverride(

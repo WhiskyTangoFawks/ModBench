@@ -148,7 +148,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>:
     /// the tree only says which document that is. Null when nothing holds it; text naming no record is
     /// unreadable.</summary>
-    public SourceAnswer<(RecordIdentity Record, SourceDocument Carrying)?> CarryingFromText(
+    private SourceAnswer<(RecordIdentity Record, SourceDocument Carrying)?> CarryingFromText(
         PluginAddress plugin, string formKey, string text) =>
         SourceFailure.Answer(() => Locator.CarryingFromText(Spelled(plugin), formKey, text));
 
@@ -336,11 +336,10 @@ public sealed class SourceRepository : ISourceRepositoryReads
         PluginAddress plugin, RecordIdentity container, string slot, SourceDocument child) =>
         SourceFailure.Answer(() => Writes.ChangesToPutChild(Spelled(plugin), container, slot, child));
 
-    /// <summary>What changing the FormKey of <paramref name="identity"/> changes, from the text of the document
-    /// <paramref name="carrying"/> it, written nowhere. Text the codec cannot give the new key is unreadable.</summary>
-    public SourceAnswer<SourceChanges> ChangesToRekey(
-        PluginAddress plugin, SourceDocument carrying, RecordIdentity identity, string newFormKey) =>
-        SourceFailure.Answer(() => Writes.ChangesToRekey(Spelled(plugin), carrying, identity, newFormKey));
+    /// <summary>What changing the FormKey of <paramref name="identity"/> changes, written nowhere. Text the codec
+    /// cannot give the new key is unreadable.</summary>
+    public SourceAnswer<SourceChanges> ChangesToRekey(PluginAddress plugin, RecordIdentity identity, string newFormKey) =>
+        SourceFailure.Answer(() => Writes.ChangesToRekey(Spelled(plugin), identity, newFormKey));
 
     /// <summary>What taking the record out of the tree changes, written nowhere: its file, its directory, or its
     /// element of another record's document. A record no document holds, or whose document lacks it, is not

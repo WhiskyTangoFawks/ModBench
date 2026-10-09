@@ -118,24 +118,25 @@ internal sealed class SourceRepositoryWrites(
             throw SourceStopException.Unreadable($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
     }
 
-    /// <summary>What changing <paramref name="identity"/>'s FormKey changes, read from the text of the document
-    /// <paramref name="carrying"/> it: its own file or folder moves to the new leaf name, or its owner's text changes.</summary>
-    internal SourceChanges ChangesToRekey(
-        PluginAddress plugin, SourceDocument carrying, RecordIdentity identity, string newFormKey)
+    /// <summary>What changing <paramref name="identity"/>'s FormKey changes: its own file or folder moves to the
+    /// new leaf name, or its owner's text changes.</summary>
+    internal SourceChanges ChangesToRekey(PluginAddress plugin, RecordIdentity identity, string newFormKey)
     {
-        var unit = locator.Locate(plugin, identity)
-            ?? throw new InvalidOperationException($"No document in {plugin.Name}'s tree carries {identity.FormKey}.");
+        var unit = locator.Locate(plugin, identity) is { } held && (held.IsEmbedded || files.FileExists(held.FullPath))
+            ? held
+            : throw new InvalidOperationException($"No document in {plugin.Name}'s tree carries {identity.FormKey}.");
 
-        if (!carrying.FormKey.Equals(identity.FormKey, StringComparison.Ordinal))
+        if (unit.IsEmbedded)
         {
-            var ownerBytes = Encoding.UTF8.GetBytes(carrying.Body);
+            var ownerBytes = OwnerBytes(unit);
             var span = DocumentText.EmbeddedChildIn(ownerBytes, unit, identity.FormKey, _release) ?? throw NoLongerCarried(unit, identity.FormKey);
             var rekeyed = Read(() => RecordDocumentEdits.WithFormKey(
                 EmbeddedChildSplice.Extract(ownerBytes, span, _release), _release, identity.RecordType, newFormKey));
             return Written(unit.FullPath, EmbeddedChildSplice.Replace(ownerBytes, span, rekeyed));
         }
 
-        var text = Read(() => RecordDocumentEdits.WithFormKey(carrying.Body, _release, carrying.RecordType, newFormKey));
+        var text = Read(() => RecordDocumentEdits.WithFormKey(
+            Encoding.UTF8.GetString(OwnerBytes(unit)), _release, identity.RecordType, newFormKey));
         if (unit.IsDirectoryPerRecord)
         {
             var from = PathShape.DirectoryOf(unit.FullPath);

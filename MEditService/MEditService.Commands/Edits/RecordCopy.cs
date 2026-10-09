@@ -10,7 +10,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The container half of both copy modes: a child lands inside its container's document, the
+/// <summary>The container half of both copy modes: a child lands in its container, the
 /// container copied in when absent, as a Partial Form where the game allows (ADR-0007).</summary>
 internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger)
 {

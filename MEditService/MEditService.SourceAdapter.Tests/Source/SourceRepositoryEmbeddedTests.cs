@@ -275,11 +275,11 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void CarryingFromText_OfARecordWithADocumentOfItsOwn_WhoseEditorIdIsNoString_RefusesNamingItsFileAndTheField()
+    public void RecordFromText_OfARecordWithADocumentOfItsOwn_WhoseEditorIdIsNoString_RefusesNamingItsFileAndTheField()
     {
         var text = File.ReadAllText(FullPath(QuestPath)).Replace("\"EditorID\": \"Quest\"", "\"EditorID\": 5", StringComparison.Ordinal);
 
-        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.CarryingFromText(Plugin, _quest.FormKey.ToString(), text).Stopped());
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.RecordFromText(Plugin, _quest.FormKey.ToString(), text).Stopped());
 
         Assert.Contains(QuestPath, refused.Reason, StringComparison.Ordinal);
         Assert.Contains("its 'EditorID' is not a string", refused.Reason, StringComparison.Ordinal);
@@ -326,20 +326,20 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void CarryingFromText_OfAChildNoTypeResolves_RefusesNamingItsOwnersFileAndWhy()
+    public void RecordFromText_OfAChildNoTypeResolves_RefusesNamingItsOwnersFileAndWhy()
     {
-        AssertNamesTheInteriorCellsUntypedRef("PlacedObjekt", Assert.IsType<SourceFailure.Unreadable>(Repository.CarryingFromText(
+        AssertNamesTheInteriorCellsUntypedRef("PlacedObjekt", Assert.IsType<SourceFailure.Unreadable>(Repository.RecordFromText(
                 Plugin, _temporaryRef.FormKey.ToString(), InteriorCellWithItsRefsTyped("PlacedObjekt")).Stopped()));
     }
 
     [Fact]
-    public void CarryingFromText_OfAChildWhoseOwnersTextDeclaresNoFormKey_RefusesNamingItsOwnersFileAndWhat_ItDeclares()
+    public void RecordFromText_OfAChildWhoseOwnersTextDeclaresNoFormKey_RefusesNamingItsOwnersFileAndWhat_ItDeclares()
     {
         var text = File.ReadAllText(FullPath(InteriorCellPath))
             .Replace($"\"FormKey\": \"{_interiorCell.FormKey}\"", "\"FormKey\": \"NotAFormKey\"", StringComparison.Ordinal);
         Assert.Contains("NotAFormKey", text, StringComparison.Ordinal);
 
-        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.CarryingFromText(Plugin, _temporaryRef.FormKey.ToString(), text).Stopped());
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.RecordFromText(Plugin, _temporaryRef.FormKey.ToString(), text).Stopped());
 
         Assert.Equal($"The text given for {InteriorCellPath} declares NotAFormKey, which is no FormKey.", refused.Reason);
     }
@@ -445,11 +445,11 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void CarryingFromText_OfAContainerOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
+    public void RecordFromText_OfAContainerOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
     {
         GiveTheTemporaryRefItsCellsOwnFormKey();
 
-        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.IsType<SourceFailure.Ambiguous>(Repository.CarryingFromText(
+        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.IsType<SourceFailure.Ambiguous>(Repository.RecordFromText(
                 Plugin, _interiorCell.FormKey.ToString(), File.ReadAllText(FullPath(InteriorCellPath))).Stopped()));
     }
 
@@ -588,7 +588,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var absent = new SourceDocument("00FFFF:Embedded.esp", "refr", "Absent", "{}");
 
         var refused = Assert.Throws<InvalidOperationException>(() => Repository.ChangesToRekey(
-            Plugin, absent, absent.Identity, FreeFormKey).Value());
+            Plugin, absent.Identity, FreeFormKey).Value());
 
         Assert.Contains("00FFFF:Embedded.esp", refused.Message, StringComparison.Ordinal);
     }
@@ -611,22 +611,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.EndsWith(
             "If nothing outside Modbench changed that file, this is a defect — please report it; otherwise relaunch mEdit so the index re-reads the tree.",
             refused.Reason, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Rekey_OfAChildItsOwnersTextDoesNotCarry_RefusesInOneSentence_BeforeTheTreeIsTouched()
-    {
-        var before = TreeSnapshot.Of(_modFolder);
-        var owner = Repository.RecordOf(Plugin, Identity(_interiorCell, "cell")).Value().Require();
-        _interiorCell.Temporary.Remove(_temporaryRef);
-        var ownerLacksIt = owner with { Body = System.Text.Encoding.UTF8.GetString(Serialize(_interiorCell)) };
-
-        var refused = Assert.IsType<SourceFailure.NotCarried>(
-            Repository.ChangesToRekey(Plugin, ownerLacksIt, Identity(_temporaryRef, "refr"), FreeFormKey).Stopped());
-
-        Assert.Contains("its own text does not carry it", refused.Reason, StringComparison.Ordinal);
-        Assert.DoesNotContain("Nothing was written", refused.Reason, StringComparison.Ordinal);
-        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
     [Fact]

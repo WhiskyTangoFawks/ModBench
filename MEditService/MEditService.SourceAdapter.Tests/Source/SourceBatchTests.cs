@@ -225,8 +225,7 @@ public sealed class SourceBatchTests : IDisposable
 
         Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
         [
-            repository => repository.RecordOf(Plugin, cell).Then(held =>
-                repository.ChangesToRekey(Plugin, held.Require(), cell, rekeyed.FormKey)),
+            repository => repository.ChangesToRekey(Plugin, cell, rekeyed.FormKey),
             repository => repository.ChangesToRemove(Plugin, rekeyed),
         ];
 
@@ -315,8 +314,8 @@ public sealed class SourceBatchTests : IDisposable
         Assert.Null(Write(batch, repository => repository.ChangesToRemove(Plugin, Identity(_quest, "qust"))));
         var before = batch.Changes;
 
-        var defect = Assert.Throws<InvalidOperationException>(() => Write(batch, repository => repository.RecordOf(Plugin, Identity(namesake, "qust"))
-            .Then(held => repository.ChangesToRekey(Plugin, held.Require(), Identity(namesake, "qust"), _quest.FormKey.ToString()))));
+        var defect = Assert.Throws<InvalidOperationException>(() => Write(batch, repository =>
+            repository.ChangesToRekey(Plugin, Identity(namesake, "qust"), _quest.FormKey.ToString())));
 
         Assert.Contains("a removal in it frees that path", defect.Message, StringComparison.Ordinal);
         Assert.Equal(before.Moves, batch.Changes.Moves);

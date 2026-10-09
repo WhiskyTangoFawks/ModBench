@@ -96,8 +96,8 @@ internal sealed class CopySource(
     internal CopyRead<SourceDocument> Document(RecordIdentity identity) =>
         Body(identity).Then<SourceDocument>(body => new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body));
 
-    /// <summary>The container carrying this record, or null when it has a document of its own. A
-    /// worldspace's persistent cell answers its worldspace; a numbered cell has a document of its own.</summary>
+    /// <summary>The container of this record, or null when it has none. A
+    /// worldspace's persistent cell answers its worldspace; a numbered cell has no container.</summary>
     internal CopyRead<DocumentContainment?> ContainerOf(RecordIdentity identity) =>
         _tree is { } tree
             ? CopyRead<DocumentContainment?>.Of(tree.ContainerOf(plugin, identity))

@@ -53,11 +53,10 @@ public sealed class DeleteRecordChangesHandler
         var batch = BatchOf(plugin, onDisk, unsaved, batches);
         var repository = batch.Repository;
 
-        // Read before the removal, so what the log names is the document it took from.
+        // Read before the removal, so what the log names is where it took from.
         if (!repository.RelativePathOf(plugin, identity).Holds(out var relativePath, out var unread)) return unread;
 
-        // One change either way: the owner's document without the child, or the record's own file or folder gone.
-        // Every descendant's row follows from that once it is re-indexed.
+        // Every descendant's row follows from the removal once it is re-indexed.
         var before = batch.Changes;
         if (SourceTransaction.Atomically(repository, transaction => transaction.Apply(repository.ChangesToRemove(plugin, identity)))
             is { } unremoved)
