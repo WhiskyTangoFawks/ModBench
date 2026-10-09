@@ -180,6 +180,9 @@ internal sealed class Projector(
     internal ValidationReport Validate(RegisteredPlugin plugin, ReadState state) =>
         state switch
         {
+            // Rows from the tree stand over unsaved text that stops it; the read state says why.
+            { Stamps.StoppedOnlyByUnsavedText: true } when index.DerivationOf(plugin.Key) == DerivedFrom.SourceTree =>
+                ValidationReport.Clean,
             // The re-derivation is what diagnoses the tree on the plugin, as a first ingest would.
             { Stamps: { } stamps } when stamps.Claimed.Count > 0 || stamps.Unreadable.Count > 0 =>
                 new ValidationReport(

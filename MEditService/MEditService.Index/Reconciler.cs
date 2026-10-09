@@ -98,6 +98,11 @@ internal sealed class Reconciler(
         lock (_lock) return _scope?.Failed.WhyTreeStopped(key);
     }
 
+    public IReadOnlyList<SourceFileFailure>? LaterReadFailure(PluginAddress key)
+    {
+        lock (_lock) return _scope?.Failed.LaterReadFailure(key);
+    }
+
     private OpenScope RequireScope()
     {
         lock (_lock) return _scope ?? throw new NoLoadOrderException();
@@ -391,7 +396,7 @@ internal sealed class Reconciler(
                 snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
                 () => Status.State == LoadOrderState.Ready, out heldElsewhere);
             if (fresh is null) return null;
-            scope = new OpenScope(held, fresh, new Projector(fresh, held.Find, source, logger), new FailedReads(fresh, source));
+            scope = new OpenScope(held, fresh, new Projector(fresh, held.Find, source, logger), new FailedReads(fresh, source, logger));
             fresh = null;
         }
         finally

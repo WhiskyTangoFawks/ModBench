@@ -104,6 +104,8 @@ internal sealed class DuckDbRecordIndex : IDisposable
             OweWinnerSweep();
             Announce(sequence => new PluginChangedNotification(key, sequence));
         }
+
+        public void ReadFailedOrRecovered(PluginAddress key) => Announce(sequence => new PluginChangedNotification(key, sequence));
     }
 
     public GameRelease Release => _store.Release;
