@@ -61,6 +61,43 @@ public sealed class PluginSourceUnreadableTests : IDisposable
     }
 
     [Fact]
+    public void APluginWithNoPluginSource_SaysItHoldsNoFolderForIt()
+    {
+        Directory.Delete(SourceRoot, recursive: true);
+
+        using var index = Reconciled();
+
+        var unreadable = index.PluginRowOf(Plugin)?.PluginSourceUnreadable.Require();
+        Assert.Contains(PluginName, unreadable?.Reason, StringComparison.Ordinal);
+        Assert.True(unreadable?.DecompileRepairs);
+    }
+
+    [PosixFact]
+    public void APluginSourceWithTwinFoldersNeitherSpelledAsTheLoadOrderNamesIt_NamesBothFolders()
+    {
+        var sources = Path.GetDirectoryName(SourceRoot).Require();
+        Directory.Move(SourceRoot, Path.Combine(sources, PluginName.ToUpperInvariant()));
+        Directory.CreateDirectory(Path.Combine(sources, PluginName.ToLowerInvariant()));
+
+        using var index = Reconciled();
+
+        var unreadable = index.PluginRowOf(Plugin)?.PluginSourceUnreadable.Require();
+        Assert.Contains(PluginName.ToUpperInvariant(), unreadable?.Reason, StringComparison.Ordinal);
+        Assert.Contains(PluginName.ToLowerInvariant(), unreadable?.Reason, StringComparison.Ordinal);
+        Assert.False(unreadable?.DecompileRepairs);
+    }
+
+    [Fact]
+    public void APluginSourceThatFailsItsRead_SaysWhichFileStoppedIt()
+    {
+        var backup = BackupOfTheNpcDocumentClaimingItsFormKeyAgain();
+
+        using var index = Reconciled();
+
+        Assert.Contains(Path.GetFileName(backup), index.PluginRowOf(Plugin)?.PluginSourceUnreadable?.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ACopyInAPluginThatIsNotActiveAndWhoseSourceIsUnreadable_IsRenderedFromItsPluginFile()
     {
         Directory.Delete(SourceRoot, recursive: true);

@@ -40,7 +40,9 @@ class NotificationListenerRegistry {
         this.deliver('external-change', { origin, changedPlugins: event.changedPlugins ?? [] });
         break;
       case 'plugin-source-unreadable':
-        this.deliver('plugin-source-unreadable', { plugins: keys.map((name) => ({ name, origin })) });
+        this.deliver('plugin-source-unreadable', {
+          plugins: (event.pluginWithUnreadableSources ?? []).map(({ name, source }) => ({ name, origin, ...source })),
+        });
         break;
       case 'record-filter-cleared':
         if (event.recordFilterCleared) this.deliver('record-filter-cleared', event.recordFilterCleared);
@@ -115,6 +117,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
     loadOrderStatus?: NotificationEvent['loadOrderStatus'];
     trackProgress?: NotificationEvent['trackProgress'];
     changedPlugins?: NotificationEvent['changedPlugins'];
+    pluginWithUnreadableSources?: NotificationEvent['pluginWithUnreadableSources'];
     recordFilterCleared?: NotificationEvent['recordFilterCleared'];
   };
   if (!isString(w.kind)) throw new Error('Expected a notification event to carry a string kind.');
@@ -125,7 +128,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
   return {
     kind: w.kind, plugin: w.plugin, origin: w.origin, keys: w.keys, sequence: w.sequence,
     loadOrderStatus: w.loadOrderStatus, trackProgress: w.trackProgress, changedPlugins: w.changedPlugins,
-    recordFilterCleared: w.recordFilterCleared,
+    pluginWithUnreadableSources: w.pluginWithUnreadableSources, recordFilterCleared: w.recordFilterCleared,
   };
 }
 

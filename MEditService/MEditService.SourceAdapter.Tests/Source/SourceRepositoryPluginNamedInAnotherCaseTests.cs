@@ -155,6 +155,68 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [PosixFact]
+    public void WhySourceDoesNotRead_ForTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_NamesBothFolders()
+    {
+        MakeTwinOfTheTreeIn(Recased.Name);
+
+        var why = Assert.IsType<SourceFailure.TwinFolders>(
+            new GitSourceAdapter().WhySourceDoesNotRead(Registered(new PluginAddress("fixture.esp", TestMod.Name))));
+
+        Assert.Contains(TreeName, why.Reason, StringComparison.Ordinal);
+        Assert.Contains(Recased.Name, why.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WhySourceDoesNotRead_ForAPluginWithNoFolder_SaysSo()
+    {
+        var why = new GitSourceAdapter().WhySourceDoesNotRead(Registered(new PluginAddress("Other.esp", TestMod.Name)));
+
+        var missing = Assert.IsType<SourceFailure.NotCarried>(why);
+        Assert.Contains("Other.esp", missing.Reason, StringComparison.Ordinal);
+        Assert.True(missing.DecompileRepairs);
+    }
+
+    [PosixFact]
+    public void WhySourceDoesNotRead_ForAPluginSourceThatCannotBeListed_SaysWhyTheSystemGave()
+    {
+        var sources = Path.Combine(_modFolder, "plugin-source");
+        FileModes.Set(sources, "000");
+        try
+        {
+            var why = Assert.IsType<SourceFailure.Inaccessible>(new GitSourceAdapter().WhySourceDoesNotRead(Registered(AsTreeNamesIt)));
+            Assert.Contains("plugin-source", why.Reason, StringComparison.Ordinal);
+            Assert.False(why.DecompileRepairs);
+        }
+        finally
+        {
+            FileModes.Set(sources, "700");
+        }
+    }
+
+    [Fact]
+    public void WhySourceDoesNotRead_ForATreeThatReads_IsNull()
+    {
+        Assert.Null(new GitSourceAdapter().WhySourceDoesNotRead(Registered(Recased)));
+    }
+
+    [PosixFact]
+    public void ReplaceSourceFrom_ForTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_AnswersAmbiguousNamingBoth_AndWritesNoThirdFolder()
+    {
+        MakeTwinOfTheTreeIn(Recased.Name);
+        var lowered = new PluginAddress("fixture.esp", TestMod.Name);
+
+        var failure = Repository.ReplaceSourceFrom(lowered, [new TreeFile("RecordData.json", Encoding.UTF8.GetBytes("{}"))], "ABCDEF0123");
+
+        var ambiguous = Assert.IsType<SourceFailure.TwinFolders>(failure);
+        Assert.False(ambiguous.DecompileRepairs);
+        Assert.Contains(TreeName, ambiguous.Reason, StringComparison.Ordinal);
+        Assert.Contains(Recased.Name, ambiguous.Reason, StringComparison.Ordinal);
+        Assert.Equal(
+            [Recased.Name, TreeName],
+            Directory.GetDirectories(Path.Combine(_modFolder, "plugin-source")).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+    }
+
+    [PosixFact]
     public void RecordOfFile_ADocumentOfATwinTreeThePluginDoesNotRead_IsRefused()
     {
         MakeTwinOfTheTreeIn(Recased.Name);

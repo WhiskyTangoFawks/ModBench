@@ -64,7 +64,15 @@ public sealed class SourceRepository : ISourceRepositoryReads
         plugin.Provider is PluginProvider.FromMod mod && HoldsTreeFor(mod.Folder, plugin.Name);
 
     private static bool HoldsTreeFor(string modFolder, string pluginFileName) =>
-        IsTracked(modFolder) && SourceRepositoryLayout.TreeNameIn(modFolder, pluginFileName) is not null;
+        IsTracked(modFolder) && SourceRepositoryLayout.TreeNameIn(modFolder, pluginFileName).Holds(out _, out _);
+
+    /// <summary>Why the plugin's source does not read though its mod is tracked: no folder, twin folders, or a plugin
+    /// source that cannot be listed. Null when it reads, and when its mod is not tracked.</summary>
+    public static SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) =>
+        plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.Folder)
+        && !SourceRepositoryLayout.TreeNameIn(mod.Folder, plugin.Name).Holds(out _, out var why)
+            ? why
+            : null;
 
     /// <summary>A <c>.git</c> with no <c>main</c> that Track did not mark as its own: someone else's, which Track never
     /// writes to (ADR-0003).</summary>
@@ -187,7 +195,8 @@ public sealed class SourceRepository : ISourceRepositoryReads
                 && SourceRepositoryLayout.TreeFolderHolding(mod.Folder, fullPath) is { } tree
                 && tree.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
                 && IsTracked(mod.Folder)
-                && string.Equals(SourceRepositoryLayout.TreeNameIn(mod.Folder, plugin.Name), tree, SourceRepositoryLocator.PathComparison))
+                && SourceRepositoryLayout.TreeNameIn(mod.Folder, plugin.Name).Holds(out var named, out _)
+                && string.Equals(named, tree, SourceRepositoryLocator.PathComparison))
             {
                 return Over(mod, loadOrder.GameRelease).Locator.RecordOfFile(plugin.Key, tree, fullPath);
             }
@@ -345,7 +354,8 @@ public sealed class SourceRepository : ISourceRepositoryReads
     public SourceFailure? ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256) =>
         SourceFailure.Answer(() =>
         {
-            var name = Spelled(plugin).Name;
+            if (!TreeNameFor(plugin).Holds(out var folder, out var why) && why is SourceFailure.TwinFolders) throw SourceStopException.Of(why);
+            var name = folder ?? plugin.Name;
             Writes.ReplaceSourceFrom(name, SourceRepositoryLayout.PristineFilesOf(name, tree), binarySha256);
         });
 
@@ -384,16 +394,18 @@ public sealed class SourceRepository : ISourceRepositoryReads
         return SourceFailure.Answer(() => _git.LastWrittenBinarySha256s(name));
     }
 
-    // A plugin's tree is read and written as its folder spells it. With no tree to say, or twins spelled
-    // otherwise, the name stays as given: SourceReads refuses the twins.
-    private PluginAddress Spelled(PluginAddress plugin)
+    // A plugin's tree is read and written as its folder spells it; with no single tree, as the load order names it.
+    private PluginAddress Spelled(PluginAddress plugin) =>
+        new(TreeNameFor(plugin).Holds(out var tree, out _) ? tree : plugin.Name, _modName);
+
+    private SourceAnswer<string> TreeNameFor(PluginAddress plugin)
     {
         if (!string.Equals(plugin.Origin, _modName, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
                 $"{plugin.Name} is provided by '{plugin.Origin}', and this repository holds '{_modName}'.", nameof(plugin));
         }
-        return new PluginAddress(SourceRepositoryLayout.TreeNameIn(_modFolder, plugin.Name) ?? plugin.Name, _modName);
+        return SourceRepositoryLayout.TreeNameIn(_modFolder, plugin.Name);
     }
 }
 

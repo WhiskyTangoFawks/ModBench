@@ -40,6 +40,9 @@ internal interface IQueryIndex
     /// no load order held.</summary>
     IReadOnlyList<SourceFileFailure> SourceFileFailures { get; }
 
+    /// <summary>What stopped the plugin's source tree in its last failed read, while it fails.</summary>
+    UnreadableSource? WhyTreeStopped(PluginAddress key);
+
     void SetFilter(string sql, string source);
 
     void ClearFilter();

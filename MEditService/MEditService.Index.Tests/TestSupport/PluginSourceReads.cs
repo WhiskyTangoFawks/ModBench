@@ -7,10 +7,10 @@ namespace MEditService.Index.Tests.TestSupport;
 internal static class PluginSourceReads
 {
     internal static bool ReadFromItsPluginSource(this OpenedIndex index, PluginAddress plugin) =>
-        index.PluginRowOf(plugin) is { IsTracked: true, PluginSourceUnreadable: false };
+        index.PluginRowOf(plugin) is { IsTracked: true, PluginSourceUnreadable: null };
 
     internal static bool ReadFromItsPluginFileForItsUnreadableSource(this OpenedIndex index, PluginAddress plugin) =>
-        index.PluginRowOf(plugin) is { IsTracked: true, PluginSourceUnreadable: true };
+        index.PluginRowOf(plugin) is { IsTracked: true, PluginSourceUnreadable: not null };
 
     /// <summary>The problems of the one plugin an index over a single tracked plugin holds.</summary>
     internal static IReadOnlyList<SourceProblem> SourceProblems(this OpenedIndex index) =>

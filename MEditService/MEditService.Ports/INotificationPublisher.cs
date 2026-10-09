@@ -40,9 +40,15 @@ public sealed record ExternalChangeNotification(string Origin, IReadOnlyList<Cha
 /// read.</summary>
 public sealed record ChangedPlugin(string Name, string? BytesSha256);
 
-/// <summary>The plugins of a tracked mod whose plugin source is unreadable.</summary>
-public sealed record PluginSourceUnreadableNotification(string Origin, IReadOnlyList<string> Plugins)
+/// <summary>The plugins of a tracked mod whose plugin source is unreadable, each with why and whether decompile
+/// gets past it.</summary>
+public sealed record PluginSourceUnreadableNotification(string Origin, IReadOnlyList<PluginWithUnreadableSource> Plugins)
     : INotification;
+
+public sealed record PluginWithUnreadableSource(string Name, UnreadableSource Source);
+
+/// <summary>Why a tracked plugin's source does not read, and whether decompile gets past it.</summary>
+public sealed record UnreadableSource(string Reason, bool DecompileRepairs);
 
 /// <summary>The record filter could not apply again after a change to the index, so the Index
 /// cleared it. Source names the filter's source; Reason is the database's.</summary>

@@ -101,6 +101,9 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
 
         var untracked = Assert.Single(await stream.EventsUntil("plugin-source-unreadable"));
         Assert.Equal(Origin, untracked.GetProperty("origin").GetString());
-        Assert.Equal([SecondPlugin], untracked.GetProperty("keys").EnumerateArray().Select(k => k.GetString()));
+        var unreadable = Assert.Single(untracked.GetProperty("pluginWithUnreadableSources").EnumerateArray());
+        Assert.Equal(SecondPlugin, unreadable.GetProperty("name").GetString());
+        Assert.Contains(SecondPlugin, unreadable.GetProperty("source").GetProperty("reason").GetString(), StringComparison.Ordinal);
+        Assert.True(unreadable.GetProperty("source").GetProperty("decompileRepairs").GetBoolean());
     }
 }

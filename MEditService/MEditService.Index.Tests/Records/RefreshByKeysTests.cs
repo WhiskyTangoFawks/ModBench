@@ -77,7 +77,7 @@ public sealed class RefreshByKeysTests : IDisposable
         File.WriteAllText(file, notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold);
 
         _index.NextSnapshotUntil(
-            () => _index.PluginRowOf(_mod.KeyOf()) is { IsTracked: true, PluginSourceUnreadable: true }, "the binary read in the tree's place");
+            () => _index.PluginRowOf(_mod.KeyOf()) is { IsTracked: true, PluginSourceUnreadable: not null }, "the binary read in the tree's place");
 
         Assert.Equal("FixtureNpc", _index.DocumentOf(_npc, _mod.KeyOf()).EditorId);
         Assert.Empty(_index.Status.Failures);

@@ -32,7 +32,7 @@ public sealed class TrackedPluginReadTests : IDisposable
     private static readonly PluginAddress Plain = new("Plain.esp", "PlainMod");
 
     private bool ReadsFromItsTree(PluginAddress plugin) =>
-        _index.PluginRowOf(plugin) is { IsTracked: true, PluginSourceUnreadable: false };
+        _index.PluginRowOf(plugin) is { IsTracked: true, PluginSourceUnreadable: null };
 
     [Fact]
     public void APluginIngestedFromItsSourceTree_ReadsAsDerivedFromIt()

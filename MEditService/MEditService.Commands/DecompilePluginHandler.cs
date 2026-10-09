@@ -53,6 +53,7 @@ public sealed class DecompilePluginHandler
         {
             null => ItemAnswer<DecompileRefusal, NoOutcome>.Landed(default),
             SourceFailure.GitUnavailable gitMissing => ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.GitUnavailable, gitMissing.Reason),
+            SourceFailure.TwinFolders twins => ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.AmbiguousSource, twins.Reason),
             var failure => ItemAnswer<DecompileRefusal, NoOutcome>.Refused(
                 DecompileRefusal.WriteFailed, $"Could not write {plugin.Name}'s source: {failure.Reason}"),
         };
