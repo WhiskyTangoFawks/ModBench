@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, basename, sep } from 'node:path';
 import ts from 'typescript';
-import { MO2_NAMES, pathSegments, productionFiles, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
+import { pathSegments, productionFiles, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 interface Codec {
@@ -39,27 +39,35 @@ const TOKENS = FORMATS.flatMap((format) => format.tokens);
 
 const THIS_FILE_HOLDING_EVERY_TOKEN_AS_DATA_NOT_READING_ANY_INSTANCE_FILE = 'formatLiteralScan.test.ts';
 
-const LAYOUT_OWNERS: Record<string, readonly string[]> = {
-  profiles: [join('instanceAdapter', 'layout.ts')],
-  mods: [join('instanceAdapter', 'layout.ts')],
-  downloads: [join('instanceAdapter', 'layout.ts')],
-  overwrite: [join(ADAPTER_CODECS, 'modlistText.ts')],
-  'modlist.txt': [join(ADAPTER_CODECS, 'modlistText.ts')],
-  'ModOrganizer.ini': [join(ADAPTER_CODECS, 'modOrganizerIni.ts')],
-  'meta.ini': [join(ADAPTER_CODECS, 'metaIni.ts')],
-  '.meta': [join(ADAPTER_CODECS, 'downloads.ts')],
-  '.mohidden': [join('instanceAdapter', 'layout.ts')],
-  'plugins.txt': [LOAD_ORDER_FILE_CODEC],
-};
-const LAYOUT_NAMES = Object.keys(LAYOUT_OWNERS);
-const MO2_LAYOUT_NAMES: readonly string[] = [...MO2_NAMES.files, ...MO2_NAMES.directories];
+interface LayoutName {
+  readonly owners: readonly string[];
+  readonly matchedWithinLiterals?: true;
+}
 
-function stringLiterals(sourceText: string, fileName: string): string[] {
+const LAYOUT: Record<string, LayoutName> = {
+  profiles: { owners: [join('instanceAdapter', 'layout.ts')] },
+  mods: { owners: [join('instanceAdapter', 'layout.ts')] },
+  downloads: { owners: [join('instanceAdapter', 'layout.ts')] },
+  overwrite: { owners: [join(ADAPTER_CODECS, 'modlistText.ts')] },
+  'modlist.txt': { owners: [join(ADAPTER_CODECS, 'modlistText.ts')], matchedWithinLiterals: true },
+  'ModOrganizer.ini': { owners: [join(ADAPTER_CODECS, 'modOrganizerIni.ts')], matchedWithinLiterals: true },
+  'meta.ini': { owners: [join(ADAPTER_CODECS, 'metaIni.ts')], matchedWithinLiterals: true },
+  '.meta': { owners: [join(ADAPTER_CODECS, 'downloads.ts')], matchedWithinLiterals: true },
+  '.mohidden': { owners: [join('instanceAdapter', 'layout.ts')], matchedWithinLiterals: true },
+  'plugins.txt': { owners: [LOAD_ORDER_FILE_CODEC] },
+};
+const LAYOUT_NAMES = Object.keys(LAYOUT);
+
+function stringLiterals(
+  sourceText: string,
+  fileName: string,
+  isTemplatePart: (node: ts.Node) => node is ts.TemplateLiteralToken = ts.isTemplateHead,
+): string[] {
   const scriptKind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, scriptKind);
   const found: string[] = [];
   const visit = (node: ts.Node): void => {
-    if (ts.isStringLiteralLike(node) || ts.isTemplateHead(node)) found.push(node.text);
+    if (ts.isStringLiteralLike(node) || isTemplatePart(node)) found.push(node.text);
     ts.forEachChild(node, visit);
   };
   visit(source);
@@ -197,17 +205,22 @@ describe('format literals, scanned over the extension and webview trees against 
   });
 });
 
+const namesFile = (literal: string, name: string): boolean =>
+  literal.split(name).slice(1).some((after) => !/^\w/.test(after));
+
 function layoutLeaks(sourceText: string, fileName: string): string[] {
   const segments = pathSegments(sourceText, fileName);
-  return LAYOUT_NAMES.filter((name) => segments.has(name));
+  const literals = stringLiterals(sourceText, fileName, ts.isTemplateLiteralToken);
+  return LAYOUT_NAMES.filter((name) => segments.has(name)
+    || (LAYOUT[name]?.matchedWithinLiterals === true && literals.some((literal) => namesFile(literal, name))));
 }
 
 function findLayoutLeaks(roots: readonly string[]): Record<string, string[]> {
   const leaks: Record<string, string[]> = {};
   for (const path of roots.flatMap((root) => productionFiles(root))) {
     const leaked = new Set(layoutLeaks(readFileSync(path, 'utf8'), path));
-    const found = Object.entries(LAYOUT_OWNERS)
-      .filter(([name, owners]) => leaked.has(name) && !owners.some((owner) => path.endsWith(sep + owner)))
+    const found = Object.entries(LAYOUT)
+      .filter(([name, { owners }]) => leaked.has(name) && !owners.some((owner) => path.endsWith(sep + owner)))
       .map(([name]) => name);
     if (found.length > 0) leaks[path] = found;
   }
@@ -216,7 +229,7 @@ function findLayoutLeaks(roots: readonly string[]): Record<string, string[]> {
 
 describe('layout names', () => {
   it('every name is spelled by each file that owns it, a name dropped from its owner freeing every other file to spell it again with the production assertion still green', () => {
-    const ownersLackingTheirName = Object.entries(LAYOUT_OWNERS).flatMap(([name, owners]) => owners
+    const ownersLackingTheirName = Object.entries(LAYOUT).flatMap(([name, { owners }]) => owners
       .filter((owner) => {
         const path = join(SRC, owner);
         return !layoutLeaks(readFileSync(path, 'utf8'), path).includes(name);
@@ -224,10 +237,6 @@ describe('layout names', () => {
       .map((owner) => `${owner} lacks ${name}`));
 
     expect(ownersLackingTheirName).toEqual([]);
-  });
-
-  it('name every file and directory of MO2 that the manager-name scan holds', () => {
-    expect(MO2_LAYOUT_NAMES.filter((name) => !LAYOUT_NAMES.includes(name))).toEqual([]);
   });
 
   it('appear in no production file of either tree but their owner', () => {
@@ -249,6 +258,24 @@ describe('layout names', () => {
 
   it('catches a name spelled as one segment of a watcher glob', () => {
     expect(layoutLeaks("watch(root, 'profiles/*/plugins.txt');\n", 'x.ts')).toEqual(['profiles', 'plugins.txt']);
+  });
+
+  it('catches a file of the manager\'s named in a message, in a template\'s tail too', () => {
+    expect(layoutLeaks('export const say = (mod: string) => `"${mod}" was created, but its modlist.txt line could not be written.`;\n', 'x.ts'))
+      .toEqual(['modlist.txt']);
+    expect(layoutLeaks('export const say = (name: string) => `${name}.meta was left behind.`;\n', 'x.ts')).toEqual(['.meta']);
+    expect(layoutLeaks("export const tooltip = 'Mod files tools wrote, in ModOrganizer.ini';\n", 'x.ts')).toEqual(['ModOrganizer.ini']);
+  });
+
+  it('catches a directory name only as a path segment, not in prose', () => {
+    expect(layoutLeaks("join(base, 'profiles', 'overwrite');\n", 'x.ts')).toEqual(['profiles', 'overwrite']);
+    expect(layoutLeaks("export const say = 'the mods and profiles are fine';\n", 'x.ts')).toEqual([]);
+  });
+
+  it('does not flag a file of the manager\'s named in a comment, or a longer name one begins', () => {
+    expect(layoutLeaks('// reads modlist.txt\n', 'x.ts')).toEqual([]);
+    expect(layoutLeaks("export const say = 'its .metadata';\n", 'x.ts')).toEqual([]);
+    expect(layoutLeaks('export const say = (file: string) => `its ${file} line could not be written.`;\n', 'x.ts')).toEqual([]);
   });
 
   it('does not flag a name inside a longer path segment, or one only in prose', () => {

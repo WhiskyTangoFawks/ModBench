@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as http from 'http';
-import * as fs from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -11,7 +11,7 @@ import { PLUGIN_SOURCE_GLOB } from '../../instanceAdapter/instanceAdapter';
 import { comparisonOf, fieldOf } from '../comparison';
 import { isRecord, requires } from '../manifest';
 
-const MANIFEST: unknown = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'));
+const MANIFEST: unknown = JSON.parse(readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'));
 
 function contributed(point: string): unknown[] {
   const entries = isRecord(MANIFEST) && isRecord(MANIFEST.contributes) ? MANIFEST.contributes[point] : undefined;
@@ -53,18 +53,18 @@ async function setGameDirectory(dir: string): Promise<void> {
 }
 
 function gameFolderHolding(prefix: string, plugins: readonly string[]): string {
-  const gameDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-  fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-  for (const name of plugins) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
+  const gameDir = mkdtempSync(path.join(os.tmpdir(), prefix));
+  mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+  for (const name of plugins) writeFileSync(path.join(gameDir, 'Data', name), '');
   return gameDir;
 }
 
 async function holdPluginsTxt(text: string): Promise<void> {
   const lines = text.split(/\r?\n/).map((line) => line.replace(/^\*/, '')).filter((line) => line !== '');
   await waitFor(`mEdit to be put the load order of a plugins.txt holding ${lines.join(', ')}, rewritten past a sync of an earlier value`, () => {
-    if (fs.readFileSync(pluginsTxtPath, 'utf8') !== text) fs.writeFileSync(pluginsTxtPath, text);
+    if (readFileSync(pluginsTxtPath, 'utf8') !== text) writeFileSync(pluginsTxtPath, text);
     const put = putLoadOrders.at(-1) ?? [];
-    return put.filter((name) => lines.includes(name)).join() === lines.join() && fs.readFileSync(pluginsTxtPath, 'utf8') === text;
+    return put.filter((name) => lines.includes(name)).join() === lines.join() && readFileSync(pluginsTxtPath, 'utf8') === text;
   });
 }
 
@@ -243,7 +243,7 @@ function createMockBackend(): http.Server {
         if (!isRecord(asked) || typeof asked.name !== 'string' || typeof asked.origin !== 'string' || typeof asked.folder !== 'string') {
           throw new Error(`expected a create body naming a plugin, its origin and its folder, got: ${body}`);
         }
-        fs.writeFileSync(path.join(asked.folder, asked.name), '');
+        writeFileSync(path.join(asked.folder, asked.name), '');
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ name: asked.name, origin: asked.origin }));
       });
@@ -412,16 +412,16 @@ const HELD_FORM_KEY = '000801:Held.esp';
 const NOT_HELD_FORM_KEY = '000999:Nobody.esp';
 const RENDERED_REFERRER_FORM_KEY = '000803:Fallout4.esm';
 const TRACKED_FILE = path.join(
-  fs.mkdtempSync(path.join(os.tmpdir(), 'modbench-tracked-')), TRACKED_ORIGIN, 'plugin-source', TRACKED_PLUGIN, 'Weapons', 'TrackedGun.json');
-fs.mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
-fs.writeFileSync(TRACKED_FILE, JSON.stringify({
+  mkdtempSync(path.join(os.tmpdir(), 'modbench-tracked-')), TRACKED_ORIGIN, 'plugin-source', TRACKED_PLUGIN, 'Weapons', 'TrackedGun.json');
+mkdirSync(path.dirname(TRACKED_FILE), { recursive: true });
+writeFileSync(TRACKED_FILE, JSON.stringify({
   FormKey: TRACKED_FORM_KEY, EditorID: 'TrackedGun', Model: HELD_FORM_KEY, Placed: [
     { FormKey: CHILD_FORM_KEY, EditorID: 'TrackedRef', Base: HELD_FORM_KEY }, { FormKey: SECOND_CHILD_FORM_KEY, EditorID: 'SecondRef' },
   ],
 }));
 const TRACKED_FS_PATH = vscode.Uri.file(TRACKED_FILE).fsPath;
 const METADATA_FILE = path.join(path.dirname(TRACKED_FILE), 'GroupRecordData.json');
-fs.writeFileSync(METADATA_FILE, JSON.stringify({ Type: 'WEAP' }));
+writeFileSync(METADATA_FILE, JSON.stringify({ Type: 'WEAP' }));
 const METADATA_FS_PATH = vscode.Uri.file(METADATA_FILE).fsPath;
 const copyQuery = (formKey: string, plugin: string, origin: string) => `formKey=${encodeURIComponent(formKey)}&name=${plugin}&origin=${encodeURIComponent(origin)}`;
 const trackedChildUri = `modbench-child-record:${vscode.Uri.file(TRACKED_FILE).path}?${copyQuery(CHILD_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN)}`;
@@ -469,8 +469,8 @@ after(async () => {
 });
 
 function modbenchLog(): string {
-  const log = fs.readdirSync(LOGS, { recursive: true, encoding: 'utf8' }).find((file) => file.endsWith(path.join(EXTENSION_ID, 'Modbench.log')));
-  return log === undefined ? '' : fs.readFileSync(path.join(LOGS, log), 'utf8');
+  const log = readdirSync(LOGS, { recursive: true, encoding: 'utf8' }).find((file) => file.endsWith(path.join(EXTENSION_ID, 'Modbench.log')));
+  return log === undefined ? '' : readFileSync(path.join(LOGS, log), 'utf8');
 }
 
 describe('Modbench output channel', () => {
@@ -481,14 +481,14 @@ describe('Modbench output channel', () => {
 
 describe('the Problems language status selector', () => {
   const matches = async (...segments: string[]): Promise<number> => {
-    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'status-selector-'));
+    const folder = mkdtempSync(path.join(os.tmpdir(), 'status-selector-'));
     try {
       const file = path.join(folder, ...segments);
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, '{}');
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, '{}');
       return vscode.languages.match({ language: 'json', pattern: PLUGIN_SOURCE_GLOB }, await vscode.workspace.openTextDocument(file));
     } finally {
-      fs.rmSync(folder, { recursive: true, force: true });
+      rmSync(folder, { recursive: true, force: true });
     }
   };
 
@@ -516,13 +516,13 @@ describe('modbench command registration', () => {
 describe('Mod sync', () => {
   let original = '';
 
-  before(() => { original = fs.readFileSync(modlistPath, 'utf8'); });
-  after(() => fs.writeFileSync(modlistPath, original));
+  before(() => { original = readFileSync(modlistPath, 'utf8'); });
+  after(() => writeFileSync(modlistPath, original));
 
   it('drops the line of a folder gone from mods/ from the active profile', async () => {
-    fs.writeFileSync(modlistPath, '+Gone Mod\r\n');
+    writeFileSync(modlistPath, '+Gone Mod\r\n');
 
-    await waitFor('mod sync to drop the line', () => !fs.readFileSync(modlistPath, 'utf8').includes('Gone Mod'));
+    await waitFor('mod sync to drop the line', () => !readFileSync(modlistPath, 'utf8').includes('Gone Mod'));
   });
 });
 
@@ -676,7 +676,7 @@ describe('a tracked copy of a record', () => {
     try {
       await openRecord(trackedCopy);
 
-      await waitFor('a read of the saved text', () => comparedTexts.includes(fs.readFileSync(TRACKED_FILE, 'utf8')));
+      await waitFor('a read of the saved text', () => comparedTexts.includes(readFileSync(TRACKED_FILE, 'utf8')));
     } finally {
       Object.assign(trackedPlugin, { inLoadOrder: true });
     }
@@ -769,7 +769,7 @@ describe('a tracked copy of a record', () => {
 describe('a child record of a tracked plugin', () => {
   const plugin = { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN };
   const childCopy = { formKey: CHILD_FORM_KEY, plugin };
-  const containerText = fs.readFileSync(TRACKED_FILE, 'utf8');
+  const containerText = readFileSync(TRACKED_FILE, 'utf8');
   const recordTabs = () => openTabs().filter((t) => t.input instanceof vscode.TabInputCustom && t.input.viewType === 'modbench.record');
   const childTab = () => recordTabs().find((t) => t.input instanceof vscode.TabInputCustom && t.input.uri.scheme !== 'file');
   const childUri = () => {
@@ -787,8 +787,8 @@ describe('a child record of a tracked plugin', () => {
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    fs.writeFileSync(TRACKED_FILE, containerText);
-    fs.rmSync(OTHER_CELL, { force: true });
+    writeFileSync(TRACKED_FILE, containerText);
+    rmSync(OTHER_CELL, { force: true });
     carriedIn.clear();
     heldIn.clear();
     answerEdit = () => refusedAsUntracked;
@@ -799,7 +799,7 @@ describe('a child record of a tracked plugin', () => {
   };
 
   it('follows its record to the file that carries it now, as when its cell\'s file moves or it crosses into another cell', async () => {
-    fs.writeFileSync(OTHER_CELL, containerText);
+    writeFileSync(OTHER_CELL, containerText);
     heldIn.set(vscode.Uri.file(OTHER_CELL).fsPath, '000803:Tracked.esp');
     await openRecord(childCopy);
     await childDocument();
@@ -812,7 +812,7 @@ describe('a child record of a tracked plugin', () => {
   });
 
   it('follows, in each child\'s tab of a moved container, its own record, the tab in the background staying there and the focus where it was', async () => {
-    fs.writeFileSync(OTHER_CELL, containerText);
+    writeFileSync(OTHER_CELL, containerText);
     heldIn.set(vscode.Uri.file(OTHER_CELL).fsPath, '000803:Tracked.esp');
     const openLoaded = async (record: RecordToOpen) => {
       const asked = requestLog.length;
@@ -895,7 +895,7 @@ describe('a child record of a tracked plugin', () => {
 
     const fromChild = JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'SavedFromChild' });
     await replaceAll(child, fromChild);
-    assert.strictEqual(fs.readFileSync(TRACKED_FILE, 'utf8'), fromChild);
+    assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), fromChild);
     await waitFor('the container\'s file to show the child\'s save', () => container.getText() === fromChild);
 
     const fromContainer = JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'SavedFromContainer' });
@@ -907,7 +907,7 @@ describe('a child record of a tracked plugin', () => {
 
 describe('an edit in a tracked copy\'s grid', () => {
   const plugin = { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN };
-  const savedText = fs.readFileSync(TRACKED_FILE, 'utf8');
+  const savedText = readFileSync(TRACKED_FILE, 'utf8');
   const MOVED_FILE = path.join(path.dirname(TRACKED_FILE), 'Moved.json');
   const MOVED_FORM_KEY = '000900:Tracked.esp';
   const edit = (formKey: string, value: unknown) => vscode.commands.executeCommand(
@@ -929,8 +929,8 @@ describe('an edit in a tracked copy\'s grid', () => {
   afterEach(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     answerEdit = () => refusedAsUntracked;
-    if (fs.existsSync(MOVED_FILE)) fs.renameSync(MOVED_FILE, TRACKED_FILE);
-    fs.writeFileSync(TRACKED_FILE, savedText);
+    if (existsSync(MOVED_FILE)) renameSync(MOVED_FILE, TRACKED_FILE);
+    writeFileSync(TRACKED_FILE, savedText);
   });
 
   it('changes the file\'s document to the text mEdit answers for the document\'s own text, and saves it', async () => {
@@ -942,7 +942,7 @@ describe('an edit in a tracked copy\'s grid', () => {
     assert.strictEqual(editsAsked.at(-1)?.text, savedText);
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
     assert.deepStrictEqual(shown(document), { text: `${savedText}+1`, unsaved: false });
-    assert.strictEqual(fs.readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1`);
+    assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1`);
   });
 
   it('is undone by VS Code\'s Undo in the tab, over the document', async () => {
@@ -963,7 +963,7 @@ describe('an edit in a tracked copy\'s grid', () => {
 
     await Promise.all([edit(TRACKED_FORM_KEY, 1), edit(TRACKED_FORM_KEY, 2)]);
 
-    assert.strictEqual(fs.readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1+2`);
+    assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1+2`);
   });
 
   it('changes no document when mEdit refuses the edit, and says why, naming the field', async () => {
@@ -985,7 +985,7 @@ describe('an edit in a tracked copy\'s grid', () => {
 
     await waitFor('the tab on the moved file', () => recordTabsOn(vscode.Uri.file(MOVED_FILE).fsPath).length === 1);
     assert.deepStrictEqual(recordTabsOn(TRACKED_FS_PATH), []);
-    assert.strictEqual(fs.existsSync(TRACKED_FILE), false);
+    assert.strictEqual(existsSync(TRACKED_FILE), false);
     const moved = await vscode.workspace.openTextDocument(vscode.Uri.file(MOVED_FILE));
     assert.deepStrictEqual(shown(moved), { text: `${savedText}+moved`, unsaved: false });
     await waitFor('the moved tab to read its new record from the document', () => comparedTexts.slice(readsBefore).includes(`${savedText}+moved`));
@@ -1016,13 +1016,13 @@ describe('an edit in a tracked copy\'s grid', () => {
     await edit(CHILD_FORM_KEY, 1);
 
     assert.deepStrictEqual(shown(child), { text: `${savedText}+1`, unsaved: false });
-    assert.strictEqual(fs.readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1`);
+    assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1`);
   });
 });
 
 describe('deleting a record in a tracked copy', () => {
   const plugin = { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN };
-  const savedText = fs.readFileSync(TRACKED_FILE, 'utf8');
+  const savedText = readFileSync(TRACKED_FILE, 'utf8');
   const folder = path.join(path.dirname(TRACKED_FILE), 'DoomedNpc');
   const warn = vscode.window.showWarningMessage;
 
@@ -1030,7 +1030,7 @@ describe('deleting a record in a tracked copy', () => {
     (vscode.window as { showWarningMessage: unknown }).showWarningMessage = warn;
     await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    fs.rmSync(folder, { recursive: true, force: true });
+    rmSync(folder, { recursive: true, force: true });
     const restored = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
     const restoring = new vscode.WorkspaceEdit();
     restoring.replace(restored.uri, new vscode.Range(0, 0, restored.lineCount, 0), savedText);
@@ -1040,8 +1040,8 @@ describe('deleting a record in a tracked copy', () => {
   });
 
   it('reads the dirty plugin source in place of its file, deletes the answered folder recursively, and saves the rewritten document', async () => {
-    fs.mkdirSync(path.join(folder, 'Nested'), { recursive: true });
-    fs.writeFileSync(path.join(folder, 'Nested', 'Child.json'), '{}');
+    mkdirSync(path.join(folder, 'Nested'), { recursive: true });
+    writeFileSync(path.join(folder, 'Nested', 'Child.json'), '{}');
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
     await vscode.window.showTextDocument(document);
     const dirtied = new vscode.WorkspaceEdit();
@@ -1062,8 +1062,8 @@ describe('deleting a record in a tracked copy', () => {
     const asked = deletesAsked.at(-1);
     assert.ok(isRecord(asked) && Array.isArray(asked.documents));
     assert.deepStrictEqual(asked.documents, [{ path: TRACKED_FS_PATH, text: unsavedText }]);
-    assert.ok(!fs.existsSync(folder), 'the answered folder should be deleted with what is in it');
-    assert.strictEqual(fs.readFileSync(TRACKED_FILE, 'utf8'), 'rewritten');
+    assert.ok(!existsSync(folder), 'the answered folder should be deleted with what is in it');
+    assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), 'rewritten');
     assert.ok(!document.isDirty, 'the rewritten document should be saved');
   });
 });
@@ -1162,7 +1162,7 @@ describe('modbench.downloads tree', () => {
   const iniPath = path.join(root, 'ModOrganizer.ini');
 
   async function repointDownloads(iniText: string, landed: (rows: readonly string[]) => boolean): Promise<void> {
-    fs.writeFileSync(iniPath, iniText);
+    writeFileSync(iniPath, iniText);
     await waitFor('the Downloads view to follow ModOrganizer.ini', async () => landed(await downloadsRows()));
   }
 
@@ -1172,7 +1172,7 @@ describe('modbench.downloads tree', () => {
     await waitFor(`a file written into ${dir}, once no read is in flight to pick it up, to reach the Downloads tree through the watcher`, async () => {
       const name = `${prefix}-${written.size}.zip`;
       written.add(name);
-      fs.writeFileSync(path.join(dir, name), 'data');
+      writeFileSync(path.join(dir, name), 'data');
       const deadline = Date.now() + PROBE_SPACING_MS;
       do {
         if ((await downloadsRows()).some((row) => written.has(row))) return true;
@@ -1181,8 +1181,8 @@ describe('modbench.downloads tree', () => {
     }, 35000);
   }
 
-  before(() => fs.mkdirSync(downloadsDir, { recursive: true }));
-  after(() => fs.rmSync(downloadsDir, { recursive: true, force: true }));
+  before(() => mkdirSync(downloadsDir, { recursive: true }));
+  after(() => rmSync(downloadsDir, { recursive: true, force: true }));
 
   it('reflects a new archive dropped into downloads/ via the file-watcher, with no manual refresh', async () => {
     await probeUntilListed(downloadsDir, 'dropped');
@@ -1190,37 +1190,37 @@ describe('modbench.downloads tree', () => {
 
   it('scans and watches a downloads folder ModOrganizer.ini points outside the instance', async function () {
     this.timeout(40000);
-    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-external-downloads-'));
-    const originalIni = fs.readFileSync(iniPath, 'utf8');
+    const external = mkdtempSync(path.join(os.tmpdir(), 'medit-external-downloads-'));
+    const originalIni = readFileSync(iniPath, 'utf8');
     try {
-      fs.writeFileSync(path.join(external, 'external-preexisting.zip'), 'data');
+      writeFileSync(path.join(external, 'external-preexisting.zip'), 'data');
       await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${external}\r\n`,
         (rows) => rows.includes('external-preexisting.zip'));
 
       await probeUntilListed(external, 'external-new');
     } finally {
       await repointDownloads(originalIni, (rows) => !rows.some((row) => row.startsWith('external-')));
-      fs.rmSync(external, { recursive: true, force: true });
+      rmSync(external, { recursive: true, force: true });
     }
   });
 
   it('watches a downloads folder ModOrganizer.ini points at before it exists on disk', async function () {
     this.timeout(40000);
-    const container = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-notyet-downloads-'));
+    const container = mkdtempSync(path.join(os.tmpdir(), 'medit-notyet-downloads-'));
     const notYetCreated = path.join(container, 'NotYetCreated');
-    const originalIni = fs.readFileSync(iniPath, 'utf8');
+    const originalIni = readFileSync(iniPath, 'utf8');
     const marker = 'in-the-instance-downloads.zip';
     const listsMarker = (rows: readonly string[]) => rows.includes(marker);
     try {
-      fs.writeFileSync(path.join(downloadsDir, marker), 'data');
+      writeFileSync(path.join(downloadsDir, marker), 'data');
       await waitFor('the instance\'s own downloads folder to be listed', async () => listsMarker(await downloadsRows()));
       await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${notYetCreated}\r\n`, (rows) => rows.length === 0);
 
-      fs.mkdirSync(notYetCreated);
+      mkdirSync(notYetCreated);
       await probeUntilListed(notYetCreated, 'created');
     } finally {
       await repointDownloads(originalIni, listsMarker);
-      fs.rmSync(container, { recursive: true, force: true });
+      rmSync(container, { recursive: true, force: true });
     }
   });
 });
@@ -1230,17 +1230,17 @@ const trashInfoDir = path.join(xdgTrash, 'info');
 const TRASH_INFO = '.trashinfo';
 
 function trashInfoNames(): ReadonlySet<string> {
-  return new Set(fs.existsSync(trashInfoDir) ? fs.readdirSync(trashInfoDir) : []);
+  return new Set(existsSync(trashInfoDir) ? readdirSync(trashInfoDir) : []);
 }
 
 function takeFromTrash(original: string, before: ReadonlySet<string>): number {
   let taken = 0;
   for (const info of trashInfoNames()) {
     if (before.has(info) || !info.endsWith(TRASH_INFO)) continue;
-    const pathLine = fs.readFileSync(path.join(trashInfoDir, info), 'utf8').split('\n').find((l) => l.startsWith('Path='));
+    const pathLine = readFileSync(path.join(trashInfoDir, info), 'utf8').split('\n').find((l) => l.startsWith('Path='));
     if (pathLine === undefined || decodeURIComponent(pathLine.slice('Path='.length)) !== original) continue;
-    fs.rmSync(path.join(xdgTrash, 'files', info.slice(0, -TRASH_INFO.length)), { recursive: true, force: true });
-    fs.rmSync(path.join(trashInfoDir, info));
+    rmSync(path.join(xdgTrash, 'files', info.slice(0, -TRASH_INFO.length)), { recursive: true, force: true });
+    rmSync(path.join(trashInfoDir, info));
     taken++;
   }
   return taken;
@@ -1265,15 +1265,15 @@ describe('Delete separator, as VS Code runs it on the Mods view\'s selection', (
 
   before(() => {
     trashedBefore = trashInfoNames();
-    original = fs.readFileSync(modlistPath, 'utf8');
-    fs.mkdirSync(doomedDir, { recursive: true });
-    fs.writeFileSync(modlistPath, '-Doomed_separator\r\n');
+    original = readFileSync(modlistPath, 'utf8');
+    mkdirSync(doomedDir, { recursive: true });
+    writeFileSync(modlistPath, '-Doomed_separator\r\n');
   });
 
   after(() => {
     takeFromTrash(doomedDir, trashedBefore);
-    fs.rmSync(doomedDir, { recursive: true, force: true });
-    fs.writeFileSync(modlistPath, original);
+    rmSync(doomedDir, { recursive: true, force: true });
+    writeFileSync(modlistPath, original);
   });
 
   it('takes its line from modlist.txt and its folder to the OS trash', async () => {
@@ -1283,8 +1283,8 @@ describe('Delete separator, as VS Code runs it on the Mods view\'s selection', (
     try {
       await vscode.commands.executeCommand('modbench.separator.delete');
 
-      assert.ok(!fs.readFileSync(modlistPath, 'utf8').includes('Doomed'), 'the delete should have written modlist.txt');
-      assert.ok(!fs.existsSync(doomedDir), 'the delete should have taken the separator\'s folder from mods/');
+      assert.ok(!readFileSync(modlistPath, 'utf8').includes('Doomed'), 'the delete should have written modlist.txt');
+      assert.ok(!existsSync(doomedDir), 'the delete should have taken the separator\'s folder from mods/');
       if (process.platform === 'linux') {
         assert.strictEqual(takeFromTrash(doomedDir, trashedBefore), 1, 'the separator\'s folder should be in the OS trash');
       }
@@ -1299,20 +1299,20 @@ describe('The Mods view\'s palette entries, as VS Code runs them', () => {
   let original = '';
 
   const enabledAndSelected = async () => {
-    fs.writeFileSync(modlistPath, '+Palette Mod\r\n');
+    writeFileSync(modlistPath, '+Palette Mod\r\n');
     await selectFirstRow('modbench.modList', 'Palette Mod');
   };
 
   before(async () => {
-    original = fs.readFileSync(modlistPath, 'utf8');
-    fs.mkdirSync(modDir, { recursive: true });
-    await waitFor('mod sync to give the new folder its line', () => fs.readFileSync(modlistPath, 'utf8').includes('Palette Mod'));
+    original = readFileSync(modlistPath, 'utf8');
+    mkdirSync(modDir, { recursive: true });
+    await waitFor('mod sync to give the new folder its line', () => readFileSync(modlistPath, 'utf8').includes('Palette Mod'));
   });
 
   after(async () => {
     await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
-    fs.writeFileSync(modlistPath, original);
-    fs.rmSync(modDir, { recursive: true, force: true });
+    writeFileSync(modlistPath, original);
+    rmSync(modDir, { recursive: true, force: true });
   });
 
   it('copies the selection of the view last selected in when Copy Value is run from the palette', async function () {
@@ -1332,7 +1332,7 @@ describe('The Mods view\'s palette entries, as VS Code runs them', () => {
     await waitFor('the palette\'s disable to reach modlist.txt', async () => {
       await vscode.commands.executeCommand('workbench.action.quickOpen', '>Modbench: Disable Mod');
       await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
-      return fs.readFileSync(modlistPath, 'utf8').includes('-Palette Mod');
+      return readFileSync(modlistPath, 'utf8').includes('-Palette Mod');
     });
   });
 });
@@ -1346,18 +1346,18 @@ describe('modbench.plugin.create', () => {
 
   before(async function () {
     this.timeout(30_000);
-    original = fs.readFileSync(modlistPath, 'utf8');
-    originalPlugins = fs.readFileSync(pluginsTxtPath, 'utf8');
-    fs.mkdirSync(modDir, { recursive: true });
-    fs.writeFileSync(modlistPath, '+Create Mod\r\n');
+    original = readFileSync(modlistPath, 'utf8');
+    originalPlugins = readFileSync(pluginsTxtPath, 'utf8');
+    mkdirSync(modDir, { recursive: true });
+    writeFileSync(modlistPath, '+Create Mod\r\n');
     await selectFirstRow('modbench.modList', modName);
   });
 
   after(() => {
     Object.assign(vscode.window, { showInputBox, showQuickPick });
-    fs.writeFileSync(modlistPath, original);
-    fs.writeFileSync(pluginsTxtPath, originalPlugins);
-    fs.rmSync(modDir, { recursive: true, force: true });
+    writeFileSync(modlistPath, original);
+    writeFileSync(pluginsTxtPath, originalPlugins);
+    rmSync(modDir, { recursive: true, force: true });
   });
 
   it('puts the new plugin\'s line, disabled, at the end of plugins.txt', async function () {
@@ -1369,9 +1369,9 @@ describe('modbench.plugin.create', () => {
 
     await vscode.commands.executeCommand('modbench.plugin.create');
 
-    assert.ok(fs.existsSync(path.join(modDir, 'Created.esp')), 'the mock backend writes the file into the chosen mod');
-    await waitFor('plugin sync to put the line in plugins.txt', () => /^Created\.esp\r?$/m.test(fs.readFileSync(pluginsTxtPath, 'utf8')));
-    const lines = fs.readFileSync(pluginsTxtPath, 'utf8').split(/\r?\n/).filter((line) => line !== '');
+    assert.ok(existsSync(path.join(modDir, 'Created.esp')), 'the mock backend writes the file into the chosen mod');
+    await waitFor('plugin sync to put the line in plugins.txt', () => /^Created\.esp\r?$/m.test(readFileSync(pluginsTxtPath, 'utf8')));
+    const lines = readFileSync(pluginsTxtPath, 'utf8').split(/\r?\n/).filter((line) => line !== '');
     assert.strictEqual(lines.at(-1), 'Created.esp');
   });
 });
@@ -1381,7 +1381,7 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
   let original = '';
 
   before(async () => {
-    original = fs.readFileSync(pluginsTxtPath, 'utf8');
+    original = readFileSync(pluginsTxtPath, 'utf8');
     gameDir = gameFolderHolding('medit-keys-', ['TestMod.esp', 'Other.esp']);
     await setGameDirectory(gameDir);
   });
@@ -1389,8 +1389,8 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
   after(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     await setGameDirectory(FIXTURE_GAME_DIRECTORY);
-    fs.writeFileSync(pluginsTxtPath, original);
-    fs.rmSync(gameDir, { recursive: true, force: true });
+    writeFileSync(pluginsTxtPath, original);
+    rmSync(gameDir, { recursive: true, force: true });
   });
 
   it('Space disables the selected plugin', async () => {
@@ -1401,7 +1401,7 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
 
     await vscode.commands.executeCommand('modbench.plugin.disable');
 
-    await waitFor('the disable to reach plugins.txt', () => /^TestMod\.esp\r?$/m.test(fs.readFileSync(pluginsTxtPath, 'utf8')));
+    await waitFor('the disable to reach plugins.txt', () => /^TestMod\.esp\r?$/m.test(readFileSync(pluginsTxtPath, 'utf8')));
   });
 });
 
@@ -1416,9 +1416,9 @@ describe('The game-directory setting reaches the Instance as a recompute', () =>
 
   after(async () => {
     await setGameDirectory(FIXTURE_GAME_DIRECTORY);
-    fs.writeFileSync(pluginsTxtPath, '');
-    fs.rmSync(providing, { recursive: true, force: true });
-    fs.rmSync(empty, { recursive: true, force: true });
+    writeFileSync(pluginsTxtPath, '');
+    rmSync(providing, { recursive: true, force: true });
+    rmSync(empty, { recursive: true, force: true });
   });
 
   it('lands a value plugin sync reads, with no file of the instance touched: the line the Data folder it now names does not provide goes', async () => {
@@ -1427,7 +1427,7 @@ describe('The game-directory setting reaches the Instance as a recompute', () =>
 
     await setGameDirectory(empty);
 
-    await waitFor('plugin sync to drop the line', () => !fs.readFileSync(pluginsTxtPath, 'utf8').includes('TestMod.esp'));
+    await waitFor('plugin sync to drop the line', () => !readFileSync(pluginsTxtPath, 'utf8').includes('TestMod.esp'));
   });
 });
 
@@ -1453,7 +1453,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   async function writePluginsTxt(text: string): Promise<void> {
     const before = putCount();
     const pluginReads = requestLog.filter((l) => l === 'GET /plugins').length;
-    fs.writeFileSync(pluginsTxtPath, text);
+    writeFileSync(pluginsTxtPath, text);
     await waitFor('a fresh PUT /load-order after plugins.txt changed', () => putCount() > before ? true : undefined);
     await waitFor('the tree hand-off after the PUT', () => requestLog.filter((l) => l === 'GET /plugins').length > pluginReads ? true : undefined);
   }
@@ -1466,8 +1466,8 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
   after(async () => {
     await setGameDirectory(FIXTURE_GAME_DIRECTORY);
-    fs.writeFileSync(pluginsTxtPath, '');
-    fs.rmSync(gameDir, { recursive: true, force: true });
+    writeFileSync(pluginsTxtPath, '');
+    rmSync(gameDir, { recursive: true, force: true });
   });
 
   it('a plugins.txt write is followed by a fresh PUT /load-order, no command required', async () => {
@@ -1482,7 +1482,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     const sent = putLoadOrders.length;
     const order = swapped ? ['Second.esp', 'TestMod.esp'] : ['TestMod.esp', 'Second.esp'];
 
-    await writePluginsTxt(`${fs.readFileSync(pluginsTxtPath, 'utf8')}\n`);
+    await writePluginsTxt(`${readFileSync(pluginsTxtPath, 'utf8')}\n`);
 
     assert.deepStrictEqual(putLoadOrders.slice(sent), [order]);
   });
@@ -1536,13 +1536,13 @@ describe('A FormKey in plugin source', () => {
   let document: vscode.TextDocument;
 
   before(async () => {
-    folder = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-plugin-source-'));
+    folder = mkdtempSync(path.join(os.tmpdir(), 'medit-plugin-source-'));
     const file = path.join(folder, 'plugin-source', 'Held.esp', 'Gun.json');
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY, Name: 'Rusty Gun', Mode: 'Auto' }, null, 2));
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY, Name: 'Rusty Gun', Mode: 'Auto' }, null, 2));
     document = await vscode.workspace.openTextDocument(file);
   });
-  after(() => fs.rmSync(folder, { recursive: true, force: true }));
+  after(() => rmSync(folder, { recursive: true, force: true }));
 
   const positionIn = (text: string) => document.positionAt(document.getText().indexOf(text) + 1);
   const hoverTextsIn = async (doc: vscode.TextDocument, text: string): Promise<string[]> => {
@@ -1558,8 +1558,8 @@ describe('A FormKey in plugin source', () => {
   });
   const documentAt = async (...segments: string[]) => {
     const file = path.join(folder, ...segments);
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY, Mode: 'Auto' }));
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY, Mode: 'Auto' }));
     return vscode.workspace.openTextDocument(file);
   };
 
@@ -1597,8 +1597,8 @@ describe('A FormKey in plugin source', () => {
 
   const definitionsOf = async (formKey: string): Promise<vscode.Location[]> => {
     const referencing = path.join(folder, 'plugin-source', 'Held.esp', 'References', `${formKey.replace(':', '_')}.json`);
-    fs.mkdirSync(path.dirname(referencing), { recursive: true });
-    fs.writeFileSync(referencing, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: formKey }));
+    mkdirSync(path.dirname(referencing), { recursive: true });
+    writeFileSync(referencing, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: formKey }));
     const doc = await vscode.workspace.openTextDocument(referencing);
     return vscode.commands.executeCommand<vscode.Location[]>(
       'vscode.executeDefinitionProvider', doc.uri, doc.positionAt(doc.getText().indexOf(formKey) + 1));
@@ -1632,7 +1632,7 @@ describe('A FormKey in plugin source', () => {
       return more.length === 0 && found?.uri.toString(true) === trackedChildUri && await definedText(found) === `"FormKey":"${CHILD_FORM_KEY}"` && found;
     });
 
-    assert.strictEqual(definition.range.start.character, fs.readFileSync(TRACKED_FILE, 'utf8').indexOf(`"FormKey":"${CHILD_FORM_KEY}"`));
+    assert.strictEqual(definition.range.start.character, readFileSync(TRACKED_FILE, 'utf8').indexOf(`"FormKey":"${CHILD_FORM_KEY}"`));
   });
 
   it('lists every record that references it, one entry for each plugin\'s copy at its reference, a record referencing itself never at its declaration', async () => {
@@ -1640,7 +1640,7 @@ describe('A FormKey in plugin source', () => {
     const found = await vscode.commands.executeCommand<vscode.Location[]>('vscode.executeReferenceProvider', document.uri, positionIn(HELD_FORM_KEY));
     const entries = await Promise.all(found.map(async ({ uri, range }) =>
       [uri.toString(true), (await vscode.workspace.openTextDocument(uri)).offsetAt(range.start)]));
-    const tracked = fs.readFileSync(TRACKED_FILE, 'utf8');
+    const tracked = readFileSync(TRACKED_FILE, 'utf8');
     const quoted = `"${HELD_FORM_KEY}"`;
 
     assert.deepStrictEqual(entries.sort(), [
@@ -1753,12 +1753,12 @@ describe('An unsaved document in plugin source', () => {
   let file = '';
 
   before(() => {
-    folder = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-unsaved-'));
+    folder = mkdtempSync(path.join(os.tmpdir(), 'medit-unsaved-'));
     file = path.join(folder, 'plugin-source', 'Held.esp', 'Typed.json');
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, EditorID: 'Saved' }));
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, EditorID: 'Saved' }));
   });
-  after(() => fs.rmSync(folder, { recursive: true, force: true }));
+  after(() => rmSync(folder, { recursive: true, force: true }));
 
   const textHanded = (documents: unknown[] | undefined, at: string): unknown => {
     const document = documents?.find((each) => isRecord(each) && each.path === at);
@@ -1792,7 +1792,7 @@ describe('An unsaved document in plugin source', () => {
 
     await waitFor('a hand-over without the discarded document', () =>
       textHanded(handedUnsaved.at(-1), document.uri.fsPath) === undefined);
-    assert.strictEqual(fs.readFileSync(file, 'utf8').includes('Discarded'), false);
+    assert.strictEqual(readFileSync(file, 'utf8').includes('Discarded'), false);
   });
 });
 
@@ -1803,12 +1803,12 @@ describe('The Problems panel on plugin source', () => {
   const plugin = { name: 'Held.esp', origin: 'Data/' };
 
   before(() => {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY }, null, 2));
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY }, null, 2));
   });
   after(() => {
     pluginProblems = [];
-    fs.rmSync(path.join(FIXTURE_GAME_DIRECTORY, 'Data', 'plugin-source'), { recursive: true, force: true });
+    rmSync(path.join(FIXTURE_GAME_DIRECTORY, 'Data', 'plugin-source'), { recursive: true, force: true });
   });
 
   const saved = (problems: PluginProblems['problems']) => {

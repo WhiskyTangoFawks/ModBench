@@ -8,8 +8,6 @@ export const SOURCE_ROOTS = [SRC, WEBVIEW_SRC];
 
 export const MO2_NAMES = {
   anywhere: [/mo2/i, /modorganizer/i, /\bMod Organizer\b/i],
-  files: ['modlist.txt', 'ModOrganizer.ini', 'meta.ini', '.mohidden', '.meta'],
-  directories: ['profiles', 'mods', 'overwrite', 'downloads'],
 } as const;
 
 export const MO2_CONSTRUCTION = { file: 'extension.ts', module: join('instanceAdapter', 'mo2Instance') };
