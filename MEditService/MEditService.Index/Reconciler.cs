@@ -45,7 +45,7 @@ internal sealed class Reconciler(
     private long _version;
     // A detached index whose reads outlived the drain: it stays open, so a retry drains it again
     // before any store is opened on its path.
-    private DuckDbRecordIndex? _undrained;
+    private OpenScope? _undrained;
 
     // Two mechanisms, because one is not enough: the token asks the reconcile loop to stop, the
     // exclusive lock waits until it has. Cancelling without draining would let a teardown dispose
@@ -246,10 +246,10 @@ internal sealed class Reconciler(
                 _failureMessage = null;
             }
             var token = BeginReconcile();
-            if (EnsureScope(snapshot, out heldElsewhere) is not { } scope)
+            if (EnsureScope(snapshot, out heldElsewhere, out failure) is not { } scope)
             {
-                // Refused, not failed: the user has two windows on one instance, and nothing is
-                // held here (EnsureScope tore the previous scope down before the open that refused).
+                // Refused, or failed with a reason: nothing is held here (EnsureScope tore the
+                // previous scope down before the open that refused).
                 return true;
             }
             var reconciled = ReconcileProgressively(scope, snapshot, token) || refusalCleared;
@@ -295,26 +295,26 @@ internal sealed class Reconciler(
 
     // ADR-0010.
     // Published before any plugin is opened, which is what makes the reconcile progressive.
-    private OpenScope? EnsureScope(LoadOrderSnapshot snapshot, out string? heldElsewhere)
+    private OpenScope? EnsureScope(LoadOrderSnapshot snapshot, out string? heldElsewhere, out string? failure)
     {
-        heldElsewhere = null;
-        DuckDbRecordIndex? leaving;
+        (heldElsewhere, failure) = (null, null);
+        OpenScope? leaving;
         lock (_lock)
         {
             if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot)) return current;
-            leaving = DetachCurrent()?.Index ?? _undrained;
+            leaving = DetachCurrent() ?? _undrained;
             _undrained = null;
             filter.DropWhenOutside(snapshot);
         }
         if (leaving is not null)
         {
-            if (!leaving.EndReads())
+            if (SharesFile(leaving, snapshot) && !leaving.Index.EndReads())
             {
                 lock (_lock) _undrained = leaving;
-                throw new InvalidOperationException(
-                    $"mEdit's index was not reopened: a read of it was still open after {IndexWriteGate.HoldLimit.TotalSeconds:0}s. It is retried with the next load order.");
+                failure = IndexWriteGate.NotDrained("mEdit's index was not reopened", "It is retried with the next load order.");
+                return null;
             }
-            leaving.Dispose();
+            leaving.Index.Dispose();
         }
 
         logger.LogDebug("Initializing DuckDB record index");
@@ -353,6 +353,11 @@ internal sealed class Reconciler(
         PublishStatus();
         return scope;
     }
+
+    // A different file has its own DuckDB instance, so a stuck read on the old one cannot reach the new.
+    private static bool SharesFile(OpenScope leaving, LoadOrderSnapshot snapshot) =>
+        leaving.Held.InstanceRoot is { } from && snapshot.InstanceRoot is { } to
+        && string.Equals(IndexFile.For(from), IndexFile.For(to), StringComparison.OrdinalIgnoreCase);
 
     // The diff is computed first and without side effects (one stamp read and a folder probe per
     // plugin), so a snapshot that moves nothing writes nothing and publishes no status.
@@ -833,7 +838,7 @@ internal sealed class Reconciler(
 
     /// <summary>Drops the scope: the plugins it has open and the store's connection. Cancels an in-flight
     /// reconcile and waits for it to stop first. False when a read outlived
-    /// <see cref="Store.EndReads"/>.</summary>
+    /// <see cref="Store.EndReads"/>: that index stays open, so nothing opens a store on its file.</summary>
     public bool Close()
     {
         // Cancels an in-flight reconcile and waits for it to stop *before* disposing anything,
@@ -843,14 +848,15 @@ internal sealed class Reconciler(
         bool readsEnded;
         try
         {
-            DuckDbRecordIndex? closing;
+            OpenScope? closing;
             lock (_lock)
             {
-                closing = DetachCurrent()?.Index ?? _undrained;
+                closing = DetachCurrent() ?? _undrained;
                 _undrained = null;
             }
-            readsEnded = closing?.EndReads() ?? true;
-            closing?.Dispose();
+            readsEnded = closing?.Index.EndReads() ?? true;
+            if (readsEnded) closing?.Index.Dispose();
+            else lock (_lock) _undrained = closing;
         }
         finally { ExitExclusive(); }
 
@@ -881,7 +887,7 @@ internal sealed class Reconciler(
                 _reconcileCancellation = null;
             }
             closing?.Index.Dispose();
-            _undrained?.Dispose();
+            _undrained?.Index.Dispose();
         }
         finally { ExitExclusive(); }
     }

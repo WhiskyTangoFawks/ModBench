@@ -13,6 +13,9 @@ internal sealed class IndexWriteGate
     /// seconds on a large plugin), short enough that a stuck one is reported rather than hung on.</summary>
     public static readonly TimeSpan HoldLimit = TimeSpan.FromMinutes(2);
 
+    internal static string NotDrained(string outcome, string consequence) =>
+        $"{outcome}: a read of it was still open after {HoldLimit.TotalSeconds:0}s. {consequence}";
+
     private readonly Lock _gate = new();
 
     /// <summary>Throws <see cref="IndexWriteGateTimeoutException"/> rather than returning false: every
