@@ -1,16 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from '../../test/vscodeMock';
 
-interface TestUri { scheme: string; path: string; query: string; with(change: Partial<Pick<TestUri, 'scheme' | 'query'>>): TestUri }
+interface TestUri {
+  scheme: string; path: string; fsPath: string; query: string;
+  with(change: Partial<Pick<TestUri, 'scheme' | 'query'>>): TestUri;
+  toString(): string;
+}
+interface TestDocument { uri: TestUri; isDirty?: boolean; getText?(): string; save?(): Promise<boolean> }
 
 const h = vi.hoisted(() => {
-  const uri = (scheme: string, path: string, query = ''): TestUri =>
-    ({ scheme, path, query, with: (change) => uri(change.scheme ?? scheme, path, change.query ?? query) });
+  const uri = (scheme: string, path: string, query = ''): TestUri => ({
+    scheme, path, fsPath: path, query,
+    with: (change) => uri(change.scheme ?? scheme, path, change.query ?? query),
+    toString: () => `${scheme}:${path}?${query}`,
+  });
   return {
     uri,
     providers: new Map<string, unknown>(),
-    textDocuments: [] as { uri: TestUri }[],
+    textDocuments: [] as TestDocument[],
     files: new Map<string, Uint8Array>(),
+    size: 3,
   };
 });
 
@@ -26,7 +35,9 @@ vi.mock('vscode', () => ({
       return { dispose: () => h.providers.delete(scheme) };
     },
     get textDocuments() { return h.textDocuments; },
+    onDidCloseTextDocument: () => ({ dispose: () => undefined }),
     fs: {
+      stat: () => Promise.resolve({ type: 1, ctime: 1, mtime: 2, size: h.size }),
       readFile: (uri: TestUri) => Promise.resolve(h.files.get(`${uri.scheme}:${uri.path}?${uri.query}`)),
       writeFile: (uri: TestUri, content: Uint8Array) => {
         h.files.set(`${uri.scheme}:${uri.path}?${uri.query}`, content);
@@ -40,6 +51,7 @@ import { ChildRecordDocuments } from '../childRecordDocument';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 interface FileSystem {
+  stat(uri: unknown): Promise<unknown>;
   readFile(uri: unknown): Promise<Uint8Array>;
   writeFile(uri: unknown, content: Uint8Array, options: unknown): Promise<void>;
   onDidChangeFile(listener: (events: { type: number; uri: unknown }[]) => void): unknown;
@@ -67,6 +79,7 @@ beforeEach(() => {
   h.providers.clear();
   h.textDocuments.length = 0;
   h.files.clear();
+  h.size = 3;
 });
 
 describe('a child record\'s document', () => {
@@ -100,6 +113,28 @@ describe('a child record\'s document', () => {
     await files.writeFile(PLACED_URI, new TextEncoder().encode('{ "EditorID": "Saved" }'), { create: true, overwrite: true });
 
     expect(new TextDecoder().decode(h.files.get(`file:${CELL_FILE}?`))).toBe('{ "EditorID": "Saved" }');
+  });
+
+  it('saves through its container\'s open document, which writes the file', async () => {
+    const save = vi.fn(() => Promise.resolve(true));
+    h.textDocuments.push({ uri: h.uri('file', CELL_FILE), isDirty: true, getText: () => '{ "EditorID": "Saved" }', save });
+    const { files } = childDocuments();
+
+    await files.writeFile(PLACED_URI, new TextEncoder().encode('{ "EditorID": "Saved" }'), { create: true, overwrite: true });
+
+    expect(save).toHaveBeenCalledOnce();
+    expect(h.files.size).toBe(0);
+  });
+
+  it('states the file\'s stat, its size as it read it while its container\'s document is open', async () => {
+    const { files } = childDocuments();
+    expect(await files.stat(PLACED_URI)).toEqual({ type: 1, ctime: 1, mtime: 2, size: 3 });
+    h.textDocuments.push({ uri: h.uri('file', CELL_FILE) });
+    h.size = 9;
+
+    expect(await files.stat(PLACED_URI)).toEqual({ type: 1, ctime: 1, mtime: 2, size: 3 });
+    h.textDocuments.length = 0;
+    expect(await files.stat(PLACED_URI)).toEqual({ type: 1, ctime: 1, mtime: 2, size: 9 });
   });
 });
 

@@ -35,6 +35,8 @@ export const recordGridVscode = {
     registerFileSystemProvider: () => ({ dispose: () => undefined }),
     registerTextDocumentContentProvider: () => ({ dispose: () => undefined }),
     onDidCloseTextDocument: () => ({ dispose: () => undefined }),
+    onDidOpenTextDocument: () => ({ dispose: () => undefined }),
+    onDidSaveTextDocument: () => ({ dispose: () => undefined }),
     onDidChangeTextDocument: () => ({ dispose: () => undefined }),
     textDocuments: [],
     openTextDocument: (uri: unknown) => Promise.resolve({ uri, getText: () => '{}', isDirty: false }),

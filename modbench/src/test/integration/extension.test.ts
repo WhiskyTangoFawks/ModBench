@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSy
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { before, after, afterEach, describe, it } from 'mocha';
+import { before, after, afterEach, beforeEach, describe, it } from 'mocha';
 import type { CompareResult, PluginMetadata, PluginProblems } from '../../client';
 import { present } from '../../ports/present';
 import { PLUGIN_SOURCE_GLOB } from '../../instanceAdapter/instanceAdapter';
@@ -900,12 +900,115 @@ describe('a child record of a tracked plugin', () => {
     const fromChild = JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'SavedFromChild' });
     await replaceAll(child, fromChild);
     assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), fromChild);
-    await waitFor('the container\'s file to show the child\'s save', () => container.getText() === fromChild);
+    await waitFor('the container\'s file to show the child\'s save, saved', () => container.getText() === fromChild && !container.isDirty);
 
     const fromContainer = JSON.stringify({ FormKey: TRACKED_FORM_KEY, EditorID: 'SavedFromContainer' });
     await replaceAll(container, fromContainer);
     for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: plugin.name, origin: plugin.origin, keys: [TRACKED_FORM_KEY] });
     await waitFor('the child\'s document to show the container\'s save', () => child.getText() === fromContainer);
+  });
+
+  // Each test has a cell of its own, as VS Code misses a write to a file outside the workspace while no tab shows it.
+  describe('and its container\'s document', () => {
+    const CELL_FORM_KEY = '000803:Tracked.esp';
+    let cells = 0;
+    let cell = '';
+    const cellText = (editorID: string, rest = {}) => JSON.stringify({ FormKey: CELL_FORM_KEY, EditorID: editorID, ...rest });
+    const replace = async (document: vscode.TextDocument, text: string) => {
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)), text);
+      await vscode.workspace.applyEdit(edit);
+    };
+    const shown = (document: vscode.TextDocument) => ({ text: document.getText(), unsaved: document.isDirty });
+    const containerDocument = () => vscode.workspace.openTextDocument(vscode.Uri.file(cell));
+    const openBoth = async () => {
+      await openRecord({ formKey: CELL_FORM_KEY, plugin });
+      await openRecord({ ...childCopy, placement: 'beside' });
+      return { child: await childDocument(), container: await containerDocument() };
+    };
+
+    beforeEach(() => {
+      cell = path.join(path.dirname(TRACKED_FILE), `Cell${++cells}.json`);
+      writeFileSync(cell, cellText('Cell'));
+      heldIn.set(vscode.Uri.file(cell).fsPath, CELL_FORM_KEY);
+      carriedIn.set(CELL_FORM_KEY, cell);
+      carriedIn.set(CHILD_FORM_KEY, cell);
+    });
+    afterEach(async () => {
+      await vscode.workspace.saveAll();
+      await waitFor('every document over the cell saved', () =>
+        !vscode.workspace.textDocuments.some(({ uri, isDirty }) => isDirty && uri.fsPath === vscode.Uri.file(cell).fsPath));
+      rmSync(cell);
+    });
+
+    it('shows an unsaved change made in its container\'s tab in its own, and one made in its own in its container\'s', async () => {
+      const { child, container } = await openBoth();
+
+      await replace(container, cellText('InContainer'));
+      await waitFor('the child\'s document to show the container\'s change', () => child.getText() === cellText('InContainer'));
+      assert.deepStrictEqual(shown(child), { text: cellText('InContainer'), unsaved: true });
+
+      await replace(child, cellText('InChild'));
+      await waitFor('the container\'s document to show the child\'s change', () => container.getText() === cellText('InChild'));
+      assert.deepStrictEqual(shown(container), { text: cellText('InChild'), unsaved: true });
+    });
+
+    it('leaves its own tab and its container\'s both saved when either saves, opened first on a file too large for VS Code to compare by content', async () => {
+      await openRecord(childCopy);
+      const child = await childDocument();
+      await openRecord({ formKey: CELL_FORM_KEY, plugin, placement: 'beside' });
+      const container = await containerDocument();
+      const large = { Padding: 'x'.repeat(1 << 20) };
+
+      await replace(child, cellText('SavedInContainer', large));
+      await waitFor('the container\'s document to show the child\'s change', () => container.getText() === cellText('SavedInContainer', large));
+      await container.save();
+      await waitFor('the child\'s document saved', () => !child.isDirty);
+
+      await replace(container, cellText('SavedInChild', large));
+      await waitFor('the child\'s document to show the container\'s change', () => child.getText() === cellText('SavedInChild', large));
+      await child.save();
+      await waitFor('the container\'s document saved', () => !container.isDirty);
+      assert.strictEqual(readFileSync(cell, 'utf8'), cellText('SavedInChild', large));
+    });
+
+    it('keeps every key typed in quick succession in its container\'s text editor, and saves them all', async () => {
+      await openRecord({ ...childCopy, placement: 'beside' });
+      const child = await childDocument();
+      const editor = await vscode.window.showTextDocument(await containerDocument(), vscode.ViewColumn.One);
+      editor.selection = new vscode.Selection(0, 1, 0, 1);
+      const typed = Array.from('"Typed":"abcdefghij",');
+
+      await Promise.all(typed.map((text) => vscode.commands.executeCommand('type', { text })));
+
+      const final = cellText('Cell').replace('{', `{${typed.join('')}`);
+      await waitFor('the child\'s document to show every key', () => child.getText() === final);
+      await editor.document.save();
+      await waitFor('both documents saved', () => !child.isDirty);
+      assert.strictEqual(readFileSync(cell, 'utf8'), final);
+    });
+
+    it('stays saved when the file changes on disk, reading it again on mEdit\'s report', async () => {
+      const { child, container } = await openBoth();
+
+      writeFileSync(cell, cellText('OnDisk'));
+      await waitFor('the container\'s document to read the file again', () => container.getText() === cellText('OnDisk'));
+      reportChanged(CHILD_FORM_KEY);
+
+      await waitFor('the child\'s document to read the file again', () => child.getText() === cellText('OnDisk'));
+      assert.deepStrictEqual([shown(child), shown(container)], [{ text: cellText('OnDisk'), unsaved: false }, { text: cellText('OnDisk'), unsaved: false }]);
+    });
+
+    it('opens on its container\'s unsaved text', async () => {
+      const container = await containerDocument();
+      await replace(container, cellText('BeforeChildOpened'));
+
+      await openRecord(childCopy);
+
+      const child = await childDocument();
+      await waitFor('the child\'s document to show the container\'s unsaved text', () => child.getText() === cellText('BeforeChildOpened'));
+      assert.deepStrictEqual(shown(child), { text: cellText('BeforeChildOpened'), unsaved: true });
+    });
   });
 });
 
@@ -1009,18 +1112,29 @@ describe('an edit in a tracked copy\'s grid', () => {
       Array.isArray(asked) && JSON.stringify(asked.map((copy: unknown) => isRecord(copy) && copy.formKey)) === JSON.stringify([MOVED_FORM_KEY, column.formKey])));
   });
 
-  it('edits a child record through its own tab\'s document', async () => {
-    await openRecord({ formKey: CHILD_FORM_KEY, plugin });
-    const tab = await waitFor('the child\'s tab', () => openTabs().find((t) =>
-      t.input instanceof vscode.TabInputCustom && t.input.viewType === 'modbench.record' && t.input.uri.scheme !== 'file'));
-    if (!(tab.input instanceof vscode.TabInputCustom)) throw new Error('expected a custom editor tab');
-    const child = await vscode.workspace.openTextDocument(tab.input.uri);
-    answerEdit = answeredIn(TRACKED_FILE);
+  it('edits a child record through its own tab\'s document, and saves its container\'s document with it', async () => {
+    // A cell of its own, as VS Code misses a write to a file outside the workspace while no tab shows it.
+    const cell = path.join(path.dirname(TRACKED_FILE), 'EditedCell.json');
+    writeFileSync(cell, savedText);
+    carriedIn.set(CHILD_FORM_KEY, cell);
+    try {
+      const container = await vscode.workspace.openTextDocument(vscode.Uri.file(cell));
+      await openRecord({ formKey: CHILD_FORM_KEY, plugin });
+      const tab = await waitFor('the child\'s tab', () => openTabs().find((t) =>
+        t.input instanceof vscode.TabInputCustom && t.input.viewType === 'modbench.record' && t.input.uri.scheme !== 'file'));
+      if (!(tab.input instanceof vscode.TabInputCustom)) throw new Error('expected a custom editor tab');
+      const child = await vscode.workspace.openTextDocument(tab.input.uri);
+      answerEdit = answeredIn(cell);
 
-    await edit(CHILD_FORM_KEY, 1);
+      await edit(CHILD_FORM_KEY, 1);
 
-    assert.deepStrictEqual(shown(child), { text: `${savedText}+1`, unsaved: false });
-    assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1`);
+      assert.deepStrictEqual(shown(child), { text: `${savedText}+1`, unsaved: false });
+      assert.strictEqual(readFileSync(cell, 'utf8'), `${savedText}+1`);
+      await waitFor('the container\'s document saved with the edit', () => container.getText() === `${savedText}+1` && !container.isDirty);
+    } finally {
+      carriedIn.delete(CHILD_FORM_KEY);
+      rmSync(cell, { force: true });
+    }
   });
 });
 

@@ -52,18 +52,15 @@ describe('handing mEdit the unsaved plugin source', () => {
     expect(handed.at(-1)).toEqual([{ path: FILE, text: 'child text' }]);
   });
 
-  it('hands the text of whichever document over the container file changed last', () => {
-    const file = document('file', FILE, 'typed in the file');
-    const child = document('modbench-child-record', FILE, 'applied to the child');
+  it('hands a file once when its own document and a child record\'s are both unsaved', () => {
+    const file = document('file', FILE, 'unsaved text');
+    const child = document('modbench-child-record', FILE, 'unsaved text');
     h.workspace.textDocuments = [file, child];
     const handed = handing();
 
-    changed(file);
     changed(child);
-    expect(handed.at(-1)).toEqual([{ path: FILE, text: 'applied to the child' }]);
 
-    changed(file);
-    expect(handed.at(-1)).toEqual([{ path: FILE, text: 'typed in the file' }]);
+    expect(handed.at(-1)).toEqual([{ path: FILE, text: 'unsaved text' }]);
   });
 
   it('hands over again when a dirty document is moved, which closes it at one path and opens it at another', () => {
