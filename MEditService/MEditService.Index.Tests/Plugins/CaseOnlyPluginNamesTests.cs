@@ -1,5 +1,5 @@
-using MEditService.LoadOrder;
 using MEditService.Index.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
