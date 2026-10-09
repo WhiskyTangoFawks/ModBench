@@ -9,8 +9,8 @@ namespace MEditService.Codec.Serialization;
 public readonly record struct NamedDocument(string Text, string? EditorId);
 
 /// <summary>A record's own identity and links changed as documents: the codec reads the text, edits
-/// the graph it built, and writes the text back (ADR-0005); a plugin's rename splices only the
-/// strings it changes into the text.</summary>
+/// the graph it built, and writes the text back (ADR-0005). A plugin's rename splices its strings
+/// into the text.</summary>
 public static class RecordDocumentEdits
 {
     /// <summary>The record under <paramref name="newFormKey"/> with every child slot cleared and its

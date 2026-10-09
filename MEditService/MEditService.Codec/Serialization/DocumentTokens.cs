@@ -161,10 +161,9 @@ public static class DocumentTokens
         }
     }
 
-    // JSON spells a FormKey other than literally only through a \u escape: no plugin's file name
-    // holds a quote, a backslash, a slash or a control character, the only others it escapes.
-    /// <summary>Whether the document's bytes may spell <paramref name="formKey"/>: false only when
-    /// they certainly do not.</summary>
+    /// <summary>False only when the bytes certainly do not spell <paramref name="formKey"/>: JSON spells
+    /// it other than literally only through a \u escape, since no plugin file name holds a quote,
+    /// backslash, slash or control character.</summary>
     public static bool MayCarry(byte[] document, string formKey) =>
         document.AsSpan().IndexOf(Encoding.UTF8.GetBytes(formKey)) >= 0 || document.AsSpan().IndexOf(@"\u"u8) >= 0;
 }
