@@ -10,7 +10,6 @@ import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
-import type { PluginAddress } from './wire/pluginAddress';
 import { createSourceLanguage } from './sourceLanguage';
 import { saveDirtyPluginSource } from './sourceLanguage/dirtyPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
@@ -24,6 +23,7 @@ import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader
 import { originFiles, NO_ORIGIN_FILES, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
+import type { InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { createStatusBar, type StatusBar } from './plugins/statusBar';
 import { meditConfig, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
@@ -37,14 +37,14 @@ import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyConte
 import { createDownloadsView } from './downloads/downloadsView';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
-import { openedFolder, whenOpened } from './drivingLib/instanceCheck';
+import { openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { pluginSyncOver } from './pluginsCommands/plugins';
 import { modSyncOver, modlistCommands } from './modlist/modlist';
 import { warnIfFomod } from './install/fomodWarning';
 import { installCommands } from './install/install';
 import { downloadsCommands } from './downloadsCommands/downloads';
-import { refresh } from './instanceCommands/loadOrder';
+import { instanceCommands } from './instanceCommands/instanceCommands';
 import { editingFlow } from './instanceCommands/editing';
 import { instanceSyncs, loadOrderPutHandler, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
@@ -80,7 +80,6 @@ interface InstanceSide {
   /** Absent together, on the path with no instance to read. */
   instance?: Instance;
   toolboxProvider: ToolboxProvider;
-  facts: InstanceFacts;
   originFiles: OriginFilesOf;
   copyValue: CopyValueAdapter[];
   downloadsSelection: () => readonly DownloadsTreeNode[];
@@ -95,25 +94,43 @@ const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
 function buildBareSide(own: Own): InstanceSide {
   return {
     toolboxProvider: own(new ToolboxProvider({ instance: undefined })),
-    facts: NO_INSTANCE_FACTS,
     originFiles: NO_ORIGIN_FILES,
     copyValue: [], downloadsSelection: () => [],
   };
 }
 
-function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): InstanceSide {
+interface OpenedInstance {
+  instanceRoot: string;
+  adapter: InstanceAdapter;
+  instance: Instance;
+}
+
+interface Opened {
+  facts: InstanceFacts;
+  side: (own: Own, deps: ViewsDeps) => InstanceSide;
+}
+
+function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened {
+  return whenOpened<Opened>(openedFolder(isMo2Instance, (line) => outputChannel.info(line)), {
+    instance: (instanceRoot) => {
+      const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides, gameDirectoryChanged: onGameDirectoryChange });
+      const instance = own(new Instance({
+        adapter, window: vscode.window, log: (line) => outputChannel.info(line), logReadFailure: (line) => outputChannel.error(line),
+      }));
+      return { facts: factsOf(instance), side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
+    },
+    notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, side: buildBareSide }),
+  });
+}
+
+function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: OpenedInstance, deps: ViewsDeps): InstanceSide {
   const {
     outputChannel, client, recordBrowser, pluginFacts,
     statusBar, registerRepositories, recordWrite, reporterFor, ask, trash, extensionId,
   } = deps;
-  const log = (msg: string) => outputChannel.info(msg);
-  const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides, gameDirectoryChanged: onGameDirectoryChange });
   const install = installCommands({ instanceRoot, adapter });
-  const instance = own(new Instance({
-    adapter, window: vscode.window, log, logReadFailure: (line) => outputChannel.error(line),
-  }));
   own(markFirstReadLanded(instance));
-  const refreshIndex = () => refresh(client, instanceRoot, instance.value);
+  const commands = instanceCommands({ adapter, client, instanceRoot });
   const { modSync, pluginSync } = own(instanceSyncs({
     instance, syncMods: modSyncOver(adapter), syncPlugins: pluginSyncOver(adapter), channel: outputChannel,
   }));
@@ -156,7 +173,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   own(loadOrderPutOnEachValue(instance, putLoadOrder));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putLoadOrder));
   const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
-  ownAll(own, registerToolboxCommands({ adapter, instance, extensionId, reporterFor }));
+  ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));
   own(deps.focusedView.follow('modbench.modList', mods.view));
   own(deps.focusedView.follow('modbench.pluginListTree', plugins.followed));
   own(deps.focusedView.follow('modbench.downloads', downloadsView));
@@ -168,30 +185,29 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     ]),
     () => vscode.window.setStatusBarMessage('Focus a list to filter it.', 5000)));
   own(registerRefreshCommand({
-    refresh: refreshIndex, nextRefill: () => plugins.narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
+    commands, nextRefill: () => plugins.narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
     instance, toolboxProvider,
-    facts: factsOf(instance),
     originFiles: (origin) => originFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue],
     downloadsSelection: () => downloadsView.selection,
   };
 }
 
-function buildViews(deps: ViewsDeps): Views {
-  const { reporterFor } = deps;
+function ownership(): { own: Own; dispose: () => void } {
   const owned: vscode.Disposable[] = [];
   const own: Own = (disposable) => {
     owned.push(disposable);
     return disposable;
   };
+  return { own, dispose: () => { vscode.Disposable.from(...owned.splice(0).reverse()).dispose(); } };
+}
 
-  const opened = openedFolder(isMo2Instance, (line) => deps.outputChannel.info(line));
-  const side = whenOpened(opened, {
-    instance: (instanceRoot) => buildInstanceSide(own, instanceRoot, deps),
-    notAnInstance: () => buildBareSide(own),
-  });
+function buildViews(opened: Opened, { own, dispose }: ReturnType<typeof ownership>, deps: ViewsDeps): Views {
+  const { reporterFor } = deps;
+
+  const side = opened.side(own, deps);
 
   const toolboxView = own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: side.toolboxProvider }));
   const showMessage = () => { toolboxView.message = side.toolboxProvider.viewMessage(); };
@@ -210,9 +226,7 @@ function buildViews(deps: ViewsDeps): Views {
 
   return {
     ...side,
-    dispose: () => {
-      vscode.Disposable.from(...owned.splice(0).reverse()).dispose();
-    },
+    dispose,
   };
 }
 
@@ -230,14 +244,10 @@ export function activate(context: vscode.ExtensionContext): void {
   const treeProvider = new RecordBrowser(meditClient, log);
   const focusedView = createFocusedView();
 
-  const modFacts = {
-    trackedMods: () => views.facts.trackedMods(), modDirs: () => views.facts.modDirs(),
-    standingOf: (plugin: PluginAddress) => views.facts.standingOf(plugin),
-    onChange: (listener: () => void) => views.facts.onChange(listener),
-  };
-  const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...modFacts });
-  const instance = { refresh: () => views.facts.refresh() };
-  const recordWrite = recordWriteOver(instance, meditClient);
+  const ownedByViews = ownership();
+  const opened = openInstance(outputChannel, ownedByViews.own);
+  const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...opened.facts });
+  const recordWrite = recordWriteOver(opened.facts, meditClient);
   const sourceEditing: SourceEditing = {
     applyWorkspaceChanges: (items) => applyWorkspaceChanges(items),
     oneAtATime: oneAtATime(),
@@ -251,9 +261,9 @@ export function activate(context: vscode.ExtensionContext): void {
     recordViewIds: ['modbench.pluginListTree'],
     recordWrite,
     sourceEditing,
-    modFacts,
+    modFacts: opened.facts,
   });
-  const views = buildViews({
+  const views = buildViews(opened, ownedByViews, {
     outputChannel, client: meditClient,
     reporterFor: (tag) => makeReporter(outputChannel, tag),
     ask: askQuestion,

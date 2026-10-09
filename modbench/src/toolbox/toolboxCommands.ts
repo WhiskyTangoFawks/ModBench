@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
-import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { switchProfile } from '../instanceCommands/profile';
-import type { RefreshResult } from '../instanceCommands/loadOrder';
+import type { InstanceCommands } from '../instanceCommands/instanceCommands';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
@@ -10,7 +8,7 @@ import type { Reporter } from '../ports/reporter';
 const TOOLBOX_VIEW = 'modbench.toolbox';
 
 interface ToolboxCommandDeps {
-  adapter: InstanceAdapter;
+  commands: Pick<InstanceCommands, 'switchProfile'>;
   /** The profiles and the active one, from the instance value (ADR-0015); `refresh` ends each gesture. */
   instance: Pick<Instance, 'value' | 'refresh'>;
   /** Modbench's own extension ID, which scopes the Settings editor to its settings. */
@@ -21,7 +19,7 @@ interface ToolboxCommandDeps {
 // The instance-wide gestures the Toolbox view owns (toolbox.md), registered
 // for the box that draws them.
 export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Disposable[] {
-  const { adapter, instance, extensionId, reporterFor } = deps;
+  const { commands, instance, extensionId, reporterFor } = deps;
   const profileReporter = reporterFor('switchProfile');
   return [
     vscode.commands.registerCommand('modbench.profile.switch', async () => {
@@ -30,7 +28,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
       const picked = await pickWithMarked(items, items.find((i) => i.label === active), 'Switch profile');
       if (!picked || picked.label === active) return;
       await runWritingGesture(TOOLBOX_VIEW, instance, async () => {
-        const outcome = await switchProfile(adapter, picked.label, profiles);
+        const outcome = await commands.switchProfile(picked.label, profiles);
         if (!outcome.applied) profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
       });
     }),
@@ -40,13 +38,12 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
 }
 
 interface RefreshGestureDeps {
-  /** instance commands' refresh, bound by the root to the mEdit client and the current value. */
-  refresh: () => Promise<RefreshResult>;
+  commands: Pick<InstanceCommands, 'refresh'>;
   /** Armed before the rebuild is asked for: `ended` settles once mEdit's refill ends, since the
    *  rebuild answers before it has read anything again. A refused rebuild starts no refill, so its
    *  wait is released. */
   nextRefill: () => { ended: Promise<void>; release: () => void };
-  instance: Pick<Instance, 'refresh'>;
+  instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
   /** Names this instance in toolbox.md's Reporting story 1 — Modbench cannot name the other
    *  window that holds the index, only the one refused here. */
@@ -56,7 +53,7 @@ interface RefreshGestureDeps {
 export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposable {
   const run = async (): Promise<void> => {
     const refill = deps.nextRefill();
-    const outcome = await deps.refresh();
+    const outcome = await deps.commands.refresh(deps.instance.value);
     if (!outcome.applied) {
       if (outcome.heldElsewhere) {
         // toolbox.md, Reporting story 1: the spec's own words, naming this instance.
