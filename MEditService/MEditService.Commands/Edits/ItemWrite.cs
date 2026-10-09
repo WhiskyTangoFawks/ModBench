@@ -51,9 +51,8 @@ internal static class ItemWrite
             ? RecordEditResult.Refused(RecordEditRefusal.GitUnavailable, gitMissing.Reason)
             : null;
 
-    /// <summary>A tree another tool changed, or a file system that refused the write, is that item's
-    /// answer. <paramref name="failure"/> names what could not be written; the file system's words
-    /// follow it. A landed item's outcome is what <paramref name="landed"/> makes of its answer.</summary>
+    /// <summary>A tree another tool changed, or a file system that refused the write, is that item's answer;
+    /// <paramref name="failure"/> names what could not be written. <paramref name="landed"/> makes a landed item's outcome.</summary>
     internal static Task<SelectionResult<TItem, RecordEditRefusal, TOutcome>> Over<TItem, TOutcome>(
         IEnumerable<TItem> items, IEqualityComparer<TItem> sameItem,
         Func<TItem, SourceAnswer<RecordEditChanges>> write, Func<RecordEditChanges, TOutcome> landed,
