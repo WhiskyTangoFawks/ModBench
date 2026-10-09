@@ -43,6 +43,9 @@ internal sealed class Reconciler(
     // The version the reconcile door last finished answering for: never a superseded attempt's,
     // since that one returns before reaching its own update.
     private long _version;
+    // A detached index whose reads outlived the drain: it stays open, so a retry drains it again
+    // before any store is opened on its path.
+    private DuckDbRecordIndex? _undrained;
 
     // Two mechanisms, because one is not enough: the token asks the reconcile loop to stop, the
     // exclusive lock waits until it has. Cancelling without draining would let a teardown dispose
@@ -295,14 +298,24 @@ internal sealed class Reconciler(
     private OpenScope? EnsureScope(LoadOrderSnapshot snapshot, out string? heldElsewhere)
     {
         heldElsewhere = null;
-        OpenScope? leaving;
+        DuckDbRecordIndex? leaving;
         lock (_lock)
         {
             if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot)) return current;
-            leaving = DetachCurrent();
+            leaving = DetachCurrent()?.Index ?? _undrained;
+            _undrained = null;
             filter.DropWhenOutside(snapshot);
         }
-        leaving?.Index.Dispose();
+        if (leaving is not null)
+        {
+            if (!leaving.EndReads())
+            {
+                lock (_lock) _undrained = leaving;
+                throw new InvalidOperationException(
+                    $"mEdit's index was not reopened: a read of it was still open after {IndexWriteGate.HoldLimit.TotalSeconds:0}s. It is retried with the next load order.");
+            }
+            leaving.Dispose();
+        }
 
         logger.LogDebug("Initializing DuckDB record index");
         var createTimer = Stopwatch.StartNew();
@@ -830,10 +843,14 @@ internal sealed class Reconciler(
         bool readsEnded;
         try
         {
-            OpenScope? closing;
-            lock (_lock) closing = DetachCurrent();
-            readsEnded = closing?.Index.EndReads() ?? true;
-            closing?.Index.Dispose();
+            DuckDbRecordIndex? closing;
+            lock (_lock)
+            {
+                closing = DetachCurrent()?.Index ?? _undrained;
+                _undrained = null;
+            }
+            readsEnded = closing?.EndReads() ?? true;
+            closing?.Dispose();
         }
         finally { ExitExclusive(); }
 
@@ -864,6 +881,7 @@ internal sealed class Reconciler(
                 _reconcileCancellation = null;
             }
             closing?.Index.Dispose();
+            _undrained?.Dispose();
         }
         finally { ExitExclusive(); }
     }
