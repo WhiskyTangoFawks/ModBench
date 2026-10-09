@@ -35,7 +35,9 @@ internal sealed record PluginResponse(
     bool HasParseFailure = false,
     // plugins.md, A row, Plugin: tracked, and its records are its plugin file's because its plugin
     // source is missing or cannot be read. Null when the plugin source reads.
-    UnreadableSource? PluginSourceUnreadable = null)
+    UnreadableSource? PluginSourceUnreadable = null,
+    // common.md, States, story 6: why its last read failed while its rows are the last good read's.
+    string? LaterReadFailure = null)
 {
     /// <summary>One row on the wire: the read side's answer, flattened.</summary>
     public static PluginResponse Of(PluginRow row)
@@ -45,6 +47,6 @@ internal sealed record PluginResponse(
             row.Content.IsBlueprint, row.Content.Masters, row.Content.RecordCount, row.IsImmutable,
             plugin.Origin, row.MasterIssues, row.LoadOrderIndex is not null,
             row.HasMatchingRecords, row.IsTracked,
-            row.HasParseFailure, row.PluginSourceUnreadable);
+            row.HasParseFailure, row.PluginSourceUnreadable, row.LaterReadFailure);
     }
 }

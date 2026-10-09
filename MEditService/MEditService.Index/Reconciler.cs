@@ -98,6 +98,11 @@ internal sealed class Reconciler(
         lock (_lock) return _scope?.Failed.WhyTreeStopped(key);
     }
 
+    public string? LaterReadFailure(PluginAddress key)
+    {
+        lock (_lock) return _scope?.Failed.LaterReadFailure(key);
+    }
+
     private OpenScope RequireScope()
     {
         lock (_lock) return _scope ?? throw new NoLoadOrderException();
@@ -228,7 +233,7 @@ internal sealed class Reconciler(
     {
         var scope = RequireScope();
         var holding = scope.Held.Plugins.Where(plugin => paths.Exists(path => source.TreeHolds(plugin.Registered, path))).ToList();
-        if (holding.Count > 0) scope.Index.Commit(_ => holding.ForEach(plugin => ValidateOne(scope, plugin)));
+        if (holding.Count > 0) scope.Index.Commit(projection => holding.ForEach(plugin => ValidateOne(scope, plugin, projection)));
     }
 
     // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
@@ -639,7 +644,7 @@ internal sealed class Reconciler(
         // (Store.ValidateAgainstDisk), so a second hash of every binary here would pay that whole cost
         // twice for no new answer.
         var truth = scope.Projector.TruthOf(plugin.Registered);
-        if (truth != DerivedFrom.SourceTree) return scope.Index.DerivationOf(plugin.Key) == truth;
+        if (truth != DerivedFrom.SourceTree || state.UnsavedUnread is not null) return scope.Index.DerivationOf(plugin.Key) == truth;
 
         try
         {
@@ -686,7 +691,7 @@ internal sealed class Reconciler(
                     "Registering {Plugin} ({RecordCount} records), already indexed and unchanged on disk",
                     plugin.Name, plugin.RecordCount);
             }
-            return ReadOutcome.Read;
+            return state.UnsavedUnread is { } why ? ReadOutcome.LaterReadFailed(why) : ReadOutcome.Read;
         }
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -769,19 +774,19 @@ internal sealed class Reconciler(
     {
         var scope = RequireScope();
         // A plugin not held failed to open, and the reconcile opens it again once its bytes change.
-        scope.Index.Commit(_ =>
+        scope.Index.Commit(projection =>
         {
             foreach (var metadata in scope.Held.Plugins)
             {
                 token.ThrowIfCancellationRequested();
-                ValidateOne(scope, metadata);
+                ValidateOne(scope, metadata, projection);
             }
         });
     }
 
     // plugins.md, A row, Plugin, "Failed to read": a plugin that cannot be read is flagged, and the
     // rest are still validated. A failed one is read whole again once what it reads from changed.
-    private void ValidateOne(OpenScope scope, PluginMetadata plugin)
+    private void ValidateOne(OpenScope scope, PluginMetadata plugin, DuckDbRecordIndex.Projection projection)
     {
         var (held, index) = (scope.Held, scope.Index);
         var key = plugin.Key;
@@ -802,11 +807,20 @@ internal sealed class Reconciler(
             }
 
             var readWhole = false;
+            var failedBefore = scope.Failed.LaterReadFailure(key);
             scope.Failed.Read(plugin.Registered, state =>
             {
+                if (state.UnsavedUnread is { } why) return ReadOutcome.LaterReadFailed(why);
                 readWhole = MustReadWhole(scope, plugin, holdsTree, state);
                 return ReadOutcome.Read;
             });
+            var failed = scope.Failed.LaterReadFailure(key);
+            if (failed != failedBefore)
+            {
+                if (failed is not null)
+                    logger.LogWarning("Could not read {Plugin} ({Origin}); its rows are the last good read: {Reason}", key.Name, key.Origin, failed);
+                projection.ReadChanged(key);
+            }
             if (readWhole) ReindexHeldPlugin(scope, plugin);
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))

@@ -13,6 +13,7 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
 
     private readonly Lock _lock = new();
     private readonly Dictionary<PluginAddress, Failure> _failed = new(PluginAddress.Comparer);
+    private readonly Dictionary<PluginAddress, string> _laterReads = new(PluginAddress.Comparer);
 
     public IReadOnlyList<PluginAddress> Keys
     {
@@ -28,6 +29,12 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
     public UnreadableSource? WhyTreeStopped(PluginAddress key)
     {
         lock (_lock) return _failed.TryGetValue(key, out var failure) ? failure.Why : null;
+    }
+
+    /// <summary>Why the plugin's last read failed while the rows of the last good one stand.</summary>
+    public string? LaterReadFailure(PluginAddress key)
+    {
+        lock (_lock) return _laterReads.GetValueOrDefault(key);
     }
 
     public bool Holds(PluginAddress key)
@@ -58,6 +65,7 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
             state = ReadStateOf(plugin);
             var outcome = read(state);
             if (outcome.Served) Forget(plugin.Key);
+            else if (outcome.LaterReadFailure is { } why) FailLaterRead(plugin.Key, why);
             else Remember(plugin.Key, state, state.Vouches && StateObserves(outcome), outcome.TreeStopped, WhyStopped(outcome));
             return outcome;
         }
@@ -84,7 +92,20 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
 
     public void Forget(PluginAddress key)
     {
-        lock (_lock) _failed.Remove(key);
+        lock (_lock)
+        {
+            _failed.Remove(key);
+            _laterReads.Remove(key);
+        }
+    }
+
+    private void FailLaterRead(PluginAddress key, string why)
+    {
+        lock (_lock)
+        {
+            _failed.Remove(key);
+            _laterReads[key] = why;
+        }
     }
 
     private void Remember(PluginAddress key, ReadState? state, bool stands, SourceFailure? treeStopped, UnreadableSource? why)
@@ -94,7 +115,11 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
             .. (state?.FileFailuresOf(key) ?? []).Concat(SourceFileFailure.Of(key, treeStopped))
                 .DistinctBy(file => (file.SourceRelativePath, file.FormKey)),
         ];
-        lock (_lock) _failed[key] = new Failure(state, stands, files, why);
+        lock (_lock)
+        {
+            _laterReads.Remove(key);
+            _failed[key] = new Failure(state, stands, files, why);
+        }
     }
 
     private ReadState ReadStateOf(RegisteredPlugin plugin)

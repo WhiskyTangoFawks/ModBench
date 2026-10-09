@@ -11,6 +11,13 @@ internal sealed record ReadState(string? Binary, RecordStamps? Stamps)
     /// read is no evidence either way.</summary>
     public bool Vouches => Stamps is { } stamps ? stamps.Unreadable.Count == 0 : Binary is not null;
 
+    /// <summary>Why the tree does not read when unsaved documents alone stop it, which is a failed later
+    /// read (common.md, States, story 6); null otherwise.</summary>
+    public string? UnsavedUnread =>
+        Stamps is { Claimed.Count: 0, Unreadable: [_, ..] files } && files.All(file => file.Unsaved)
+            ? string.Join(" ", files.Select(file => file.Message))
+            : null;
+
     /// <summary>The files of the tree that fail any read of it.</summary>
     public IEnumerable<SourceFileFailure> FileFailuresOf(PluginAddress plugin) =>
         Stamps is not { } stamps

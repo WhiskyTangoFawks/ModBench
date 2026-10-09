@@ -11,8 +11,8 @@ namespace MEditService.Index.Queries;
 public sealed record SourceProblem(
     string? FormKey, string? TargetFormKey, string? FieldPath, string SourceRelativePath, string Message);
 
-/// <summary><paramref name="Failure"/> is set when the plugin's links could not be placed on files, so
-/// its <paramref name="Problems"/> are not a clean bill (ADR-0019).</summary>
+/// <summary><paramref name="Failure"/> is set when the plugin's links could not be placed on files, or its
+/// rows are the last good read's, so its <paramref name="Problems"/> are not a clean bill (ADR-0019).</summary>
 public sealed record PluginProblems(PluginAddress Plugin, IReadOnlyList<SourceProblem> Problems, string? Failure = null);
 
 /// <summary>The Problems panel's source, per tracked plugin, active or not. A plugin whose read
@@ -49,16 +49,16 @@ public sealed class PluginProblemQueryService
             .. snapshot.Plugins
                 .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsTracked() || stopped.Contains(plugin.Key))
                 .Select(plugin => ProblemsOf(
-                    plugin.Key, snapshot.GameRelease, [.. stopped[plugin.Key].Select(Problem)],
+                    plugin.Key, snapshot.GameRelease, _index.LaterReadFailure(plugin.Key), [.. stopped[plugin.Key].Select(Problem)],
                     // A binary's links are not its tree's, whose files the panel shows them on.
                     derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom == DerivedFrom.SourceTree ? [.. missing[plugin.Key]] : [])),
         ];
     }
 
     private static PluginProblems ProblemsOf(
-        PluginAddress plugin, GameRelease release, List<SourceProblem> stoppedAt, List<MissingReferenceOnFile> rows) =>
-        rows.FirstOrDefault(row => row.Failure is not null) is { } failed
-            ? new(plugin, stoppedAt, failed.Failure)
+        PluginAddress plugin, GameRelease release, string? laterReadFailure, List<SourceProblem> stoppedAt, List<MissingReferenceOnFile> rows) =>
+        (laterReadFailure ?? rows.FirstOrDefault(row => row.Failure is not null)?.Failure) is { } failure
+            ? new(plugin, stoppedAt, failure)
             : new(plugin, [.. stoppedAt, .. rows.Select(row => Problem(row, release))]);
 
     private static SourceProblem Problem(SourceFileFailure failure) =>

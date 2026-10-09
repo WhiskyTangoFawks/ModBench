@@ -8,8 +8,9 @@ using MEditService.RepositoriesLib;
 namespace MEditService.SourceAdapter;
 
 /// <summary>A file of a plugin's tree, as the mod folder spells it, that could not be read as a
-/// document, and the FormKey it was read for when one is known.</summary>
-public sealed record UnreadableFile(string SourceRelativePath, string Message, string? FormKey = null);
+/// document, the FormKey it was read for when one is known, and whether it was read as the text VS Code
+/// holds unsaved.</summary>
+public sealed record UnreadableFile(string SourceRelativePath, string Message, string? FormKey = null, bool Unsaved = false);
 
 /// <summary>A FormKey a plugin's tree holds more than once, with the documents holding it as the mod
 /// folder spells them: one document when that document holds it twice.</summary>
@@ -80,8 +81,8 @@ internal static class TreeStamps
                 var relativePath = Path.GetRelativePath(modFolder, file);
                 // An unsaved text moves no file-system stamp, so it is read every time.
                 var document = files.HoldsUnsavedText(file)
-                    ? Read(files, file, relativePath, plugin.Name, unreadable)
-                    : known.Of(file, () => Read(files, file, relativePath, plugin.Name, unreadable));
+                    ? Read(files, file, relativePath, plugin.Name, unreadable, unsaved: true)
+                    : known.Of(file, () => Read(files, file, relativePath, plugin.Name, unreadable, unsaved: false));
                 if (document is null) continue;
                 holders.Hold(document.FormKey, file);
                 stamps[document.FormKey] = document.Content;
@@ -93,7 +94,7 @@ internal static class TreeStamps
     }
 
     private static KnownDocument? Read(
-        ISourceFiles files, string file, string relativePath, string pluginName, List<UnreadableFile> unreadable)
+        ISourceFiles files, string file, string relativePath, string pluginName, List<UnreadableFile> unreadable, bool unsaved)
     {
         byte[] bytes;
         try
@@ -115,7 +116,8 @@ internal static class TreeStamps
                 relativePath,
                 DocumentTokens.WhyNotADocument(text) is { } error
                     ? $"'{relativePath}' is no record document: {error}"
-                    : $"'{relativePath}' declares no FormKey, so the records it holds could not be validated."));
+                    : $"'{relativePath}' declares no FormKey, so the records it holds could not be validated.",
+                Unsaved: unsaved));
             return null;
         }
 

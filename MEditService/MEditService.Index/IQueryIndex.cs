@@ -43,6 +43,10 @@ internal interface IQueryIndex
     /// <summary>What stopped the plugin's source tree in its last failed read, while it fails.</summary>
     UnreadableSource? WhyTreeStopped(PluginAddress key);
 
+    /// <summary>Why the plugin's last read failed while the rows of the last good one stand (common.md,
+    /// States, story 6).</summary>
+    string? LaterReadFailure(PluginAddress key);
+
     void SetFilter(string sql, string source);
 
     void ClearFilter();
