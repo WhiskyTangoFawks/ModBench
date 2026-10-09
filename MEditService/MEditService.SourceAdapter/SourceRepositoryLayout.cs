@@ -48,9 +48,25 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     internal static string RootIn(string modFolder, string pluginFileName) =>
         Path.Combine(modFolder, RootFor(pluginFileName));
 
+    /// <summary>Each folder of the mod's plugin source named for <paramref name="pluginFileName"/>, compared
+    /// without case as a ModKey compares a plugin's name, and as Windows finds a folder.</summary>
+    internal static IReadOnlyList<string> TreeNamesIn(string modFolder, string pluginFileName)
+    {
+        try
+        {
+            return [.. Directory.EnumerateDirectories(Path.Combine(modFolder, RootFolderName))
+                .Select(Path.GetFileName)
+                .OfType<string>()
+                .Where(name => name.Equals(pluginFileName, StringComparison.OrdinalIgnoreCase))];
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return [];
+        }
+    }
+
     /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and
-    /// decompile write. The name is verbatim: that is how the load order spells the root a reader
-    /// looks under.</summary>
+    /// decompile write.</summary>
     internal static IReadOnlyList<TreeFile> PristineFilesOf(
         string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
         [.. treeFiles.Select(file => PlacedFileOf(pluginFileName, file))];

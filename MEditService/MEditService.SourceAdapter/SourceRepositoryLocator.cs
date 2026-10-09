@@ -178,15 +178,15 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         return null;
     }
 
-    internal RecordOfFileAnswer RecordOfFile(PluginAddress plugin, string fullPath)
+    internal RecordOfFileAnswer RecordOfFile(PluginAddress plugin, string treeName, string fullPath)
     {
         var relativePath = Path.Combine(
-            SourceRepositoryLayout.RootFor(plugin.Name),
-            Path.GetRelativePath(SourceRepositoryLayout.RootIn(_modFolder, plugin.Name), fullPath));
+            SourceRepositoryLayout.RootFor(treeName),
+            Path.GetRelativePath(SourceRepositoryLayout.RootIn(_modFolder, treeName), fullPath));
         var text = DocumentText.ReadOrNull(fullPath);
         if (text is null) return new RecordOfFileAnswer.Refused($"{fullPath} could not be read.");
         if (NotADocument(text) is { } why) return new RecordOfFileAnswer.Refused($"{fullPath} is no record document: {why}");
-        return FormKey.TryFactory(DocumentText.FormKeyDeclaredIn(text, relativePath, plugin.Name), out var declared)
+        return FormKey.TryFactory(DocumentText.FormKeyDeclaredIn(text, relativePath, treeName), out var declared)
             ? new RecordOfFileAnswer.Holds(new RecordAt(plugin, declared.ToString()))
             : new RecordOfFileAnswer.Refused($"{fullPath} declares no FormKey, so it is no record's document.");
     }
