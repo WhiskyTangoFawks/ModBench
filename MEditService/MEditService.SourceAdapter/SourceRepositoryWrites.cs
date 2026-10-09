@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -65,7 +64,7 @@ internal sealed class SourceRepositoryWrites(
     }
 
     /// <summary>What putting a new child at the end of <paramref name="slot"/> of <paramref name="container"/>
-    /// changes: the text of the document carrying the container, which is its owner's when it is embedded.</summary>
+    /// changes: the container's own text with the child appended, rewritten as <see cref="ChangesToRewrite"/> says.</summary>
     internal SourceChanges ChangesToPutChild(PluginAddress plugin, RecordIdentity container, string slot, SourceDocument child)
     {
         var unit = locator.Locate(plugin, container) is { } held && (held.IsEmbedded || File.Exists(held.FullPath))
@@ -73,11 +72,12 @@ internal sealed class SourceRepositoryWrites(
             : throw SourceStopException.NotCarried(
                 $"No document in {plugin.Name}'s tree holds {container.FormKey}, so there is no slot to put a child in. " +
                 SourceFailure.NotCarried.MovedOrRemovedOutside);
-        var ownerText = Encoding.UTF8.GetString(OwnerBytes(unit));
-        var withChild = Read(() => ContainerDocumentEdits.WithChildAppended(
-                ownerText, _release, unit.OwnerRecordType, container.FormKey, slot, child.Body, child.RecordType))
+        var containerText = DocumentText.RecordBodyFromOwnerBytes(OwnerBytes(unit), unit, container.FormKey, _release)
             ?? throw NoLongerCarried(unit, container.FormKey);
-        return Written(unit.FullPath, withChild);
+        var withChild = Read(() => ContainerDocumentEdits.WithChildAppended(
+                containerText, _release, container.RecordType, container.FormKey, slot, child.Body, child.RecordType))
+            ?? throw NoLongerCarried(unit, container.FormKey);
+        return ChangesToHeld(unit, new SourceDocument(container.FormKey, container.RecordType, container.EditorId, withChild));
     }
 
     /// <summary>What rewriting a document the tree holds changes: its text, inside its owner's when embedded, and

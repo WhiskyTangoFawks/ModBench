@@ -753,9 +753,23 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         var owner = Assert.Single(changes.Documents);
         Assert.Equal(FullPath(QuestPath), Path.Combine(_modFolder, owner.Path));
-        Assert.InRange(owner.Text.IndexOf("\"Response3\"", StringComparison.Ordinal), owner.Text.IndexOf("\"Response2\"", StringComparison.Ordinal) + 1, int.MaxValue);
+        var order = new[] { "Response", "Response2", "Response3" }.Select(name => owner.Text.IndexOf($"\"{name}\"", StringComparison.Ordinal)).ToArray();
+        Assert.True(order[0] >= 0 && order[0] < order[1] && order[1] < order[2], string.Join(",", order));
         Assert.Empty(changes.Deletions);
         Assert.Equal(before, File.ReadAllText(FullPath(QuestPath)));
+    }
+
+    [Fact]
+    public void ChangesToPutChild_IntoAnEmbeddedContainer_LeavesTheOwnersHandFormattedText_ByteForByte()
+    {
+        var handFormatted = File.ReadAllText(FullPath(QuestPath)).Replace("\"EditorID\": \"Quest\"", "\"EditorID\":    \"Quest\"", StringComparison.Ordinal);
+        Assert.Contains("\"EditorID\":    \"Quest\"", handFormatted, StringComparison.Ordinal);
+        File.WriteAllText(FullPath(QuestPath), handFormatted);
+        var added = new DialogResponses(_mod) { EditorID = "Response3" };
+
+        var owner = Assert.Single(Repository.ChangesToPutChild(Plugin, Identity(_topic, "dial"), "Responses", ANewChild(added, "info")).Value().Documents);
+
+        Assert.Contains("\"EditorID\":    \"Quest\"", owner.Text, StringComparison.Ordinal);
     }
 
     [Fact]
