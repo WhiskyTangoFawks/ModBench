@@ -95,7 +95,7 @@ public static class CommandHandlers
             sp.GetRequiredService<SchemaReflector>(),
             new ExternalChangeCheck(
                 sp.GetRequiredService<INotificationPublisher>(),
-                new PluginFileHashes(sp.GetRequiredService<TimeProvider>()))));
+                sp.GetRequiredService<IPluginAdapter>())));
 
         return services;
     }

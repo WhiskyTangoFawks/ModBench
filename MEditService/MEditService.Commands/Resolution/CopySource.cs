@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -25,7 +26,8 @@ internal sealed class CopySource(
         ? SourceRepository.Over(mod, loadOrder.GameRelease)
         : null;
 
-    private IPluginRecordLookup? _loaded;
+    private IPluginRecords? _records;
+    private string? _unopened;
     private bool _opened;
 
     internal PluginAddress Plugin => plugin;
@@ -33,99 +35,137 @@ internal sealed class CopySource(
     internal LoadOrderSnapshot Snapshot => loadOrder;
 
     /// <summary>The record type and EditorID this plugin's copy names <paramref name="formKey"/>, or
-    /// null when it holds nothing under that key. A tracked plugin's document that is no record
-    /// document refuses rather than reading as none.</summary>
-    internal RecordIdentity? Identity(string formKey) =>
-        _tree != null ? _tree.Get(plugin, formKey)?.Identity : Loaded()?.IdentityOf(formKey);
+    /// null when it holds nothing under that key. A tracked document that is no record document is
+    /// unreadable, not none.</summary>
+    internal CopyRead<RecordIdentity?> Identity(string formKey) =>
+        _tree is { } tree ? FromTree(() => tree.Get(plugin, formKey)?.Identity) : FromFile(records => records.IdentityOf(formKey));
 
     /// <summary>The record header's flags, read without the record's fields.</summary>
-    internal long RecordFlags(RecordIdentity identity)
+    internal CopyRead<long> RecordFlags(RecordIdentity identity)
     {
-        if (_tree == null) return Loaded()?.RecordFlagsOf(identity.FormKey) ?? throw NoLongerHeld(identity.FormKey);
-        var body = _tree.RecordOf(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey);
-        return JsonNode.Parse(body) is JsonObject document ? RecordFlagsWrite.HeldBy(document) : 0;
+        if (_tree is not { } tree)
+            return FromFile(records => records.RecordFlagsOf(identity.FormKey)).Then<long>(flags => flags ?? throw NoLongerHeld(identity.FormKey));
+        return FromTree(() => tree.RecordOf(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey)).Then<long>(body =>
+        {
+            try
+            {
+                return JsonNode.Parse(body) is JsonObject document ? RecordFlagsWrite.HeldBy(document) : 0;
+            }
+            catch (JsonException ex)
+            {
+                return CopyRead<long>.Unreadable(ex.Message);
+            }
+        });
     }
 
     /// <summary>Whether the record's header carries Partial Form, on a type that can.</summary>
-    internal bool IsPartialForm(RecordIdentity identity) =>
-        RecordTypes.For(_release).HasChildSlots(identity.RecordType) && (RecordFlags(identity) & PartialFormFlag.Bit) != 0;
+    internal CopyRead<bool> IsPartialForm(RecordIdentity identity)
+    {
+        if (!RecordTypes.For(_release).HasChildSlots(identity.RecordType)) return false;
+        return RecordFlags(identity).Then<bool>(flags => (flags & PartialFormFlag.Bit) != 0);
+    }
 
     /// <summary>The record's own text: the working tree's own bytes when tracked, otherwise the loaded
     /// plugin's record through the codec — byte for byte what Track would have written.</summary>
-    internal string Body(RecordIdentity identity)
+    internal CopyRead<string> Body(RecordIdentity identity)
     {
-        if (_tree == null) return Loaded()?.TextOf(identity.FormKey) ?? throw NoLongerHeld(identity.FormKey);
+        if (_tree is not { } tree)
+            return FromFile(records => records.TextOf(identity.FormKey)).Then<string>(text => text ?? throw NoLongerHeld(identity.FormKey));
 
-        var body = _tree.RecordOf(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey);
-        // Read through the codec even though the verbatim bytes are what lands: a copy of text no
-        // reader can make a record of would leave the destination uncompilable.
-        RecordTextCodec.RoundTrip(body, _release, identity.RecordType);
-        return body;
+        return FromTree(() => tree.RecordOf(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey)).Then<string>(body =>
+        {
+            // Read through the codec even though the verbatim bytes land: a copy of text no reader can
+            // make a record of would leave the destination uncompilable. The codec answers such text by
+            // throwing, in Mutagen's open-ended ways.
+            try
+            {
+                RecordTextCodec.RoundTrip(body, _release, identity.RecordType);
+                return body;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                return CopyRead<string>.Unreadable(ex.Message);
+            }
+        });
     }
 
     /// <summary>The record's own text under the identity a copy files it by, which is what the
     /// destination writes and what the container rule appends.</summary>
-    internal SourceDocument Document(RecordIdentity identity) =>
-        new(identity.FormKey, identity.RecordType, identity.EditorId, Body(identity));
-
-    /// <summary>The reader's own words for a record it cannot read: the codec's message for a working
-    /// tree's document, the diagnosis Track uses for a plugin's own file.</summary>
-    internal string Diagnose(Exception ex) =>
-        _tree != null ? ex.Message : PluginDiagnosis.FromParseException(ex).Describe();
+    internal CopyRead<SourceDocument> Document(RecordIdentity identity) =>
+        Body(identity).Then<SourceDocument>(body => new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body));
 
     /// <summary>The container carrying this record, or null when it has a document of its own. A
     /// worldspace's persistent cell answers its worldspace; a numbered cell has a document of its own.</summary>
-    internal DocumentContainment? ContainerOf(RecordIdentity identity) =>
-        _tree != null ? _tree.ContainerOf(plugin, identity) : Loaded()?.ContainmentOf(identity.FormKey);
+    internal CopyRead<DocumentContainment?> ContainerOf(RecordIdentity identity) =>
+        _tree is { } tree
+            ? FromTree(() => tree.ContainerOf(plugin, identity))
+            : FromFile(records => records.ContainmentOf(identity.FormKey));
 
     /// <summary>The worldspace the cell <paramref name="identity"/> names sits in, or null for an interior
     /// cell or a cell this plugin does not hold.</summary>
-    internal string? WorldspaceOf(RecordIdentity identity) =>
-        _tree != null ? _tree.WorldspaceOf(plugin, identity) : Loaded()?.CellStructureOf(identity.FormKey)?.ParentWorldspace;
+    internal CopyRead<string?> WorldspaceOf(RecordIdentity identity) =>
+        _tree is { } tree
+            ? FromTree(() => tree.WorldspaceOf(plugin, identity))
+            : FromFile(records => records.CellStructureOf(identity.FormKey)).Then<string?>(cell => cell?.ParentWorldspace);
 
     /// <summary>How many records sit above this one: its containers, and a numbered cell's worldspace.
     /// An unreadable record ends the count where it stood; its own copy refuses it, naming why.</summary>
     internal int ContainmentDepth(string formKey)
     {
         var depth = 0;
-        try
+        var identity = Identity(formKey);
+        while (identity.Holds(out var held, out _) && held is { } record
+               && ParentOf(record).Holds(out var parent, out _) && parent is { } above)
         {
-            var identity = Identity(formKey);
-            while (identity is { } held && ParentOf(held) is { } parent)
-            {
-                depth++;
-                identity = Identity(parent);
-            }
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            return depth;
+            depth++;
+            identity = Identity(above);
         }
         return depth;
     }
 
-    private string? ParentOf(RecordIdentity identity) =>
-        ContainerOf(identity)?.ParentFormKey
-        ?? (RecordTypes.For(_release).IsCell(identity.RecordType) ? WorldspaceOf(identity) : null);
+    private CopyRead<string?> ParentOf(RecordIdentity identity) =>
+        ContainerOf(identity).Then(container =>
+        {
+            if (container is { } held) return held.ParentFormKey;
+            return RecordTypes.For(_release).IsCell(identity.RecordType) ? WorldspaceOf(identity) : (string?)null;
+        });
 
     /// <summary>The exterior cell this plugin holds at grid (<paramref name="x"/>, <paramref name="y"/>)
     /// of <paramref name="worldspace"/>, or null when it holds none there.</summary>
-    internal RecordIdentity? CellAt(string worldspace, int x, int y)
+    internal CopyRead<RecordIdentity?> CellAt(string worldspace, int x, int y) =>
+        _tree is { } tree
+            ? FromTree(() => tree.GetCellAt(plugin, worldspace, x, y)?.Identity)
+            : FromFile(records => records.CellAt(worldspace, x, y))
+                .Then(formKey => formKey is null ? (RecordIdentity?)null : Identity(formKey));
+
+    public void Dispose() => _records?.Dispose();
+
+    // The Source adapter answers a document it cannot read by throwing.
+    private static CopyRead<T> FromTree<T>(Func<T> read)
     {
-        if (_tree != null) return _tree.GetCellAt(plugin, worldspace, x, y)?.Identity;
-        return Loaded()?.CellAt(worldspace, x, y) is { } formKey ? Loaded()?.IdentityOf(formKey) : null;
+        try
+        {
+            return read();
+        }
+        catch (UnreadableSourceDocumentException ex)
+        {
+            return CopyRead<T>.Unreadable(ex.Message);
+        }
     }
 
-    public void Dispose() => _loaded?.Dispose();
-
-    // Null when the load order registers no such plugin: it holds nothing, which is an answer.
-    private IPluginRecordLookup? Loaded()
+    // A plugin the load order does not register holds nothing, which is an answer.
+    private CopyRead<T?> FromFile<T>(Func<IPluginRecords, PluginAnswer<T?>> read)
     {
-        if (_opened) return _loaded;
-        _opened = true;
-        if (loadOrder.Plugin(plugin) is { } registered)
-            _loaded = adapter.OpenRecordLookup(registered, _release, _schemas);
-        return _loaded;
+        if (loadOrder.Plugin(plugin) is not { } registered) return default(T);
+        if (!_opened)
+        {
+            _opened = true;
+            if (adapter.OpenRecordLookup(registered, _release, _schemas).Holds(out var records, out var failure)) _records = records;
+            else _unopened = failure.Reason;
+        }
+        return _records is { } opened
+            ? CopyRead<T?>.Of(read(opened))
+            : CopyRead<T?>.Unreadable(_unopened ?? throw new InvalidOperationException("Expected an open that failed to say why."));
     }
 
     private InvalidOperationException NoLongerHeld(string formKey) =>

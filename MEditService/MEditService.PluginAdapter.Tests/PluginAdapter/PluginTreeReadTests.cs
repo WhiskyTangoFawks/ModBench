@@ -35,10 +35,9 @@ public sealed class PluginTreeReadTests
     {
         var unreadable = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), "{ not json"u8.ToArray());
 
-        var (tree, diagnosis, _) = await Adapter.ReadTreeAsync([unreadable], GameRelease.Fallout4);
+        var read = await Adapter.ReadTreeAsync([unreadable], GameRelease.Fallout4);
 
-        Assert.Null(tree);
-        Assert.NotNull(diagnosis);
+        Assert.IsType<PluginFailure.Unparsed>(read.Failure());
     }
 
     [Fact]
@@ -57,18 +56,18 @@ public sealed class PluginTreeReadTests
         var corrupt = files.Select(file => new TreeFile(file.RelativePath,
             Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(file.Content).Replace(race, "NOT-A-FORMKEY", StringComparison.Ordinal))));
 
-        var (_, _, error) = await Adapter.ReadTreeAsync([.. corrupt], GameRelease.Fallout4);
+        var read = await Adapter.ReadTreeAsync([.. corrupt], GameRelease.Fallout4);
 
-        AssertScratchFolderGone(Assert.IsType<FilePathedException>(error).Path);
+        AssertScratchFolderGone(Assert.IsType<FilePathedException>(read.Failure().Error).Path);
     }
 
     private static async Task<IReadOnlyList<TreeFile>> ReadTreeFiles(PluginFixtureData data, string pluginName)
     {
-        var (files, _) = await Adapter.ReadSourceOfAsync(
+        var read = await Adapter.ReadSourceOfAsync(
             new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, Path.Combine(data.DataFolder, pluginName), PluginProvider.Game, Line: null),
             GameRelease.Fallout4,
             new PluginStrings(null, data.DataFolder));
-        return files;
+        return read.Answered().Files;
     }
 
     private static void AssertScratchFolderGone(string textNamingAPathInIt)
@@ -94,10 +93,10 @@ public sealed class PluginTreeReadTests
         var reversed = new[] { "BetaBase.esm", "AlphaBase.esm" };
         var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Patch.esp");
 
-        await Adapter.WriteFromTreeAsync(files, recompiledPath, reversed);
+        (await Adapter.WriteFromTreeAsync(files, recompiledPath, reversed)).Answered();
 
         var written = Adapter.ReadContent(
-            new ModPath(ModKey.FromFileName("Patch.esp"), recompiledPath), GameRelease.Fallout4);
+            new ModPath(ModKey.FromFileName("Patch.esp"), recompiledPath), GameRelease.Fallout4).Answered();
         Assert.Equal(reversed, written.Content.Masters);
     }
 
@@ -118,10 +117,10 @@ public sealed class PluginTreeReadTests
         var files = await ReadTreeFiles(data, "Lower.esp");
         var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Lower.esp");
 
-        await Adapter.WriteFromTreeAsync(files, recompiledPath, ["AlphaBase.esm"]);
+        (await Adapter.WriteFromTreeAsync(files, recompiledPath, ["AlphaBase.esm"])).Answered();
 
         var written = Adapter.ReadContent(
-            new ModPath(ModKey.FromFileName("Lower.esp"), recompiledPath), GameRelease.Fallout4);
+            new ModPath(ModKey.FromFileName("Lower.esp"), recompiledPath), GameRelease.Fallout4).Answered();
         Assert.Equal(["AlphaBase.esm"], written.Content.Masters);
     }
 
@@ -141,7 +140,7 @@ public sealed class PluginTreeReadTests
         var files = await ReadTreeFiles(data, "Counter.esp");
         var recompiledPath = Path.Combine(Directory.CreateDirectory(Path.Combine(data.DataFolder, "scratch")).FullName, "Counter.esp");
 
-        await Adapter.WriteFromTreeAsync(files, recompiledPath, []);
+        (await Adapter.WriteFromTreeAsync(files, recompiledPath, [])).Answered();
 
         using var written = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Counter.esp"), recompiledPath), Fallout4Release.Fallout4);

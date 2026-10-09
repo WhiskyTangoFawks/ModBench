@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
 
@@ -21,53 +20,55 @@ public sealed class PluginFileHashesTests : IDisposable
 
     public void Dispose() => _data.Dispose();
 
-    private static PluginFileHashes WithTheClockPastEveryWrite() =>
+    private static MutagenPluginAdapter WithTheClockPastEveryWrite() =>
         new(new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1)));
+
+    private static PluginAnswer<FileClaim> ClaimOf(string path) => TestAdapters.Mutagen().ClaimOf(path);
 
     private FileStream HeldAgainstReaders()
     {
         var held = new FileStream(PluginPath, FileMode.Open, FileAccess.Read, FileShare.None);
-        Assert.Null(PluginBinaryHash.ClaimOfFile(PluginPath));
+        Assert.IsType<PluginFailure.Inaccessible>(ClaimOf(PluginPath).Failure());
         return held;
     }
 
     [Fact]
     public void TheClaimOfAFile_CarriesTheHashOfTheBytesItScanned()
     {
-        var claim = PluginBinaryHash.ClaimOfFile(PluginPath);
+        var claim = ClaimOf(PluginPath).Answered();
 
-        Assert.Equal(Sha256Hex(File.ReadAllBytes(PluginPath)), claim?.Hash);
-        Assert.Empty(claim?.Diagnoses ?? [new PluginDiagnosis(null, "unscanned", null, "")]);
+        Assert.Equal(Sha256Hex(File.ReadAllBytes(PluginPath)), claim.Hash);
+        Assert.Empty(claim.Diagnoses.Answered());
     }
 
     [Fact]
-    public void TheClaimOfAFileHeldAgainstReaders_IsNull()
+    public void TheClaimOfAFileHeldAgainstReaders_IsInaccessible()
     {
         using var held = HeldAgainstReaders();
 
-        Assert.Null(PluginBinaryHash.ClaimOfFile(PluginPath));
+        Assert.IsType<PluginFailure.Inaccessible>(ClaimOf(PluginPath).Failure());
     }
 
     [Fact]
     public void AnUnchangedFile_KeepsItsHashWithoutARead()
     {
         var hashes = WithTheClockPastEveryWrite();
-        var first = hashes.Of(PluginPath);
+        var first = hashes.HashOf(PluginPath);
 
         using var held = HeldAgainstReaders();
 
         Assert.NotNull(first);
-        Assert.Equal(first, hashes.Of(PluginPath));
+        Assert.Equal(first, hashes.HashOf(PluginPath));
     }
 
     [Fact]
     public void AnotherInstance_ReadsTheFile()
     {
-        WithTheClockPastEveryWrite().Of(PluginPath);
+        WithTheClockPastEveryWrite().HashOf(PluginPath);
 
         using var held = HeldAgainstReaders();
 
-        Assert.Null(WithTheClockPastEveryWrite().Of(PluginPath));
+        Assert.Null(WithTheClockPastEveryWrite().HashOf(PluginPath));
     }
 
     [Fact]
@@ -77,12 +78,12 @@ public sealed class PluginFileHashesTests : IDisposable
         var rewritten = File.ReadAllBytes(PluginPath);
         rewritten[^1] ^= 0xFF;
         File.SetLastWriteTimeUtc(PluginPath, ModifiedOnAWholeDateTimeTick);
-        hashes.Of(PluginPath);
+        hashes.HashOf(PluginPath);
 
         File.WriteAllBytes(PluginPath, rewritten);
         File.SetLastWriteTimeUtc(PluginPath, ModifiedOnAWholeDateTimeTick);
 
-        Assert.Equal(Sha256Hex(rewritten), hashes.Of(PluginPath));
+        Assert.Equal(Sha256Hex(rewritten), hashes.HashOf(PluginPath));
     }
 
     [Fact]
@@ -90,22 +91,22 @@ public sealed class PluginFileHashesTests : IDisposable
     {
         var hashes = WithTheClockPastEveryWrite();
         File.SetLastWriteTimeUtc(PluginPath, ModifiedOnAWholeDateTimeTick);
-        hashes.Of(PluginPath);
+        hashes.HashOf(PluginPath);
 
         File.SetLastWriteTimeUtc(PluginPath, ModifiedOnAWholeDateTimeTick);
         using var held = HeldAgainstReaders();
 
-        Assert.Null(hashes.Of(PluginPath));
+        Assert.Null(hashes.HashOf(PluginPath));
     }
 
     [Fact]
     public void AFileWhoseStampIsWithinTheClockTickOfItsHash_IsReadAgain()
     {
-        var hashes = new PluginFileHashes(TimeProvider.System);
-        hashes.Of(PluginPath);
+        var hashes = new MutagenPluginAdapter(TimeProvider.System);
+        hashes.HashOf(PluginPath);
 
         using var held = HeldAgainstReaders();
 
-        Assert.Null(hashes.Of(PluginPath));
+        Assert.Null(hashes.HashOf(PluginPath));
     }
 }

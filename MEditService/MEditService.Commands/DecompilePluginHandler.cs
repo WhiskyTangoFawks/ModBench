@@ -47,11 +47,11 @@ public sealed class DecompilePluginHandler
 
         var repository = SourceRepository.Over(mod, loadOrder.GameRelease);
         var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, mod.Folder, onParsed: () => { }, cancel);
-        if (decompiled.Files is not { } files) return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(decompiled.Refusal, decompiled.Message);
+        if (decompiled.Source is not { } source) return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(decompiled.Refusal, decompiled.Message);
 
         try
         {
-            repository.ReplaceSourceFrom(key, files, PluginBinaryHash.TrailerFormOfFile(plugin.Path));
+            repository.ReplaceSourceFrom(key, source.Files, source.BinarySha256);
             return ItemAnswer<DecompileRefusal, NoOutcome>.Landed(default);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)

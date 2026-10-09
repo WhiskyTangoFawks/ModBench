@@ -121,24 +121,17 @@ internal sealed class WriteTargets(
         var destinationRepository = openedDestinationRepository
             ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
 
-        try
+        if (!source.Identity(formKey).Holds(out var held, out var why)) return RefuseUnreadableCopySource(formKey, why);
+        if (held is not { } identity)
         {
-            if (source.Identity(formKey) is not { } identity)
-            {
-                return RecordEditResult.Refused(
-                    RecordEditRefusal.RecordNotFound, $"{source.Plugin.Name} does not hold record {formKey}.");
-            }
+            return RecordEditResult.Refused(
+                RecordEditRefusal.RecordNotFound, $"{source.Plugin.Name} does not hold record {formKey}.");
+        }
+        if (!source.Body(identity).Holds(out var body, out why)) return RefuseUnreadableCopySource(formKey, why);
 
-            target = new CopyTarget(
-                source, identity,
-                new RecordCopy.Destination(destinationRepository, destinationPlugin),
-                loadOrder.Current.GameRelease, source.Body(identity));
-            return null;
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            return RefuseUnreadableCopySource(formKey, source.Diagnose(ex));
-        }
+        target = new CopyTarget(
+            source, identity, new RecordCopy.Destination(destinationRepository, destinationPlugin), loadOrder.Current.GameRelease, body);
+        return null;
     }
 
     // A record's own descendants are inside its text, so one unreadable response refuses its topic
@@ -149,9 +142,9 @@ internal sealed class WriteTargets(
             $"{formKey} cannot be read, so copying it would land a stub holding only its FormKey and " +
             $"EditorID rather than the record: {why}");
 
-    /// <summary>A copy that reads a source-tree document beyond its own record, as an exterior cell's
-    /// worldspace, refuses naming that document.</summary>
-    internal static RecordEditResult RefuseUnreadableSourceTree(string formKey, string why) =>
+    /// <summary>A copy that reads its source beyond its own record, as an exterior cell's worldspace,
+    /// refuses naming what it could not read.</summary>
+    internal static RecordEditResult RefuseUnreadableSource(string formKey, string why) =>
         RecordEditResult.Refused(RecordEditRefusal.RecordParseFailed, $"{formKey} cannot be copied: {why} Nothing was written.");
 
     // The six record gestures enter here first.

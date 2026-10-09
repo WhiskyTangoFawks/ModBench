@@ -42,6 +42,18 @@ public sealed class TrackCommitShapeTests : IDisposable
     }
 
     [Fact]
+    public async Task Track_ParksTheHashOfTheBytesEachPluginsSourceWasReadFrom()
+    {
+        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+
+        await Track(new ReadingAs("READ-FROM"));
+
+        Assert.Equal(
+            ["READ-FROM"],
+            SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4).LastWrittenBinarySha256s(Key("First.esp")));
+    }
+
+    [Fact]
     public async Task Track_OfAPluginInAModThatAlreadyHasARepository_RefusesTheMod_PointingAtDecompile_AndCommitsNothing()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
@@ -158,7 +170,7 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private sealed class RoundTripFailsForEvery(params string[] plugins) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override Task WriteFromTreeAsync(
+        public override Task<PluginAnswer<string>> WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
             IReadOnlyList<string> masterOrder, CancellationToken cancel = default) =>
             plugins.Contains(Path.GetFileName(destinationPath))
@@ -184,7 +196,7 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private sealed class RoundTripFailsFor(string plugin) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override Task WriteFromTreeAsync(
+        public override Task<PluginAnswer<string>> WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
             IReadOnlyList<string> masterOrder, CancellationToken cancel = default) =>
             Path.GetFileName(destinationPath) == plugin

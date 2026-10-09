@@ -37,7 +37,7 @@ public sealed class PluginAdapterTests
     {
         using var data = TwoNpcPlugin("adapter-read");
 
-        using var documents = Adapter.OpenDocuments(PathOf(data), GameRelease.Fallout4, Schemas);
+        using var documents = Adapter.OpenDocuments(PathOf(data), GameRelease.Fallout4, Schemas).Answered();
         var npcs = documents.Records.Where(r => r.RecordType == "npc_").ToList();
 
         Assert.Equal(
@@ -54,7 +54,7 @@ public sealed class PluginAdapterTests
 
         Assert.Equal(
             EmptyPluginWrite.Written,
-            (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4)).Outcome);
+            (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4)).Answered().Outcome);
 
         using var reread = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName(PluginName), path), Fallout4Release.Fallout4);
@@ -73,7 +73,7 @@ public sealed class PluginAdapterTests
         using var scratch = new ScratchDirectory("medit-adapter-create-flags-");
         var path = Path.Combine(scratch, name);
 
-        await Adapter.CreateAndWriteAsync(ModKey.FromFileName(name), scratch, GameRelease.Fallout4);
+        (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(name), scratch, GameRelease.Fallout4)).Answered();
 
         using var reread = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName(name), path), Fallout4Release.Fallout4);
@@ -84,7 +84,7 @@ public sealed class PluginAdapterTests
     public async Task CreateAndWriteAsync_LeavesThePluginAloneInItsFolder()
     {
         using var scratch = new ScratchDirectory("medit-adapter-create-alone-");
-        await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4);
+        (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4)).Answered();
 
         Assert.Equal(
             [PluginName],
@@ -100,7 +100,7 @@ public sealed class PluginAdapterTests
 
         var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), gone, GameRelease.Fallout4);
 
-        Assert.Equal(EmptyPluginWrite.FolderGone, written.Outcome);
+        Assert.Equal(EmptyPluginWrite.FolderGone, written.Answered().Outcome);
         Assert.False(Directory.Exists(gone));
     }
 
@@ -113,7 +113,7 @@ public sealed class PluginAdapterTests
 
         var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4);
 
-        Assert.Equal(EmptyPluginWrite.FileExists, written.Outcome);
+        Assert.Equal(EmptyPluginWrite.FileExists, written.Answered().Outcome);
         Assert.Equal("another tool's file", File.ReadAllText(path));
         Assert.Single(Directory.EnumerateFileSystemEntries(scratch));
     }
@@ -124,8 +124,9 @@ public sealed class PluginAdapterTests
         using var scratch = new ScratchDirectory("medit-adapter-create-fails-");
         var directoryAtThePluginsOwnNameBlockingTheMoveOnEveryOs = Directory.CreateDirectory(Path.Combine(scratch, PluginName));
 
-        await Assert.ThrowsAsync<IOException>(
-            () => Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4));
+        var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4);
+
+        Assert.IsType<PluginFailure.Inaccessible>(written.Failure());
 
         Assert.Equal([PluginName], Directory.EnumerateFileSystemEntries(scratch).Select(Path.GetFileName));
         Assert.Empty(Directory.EnumerateFileSystemEntries(directoryAtThePluginsOwnNameBlockingTheMoveOnEveryOs.FullName));
@@ -152,10 +153,11 @@ public sealed class PluginAdapterTests
             Assert.NotEqual(reversed, natural.ModHeader.MasterReferences.Select(m => m.Master.FileName.ToString()));
         }
 
-        using (var prep = await TreeSaves.PrepareAsync(patchPath, reversed))
+        await TreeSaves.SaveAsync(patchPath, prep =>
         {
             prep.Commit();
-        }
+            return true;
+        }, reversed);
 
         using var reread = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Patch.esp"), patchPath), Fallout4Release.Fallout4);

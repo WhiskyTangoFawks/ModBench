@@ -13,20 +13,29 @@ namespace MEditService.PluginAdapter;
 /// them.</summary>
 internal static class PluginTrees
 {
-    /// <summary>A plugin's own binary read as the documents its tree would hold.
-    /// <c>MissingStringsFile</c> names the localization file it declares and the disk has not, in
-    /// which case there are no files.</summary>
-    internal static async Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadAsync(
+    /// <summary>A plugin's own binary read as the documents its tree would hold.</summary>
+    internal static async Task<PluginAnswer<PluginSource>> ReadAsync(
         ModPath modPath, string pluginName, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default)
     {
-        var mod = OpenFor(modPath, gameRelease, strings);
+        try
+        {
+            // Hashed before the read: bytes another tool writes after it are then named as an external
+            // change, never taken for the bytes this tree came from.
+            var binarySha256 = PluginBinaryHash.TrailerFormOfFile(modPath.Path);
+            var mod = OpenFor(modPath, gameRelease, strings);
 
-        // Refuse by name before any serialize: TranslatedString.TryLookup returns false for a missing
-        // file with no exception.
-        return LocalizedStrings.FindMissingStringsFile(mod, pluginName, strings, gameRelease) is { } missing
-            ? ([], missing)
-            : (await SerializeTree(mod, cancel), null);
+            // Refuse by name before any serialize: TranslatedString.TryLookup returns false for a missing
+            // file with no exception.
+            if (LocalizedStrings.FindMissingStringsFile(mod, pluginName, strings, gameRelease) is { } missing)
+                return new PluginFailure.MissingStrings(missing);
+            return PluginAnswer.Of(new PluginSource(
+                await SerializeTree(mod, cancel), [.. mod.MasterReferences.Select(reference => reference.Master.FileName.ToString())], binarySha256));
+        }
+        catch (Exception ex) when (PluginFailure.StandsFor(ex))
+        {
+            return PluginFailure.Of(ex);
+        }
     }
 
     private static IMod OpenFor(ModPath modPath, GameRelease gameRelease, PluginStrings strings) =>
@@ -72,7 +81,7 @@ internal static class PluginTrees
     /// <summary>The tree in <paramref name="files"/> compiled to bytes at
     /// <paramref name="destinationPath"/>, in place with no rename: a scratch verification, never a
     /// replacement of the real plugin.</summary>
-    internal static async Task WriteFromTreeAsync(
+    internal static async Task<PluginAnswer<string>> WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
         CancellationToken cancel = default)
     {
@@ -82,6 +91,11 @@ internal static class PluginTrees
             var recompiled = await DeserializeTree(
                 await MaterializeTree(files, scratchDir, cancel), cancel);
             await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder);
+            return PluginAnswer.Of(destinationPath);
+        }
+        catch (Exception ex) when (PluginFailure.OfWrite(ex) is { } failure)
+        {
+            return failure;
         }
         finally
         {
@@ -141,7 +155,7 @@ internal static class PluginTrees
 
     /// <summary>One source tree's files read into the mod they compile to, in a scratch folder of the
     /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005).</summary>
-    internal static async Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
+    internal static async Task<PluginAnswer<CompiledTree>> ReadTreeAsync(
         IReadOnlyList<TreeFile> files, GameRelease gameRelease,
         CancellationToken cancel = default)
     {
@@ -156,12 +170,11 @@ internal static class PluginTrees
             // every path a read failure names is relative to one.
             try
             {
-                var mod = await DeserializeTree(treeRoot, cancel);
-                return (new CompiledTree(mod, gameRelease), null, null);
+                return PluginAnswer.Of(new CompiledTree(await DeserializeTree(treeRoot, cancel), gameRelease));
             }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
+            catch (Exception ex) when (PluginFailure.StandsFor(ex))
             {
-                return (null, PluginDiagnosis.FromSourceReadException(ex, scratchDir), ex);
+                return new PluginFailure.Unparsed(PluginDiagnosis.FromSourceReadException(ex, scratchDir), ex);
             }
         }
         finally
@@ -220,8 +233,22 @@ public sealed class CompiledTree
     /// compares the tree against.</summary>
     public Task<IReadOnlyList<TreeFile>> SerializeTreeAsync() => PluginTrees.SerializeTree(_mod);
 
-    /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/>, which the
-    /// returned save renames into place on Commit.</summary>
-    public Task<PreparedPluginSave> PrepareSaveAsync(string pluginPath, IReadOnlyList<string> loadOrder) =>
-        PluginWriter.PrepareFromModAsync(_mod, pluginPath, loadOrder);
+    /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> and handed to
+    /// <paramref name="land"/>, whose Commit renames it into place; discarded once it returns.</summary>
+    public async Task<PluginAnswer<T>> SaveAsync<T>(
+        string pluginPath, IReadOnlyList<string> loadOrder, Func<PreparedPluginSave, T> land)
+    {
+        var landing = false;
+        try
+        {
+            using var save = await PluginWriter.PrepareFromModAsync(_mod, pluginPath, loadOrder);
+            landing = true;
+            return PluginAnswer.Of(land(save));
+        }
+        // A throw out of land is the caller's own, never the write's.
+        catch (Exception ex) when (!landing && PluginFailure.OfWrite(ex) is { } failure)
+        {
+            return failure;
+        }
+    }
 }

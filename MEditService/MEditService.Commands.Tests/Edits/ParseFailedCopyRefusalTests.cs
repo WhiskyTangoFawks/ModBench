@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -25,6 +26,8 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
         var refused = result.OnlyRefused();
         Assert.Equal(RecordEditRefusal.RecordParseFailed, refused.Refusal);
+        Assert.Contains(
+            $"{UnreadablePerk} ({MisshapedPerkPlugin.EditorId}) — {PluginDiagnosis.UnknownClass}:", refused.Message, StringComparison.Ordinal);
         Assert.Contains(Diagnosis, refused.Message, StringComparison.Ordinal);
         Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
         Assert.Null(_mod.Document(_mod.DestinationPlugin, UnreadablePerk));

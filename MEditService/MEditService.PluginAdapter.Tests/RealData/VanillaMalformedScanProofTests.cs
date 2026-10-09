@@ -16,7 +16,7 @@ public sealed class VanillaMalformedScanProofTests
         foreach (var path in Directory.EnumerateFiles(dataDir.Path)
                      .Where(p => Path.GetExtension(p) is ".esm" or ".esp" or ".esl"))
         {
-            foreach (var d in PluginBinaryHash.ClaimOfFile(path)?.Diagnoses ?? [])
+            foreach (var d in TestAdapters.Mutagen().ClaimOf(path).Answered().Diagnoses.Answered())
                 falsePositives.Add($"{Path.GetFileName(path)}: {d.Anchor} — {d.DefectClass}: {d.Message}");
         }
 

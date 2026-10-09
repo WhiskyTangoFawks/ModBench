@@ -23,7 +23,7 @@ internal sealed class GatedPluginAdapter(
     /// is absent.</summary>
     public List<string> Opened { get; } = [];
 
-    public override IPluginDocuments OpenDocuments(
+    public override PluginAnswer<IPluginDocuments> OpenDocuments(
         ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         PluginStrings? strings = null)
     {
@@ -38,7 +38,7 @@ internal sealed class GatedPluginAdapter(
         }
 
         if (pluginName.Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"injected open failure for {pluginName}");
+            return PluginFailures.Unparsed();
 
         var documents = base.OpenDocuments(modPath, gameRelease, schemas, strings);
         lock (_gate) Opened.Add(pluginName);

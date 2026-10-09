@@ -75,6 +75,16 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Decompile_ParksTheHashOfTheBytesItsSourceWasReadFrom()
+    {
+        await Decompile(new ReadingAs("READ-FROM"), Tracked("Second.esp"));
+
+        Assert.Equal(
+            ["READ-FROM"],
+            SourceRepository.Over(new PluginProvider.FromMod(TrackedModName, _trackedMod), GameRelease.Fallout4).LastWrittenBinarySha256s(Tracked("Second.esp")));
+    }
+
+    [Fact]
     public async Task Decompile_OfATrackedPlugin_ReplacesItsSourceInTheWorkingTree_WithWhatItsBytesHold_DiscardingHandEditsAndStrayDocuments()
     {
         var first = TreeDocuments.Of(Repository, Tracked("First.esp")).Single(document => document.EditorId == "FirstNpc");

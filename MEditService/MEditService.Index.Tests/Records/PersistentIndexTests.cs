@@ -35,10 +35,10 @@ public sealed class PersistentIndexTests : IDisposable
 
     private sealed class Launch : IDisposable
     {
-        public Launch(string gameDirectory, string instanceRoot, IReadOnlyList<LoadOrderEntry> plugins)
+        public Launch(string gameDirectory, string instanceRoot, IReadOnlyList<LoadOrderEntry> plugins, DiskSaysAdapter? disk)
         {
             var holder = new LoadOrderHolder();
-            Opens = new GatedPluginAdapter();
+            Opens = new GatedPluginAdapter(inner: disk);
             Index = Indexes.Open(holder, Opens);
             Index.Reconcile(holder, gameDirectory, plugins, GameRelease.Fallout4, instanceRoot);
         }
@@ -53,7 +53,8 @@ public sealed class PersistentIndexTests : IDisposable
         }
     }
 
-    private Launch Launched(IReadOnlyList<LoadOrderEntry> plugins) => new(_gameDirectory, _instanceRoot, plugins);
+    private Launch Launched(IReadOnlyList<LoadOrderEntry> plugins, DiskSaysAdapter? disk = null) =>
+        new(_gameDirectory, _instanceRoot, plugins, disk);
 
     [Fact]
     public void ReopeningTheSameFile_KeepsTheRows_AndRegisterAloneMakesThemAnswer()
@@ -130,6 +131,34 @@ public sealed class PersistentIndexTests : IDisposable
         using var second = Launched([alpha]);
         Assert.Empty(second.Index.ListedIn(alpha.KeyOf()));
         Assert.Contains(second.Index.Status.Failures, f => f.Name == "Alpha.esp");
+    }
+
+    [Fact]
+    public void APluginTheAdapterSaysWentBetweenOpens_HasItsRowsRemoved()
+    {
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
+        using (Launched([alpha])) { }
+        var disk = new DiskSaysAdapter();
+
+        disk.Gone(alpha.Path);
+
+        using var second = Launched([alpha], disk);
+        Assert.Empty(second.Index.ListedIn(alpha.KeyOf()));
+        Assert.Contains(second.Index.Status.Failures, f => f.Name == "Alpha.esp");
+    }
+
+    [Fact]
+    public void APluginTheAdapterSaysChangedBetweenOpens_IsTheOneReadAgain()
+    {
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
+        var beta = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Beta.esp", "NpcBeta", 1);
+        using (Launched([alpha, beta])) { }
+        var disk = new DiskSaysAdapter();
+
+        disk.Changed(alpha.Path);
+
+        using var second = Launched([alpha, beta], disk);
+        Assert.Equal(["Alpha.esp"], second.Opens.Opened);
     }
 
     [Fact]

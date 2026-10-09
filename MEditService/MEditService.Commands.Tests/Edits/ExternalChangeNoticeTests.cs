@@ -23,8 +23,8 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     public ExternalChangeNoticeTests() =>
         _handler = new(() => TestEditService.PutLoadOrderHandler(new LoadOrderHolder(), notifications: _notifications));
 
-    private void Put(LoadOrderSnapshot snapshot) =>
-        Assert.True(_handler.Value.Put(snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease,
+    private void Put(LoadOrderSnapshot snapshot, PutLoadOrderHandler? handler = null) =>
+        Assert.True((handler ?? _handler.Value).Put(snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease,
             snapshot.Plugins, [.. snapshot.Active.Select(p => p.Key)], [.. snapshot.LoadedWithNoLine.Select(p => p.Key)]).Applied);
 
     private string ModFolder => Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
@@ -52,22 +52,6 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         Assert.Single(_notifications.Notifications.OfType<ExternalChangeNotification>());
 
     [Fact]
-    public void ASnapshot_NamesATrackedPlugin_WithTheStateOfItsBytes_WhenTheyDifferFromWhatModbenchLastWrote()
-    {
-        var tracked = "the tracked binary"u8.ToArray();
-        var changed = "changed-by-xedit"u8.ToArray();
-        WithPlugins((PluginName, tracked));
-        Track((PluginName, tracked));
-        var loadOrder = WithPlugins((PluginName, changed));
-
-        Put(loadOrder);
-
-        var notice = TheExternalChange();
-        Assert.Equal(Origin, notice.Origin);
-        Assert.Equal([new ChangedPlugin(PluginName, Sha256(changed))], notice.Plugins);
-    }
-
-    [Fact]
     public async Task ASnapshot_NamesNoPlugin_ForTheBinaryARealCompileJustWrote()
     {
         using var mod = SourceEditFixture.Tracked();
@@ -79,6 +63,25 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         var notice = Assert.IsType<ExternalChangeNotification>(Assert.Single(_notifications.Notifications));
         Assert.Equal(SourceEditFixture.ModFolderOrigin, notice.Origin);
         Assert.Empty(notice.Plugins);
+    }
+
+    [Fact]
+    public void ASnapshot_NamesATrackedPlugin_WithTheStateOfItsBytes_WhenTheyDifferFromWhatModbenchLastWrote()
+    {
+        var tracked = "the tracked binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, tracked));
+        Track((PluginName, tracked));
+
+        Put(loadOrder, TestEditService.PutLoadOrderHandler(new LoadOrderHolder(), _notifications, new HashingAs("changed")));
+
+        var notice = TheExternalChange();
+        Assert.Equal(Origin, notice.Origin);
+        Assert.Equal([new ChangedPlugin(PluginName, "changed")], notice.Plugins);
+    }
+
+    private sealed class HashingAs(string hash) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        public override string? HashOf(string pluginPath) => hash;
     }
 
     [Fact]

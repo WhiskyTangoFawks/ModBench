@@ -14,7 +14,7 @@ internal sealed class ParkedPluginAdapter() : DelegatingPluginAdapter(TestAdapte
 {
     private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    public override IPluginDocuments OpenDocuments(
+    public override PluginAnswer<IPluginDocuments> OpenDocuments(
         ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         PluginStrings? strings = null)
     {

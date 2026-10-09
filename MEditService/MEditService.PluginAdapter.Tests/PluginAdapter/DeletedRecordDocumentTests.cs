@@ -23,7 +23,7 @@ public sealed class DeletedRecordDocumentTests
         write(path);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas);
+            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas).Answered();
         return documents.Records.Single(d => d.FormKey == Npc.ToString());
     }
 

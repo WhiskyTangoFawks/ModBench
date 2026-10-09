@@ -35,10 +35,10 @@ public sealed class CreatePluginHandler
         try
         {
             var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, folder, onParsed: () => { }, default);
-            if (decompiled.Files is { } files)
+            if (decompiled.Source is { } source)
             {
                 SourceRepository.Over((PluginProvider.FromMod)provider, loadOrder.GameRelease)
-                    .ReplaceSourceFrom(address, files, PluginBinaryHash.TrailerFormOfFile(path));
+                    .ReplaceSourceFrom(address, source.Files, source.BinarySha256);
                 return new PluginCreateResult();
             }
 
@@ -55,19 +55,14 @@ public sealed class CreatePluginHandler
 
     private string TakeBack(ModKey modKey, string name, string folder, string written)
     {
-        try
+        if (!_adapter.TakeBackEmpty(modKey, folder, written).Holds(out var takenBack, out var failure))
+            return $"{name} could not be taken back and is still in {folder}: {failure.Reason}";
+        return takenBack switch
         {
-            return _adapter.TakeBackEmpty(modKey, folder, written) switch
-            {
-                EmptyPluginTakeBack.TakenBack or EmptyPluginTakeBack.Gone => $"{name} was not created.",
-                EmptyPluginTakeBack.Changed => $"{name} was changed by something else since it was created, so it was left in {folder}.",
-                var outcome => throw new InvalidOperationException($"Unhandled {nameof(EmptyPluginTakeBack)} outcome: {outcome}."),
-            };
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return $"{name} could not be taken back and is still in {folder}: {ex.Message}";
-        }
+            EmptyPluginTakeBack.TakenBack or EmptyPluginTakeBack.Gone => $"{name} was not created.",
+            EmptyPluginTakeBack.Changed => $"{name} was changed by something else since it was created, so it was left in {folder}.",
+            var outcome => throw new InvalidOperationException($"Unhandled {nameof(EmptyPluginTakeBack)} outcome: {outcome}."),
+        };
     }
 
     /// <summary>Throws <see cref="NoLoadOrderException"/> with nothing written when no load order
@@ -87,15 +82,8 @@ public sealed class CreatePluginHandler
                 $"{release} has no light plugins, so {plugin.Name} cannot be created.");
         }
 
-        EmptyPluginCreated created;
-        try
-        {
-            created = await _adapter.CreateAndWriteAsync(modKey, folder, release);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return new PluginCreateResult(PluginCreateRefusal.WriteFailed, $"Could not write {plugin.Name} into {folder}: {ex.Message}");
-        }
+        if (!(await _adapter.CreateAndWriteAsync(modKey, folder, release)).Holds(out var created, out var failure))
+            return new PluginCreateResult(PluginCreateRefusal.WriteFailed, $"Could not write {plugin.Name} into {folder}: {failure.Reason}");
 
         return created.Outcome switch
         {

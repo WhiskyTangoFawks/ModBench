@@ -39,7 +39,7 @@ internal sealed class OverrideCopy
         }
         catch (UnreadableSourceDocumentException ex)
         {
-            return WriteTargets.RefuseUnreadableSourceTree(formKey, ex.Message);
+            return WriteTargets.RefuseUnreadableSource(formKey, ex.Message);
         }
         catch (ChildSlotHeldByAnotherRecordException ex)
         {
@@ -61,7 +61,8 @@ internal sealed class OverrideCopy
 
         // A record a container's document carries, a worldspace's persistent cell among them, lands
         // inside the destination's copy of that document (the container rule).
-        if (source.ContainerOf(identity) is { } container)
+        if (!source.ContainerOf(identity).Holds(out var held, out var why)) return WriteTargets.RefuseUnreadableSource(formKey, why);
+        if (held is { } container)
         {
             return _recordCopy.CopyEmbeddedChildAsOverride(
                 source, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body),
@@ -96,8 +97,9 @@ internal sealed class OverrideCopy
     {
         var (source, identity, destination, release, _) = copy;
         var formKey = identity.FormKey;
-        var isCell = RecordTypes.For(release).IsCell(identity.RecordType);
-        if (isCell && source.WorldspaceOf(identity) is { } worldspace)
+        var worldspaceRead = RecordTypes.For(release).IsCell(identity.RecordType) ? source.WorldspaceOf(identity) : (string?)null;
+        if (!worldspaceRead.Holds(out var worldspace, out var why)) return WriteTargets.RefuseUnreadableSource(formKey, why);
+        if (worldspace is not null)
         {
             var placed = SourceTransaction.Atomically(destination.Repository, transaction => _recordCopy.PlaceExteriorCell(
                 transaction, source, worldspace,

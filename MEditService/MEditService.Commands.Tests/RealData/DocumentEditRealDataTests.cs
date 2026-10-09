@@ -82,7 +82,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
         var modPath = new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath);
         var strings = new PluginStrings(null, Path.GetDirectoryName(CutDownPluginFixture.PluginPath)
             ?? throw new InvalidOperationException("Expected the cut-down plugin's path to sit in a directory."));
-        using var documents = TestAdapters.Mutagen().OpenDocuments(modPath, GameRelease.Fallout4, Schemas, strings);
+        using var documents = TestAdapters.Mutagen().OpenDocuments(modPath, GameRelease.Fallout4, Schemas, strings).Answered();
         return [.. documents.Records.Prepend(documents.Header).SelectMany(GesturesOn)];
     });
 

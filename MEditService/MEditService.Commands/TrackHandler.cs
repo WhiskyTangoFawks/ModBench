@@ -1,4 +1,3 @@
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -77,7 +76,7 @@ public sealed class TrackHandler
                 $"'{modFolder}' already holds a repository Track did not make, with no main branch.");
         }
 
-        var verified = new List<(RegisteredPlugin Plugin, IReadOnlyList<TreeFile> Files)>();
+        var verified = new List<(RegisteredPlugin Plugin, PluginSource Source)>();
         var refused = new List<ItemRefused<PluginAddress, TrackRefusal>>();
         foreach (var plugin in plugins)
         {
@@ -85,9 +84,9 @@ public sealed class TrackHandler
             SetProgress(modName, TrackPhase.Parsing, done, total);
             var decompiled = await _decompiler.DecompileAsync(
                 loadOrder, plugin, modFolder, onParsed: () => SetProgress(modName, TrackPhase.Serializing, done, total), cancel);
-            if (decompiled.Files is { } files)
+            if (decompiled.Source is { } source)
             {
-                verified.Add((plugin, files));
+                verified.Add((plugin, source));
             }
             else
             {
@@ -117,19 +116,19 @@ public sealed class TrackHandler
 
     // The adapter writes nothing when any plugin's files fail (plugins.md, Track, story 5).
     private List<ItemRefused<PluginAddress, TrackRefusal>> Commit(
-        string modFolder, List<(RegisteredPlugin Plugin, IReadOnlyList<TreeFile> Files)> verified)
+        string modFolder, List<(RegisteredPlugin Plugin, PluginSource Source)> verified)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("Tracking {PluginCount} plugin(s) into {ModFolder}: {FileCount} source files",
-                verified.Count, modFolder, verified.Sum(v => v.Files.Count));
+                verified.Count, modFolder, verified.Sum(v => v.Source.Files.Count));
         }
 
         IReadOnlyList<(string Plugin, string Reason)> failed;
         try
         {
             failed = SourceRepository.Track(modFolder,
-                [.. verified.Select(v => (v.Files, new DecompiledPlugin(v.Plugin.Name, PluginBinaryHash.TrailerFormOfFile(v.Plugin.Path))))]);
+                [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Name, v.Source.BinarySha256)))]);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {

@@ -115,24 +115,14 @@ internal sealed class PluginCompileService(
 
         var loadOrderNames = loadOrder.InJudgedOrder().Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-        PreparedPluginSave save;
-        try
+        var saved = await tree.SaveAsync(registered.Path, loadOrderNames, save => repository.WriteBinary(plugin, save.BinarySha256(), save.Commit));
+        if (!saved.Holds(out var recorded, out var failure))
         {
-            save = await tree.PrepareSaveAsync(registered.Path, loadOrderNames);
-        }
-        catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
-        {
-            // A struct-list script property's FormLink is invisible to Mutagen's EnumerateFormLinks
-            // (Mutagen issue 688), so the content-derived master pass (ADR-0008) prunes a
-            // master this write still needs. Every other write failure propagates raw.
-            return CompileResult.Refused(
-                CompileRefusal.FormIdUnmappable,
-                $"{plugin.Name} could not be compiled: {PluginDiagnosis.FromWriteException(ex).Describe()}");
-        }
-        bool recorded;
-        using (save)
-        {
-            recorded = repository.WriteBinary(plugin, save.BinarySha256(), save.Commit);
+            return failure is PluginFailure.PrunedMaster
+                ? CompileResult.Refused(CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be compiled: {failure.Reason}")
+                : CompileResult.Refused(
+                    CompileRefusal.WriteFailed,
+                    $"Could not write {plugin.Name}: {failure.Reason} Its source is untouched, so compiling again rebuilds it.");
         }
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -175,13 +165,11 @@ internal sealed class PluginCompileService(
     private async Task<(CompiledTree? Tree, string? RefusalReason)> DeserializeSource(
         IReadOnlyList<TreeFile> files, PluginAddress plugin, SourceRepository repository, GameRelease release)
     {
-        var read = await adapter.ReadTreeAsync(files, release);
-        if (read.Tree is { } tree) return (tree, null);
+        if ((await adapter.ReadTreeAsync(files, release)).Holds(out var tree, out var failure)) return (tree, null);
 
-        logger.LogWarning(read.Error, "{Plugin} could not be read from its source", plugin.Name);
-        var diagnosis = read.Diagnosis
-            ?? throw new InvalidOperationException("Expected a failed read to carry a diagnosis.");
-        return (null, $"{plugin.Name} could not be read from its source: {repository.InSourceNames(plugin, diagnosis).Describe()} {RegenerateTheSource}");
+        logger.LogWarning("{Plugin} could not be read from its source: {Reason}", plugin.Name, failure.Reason);
+        var why = failure is PluginFailure.Unparsed unparsed ? repository.InSourceNames(plugin, unparsed.Diagnosis).Describe() : failure.Reason;
+        return (null, $"{plugin.Name} could not be read from its source: {why} {RegenerateTheSource}");
     }
 
     // ADR-0006. The generated deserializer skips an unrecognized property or file without

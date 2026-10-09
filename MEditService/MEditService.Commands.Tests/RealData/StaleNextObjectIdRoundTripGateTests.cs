@@ -36,10 +36,11 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         var stale = StaleHeaderPlugins.Named(fileName);
         Assert.Equal((stale.StoredNextObjectId, stale.StoredNumRecords), ReadHeaderStats(scratch.PluginPath));
 
-        using (var prep = await TreeSaves.PrepareAsync(scratch.PluginPath))
+        await TreeSaves.SaveAsync(scratch.PluginPath, prep =>
         {
             prep.Commit();
-        }
+            return true;
+        });
 
         Assert.Equal((stale.StoredNextObjectId, derivedNumRecords), ReadHeaderStats(scratch.PluginPath));
     }

@@ -23,7 +23,7 @@ internal static class TestEditService
             .AddSingleton(holder)
             .AddSingleton(TimeProvider.System)
             .AddSingleton(notifications ?? new InMemoryNotificationPublisher())
-            .AddSingleton(adapter ?? new MutagenPluginAdapter())
+            .AddSingleton(adapter ?? TestAdapters.Mutagen())
             .AddSingleton(SharedSchemaReflector.Instance)
             .AddCommandHandlers()
             .BuildServiceProvider();
@@ -54,6 +54,6 @@ internal static class TestEditService
         Over(holder, adapter: adapter).GetRequiredService<CreatePluginHandler>();
 
     internal static PutLoadOrderHandler PutLoadOrderHandler(
-        LoadOrderHolder holder, INotificationPublisher? notifications = null) =>
-        Over(holder, notifications: notifications).GetRequiredService<PutLoadOrderHandler>();
+        LoadOrderHolder holder, INotificationPublisher? notifications = null, IPluginAdapter? adapter = null) =>
+        Over(holder, adapter: adapter, notifications: notifications).GetRequiredService<PutLoadOrderHandler>();
 }

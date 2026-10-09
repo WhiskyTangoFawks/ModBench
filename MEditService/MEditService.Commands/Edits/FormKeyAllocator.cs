@@ -3,10 +3,10 @@ using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Meta;
 
 namespace MEditService.Commands.Edits;
 
@@ -93,13 +93,13 @@ internal sealed class FormKeyAllocator
 
     private uint FirstFreeId()
     {
-        var id = Math.Max(_nextObjectId, PluginFlagPredicates.HighRangeFormIdFloor(_release));
+        var id = Math.Max(_nextObjectId, GameConstants.Get(_release).DefaultHighRangeFormID);
         var taken = _used.Where(IsNative).Select(LocalId).Where(used => used >= id).ToHashSet();
         while (taken.Contains(id)) id++;
         return id;
     }
 
-    private uint Cap => _isLight ? PluginFlagPredicates.LightLocalFormIdCap : FormID.FullIdMask;
+    private uint Cap => _isLight ? FormID.SmallIdMask : FormID.FullIdMask;
 
     private string KeyOf(uint id) => $"{id:X6}:{_plugin.Name}";
 
@@ -121,12 +121,12 @@ internal sealed class FormKeyAllocator
                 "must be native to the plugin that is to hold it.");
         }
 
-        if (_isLight && parsed.ID > PluginFlagPredicates.LightLocalFormIdCap)
+        if (_isLight && parsed.ID > FormID.SmallIdMask)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.LightPluginFormIdOutOfRange,
                 $"{requestedFormKey} exceeds {_plugin.Name}'s ESL local FormID range — a light-flagged " +
-                $"plugin can only address local FormIDs up to 0x{PluginFlagPredicates.LightLocalFormIdCap:X}. " +
+                $"plugin can only address local FormIDs up to 0x{FormID.SmallIdMask:X}. " +
                 "Choose a FormID within that range, or un-flag the plugin as ESL.");
         }
 

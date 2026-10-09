@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Index;
@@ -42,7 +43,7 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
     /// <summary>Runs one read of <paramref name="plugin"/> over what it reads from, taken first, as a
     /// file can change during the read. A failure is remembered against that state with the files
     /// that stopped it.</summary>
-    public void Read(RegisteredPlugin plugin, Func<ReadState, ReadOutcome> read)
+    public ReadOutcome Read(RegisteredPlugin plugin, Func<ReadState, ReadOutcome> read)
     {
         ReadState? state = null;
         try
@@ -50,21 +51,24 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
             state = ReadStateOf(plugin);
             var outcome = read(state);
             if (outcome.Served) Forget(plugin.Key);
-            else Remember(plugin.Key, state, state.Vouches && StateObserves(outcome.StoppedBy), outcome.StoppedBy);
+            else Remember(plugin.Key, state, state.Vouches && StateObserves(outcome), outcome.StoppedBy);
+            return outcome;
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
-            // Only the binary's read throws, and its hash observes what stopped it, unless another
-            // process held the file.
-            Remember(plugin.Key, state, state is { Vouches: true } && ex is not (IOException or UnauthorizedAccessException), ex);
+            // A plugin file's own failure is an answer, so a throw is the store's or the tree's, and
+            // nothing the state holds observes it.
+            Remember(plugin.Key, state, stands: false, ex);
             throw;
         }
     }
 
-    // A tree that stopped the read stands only on its documents, whose stamps the state holds. The state
-    // holds nothing of git or of a file another process held, so those are read again at the next reconcile.
-    private static bool StateObserves(Exception? stoppedBy) =>
-        stoppedBy is null or UnreadableSourceDocumentException or AmbiguousSourceUnitException;
+    // A stopped read stands on what the state holds: a tree's document stamps, a binary's hash. It
+    // holds nothing of git or of a file another process held, so those are read again at the next
+    // reconcile.
+    private static bool StateObserves(ReadOutcome outcome) =>
+        outcome.Failure is not PluginFailure.Inaccessible
+        && outcome.StoppedBy is null or UnreadableSourceDocumentException or AmbiguousSourceUnitException;
 
     public void Forget(PluginAddress key)
     {

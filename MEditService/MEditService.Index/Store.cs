@@ -24,8 +24,7 @@ internal sealed class Store : IDisposable
     private readonly TimeProvider _timeProvider;
     private readonly SchemaReflector _schemaReflector;
     private readonly TableDdlBuilder _ddlBuilder;
-    // One per Store.
-    private readonly PluginFileHashes _hashes;
+    private readonly IPluginAdapter _plugins;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
     private bool _recordTypeViewsCreated;
 
@@ -48,15 +47,15 @@ internal sealed class Store : IDisposable
     /// the store holds no header flag, master list or record count, so the reads take them from the
     /// plugins the Indexer holds open.</summary>
     public Store(
-        ILogger logger, string? databasePath, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder,
+        ILogger logger, string? databasePath, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder, IPluginAdapter plugins,
         TimeProvider? timeProvider, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins)
     {
         _logger = logger;
         _databasePath = databasePath;
         _schemaReflector = schemaReflector;
         _ddlBuilder = ddlBuilder;
+        _plugins = plugins;
         _timeProvider = timeProvider ?? TimeProvider.System;
-        _hashes = new PluginFileHashes(_timeProvider);
         Reads = new RelationReads(this, openedPlugins);
         Filter = new RecordFilter(this);
     }
@@ -248,7 +247,7 @@ internal sealed class Store : IDisposable
         foreach (var (key, filePath, contentHash) in IndexedFiles())
         {
             checkedCount++;
-            if (!File.Exists(filePath))
+            if (!_plugins.Exists(filePath))
             {
                 if (_logger.IsEnabled(LogLevel.Information))
                 {
@@ -293,11 +292,10 @@ internal sealed class Store : IDisposable
     }
 
     // Null when the file cannot be read (mid-write, permissions) counts as a mismatch: an unreadable
-    // file is no evidence its rows are still true. Shared with PluginBinaryHash so identical bytes
-    // hash identically.
+    // file is no evidence its rows are still true.
     internal string? FileContentHash(string filePath)
     {
-        var hash = _hashes.Of(filePath);
+        var hash = _plugins.HashOf(filePath);
         if (hash == null) LogUnreadable(filePath);
         return hash;
     }
@@ -361,9 +359,10 @@ internal sealed class Store : IDisposable
         DuckDbSql.ExecuteFor(Connection, $"""
             INSERT INTO {PluginDerivationRelation} (plugin, origin, derived_from) VALUES ($1, $2, $3)
             """, plugin, origin, derivedFrom.ToString());
-        if (filePath == null || PluginBinaryHash.ClaimOfFile(filePath) is not { } claim)
+        if (filePath == null) return;
+        if (!_plugins.ClaimOf(filePath).Holds(out var claim, out var unread))
         {
-            if (filePath != null) LogUnreadable(filePath);
+            _logger.LogWarning(unread.Error, "Could not read {Path} to hash it, so nothing vouches for its rows: {Reason}", filePath, unread.Reason);
             return;
         }
 
@@ -377,9 +376,9 @@ internal sealed class Store : IDisposable
     // A scan that threw is logged and leaves no rows, never a refused ingest.
     private void StampDiagnoses(string plugin, string origin, FileClaim claim)
     {
-        if (claim.Diagnoses is not { } diagnoses)
+        if (!claim.Diagnoses.Holds(out var diagnoses, out var unscanned))
         {
-            _logger.LogWarning(claim.ScanError, "Could not scan {Plugin} ({Origin}) for malformed records", plugin, origin);
+            _logger.LogWarning(unscanned.Error, "Could not scan {Plugin} ({Origin}) for malformed records: {Reason}", plugin, origin, unscanned.Reason);
             return;
         }
 

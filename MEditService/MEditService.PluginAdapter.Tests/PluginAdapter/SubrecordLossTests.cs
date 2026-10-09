@@ -19,7 +19,7 @@ public sealed class SubrecordLossTests : IDisposable
         var rewrittenPath = Path.Combine(_folder.Path, "rewritten.esp");
         File.WriteAllBytes(originalPath, original);
         File.WriteAllBytes(rewrittenPath, rewritten);
-        return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath)).Loss;
+        return (await Adapter.CompareBytesAsync(originalPath, rewrittenPath)).Answered().Loss;
     }
 
     [Fact]

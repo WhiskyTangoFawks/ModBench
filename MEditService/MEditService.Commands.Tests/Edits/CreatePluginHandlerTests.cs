@@ -1,4 +1,4 @@
-using MEditService.Codec.Serialization;
+using System.Security.Cryptography;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -155,13 +155,14 @@ public sealed class CreatePluginHandlerTests : IDisposable
     public async Task CreatePlugin_WhoseTakeBackFails_RefusesWithBothCauses()
     {
         var folder = await TrackedModWith("LockedMod", "First.esp");
-        var adapter = new SourceUnreadableAdapter { TakeBackFailure = new IOException("locked") };
+        var takeBackFailure = PluginFailures.Inaccessible();
+        var adapter = new SourceUnreadableAdapter { TakeBackFailure = takeBackFailure };
 
         var result = await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "LockedMod"), folder);
 
         Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
-        Assert.Contains("unreadable", result.Message, StringComparison.Ordinal);
-        Assert.Contains("locked", result.Message, StringComparison.Ordinal);
+        Assert.Contains(adapter.Unread.Reason, result.Message, StringComparison.Ordinal);
+        Assert.Contains(takeBackFailure.Reason, result.Message, StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(folder, "Second.esp")));
     }
 
@@ -173,24 +174,25 @@ public sealed class CreatePluginHandlerTests : IDisposable
         await Create("Second.esp", folder, "ParkedMod");
 
         Assert.Equal(
-            [PluginBinaryHash.TrailerFormOfFile(Path.Combine(folder, "Second.esp"))],
+            [Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(folder, "Second.esp"))))],
             SourceRepository.Over(new PluginProvider.FromMod("ParkedMod", folder), GameRelease.Fallout4).LastWrittenBinarySha256s(new PluginAddress("Second.esp", "ParkedMod")));
     }
 
     private sealed class SourceUnreadableAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public Action? Before { get; init; }
-        public Exception? TakeBackFailure { get; init; }
+        public PluginFailure? TakeBackFailure { get; init; }
+        public PluginFailure Unread { get; } = PluginFailures.Unparsed();
 
-        public override Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceOfAsync(
+        public override Task<PluginAnswer<PluginSource>> ReadSourceOfAsync(
             RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default)
         {
             Before?.Invoke();
-            throw new IOException("unreadable");
+            return Task.FromResult<PluginAnswer<PluginSource>>(Unread);
         }
 
-        public override EmptyPluginTakeBack TakeBackEmpty(ModKey modKey, string folder, string written) =>
-            TakeBackFailure is { } failure ? throw failure : base.TakeBackEmpty(modKey, folder, written);
+        public override PluginAnswer<EmptyPluginTakeBack> TakeBackEmpty(ModKey modKey, string folder, string written) =>
+            TakeBackFailure ?? base.TakeBackEmpty(modKey, folder, written);
     }
 
     [Fact]
@@ -289,13 +291,14 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [Fact]
     public async Task CreatePlugin_WhenTheFileSystemRefusesTheWrite_RefusesWithItsWords()
     {
-        var adapter = new FailingWriteAdapter(new IOException("disk full"));
+        var failure = PluginFailures.Inaccessible();
+        var adapter = new FailingWriteAdapter(failure);
 
         var result = await HandlerIn(GameRelease.Fallout4, adapter).CreatePlugin(new PluginAddress("Full.esp", "FullMod"), ModFolder("FullMod"));
 
         Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
         Assert.Contains("Full.esp", result.Message, StringComparison.Ordinal);
-        Assert.Contains("disk full", result.Message, StringComparison.Ordinal);
+        Assert.Contains(failure.Reason, result.Message, StringComparison.Ordinal);
     }
 
     private CreatePluginHandler HandlerIn(GameRelease release, IPluginAdapter? adapter = null)
@@ -305,17 +308,17 @@ public sealed class CreatePluginHandlerTests : IDisposable
         return TestEditService.PluginCreateHandler(holder, adapter);
     }
 
-    private sealed class FailingWriteAdapter(Exception failure) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    private sealed class FailingWriteAdapter(PluginFailure failure) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override Task<EmptyPluginCreated> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease) =>
-            throw failure;
+        public override Task<PluginAnswer<EmptyPluginCreated>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease) =>
+            Task.FromResult<PluginAnswer<EmptyPluginCreated>>(failure);
     }
 
     private sealed class WritesAsFallout4Adapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public List<GameRelease> Asked { get; } = [];
 
-        public override Task<EmptyPluginCreated> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease)
+        public override Task<PluginAnswer<EmptyPluginCreated>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease)
         {
             Asked.Add(gameRelease);
             return base.CreateAndWriteAsync(modKey, folder, GameRelease.Fallout4);

@@ -8,8 +8,11 @@ public sealed class PluginWriterSaveTests
 {
     private static async Task RewriteAsync(string pluginPath)
     {
-        using var prep = await TreeSaves.PrepareAsync(pluginPath);
-        prep.Commit();
+        await TreeSaves.SaveAsync(pluginPath, prep =>
+        {
+            prep.Commit();
+            return true;
+        });
     }
 
     [Fact]
@@ -52,13 +55,13 @@ public sealed class PluginWriterSaveTests
 
         var entriesBefore = FolderEntries.Of(data.DataFolder);
 
-        using (var prep = await TreeSaves.PrepareAsync(pluginPath))
+        await TreeSaves.SaveAsync(pluginPath, prep =>
         {
             var added = FolderEntries.TheOneAddedTo(data.DataFolder, entriesBefore);
             File.Delete(Path.Combine(added, "TestPlugin.esp"));
 
-            Assert.ThrowsAny<IOException>(prep.Commit);
-        }
+            return Assert.ThrowsAny<IOException>(prep.Commit);
+        });
 
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
     }
