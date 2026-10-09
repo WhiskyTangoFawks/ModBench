@@ -5,6 +5,7 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import type { RecordArgument } from '../drivingLib/recordArgument';
 import { isKeyArgs } from '../drivingLib/copyValue';
 import { recordTitle } from './recordTitle';
+import { recordLabel } from '../wire/recordLabel';
 import { failureReason, isReadFailed, localFailure } from '../wire/readFailed';
 
 /** One plugin's copy of a referrer, with the fields that hold the reference. */
@@ -31,10 +32,6 @@ export class ReferencedByHolderNode extends vscode.TreeItem {
   }
 }
 
-function referrerName(formKey: string, editorId: string | undefined): string {
-  return editorId ? `${editorId} [${formKey}]` : formKey;
-}
-
 class ReferencedByReferrerNode extends vscode.TreeItem {
   readonly copyText: string;
   readonly argument: RecordArgument;
@@ -51,7 +48,7 @@ class ReferencedByReferrerNode extends vscode.TreeItem {
     super(editorId ?? formKey, vscode.TreeItemCollapsibleState.Collapsed);
     this.name = editorId ?? formKey;
     this.argument = { kind: 'record', formKey };
-    this.copyText = referrerName(formKey, editorId);
+    this.copyText = recordLabel(editorId, formKey);
     // The target is in the id so a referrer collapses again when the list follows a new record.
     this.id = JSON.stringify([target, formKey]);
     this.description = holders.length > 1 ? `${recordTypeName} · ${holders.length} plugins` : recordTypeName;

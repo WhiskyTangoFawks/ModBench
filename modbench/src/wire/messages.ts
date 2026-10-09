@@ -78,7 +78,6 @@ export interface ViewState {
   scroll: { top: number; left: number };
 }
 
-const isStrings = (value: unknown): value is string[] => Array.isArray(value) && value.every(isString);
 
 function isFocusedCell(value: unknown): value is ViewState['focusedCell'] {
   return value === null || (typeof value === 'object' && 'rowKey' in value && isString(value.rowKey)
@@ -92,13 +91,13 @@ function isScroll(value: unknown): value is ViewState['scroll'] {
 
 export function isViewState(value: unknown): value is ViewState {
   return typeof value === 'object' && value !== null
-    && 'collapsedRows' in value && isStrings(value.collapsedRows)
-    && 'collapsedColumns' in value && isStrings(value.collapsedColumns)
+    && 'collapsedRows' in value && isStringArray(value.collapsedRows)
+    && 'collapsedColumns' in value && isStringArray(value.collapsedColumns)
     && 'focusedCell' in value && isFocusedCell(value.focusedCell)
     && 'scroll' in value && isScroll(value.scroll);
 }
 
-function isPluginAddress(value: unknown): value is PluginAddress {
+export function isPluginAddress(value: unknown): value is PluginAddress {
   return typeof value === 'object' && value !== null
     && 'name' in value && isString(value.name) && 'origin' in value && isString(value.origin);
 }
@@ -268,7 +267,7 @@ export function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-function isStringArray(value: unknown): value is string[] {
+export function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(isString);
 }
 

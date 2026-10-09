@@ -1,14 +1,9 @@
 import type { DownloadFile } from '../instanceLoader/instance';
 import type { ArgumentOf } from '../wire/argument';
-import type { PluginAddress } from '../wire/pluginAddress';
+import { isPluginAddress, isString } from '../wire/messages';
 
 export type PluginArgument = ArgumentOf<'plugin'>;
 export type ModArgument = ArgumentOf<'mod'>;
-
-export const isString = (value: unknown): value is string => typeof value === 'string';
-
-export const isAddress = (value: unknown): value is PluginAddress =>
-  typeof value === 'object' && value !== null && isString(Reflect.get(value, 'name')) && isString(Reflect.get(value, 'origin'));
 
 /** What a row or webview context carries as its `argument`, read by shape so a gesture imports
  *  no box that builds one (ADR-0014). */
@@ -21,7 +16,7 @@ export function carriedArgument(carrier: unknown): object | undefined {
 export function pluginArgumentOf(carrier: unknown): PluginArgument | undefined {
   const argument = carriedArgument(carrier);
   const plugin: unknown = argument && Reflect.get(argument, 'plugin');
-  return argument && Reflect.get(argument, 'kind') === 'plugin' && isAddress(plugin) ? { kind: 'plugin', plugin } : undefined;
+  return argument && Reflect.get(argument, 'kind') === 'plugin' && isPluginAddress(plugin) ? { kind: 'plugin', plugin } : undefined;
 }
 
 export function modArgumentOf(carrier: unknown): ModArgument | undefined {

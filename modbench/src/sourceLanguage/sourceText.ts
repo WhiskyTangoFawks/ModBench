@@ -18,9 +18,6 @@ interface ProblemPlace {
   fieldPath?: string | null;
 }
 
-export const recordLabel = (editorId: string | null | undefined, formKey: string): string =>
-  [editorId, `[${formKey}]`].filter(Boolean).join(' ');
-
 const FORM_KEY = /^[0-9A-F]{6}:.+$/i;
 
 const spanOf = (node: Node): TextSpan => ({ start: node.offset, end: node.offset + node.length });

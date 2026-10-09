@@ -1,5 +1,6 @@
 import { toLoadOrderStatus, type NotificationEvent } from './apiClient';
 import { isNotificationKind, type NotificationKind, type NotificationPayloads } from './MEditClient';
+import { isString, isStringArray } from '../wire/messages';
 import { errorMessage } from '../ports/errorMessage';
 
 // Dispatching for the one stream kind this file opens (SSE); `whenConnected`'s
@@ -94,16 +95,6 @@ async function* readFrames(body: ReadableStream<Uint8Array>): AsyncGenerator<str
   }
 }
 
-// A comment-only frame (`: connected`) has no `data:` line and parses to `undefined`. Only
-// `data:` is read: it already carries `kind`, so the SSE `event:` line is redundant.
-function isString(value: unknown): value is string {
-  return typeof value === 'string';
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every(isString);
-}
-
 // The notification stream's one parse point for an SSE frame's JSON: checks the fields every
 // event has and throws rather than handing back an unproven shape. parseFrame's caller treats
 // the throw the same as a dropped connection.
@@ -132,6 +123,8 @@ function parseNotificationEvent(raw: string): NotificationEvent {
   };
 }
 
+// A comment-only frame (`: connected`) has no `data:` line and parses to `undefined`. Only
+// `data:` is read: it already carries `kind`, so the SSE `event:` line is redundant.
 function parseFrame(frame: string): NotificationEvent | undefined {
   const dataLine = frame.split('\n').find((line) => line.startsWith('data:'));
   if (!dataLine) return undefined;

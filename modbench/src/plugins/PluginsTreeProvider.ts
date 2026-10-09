@@ -14,6 +14,7 @@ import { placeOf, type PluginWarning } from './pluginFacts';
 import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
+import { isPluginAddress } from '../wire/messages';
 import { headerFormKeyOf } from '../wire/headerFormKey';
 import type { PluginArgument } from '../drivingLib/argument';
 import { DATA_DIRECTORY_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
@@ -32,14 +33,9 @@ function listedPlugins(value: InstanceValue): (InstanceValue['plugins'][number] 
 }
 
 // `DataTransferItem.value` is `any`, so a dropped payload is checked, not trusted.
-export function isAddress(value: unknown): value is PluginAddress {
-  return typeof value === 'object' && value !== null && 'name' in value && typeof value.name === 'string'
-    && 'origin' in value && typeof value.origin === 'string';
-}
-
 function isDropPayload(value: unknown): value is { plugins: PluginAddress[] } {
   return typeof value === 'object' && value !== null && 'plugins' in value && Array.isArray(value.plugins)
-    && value.plugins.every(isAddress);
+    && value.plugins.every(isPluginAddress);
 }
 
 /** The record browser a row's children are delegated to (ADR-0017). `RecordBrowser`

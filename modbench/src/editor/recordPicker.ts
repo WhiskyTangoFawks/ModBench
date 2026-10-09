@@ -3,6 +3,7 @@ import type { RecordSummary, MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import { answerOf } from '../wire/readFailed';
+import { recordLabel } from '../wire/recordLabel';
 
 export interface RecordPickerDeps {
   meditClient: Pick<MEditClient, 'searchRecords'>;
@@ -14,7 +15,7 @@ type PickItem = vscode.QuickPickItem & { formKey?: string };
 // FormKeyLink and FormKeyCell show a resolved reference in this label, so a record is chosen and
 // read back in the same words.
 function toPickItem(r: RecordSummary): PickItem {
-  return { label: r.editorId ? `${r.editorId} [${r.formKey}]` : r.formKey, formKey: r.formKey };
+  return { label: recordLabel(r.editorId, r.formKey), formKey: r.formKey };
 }
 
 function failureItem(err: unknown): PickItem {
