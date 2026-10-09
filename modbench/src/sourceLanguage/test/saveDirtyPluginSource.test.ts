@@ -43,6 +43,15 @@ describe('saving the unsaved plugin source of a plugin\'s folder', () => {
     for (const untouched of [other, prefixed, clean]) expect(untouched.save).not.toHaveBeenCalled();
   });
 
+  it('matches the folder without case, as the layout does', async () => {
+    const cell = document('file', '/Mods/ModA/Plugin-Source/a.esp/Cells/Cell.json');
+    h.textDocuments = [cell];
+
+    await saveDirtyPluginSource(FOLDER);
+
+    expect(cell.save).toHaveBeenCalledOnce();
+  });
+
   it('saves a file and a child record over it once: the file\'s save settles both', async () => {
     const file = document('file', CELL);
     const child = document('modbench-child-record', CELL);

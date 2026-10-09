@@ -7,7 +7,7 @@ import type { MoveToTrash } from '../ports/trash';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { fileExtension, isPluginFile } from './pluginFile';
-export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
+export { fileInFolder, isPluginSourcePath, pluginSourceFolderOf, PLUGIN_SOURCE_GLOB } from './layout';
 
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
 export { OVERWRITE_ORIGIN } from './codecs/modlistText';

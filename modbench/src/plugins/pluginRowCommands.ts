@@ -7,6 +7,7 @@ import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { modArgumentOf, pluginArgumentOf, rowNameOf } from '../drivingLib/argument';
 import { recordArgumentOf } from '../drivingLib/recordArgument';
+import { pluginSourceFolderOf } from '../instanceAdapter/instanceAdapter';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { trackProgressMessage } from './trackProgress';
@@ -271,9 +272,15 @@ async function compilePlugins(deps: CompileDeps, plugins: readonly PluginAddress
 // source is saved first, and a file VS Code does not save refuses the compile before anything is written.
 async function savedFirst(deps: CompileDeps, plugins: readonly PluginAddress[]): Promise<boolean> {
   const unsaved: string[] = [];
-  for (const { name, origin } of plugins) {
-    const folder = deps.originFiles(origin)?.file(`plugin-source/${name}`);
-    if (folder !== undefined) unsaved.push(...await deps.saveUnsaved(folder));
+  const homeless: string[] = [];
+  for (const plugin of plugins) {
+    const files = deps.originFiles(plugin.origin);
+    if (files === undefined) homeless.push(rowName(plugin));
+    else unsaved.push(...await deps.saveUnsaved(files.file(pluginSourceFolderOf(plugin.name))));
+  }
+  if (homeless.length > 0) {
+    deps.reporter.report('error', 'Could not compile: no folder for the plugin source of these plugins.', homeless.join('\n'));
+    return false;
   }
   if (unsaved.length === 0) return true;
   deps.reporter.report('error', 'Could not compile: VS Code did not save its plugin source.', unsaved.join('\n'));

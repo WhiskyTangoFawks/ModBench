@@ -17,7 +17,7 @@ export function dirtyPluginSource(): { path: string; text: string }[] {
 }
 
 const isUnder = (folder: string, path: string): boolean => {
-  const inside = relative(folder, path);
+  const inside = relative(folder.toLowerCase(), path.toLowerCase());
   return inside !== '' && !inside.startsWith('..') && !isAbsolute(inside);
 };
 
