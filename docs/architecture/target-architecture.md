@@ -19,7 +19,7 @@ A box is a project, and so is a band's lib. Its references are the project file'
 
 ## Why the two columns match
 
-Each process has its own systems of record and one read model over them ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)). One watcher, the Instance adapter's, drives both. A change from another tool and a change from Modbench are the same signal, so no trace draws that signal on its own. The watch opens [load-instance](traces/load-instance.d2), and each recompute's snapshot opens [index-load-order](traces/index-load-order.d2) and [detect-external-change](traces/detect-external-change.d2). A plugin file is in both data bands: a file in a mod to Modbench, records to mEdit, each hashed by its own repository ([ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md)).
+Each process has its own systems of record and one read model over them ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)). One watcher, the Instance adapter's, drives both. A change from another tool and a change from Modbench are the same signal, so no trace draws that signal on its own. The watch opens [load-instance](traces/load-instance.d2), and each recompute's snapshot opens [index-load-order](traces/index-load-order.d2) and [detect-external-change](traces/detect-external-change.d2). A plugin file is in both data bands: a file in a mod to Modbench, records to mEdit, each hashed by its own repository ([ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md)). On mEdit a box's answer type is its wire type, and HTTP endpoints add the protocol and nothing else.
 
 ## Rules the Modbench column draws
 

@@ -50,7 +50,7 @@ modbench_core: "MODBENCH · Core — one command per gesture; each writes throug
 medit_kernel: "MEDIT · Kernel — read by the core, the read model and the repositories; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
   class: band; grid-rows: 1
   loadorder: "Load order state\nowns: the load order Mod Management hands Editing" {class: kernel}
-  codec: "Codec + schema\nowns: a record as text and as document\nhides: the text format" {class: kernel}
+  codec: "Codec + schema\nowns: a record as text and as document\nhides: how a document is spelled as text" {class: kernel}
   ports: "Ports\nowns: how mEdit tells its clients what changed" {class: kernel}
 }
 modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model and the repositories; a kernel box references nothing" {
