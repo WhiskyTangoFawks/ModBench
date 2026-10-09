@@ -1,8 +1,10 @@
 using System.Drawing;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -105,7 +107,9 @@ public sealed class ColorCompileRoundTripTests : IDisposable
 
         var compiled = (await CompileAndReparse()).MaterialObjects.Single(m => m.FormKey == _fixture.MaterialObject);
         using var document = JsonDocument.Parse(RecordTextCodec.SerializeToText(compiled, GameRelease.Fallout4));
+        var color = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["mato"].RecordColumns.Single(c => c.Name == "SinglePassColor").Field;
+        var read = JsonValue.Create(DocumentNodes.StringValueOf(document.RootElement.GetProperty("SinglePassColor")));
 
-        Assert.Equal("#01FE7F", DocumentNodes.StringValueOf(document.RootElement.GetProperty("SinglePassColor")));
+        Assert.True(LeafSpelling.Same(JsonValue.Create("#01FE7F"), read, color));
     }
 }
