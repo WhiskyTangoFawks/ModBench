@@ -1,10 +1,10 @@
 # Edits reach the read model through the watcher
 
-Modbench never assumes exclusive ownership of a file ([ADR-0003](0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)), so a watcher and validation must exist for every file it reads. Once they exist, Modbench's own write can take the same path as another tool's: a command writes a system of record and returns, and the change comes back to the read model through the watcher. Both processes have that shape. In mEdit the read model is the record index, over the plugin files and the source tree. In Modbench it is the instance value, over the mod manager's files. One architecture on both sides of the HTTP boundary is worth more than either side's local optimum.
+Modbench never assumes exclusive ownership of a file ([ADR-0003](0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)), so a watcher and validation must exist for every file it reads. Once they exist, Modbench's own write can take the same path as another tool's: a command writes a system of record and returns, and the change comes back to the read model through the watcher. Both processes have that shape. In mEdit the read model is the record index, over the plugin files, the source tree and the editor's unsaved documents ([ADR-0001](0001-modbench-is-a-vscode-extension.md)). In Modbench it is the instance value, over the mod manager's files. One architecture on both sides of the HTTP boundary is worth more than either side's local optimum.
 
 ## Consequences
 
-- The write side never reads the read model. A command takes its inputs from the files: the source text, the plugins and the schema. A document taken from the read model can be a generation behind.
+- The write side never reads the read model. A command takes its inputs from the files, an unsaved document standing in for its file: the source text, the plugins and the schema. A document taken from the read model can be a generation behind.
 - Read-your-writes belongs to the read side. A command returns no state. The read model announces what changed and the front end re-reads, so a hand edit and another tool's write reach the screen the same way.
 - The instance value is recomputed whole, never patched. A consumer then never holds two facts from two generations.
 
