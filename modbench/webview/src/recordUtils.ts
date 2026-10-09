@@ -1,10 +1,12 @@
-import { isFieldType, type ColumnKey, type CompareOverride, type FieldMetadata, type FieldValue, type PathHop, type PathSegment } from './types';
+import { isString } from '../../src/wire/messages';
+import { isFieldType } from '../../src/wire/fieldType';
+import type { ColumnKey, CompareOverride, FieldMetadata, FieldValue, PathHop, PathSegment } from './types';
 import { copyColumnKey } from '../../src/wire/columnKey';
 import { pluginAddressOf } from '../../src/wire/pluginAddress';
 
 export function toStr(v: unknown): string {
   if (v == null) return '';
-  if (typeof v === 'string') return v;
+  if (isString(v)) return v;
   // JSON.stringify returns undefined for these two, whatever its declared type says.
   if (typeof v === 'function' || typeof v === 'symbol') return '';
   return JSON.stringify(v);
@@ -90,7 +92,7 @@ export function cellContext(copyText: string | undefined, ...more: (object | und
   const merged: Record<string, unknown> = {};
   for (const [name, value] of more.flatMap(context => (context === undefined ? [] : Object.entries(context)))) {
     if (name !== 'webviewSection') merged[name] = value;
-    else if (typeof value === 'string') sections.push(value);
+    else if (isString(value)) sections.push(value);
   }
   return {
     ...merged, ...(copyText === undefined ? {} : { copyText }), preventDefaultContextMenuItems: true,
@@ -194,7 +196,7 @@ export function variantFor(meta: FieldMetadata, owner: unknown, ownerMeta: Field
   const discriminator = discriminatorOf(ownerMeta);
   if (!meta.variants || discriminator == null || owner == null || typeof owner !== 'object') return meta;
   const leaf = (owner as Record<string, unknown>)[discriminator];
-  return typeof leaf === 'string' ? meta.variants[leaf] ?? meta : meta;
+  return isString(leaf) ? meta.variants[leaf] ?? meta : meta;
 }
 
 // `fieldMetaMap[rootField].elementType` is the right element type only when the array is the

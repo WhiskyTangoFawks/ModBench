@@ -2,7 +2,6 @@ import type { ColumnKey, CompareResult, PluginLoadFailure } from './types';
 import { columnKey, copyColumnKey } from '../../src/wire/columnKey';
 import { unreadableSources, type UnreadableSource } from '../../src/wire/unreadableSource';
 import { pluginAddressOf, samePluginAddress } from '../../src/wire/pluginAddress';
-import { parseCompareResult } from './parseCompareResult';
 import { requestRecordLoad } from './nativeBridge';
 import { tabState } from './vscode';
 import { isColumnCopies, type ColumnCopy, type ModRepository } from '../../src/wire/messages';
@@ -72,7 +71,7 @@ export function createRecordPanelClient(): RecordPanelClient {
       const pluginList = answer.plugins;
       const read: PanelRead = answer.compare === null
         ? { result: null, gone: answer.gone, copiesLacking: answer.copiesLacking }
-        : { result: parseCompareResult(answer.compare) };
+        : { result: answer.compare };
       const result = read.result;
       // Several records compared put the document's copy first, so the first match is it.
       const fileCopy = result?.overrides.find(o =>

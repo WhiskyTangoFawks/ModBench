@@ -1,3 +1,4 @@
+import { isString } from '../../src/wire/messages';
 import { copiedText, modelValue, readsAsFlags } from './modelValue';
 import { formKeyLabel } from './FormKeyLink';
 import { elementsIn } from './presentation';
@@ -107,7 +108,7 @@ function fieldRow(
       hops && meta.type === 'string'
         ? stringValueContext(o.formKey, o.plugin, o.origin, recordLabel(o), name, modelValue(value, meta), !editPath, hops)
         : undefined,
-      typeof shown === 'string' && cellMeta.type === 'formKey' && resolution && resolution.state !== 'Unresolved'
+      isString(shown) && cellMeta.type === 'formKey' && resolution && resolution.state !== 'Unresolved'
         ? referenceContext(shown)
         : undefined,
     );
