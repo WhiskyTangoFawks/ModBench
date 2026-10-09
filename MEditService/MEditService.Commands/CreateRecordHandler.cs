@@ -136,7 +136,7 @@ public sealed class CreateRecordHandler
             case ChildSlot.Open(var slot):
                 var root = JsonObject.Create(parsed.RootElement)
                     ?? throw new InvalidOperationException($"Expected {container}'s document to hold a JSON object.");
-                return AppendChild(repository, plugin, recordType, schema, release, new Landing(containerDocument, root, slot));
+                return AppendChild(repository, plugin, recordType, schema, release, new Landing(target.Identity, root, slot));
             case ChildSlot.Filled(var slot, var held):
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ChildSlotHeldByAnotherRecord,
@@ -192,7 +192,7 @@ public sealed class CreateRecordHandler
         return RecordEditResult.Success(formKey);
     }
 
-    private sealed record Landing(SourceDocument Container, JsonObject Root, string Slot);
+    private sealed record Landing(RecordIdentity Container, JsonObject Root, string Slot);
 
     private SourceAnswer<RecordEditResult> AppendChild(
         SourceRepository repository, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
@@ -204,13 +204,11 @@ public sealed class CreateRecordHandler
         var child = ObjectOf(RecordMint.BareDocument(schema, release, formKey, editorId: null), $"the minted {recordType}");
         if (!PlacedCell.TryAsCreatedIn(child, slot, root, release, out var unplaceable))
             return RecordEditResult.Refused(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, unplaceable);
-        var withChild = ContainerDocumentEdits.WithChildAppended(
-                container.Body, release, container.RecordType, container.FormKey, slot, child.ToJsonString(), recordType)
-            ?? throw new InvalidOperationException($"{container.FormKey} was found, but its own text does not carry it.");
+        var childDocument = new SourceDocument(formKey.ToString(), recordType, null, child.ToJsonString());
 
         if (SourceTransaction.Atomically(repository, transaction =>
             {
-                transaction.Apply(repository.ChangesToRewrite(plugin, container with { Body = withChild }));
+                transaction.Apply(repository.ChangesToPutChild(plugin, container, slot, childDocument));
                 transaction.Apply(allocator.HeaderChanges());
             }) is { } unwritten)
         {

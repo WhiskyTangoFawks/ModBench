@@ -740,6 +740,72 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Equal(before, File.ReadAllText(FullPath(QuestPath)));
     }
 
+    private static SourceDocument ANewChild(IMajorRecordGetter record, string recordType) =>
+        new(record.FormKey.ToString(), recordType, record.EditorID, RecordTextCodec.SerializeToText(record, Release));
+
+    [Fact]
+    public void ChangesToPutChild_IntoAnEmbeddedContainersSlot_AppendsToItInItsOwnersDocument_AndWritesNothing()
+    {
+        var before = File.ReadAllText(FullPath(QuestPath));
+        var added = new DialogResponses(_mod) { EditorID = "Response3" };
+
+        var changes = Repository.ChangesToPutChild(Plugin, Identity(_topic, "dial"), "Responses", ANewChild(added, "info")).Value();
+
+        var owner = Assert.Single(changes.Documents);
+        Assert.Equal(FullPath(QuestPath), Path.Combine(_modFolder, owner.Path));
+        var order = new[] { "Response", "Response2", "Response3" }.Select(name => owner.Text.IndexOf($"\"{name}\"", StringComparison.Ordinal)).ToArray();
+        Assert.True(order[0] >= 0 && order[0] < order[1] && order[1] < order[2], string.Join(",", order));
+        Assert.Empty(changes.Deletions);
+        Assert.Equal(before, File.ReadAllText(FullPath(QuestPath)));
+    }
+
+    [Fact]
+    public void ChangesToPutChild_IntoAnEmbeddedContainer_LeavesTheOwnersHandFormattedText_ByteForByte()
+    {
+        var handFormatted = File.ReadAllText(FullPath(QuestPath)).Replace("\"EditorID\": \"Quest\"", "\"EditorID\":    \"Quest\"", StringComparison.Ordinal);
+        Assert.Contains("\"EditorID\":    \"Quest\"", handFormatted, StringComparison.Ordinal);
+        File.WriteAllText(FullPath(QuestPath), handFormatted);
+        var added = new DialogResponses(_mod) { EditorID = "Response3" };
+
+        var owner = Assert.Single(Repository.ChangesToPutChild(Plugin, Identity(_topic, "dial"), "Responses", ANewChild(added, "info")).Value().Documents);
+
+        Assert.Contains("\"EditorID\":    \"Quest\"", owner.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ChangesToPutChild_IntoAContainerWithADocumentOfItsOwn_RewritesThatDocument()
+    {
+        var added = new PlacedObject(_mod) { EditorID = "AddedRef", Position = new P3Float(1f, 1f, 1f), Scale = 1f };
+
+        var changes = Repository.ChangesToPutChild(Plugin, Identity(_interiorCell, "cell"), "Temporary", ANewChild(added, "refr")).Value();
+
+        var document = Assert.Single(changes.Documents);
+        Assert.Equal(FullPath(InteriorCellPath), Path.Combine(_modFolder, document.Path));
+        Assert.Contains("\"AddedRef\"", document.Text, StringComparison.Ordinal);
+        Assert.Contains("\"TempRef\"", document.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ChangesToPutChild_IntoASingleSlotThatHoldsARecord_IsSlotHeld()
+    {
+        var other = new Cell(_mod) { EditorID = "OtherTopCell" };
+
+        var stopped = Repository.ChangesToPutChild(Plugin, Identity(_worldspace, "wrld"), "TopCell", ANewChild(other, "cell")).Stopped();
+
+        Assert.IsType<SourceFailure.SlotHeld>(stopped);
+    }
+
+    [Fact]
+    public void ChangesToPutChild_IntoAContainerNoDocumentHolds_IsNotCarried()
+    {
+        var added = new DialogResponses(_mod) { EditorID = "Response3" };
+
+        var stopped = Repository.ChangesToPutChild(
+            Plugin, new RecordIdentity("00FFFF:Embedded.esp", "dial", "Absent"), "Responses", ANewChild(added, "info")).Stopped();
+
+        Assert.IsType<SourceFailure.NotCarried>(stopped);
+    }
+
     [Fact]
     public void ChangesToRemove_OfAContainerWithADirectoryOfItsOwn_DeletesTheWholeDirectory_AndRemovesNothing()
     {
