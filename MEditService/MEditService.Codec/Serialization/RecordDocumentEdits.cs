@@ -52,9 +52,9 @@ public static class RecordDocumentEdits
 
     private const string ModKeyMember = "ModKey";
 
-    /// <summary>A plugin's document as it reads under another plugin name: every FormKey string of
-    /// <paramref name="from"/> follows it, and the header's ModKey, and every other byte stays. Throws
-    /// <see cref="JsonException"/> for text that is no JSON document.</summary>
+    /// <summary>The document with every FormKey of <paramref name="from"/> (and the header's
+    /// ModKey) under <paramref name="to"/>, every other byte as it was. Throws <see cref="JsonException"/>
+    /// for text that is no JSON.</summary>
     public static byte[] WithPluginRenamed(byte[] text, bool isHeader, ModKey from, ModKey to)
     {
         var splices = new List<(int Start, int Length, byte[] Value)>();
