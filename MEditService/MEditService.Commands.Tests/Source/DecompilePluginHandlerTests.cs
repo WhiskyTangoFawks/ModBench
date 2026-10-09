@@ -115,6 +115,22 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Assert.False(SourceRepository.SourceReads(new RegisteredPlugin("Other.esp", UntrackedModName, "", new PluginProvider.FromMod(UntrackedModName, _untrackedMod), Line: null)));
     }
 
+    [PosixFact]
+    public async Task Decompile_OfAPluginWhoseSourceHasTwinFoldersNeitherSpelledAsTheLoadOrderNamesIt_RefusesNamingBoth_AndWritesNoThirdFolder()
+    {
+        var sources = Path.Combine(_trackedMod, "plugin-source");
+        Directory.Move(Path.Combine(sources, "First.esp"), Path.Combine(sources, "FIRST.ESP"));
+        Directory.CreateDirectory(Path.Combine(sources, "first.esp"));
+
+        var result = await Decompile(Tracked("First.esp"));
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(DecompileRefusal.AmbiguousSource, refused.Refusal);
+        Assert.Contains("FIRST.ESP", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("first.esp", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(["FIRST.ESP", "first.esp"], Directory.GetDirectories(sources).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+    }
+
     [Fact]
     public async Task Decompile_OfASelection_LandsEachPluginOnItsOwn_ANotLoadedOneRefusedByName()
     {

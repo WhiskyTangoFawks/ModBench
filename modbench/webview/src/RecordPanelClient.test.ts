@@ -9,6 +9,7 @@ vi.mock('./vscode', () => ({ vscode: vscodeBridgeAcquiredAtModuleLoad, tabState:
 
 import { createRecordPanelClient } from './RecordPanelClient';
 import { columnKey } from '../../src/wire/columnKey';
+import { unreadableSources } from '../../src/wire/unreadableSource';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
 
@@ -217,5 +218,19 @@ describe('RecordPanelClient, the records a tab shows beside its document\'s own'
 
     expect(postedColumns()).toEqual([]);
     expect(tab.getState()).toEqual({ columns: [] });
+  });
+});
+
+describe('unreadableSources', () => {
+  it('maps each unreadable plugin by its column, with why and whether decompile repairs it', () => {
+    const reason = { reason: 'Gone.', decompileRepairs: true };
+
+    const map = unreadableSources([
+      { name: 'A.esp', origin: 'ModA', pluginSourceUnreadable: reason },
+      { name: 'A.esp', origin: 'ModB', pluginSourceUnreadable: null },
+      { name: 'C.esp', origin: 'ModA' },
+    ]);
+
+    expect([...map]).toEqual([[columnKey({ name: 'A.esp', origin: 'ModA' }), reason]]);
   });
 });

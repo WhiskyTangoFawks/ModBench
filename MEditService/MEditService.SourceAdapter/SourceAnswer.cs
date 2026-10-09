@@ -54,6 +54,9 @@ public abstract record SourceFailure
 
     public string Reason { get; private init; }
 
+    /// <summary>Whether decompile, writing the plugin's source afresh from its file, gets past this failure.</summary>
+    public virtual bool DecompileRepairs => true;
+
     /// <summary>This failure, in <paramref name="reason"/>'s words.</summary>
     internal SourceFailure Saying(string reason) => this with { Reason = reason };
 
@@ -95,6 +98,17 @@ public abstract record SourceFailure
             $"{relativePath} was found holding {formKey}, but its own text does not carry it. {DefectOrOutsideChange}";
     }
 
+    /// <summary>Folders of the plugin source that differ only in case, none spelled as the load order names the
+    /// plugin, so no one is its tree. Decompile would write a third.</summary>
+    public sealed record TwinFolders : SourceFailure
+    {
+        internal TwinFolders(string reason) : base(reason)
+        {
+        }
+
+        public override bool DecompileRepairs => false;
+    }
+
     /// <summary>A single-value slot a child is put in already holds another record.</summary>
     public sealed record SlotHeld : SourceFailure
     {
@@ -110,6 +124,8 @@ public abstract record SourceFailure
             : base("git was not found on PATH. Modbench's tracking features require git to be installed and on PATH.")
         {
         }
+
+        public override bool DecompileRepairs => false;
     }
 
     /// <summary>git ran and refused: a state of the repository.</summary>
@@ -118,6 +134,8 @@ public abstract record SourceFailure
         internal GitFailed(string reason) : base(reason)
         {
         }
+
+        public override bool DecompileRepairs => false;
     }
 
     /// <summary>The file system would not give a read or write what it needs: a file or folder is gone,
@@ -125,6 +143,8 @@ public abstract record SourceFailure
     public sealed record Inaccessible : SourceFailure
     {
         internal Inaccessible(string reason, Exception? error) : base(reason) => Error = error;
+
+        public override bool DecompileRepairs => false;
 
         /// <summary>The throw that stopped the read or write, for the log.</summary>
         public Exception? Error { get; }
@@ -204,6 +224,8 @@ internal sealed class SourceStopException : InvalidOperationException
     internal static SourceStopException Ambiguous(string reason) => new(new SourceFailure.Ambiguous(reason, null));
 
     internal static SourceStopException Ambiguous(ClaimedFormKey claim) => new(new SourceFailure.Ambiguous(claim.Message, claim));
+
+    internal static SourceStopException TwinFolders(string reason) => new(new SourceFailure.TwinFolders(reason));
 
     internal static SourceStopException NotCarried(string reason) => new(new SourceFailure.NotCarried(reason));
 

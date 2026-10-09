@@ -22,7 +22,7 @@ internal static class WriteFailure
     /// <summary>The refusal whose way out is the way out of <paramref name="failure"/>.</summary>
     internal static RecordEditRefusal KindOf(SourceFailure failure) => failure switch
     {
-        SourceFailure.Ambiguous => RecordEditRefusal.AmbiguousSourceUnit,
+        SourceFailure.Ambiguous or SourceFailure.TwinFolders => RecordEditRefusal.AmbiguousSourceUnit,
         SourceFailure.NotCarried => RecordEditRefusal.SourceUnitNotFound,
         SourceFailure.SlotHeld => RecordEditRefusal.ChildSlotHeldByAnotherRecord,
         SourceFailure.Unreadable => RecordEditRefusal.RecordParseFailed,

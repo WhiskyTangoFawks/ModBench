@@ -89,6 +89,11 @@ internal sealed class Reconciler(
         get { lock (_lock) return _scope?.Failed.SourceFileFailures ?? []; }
     }
 
+    public UnreadableSource? WhyTreeStopped(PluginAddress key)
+    {
+        lock (_lock) return _scope?.Failed.WhyTreeStopped(key);
+    }
+
     private OpenScope RequireScope()
     {
         lock (_lock) return _scope ?? throw new NoLoadOrderException();

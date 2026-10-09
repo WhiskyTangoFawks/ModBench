@@ -10,6 +10,7 @@ import {
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress } from '../wire/pluginAddress';
+import type { UnreadableSource } from '../wire/unreadableSource';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 /** What `getEditChanges` is handed, re-exported because its caller reaches the backend only through
@@ -54,7 +55,7 @@ export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
   'track-progress': TrackStatus;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
-  'plugin-source-unreadable': { plugins: PluginAddress[] };
+  'plugin-source-unreadable': { plugins: (PluginAddress & UnreadableSource)[] };
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
   'rows-changed': { plugin: PluginAddress; keys: string[] };
   'plugin-changed': { plugin: PluginAddress };

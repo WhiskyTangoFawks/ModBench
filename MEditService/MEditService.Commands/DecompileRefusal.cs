@@ -23,6 +23,10 @@ public enum DecompileRefusal
     /// <summary>A localized plugin whose strings file is missing; the way out is restoring it.</summary>
     MissingLocalizationStrings,
 
+    /// <summary>The plugin source holds twin folders and none is its tree; the way out is removing the extra by
+    /// hand. Nothing was written.</summary>
+    AmbiguousSource,
+
     /// <summary>The plugin passed its gate, and git or the file system refused the write. Its source is
     /// as it was.</summary>
     WriteFailed,

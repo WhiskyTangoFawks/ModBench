@@ -49,24 +49,33 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         Path.Combine(modFolder, RootFor(pluginFileName));
 
     /// <summary>The folder of the mod's plugin source holding <paramref name="pluginFileName"/>'s tree: the one spelled
-    /// so, else the only one spelled so without case, as a ModKey compares a name. Null for none, or for twins.</summary>
-    internal static string? TreeNameIn(string modFolder, string pluginFileName)
+    /// so, else the only one spelled so without case, as a ModKey compares a name. Else why there is none.</summary>
+    internal static SourceAnswer<string> TreeNameIn(string modFolder, string pluginFileName) =>
+        SourceFailure.Answer(() => NamedIn(Path.Combine(modFolder, RootFolderName), pluginFileName))
+            .Then<string>(named => named switch
+            {
+                _ when named.Contains(pluginFileName, StringComparer.Ordinal) => pluginFileName,
+                [var only] => only,
+                [] => SourceStopException.NotCarried($"{RootFolderName} holds no folder for {pluginFileName}.").Failure,
+                _ => SourceStopException.TwinFolders(
+                    $"{RootFolderName} holds {string.Join(" and ", named)}, which differ only in case, and none is spelled {pluginFileName}. " +
+                    "Remove the extra ones by hand.").Failure,
+            });
+
+    private static List<string> NamedIn(string sources, string pluginFileName)
     {
-        List<string> named;
         try
         {
-            named = [.. Directory.EnumerateDirectories(Path.Combine(modFolder, RootFolderName))
+            return [.. Directory.EnumerateDirectories(sources)
                 .Select(Path.GetFileName)
                 .OfType<string>()
-                .Where(name => name.Equals(pluginFileName, StringComparison.OrdinalIgnoreCase))];
+                .Where(name => name.Equals(pluginFileName, StringComparison.OrdinalIgnoreCase))
+                .Order(StringComparer.Ordinal)];
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (DirectoryNotFoundException)
         {
-            return null;
+            return [];
         }
-
-        if (named.Contains(pluginFileName, StringComparer.Ordinal)) return pluginFileName;
-        return named is [var only] ? only : null;
     }
 
     /// <summary>The folder of the mod's plugin source that <paramref name="fullPath"/> sits in, as the path spells

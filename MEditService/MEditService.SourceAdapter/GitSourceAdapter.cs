@@ -10,6 +10,8 @@ public sealed class GitSourceAdapter : ISourceAdapter
 
     public bool IsTracked(RegisteredPlugin plugin) => SourceRepository.IsTracked(plugin);
 
+    public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => SourceRepository.WhySourceDoesNotRead(plugin);
+
     public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) =>
         plugin.Provider is PluginProvider.FromMod mod ? SourceRepository.Over(mod, release) : null;
 

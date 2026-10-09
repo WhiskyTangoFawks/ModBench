@@ -1,4 +1,5 @@
 using MEditService.Index.Queries;
+using MEditService.Ports;
 
 namespace MEditService.Http;
 
@@ -33,8 +34,8 @@ internal sealed record PluginResponse(
     // load failure (LoadOrderResponse.Failures) stays its own channel for a file that never indexed.
     bool HasParseFailure = false,
     // plugins.md, A row, Plugin: tracked, and its records are its plugin file's because its plugin
-    // source is missing or cannot be read.
-    bool PluginSourceUnreadable = false)
+    // source is missing or cannot be read. Null when the plugin source reads.
+    UnreadableSource? PluginSourceUnreadable = null)
 {
     /// <summary>One row on the wire: the read side's answer, flattened.</summary>
     public static PluginResponse Of(PluginRow row)

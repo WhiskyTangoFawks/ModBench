@@ -416,6 +416,66 @@ public sealed class FailedReadStateTests : IDisposable
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
     }
 
+    [Theory]
+    [InlineData("the codec broke", "the codec broke")]
+    [InlineData("", "could not be read")]
+    public void ATreeWhoseReadThrows_SaysWhy_NeverBlank_AndDecompileRepairsIt(string message, string expected)
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        void Throw()
+        {
+            Arm(TreeMoment.ReadBegins, Throw);
+            throw new InvalidOperationException(message);
+        }
+        Arm(TreeMoment.ReadBegins, Throw);
+
+        using var index = Reconciled();
+
+        var unreadable = index.PluginRowOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
+        Assert.Contains(expected, unreadable?.Reason, StringComparison.Ordinal);
+        Assert.True(unreadable?.DecompileRepairs);
+    }
+
+    [Theory]
+    [InlineData(typeof(IOException))]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    public void ATreeWhoseReadThrowsAFileSystemRefusal_SaysWhy_AndDecompileDoesNotRepairIt(Type refusal)
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        void Throw()
+        {
+            Arm(TreeMoment.ReadBegins, Throw);
+            throw (Exception)Activator.CreateInstance(refusal, "the file is held").Require();
+        }
+        Arm(TreeMoment.ReadBegins, Throw);
+
+        using var index = Reconciled();
+
+        var unreadable = index.PluginRowOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
+        Assert.Contains("the file is held", unreadable?.Reason, StringComparison.Ordinal);
+        Assert.False(unreadable?.DecompileRepairs);
+    }
+
+    [PosixFact]
+    public void ATreeWhoseDocumentCannotBeOpened_SaysWhy_AndDecompileDoesNotRepairIt()
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        var document = NpcDocument;
+        FileModes.Set(document, "000");
+        try
+        {
+            using var index = Reconciled();
+
+            var unreadable = index.PluginRowOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
+            Assert.False(string.IsNullOrWhiteSpace(unreadable?.Reason));
+            Assert.False(unreadable?.DecompileRepairs);
+        }
+        finally
+        {
+            FileModes.Set(document, "600");
+        }
+    }
+
     [Fact]
     public void AWarmValidationThatThrows_ReadsThePluginWhole()
     {
@@ -473,6 +533,8 @@ public sealed class FailedReadStateTests : IDisposable
         public bool SourceReads(RegisteredPlugin plugin) => _inner.SourceReads(plugin);
 
         public bool IsTracked(RegisteredPlugin plugin) => _inner.IsTracked(plugin);
+
+        public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => _inner.WhySourceDoesNotRead(plugin);
 
         public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) =>
             _inner.Over(plugin, release) is { } reads ? new HookedRepository(reads, at) : null;

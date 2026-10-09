@@ -67,7 +67,8 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         await Client.NextSnapshot(fx);
 
         await Wire.Eventually(
-            async () => (await Client.Plugin(Plugin)).GetProperty("pluginSourceUnreadable").GetBoolean(),
+            async () => (await Client.Plugin(Plugin)).GetProperty("pluginSourceUnreadable") is { ValueKind: JsonValueKind.Object } unreadable
+                && unreadable.GetProperty("reason").GetString().Require().Contains(Plugin, StringComparison.Ordinal),
             $"{Plugin} reported with its plugin source unreadable");
         Assert.True((await Client.Plugin(Plugin)).GetProperty("isTracked").GetBoolean());
         var records = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_");

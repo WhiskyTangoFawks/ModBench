@@ -759,7 +759,7 @@ describe('the Plugins view\'s message line and name filter', () => {
   const heldPlugin = (name: string, hasMatchingRecords: boolean): PluginMetadata => ({
     name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0,
     isImmutable: false, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, hasMatchingRecords, isTracked: false,
-    hasParseFailure: false, pluginSourceUnreadable: false,
+    hasParseFailure: false, pluginSourceUnreadable: null,
   });
   const NO_MATCH = 'No matches for "zzznomatch".';
   const currentBox = currentBoxOf(h.state);

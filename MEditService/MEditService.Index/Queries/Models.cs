@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.Ports;
 
 namespace MEditService.Index.Queries;
 
@@ -38,8 +39,8 @@ public sealed record PluginRow(
     // now is the Source adapter's.
     bool IsTracked,
     // plugins.md, A row, Plugin: tracked, and its rows read from its plugin file because its plugin
-    // source is missing or cannot be read.
-    bool PluginSourceUnreadable);
+    // source is missing or cannot be read. Null when the plugin source reads.
+    UnreadableSource? PluginSourceUnreadable);
 
 public record RecordDetail(
     string FormKey,

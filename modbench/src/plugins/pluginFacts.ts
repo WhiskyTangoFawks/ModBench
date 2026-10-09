@@ -1,4 +1,5 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
+import type { UnreadableSource } from '../wire/unreadableSource';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { ByPluginAddress } from './pluginAddress';
@@ -43,7 +44,7 @@ const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from wh
 interface PluginRead {
   readOnly: boolean;
   tracked: boolean;
-  sourceUnreadable: boolean;
+  sourceUnreadable: UnreadableSource | undefined;
   masterIssues?: string[];
   parseFailure: boolean;
 }
@@ -66,10 +67,11 @@ const unreadableRecords = (held: boolean): PluginStatus | undefined => !held ? u
     tooltipLine: 'This plugin holds a record that could not be read into its document.',
   };
 
-const sourceUnreadable = (unreadable: boolean): PluginStatus | undefined => !unreadable ? undefined
+const sourceUnreadable = (unreadable: UnreadableSource | undefined): PluginStatus | undefined => unreadable === undefined ? undefined
   : {
     kind: 'sourceUnreadable', words: 'plugin source unreadable',
-    tooltipLine: 'Plugin source unreadable: its records are those of its plugin file, until decompile writes its source.',
+    tooltipLine: `Plugin source unreadable: ${unreadable.reason} Its records are those of its plugin file`
+      + (unreadable.decompileRepairs ? ', until decompile writes its source.' : '.'),
   };
 
 const changedOutside = (changed: boolean): PluginStatus | undefined => !changed ? undefined
@@ -149,8 +151,8 @@ export class PluginFacts {
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
       reads.set(p, {
-        readOnly: p.isImmutable || p.pluginSourceUnreadable, tracked: p.isTracked,
-        sourceUnreadable: p.pluginSourceUnreadable, parseFailure: p.hasParseFailure,
+        readOnly: p.isImmutable || p.pluginSourceUnreadable != null, tracked: p.isTracked,
+        sourceUnreadable: p.pluginSourceUnreadable ?? undefined, parseFailure: p.hasParseFailure,
         masterIssues: p.masterIssues ?? this.reads.get(p)?.masterIssues,
       });
       matches.set(p, p.hasMatchingRecords);
@@ -223,7 +225,7 @@ export class PluginFacts {
       failedToRead(this.loadFailures.get(address)),
       masterIssues(read?.masterIssues ?? []),
       unreadableRecords(read?.parseFailure === true),
-      sourceUnreadable(read?.sourceUnreadable === true),
+      sourceUnreadable(read?.sourceUnreadable),
       changedOutside(this.changed.has(address)),
       malformed(this.diagnosisTexts.get(address) ?? []),
     ].filter((s): s is PluginStatus => s !== undefined);

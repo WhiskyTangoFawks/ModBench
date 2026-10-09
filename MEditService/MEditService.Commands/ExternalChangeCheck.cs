@@ -47,7 +47,12 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
             .Select(plugin => new ChangedPlugin(plugin.Key.Name, plugin.Observed))]));
 
         if (sourceReads[false].Any())
-            notifications.Publish(new PluginSourceUnreadableNotification(origin, [.. sourceReads[false].Select(plugin => plugin.Name)]));
+        {
+            notifications.Publish(new PluginSourceUnreadableNotification(origin, [.. sourceReads[false]
+                .SelectMany(plugin => SourceRepository.WhySourceDoesNotRead(plugin) is { } why
+                    ? new[] { new PluginWithUnreadableSource(plugin.Name, new UnreadableSource(why.Reason, why.DecompileRepairs)) }
+                    : [])]));
+        }
     }
 
     // Bytes that cannot be read, or a last write that cannot, match nothing (ADR-0003).

@@ -116,7 +116,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
 
         var plugin = Reconciled(fixture).PluginRowOf(PluginKey) ?? throw new InvalidOperationException("Expected the plugin's row.");
 
-        Assert.Equal((tracked, pluginSourceUnreadable), (plugin.IsTracked, plugin.PluginSourceUnreadable));
+        Assert.Equal((tracked, pluginSourceUnreadable), (plugin.IsTracked, plugin.PluginSourceUnreadable is not null));
     }
 
     [Fact]
