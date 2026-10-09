@@ -82,6 +82,13 @@ internal sealed class WriteTargets(
         return null;
     }
 
+    /// <summary>The batch over the mod folder of <paramref name="plugin"/>, which is editable.</summary>
+    internal SourceBatch BatchOf(PluginAddress plugin, UnsavedBatches batches) =>
+        batches.Over(
+            loadOrder.Current.Plugin(plugin)?.Provider as PluginProvider.FromMod
+                ?? throw new InvalidOperationException($"Expected {plugin.Name}, once editable, to be provided by a mod."),
+            loadOrder.Current.GameRelease);
+
     internal readonly record struct CopyTarget(
         CopySource Source, RecordIdentity Identity, RecordCopy.Destination Destination, SourceBatch Batch, GameRelease Release,
         string Body);
@@ -95,10 +102,7 @@ internal sealed class WriteTargets(
         target = default;
 
         if (RefuseUnlessEditable(destinationPlugin, out _) is { } blocked) return blocked;
-        var batch = batches.Over(
-            loadOrder.Current.Plugin(destinationPlugin)?.Provider as PluginProvider.FromMod
-                ?? throw new InvalidOperationException("Expected an editable plugin to be provided by a mod."),
-            loadOrder.Current.GameRelease);
+        var batch = BatchOf(destinationPlugin, batches);
 
         if (!source.Identity(formKey).Holds(out var held, out var why)) return RefuseUnreadableCopySource(formKey, why);
         if (held is not { } identity)

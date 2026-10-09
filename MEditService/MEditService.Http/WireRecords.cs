@@ -131,9 +131,9 @@ internal sealed record RecordCopyRequest(
     IReadOnlyList<DocumentChange>? Documents = null);
 
 /// <summary>The changes copying one record into one destination makes to plugin source, written nowhere, as an
-/// edit's are. <see cref="NewFormKey"/> is the duplicate's, and null for an override.</summary>
+/// edit's are.</summary>
 internal sealed record RecordCopyChanges(
-    RecordAddress Record, PluginAddress Destination, string? NewFormKey, IReadOnlyList<SourceMove> Moves,
+    RecordAddress Record, PluginAddress Destination, IReadOnlyList<SourceMove> Moves,
     IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents);
 
 internal sealed record RecordCopyItem(RecordAddress Record, PluginAddress Destination);

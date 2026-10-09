@@ -9,11 +9,12 @@ import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { SourceEditing } from '../drivingLib/sourceEditing';
+import { applyAnswered } from '../drivingLib/applyAnswered';
 import { keyArgsView } from '../drivingLib/copyValue';
 import { gestureEntry, isClickedRow } from '../drivingLib/gestureEntry';
 import { rowLabelOf, rowNameOf } from '../drivingLib/argument';
 import { recordArgumentOf } from '../drivingLib/recordArgument';
-import { pluginAddressKey, pluginAddressOf } from '../wire/pluginAddress';
+import { pluginAddressOf } from '../wire/pluginAddress';
 import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from './ReferencedByTreeProvider';
 
 function recordName(formKey: string, label: string | undefined): string {
@@ -103,19 +104,11 @@ export function registerRecordLifecycleCommands(
         const refused = [...unreadable, ...answer.refused];
         const outcome = (landed: readonly RecordAddress[]) => reporter.selectionOutcome(
           `Could not delete ${refused.length} of ${records.length + unreadable.length} records.`, { landed, refused }, label);
-        let notSaved: readonly string[] = [];
-        try {
-          if (answer.applied.length > 0) notSaved = await source.applyWorkspaceChanges(answer.applied);
-        } catch (error) {
-          reporter.report('error', 'Could not delete the records.', errorMessage(error));
-          outcome([]);
-          return;
-        }
-        const landed = answer.applied.map(({ record }) => record);
-        const touched = new Map(landed.map((record) => [pluginAddressKey(pluginAddressOf(record)), pluginAddressOf(record)]));
-        for (const plugin of touched.values()) source.refreshSourceControlFor(plugin);
-        if (notSaved.length > 0) reporter.report('error', 'Could not save the deletions.', `VS Code did not save ${notSaved.join(', ')}.`);
-        outcome(landed);
+        const touched = answer.applied.map(({ record }) => record);
+        const applied = await applyAnswered(
+          source, reporter, answer.applied, touched.map(pluginAddressOf),
+          { notApplied: 'Could not delete the records.', notSaved: 'Could not save the deletions.' });
+        outcome(applied ? touched : []);
       });
       await (records.length > 0 ? write(reportOutcome, invokedFrom) : reportOutcome());
     }),
@@ -229,24 +222,18 @@ export function registerRecordCopyCommands(
       await write(() => source.oneAtATime(async () => {
         const answer = await client.getCopyChanges(records, mode, destinations, confirmed.replace, source.unsaved());
         if (isRefused(answer)) { reporter.report('error', answer.message); return; }
-        let applied = answer.applied;
-        let notSaved: readonly string[] = [];
-        try {
-          if (applied.length > 0) notSaved = await source.applyWorkspaceChanges(applied);
-        } catch (error) {
-          reporter.report('error', 'Could not copy the records.', errorMessage(error));
-          applied = [];
-        }
-        const landed = applied.map(({ record, destination }) => ({ record, destination }));
-        const touched = new Map(landed.map(({ destination }) => [pluginAddressKey(destination), destination]));
-        for (const plugin of touched.values()) source.refreshSourceControlFor(plugin);
-        if (notSaved.length > 0) reporter.report('error', 'Could not save the copies.', `VS Code did not save ${notSaved.join(', ')}.`);
+        const answered = answer.applied.map(({ record, destination }) => ({ record, destination }));
+        const attempted = copiesWritten(answered, mode).length + answer.refused.length;
+        const applied = await applyAnswered(
+          source, reporter, answer.applied, answered.map(({ destination }) => destination),
+          { notApplied: 'Could not copy the records.', notSaved: 'Could not save the copies.' });
+        const landed = applied ? answered : [];
         const written = copiesWritten(landed, mode);
         if (written.length > 0) reporter.landed(landedMessage(written, labels));
         const into = (item: CopyItem) =>
           `${addressLabel(item.record, labels)} into ${item.destination.name} (${item.destination.origin})`;
         reporter.selectionOutcome(
-          `Could not make ${answer.refused.length} of ${written.length + answer.refused.length} copies.`,
+          `Could not make ${answer.refused.length} of ${attempted} copies.`,
           { landed, refused: answer.refused }, into);
         reportUnreadable();
       }), invokedFrom);

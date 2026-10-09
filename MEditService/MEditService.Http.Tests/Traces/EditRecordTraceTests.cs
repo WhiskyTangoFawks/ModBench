@@ -259,7 +259,9 @@ public sealed class EditRecordTraceTests : HostedTests
 
         response.EnsureSuccessStatusCode();
         var landed = Assert.Single((await Body(response)).GetProperty("applied").EnumerateArray());
-        Assert.Equal("000A00:" + OtherPlugin, landed.GetProperty("newFormKey").GetString());
+        Assert.Contains(
+            landed.GetProperty("documents").EnumerateArray(),
+            document => document.GetProperty("text").GetString().Require().Contains("000A00:" + OtherPlugin, StringComparison.Ordinal));
     }
 
     private async Task<double?> HeightMax(string formKey) =>

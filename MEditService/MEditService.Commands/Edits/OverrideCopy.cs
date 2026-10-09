@@ -33,7 +33,8 @@ internal sealed class OverrideCopy
         if (_targets.ResolveCopySource(destinationPlugin, source, formKey, batches, out var copy) is { } blocked) return blocked;
         // commands.md, Doing nothing is not an error: the record's own plugin already is this copy.
         if (PluginAddress.Comparer.Equals(source.Plugin, destinationPlugin)) return RecordEditResult.Success();
-        return RecordCopy.ChangesSince(copy.Batch, copy.Batch.Changes, CopyAsOverride(copy, destinationPlugin, replace));
+        var before = copy.Batch.Changes;
+        return RecordCopy.ChangesSince(copy.Batch, before, CopyAsOverride(copy, destinationPlugin, replace));
     }
 
     private SourceAnswer<RecordEditResult> CopyAsOverride(

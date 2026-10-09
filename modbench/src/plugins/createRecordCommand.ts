@@ -7,6 +7,7 @@ import type { PluginsTreeNode } from './PluginsTreeProvider';
 import type { CreatedRecordWatch, RecordPlace } from './createdRecordSelection';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { SourceEditing } from '../drivingLib/sourceEditing';
+import { applyAnswered } from '../drivingLib/applyAnswered';
 import { CREATE_ROW_KINDS, isContainerRow } from './gestureEntry';
 import { CELL_RECORD_TYPE } from './RecordBrowser';
 import { pluginAddressOf } from '../wire/pluginAddress';
@@ -123,16 +124,11 @@ export function registerRecordCreateCommand(
           deps.reporter.report('error', changes.message);
           return;
         }
-        let notSaved: readonly string[];
-        try {
-          notSaved = await deps.source.applyWorkspaceChanges([changes]);
-        } catch (error) {
-          deps.reporter.report('error', `Could not create the ${typeName} record.`, errorMessage(error));
-          return;
-        }
+        const applied = await applyAnswered(
+          deps.source, deps.reporter, [changes], [plugin],
+          { notApplied: `Could not create the ${typeName} record.`, notSaved: `Could not save ${changes.formKey}.` });
+        if (!applied) return;
         answer.formKey = changes.formKey;
-        deps.source.refreshSourceControlFor(plugin);
-        if (notSaved.length > 0) deps.reporter.report('error', `Could not save ${changes.formKey}.`, `VS Code did not save ${notSaved.join(', ')}.`);
         deps.reporter.landed(`Created ${changes.formKey}.`);
       }));
     } finally {

@@ -40,6 +40,7 @@ import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 
 beforeEach(() => {
+  reads.length = 0;
   handlers.clear();
   vi.clearAllMocks();
 });
@@ -68,6 +69,8 @@ function recordingWrite(): { write: RecordWrite; writing: string[]; viewsAskedFo
   };
 }
 
+const reads: string[] = [];
+
 const UNSAVED = { path: '/mods/ModA/plugin-source/MyPatch.esp/Cell.json', text: '{}' };
 const changes = (record: RecordAddress) => ({ record, moves: [], deletions: [], documents: [] });
 
@@ -77,7 +80,7 @@ describe('registerRecordLifecycleCommands', () => {
     const ask = scriptedDialog(...answers);
     const { write, writing, viewsAskedFor } = recordingWrite();
     const serially = vi.fn();
-    const source = { unsaved: () => [UNSAVED], applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
+    const source = { unsaved: () => { reads.push(serially.mock.calls.length > 0 ? 'inside the queue' : 'outside the queue'); return [UNSAVED]; }, applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
     registerRecordLifecycleCommands(client, reporter, ask, selections, write, source);
     return { reporter, ask, writing, viewsAskedFor, source };
   }
@@ -336,7 +339,7 @@ describe('registerRecordLifecycleCommands', () => {
       ]);
     });
 
-    it('reports a workspace edit VS Code did not make, lands nothing, and still names the records mEdit refused', async () => {
+    it('reports a workspace edit VS Code did not make as one that may have partly landed, lands none, refreshes Source Control, and still names the records mEdit refused', async () => {
       const client = new InMemoryMEditClient();
       const refusal = { item: UNTRACKED, reason: 'Other.esp is not tracked, so it is read-only.' };
       client.setCommandResult('getDeleteChanges', { applied: [changes(FIRST)], refused: [refusal] });
@@ -346,11 +349,11 @@ describe('registerRecordLifecycleCommands', () => {
       await deleteRecords(SECOND_NODE, [RECORD_NODE, UNTRACKED_NODE]);
 
       expect(reporter.reports[0]).toEqual(
-        { severity: 'error', message: 'Could not delete the records.', detail: 'VS Code did not apply the changes.' });
+        { severity: 'error', message: 'Could not delete the records.', detail: "VS Code did not apply the changes. VS Code stops at the first change it cannot make, so some changes may have landed." });
       expect(reporter.selectionOutcomeCalls).toEqual([
         { message: 'Could not delete 1 of 2 records.', outcome: { landed: [], refused: [refusal] } },
       ]);
-      expect(source.refreshSourceControlFor).not.toHaveBeenCalled();
+      expect(source.refreshSourceControlFor).toHaveBeenCalledWith({ name: 'MyPatch.esp', origin: 'ModA' });
     });
 
     it('reports the files VS Code did not save as a part that failed, with the records landed and Source Control refreshed', async () => {
@@ -376,6 +379,7 @@ describe('registerRecordLifecycleCommands', () => {
       await deleteRecords(SECOND_NODE);
 
       expect(source.serially).toHaveBeenCalledOnce();
+      expect(reads).toEqual(['inside the queue']);
     });
 
     it('runs the delete inside the write, which ends when the call is answered', async () => {
@@ -438,15 +442,15 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   afterEach(() => { viewSelection = []; });
   beforeEach(function dropUnansweredPicksSoTheyDoNotAnswerTheNextTest() { showQuickPick.mockReset(); });
 
-  const copyChanges = (record: RecordAddress, destination: { name: string; origin: string }, newFormKey?: string) =>
-    ({ record, destination, newFormKey, moves: [], deletions: [], documents: [] });
+  const copyChanges = (record: RecordAddress, destination: { name: string; origin: string }) =>
+    ({ record, destination, moves: [], deletions: [], documents: [] });
 
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
     const { write, writing, viewsAskedFor } = recordingWrite();
     const serially = vi.fn();
-    const source = { unsaved: () => [UNSAVED], applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
+    const source = { unsaved: () => { reads.push(serially.mock.calls.length > 0 ? 'inside the queue' : 'outside the queue'); return [UNSAVED]; }, applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
     registerRecordCopyCommands(client, reporter, ask, selections, write, source);
     return { reporter, ask, writing, viewsAskedFor, source };
   }
@@ -731,7 +735,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     const { writing } = invoke(client);
     client.setCommandHandler('getCopyChanges', () => {
       writing.push('copy');
-      return Promise.resolve({ applied: [copyChanges(SOURCE, PATCH, '000900:Patch.esp')], refused: [] });
+      return Promise.resolve({ applied: [copyChanges(SOURCE, PATCH)], refused: [] });
     });
 
     await copy(RECORD_NODE);
@@ -802,9 +806,10 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
       const { source } = await copyAnswered([]);
 
       expect(source.serially).toHaveBeenCalledOnce();
+      expect(reads).toEqual(['inside the queue']);
     });
 
-    it('reports a workspace edit VS Code did not make, lands nothing, and still names the items mEdit refused', async () => {
+    it('reports a workspace edit VS Code did not make as one that may have partly landed, lands none, refreshes Source Control, and counts the copies asked', async () => {
       const client = new InMemoryMEditClient();
       destinations(client);
       const refusal = { item: { record: SOURCE, destination: OTHER }, reason: 'Other.esp is not tracked' };
@@ -816,10 +821,10 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
       await copy(RECORD_NODE);
 
       expect(reporter.reports[0]).toEqual(
-        { severity: 'error', message: 'Could not copy the records.', detail: 'VS Code did not apply the changes.' });
+        { severity: 'error', message: 'Could not copy the records.', detail: "VS Code did not apply the changes. VS Code stops at the first change it cannot make, so some changes may have landed." });
       expect(reporter.landings).toEqual([]);
-      expect(reporter.reports.map((r) => r.message)).toEqual(['Could not copy the records.', 'Could not make 1 of 1 copies.']);
-      expect(source.refreshSourceControlFor).not.toHaveBeenCalled();
+      expect(reporter.reports.map((r) => r.message)).toEqual(['Could not copy the records.', 'Could not make 1 of 2 copies.']);
+      expect(source.refreshSourceControlFor).toHaveBeenCalledWith(PATCH);
     });
 
     it('reports the files VS Code did not save as a part that failed, with the copies landed and Source Control refreshed', async () => {

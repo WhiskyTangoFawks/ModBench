@@ -47,12 +47,10 @@ public sealed class DeleteRecordChangesHandler
         PluginAddress plugin, string formKey, UnsavedBatches batches)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
-        var (release, identity, _) = target;
+        var (_, identity, _) = target;
         if (RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
 
-        if (_loadOrder.Current.Plugin(plugin)?.Provider is not PluginProvider.FromMod mod)
-            throw new InvalidOperationException($"Expected {plugin.Name}, once editable, to be provided by a mod.");
-        var batch = batches.Over(mod, release);
+        var batch = _targets.BatchOf(plugin, batches);
         var repository = batch.Repository;
 
         // Read before the removal, so what the log names is where it took from.

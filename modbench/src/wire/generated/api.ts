@@ -1087,7 +1087,6 @@ export interface components {
         RecordCopyChanges: {
             record: components["schemas"]["RecordAddress"];
             destination: components["schemas"]["PluginAddress"];
-            newFormKey?: string | null;
             moves: components["schemas"]["SourceMove"][];
             deletions: string[];
             documents: components["schemas"]["DocumentChange"][];

@@ -326,7 +326,7 @@ describe('HttpMEditClient — copying records answers the changes per record and
   const unsaved = [{ path: '/mods/PatchMod/plugin-source/Patch.esp/Header.json', text: '{"h":1}' }];
 
   it('sends the records, the mode, the destinations, the replace Option and the unsaved documents as one call, and reads each item', async () => {
-    const copied = { record: npc, destination: patch, newFormKey: null, moves: [], deletions: [], documents: unsaved };
+    const copied = { record: npc, destination: patch, moves: [], deletions: [], documents: unsaved };
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
       applied: [copied],
       refused: [{ item: { record: npc, destination: other }, refusal: 'DestinationHoldsRecord', message: 'Other.esp already holds it.' }],
@@ -344,15 +344,6 @@ describe('HttpMEditClient — copying records answers the changes per record and
     expect(await request?.json()).toEqual({
       records: [npc], mode: 'Override', destinations: [patch, other], replace: true, documents: unsaved,
     });
-  });
-
-  it('names the FormKey mEdit minted for a new record\'s copy', async () => {
-    const minted = { record: npc, destination: patch, newFormKey: '000900:Patch.esp', moves: [], deletions: [], documents: [] };
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { applied: [minted], refused: [] })));
-
-    const outcome = await makeClient(fetch).getCopyChanges([npc], 'New', [patch], false, []);
-
-    expect(outcome).toEqual({ applied: [minted], refused: [] });
   });
 
   it('asks the record\'s holders by plugin and origin', async () => {

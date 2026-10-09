@@ -25,7 +25,8 @@ internal sealed class NewRecordCopy
         CopySource source, string formKey, PluginAddress destinationPlugin, UnsavedBatches batches)
     {
         if (_targets.ResolveCopySource(destinationPlugin, source, formKey, batches, out var copy) is { } blocked) return blocked;
-        return RecordCopy.ChangesSince(copy.Batch, copy.Batch.Changes, CopyAsNewRecord(copy, destinationPlugin));
+        var before = copy.Batch.Changes;
+        return RecordCopy.ChangesSince(copy.Batch, before, CopyAsNewRecord(copy, destinationPlugin));
     }
 
     private SourceAnswer<RecordEditResult> CopyAsNewRecord(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin)

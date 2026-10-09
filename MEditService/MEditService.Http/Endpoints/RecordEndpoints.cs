@@ -292,7 +292,7 @@ internal static class RecordEndpoints
                     [.. unsaved.Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))]),
                 WriteEndpointMapping.Refusal,
                 landed => new RecordCopyChanges(
-                    Addressed(landed.Item.Record), landed.Item.Destination, landed.Outcome.Outcome.NewFormKey,
+                    Addressed(landed.Item.Record), landed.Item.Destination,
                     [.. landed.Outcome.Changes.Moves.Select(move => new SourceMove(move.From, move.To))],
                     landed.Outcome.Changes.Deletions,
                     [.. landed.Outcome.Changes.Documents.Select(document => new DocumentChange(document.Path, document.Text))]),
