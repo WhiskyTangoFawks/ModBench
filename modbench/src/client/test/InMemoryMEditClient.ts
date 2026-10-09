@@ -49,13 +49,13 @@ type Scripted<T> = { value: T };
 type ScriptedAnswers = { [K in QueryMethod]: Scripted<Answer<K>>[] };
 type ScriptedResults = { [K in CommandMethod]: Scripted<Answer<K>>[] };
 
+function failed(failure: Error | ReadFailed): Promise<unknown> {
+  return isReadFailed(failure) ? Promise.resolve(failure) : Promise.reject(failure);
+}
+
 /** The in-memory adapter (target-architecture.d2, mEdit client): a test scripts each answer by
  *  method name, drives notifications with `emit`, and reads every recorded call back. An
  *  unscripted query rejects, so a forgotten script fails loudly, not silently empty. */
-function failed(failure: Error | ReadFailed): Promise<never> {
-  return isReadFailed(failure) ? Promise.resolve(failure as never) : Promise.reject(failure);
-}
-
 export class InMemoryMEditClient implements MEditClient {
   readonly calls: RecordedCall[] = [];
 
@@ -250,18 +250,19 @@ export class InMemoryMEditClient implements MEditClient {
     this.calls.push({ method, args });
   }
 
-  private query<K extends QueryMethod>(method: K, args: unknown[]): Promise<Answer<K>> {
+  private query<K extends QueryMethod>(method: K, args: unknown[]): Promise<Answer<K>>;
+  private query(method: QueryMethod, args: unknown[]): Promise<unknown> {
     this.record(method, args);
     const step = this.queryQueues[method]?.shift();
     if (step?.kind === 'failure') return failed(step.error);
-    if (step) return Promise.resolve(step.value as never);
+    if (step) return Promise.resolve(step.value);
     const failure = this.queryFailures.get(method);
     if (failure) return failed(failure);
     const scripted = this.queryAnswers[method]?.[0];
     if (!scripted) {
       return Promise.reject(new Error(`InMemoryMEditClient: no scripted answer for query "${method}"`));
     }
-    return Promise.resolve(scripted.value as never);
+    return Promise.resolve(scripted.value);
   }
 
   private command<K extends CommandMethod>(

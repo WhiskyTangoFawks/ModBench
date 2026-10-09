@@ -469,9 +469,8 @@ class HttpMEditClient implements MEditClient {
 
   // ── reads ────────────────────────────────────────────────────────────────
 
-  // A read that does not land answers a ReadFailed, never an empty list, so the tree renders its error
-  // row (common.md, States, story 2). A 200 with an absent body is a legitimate empty result where
-  // `answer` says so. The transport's verb, path and status go to the log alone (ADR-0019).
+  // A read that does not land answers a ReadFailed, never an empty list (common.md, States, story 2).
+  // The transport's verb, path and status go to the log alone (ADR-0019).
   private async read<D, A>(
     what: string,
     call: (signal: AbortSignal) => Promise<{ data?: D; error?: unknown; response: Response }>,

@@ -966,7 +966,7 @@ describe('HttpMEditClient — the record types the game can create', () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
     const client = makeClient(fetch);
 
-    await expect(client.getCreatableRecordTypes()).resolves.toEqual({ failed: 'refused', refusal: expect.stringMatching(/No load order has been loaded/) });
+    await expect(client.getCreatableRecordTypes()).resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
   });
 });
 
@@ -988,7 +988,7 @@ describe('HttpMEditClient — the record types a container record can hold', () 
     const client = makeClient(fetch);
 
     await expect(client.getChildRecordTypes({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
-      .resolves.toEqual({ failed: 'refused', refusal: expect.stringMatching(/No load order has been loaded/) });
+      .resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
   });
 });
 
@@ -1018,7 +1018,7 @@ describe('HttpMEditClient — a copy rendered as its document', () => {
     const client = makeClient(fetch);
 
     await expect(client.getRenderedDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
-      .resolves.toEqual({ failed: 'refused', refusal: expect.stringMatching(/No load order has been loaded/) });
+      .resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
   });
 });
 
@@ -1046,7 +1046,7 @@ describe('HttpMEditClient — the document of a copy of a record', () => {
     const client = makeClient(fetch);
 
     await expect(client.getCopyDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
-      .resolves.toEqual({ failed: 'refused', refusal: expect.stringMatching(/No load order has been loaded/) });
+      .resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
   });
 });
 
@@ -1093,7 +1093,7 @@ describe('HttpMEditClient — the extensions a new plugin may take', () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
     const client = makeClient(fetch);
 
-    await expect(client.getCreatablePluginExtensions()).resolves.toEqual({ failed: 'refused', refusal: expect.stringMatching(/No load order has been loaded/) });
+    await expect(client.getCreatablePluginExtensions()).resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
   });
 });
 
@@ -1115,7 +1115,7 @@ describe('HttpMEditClient — the plugins that list a plugin as a master', () =>
     const client = makeClient(vi.fn((_req: Request) =>
       Promise.resolve(jsonResponse(503, { detail: 'mEdit has not finished indexing the plugins.' }))));
 
-    await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).resolves.toEqual({ failed: 'refused', refusal: expect.stringMatching(/not finished indexing/) });
+    await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).resolves.toEqual({ failed: 'refused', refusal: 'mEdit has not finished indexing the plugins.' });
   });
 });
 
@@ -1145,7 +1145,7 @@ describe('HttpMEditClient — the problems in each tracked plugin\'s source', ()
     const client = makeClient(vi.fn((_req: Request) =>
       Promise.resolve(jsonResponse(503, { detail: 'mEdit has not finished indexing the plugins.' }))));
 
-    await expect(client.getPluginProblems()).resolves.toEqual({ failed: 'refused', refusal: expect.stringMatching(/not finished indexing/) });
+    await expect(client.getPluginProblems()).resolves.toEqual({ failed: 'refused', refusal: 'mEdit has not finished indexing the plugins.' });
   });
 });
 

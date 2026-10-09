@@ -5,7 +5,7 @@ import { dropIndexIn, type Drop } from './dropIndex';
 import type { CommandResult, SelectionResult } from '../coreLib/commandResult';
 export type { SelectionResult };
 import { refuse } from '../ports/refuse';
-import type { MEditClient, PluginAddress, PluginMetadata } from '../client';
+import type { MEditClient, PluginAddress } from '../client';
 import { moveOrderRefusal, type PluginOrderFactsOf } from './pluginOrder';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type {
