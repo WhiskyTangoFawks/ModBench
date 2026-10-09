@@ -94,6 +94,18 @@ function restrictedImports({ vscode, packages, path, client = false, inAdapter =
     }];
 }
 
+// A view fires the commands the root bound to the Instance adapter; it takes only types from the core box.
+/** @type {Record<string, string[]>} */
+const BOUND_COMMAND_BOXES = { mods: ['modlist'] };
+/** @param {string} view */
+const boundCommandImports = (view) => ['error', {
+    patterns: BOUND_COMMAND_BOXES[view].map((core) => ({
+        group: [`**/${core}/${core}`],
+        allowTypeImports: true,
+        message: 'The root binds the core box\'s commands to the Instance adapter; the view receives them.',
+    })),
+}];
+
 const SYNTAX = {
     message: MESSAGE_API_SITES.map((selector) => ({ selector, message: SURFACING_GOES_THROUGH_THE_REPORTER })),
     watcher: ['CallExpression[callee.name=/^create\\w*Watcher$/]', 'CallExpression[callee.property.name=/^create\\w*Watcher$/]']
@@ -193,12 +205,16 @@ export default defineConfig(
             }),
         },
     })),
+    ...Object.keys(BOUND_COMMAND_BOXES).map((view) => ({
+        files: [`src/${view}/**/*.ts`],
+        ignores: NOT_PRODUCTION,
+        rules: { '@typescript-eslint/no-restricted-imports': boundCommandImports(view) },
+    })),
     // No test reads a plugin's bytes either (ADR-0004).
     {
         files: ['src/**/*.test.ts', 'src/test/**/*.ts', 'src/*/test/**/*.ts'],
         rules: { 'no-restricted-imports': ['error', { paths: BYTE_READ_PATHS }] },
     },
-    // The wire's type-only readers of the generated schema.
     ...['messages', 'pluginAddress', 'wireContractChecks'].map((name) => ({
         files: [`src/wire/${name}.ts`],
         rules: { 'no-restricted-imports': restrictedImports({ vscode: true, packages: true, path: false, clientSeam: false }) },
@@ -243,7 +259,6 @@ export default defineConfig(
         },
     },
 
-    // The reporter and the dialog own a message API; tests swap it out to observe a toast.
     {
         files: ['webview/src/**/*.{ts,tsx}'],
         ignores: ['webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**', 'webview/src/nativeBridge.ts'],

@@ -40,7 +40,7 @@ import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolb
 import { openedFolder, whenOpened } from './drivingLib/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { pluginSyncOver } from './pluginsCommands/plugins';
-import { modSyncOver } from './modlist/modlist';
+import { modSyncOver, modlistCommands } from './modlist/modlist';
 import { warnIfFomod } from './install/fomodWarning';
 import { refresh } from './instanceCommands/loadOrder';
 import { editingFlow } from './instanceCommands/editing';
@@ -130,7 +130,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
   const mods = own(createModsView({
-    instance, access, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
+    instance, access, commands: modlistCommands(adapter), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
     downloadInstall: {
       reporter: reporterFor('downloadList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),

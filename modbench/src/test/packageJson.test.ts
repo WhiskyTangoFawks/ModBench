@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import * as path from 'path';
 import { present } from '../ports/present';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, uriFile, uriFrom,
 } from './vscodeMock';
 import { FOLDER_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 
@@ -16,11 +16,13 @@ const placed = (entries: readonly MenuEntry[]): [string, string][] =>
     .map((e) => [e.command, groupOf(e)]);
 
 vi.mock('vscode', () => ({
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter,
   Uri: { file: uriFile, from: uriFrom },
 }));
 
-import { ModNode, NO_MODS_MESSAGE, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
+import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
+import { FakeInstance } from './mo2/fakeInstance';
+import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { CELL_VALUE_SETTING } from '../mods/conflictTableEditor';
 import { CONFLICT_CELL_VALUES } from '../wire/conflictTable';
 import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
@@ -1294,8 +1296,9 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     const overflowTitles = inModsView('view/title').filter((e) => groupOf(e) !== 'navigation')
       .map((e) => present(pkg.contributes.commands.find((c) => c.command === e.command), e.command).title);
     expect(overflowTitles.length).toBeGreaterThan(0);
-    for (const title of overflowTitles) expect(NO_MODS_MESSAGE).toContain(title);
-    expect(NO_MODS_MESSAGE).toContain('overflow');
+    const shown = present(new ModListProvider({ instance: new FakeInstance(instanceValueFixture({ mods: [] })) }).viewMessage(), 'the empty list\'s message');
+    for (const title of overflowTitles) expect(shown).toContain(title);
+    expect(shown).toContain('overflow');
   });
 });
 

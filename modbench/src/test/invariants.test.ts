@@ -15,7 +15,10 @@ describe('every MO2 text-file write command has a corpus test', () => {
   const corpus = tsFiles(SRC, { exclude: ['generated'] }).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => readFileSync(f, 'utf8')).join('\n');
 
   it('finds the write verbs', () => {
-    expect(writeVerbs).toContain('setModsEnabled');
+    for (const verb of [
+      'setModsEnabled', 'moveMods', 'moveSeparators', 'markFiles', 'insertSeparator', 'renameSeparator',
+      'deleteSeparators', 'uninstallMods', 'createEmptyMod', 'renameMod',
+    ]) expect(writeVerbs).toContain(verb);
     expect(writeVerbs).toContain('switchProfile');
     expect(writeVerbs).toContain('excludeDownloads');
     expect(writeVerbs).toContain('modSyncOver');
@@ -46,9 +49,11 @@ describe('only the Instance adapter touches a downloaded file\'s .meta', () => {
 });
 
 function commandVerbs(source: string): string[] {
-  return [...source.matchAll(/^export (?:async )?function (\w+)([\s\S]*?)\{\n/gm)]
-    .filter((m) => /applied|Result[<>]|SelectionOutcome<|Run\s*$/.test(present(m[2], "the function body between signature and opening brace")))
-    .map((m) => present(m[1], "the exported function's name"));
+  const bound = new Set([...source.matchAll(/TailOf<typeof (\w+)>/g)].map((m) => m[1]));
+  return [...source.matchAll(/^(export )?(?:async )?function (\w+)([\s\S]*?)\{\n/gm)]
+    .filter((m) => m[1] !== undefined || bound.has(m[2]))
+    .filter((m) => /applied|Result[<>]|SelectionOutcome<|Run\s*$/.test(present(m[3], "the function body between signature and opening brace")))
+    .map((m) => present(m[2], "the function's name"));
 }
 
 describe('the createTreeView sites', () => {
