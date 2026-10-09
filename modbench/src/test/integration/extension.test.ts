@@ -1053,6 +1053,18 @@ describe('a child record of a tracked plugin', () => {
       assert.strictEqual(readFileSync(cell, 'utf8'), saved);
     });
 
+    it('refuses to save its unsaved text over a change another program made to the file, with no container\'s document open', async () => {
+      await openRecord(childCopy);
+      const child = await shownDocumentOf(CHILD_FORM_KEY);
+      await replace(child, cellText('UnsavedInChild'));
+      writeFileSync(cell, cellText('WrittenByAnotherProgram', { Longer: true }));
+
+      const saved = await child.save();
+
+      assert.deepStrictEqual([saved, readFileSync(cell, 'utf8'), child.isDirty], [false, cellText('WrittenByAnotherProgram', { Longer: true }), true]);
+      await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+    });
+
     it('opens on its container\'s unsaved text', async () => {
       const container = await containerDocument();
       await replace(container, cellText('BeforeChildOpened'));

@@ -21,6 +21,8 @@ const h = vi.hoisted(() => {
     textDocuments: [] as TestDocument[],
     files: new Map<string, Uint8Array>(),
     applyEdit: (_edit: { replacements: Replacement[] }) => Promise.resolve(true),
+    disk: { mtime: 2, size: 3 },
+    saved: [] as ((document: TestDocument) => void)[],
   };
 });
 
@@ -42,8 +44,10 @@ vi.mock('vscode', () => ({
     },
     get textDocuments() { return h.textDocuments; },
     applyEdit: (edit: { replacements: Replacement[] }) => h.applyEdit(edit),
+    onDidSaveTextDocument: (listener: (document: TestDocument) => void) => { h.saved.push(listener); return { dispose: () => undefined }; },
+    onDidCloseTextDocument: () => ({ dispose: () => undefined }),
     fs: {
-      stat: () => Promise.resolve({ type: 1, ctime: 1, mtime: 2, size: 3 }),
+      stat: () => Promise.resolve({ type: 1, ctime: 1, ...h.disk }),
       readFile: (uri: TestUri) => Promise.resolve(h.files.get(`${uri.scheme}:${uri.path}?${uri.query}`)),
       writeFile: (uri: TestUri, content: Uint8Array) => {
         h.files.set(`${uri.scheme}:${uri.path}?${uri.query}`, content);
@@ -57,7 +61,7 @@ import { ChildRecordDocuments } from '../childRecordDocument';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 interface FileSystem {
-  stat(uri: unknown): Promise<unknown>;
+  stat(uri: unknown): Promise<{ size: number }>;
   readFile(uri: unknown): Promise<Uint8Array>;
   writeFile(uri: unknown, content: Uint8Array, options: unknown): Promise<void>;
   onDidChangeFile(listener: (events: { type: number; uri: unknown }[]) => void): unknown;
@@ -86,6 +90,8 @@ beforeEach(() => {
   h.textDocuments.length = 0;
   h.files.clear();
   h.applyEdit = () => Promise.resolve(true);
+  h.disk = { mtime: 2, size: 3 };
+  h.saved.length = 0;
 });
 
 describe('a child record\'s document', () => {
@@ -139,10 +145,21 @@ describe('a child record\'s document', () => {
     expect([text, save.mock.calls.length, h.files.size]).toEqual(['{ "EditorID": "Saved" }', 1, 0]);
   });
 
-  it('states the file\'s stat with no size, so that no save it follows moves both its mtime and its size', async () => {
+  it('states the file\'s stat, and the size it read once Modbench wrote the file, as it does on a save', async () => {
     const { files } = childDocuments();
+    h.textDocuments.push({ uri: PLACED_URI });
+    const sizeStated = async () => (await files.stat(PLACED_URI)).size;
+    expect(await sizeStated()).toBe(3);
 
-    expect(await files.stat(PLACED_URI)).toEqual({ type: 1, ctime: 1, mtime: 2, size: 0 });
+    h.disk = { mtime: 5, size: 9 };
+    await files.writeFile(PLACED_URI, new TextEncoder().encode('written'), { create: true, overwrite: true });
+    const afterOwnWrite = await sizeStated();
+    h.disk = { mtime: 6, size: 12 };
+    for (const listener of h.saved) listener({ uri: h.uri('file', CELL_FILE) });
+    const afterOwnSave = await sizeStated();
+    h.disk = { mtime: 7, size: 20 };
+
+    expect([afterOwnWrite, afterOwnSave, await sizeStated()]).toEqual([3, 3, 20]);
   });
 });
 
