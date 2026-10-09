@@ -9,7 +9,7 @@ import type { PluginAddress } from '../wire/pluginAddress';
 
 /** How the gesture reaches plugin source in VS Code: the dirty documents mEdit reads in place of their files,
  *  and the changes applied as one workspace edit and saved. Resolves the files not saved. */
-export interface RenameSourceEditing {
+interface RenameSourceEditing {
   readonly unsaved: () => readonly UnsavedDocument[];
   readonly apply: (changes: SourceChanges) => Promise<readonly string[]>;
 }
