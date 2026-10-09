@@ -43,7 +43,7 @@ internal static class DocumentText
         // FormKey the index files it under.
         SourceRepositoryLayout.IsHeaderDocumentPath(filePath, pluginFileName)
             ? SourceRepositoryLayout.HeaderFormKeyOf(pluginFileName)
-            : RootStringIn(text, "FormKey");
+            : RootStringIn(text, RecordMembers.FormKey);
 
     // A member of the document's own root object, as a string. Malformed text declares nothing.
     internal static string? RootStringIn(string text, string member)

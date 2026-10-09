@@ -240,12 +240,40 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// an embedded child alike — what a derived EditorID is checked against to stay unique in the
     /// destination.</summary>
     public SourceAnswer<IReadOnlySet<string>> EditorIdsHeld(PluginAddress plugin) =>
-        SourceFailure.Answer<IReadOnlySet<string>>(() => DocumentTokens.EditorIdsOf(Locator.ReadAll(Spelled(plugin))));
+        SourceFailure.Answer<IReadOnlySet<string>>(() => EditorIdsOf(Locator.ReadAll(Spelled(plugin))));
 
     /// <summary>Every FormKey the plugin's working tree uses: a record's own, an embedded child's and the
     /// header's synthetic one.</summary>
     public SourceAnswer<IReadOnlySet<string>> FormKeysUsed(PluginAddress plugin) =>
-        SourceFailure.Answer<IReadOnlySet<string>>(() => DocumentTokens.FormKeysOf(Locator.ReadAll(Spelled(plugin)), _release));
+        SourceFailure.Answer<IReadOnlySet<string>>(() => FormKeysOf(Locator.ReadAll(Spelled(plugin))));
+
+    private HashSet<string> FormKeysOf(IEnumerable<SourceDocument> documents)
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var document in documents)
+        {
+            keys.Add(document.FormKey);
+
+            // A child inlined in this document is a record of its own with a FormKey of its own, so its
+            // ID is as taken as any other.
+            foreach (var (formKey, _, inAnEmbedSlot) in DocumentTokens.FormKeysIn(Encoding.UTF8.GetBytes(document.Body), _release))
+            {
+                if (inAnEmbedSlot) keys.Add(formKey);
+            }
+        }
+        return keys;
+    }
+
+    private static HashSet<string> EditorIdsOf(IEnumerable<SourceDocument> documents)
+    {
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var document in documents)
+        {
+            foreach (var editorId in DocumentTokens.EditorIdsIn(Encoding.UTF8.GetBytes(document.Body)))
+                ids.Add(editorId ?? throw new InvalidOperationException($"{document.FormKey}'s document reached EditorIdsOf unread."));
+        }
+        return ids;
+    }
 
     /// <summary>What <paramref name="read"/> makes of the plugin's tree, streamed as each record's own
     /// document. One the stream cannot read stops <paramref name="read"/>, and the answer is why.</summary>

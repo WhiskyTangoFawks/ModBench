@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;

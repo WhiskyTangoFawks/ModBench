@@ -1,19 +1,22 @@
 using System.Text;
 using System.Text.Json;
-using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
-namespace MEditService.SourceAdapter;
+namespace MEditService.Codec.Serialization;
+
+/// <summary>A FormKey a document's bytes carry, and where: at the document's own root, or inside the
+/// slot of an embedded child.</summary>
+public readonly record struct DocumentFormKey(string FormKey, bool AtRoot, bool InAnEmbedSlot);
 
 /// <summary>The FormKeys and EditorIDs a document's bytes carry, from one token pass.</summary>
-internal static class DocumentTokens
+public static class DocumentTokens
 {
     // The codec writes a link as a bare string and a child as an object with a FormKey of its
     // own, so the slot a key sits under tells the two apart. Malformed text yields what it read.
-    internal static List<(string FormKey, bool AtRoot, bool InAnEmbedSlot)> FormKeysIn(byte[] bytes, GameRelease release)
+    public static List<DocumentFormKey> FormKeysIn(byte[] bytes, GameRelease release)
     {
         var embeddedSlotNames = RecordTypes.For(release).EmbeddedSlotNames;
-        var found = new List<(string, bool, bool)>();
+        var found = new List<DocumentFormKey>();
         var reader = new Utf8JsonReader(bytes);
 
         // The member that opened the container at each depth; null where an array element or the
@@ -39,7 +42,7 @@ internal static class DocumentTokens
                     case JsonTokenType.String when atFormKey:
                         var formKey = reader.GetString()
                             ?? throw new InvalidOperationException("Expected a JSON string value to read a non-null string.");
-                        found.Add((formKey, keyDepth == 1, UnderAnEmbedSlot(openedBy, keyDepth, embeddedSlotNames)));
+                        found.Add(new DocumentFormKey(formKey, keyDepth == 1, UnderAnEmbedSlot(openedBy, keyDepth, embeddedSlotNames)));
                         break;
                 }
                 atFormKey = false;
@@ -70,12 +73,12 @@ internal static class DocumentTokens
         return false;
     }
 
-    private static ReadOnlySpan<byte> FormKeyPropertyName => "FormKey"u8;
+    private static readonly byte[] FormKeyPropertyName = Encoding.UTF8.GetBytes(RecordMembers.FormKey);
 
     // Every EditorID member's value the document's bytes carry, at its own root or an embedded
     // child's, null for one that is no string: RecordMembers.EditorId is the one property name every
     // record's document uses for it.
-    internal static List<string?> EditorIdsIn(byte[] bytes)
+    public static List<string?> EditorIdsIn(byte[] bytes)
     {
         var found = new List<string?>();
         var reader = new Utf8JsonReader(bytes);
@@ -108,32 +111,4 @@ internal static class DocumentTokens
     }
 
     private static readonly byte[] EditorIdPropertyName = Encoding.UTF8.GetBytes(RecordMembers.EditorId);
-
-    internal static HashSet<string> FormKeysOf(IEnumerable<SourceDocument> documents, GameRelease release)
-    {
-        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var document in documents)
-        {
-            keys.Add(document.FormKey);
-
-            // A child inlined in this document is a record of its own with a FormKey of its own, so its
-            // ID is as taken as any other.
-            foreach (var (formKey, _, inAnEmbedSlot) in FormKeysIn(Encoding.UTF8.GetBytes(document.Body), release))
-            {
-                if (inAnEmbedSlot) keys.Add(formKey);
-            }
-        }
-        return keys;
-    }
-
-    internal static HashSet<string> EditorIdsOf(IEnumerable<SourceDocument> documents)
-    {
-        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var document in documents)
-        {
-            foreach (var editorId in EditorIdsIn(Encoding.UTF8.GetBytes(document.Body)))
-                ids.Add(editorId ?? throw new InvalidOperationException($"{document.FormKey}'s document reached EditorIdsOf unread."));
-        }
-        return ids;
-    }
 }
