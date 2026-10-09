@@ -41,7 +41,7 @@ class NotificationListenerRegistry {
         break;
       case 'plugin-source-unreadable':
         this.deliver('plugin-source-unreadable', {
-          plugins: (event.pluginWithUnreadableSources ?? []).map(({ name, reason, decompileRepairs }) => ({ name, origin, reason, decompileRepairs })),
+          plugins: (event.pluginWithUnreadableSources ?? []).map(({ name, source }) => ({ name, origin, ...source })),
         });
         break;
       case 'record-filter-cleared':

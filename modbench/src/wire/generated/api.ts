@@ -1053,8 +1053,7 @@ export interface components {
         };
         PluginWithUnreadableSource: {
             name: string;
-            reason: string;
-            decompileRepairs: boolean;
+            source: components["schemas"]["UnreadableSource"];
         };
         ProblemDetails: {
             type?: string | null;

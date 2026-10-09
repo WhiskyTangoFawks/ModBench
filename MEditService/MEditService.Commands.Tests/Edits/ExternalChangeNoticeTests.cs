@@ -124,8 +124,8 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         Assert.Equal(Origin, unreadable.Origin);
         var plugin = Assert.Single(unreadable.Plugins);
         Assert.Equal("SourceUnreadable.esp", plugin.Name);
-        Assert.Contains("SourceUnreadable.esp", plugin.Reason, StringComparison.Ordinal);
-        Assert.True(plugin.DecompileRepairs);
+        Assert.Contains("SourceUnreadable.esp", plugin.Source.Reason, StringComparison.Ordinal);
+        Assert.True(plugin.Source.DecompileRepairs);
     }
 
     [Fact]

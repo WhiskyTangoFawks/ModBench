@@ -1,4 +1,4 @@
-using MEditService.Index.Queries;
+using MEditService.Ports;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
@@ -78,8 +78,8 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
 
     private static UnreadableSource? WhyStopped(ReadOutcome outcome)
     {
-        if (outcome.TreeStopped is { } failure) return UnreadableSource.Of(failure);
-        return outcome.StoppedBy is { } error ? UnreadableSource.Of(error) : null;
+        if (outcome.TreeStopped is { } failure) return UnreadableSources.Of(failure);
+        return outcome.StoppedBy is { } error ? UnreadableSources.Of(error) : null;
     }
 
     public void Forget(PluginAddress key)

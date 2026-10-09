@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.SourceAdapter;
+using MEditService.Ports;
 
 namespace MEditService.Index.Queries;
 
@@ -41,20 +41,6 @@ public sealed record PluginRow(
     // plugins.md, A row, Plugin: tracked, and its rows read from its plugin file because its plugin
     // source is missing or cannot be read. Null when the plugin source reads.
     UnreadableSource? PluginSourceUnreadable);
-
-/// <summary>Why a tracked plugin's source does not read, and whether decompile gets past it.</summary>
-public sealed record UnreadableSource(string Reason, bool DecompileRepairs)
-{
-    private const string Unsaid = "The plugin source could not be read.";
-
-    internal static UnreadableSource Of(SourceFailure failure) => new(Said(failure.Reason), failure.DecompileRepairs);
-
-    internal static UnreadableSource Of(Exception error) => new(Said(error.Message), DecompileRepairs: true);
-
-    private static string Said(string reason) => string.IsNullOrWhiteSpace(reason) ? Unsaid : reason;
-
-    internal static UnreadableSource Unknown => new(Unsaid, DecompileRepairs: false);
-}
 
 public record RecordDetail(
     string FormKey,

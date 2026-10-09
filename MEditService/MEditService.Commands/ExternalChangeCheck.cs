@@ -50,7 +50,7 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
         {
             notifications.Publish(new PluginSourceUnreadableNotification(origin, [.. sourceReads[false]
                 .SelectMany(plugin => SourceRepository.WhySourceDoesNotRead(plugin) is { } why
-                    ? new[] { new PluginWithUnreadableSource(plugin.Name, why.Reason, why.DecompileRepairs) }
+                    ? new[] { new PluginWithUnreadableSource(plugin.Name, new UnreadableSource(why.Reason, why.DecompileRepairs)) }
                     : [])]));
         }
     }

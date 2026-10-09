@@ -436,6 +436,26 @@ public sealed class FailedReadStateTests : IDisposable
         Assert.True(unreadable?.DecompileRepairs);
     }
 
+    [Theory]
+    [InlineData(typeof(IOException))]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    public void ATreeWhoseReadThrowsAFileSystemRefusal_SaysWhy_AndDecompileDoesNotRepairIt(Type refusal)
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        void Throw()
+        {
+            Arm(TreeMoment.ReadBegins, Throw);
+            throw (Exception)Activator.CreateInstance(refusal, "the file is held").Require();
+        }
+        Arm(TreeMoment.ReadBegins, Throw);
+
+        using var index = Reconciled();
+
+        var unreadable = index.PluginRowOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
+        Assert.Contains("the file is held", unreadable?.Reason, StringComparison.Ordinal);
+        Assert.False(unreadable?.DecompileRepairs);
+    }
+
     [PosixFact]
     public void ATreeWhoseDocumentCannotBeOpened_SaysWhy_AndDecompileDoesNotRepairIt()
     {

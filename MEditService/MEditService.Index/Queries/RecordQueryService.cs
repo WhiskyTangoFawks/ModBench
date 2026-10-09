@@ -57,8 +57,8 @@ internal sealed class RecordQueryService(
     }
 
     private UnreadableSource WhyUnreadable(RegisteredPlugin plugin) =>
-        source.WhySourceDoesNotRead(plugin) is { } failure ? UnreadableSource.Of(failure)
-        : _index.WhyTreeStopped(plugin.Key) ?? UnreadableSource.Unknown;
+        source.WhySourceDoesNotRead(plugin) is { } failure ? UnreadableSources.Of(failure)
+        : _index.WhyTreeStopped(plugin.Key) ?? UnreadableSources.Unknown;
 
     // The header is not a browsable record type: it stays a schemas.Keys entry so GetRecord/
     // GetCompare resolve it by FormKey, but both browse paths below exclude it.

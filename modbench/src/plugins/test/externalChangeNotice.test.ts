@@ -17,7 +17,7 @@ function settled(origin: string, ...changed: [name: string, bytesSha256: string 
 function unreadable(origin: string, ...plugins: [name: string, reason: string, decompileRepairs: boolean][]): NotificationEvent {
   return {
     kind: 'plugin-source-unreadable', plugin: '', origin, keys: [], sequence: 0,
-    pluginWithUnreadableSources: plugins.map(([name, reason, decompileRepairs]) => ({ name, reason, decompileRepairs })),
+    pluginWithUnreadableSources: plugins.map(([name, reason, decompileRepairs]) => ({ name, source: { reason, decompileRepairs } })),
   };
 }
 
