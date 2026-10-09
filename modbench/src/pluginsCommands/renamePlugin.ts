@@ -9,11 +9,6 @@ import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { answerOf } from '../wire/readFailed';
 
-interface RenameSourceEditing {
-  /** Resolves whether the changes were applied; a failure has been reported by whoever applied them. */
-  readonly apply: (changes: SourceChanges) => Promise<boolean>;
-}
-
 export type PluginRenameClient = Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants'>;
 
 interface PluginRenameAccess {
@@ -67,7 +62,7 @@ async function confirmRename(
 }
 
 async function renamePlugin(
-  access: PluginRenameAccess, source: RenameSourceEditing, plugin: PluginAddress, newName: string, gameRelease: string | undefined,
+  access: PluginRenameAccess, source: { apply(changes: SourceChanges): Promise<boolean> }, plugin: PluginAddress, newName: string, gameRelease: string | undefined,
 ): Promise<PluginRenameResult> {
   const origin = fileOriginOf(plugin.origin);
   const checked = await access.adapter.checkPluginRename(origin, plugin.name, newName, gameRelease);
