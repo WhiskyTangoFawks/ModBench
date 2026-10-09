@@ -4,7 +4,6 @@ namespace MEditService.SourceAdapter;
 /// place of the file at its absolute path (ADR-0015).</summary>
 public sealed class UnsavedDocuments
 {
-    // Replaced wholesale, never mutated, so a reader mid-Apply reads one hand-over whole.
     private IReadOnlyList<DocumentChange> _held = [];
     private readonly Lock _applying = new();
 

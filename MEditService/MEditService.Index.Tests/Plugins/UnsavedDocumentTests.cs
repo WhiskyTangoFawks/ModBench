@@ -1,4 +1,5 @@
 using MEditService.Index.Tests.TestSupport;
+using MEditService.Ports;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -70,6 +71,28 @@ public sealed class UnsavedDocumentTests : IDisposable
         Hand();
 
         Assert.Equal("TrackedNpc", _index.DocumentOf(_npc, _tracked.KeyOf()).EditorId);
+    }
+
+    [Fact]
+    public void AHandOverWhoseValidationFaultsOutright_FailsTheStatus()
+    {
+        using var faulting = Indexes.Reconciled(
+            _fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: new RowsChangedFaults());
+
+        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedUnsaved\""))]);
+
+        Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
+        Assert.Contains(RowsChangedFaults.Reason, faulting.Status.Message, StringComparison.Ordinal);
+    }
+
+    private sealed class RowsChangedFaults : INotificationPublisher
+    {
+        public const string Reason = "the stream could not take the push";
+
+        public void Publish(INotification notification)
+        {
+            if (notification is RowsChangedNotification) throw new InvalidOperationException(Reason);
+        }
     }
 
     [Fact]

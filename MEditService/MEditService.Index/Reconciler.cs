@@ -57,7 +57,6 @@ internal sealed class Reconciler(
     private CancellationTokenSource? _reconcileCancellation;
     private bool _disposed;
 
-    // The paths of unsaved documents handed over and not yet validated, guarded by _lock.
     private readonly List<string> _handed = [];
     private bool _validatingHanded;
 
@@ -208,28 +207,22 @@ internal sealed class Reconciler(
                 _handed.Clear();
             }
 
+            string? failure;
             _exclusive.Enter();
             try
             {
-                ValidateTreesOf(paths);
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                // Validation is idempotent: the next hand-over or snapshot validates again.
-                logger.LogWarning(ex, "Could not validate the plugins whose unsaved documents were handed over");
+                failure = ValidationFailure(() => ValidateTreesOf(paths));
             }
             finally { _exclusive.Exit(); }
+            if (failure is null) continue;
+            lock (_lock) _failureMessage = failure;
+            PublishStatus();
         }
     }
 
     private void ValidateTreesOf(List<string> paths)
     {
-        OpenScope scope;
-        lock (_lock)
-        {
-            if (_disposed || _scope is null) return;
-            scope = _scope;
-        }
+        var scope = RequireScope();
         var holding = scope.Held.Plugins.Where(plugin => paths.Exists(path => source.TreeHolds(plugin.Registered, path))).ToList();
         if (holding.Count > 0) scope.Index.Commit(_ => holding.ForEach(plugin => ValidateOne(scope, plugin)));
     }
@@ -855,7 +848,9 @@ internal sealed class Reconciler(
     // ADR-0003: the status answering the version is published once the plugins are validated, and a
     // reconcile that changed the status reads Reconciling until then. The message when validation
     // failed outright, which becomes status data.
-    private string? ValidateHeld(CancellationToken token)
+    private string? ValidateHeld(CancellationToken token) => ValidationFailure(() => ValidateIndex(token));
+
+    private string? ValidationFailure(Action validate)
     {
         lock (_lock)
         {
@@ -863,7 +858,7 @@ internal sealed class Reconciler(
         }
         try
         {
-            ValidateIndex(token);
+            validate();
             return null;
         }
         catch (IndexWriteGateTimeoutException ex)

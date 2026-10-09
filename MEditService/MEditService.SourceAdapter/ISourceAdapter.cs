@@ -19,7 +19,6 @@ public interface ISourceAdapter
     /// when no mod provides it. One serves a batch, so what it learns of the tree is learned once.</summary>
     ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release);
 
-    /// <summary>Whether <paramref name="path"/> is under <paramref name="plugin"/>'s source tree.</summary>
     bool TreeHolds(RegisteredPlugin plugin, string path);
 
     RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path);

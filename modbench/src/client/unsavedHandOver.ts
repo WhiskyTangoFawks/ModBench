@@ -1,13 +1,11 @@
 import { errorMessage } from '../ports/errorMessage';
-import type { BackendStatus, UnsavedDocument } from './MEditClient';
+import type { LoadOrderWire } from './loadOrderSender';
+import type { UnsavedDocument } from './MEditClient';
 
 /** What an adapter gives the hand-over: its process, its stream's reopen, and one PUT of the documents. */
-export interface UnsavedDocumentsWire {
-  status(): BackendStatus;
-  onStatusChanged(listener: (status: BackendStatus) => void): () => void;
-  onReconnected(listener: () => void): () => void;
+export type UnsavedDocumentsWire = Pick<LoadOrderWire, 'status' | 'onStatusChanged' | 'onReconnected'> & {
   put(documents: readonly UnsavedDocument[]): Promise<void>;
-}
+};
 
 /** Puts each hand-over at once and in order while mEdit runs, and the newest again whenever the
  *  process behind the wire may hold none. */

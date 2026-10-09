@@ -1778,6 +1778,22 @@ describe('An unsaved document in plugin source', () => {
     await waitFor('a hand-over without the saved document', () =>
       handedUnsaved.length > 0 && textHanded(handedUnsaved.at(-1), document.uri.fsPath) === undefined);
   });
+
+  it('is dropped from the next hand-over once closed without saving', async () => {
+    const document = await vscode.workspace.openTextDocument(file);
+    await vscode.window.showTextDocument(document);
+    const edit = new vscode.WorkspaceEdit();
+    edit.insert(document.uri, new vscode.Position(0, 1), '"Discarded": 1, ');
+    await vscode.workspace.applyEdit(edit);
+    await waitFor('the typed text handed to mEdit', () =>
+      handedUnsaved.some((documents) => textHanded(documents, document.uri.fsPath) === document.getText()));
+
+    await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+
+    await waitFor('a hand-over without the discarded document', () =>
+      textHanded(handedUnsaved.at(-1), document.uri.fsPath) === undefined);
+    assert.strictEqual(fs.readFileSync(file, 'utf8').includes('Discarded'), false);
+  });
 });
 
 describe('The Problems panel on plugin source', () => {

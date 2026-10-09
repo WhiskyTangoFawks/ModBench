@@ -194,7 +194,6 @@ public sealed class SourceRepository : ISourceRepositoryReads
         return new RecordOfFileAnswer.Refused($"{fullPath} is under no tracked plugin's source.");
     }
 
-    /// <summary>Whether <paramref name="fullPath"/> is under the plugin's tree in its tracked mod.</summary>
     internal static bool TreeHolds(RegisteredPlugin plugin, string fullPath) => TreeFolderHolding(plugin, fullPath) is not null;
 
     private static string? TreeFolderHolding(RegisteredPlugin plugin, string fullPath) =>

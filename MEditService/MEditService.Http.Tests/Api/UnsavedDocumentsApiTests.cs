@@ -37,6 +37,17 @@ public sealed class UnsavedDocumentsApiTests : HostedTests
     }
 
     [Fact]
+    public async Task PuttingADocumentByARelativePath_Is400()
+    {
+        var response = await Client.PutAsJsonAsync("/unsaved-documents", new
+        {
+            documents = new[] { new { path = Path.Combine("plugin-source", Plugin, "Typed.json"), text = "{}" } },
+        });
+
+        await response.AssertIsProblem(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task PuttingNoDocuments_Is400()
     {
         var response = await Client.PutAsJsonAsync("/unsaved-documents", new { });
