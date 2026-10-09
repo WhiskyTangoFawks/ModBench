@@ -368,7 +368,7 @@ internal sealed class Reconciler(
             .Select(r => r.Key)
             .Where(key => open.TryGetValue(key, out var h) && (h.Key != key || h.Path != wanted[key].Path || h.Registration != Registration.In(snapshot, key)))
             .ToList();
-        var respelled = resolved.Select(r => r.Key).Where(key => held.IsSpelledOtherwise(key) || scope.Failed.IsSpelledOtherwise(key)).ToList();
+        var respelled = resolved.Select(r => r.Key).Where(key => held.IsSpelledOtherwise(key)).ToList();
         // A plugin in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
         var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !scope.Failed.StillFailing(r)).ToList();
@@ -413,7 +413,6 @@ internal sealed class Reconciler(
             foreach (var key in respelled)
             {
                 held.RespellFailure(key);
-                scope.Failed.Respell(key);
             }
             lock (_lock)
             {
