@@ -67,7 +67,9 @@ public sealed class SourceTransaction
     private List<Unrestored> UndoAll()
     {
         if (_batch is not null && _batchChangesBefore is not null) _batch.Changes = _batchChangesBefore;
-        return _journal.UndoSince(0);
+        var unrestored = _journal.UndoSince(0);
+        _repository.Locator.Forget();
+        return unrestored;
     }
 
     /// <summary>Makes each move of <paramref name="changes"/>, then each deletion, then writes each document, holding what each

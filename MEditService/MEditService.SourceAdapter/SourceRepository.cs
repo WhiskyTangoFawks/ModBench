@@ -354,6 +354,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     public SourceFailure? ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256) =>
         SourceFailure.Answer(() =>
         {
+            RefuseInABatch();
             if (!TreeNameFor(plugin).Holds(out var folder, out var why) && why is SourceFailure.TwinFolders) throw SourceStopException.Of(why);
             var name = folder ?? plugin.Name;
             Writes.ReplaceSourceFrom(name, SourceRepositoryLayout.PristineFilesOf(name, tree), binarySha256);
@@ -365,6 +366,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     public SourceAnswer<bool> RenameSource(PluginAddress plugin, string newName) =>
         SourceFailure.Answer(() =>
         {
+            RefuseInABatch();
             var name = Spelled(plugin).Name;
             var sources = Path.Combine(_modFolder, SourceRepositoryLayout.RootFolderName);
             if (Directory.EnumerateFileSystemEntries(sources)
@@ -382,6 +384,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// answers why, with nothing written; after it, false.</summary>
     public SourceAnswer<bool> WriteBinary(PluginAddress plugin, string binarySha256, Action write)
     {
+        RefuseInABatch();
         var name = Spelled(plugin).Name;
         return SourceFailure.Answer(() => _git.WriteBinary(name, binarySha256, write));
     }
@@ -392,6 +395,12 @@ public sealed class SourceRepository : ISourceRepositoryReads
     {
         var name = Spelled(plugin).Name;
         return SourceFailure.Answer(() => _git.LastWrittenBinarySha256s(name));
+    }
+
+    // A batch writes nothing, and these verbs write the disk themselves.
+    private void RefuseInABatch()
+    {
+        if (Files is SourceBatch) throw new InvalidOperationException("A batch's repository answers changes and writes nothing to disk.");
     }
 
     // A plugin's tree is read and written as its folder spells it; with no single tree, as the load order names it.

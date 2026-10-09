@@ -1,4 +1,5 @@
 using System.Text;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
@@ -25,6 +26,7 @@ public sealed class SourceBatchTests : IDisposable
     private readonly Cell _cell;
     private readonly Worldspace _worldspace;
     private readonly Cell _exteriorCell;
+    private readonly byte[] _header;
 
     public SourceBatchTests()
     {
@@ -39,6 +41,7 @@ public sealed class SourceBatchTests : IDisposable
         _cell.Temporary.Add(new PlacedObject(_mod) { EditorID = "Ref" });
         _worldspace = new Worldspace(_mod) { EditorID = "World" };
         _exteriorCell = new Cell(_mod) { EditorID = "Exterior" };
+        _header = HeaderDocument.Write(_mod);
 
         PluginBaselines.Track(_modFolder, TheTree());
     }
@@ -49,6 +52,7 @@ public sealed class SourceBatchTests : IDisposable
         new(CellPath, Serialize(_cell)),
         new(WorldspacePath, Serialize(_worldspace)),
         new(ExteriorCellPath, Serialize(_exteriorCell)),
+        new(PluginSourceRoot.HeaderDocument(PluginName), _header),
     ];
 
     private string WorldspaceDirectory =>
@@ -126,19 +130,22 @@ public sealed class SourceBatchTests : IDisposable
         Assert.True(File.Exists(FullPath(QuestPath)));
     }
 
-    private void AssertAnswersTheTreeTheWritesLeaveOneAfterAnother(params Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes)
+    private IReadOnlyList<string> TreeTheBatchAnswers(Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes)
     {
         var batch = SourceBatch.Over(Repository, []);
         foreach (var write in writes) Assert.Null(Write(batch, write));
         Assert.Null(SourceTransaction.Atomically(Repository, transaction => transaction.Apply(SourceAnswer.Of(batch.Changes))));
+        return TreeSnapshot.Of(_modFolder);
+    }
 
+    private IReadOnlyList<string> TreeTheWritesLeaveOneAfterAnother(Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes)
+    {
         using var oneAfterAnother = new ScratchDirectory("medit-batch-sequence-");
         PluginBaselines.Track(oneAfterAnother, TheTree());
         var repository = SourceRepository.Over(TestMod.In(oneAfterAnother), Release);
         foreach (var write in writes)
             Assert.Null(SourceTransaction.Atomically(repository, transaction => transaction.Apply(write(repository))));
-
-        Assert.Equal(TreeSnapshot.Of(oneAfterAnother), TreeSnapshot.Of(_modFolder));
+        return TreeSnapshot.Of(oneAfterAnother);
     }
 
     private SourceDocument Renamed(IMajorRecordGetter record, string recordType, string path, string editorId) =>
@@ -153,9 +160,13 @@ public sealed class SourceBatchTests : IDisposable
     {
         var renamed = Renamed(_quest, "qust", QuestPath, "Renamed");
 
-        AssertAnswersTheTreeTheWritesLeaveOneAfterAnother(
+        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        [
             repository => repository.ChangesToPut(Plugin, renamed),
-            repository => repository.ChangesToRemove(Plugin, Identity(_response, "info")));
+            repository => repository.ChangesToRemove(Plugin, Identity(_response, "info")),
+        ];
+
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
     }
 
     [Fact]
@@ -163,9 +174,13 @@ public sealed class SourceBatchTests : IDisposable
     {
         var renamed = Renamed(_quest, "qust", QuestPath, "Renamed");
 
-        AssertAnswersTheTreeTheWritesLeaveOneAfterAnother(
+        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        [
             repository => repository.ChangesToPut(Plugin, renamed),
-            repository => repository.ChangesToRemove(Plugin, renamed.Identity));
+            repository => repository.ChangesToRemove(Plugin, renamed.Identity),
+        ];
+
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
     }
 
     [Fact]
@@ -174,9 +189,13 @@ public sealed class SourceBatchTests : IDisposable
         var renamed = Renamed(_cell, "cell", CellPath, "RenamedCell");
         var child = Child(new PlacedObject(_mod) { EditorID = "AddedRef" }, "refr");
 
-        AssertAnswersTheTreeTheWritesLeaveOneAfterAnother(
+        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        [
             repository => repository.ChangesToPut(Plugin, renamed),
-            repository => repository.ChangesToPutChild(Plugin, renamed.Identity, "Temporary", child));
+            repository => repository.ChangesToPutChild(Plugin, renamed.Identity, "Temporary", child),
+        ];
+
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
     }
 
     [Fact]
@@ -185,13 +204,17 @@ public sealed class SourceBatchTests : IDisposable
         var npc = new Npc(_mod) { EditorID = "NewNpc" };
         var created = Child(npc, "npc_");
 
-        AssertAnswersTheTreeTheWritesLeaveOneAfterAnother(
+        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        [
             repository => repository.ChangesToPut(Plugin, created),
             repository => repository.ChangesToPut(Plugin, created with
             {
                 EditorId = "RenamedNpc",
                 Body = created.Body.Replace("\"NewNpc\"", "\"RenamedNpc\"", StringComparison.Ordinal),
-            }));
+            }),
+        ];
+
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
     }
 
     [Fact]
@@ -200,10 +223,14 @@ public sealed class SourceBatchTests : IDisposable
         var cell = Identity(_cell, "cell");
         var rekeyed = cell with { FormKey = $"000900:{PluginName}" };
 
-        AssertAnswersTheTreeTheWritesLeaveOneAfterAnother(
+        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        [
             repository => repository.RecordOf(Plugin, cell).Then(held =>
                 repository.ChangesToRekey(Plugin, held.Require(), cell, rekeyed.FormKey)),
-            repository => repository.ChangesToRemove(Plugin, rekeyed));
+            repository => repository.ChangesToRemove(Plugin, rekeyed),
+        ];
+
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
     }
 
     [Fact]
@@ -211,9 +238,13 @@ public sealed class SourceBatchTests : IDisposable
     {
         var renamed = Renamed(_worldspace, "wrld", WorldspacePath, "RenamedWorld");
 
-        AssertAnswersTheTreeTheWritesLeaveOneAfterAnother(
+        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        [
             repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")),
-            repository => repository.ChangesToPut(Plugin, renamed));
+            repository => repository.ChangesToPut(Plugin, renamed),
+        ];
+
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
     }
 
     [Fact]
@@ -275,7 +306,7 @@ public sealed class SourceBatchTests : IDisposable
     }
 
     [Fact]
-    public void AMoveOntoWhatTheBatchRemoved_FailsAndLeavesTheBatchAsItWas()
+    public void AMoveOntoAPathARemovalInTheBatchFrees_IsADefect_AndLeavesTheBatchAsItWas()
     {
         var namesake = new Quest(_mod) { EditorID = "Quest" };
         var namesakePath = Path.Combine(PluginSourceRoot.For(PluginName), "Quests", $"Quest - {namesake.FormKey.ID:X6}_{PluginName}.json");
@@ -284,10 +315,10 @@ public sealed class SourceBatchTests : IDisposable
         Assert.Null(Write(batch, repository => repository.ChangesToRemove(Plugin, Identity(_quest, "qust"))));
         var before = batch.Changes;
 
-        var failed = Write(batch, repository => repository.RecordOf(Plugin, Identity(namesake, "qust")).Then(held =>
-            repository.ChangesToRekey(Plugin, held.Require(), Identity(namesake, "qust"), _quest.FormKey.ToString())));
+        var defect = Assert.Throws<InvalidOperationException>(() => Write(batch, repository => repository.RecordOf(Plugin, Identity(namesake, "qust"))
+            .Then(held => repository.ChangesToRekey(Plugin, held.Require(), Identity(namesake, "qust"), _quest.FormKey.ToString()))));
 
-        Assert.IsType<SourceFailure.Inaccessible>(failed);
+        Assert.Contains("a removal in it frees that path", defect.Message, StringComparison.Ordinal);
         Assert.Equal(before.Moves, batch.Changes.Moves);
         Assert.Equal(before.Deletions, batch.Changes.Deletions);
     }
@@ -300,5 +331,97 @@ public sealed class SourceBatchTests : IDisposable
         File.Delete(FullPath(QuestPath));
 
         Assert.Null(batch.Repository.RecordOf(Plugin, Identity(_quest, "qust")).Value());
+    }
+
+    [Fact]
+    public void AMoveIntoAFolderOnlyTheBatchsDocumentsMake_IsADefect_AndLeavesTheBatchAsItWas()
+    {
+        var folder = Path.Combine(PluginSourceRoot.For(PluginName), "Quests", "New");
+        var batch = SourceBatch.Over(Repository, []);
+        Assert.Null(Write(batch, _ => SourceAnswer.Of(new SourceChanges([], [], [new DocumentChange(Path.Combine(folder, "Other.json"), "{}")]))));
+        var before = batch.Changes;
+
+        var defect = Assert.Throws<InvalidOperationException>(() => Write(batch, _ =>
+            SourceAnswer.Of(new SourceChanges([new SourceMove(QuestPath, Path.Combine(folder, "Quest.json"))], [], []))));
+
+        Assert.Contains("only a document of the batch makes that folder", defect.Message, StringComparison.Ordinal);
+        Assert.Equal(before.Moves, batch.Changes.Moves);
+        Assert.Equal(before.Documents, batch.Changes.Documents);
+    }
+
+    [Fact]
+    public void AReadAfterAFailedWrite_SeesNothingOfIt()
+    {
+        var batch = SourceBatch.Over(Repository, []);
+        var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
+        bool HoldsTheNewNpc() =>
+            batch.Repository.TreeOf(Plugin).Value().Files.Any(file => file.RelativePath.Contains("NewNpc", StringComparison.Ordinal));
+
+        var failed = SourceTransaction.Atomically(batch.Repository, transaction =>
+        {
+            transaction.Apply(batch.Repository.ChangesToPut(Plugin, created));
+            Assert.True(HoldsTheNewNpc());
+            transaction.Apply(batch.Repository.ChangesToRemove(Plugin, new RecordIdentity($"00FFFF:{PluginName}", "info", "Absent")));
+        });
+
+        Assert.IsType<SourceFailure.NotCarried>(failed);
+        Assert.False(HoldsTheNewNpc());
+    }
+
+    [Fact]
+    public void ASecondAllocatorInTheBatch_ReadsTheHeaderAndTheFormKeysTheFirstLeft()
+    {
+        var batch = SourceBatch.Over(Repository, []);
+        var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
+        var header = batch.Repository.RecordOf(Plugin, PluginHeader.IdentityOf(PluginName)).Value().Require();
+        var movedPast = header with
+        {
+            Body = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), 0x900)),
+        };
+
+        Assert.Null(SourceTransaction.Atomically(batch.Repository, transaction =>
+        {
+            transaction.Apply(batch.Repository.ChangesToPut(Plugin, created));
+            transaction.Apply(batch.Repository.ChangesToRewrite(Plugin, movedPast));
+        }));
+
+        var headerRead = batch.Repository.RecordOf(Plugin, PluginHeader.IdentityOf(PluginName)).Value().Require();
+        Assert.Equal(0x900u, HeaderDocument.NextObjectId(Encoding.UTF8.GetBytes(headerRead.Body)));
+        Assert.Contains(created.FormKey, batch.Repository.FormKeysUsed(Plugin).Value());
+    }
+
+    [Fact]
+    public void AChildPutIntoAContainerTheBatchCreated_AnswersTheTreeTheyLeave()
+    {
+        var cell = Child(new Cell(_mod) { EditorID = "NewCell" }, "cell");
+        var child = Child(new PlacedObject(_mod) { EditorID = "AddedRef" }, "refr");
+        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        [
+            repository => repository.ChangesToPut(Plugin, cell),
+            repository => repository.ChangesToPutChild(Plugin, cell.Identity, "Temporary", child),
+        ];
+
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
+    }
+
+    [Theory]
+    [InlineData("replace")]
+    [InlineData("rename")]
+    [InlineData("binary")]
+    public void AVerbThatWritesTheDiskItself_RefusesOnABatchsRepository_AndWritesNothing(string verb)
+    {
+        var before = TreeSnapshot.Of(_modFolder);
+        var batch = SourceBatch.Over(Repository, []);
+        var wrote = false;
+
+        Assert.Throws<InvalidOperationException>(() => verb switch
+        {
+            "replace" => batch.Repository.ReplaceSourceFrom(Plugin, [], "ABCDEF0123"),
+            "rename" => batch.Repository.RenameSource(Plugin, "Renamed.esp").Holds(out _, out var failure) ? null : failure,
+            _ => batch.Repository.WriteBinary(Plugin, "ABCDEF0123", () => wrote = true).Holds(out _, out var failure) ? null : failure,
+        });
+
+        Assert.False(wrote);
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 }

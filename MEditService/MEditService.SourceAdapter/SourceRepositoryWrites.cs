@@ -84,7 +84,7 @@ internal sealed class SourceRepositoryWrites(
     /// <summary>What rewriting a document the tree holds changes: its text, inside its owner's when embedded, and
     /// the move to its leaf name. One no document holds throws, since an edit never creates.</summary>
     internal SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) =>
-        locator.LocateToPlace(plugin, document.Identity) is { } unit && (unit.IsEmbedded || files.FileExists(unit.FullPath))
+        locator.Locate(plugin, document.Identity) is { } unit && (unit.IsEmbedded || files.FileExists(unit.FullPath))
             ? ChangesToHeld(unit, document)
             : throw SourceStopException.NotCarried(
                 $"No document in {plugin.Name}'s tree holds {document.FormKey}, so there is none to rewrite. " +

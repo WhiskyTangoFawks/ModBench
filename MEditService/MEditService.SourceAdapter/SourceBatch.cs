@@ -21,6 +21,8 @@ public sealed class SourceBatch : ISourceFiles
     /// texts in place of the file at its absolute path.</summary>
     public static SourceBatch Over(SourceRepository repository, IReadOnlyList<DocumentChange> unsaved) => new(repository, unsaved);
 
+    /// <summary>The repository the batch's writes are made through. Its verbs that write the disk themselves
+    /// refuse.</summary>
     public SourceRepository Repository { get; }
 
     /// <summary>What the batch's writes change, with absolute paths. Applied as moves, then deletions, then
@@ -28,7 +30,7 @@ public sealed class SourceBatch : ISourceFiles
     public SourceChanges Changes { get; internal set; } = SourceChanges.None;
 
     /// <summary>Makes <paramref name="absolute"/>'s changes over those made so far, throwing as the file system
-    /// would where one cannot be made.</summary>
+    /// would where one cannot be made. A move the answer's order cannot make is a defect: no gesture writes one.</summary>
     internal void Apply(SourceChanges absolute)
     {
         foreach (var (from, to) in absolute.Moves) Move(Path.GetFullPath(from), Path.GetFullPath(to));
@@ -36,8 +38,6 @@ public sealed class SourceBatch : ISourceFiles
         foreach (var (path, text) in absolute.Documents) Write(Path.GetFullPath(path), text);
     }
 
-    // A move of what only this batch wrote moves its documents. One of what the disk holds is a move of
-    // the answer's own, unless something a deletion takes stands where it lands before the deletions apply.
     private void Move(string from, string to)
     {
         if (KindOf(from) == Kind.None) throw new FileNotFoundException($"Could not find file '{from}'.", from);
@@ -46,11 +46,17 @@ public sealed class SourceBatch : ISourceFiles
             throw new DirectoryNotFoundException($"Could not find a part of the path '{to}'.");
 
         var fromDisk = !Deleted(from) && OnDisk(from) != Kind.None;
-        if (fromDisk && (Deleted(to) || OnDisk(to) != Kind.None || OnDisk(PathShape.DirectoryOf(to)) != Kind.Directory))
+        if (fromDisk && (Deleted(to) || OnDisk(to) != Kind.None))
         {
-            throw new IOException(
-                $"'{from}' cannot move to '{to}' in this batch: what it removed stood there, and its changes make every move " +
-                "before any removal.");
+            throw new InvalidOperationException(
+                $"'{from}' cannot move to '{to}' in this batch: a removal in it frees that path, and the answer makes every " +
+                "move before any removal.");
+        }
+        if (fromDisk && OnDisk(PathShape.DirectoryOf(to)) != Kind.Directory)
+        {
+            throw new InvalidOperationException(
+                $"'{from}' cannot move to '{to}' in this batch: only a document of the batch makes that folder, and the " +
+                "answer makes every move before any document.");
         }
 
         Changes = Changes with
@@ -79,7 +85,6 @@ public sealed class SourceBatch : ISourceFiles
 
     private Kind KindOf(string path) => Overlaid(path) ?? OnDisk(path);
 
-    // What the documents and deletions say stands at the path; null when only the disk, past the moves, can say.
     private Kind? Overlaid(string path)
     {
         if (Written(path) is not null) return Kind.File;
@@ -95,7 +100,6 @@ public sealed class SourceBatch : ISourceFiles
         return Directory.Exists(path) ? Kind.Directory : Kind.None;
     }
 
-    // Where on disk what stands at the path came from before the moves; null for a path a move left empty.
     private string? Unmoved(string path)
     {
         for (var i = Changes.Moves.Count - 1; i >= 0; i--)
@@ -119,8 +123,6 @@ public sealed class SourceBatch : ISourceFiles
 
     private static bool IsUnder(string directory, string path) => SourceRepositoryLocator.IsUnder(directory, path);
 
-    // The entries directly in the directory: what the disk holds there past the moves and deletions, what a
-    // move put there, and what a document is written in.
     private List<(string Path, Kind Kind)> Children(string directory)
     {
         var full = Path.GetFullPath(directory);
@@ -134,7 +136,8 @@ public sealed class SourceBatch : ISourceFiles
             {
                 var path = Path.Combine(full, entry.Name);
                 var listed = entry is DirectoryInfo ? Kind.Directory : Kind.File;
-                children[entry.Name] = Overlaid(path) ?? (Unmoved(path) == entry.FullName ? listed : OnDisk(path));
+                children[entry.Name] = Overlaid(path)
+                    ?? (Unmoved(path) is { } unmoved && Same(unmoved, entry.FullName) ? listed : OnDisk(path));
             }
         }
         foreach (var to in Changes.Moves.Select(move => move.To).Where(to => Same(PathShape.DirectoryOf(to), full)))
@@ -154,33 +157,24 @@ public sealed class SourceBatch : ISourceFiles
     private static bool Matches(string pattern, string path) =>
         FileSystemName.MatchesSimpleExpression(pattern, Path.GetFileName(path), ignoreCase: OperatingSystem.IsWindows());
 
+    private string? HeldText(string path, out string onDisk)
+    {
+        onDisk = Path.GetFullPath(path);
+        if (Written(onDisk) is { } document) return document.Text;
+        if (KindOf(onDisk) != Kind.File || Unmoved(onDisk) is not { } origin)
+            throw new FileNotFoundException($"Could not find file '{path}'.", path);
+        onDisk = origin;
+        return _unsaved.FirstOrDefault(unsaved => Same(unsaved.Path, origin))?.Text;
+    }
+
     bool ISourceFiles.FileExists(string path) => KindOf(Path.GetFullPath(path)) == Kind.File;
 
     bool ISourceFiles.DirectoryExists(string path) => KindOf(Path.GetFullPath(path)) == Kind.Directory;
 
-    byte[] ISourceFiles.ReadAllBytes(string path)
-    {
-        var full = Path.GetFullPath(path);
-        if (Written(full) is { } document) return Encoding.UTF8.GetBytes(document.Text);
-        var origin = OnDiskFile(full);
-        return UnsavedAt(origin) is { } unsaved ? Encoding.UTF8.GetBytes(unsaved) : File.ReadAllBytes(origin);
-    }
+    byte[] ISourceFiles.ReadAllBytes(string path) =>
+        HeldText(path, out var onDisk) is { } text ? Encoding.UTF8.GetBytes(text) : File.ReadAllBytes(onDisk);
 
-    string ISourceFiles.ReadAllText(string path)
-    {
-        var full = Path.GetFullPath(path);
-        if (Written(full) is { } document) return document.Text;
-        var origin = OnDiskFile(full);
-        return UnsavedAt(origin) ?? File.ReadAllText(origin);
-    }
-
-    // An unsaved text stands in for its file only while the disk holds that file.
-    private string? UnsavedAt(string origin) => _unsaved.FirstOrDefault(document => Same(document.Path, origin))?.Text;
-
-    private string OnDiskFile(string full) =>
-        KindOf(full) == Kind.File && Unmoved(full) is { } origin
-            ? origin
-            : throw new FileNotFoundException($"Could not find file '{full}'.", full);
+    string ISourceFiles.ReadAllText(string path) => HeldText(path, out var onDisk) ?? File.ReadAllText(onDisk);
 
     IEnumerable<string> ISourceFiles.EntriesUnder(string directory) => Descendants(directory).Select(entry => entry.Path);
 
