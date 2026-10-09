@@ -17,6 +17,8 @@ export type RecordDocument = { uri: vscode.Uri } | { refused: string };
 
 export const RENDERED_DOCUMENT_SCHEME = 'modbench-rendered';
 export const CHILD_RECORD_SCHEME = 'modbench-child-record';
+/** The schemes of the documents over a record's file: its own, and each of its child records'. */
+export const CONTAINER_SCHEMES: ReadonlySet<string> = new Set(['file', CHILD_RECORD_SCHEME]);
 
 // The copy rides in the URI's query, its plugin whole (ADR-0012), so a restored tab reads it again.
 const copyQuery = ({ formKey, plugin }: RecordCopy): string =>

@@ -998,6 +998,61 @@ describe('a child record of a tracked plugin', () => {
       assert.deepStrictEqual([shown(child), shown(container)], [{ text: cellText('OnDisk'), unsaved: false }, { text: cellText('OnDisk'), unsaved: false }]);
     });
 
+    const childTabOf = (formKey: string) => openTabs().find(({ input }) =>
+      input instanceof vscode.TabInputCustom && input.uri.scheme !== 'file' && new URLSearchParams(input.uri.query).get('formKey') === formKey);
+    const shownDocumentOf = (formKey: string) => waitFor(`${formKey}'s document`, () => {
+      const input = childTabOf(formKey)?.input;
+      return input instanceof vscode.TabInputCustom && vscode.workspace.textDocuments.find(({ uri }) => uri.toString() === input.uri.toString());
+    });
+    const typedInContainer = async () => {
+      await openRecord({ ...childCopy, placement: 'beside' });
+      const child = await shownDocumentOf(CHILD_FORM_KEY);
+      const container = (await vscode.window.showTextDocument(await containerDocument(), vscode.ViewColumn.One)).document;
+      await replace(container, cellText('Typed'));
+      await waitFor('the child\'s document to show the typing', () => child.getText() === cellText('Typed'));
+      await vscode.commands.executeCommand('workbench.action.focusSecondEditorGroup');
+      return { child, container };
+    };
+
+    it('keeps its container\'s unsaved text when its own tab is reverted, and reads that text again', async () => {
+      const { child, container } = await typedInContainer();
+      const before = child.version;
+
+      await vscode.commands.executeCommand('workbench.action.files.revert');
+
+      await waitFor('the child\'s document to read the file again and take the unsaved text', () =>
+        child.version > before + 1 && child.getText() === cellText('Typed'));
+      assert.deepStrictEqual(shown(container), { text: cellText('Typed'), unsaved: true });
+    });
+
+    it('keeps its container\'s unsaved text when its own tab is closed without saving', async () => {
+      const { container } = await typedInContainer();
+
+      await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+      await waitFor('the child\'s tab closed', () => !childTabOf(CHILD_FORM_KEY));
+      const typedAfter = new vscode.WorkspaceEdit();
+      typedAfter.insert(container.uri, new vscode.Position(0, 0), ' ');
+      await vscode.workspace.applyEdit(typedAfter);
+
+      assert.deepStrictEqual(shown(container), { text: ` ${cellText('Typed')}`, unsaved: true });
+      assert.deepStrictEqual(vscode.workspace.textDocuments.filter(({ uri, isDirty }) => isDirty && uri.scheme !== 'file' && uri.fsPath === container.uri.fsPath), []);
+    });
+
+    it('leaves two children\'s tabs both saved when either saves, with no document of their large cell\'s file open', async () => {
+      carriedIn.set(SECOND_CHILD_FORM_KEY, cell);
+      await openRecord(childCopy);
+      await openRecord({ formKey: SECOND_CHILD_FORM_KEY, plugin, placement: 'beside' });
+      const [first, second] = [await shownDocumentOf(CHILD_FORM_KEY), await shownDocumentOf(SECOND_CHILD_FORM_KEY)];
+      const saved = cellText('SavedFromAChild', { Padding: 'x'.repeat(1 << 20) });
+
+      await replace(first, saved);
+      await waitFor('the second child\'s document to show the change', () => second.getText() === saved);
+      await first.save();
+
+      await waitFor('the second child\'s document saved', () => !second.isDirty);
+      assert.strictEqual(readFileSync(cell, 'utf8'), saved);
+    });
+
     it('opens on its container\'s unsaved text', async () => {
       const container = await containerDocument();
       await replace(container, cellText('BeforeChildOpened'));

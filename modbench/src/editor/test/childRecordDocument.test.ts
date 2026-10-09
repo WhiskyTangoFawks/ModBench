@@ -6,7 +6,8 @@ interface TestUri {
   with(change: Partial<Pick<TestUri, 'scheme' | 'query'>>): TestUri;
   toString(): string;
 }
-interface TestDocument { uri: TestUri; isDirty?: boolean; getText?(): string; save?(): Promise<boolean> }
+interface TestDocument { uri: TestUri }
+interface Replacement { uri: TestUri; range: { start: number; end: number }; text: string }
 
 const h = vi.hoisted(() => {
   const uri = (scheme: string, path: string, query = ''): TestUri => ({
@@ -19,7 +20,7 @@ const h = vi.hoisted(() => {
     providers: new Map<string, unknown>(),
     textDocuments: [] as TestDocument[],
     files: new Map<string, Uint8Array>(),
-    size: 3,
+    applyEdit: (_edit: { replacements: Replacement[] }) => Promise.resolve(true),
   };
 });
 
@@ -29,15 +30,20 @@ vi.mock('vscode', () => ({
   Disposable: class { constructor(public dispose: () => void) {} },
   FileChangeType: { Changed: 1 },
   FileSystemError: { NoPermissions: (uri: unknown) => new Error(`no permissions on ${String(uri)}`) },
+  Range: class { constructor(public start: number, public end: number) {} },
+  WorkspaceEdit: class {
+    replacements: Replacement[] = [];
+    replace(uri: TestUri, range: Replacement['range'], text: string) { this.replacements.push({ uri, range, text }); }
+  },
   workspace: {
     registerFileSystemProvider: (scheme: string, provider: unknown) => {
       h.providers.set(scheme, provider);
       return { dispose: () => h.providers.delete(scheme) };
     },
     get textDocuments() { return h.textDocuments; },
-    onDidCloseTextDocument: () => ({ dispose: () => undefined }),
+    applyEdit: (edit: { replacements: Replacement[] }) => h.applyEdit(edit),
     fs: {
-      stat: () => Promise.resolve({ type: 1, ctime: 1, mtime: 2, size: h.size }),
+      stat: () => Promise.resolve({ type: 1, ctime: 1, mtime: 2, size: 3 }),
       readFile: (uri: TestUri) => Promise.resolve(h.files.get(`${uri.scheme}:${uri.path}?${uri.query}`)),
       writeFile: (uri: TestUri, content: Uint8Array) => {
         h.files.set(`${uri.scheme}:${uri.path}?${uri.query}`, content);
@@ -79,7 +85,7 @@ beforeEach(() => {
   h.providers.clear();
   h.textDocuments.length = 0;
   h.files.clear();
-  h.size = 3;
+  h.applyEdit = () => Promise.resolve(true);
 });
 
 describe('a child record\'s document', () => {
@@ -115,26 +121,28 @@ describe('a child record\'s document', () => {
     expect(new TextDecoder().decode(h.files.get(`file:${CELL_FILE}?`))).toBe('{ "EditorID": "Saved" }');
   });
 
-  it('saves through its container\'s open document, which writes the file', async () => {
+  it('saves through its container\'s open document, which takes the saved text and writes the file', async () => {
+    let text = '{ "EditorID": "Typed" }';
+    let isDirty = false;
     const save = vi.fn(() => Promise.resolve(true));
-    h.textDocuments.push({ uri: h.uri('file', CELL_FILE), isDirty: true, getText: () => '{ "EditorID": "Saved" }', save });
+    const container = { uri: h.uri('file', CELL_FILE), getText: () => text, get isDirty() { return isDirty; }, positionAt: (offset: number) => offset, save };
+    h.textDocuments.push(container);
+    h.applyEdit = ({ replacements }) => {
+      for (const { range, text: replacement } of replacements) text = text.slice(0, range.start) + replacement + text.slice(range.end);
+      isDirty = true;
+      return Promise.resolve(true);
+    };
     const { files } = childDocuments();
 
     await files.writeFile(PLACED_URI, new TextEncoder().encode('{ "EditorID": "Saved" }'), { create: true, overwrite: true });
 
-    expect(save).toHaveBeenCalledOnce();
-    expect(h.files.size).toBe(0);
+    expect([text, save.mock.calls.length, h.files.size]).toEqual(['{ "EditorID": "Saved" }', 1, 0]);
   });
 
-  it('states the file\'s stat, its size as it read it while its container\'s document is open', async () => {
+  it('states the file\'s stat with no size, so that no save it follows moves both its mtime and its size', async () => {
     const { files } = childDocuments();
-    expect(await files.stat(PLACED_URI)).toEqual({ type: 1, ctime: 1, mtime: 2, size: 3 });
-    h.textDocuments.push({ uri: h.uri('file', CELL_FILE) });
-    h.size = 9;
 
-    expect(await files.stat(PLACED_URI)).toEqual({ type: 1, ctime: 1, mtime: 2, size: 3 });
-    h.textDocuments.length = 0;
-    expect(await files.stat(PLACED_URI)).toEqual({ type: 1, ctime: 1, mtime: 2, size: 9 });
+    expect(await files.stat(PLACED_URI)).toEqual({ type: 1, ctime: 1, mtime: 2, size: 0 });
   });
 });
 

@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
-import { CHILD_RECORD_SCHEME } from '../drivingLib/recordDocument';
+import { CONTAINER_SCHEMES } from '../drivingLib/recordDocument';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
-
-const CONTAINER_SCHEMES = new Set(['file', CHILD_RECORD_SCHEME]);
 
 export const isPluginSourceDocument = ({ scheme, fsPath }: vscode.Uri): boolean =>
   CONTAINER_SCHEMES.has(scheme) && isPluginSourcePath(fsPath);
