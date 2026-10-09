@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -27,11 +28,17 @@ public sealed class ModelIdentityTests
     private const int GroupHeaderLength = 24;
     private const int InflatedLengthSize = 4;
     private const int ZlibHeaderLength = 2;
+    private const uint CompressedFlag = 0x40000;
 
     private static ReadOnlySpan<byte> FirstRecordZlibHeader(byte[] plugin)
     {
-        var firstRecordOffset = RecordHeaderLength + (int)BitConverter.ToUInt32(plugin, 4) + GroupHeaderLength;
-        return plugin.AsSpan(firstRecordOffset + RecordHeaderLength + InflatedLengthSize, ZlibHeaderLength);
+        var group = RecordHeaderLength + (int)BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(4));
+        Assert.Equal("GRUP"u8.ToArray(), plugin[group..(group + 4)]);
+        Assert.Equal("MISC"u8.ToArray(), plugin[(group + 8)..(group + 12)]);
+        var record = group + GroupHeaderLength;
+        var flags = BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(record + 8));
+        Assert.NotEqual(0u, flags & CompressedFlag);
+        return plugin.AsSpan(record + RecordHeaderLength + InflatedLengthSize, ZlibHeaderLength);
     }
 
     [Fact]

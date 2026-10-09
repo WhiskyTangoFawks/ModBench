@@ -16,19 +16,21 @@ public static class NegativeZeroPlugin
             var world = RawPlugin.NewRecordId(0, 0x800);
             var cell = RawPlugin.NewRecordId(0, 0x801);
             var placed = RawPlugin.NewRecordId(0, 0x802);
+            var npc = RawPlugin.NewRecordId(0, 0x804);
             var rotation = new[] { -0.0f, 0f, 4.9f };
             byte[] placement = [.. new byte[12], .. rotation.SelectMany(r => RawPlugin.U32(BitConverter.SingleToUInt32Bits(r)))];
             var bytes = RawPlugin.Plugin(
-                RawPlugin.Tes4(nextObjectId: 0x803, numRecords: 5, light: false),
+                RawPlugin.Tes4(nextObjectId: 0x805, numRecords: 5, light: false),
                 RawPlugin.Group("MISC",
                     RawPlugin.DeflatedRecord("MISC", RawPlugin.NewRecordId(0, 0x803), LevelMutagenDoesNotWrite, RawPlugin.EditorId("RotationSetting"))),
+                RawPlugin.Group("NPC_", RawPlugin.Record("NPC_", npc, RawPlugin.EditorId("RotationNpc"))),
                 RawPlugin.Group("WRLD",
                     RawPlugin.Record("WRLD", world, RawPlugin.EditorId("RotationWorld")),
                     RawPlugin.Group(RawPlugin.U32(world), 1,
                         RawPlugin.Record("CELL", cell, RawPlugin.EditorId("RotationWorldCell")),
                         RawPlugin.Group(RawPlugin.U32(cell), 6,
                             RawPlugin.Group(RawPlugin.U32(cell), 8,
-                                RawPlugin.Record("ACHR", placed, RawPlugin.Subrecord("NAME", RawPlugin.U32(world)), RawPlugin.Subrecord("DATA", placement)))))));
+                                RawPlugin.Record("ACHR", placed, RawPlugin.Subrecord("NAME", RawPlugin.U32(npc)), RawPlugin.Subrecord("DATA", placement)))))));
             return new GeneratedPlugin(FileName, bytes);
         }
     }
