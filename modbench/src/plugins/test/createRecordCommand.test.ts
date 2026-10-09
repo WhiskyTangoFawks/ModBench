@@ -29,6 +29,7 @@ import { recordSummaryFixture } from '../../client/test/fixtures';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { registerRecordCreateCommand } from '../createRecordCommand';
+import type { SourceEditing } from '../../drivingLib/sourceEditing';
 import type { RecordPlace } from '../createdRecordSelection';
 import { PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
 import type { RecordBrowserNode } from '../RecordBrowser';
@@ -64,22 +65,29 @@ const QUEST_HOLDS = [
 const CREATABLE = [
   { type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' },
 ];
-const NEW_NPC = { applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' };
+const NEW_NPC = { formKey: '000900:MyPatch.esp', moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
+const UNSAVED = { path: '/mods/ModA/plugin-source/MyPatch.esp/Cells/Cell.json', text: '{"dirty":true}' };
 
 function harness(viewSelection: readonly PluginsTreeNode[] = []) {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getCreatableRecordTypes', CREATABLE);
   client.setQueryAnswer('getChildRecordTypes', QUEST_HOLDS);
   const steps: string[] = [];
-  client.setCommandHandler('createRecord', (...args) => {
-    const [plugin, recordType, into] = args;
+  client.setCommandHandler('getCreateChanges', (...args) => {
+    const [plugin, recordType, , into] = args;
     steps.push(`create ${plugin.name} ${plugin.origin} ${recordType}${into === undefined ? '' : ` ${JSON.stringify(into)}`}`);
     return Promise.resolve(NEW_NPC);
   });
   const reporter = recordingReporter();
   const writing: string[] = [];
+  const source = {
+    unsaved: () => [UNSAVED],
+    applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])),
+    oneAtATime: <T,>(job: () => Promise<T>) => job(),
+    refreshSourceControlFor: vi.fn(),
+  };
   registerRecordCreateCommand({
-    client, reporter,
+    client, reporter, source,
     write: async (command) => {
       writing.push('opens');
       await command();
@@ -98,7 +106,7 @@ function harness(viewSelection: readonly PluginsTreeNode[] = []) {
     },
   }, () => viewSelection);
   const create = present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'");
-  return { client, reporter, steps, writing, create };
+  return { client, reporter, steps, writing, create, source };
 }
 
 beforeEach(() => { showQuickPick.mockReset(); showInputBox.mockReset(); });
@@ -187,13 +195,53 @@ describe('modbench.record.create', () => {
   it('reports a refusal as mEdit words it, and stops awaiting a record it did not write', async () => {
     const { client, steps, reporter, create } = harness();
     const message = 'MyPatch.esp has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address. Clear the light flag in the header to draw above it.';
-    client.setCommandHandler('createRecord', () => Promise.resolve({ refused: true, message }));
+    client.setCommandHandler('getCreateChanges', () => Promise.resolve({ refused: true, message }));
 
     await create(NPC_GROUP);
 
     expect(reporter.reports).toEqual([{ severity: 'error', message, detail: undefined }]);
     expect(reporter.landings).toEqual([]);
     expect(steps).toEqual(['watch MyPatch.esp ModA', 'forget']);
+  });
+});
+
+describe('modbench.record.create makes the changes mEdit answers', () => {
+  it('asks over the unsaved documents, applies the answer as one workspace edit, refreshes Source Control, and selects the new record', async () => {
+    const { client, steps, source, create } = harness();
+
+    await create(NPC_GROUP);
+
+    expect(client.calls.find((c) => c.method === 'getCreateChanges')?.args).toEqual([MY_PATCH, 'npc_', [UNSAVED], undefined]);
+    expect(source.applyWorkspaceChanges).toHaveBeenCalledWith([NEW_NPC]);
+    expect(source.refreshSourceControlFor).toHaveBeenCalledWith(MY_PATCH);
+    expect(steps).toContain('select 000900:MyPatch.esp in npc_');
+  });
+
+  it('reports a change VS Code did not apply, selects nothing, and lands nothing', async () => {
+    const { steps, source, reporter, create } = harness();
+    source.applyWorkspaceChanges.mockRejectedValue(new Error('VS Code did not apply the changes.'));
+
+    await create(NPC_GROUP);
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not create the Non-Player Character record.', detail: 'VS Code did not apply the changes.' }]);
+    expect(reporter.landings).toEqual([]);
+    expect(source.refreshSourceControlFor).not.toHaveBeenCalled();
+    expect(steps).toEqual(['watch MyPatch.esp ModA', 'create MyPatch.esp ModA npc_', 'forget']);
+  });
+
+  it('reports a file VS Code did not save as a part of the outcome, and still selects the record that landed', async () => {
+    const { steps, source, reporter, create } = harness();
+    source.applyWorkspaceChanges.mockResolvedValue(['/mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json']);
+
+    await create(NPC_GROUP);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not save 000900:MyPatch.esp.',
+      detail: 'VS Code did not save /mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json.',
+    }]);
+    expect(reporter.landings).toEqual(['Created 000900:MyPatch.esp.']);
+    expect(source.refreshSourceControlFor).toHaveBeenCalledWith(MY_PATCH);
+    expect(steps).toContain('select 000900:MyPatch.esp in npc_');
   });
 });
 
@@ -337,7 +385,7 @@ describe('modbench.record.create ends when the write does', () => {
   it('runs the create inside the write, and asks nothing of it before the type is picked', async () => {
     const { client, writing, create } = harness();
     showQuickPick.mockImplementation((items) => { writing.push('picked'); return Promise.resolve(items[1]); });
-    client.setCommandHandler('createRecord', () => { writing.push('create'); return Promise.resolve(NEW_NPC); });
+    client.setCommandHandler('getCreateChanges', () => { writing.push('create'); return Promise.resolve(NEW_NPC); });
 
     await create(PLUGIN_ROW);
 
@@ -346,7 +394,7 @@ describe('modbench.record.create ends when the write does', () => {
 
   it('settles the watch when the create throws', async () => {
     const { client, steps, create } = harness();
-    client.setCommandHandler('createRecord', () => Promise.reject(new Error('connection reset')));
+    client.setCommandHandler('getCreateChanges', () => Promise.reject(new Error('connection reset')));
 
     await expect(create(NPC_GROUP)).rejects.toThrow('connection reset');
 
@@ -355,7 +403,7 @@ describe('modbench.record.create ends when the write does', () => {
 
   it('ends the write after mEdit refuses the create', async () => {
     const { client, writing, create } = harness();
-    client.setCommandHandler('createRecord', () => Promise.resolve({ refused: true, message: 'no answer' }));
+    client.setCommandHandler('getCreateChanges', () => Promise.resolve({ refused: true, message: 'no answer' }));
 
     await create(NPC_GROUP);
 

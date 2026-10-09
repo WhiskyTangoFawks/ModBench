@@ -215,8 +215,7 @@ public sealed class GitMissingApiTests : HostedTests
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
         var before = FilesOutsideGit(modFolder);
 
-        var response = await WithGitMissing(() => Client.PostAsJsonAsync(
-            $"/plugins/{Plugin}/records", new { origin = Origin, recordType = "npc_" }));
+        var response = await WithGitMissing(() => Client.CreateRecord(Plugin, Origin, "npc_"));
 
         await AssertRefusedGitUnavailable(response);
         Assert.Equal(before, FilesOutsideGit(modFolder));

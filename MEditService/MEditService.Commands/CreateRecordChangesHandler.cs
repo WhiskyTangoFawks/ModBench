@@ -11,34 +11,36 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands;
 
-/// <summary>The Create gesture's handler (ADR-0014): mints a bare record (plugins.md, Create record, story 2)
-/// under the next free FormKey: a new source file, the end of its container's slot, or a worldspace's grid.</summary>
-public sealed class CreateRecordHandler
+/// <summary>The Create gesture's handler (ADR-0014): answers the changes that mint a bare record (plugins.md, Create record,
+/// story 2) under the next free FormKey, written nowhere (ADR-0001).</summary>
+public sealed class CreateRecordChangesHandler
 {
     private readonly WriteTargets _targets;
     private readonly LoadOrderResolution _resolution;
     private readonly LoadOrderHolder _loadOrder;
     private readonly SchemaReflector _schemaReflector;
-    private readonly ILogger<CreateRecordHandler> _logger;
+    private readonly ILogger<CreateRecordChangesHandler> _logger;
 
     // Internal because the shared module is, which is why this assembly registers its own handlers
     // (MEditService.Commands.Composition) rather than the host naming a type it cannot see.
-    internal CreateRecordHandler(
+    internal CreateRecordChangesHandler(
         WriteTargets targets,
         LoadOrderResolution resolution,
         LoadOrderHolder loadOrder,
         SchemaReflector schemaReflector,
-        ILogger<CreateRecordHandler> logger)
+        ILogger<CreateRecordChangesHandler> logger)
     {
         (_targets, _resolution, _loadOrder, _schemaReflector, _logger) =
             (targets, resolution, loadOrder, schemaReflector, logger);
     }
 
-    public RecordEditResult CreateRecord(
-        PluginAddress plugin, string recordType, string? container = null, GridPosition? position = null) =>
+    /// <summary>The changes creating the record makes over <paramref name="unsaved"/>, which stand in for their files.
+    /// The outcome carries the new FormKey.</summary>
+    public RecordEditChanges CreateRecord(
+        PluginAddress plugin, string recordType, IReadOnlyList<DocumentChange> unsaved, string? container = null, GridPosition? position = null) =>
         WriteFailure.Refused(
-            MintRecord(plugin, recordType, container, position), refused => refused,
-            $"Could not write the source file for the new {recordType}", _logger);
+            MintRecord(plugin, recordType, unsaved, container, position), refused => refused,
+            $"Could not read the source to create the new {recordType}", _logger);
 
     private static RecordEditResult MalformedPosition(string why) =>
         RecordEditResult.Refused(RecordEditRefusal.InvalidEnvelope, $"A grid position is for a cell in a worldspace, and the request {why}.");
@@ -54,12 +56,15 @@ public sealed class CreateRecordHandler
         return cell.ToJsonString();
     }
 
-    private SourceAnswer<RecordEditResult> MintRecord(PluginAddress plugin, string recordType, string? container, GridPosition? position)
+    private SourceAnswer<RecordEditChanges> MintRecord(
+        PluginAddress plugin, string recordType, IReadOnlyList<DocumentChange> unsaved, string? container, GridPosition? position)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
         if (_targets.RefuseUnlessEditable(plugin, out var openedRepository) is { } blocked) return blocked;
-        var repository = openedRepository
+        var onDisk = openedRepository
             ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
+        var batch = SourceBatch.Over(onDisk, unsaved);
+        var repository = batch.Repository;
 
         var release = _loadOrder.Current.GameRelease;
         var schemas = _schemaReflector.GetSchemas(release);
@@ -68,7 +73,7 @@ public sealed class CreateRecordHandler
             return RecordEditResult.Refused(
                 RecordEditRefusal.RecordTypeNotFound, $"'{recordType}' is not a creatable record type.");
         }
-        if (container is not null) return MintChild(repository, plugin, recordType, schema, release, container, position);
+        if (container is not null) return MintChild(batch, plugin, recordType, schema, release, container, position);
         if (position is not null) return MalformedPosition("names no container");
         if (!RecordTypes.For(release).IsCreatable(recordType))
         {
@@ -95,18 +100,23 @@ public sealed class CreateRecordHandler
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation(
-                "Created {RecordType} {FormKey} in {Plugin} ({Origin}) — new working-tree source document",
+                "Answered the creation of {RecordType} {FormKey} in {Plugin} ({Origin}) — a new source document",
                 recordType, targetFormKey, plugin.Name, plugin.Origin);
         }
-        return RecordEditResult.Success(targetFormKey);
+        return Landed(batch, targetFormKey);
     }
 
-    private SourceAnswer<RecordEditResult> MintChild(
-        SourceRepository repository, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
+    private static SourceAnswer<RecordEditChanges> Landed(SourceBatch batch, string formKey) =>
+        SourceAnswer.Of(new RecordEditChanges(RecordEditResult.Success(formKey), batch.Changes));
+
+    private SourceAnswer<RecordEditChanges> MintChild(
+        SourceBatch batch, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
         string container, GridPosition? position)
     {
-        if (!_targets.TryResolveEditTarget(plugin, container, out var target, out var containerDocument, out var unresolved))
+        var repository = batch.Repository;
+        if (WriteTargets.ResolveInTheTree(plugin, container, repository, release, out var target, out var containerDocument) is { } unresolved)
             return unresolved;
+        if (containerDocument is null) throw new InvalidOperationException($"Expected {container}'s document to have been located.");
         var containerType = target.Identity.RecordType;
         var types = RecordTypes.For(release);
         var exteriorCell = types.IsWorldspace(containerType) && types.IsCell(recordType);
@@ -127,7 +137,7 @@ public sealed class CreateRecordHandler
         if (exteriorCell && containerHoldsIt)
         {
             return position is { X: int x, Y: int y }
-                ? CreateCellAt(repository, plugin, recordType, schemas, release, container, (x, y))
+                ? CreateCellAt(batch, plugin, recordType, schemas, release, container, (x, y))
                 : RecordEditResult.Refused(
                     RecordEditRefusal.InvalidEnvelope, $"A cell created in the worldspace {container} takes a grid position, both x and y.");
         }
@@ -136,7 +146,7 @@ public sealed class CreateRecordHandler
             case ChildSlot.Open(var slot):
                 var root = JsonObject.Create(parsed.RootElement)
                     ?? throw new InvalidOperationException($"Expected {container}'s document to hold a JSON object.");
-                return AppendChild(repository, plugin, recordType, schema, release, new Landing(target.Identity, root, slot));
+                return AppendChild(batch, plugin, recordType, schema, release, new Landing(target.Identity, root, slot));
             case ChildSlot.Filled(var slot, var held):
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ChildSlotHeldByAnotherRecord,
@@ -147,10 +157,11 @@ public sealed class CreateRecordHandler
         }
     }
 
-    private SourceAnswer<RecordEditResult> CreateCellAt(
-        SourceRepository repository, PluginAddress plugin, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+    private SourceAnswer<RecordEditChanges> CreateCellAt(
+        SourceBatch batch, PluginAddress plugin, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         GameRelease release, string worldspace, (int X, int Y) grid)
     {
+        var repository = batch.Repository;
         var at = $"at {grid.X}, {grid.Y}";
         var holder = _resolution.HolderOfCell(repository, plugin, schemas, worldspace, grid, worldspace, $"whether a cell sits {at}");
         switch (holder)
@@ -186,18 +197,19 @@ public sealed class CreateRecordHandler
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation(
-                "Created cell {FormKey} in {Plugin} ({Origin}) — at grid {X}, {Y} of {Worldspace}",
+                "Answered the creation of cell {FormKey} in {Plugin} ({Origin}) — at grid {X}, {Y} of {Worldspace}",
                 formKey, plugin.Name, plugin.Origin, grid.X, grid.Y, worldspace);
         }
-        return RecordEditResult.Success(formKey);
+        return Landed(batch, formKey);
     }
 
     private sealed record Landing(RecordIdentity Container, JsonObject Root, string Slot);
 
-    private SourceAnswer<RecordEditResult> AppendChild(
-        SourceRepository repository, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
+    private SourceAnswer<RecordEditChanges> AppendChild(
+        SourceBatch batch, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
         Landing landing)
     {
+        var repository = batch.Repository;
         var (container, root, slot) = landing;
         if (!FormKeyAllocator.Over(repository, plugin, release).Holds(out var allocator, out var unread)) return unread;
         if (allocator.Next(out var formKey) is { } refusedTarget) return refusedTarget;
@@ -218,9 +230,9 @@ public sealed class CreateRecordHandler
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation(
-                "Created {RecordType} {FormKey} in {Plugin} ({Origin}) — at the end of {Container}'s {Slot}",
+                "Answered the creation of {RecordType} {FormKey} in {Plugin} ({Origin}) — at the end of {Container}'s {Slot}",
                 recordType, formKey, plugin.Name, plugin.Origin, container.FormKey, slot);
         }
-        return RecordEditResult.Success(formKey);
+        return Landed(batch, formKey.ToString());
     }
 }

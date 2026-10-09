@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
+using MEditService.Codec.Serialization;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -33,7 +35,7 @@ public sealed class CreateRecordApiTests : HostedTests
     }
 
     private Task<HttpResponseMessage> Create(string origin, string recordType, string? container = null, object? position = null) =>
-        Client.PostAsJsonAsync($"/plugins/{Plugin}/records", new { origin, recordType, container, position });
+        Client.CreateRecord(Plugin, origin, recordType, container, position);
 
     [Fact]
     public async Task CreatingARecord_InATrackedPlugin_AnswersTheNewFormKey()
@@ -50,6 +52,20 @@ public sealed class CreateRecordApiTests : HostedTests
             async () => (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
                 .GetProperty("items").EnumerateArray().Any(r => r.GetProperty("formKey").GetString() == formKey),
             "the created record to be read");
+    }
+
+    [Fact]
+    public async Task CreatingARecord_GivenTheUnsavedTextOfTheHeader_TakesTheNextObjectIdItHolds()
+    {
+        var fx = await Loaded(tracked: true);
+        var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
+        var headerFile = Path.Combine(modFolder, "plugin-source", Plugin, $"000000_{Plugin}.json");
+        var unsavedHeader = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(await File.ReadAllBytesAsync(headerFile), 0xA00));
+
+        var response = await Client.CreateRecord(Plugin, Origin, "npc_", unsaved: [(headerFile, unsavedHeader)]);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("000A00:" + Plugin, (await response.Body()).GetProperty("formKey").GetString());
     }
 
     [Fact]

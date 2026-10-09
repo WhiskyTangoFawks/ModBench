@@ -44,11 +44,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         using var fx = BuildOneModOnePlugin();
         await LoadAndTrack(fx);
 
-        var created = await _client.PostAsJsonAsync($"/plugins/{Plugin}/records", new
-        {
-            origin = Origin,
-            recordType = "npc_",
-        });
+        var created = await _client.CreateRecord(Plugin, Origin, "npc_");
         created.EnsureSuccessStatusCode();
         var oldFormKey = DocumentNodes.StringValueOf((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));
 

@@ -33,7 +33,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   });
 
   it.each([...VIEW_REREADS])('fails %s beside a write', (reread) => {
-    const messages = lint(`async function f(client, tree) { await client.createRecord(x); tree.${reread}(); }\n`);
+    const messages = lint(`async function f(client, tree) { await client.applyWorkspaceChanges(x); tree.${reread}(); }\n`);
 
     expect(messages).toHaveLength(1);
   });
@@ -62,12 +62,18 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
     const messages = lines(
       'function register(client, treeSync, refreshMatchingPlugins) {',
       '  const onWritten = () => { treeSync.refresh(); refreshMatchingPlugins(); };',
-      '  return registerCommand(async () => { await client.createRecord(x); onWritten(); });',
+      '  return registerCommand(async () => { await client.applyWorkspaceChanges(x); onWritten(); });',
       '}',
     );
 
     expect(messages).toHaveLength(1);
     expect(messages[0]?.line).toBe(3);
+  });
+
+  it('fails a view refresh after a create applies its workspace changes through the source editing port', () => {
+    const messages = lint('async function create(deps, tree) { await deps.source.applyWorkspaceChanges([changes]); tree.refresh(); }\n');
+
+    expect(messages).toHaveLength(1);
   });
 
   it('fails the call of a module-level helper that re-reads, made after a write', () => {
@@ -135,7 +141,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   });
 
   it('fails a re-read chained on a write with .then, as part of the caller', () => {
-    const messages = lint('async function f(client, tree) { await client.createRecord(x).then(() => tree.refresh()); }\n');
+    const messages = lint('async function f(client, tree) { await client.applyWorkspaceChanges(x).then(() => tree.refresh()); }\n');
 
     expect(messages).toHaveLength(1);
   });

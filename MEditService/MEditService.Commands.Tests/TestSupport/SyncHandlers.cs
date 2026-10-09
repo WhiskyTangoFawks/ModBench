@@ -28,6 +28,18 @@ internal static class SyncHandlers
         return result;
     }
 
+    /// <summary>Create, then its changes made on disk, as the editor makes them.</summary>
+    internal static RecordEditResult CreateRecordSync(
+        this CreateRecordChangesHandler handler, PluginAddress plugin, string recordType, string? container = null,
+        GridPosition? position = null, IReadOnlyList<DocumentChange>? unsaved = null)
+    {
+        var (outcome, changes) = handler.CreateRecord(plugin, recordType, unsaved ?? [], container, position);
+        EditSaving.Save(
+            changes.Moves.Select(move => (move.From, move.To)), changes.Deletions,
+            changes.Documents.Select(document => (document.Path, document.Text)));
+        return outcome;
+    }
+
     internal static SelectionResult<CopyItem, RecordEditRefusal, string?> CopySync(
         this CopyRecordHandler handler, IReadOnlyList<RecordAt> records, CopyMode mode,
         IReadOnlyList<PluginAddress> destinations, bool replace) =>

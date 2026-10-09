@@ -15,6 +15,9 @@ import { createSourceLanguage, dirtyPluginSource } from './sourceLanguage';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
 import type { RecordWrite } from './drivingLib/writingGesture';
+import type { SourceEditing } from './drivingLib/sourceEditing';
+import { applyWorkspaceChanges } from './drivingLib/applyWorkspaceChanges';
+import { oneAtATime } from './drivingLib/oneAtATime';
 import { Instance } from './instanceLoader/instance';
 import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
 import { originFiles, NO_ORIGIN_FILES, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
@@ -60,6 +63,7 @@ interface ViewsDeps {
   statusBar: StatusBar;
   registerRepositories: () => Promise<void>;
   recordWrite: RecordWrite;
+  sourceEditing: SourceEditing;
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
   trash: MoveToTrash;
@@ -114,7 +118,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
   const plugins = own(createPluginsView({
     instance, adapter, recordBrowser, client: pluginFacts, pluginSync, channel: outputChannel, statusBar, registerRepositories, reporterFor,
-    ask, recordWrite, trackSelection, modsView: MODS_KEY_ARGS.view,
+    ask, recordWrite, sourceEditing: deps.sourceEditing, trackSelection, modsView: MODS_KEY_ARGS.view,
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     log: (level, msg) => outputChannel[level](msg),
   }));
@@ -231,6 +235,12 @@ export function activate(context: vscode.ExtensionContext): void {
   const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...modFacts });
   const instance = { refresh: () => views.facts.refresh() };
   const recordWrite = recordWriteOver(instance, meditClient);
+  const sourceEditing: SourceEditing = {
+    unsaved: dirtyPluginSource,
+    applyWorkspaceChanges: (items) => applyWorkspaceChanges(items),
+    oneAtATime: oneAtATime(),
+    refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
+  };
   const editor = createEditor({
     context, meditClient, outputChannel,
     reporterFor: (tag) => makeReporter(outputChannel, tag),
@@ -238,8 +248,7 @@ export function activate(context: vscode.ExtensionContext): void {
     focusedView,
     recordViewIds: ['modbench.pluginListTree'],
     recordWrite,
-    refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
-    dirtyPluginSource,
+    sourceEditing,
     modFacts,
   });
   const views = buildViews({
@@ -252,6 +261,7 @@ export function activate(context: vscode.ExtensionContext): void {
     statusBar,
     registerRepositories: trackedRepositories.registerRepositories,
     recordWrite,
+    sourceEditing,
     extensionId: context.extension.id,
     extensionUri: context.extensionUri,
     focusedView,

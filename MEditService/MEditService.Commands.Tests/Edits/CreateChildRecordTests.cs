@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -20,12 +21,32 @@ public sealed class CreateChildRecordTests : IDisposable
     [Fact]
     public void ATopicCreatedOnAQuest_LandsLastInItsTopics_AndItsSiblingsKeepTheirOrder()
     {
-        var result = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, "dial", _fixture.Quest.ToString());
+        var result = _fixture.CreateHandler.CreateRecordSync(_fixture.Plugin, "dial", _fixture.Quest.ToString());
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             [_fixture.DialogTopic.ToString(), _fixture.DialogTopic2.ToString(), _fixture.DialogTopic3.ToString(), result.NewFormKey.Require()],
             SlotOf(_fixture.Quest, "DialogTopics"));
+    }
+
+    [Fact]
+    public void AChildCreatedOnAnUnsavedContainer_LandsInTheTextItHolds_AndWritesNothing()
+    {
+        var file = Path.Combine(_fixture.ModFolder, TrackedTree.DocumentFile(_fixture.ModFolder, _fixture.Plugin, _fixture.Quest.ToString()).Require());
+        var onDisk = JsonNode.Parse(File.ReadAllText(file)).Require().AsObject();
+        onDisk["DialogTopics"].Require().AsArray().RemoveAt(0);
+        var held = onDisk.ToJsonString();
+        var before = File.ReadAllText(file);
+
+        var (outcome, changes) = _fixture.CreateHandler.CreateRecord(
+            _fixture.Plugin, "dial", [new DocumentChange(file, held)], _fixture.Quest.ToString());
+
+        Assert.True(outcome.Applied, outcome.Message);
+        Assert.Equal(before, File.ReadAllText(file));
+        var quest = JsonNode.Parse(Assert.Single(changes.Documents, document => document.Path == file).Text).Require();
+        Assert.Equal(
+            [_fixture.DialogTopic2.ToString(), _fixture.DialogTopic3.ToString(), outcome.NewFormKey.Require()],
+            quest["DialogTopics"].Require().AsArray().Select(child => child.Require()["FormKey"].Require().GetValue<string>()));
     }
 
     public static TheoryData<string, string, string> OneChildOfEachOtherSlot => new()
@@ -43,7 +64,7 @@ public sealed class CreateChildRecordTests : IDisposable
         var containerKey = KeyOf(container);
         var siblings = SlotOf(containerKey, slot);
 
-        var result = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, recordType, containerKey.ToString());
+        var result = _fixture.CreateHandler.CreateRecordSync(_fixture.Plugin, recordType, containerKey.ToString());
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal([.. siblings, result.NewFormKey.Require()], SlotOf(containerKey, slot));
@@ -63,7 +84,7 @@ public sealed class CreateChildRecordTests : IDisposable
         var containerKey = KeyOf(container).ToString();
         var before = TrackedTree.Records(_fixture.ModFolder, _fixture.Plugin);
 
-        var result = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, recordType, containerKey);
+        var result = _fixture.CreateHandler.CreateRecordSync(_fixture.Plugin, recordType, containerKey);
 
         Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
         Assert.Contains(containerKey, result.Message, StringComparison.Ordinal);
@@ -75,7 +96,7 @@ public sealed class CreateChildRecordTests : IDisposable
     {
         using var mod = ExteriorCell(out var cell);
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "land", cell.ToString());
+        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "land", cell.ToString());
 
         Assert.True(result.Applied, result.Message);
         var landscape = JsonNode.Parse(mod.Body(cell)).Require()["Landscape"].Require();
@@ -87,7 +108,7 @@ public sealed class CreateChildRecordTests : IDisposable
     {
         using var mod = ExteriorCell(out var cell);
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "navm", cell.ToString());
+        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "navm", cell.ToString());
 
         Assert.True(result.Applied, result.Message);
         var navmeshes = JsonNode.Parse(mod.Body(cell)).Require()["NavigationMeshes"].Require().AsArray();
@@ -98,10 +119,10 @@ public sealed class CreateChildRecordTests : IDisposable
     public void ALandscapeCreatedOnACellHoldingOne_IsRefusedNamingIt_AndTheTreeIsAsItWas()
     {
         using var mod = ExteriorCell(out var cell);
-        var held = mod.CreateHandler.CreateRecord(mod.Plugin, "land", cell.ToString()).NewFormKey.Require();
+        var held = mod.CreateHandler.CreateRecordSync(mod.Plugin, "land", cell.ToString()).NewFormKey.Require();
         var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "land", cell.ToString());
+        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "land", cell.ToString());
 
         Assert.Equal(RecordEditRefusal.ChildSlotHeldByAnotherRecord, result.Refusal);
         Assert.Contains(held, result.Message, StringComparison.Ordinal);
@@ -120,7 +141,7 @@ public sealed class CreateChildRecordTests : IDisposable
         });
         var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "dial", questKey.ToString());
+        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "dial", questKey.ToString());
 
         Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
         Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
@@ -135,7 +156,7 @@ public sealed class CreateChildRecordTests : IDisposable
             cell.MajorRecordFlagsRaw = DeletedFlag.Bit;
         });
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "land", cell.ToString());
+        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "land", cell.ToString());
 
         Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
     }
@@ -149,7 +170,7 @@ public sealed class CreateChildRecordTests : IDisposable
         Directory.Move(directory, Path.Combine(group, Path.GetFileName(directory)));
         var before = TrackedTree.Records(_fixture.ModFolder, _fixture.Plugin);
 
-        var result = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, "navm", cell.FormKey);
+        var result = _fixture.CreateHandler.CreateRecordSync(_fixture.Plugin, "navm", cell.FormKey);
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.Equal(before, TrackedTree.Records(_fixture.ModFolder, _fixture.Plugin));
@@ -171,7 +192,7 @@ public sealed class CreateChildRecordTests : IDisposable
     {
         using var mod = CellShaped(place, cell => cell.MajorRecordFlagsRaw = persistent ? PersistentFlag.Bit : 0, out var cell);
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", cell.ToString());
+        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "refr", cell.ToString());
 
         Assert.True(result.Applied, result.Message);
         var landed = JsonNode.Parse(mod.Body(cell)).Require();
@@ -190,7 +211,7 @@ public sealed class CreateChildRecordTests : IDisposable
     {
         using var mod = InteriorCell(out var cell, interior => interior.MajorRecordFlagsRaw = PersistentFlag.Bit);
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType, cell.ToString());
+        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, recordType, cell.ToString());
 
         Assert.True(result.Applied, result.Message);
         var created = Assert.Single(JsonNode.Parse(mod.Body(cell)).Require()[PersistentFlag.PersistentGroup].Require().AsArray());
@@ -205,7 +226,7 @@ public sealed class CreateChildRecordTests : IDisposable
     {
         using var mod = CellShaped(place, cell => cell.Grid = new CellGrid { Point = new P2Int(3, -2) }, out var cell);
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType, cell.ToString());
+        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, recordType, cell.ToString());
 
         Assert.True(result.Applied, result.Message);
         var created = Assert.Single(JsonNode.Parse(mod.Body(cell)).Require()[PersistentFlag.TemporaryGroup].Require().AsArray()).Require();
@@ -228,7 +249,7 @@ public sealed class CreateChildRecordTests : IDisposable
             },
             out var cell);
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", cell.ToString());
+        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "refr", cell.ToString());
 
         Assert.True(result.Applied, result.Message);
         var created = Assert.Single(JsonNode.Parse(mod.Body(cell)).Require()[PersistentFlag.PersistentGroup].Require().AsArray()).Require();
@@ -240,7 +261,7 @@ public sealed class CreateChildRecordTests : IDisposable
     {
         using var mod = InteriorCell(out var cell, _ => { });
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "refr", cell.ToString());
+        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "refr", cell.ToString());
 
         Assert.True(result.Applied, result.Message);
         var created = Assert.Single(JsonNode.Parse(mod.Body(cell)).Require()[PersistentFlag.TemporaryGroup].Require().AsArray()).Require();
@@ -253,7 +274,7 @@ public sealed class CreateChildRecordTests : IDisposable
         using var mod = InteriorCell(out var cell, interior => interior.MajorRecordFlagsRaw = PersistentFlag.Bit);
         var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "navm", cell.ToString());
+        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "navm", cell.ToString());
 
         Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
         Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
@@ -319,7 +340,7 @@ public sealed class CreateChildRecordTests : IDisposable
     [Fact]
     public void ACreatedChild_MovesTheNextObjectIdPastItsFormKey()
     {
-        var result = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, "dial", _fixture.Quest.ToString());
+        var result = _fixture.CreateHandler.CreateRecordSync(_fixture.Plugin, "dial", _fixture.Quest.ToString());
 
         Assert.Equal("000815:ContainerFixture.esp", result.NewFormKey);
         Assert.Equal(0x816u, _fixture.NextObjectId());

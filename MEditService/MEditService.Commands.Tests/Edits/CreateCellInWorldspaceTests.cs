@@ -1,9 +1,11 @@
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -62,7 +64,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     private IReadOnlyList<string> Tree => TrackedTree.Records(_plugins.FolderOf(_edited), Edited);
 
     private RecordEditResult CreateCellAt(int? x, int? y) =>
-        _plugins.CreateHandler.CreateRecord(Edited, "cell", World.ToString(), new GridPosition(x, y));
+        _plugins.CreateHandler.CreateRecordSync(Edited, "cell", World.ToString(), new GridPosition(x, y));
 
     [Theory]
     [InlineData(-9, 33, "-1, 1", "-2, 4")]
@@ -93,6 +95,23 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         Assert.Equal(RecordEditRefusal.ChildSlotHeldByAnotherRecord, result.Refusal);
         Assert.Contains(_ownCell.ToString(), result.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("copy", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(before, Tree);
+    }
+
+    [Fact]
+    public void ACellCreatedWhereTheUnsavedTextOfThePluginsCellNoLongerSits_LandsThere_AndWritesNothing()
+    {
+        var before = Tree;
+        var folder = _plugins.FolderOf(_edited);
+        var file = Path.Combine(folder, TrackedTree.DocumentFile(folder, Edited, _ownCell.ToString()).Require());
+        var moved = JsonNode.Parse(File.ReadAllText(file)).Require().AsObject();
+        moved[RecordTypes.CellGridMember] = PlacedCell.GridAt(20, 21);
+
+        var (outcome, changes) = _plugins.CreateHandler.CreateRecord(
+            Edited, "cell", [new DocumentChange(file, moved.ToJsonString())], World.ToString(), new GridPosition(5, 6));
+
+        Assert.True(outcome.Applied, outcome.Message);
+        Assert.Contains(changes.Documents, document => document.Text.Contains(outcome.NewFormKey.Require(), StringComparison.Ordinal));
         Assert.Equal(before, Tree);
     }
 
@@ -148,7 +167,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     {
         var before = Tree;
 
-        var result = _plugins.CreateHandler.CreateRecord(Edited, "cell", World.ToString());
+        var result = _plugins.CreateHandler.CreateRecordSync(Edited, "cell", World.ToString());
 
         Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
         Assert.Equal(before, Tree);
@@ -157,7 +176,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     [Fact]
     public void ARecordOtherThanACellCreatedOnAWorldspace_IsRefusedAsOneItCannotHold()
     {
-        var result = _plugins.CreateHandler.CreateRecord(Edited, "npc_", World.ToString());
+        var result = _plugins.CreateHandler.CreateRecordSync(Edited, "npc_", World.ToString());
 
         Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
         Assert.Contains(World.ToString(), result.Message, StringComparison.Ordinal);
@@ -166,7 +185,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     [Fact]
     public void ARecordOtherThanACellCreatedOnAWorldspaceWithAGridPosition_IsRefusedAsAMalformedEnvelope()
     {
-        var result = _plugins.CreateHandler.CreateRecord(Edited, "refr", World.ToString(), new GridPosition(1, 1));
+        var result = _plugins.CreateHandler.CreateRecordSync(Edited, "refr", World.ToString(), new GridPosition(1, 1));
 
         Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
     }
@@ -176,7 +195,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     {
         var gone = new FormKey(_edited.ModKey, 0xFFF).ToString();
 
-        var result = _plugins.CreateHandler.CreateRecord(Edited, "cell", gone, new GridPosition(1, 1));
+        var result = _plugins.CreateHandler.CreateRecordSync(Edited, "cell", gone, new GridPosition(1, 1));
 
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
         Assert.Contains(gone, result.Message, StringComparison.Ordinal);
@@ -187,7 +206,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     {
         var before = Tree;
 
-        var result = _plugins.CreateHandler.CreateRecord(Edited, "cell", _deletedWorld.ToString(), new GridPosition(1, 1));
+        var result = _plugins.CreateHandler.CreateRecordSync(Edited, "cell", _deletedWorld.ToString(), new GridPosition(1, 1));
 
         Assert.Equal(RecordEditRefusal.ContainerCannotHoldType, result.Refusal);
         Assert.Equal(before, Tree);

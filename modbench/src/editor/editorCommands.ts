@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
-import type { MEditClient, UnsavedDocument } from '../client';
-import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
+import type { MEditClient } from '../client';
+import { samePluginAddress } from '../wire/pluginAddress';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { pickRecord } from './recordPicker';
 import type { SharedRecordPanelDeps } from './recordPanelMessageRouter';
 import type { RecordTabs } from './recordTabs';
 import { RECORD_VIEW_TYPE, RecordEditorProvider } from './recordPanelHost';
-import { applyRecordEdit, applySourceChanges, oneAtATime, type RecordWriteDeps } from './applyRecordEdit';
+import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 import { ExtendedFieldDocuments } from './extendedFieldEditor';
 import { commitField, registerRecordPanelContextCommands, type FieldCommitDeps } from './recordPanelContextCommands';
 import { registerGridKeyCommands } from './gridKeyCommands';
@@ -15,6 +15,7 @@ import {
 } from './recordLifecycleCommands';
 import { announceConflictsComputed, subscribeRecordTabsToNotifications } from './notificationWiring';
 import type { RecordWrite } from '../drivingLib/writingGesture';
+import type { SourceEditing } from '../drivingLib/sourceEditing';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { besideArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
@@ -41,11 +42,7 @@ export interface EditorCommandDeps {
   // The rows selected in the view `view` names, which a key bound in that view acts on.
   selectionOf: (view: string) => readonly unknown[];
   recordWrite: RecordWrite;
-  // The plugin's Source Control status, which a committed field edit redrives, lives on the session
-  // object, narrowed to a callback like focusedViewSelection.
-  refreshSourceControlFor: (plugin: PluginAddress) => void;
-  // The documents with unsaved changes under plugin source, which mEdit reads in place of their files.
-  dirtyPluginSource: () => readonly UnsavedDocument[];
+  sourceEditing: SourceEditing;
   // The instance's mods, which a column header reads for its mod's repository state.
   modFacts: ModFacts;
   outputChannel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
@@ -69,8 +66,8 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     meditClient,
     documentOf: (address) => recordEditorProvider.documentCarrying(address),
     moving: (moves, edited, newFormKey) => recordEditorProvider.moving(moves, edited, newFormKey),
-    oneAtATime: oneAtATime(),
-    refreshSourceControlFor: (plugin) => { deps.refreshSourceControlFor(plugin); },
+    oneAtATime: deps.sourceEditing.oneAtATime,
+    refreshSourceControlFor: deps.sourceEditing.refreshSourceControlFor,
     // Surfaces a refused edit (ADR-0019).
     reporter: deps.reporterFor('recordPanel'),
   };
@@ -106,12 +103,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       tellFocusedPanel: (message) => { tabs.activeTab()?.post(message); },
     }),
     ...registerRecordLifecycleCommands(
-      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, selections, deps.recordWrite, {
-        unsaved: deps.dirtyPluginSource,
-        apply: (items) => applySourceChanges(items),
-        oneAtATime: writeDeps.oneAtATime,
-        refreshSourceControlFor: writeDeps.refreshSourceControlFor,
-      }),
+      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, selections, deps.recordWrite, deps.sourceEditing),
     ...registerRecordCopyCommands(
       meditClient, deps.reporterFor('recordCopy'), deps.ask, selections, deps.recordWrite),
     vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {

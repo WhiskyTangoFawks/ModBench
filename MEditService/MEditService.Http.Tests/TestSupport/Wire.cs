@@ -112,6 +112,26 @@ internal static class Wire
         return response;
     }
 
+    /// <summary>A create as Modbench makes one: mEdit answers the changes creating the record makes, and each move,
+    /// deletion and document is saved. The answer is mEdit's.</summary>
+    internal static async Task<HttpResponseMessage> CreateRecord(
+        this HttpClient client, string plugin, string origin, string recordType, string? container = null, object? position = null,
+        IEnumerable<(string Path, string Text)>? unsaved = null)
+    {
+        var response = await client.PostAsJsonAsync(
+            $"/plugins/{Uri.EscapeDataString(plugin)}/create-record-changes",
+            new { origin, recordType, container, position, documents = (unsaved ?? []).Select(d => new { path = d.Path, text = d.Text }) });
+        if (!response.IsSuccessStatusCode) return response;
+
+        var changes = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        static string Text(JsonElement element, string name) => element.GetProperty(name).GetString().Require();
+        EditSaving.Save(
+            changes.GetProperty("moves").EnumerateArray().Select(move => (Text(move, "from"), Text(move, "to"))),
+            changes.GetProperty("deletions").EnumerateArray().Select(deletion => deletion.GetString().Require()),
+            changes.GetProperty("documents").EnumerateArray().Select(document => (Text(document, "path"), Text(document, "text"))));
+        return response;
+    }
+
     /// <summary>The text of the file holding the plugin's copy of the record; empty when it has none.</summary>
     internal static async Task<string> CopyDocumentText(this HttpClient client, string formKey, string plugin, string origin)
     {

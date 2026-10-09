@@ -165,36 +165,37 @@ describe('HttpMEditClient — a 503 from a write', () => {
   });
 });
 
-describe('HttpMEditClient — creating a record', () => {
-  it('sends the plugin and the type, and reads the new record', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' })));
-    const client = makeClient(fetch);
+describe('HttpMEditClient — creating a record answers the changes', () => {
+  const plugin = { name: 'MyPatch.esp', origin: 'ModA' };
+  const changes = { moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
 
-    const result = await client.createRecord({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_');
+  it('sends the plugin, the type and the unsaved documents, and reads the new FormKey with its changes', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { formKey: '000900:MyPatch.esp', ...changes })));
+    const unsaved = [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Header.json', text: '{"h":1}' }];
 
-    expect(result).toEqual({ applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' });
+    const result = await makeClient(fetch).getCreateChanges(plugin, 'npc_', unsaved);
+
+    expect(result).toEqual({ formKey: '000900:MyPatch.esp', ...changes });
     const request = fetch.mock.calls[0]?.[0];
-    expect(request?.url).toMatch(/\/plugins\/MyPatch\.esp\/records$/);
-    expect(await request?.json()).toEqual({ origin: 'ModA', recordType: 'npc_' });
+    expect(request?.url).toMatch(/\/plugins\/MyPatch\.esp\/create-record-changes$/);
+    expect(await request?.json()).toEqual({ origin: 'ModA', recordType: 'npc_', documents: unsaved });
   });
 
   it('sends the container and the grid position it is given', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { applied: true, formKey: '000900:MyPatch.esp', recordType: 'cell' })));
-    const client = makeClient(fetch);
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { formKey: '000900:MyPatch.esp', ...changes })));
 
-    await client.createRecord({ name: 'MyPatch.esp', origin: 'ModA' }, 'cell', { container: '000800:MyPatch.esp', position: { x: 1, y: -2 } });
+    await makeClient(fetch).getCreateChanges(plugin, 'cell', [], { container: '000800:MyPatch.esp', position: { x: 1, y: -2 } });
 
     expect(await fetch.mock.calls[0]?.[0].json()).toEqual({
-      origin: 'ModA', recordType: 'cell', container: '000800:MyPatch.esp', position: { x: 1, y: -2 },
+      origin: 'ModA', recordType: 'cell', documents: [], container: '000800:MyPatch.esp', position: { x: 1, y: -2 },
     });
   });
 
-  it('answers a full FormID space as a refusal carrying mEdit\'s remedy, asking once, nothing offering to remove the flag and try again', async () => {
+  it('answers a full FormID space as a refusal carrying mEdit\'s remedy, asking once', async () => {
     const detail = 'MyPatch.esp has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address. Clear the light flag in the header to draw above it.';
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { detail })));
-    const client = makeClient(fetch);
 
-    const result = await client.createRecord({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_');
+    const result = await makeClient(fetch).getCreateChanges(plugin, 'npc_', []);
 
     expect(result).toEqual({ refused: true, message: `Could not create a new npc_ record in "MyPatch.esp" — ${detail}` });
     expect(fetch).toHaveBeenCalledOnce();
@@ -252,7 +253,7 @@ describe('HttpMEditClient — deleting records answers the changes per record', 
 
     const answers = [
       await client.getDeleteChanges([kept], []),
-      await thrown.createRecord({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_'),
+      await thrown.getCreateChanges({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_', []),
       await thrown.copyRecords([kept], 'New', [{ name: 'Patch.esp', origin: 'PatchMod' }], false),
     ];
 
