@@ -16,7 +16,7 @@ vi.mock('vscode', () => ({
 
 import { registerGridKeyCommands } from '../gridKeyCommands';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../../wire/messages';
-import type { FocusedCellContext } from '../focusedCells';
+import type { FocusedCellContext } from '../../wire/messages';
 import { present } from '../../ports/present';
 
 const IDENTITY = { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA' };

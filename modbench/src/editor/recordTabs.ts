@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { RecordTab, type EditAddress, type EditGate, type TabPanel } from './recordTab';
-import type { FocusedCellContext } from './focusedCells';
+import type { FocusedCellContext } from '../wire/messages';
 
 /** The open record tabs, and the one in focus: its record, which Referenced By follows, and its
  *  focused cell, which a field gesture from the palette acts on. */

@@ -5,10 +5,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 const pickFormKey = vi.fn<(seed: string, validTypes: string[]) => Promise<string | null>>().mockResolvedValue(null);
-vi.mock('./nativeBridge', async importOriginal => ({
-  ...await importOriginal<typeof import('./nativeBridge')>(),
-  pickFormKey: (seed: string, validTypes: string[]) => pickFormKey(seed, validTypes),
-}));
 
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
@@ -16,7 +12,7 @@ import { WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
 import { columnKey } from '../../src/wire/columnKey';
 import type { CompareResult, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 import {
-  compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, lastToldCell, member, panelClient,
+  compareOverride, compareResultFixture, diffNode, fieldMeta, hostPicking, lastPostedEnvelope, lastToldCell, member, panelClient,
   parseJsonRecord, required, type FixturePlugin,
 } from './test/fixtures';
 
@@ -66,6 +62,7 @@ beforeEach(() => {
   vi.stubGlobal('mEditFormKey', FORM_KEY);
   vi.mocked(vscode.postMessage).mockClear();
   pickFormKey.mockClear();
+  vi.mocked(vscode.postMessage).mockImplementation(hostPicking((seed, validTypes) => pickFormKey(seed, validTypes)));
 });
 afterEach(() => vi.unstubAllGlobals());
 

@@ -4,11 +4,14 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 const pickFormKey = vi.fn<(seed: string, validTypes: string[]) => Promise<string | null>>().mockResolvedValue(null);
-vi.mock('./nativeBridge', () => ({ pickFormKey: (seed: string, validTypes: string[]) => pickFormKey(seed, validTypes) }));
+vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { FormKeyCell } from './FormKeyCell';
 import type { FormKeyResolution } from './types';
-import { fieldMeta } from './test/fixtures';
+import { fieldMeta, hostPicking } from './test/fixtures';
+import { vscode } from './vscode';
+
+vi.mocked(vscode.postMessage).mockImplementation(hostPicking((seed, validTypes) => pickFormKey(seed, validTypes)));
 
 const fkMeta = fieldMeta({ name: 'Race', type: 'formKey', validFormKeyTypes: ['race'] });
 

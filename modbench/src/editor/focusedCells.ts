@@ -1,18 +1,13 @@
 import { isKeyArgs } from '../drivingLib/copyValue';
-
-/** A record tab's focused cell, as the context its right-click menu hands a command. */
-export type FocusedCellContext = object;
+import { isFocusedCellContext, type FocusedCellContext } from '../wire/messages';
 
 function focusedCellKeys(cell: FocusedCellContext | undefined): Record<string, unknown> {
-  const field = (name: string): unknown => (cell === undefined ? undefined : Reflect.get(cell, name));
-  const section = field('webviewSection');
-  const copyText = field('copyText');
   return {
-    focusedCellSection: typeof section === 'string' ? section : undefined,
-    focusedCellCanMoveUp: field('canMoveUp') === true,
-    focusedCellCanMoveDown: field('canMoveDown') === true,
-    focusedCellCopies: typeof copyText === 'string' && copyText !== '',
-    focusedCellEditorOpen: field('editorOpen') === true,
+    focusedCellSection: cell?.webviewSection,
+    focusedCellCanMoveUp: cell?.canMoveUp === true,
+    focusedCellCanMoveDown: cell?.canMoveDown === true,
+    focusedCellCopies: cell?.copyText !== undefined && cell.copyText !== '',
+    focusedCellEditorOpen: cell?.editorOpen === true,
   };
 }
 
@@ -30,11 +25,8 @@ export const GRID_VIEW = 'modbench.recordGrid';
 export function gridCopyValueText(
   focusedCell: () => FocusedCellContext | undefined,
 ): (invocation: unknown) => string | undefined {
-  const textOf = (cell: unknown): string | undefined => {
-    const text: unknown = typeof cell === 'object' && cell !== null ? Reflect.get(cell, 'copyText') : undefined;
-    return typeof text === 'string' ? text : undefined;
-  };
   return (invocation) => {
-    return textOf(isKeyArgs(invocation, GRID_VIEW) ? focusedCell() : invocation);
+    const cell = isKeyArgs(invocation, GRID_VIEW) ? focusedCell() : invocation;
+    return isFocusedCellContext(cell) ? cell.copyText : undefined;
   };
 }
