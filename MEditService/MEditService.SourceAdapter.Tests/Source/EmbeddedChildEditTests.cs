@@ -12,7 +12,7 @@ using Noggog;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-public sealed class EmbeddedChildSpliceTests : IDisposable
+public sealed class EmbeddedChildEditTests : IDisposable
 {
     private const string PluginName = "Splice.esp";
     private const string DroppedByTheCodec = "\"NoSuchMember\": 5";
@@ -31,7 +31,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     private readonly DialogResponses _response;
     private readonly DialogResponses _response2;
 
-    public EmbeddedChildSpliceTests()
+    public EmbeddedChildEditTests()
     {
         _persistentRef = new PlacedObject(_mod) { EditorID = "PersistRef", Position = new P3Float(1f, 2f, 3f), Scale = 4f };
         _temporaryRef = new PlacedObject(_mod) { EditorID = "TempRef", Position = new P3Float(11f, 22f, 33f), Scale = 1f };

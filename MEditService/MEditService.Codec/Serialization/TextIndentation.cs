@@ -2,7 +2,7 @@ namespace MEditService.Codec.Serialization;
 
 /// <summary>A document's text moved between columns. The first line keeps its place: it continues the line it is
 /// spliced into.</summary>
-public static class TextIndentation
+internal static class TextIndentation
 {
     /// <summary>The column the line holding <paramref name="at"/> starts its text at.</summary>
     public static int ColumnAt(byte[] bytes, int at)

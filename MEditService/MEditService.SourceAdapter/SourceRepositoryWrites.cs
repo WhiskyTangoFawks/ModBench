@@ -37,7 +37,7 @@ internal sealed class SourceRepositoryWrites(
         {
             var ownerBytes = FileBytes(unit);
             return DocumentText.EmbeddedChildIn(ownerBytes, unit, identity.FormKey, _release) is { } span
-                ? Written(unit.FullPath, EmbeddedChildSplice.Cut(ownerBytes, span))
+                ? Written(unit.FullPath, ContainerDocumentEdits.WithChildCut(ownerBytes, span))
                 : throw NoLongerCarried(unit, identity.FormKey);
         }
 
@@ -109,7 +109,7 @@ internal sealed class SourceRepositoryWrites(
         var ownerBytes = FileBytes(unit);
         if (DocumentText.EmbeddedChildIn(ownerBytes, unit, document.FormKey, _release) is not { } span)
             throw NoLongerCarried(unit, document.FormKey);
-        return Written(unit.FullPath, EmbeddedChildSplice.Replace(ownerBytes, span, document.Body));
+        return Written(unit.FullPath, ContainerDocumentEdits.WithChildReplaced(ownerBytes, span, document.Body));
     }
 
     // A file whose text is not a document is something else's, and writing over it drops what it wrote.
@@ -134,8 +134,8 @@ internal sealed class SourceRepositoryWrites(
             var ownerBytes = FileBytes(unit);
             var span = DocumentText.EmbeddedChildIn(ownerBytes, unit, identity.FormKey, _release) ?? throw NoLongerCarried(unit, identity.FormKey);
             var rekeyed = Read(() => RecordDocumentEdits.WithFormKey(
-                EmbeddedChildSplice.Extract(ownerBytes, span, _release), _release, identity.RecordType, newFormKey));
-            return Written(unit.FullPath, EmbeddedChildSplice.Replace(ownerBytes, span, rekeyed));
+                ContainerDocumentEdits.ChildTextAt(ownerBytes, span, _release), _release, identity.RecordType, newFormKey));
+            return Written(unit.FullPath, ContainerDocumentEdits.WithChildReplaced(ownerBytes, span, rekeyed));
         }
 
         var text = Read(() => RecordDocumentEdits.WithFormKey(

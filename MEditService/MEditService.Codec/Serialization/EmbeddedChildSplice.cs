@@ -1,10 +1,9 @@
 using System.Text;
 using System.Text.Json;
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
-namespace MEditService.SourceAdapter;
+namespace MEditService.Codec.Serialization;
 
 /// <summary>Replacing and cutting an embedded child in its owner's JSON text. The owner is never
 /// deserialized: these verbs change the child's span and no other byte of the text they are

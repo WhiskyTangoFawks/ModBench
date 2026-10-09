@@ -104,7 +104,7 @@ public sealed class RecordTypes
             : _ambiguous.Any(a => a.IsAssignableFrom(runtimeType));
 
     /// <summary>Whether a document of this <c>record_type</c> is expected to name its own type.</summary>
-    public bool IsPathAmbiguous(string recordType) =>
+    internal bool IsPathAmbiguous(string recordType) =>
         ConcreteFor(recordType) is not { } concrete || _ambiguous.Contains(concrete);
 
     /// <summary>Null when nothing in the game's schema matches, in which case the codec falls back

@@ -2,8 +2,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>A container's child slots changed as documents: the codec reads the text, edits the
-/// graph it built, and writes the text back, or splices in only what an append adds (ADR-0005).</summary>
+/// <summary>A container's child slots changed in its text: an append or a copy goes through the graph the
+/// codec reads, and a child's read, replace or cut splices only the child's span (ADR-0005).</summary>
 public static class ContainerDocumentEdits
 {
     /// <summary>The record's own fields alone, every child slot cleared — what an own-fields copy
@@ -44,4 +44,21 @@ public static class ContainerDocumentEdits
 
         return new NamedDocument(RecordTextCodec.SerializeToText(replacement, release), replacement.EditorID);
     }
+
+    /// <summary>The child's text for a caller holding the owner and asking by identity. Null when no
+    /// embedded slot of the owner carries <paramref name="formKey"/>.</summary>
+    public static string? ChildTextOf(byte[] ownerBytes, string? ownerRecordType, string formKey, GameRelease release) =>
+        EmbeddedChildSplice.TextOf(ownerBytes, ownerRecordType, formKey, release);
+
+    /// <summary>The child's own text as the codec spells it standalone.</summary>
+    public static string ChildTextAt(byte[] ownerBytes, EmbeddedChildSpan span, GameRelease release) =>
+        EmbeddedChildSplice.Extract(ownerBytes, span, release);
+
+    /// <summary>The owner's text with <paramref name="childText"/> in the child's place and no other byte changed.</summary>
+    public static string WithChildReplaced(byte[] ownerBytes, EmbeddedChildSpan span, string childText) =>
+        EmbeddedChildSplice.Replace(ownerBytes, span, childText);
+
+    /// <summary>The owner's text without the child, and without its slot when it was all the slot held.</summary>
+    public static string WithChildCut(byte[] ownerBytes, EmbeddedChildSpan span) =>
+        EmbeddedChildSplice.Cut(ownerBytes, span);
 }

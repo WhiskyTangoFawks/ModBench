@@ -1,4 +1,6 @@
+using System.Text;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -164,5 +166,51 @@ public sealed class ContainerDocumentEditsTests
 
         OneInsertion.AssertKeepsEveryOtherByte(trailingComma, edited);
         Assert.Equal(Text(expected), RecordTextCodec.RoundTrip(edited, Release, RecordTypeOf(expected)));
+    }
+
+    private static (Cell Cell, PlacedObject Placed) CellWithAPersistentRef()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Append.esp"), Fallout4Release.Fallout4);
+        var placed = new PlacedObject(mod) { EditorID = "PersistRef" };
+        var cell = new Cell(mod) { EditorID = "InteriorCell" };
+        cell.Persistent.Add(placed);
+        return (cell, placed);
+    }
+
+    private static EmbeddedChildSpan Located(byte[] ownerBytes, Cell cell, PlacedObject child) =>
+        EmbeddedChildLocator.Find(ownerBytes, RecordTypeOf(cell), child.FormKey.ToString(), Release)
+            ?? throw new InvalidOperationException("The fixture's child is not in its owner.");
+
+    [Fact]
+    public void AnEmbeddedChild_IsReadAsItsOwnStandaloneText_AtColumnZeroAndWithoutTheDiscriminatorItsSlotCarries()
+    {
+        var (cell, placed) = CellWithAPersistentRef();
+        var ownerText = Text(cell);
+        Assert.Contains(LoquiUnions.UnionTypeDiscriminator, ownerText, StringComparison.Ordinal);
+
+        var childText = ContainerDocumentEdits.ChildTextOf(Encoding.UTF8.GetBytes(ownerText), RecordTypeOf(cell), placed.FormKey.ToString(), Release);
+
+        Assert.Equal(Text(placed), childText);
+    }
+
+    [Fact]
+    public void AFormKeyNoSlotCarries_HasNoChildText() =>
+        Assert.Null(ContainerDocumentEdits.ChildTextOf(
+            Encoding.UTF8.GetBytes(Text(CellWithAPersistentRef().Cell)), RecordTypeOf(CellWithAPersistentRef().Cell), "FFFFFF:Append.esp", Release));
+
+    [Fact]
+    public void ReplacingAChild_OfAHandFormattedContainer_ChangesNoByteOutsideTheChildsSpan()
+    {
+        var (cell, placed) = CellWithAPersistentRef();
+        var handFormatted = Text(cell)
+            .Replace("\"InteriorCell\"", "   \"InteriorCell\"  ", StringComparison.Ordinal)
+            .Replace("\"Persistent\": ", "\"Persistent\":   ", StringComparison.Ordinal);
+        var bytes = Encoding.UTF8.GetBytes(handFormatted);
+        var span = Located(bytes, cell, placed);
+        var renamed = ContainerDocumentEdits.ChildTextAt(bytes, span, Release).Replace("PersistRef", "Renamed", StringComparison.Ordinal);
+
+        var replaced = ContainerDocumentEdits.WithChildReplaced(bytes, span, renamed);
+
+        Assert.Equal(handFormatted.Replace("PersistRef", "Renamed", StringComparison.Ordinal), replaced);
     }
 }

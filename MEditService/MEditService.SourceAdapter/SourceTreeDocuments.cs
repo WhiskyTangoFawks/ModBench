@@ -254,7 +254,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
             // The index holds the file's own bytes (ADR-0005), so a hand edit the codec would respell
             // reaches it as the file spells it.
-            var text = EmbeddedChildSplice.TextOf(ownerBytes, ownerRecordType, child.FormKey, _release)
+            var text = ContainerDocumentEdits.ChildTextOf(ownerBytes, ownerRecordType, child.FormKey, _release)
                 ?? throw new InvalidOperationException(
                     $"{ownerFormKey}'s '{child.SlotName}' names '{child.FormKey}', yet the span reader finds no text for it.");
             yield return (child, text, ownerFormKey);

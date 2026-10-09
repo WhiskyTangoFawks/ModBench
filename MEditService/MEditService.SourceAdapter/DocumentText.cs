@@ -106,7 +106,7 @@ internal static class DocumentText
         if (!unit.IsEmbedded) return Encoding.UTF8.GetString(ownerBytes);
 
         return EmbeddedChildIn(ownerBytes, unit, formKey, release) is { } span
-            ? EmbeddedChildSplice.Extract(ownerBytes, span, release)
+            ? ContainerDocumentEdits.ChildTextAt(ownerBytes, span, release)
             : null;
     }
 
