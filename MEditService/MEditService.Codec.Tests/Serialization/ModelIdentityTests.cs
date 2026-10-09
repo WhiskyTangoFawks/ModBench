@@ -15,7 +15,7 @@ public sealed class ModelIdentityTests
     {
         var (original, recompiled, originalBytes, rewrittenBytes) = await ParseWriteAndReparse(NegativeZeroPlugin.Plugin);
 
-        Assert.False(RawPlugin.FirstRecordZlibHeader(originalBytes).SequenceEqual(RawPlugin.FirstRecordZlibHeader(rewrittenBytes)),
+        Assert.False(RawPlugin.FirstMiscZlibHeader(originalBytes).SequenceEqual(RawPlugin.FirstMiscZlibHeader(rewrittenBytes)),
             "The rewrite does not re-deflate the generated plugin's records — this test does not exercise the re-deflate it depends on.");
 
         var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);

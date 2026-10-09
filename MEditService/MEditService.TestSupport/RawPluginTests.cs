@@ -120,4 +120,34 @@ public class RawPluginTests
         Assert.Equal(99u, BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(24 + 6 + 4)));
         Assert.Equal(0x1234u, BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(24 + 6 + 8)));
     }
+
+    [Fact]
+    public void FirstMiscZlibHeader_OfAFastestDeflatedMisc_IsTheFastestZlibHeader()
+    {
+        var plugin = RawPlugin.Plugin(
+            RawPlugin.Tes4(),
+            RawPlugin.Group("MISC", RawPlugin.DeflatedRecord("MISC", 1, CompressionLevel.Fastest, Edid("A"))));
+
+        Assert.Equal(new byte[] { 0x78, 0x01 }, RawPlugin.FirstMiscZlibHeader(plugin));
+    }
+
+    [Fact]
+    public void FirstMiscZlibHeader_WhenTheFirstGroupIsNotMisc_Fails()
+    {
+        var plugin = RawPlugin.Plugin(
+            RawPlugin.Tes4(),
+            RawPlugin.Group("WRLD", RawPlugin.DeflatedRecord("WRLD", 1, CompressionLevel.Fastest, Edid("A"))));
+
+        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => RawPlugin.FirstMiscZlibHeader(plugin));
+    }
+
+    [Fact]
+    public void FirstMiscZlibHeader_WhenTheMiscIsNotCompressed_Fails()
+    {
+        var plugin = RawPlugin.Plugin(
+            RawPlugin.Tes4(),
+            RawPlugin.Group("MISC", RawPlugin.Misc(1, "A")));
+
+        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => RawPlugin.FirstMiscZlibHeader(plugin));
+    }
 }

@@ -13,19 +13,18 @@ namespace MEditService.Commands.Tests.RealData;
 
 public sealed class StaleNextObjectIdRoundTripGateTests
 {
-
     public static TheoryData<string, uint> GeneratedPluginsWithAStaleHeader => new()
     {
         { StaleHeaderPlugins.SettingsFileName, 5 },
-        { StaleHeaderPlugins.SierraFileName, 4 },
-        { StaleHeaderPlugins.HitechFileName, 11 },
+        { StaleHeaderPlugins.LightFileName, 4 },
+        { StaleHeaderPlugins.FullFileName, 11 },
     };
 
     public static TheoryData<string> TrackAndCompileGeneratedPlugins => new()
     {
         StaleHeaderPlugins.SettingsFileName,
-        StaleHeaderPlugins.SierraFileName,
-        StaleHeaderPlugins.HitechFileName,
+        StaleHeaderPlugins.LightFileName,
+        StaleHeaderPlugins.FullFileName,
     };
 
     [Theory]
@@ -74,17 +73,17 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Theory]
-    [InlineData(StaleHeaderPlugins.SierraFileName)]
-    [InlineData(StaleHeaderPlugins.HitechFileName)]
+    [InlineData(StaleHeaderPlugins.LightFileName)]
+    [InlineData(StaleHeaderPlugins.FullFileName)]
     public async Task Compile_OfAGeneratedPluginDeflatedAtAnotherLevel_RewritesItsCompressedRecordsAtMutagensLevel(string fileName)
     {
         using var scratch = new TrackedScratch(fileName);
-        var originalHeader = RawPlugin.FirstRecordZlibHeader(await File.ReadAllBytesAsync(scratch.PluginPath));
+        var originalHeader = RawPlugin.FirstMiscZlibHeader(await File.ReadAllBytesAsync(scratch.PluginPath));
         await scratch.TrackAsync();
 
         await scratch.CompileService().CompileLandedAsync(scratch.Plugin);
 
-        Assert.NotEqual(originalHeader, RawPlugin.FirstRecordZlibHeader(await File.ReadAllBytesAsync(scratch.PluginPath)));
+        Assert.NotEqual(originalHeader, RawPlugin.FirstMiscZlibHeader(await File.ReadAllBytesAsync(scratch.PluginPath)));
     }
 
     [Fact]
