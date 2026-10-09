@@ -10,7 +10,7 @@ interface PluginHeaderProps {
   notActive: boolean;
   isImmutable: boolean;
   isTracked: boolean;
-  sourceUnreadable: boolean;
+  sourceUnreadable: string | undefined;
   isFile: boolean;
   onOpen: () => void;
   collapsed: boolean;
@@ -24,7 +24,7 @@ interface PluginHeaderProps {
 interface Status { label: string; reason: string }
 
 // editor.md, A column's header, the Status table: the first row that applies.
-function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: boolean, isImmutable: boolean, isTracked: boolean, sourceUnreadable: boolean): Status {
+function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: boolean, isImmutable: boolean, isTracked: boolean, sourceUnreadable: string | undefined): Status {
   if (o.parseDiagnosis != null) return { label: '(parse failure)', reason: o.parseDiagnosis };
   if (overriddenBy !== null) return { label: '(overridden)', reason: `The game loads ${overriddenBy}’s file instead.` };
   if (notActive) return { label: '(not active)', reason: 'The game does not load it, so no other copy is compared.' };
@@ -42,10 +42,10 @@ function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: bo
         + 'makes it editable.',
     };
   }
-  if (sourceUnreadable) {
+  if (sourceUnreadable !== undefined) {
     return {
       label: '(plugin source unreadable)',
-      reason: 'Its plugin source is missing or cannot be read, so its records are its plugin file’s. '
+      reason: `${sourceUnreadable} Its records are its plugin file’s. `
         + '“Decompile Plugin”, in this header’s menu, makes it editable.',
     };
   }

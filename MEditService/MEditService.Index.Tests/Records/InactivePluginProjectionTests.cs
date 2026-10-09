@@ -104,7 +104,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
 
         var row = _index.PluginRowOf(_mod.KeyOf()) ?? throw new InvalidOperationException("Expected the plugin's row.");
         Assert.True(row.IsTracked);
-        Assert.False(row.PluginSourceUnreadable);
+        Assert.Null(row.PluginSourceUnreadableReason);
     }
 
     [Fact]

@@ -505,7 +505,7 @@ describe('RecordPanel — column header native right-click menu', () => {
   it.each([
     ['a tracked, editable', { isTracked: true, isImmutable: false }, true, true],
     ['an untracked', { isTracked: false, isImmutable: false }, false, false],
-    ['a tracked, plugin-source-unreadable', { isTracked: true, pluginSourceUnreadable: true }, true, false],
+    ['a tracked, plugin-source-unreadable', { isTracked: true, pluginSourceUnreadableReason: 'Its folder is gone.' }, true, false],
     ['a read-only', { isTracked: true, isImmutable: true }, false, false],
     ['an untracked read-only', { isTracked: false, isImmutable: true }, false, false],
   ])('the header of %s plugin says whether compile and delete apply to it, compile on a tracked column, delete only where the plugin source reads too', async (_what, facts, compilable, editable) => {
@@ -600,7 +600,7 @@ describe('RecordPanel — column header native right-click menu', () => {
       })],
     });
     const load = vi.fn().mockResolvedValue({
-      ok: true, result: compare, immutableSet: null, trackedSet: null, sourceUnreadableSet: null, modsByOrigin: {}, conflictsComputed: true, loadFailures: [],
+      ok: true, result: compare, immutableSet: null, trackedSet: null, sourceUnreadableReasons: null, modsByOrigin: {}, conflictsComputed: true, loadFailures: [],
     });
     const { container } = renderPanel(compare, { load });
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
@@ -688,7 +688,7 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 
   it('opens no input on a cell of a tracked column whose plugin source is unreadable', async () => {
     renderPanel(flagsCompareResult, {
-      plugins: trackedMyModPluginsForTheRealEditableColumnsGate.map(p => ({ ...p, pluginSourceUnreadable: true })),
+      plugins: trackedMyModPluginsForTheRealEditableColumnsGate.map(p => ({ ...p, pluginSourceUnreadableReason: 'Its folder is gone.' })),
     });
     await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
 
@@ -1145,7 +1145,7 @@ describe('RecordPanel — a plugin mEdit cannot read', () => {
   it('goes once a read lands with the plugin readable again', async () => {
     const answered = (loadFailures: PluginLoadFailure[]) => ({
       ok: true as const, result: compareResult, immutableSet: new Set<string>(), trackedSet: new Set<string>(),
-      sourceUnreadableSet: new Set<string>(),
+      sourceUnreadableReasons: new Map<string, string>(),
       modsByOrigin: {},
       conflictsComputed: true, loadFailures,
     });
@@ -1252,7 +1252,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
 });
 
 const loaded = (result: CompareResult | null, conflictsComputed = true, gone = ['000001:Fallout4.esm'], copiesLacking: string[] = []) => ({
-  ok: true as const, ...(result === null ? { result, gone, copiesLacking } : { result }), immutableSet: new Set<string>(), trackedSet: new Set<string>(), sourceUnreadableSet: new Set<string>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
+  ok: true as const, ...(result === null ? { result, gone, copiesLacking } : { result }), immutableSet: new Set<string>(), trackedSet: new Set<string>(), sourceUnreadableReasons: new Map<string, string>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
 });
 
 function deferred<T>() {

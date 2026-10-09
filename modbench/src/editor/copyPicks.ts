@@ -25,7 +25,7 @@ export function copyDestinationItems(
 ): CopyDestinationItem[] {
   const livesInEveryRecord = (p: PluginMetadata) => records.every((r) => samePluginAddress(pluginAddressOf(r), p));
   return plugins
-    .filter((p) => p.isTracked && !p.pluginSourceUnreadable && !p.isImmutable)
+    .filter((p) => p.isTracked && p.pluginSourceUnreadableReason == null && !p.isImmutable)
     .filter((p) => mode !== 'Override' || !livesInEveryRecord(p))
     .map((p) => ({
       label: p.name,

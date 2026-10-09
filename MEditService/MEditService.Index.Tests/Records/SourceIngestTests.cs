@@ -59,7 +59,7 @@ public sealed class SourceIngestTests : IDisposable
         _entry.SourceFileOf(index.DocumentOf(_npc, Plugin));
 
     private bool ReadFromItsBinaryInPlaceOfItsSource(OpenedIndex index) =>
-        index.PluginRowOf(Plugin) is { IsTracked: true, PluginSourceUnreadable: true };
+        index.PluginRowOf(Plugin) is { IsTracked: true, PluginSourceUnreadableReason: not null };
 
     private IEnumerable<string> SourceFilesTheReadStoppedAt(OpenedIndex index) =>
         (index.Problems.GetProblems() ?? throw new InvalidOperationException("Expected the index to be ready."))

@@ -23,7 +23,7 @@ interface LoadedPanel {
   // Null exactly when immutableSet is, but degrading the opposite way: to "nothing is
   // editable" (commands.md, No dead entries). Read fail-closed.
   trackedSet: Set<ColumnKey> | null;
-  sourceUnreadableSet: Set<ColumnKey> | null;
+  sourceUnreadableReasons: Map<ColumnKey, string> | null;
   // The repository state of each origin that names a mod, which a column header offers track or decompile on.
   modsByOrigin: Record<string, ModRepository>;
   // Whether the winner sweep has run (editor.md, States, story 3). Fails *closed*: an absent
@@ -81,7 +81,7 @@ export function createRecordPanelClient(): RecordPanelClient {
         ...read,
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p))) : null,
         trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p))) : null,
-        sourceUnreadableSet: pluginList ? new Set(pluginList.filter(p => p.pluginSourceUnreadable).map(p => columnKey(p))) : null,
+        sourceUnreadableReasons: pluginList ? new Map(pluginList.flatMap(p => p.pluginSourceUnreadableReason == null ? [] : [[columnKey(p), p.pluginSourceUnreadableReason] as const])) : null,
         modsByOrigin: answer.modsByOrigin,
         conflictsComputed: answer.conflictsComputed,
         loadFailures: answer.loadFailures,

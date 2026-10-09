@@ -100,7 +100,7 @@ function held(name: string, overrides: Partial<PluginMetadata> = {}): PluginMeta
     hasMatchingRecords: true,
     isTracked: false,
     hasParseFailure: false,
-    pluginSourceUnreadable: false,
+    pluginSourceUnreadableReason: null,
     ...overrides,
   };
 }
@@ -1230,7 +1230,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
   it('states every row of a plugin whose plugin source is unreadable tracked and not editable, and says why on the plugin row', async () => {
     const client = weaponOf(recordSummary());
     const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
-    await reconcile(h, [held('A.esp', { isTracked: true, pluginSourceUnreadable: true })]);
+    await reconcile(h, [held('A.esp', { isTracked: true, pluginSourceUnreadableReason: 'Its folder is gone.' })]);
 
     const [row] = await h.tree.getChildren();
     const { group, record } = await firstRecordUnder(h, present(row, 'the A.esp row'));

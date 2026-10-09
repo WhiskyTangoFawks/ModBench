@@ -8,9 +8,10 @@ import { headerCellContext } from './recordUtils';
 import type { CompareOverride } from './types';
 import { compareOverride, required } from './test/fixtures';
 
+const WHY = 'plugin-source holds FIXTURE.ESP and fixture.esp, which differ only in case.';
 const DIAGNOSIS = 'the PERK entry point did not have expected parameter type flag';
 
-type Facts = { override?: Partial<CompareOverride>; overriddenBy?: string | null; notActive?: boolean; isImmutable?: boolean; isTracked?: boolean; sourceUnreadable?: boolean };
+type Facts = { override?: Partial<CompareOverride>; overriddenBy?: string | null; notActive?: boolean; isImmutable?: boolean; isTracked?: boolean; sourceUnreadable?: string };
 
 function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typeof PluginHeader>> = {}) {
   const onToggleCollapse = vi.fn();
@@ -25,7 +26,7 @@ function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typ
         notActive={facts.notActive ?? false}
         isImmutable={facts.isImmutable ?? false}
         isTracked={facts.isTracked ?? true}
-        sourceUnreadable={facts.sourceUnreadable ?? false}
+        sourceUnreadable={facts.sourceUnreadable}
         isFile={false}
         onOpen={vi.fn()}
         collapsed={false}
@@ -65,8 +66,8 @@ describe('PluginHeader', () => {
       'Overwrite is not a mod, and a plugin moved into a mod can be tracked.'],
     ['a plugin that is not tracked', { isTracked: false }, '(untracked)',
       '“Track Mod…”, or “Decompile Plugin” in a tracked mod, in this header’s menu, makes it editable.'],
-    ['a tracked plugin whose plugin source is unreadable', { sourceUnreadable: true }, '(plugin source unreadable)',
-      'Its plugin source is missing or cannot be read, so its records are its plugin file’s. “Decompile Plugin”, in this header’s menu, makes it editable.'],
+    ['a tracked plugin whose plugin source is unreadable', { sourceUnreadable: WHY }, '(plugin source unreadable)',
+      `${WHY} Its records are its plugin file’s. “Decompile Plugin”, in this header’s menu, makes it editable.`],
     ['a Partial Form copy', { override: { isPartialForm: true } }, '(Partial Form)',
       'The game ignores this copy’s own fields.'],
     ['a tracked plugin', {}, '(tracked)',
@@ -86,8 +87,8 @@ describe('PluginHeader', () => {
     ['read-only over in Overwrite', { override: { isInOverwrite: true }, isImmutable: true }, '(read-only)', '(in Overwrite)'],
     ['in Overwrite over untracked', { override: { isInOverwrite: true }, isTracked: false }, '(in Overwrite)', '(untracked)'],
     ['untracked over Partial Form', { override: { isPartialForm: true }, isTracked: false }, '(untracked)', '(Partial Form)'],
-    ['untracked over unreadable', { isTracked: false, sourceUnreadable: true }, '(untracked)', '(plugin source unreadable)'],
-    ['unreadable over Partial Form', { override: { isPartialForm: true }, sourceUnreadable: true }, '(plugin source unreadable)', '(Partial Form)'],
+    ['untracked over unreadable', { isTracked: false, sourceUnreadable: WHY }, '(untracked)', '(plugin source unreadable)'],
+    ['unreadable over Partial Form', { override: { isPartialForm: true }, sourceUnreadable: WHY }, '(plugin source unreadable)', '(Partial Form)'],
     ['Partial Form over tracked', { override: { isPartialForm: true } }, '(Partial Form)', '(tracked)'],
   ])('a column shows one status, the first that applies: %s', (_case, facts, shown, displaced) => {
     const { header } = renderHeader(facts);

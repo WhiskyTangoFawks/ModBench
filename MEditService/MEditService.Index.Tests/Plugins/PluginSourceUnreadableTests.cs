@@ -61,6 +61,40 @@ public sealed class PluginSourceUnreadableTests : IDisposable
     }
 
     [Fact]
+    public void APluginWithNoPluginSource_SaysItHoldsNoFolderForIt()
+    {
+        Directory.Delete(SourceRoot, recursive: true);
+
+        using var index = Reconciled();
+
+        Assert.Contains(PluginName, index.PluginRowOf(Plugin)?.PluginSourceUnreadableReason, StringComparison.Ordinal);
+    }
+
+    [PosixFact]
+    public void APluginSourceWithTwinFoldersNeitherSpelledAsTheLoadOrderNamesIt_NamesBothFolders()
+    {
+        var sources = Path.GetDirectoryName(SourceRoot).Require();
+        Directory.Move(SourceRoot, Path.Combine(sources, PluginName.ToUpperInvariant()));
+        Directory.CreateDirectory(Path.Combine(sources, PluginName.ToLowerInvariant()));
+
+        using var index = Reconciled();
+
+        var reason = index.PluginRowOf(Plugin)?.PluginSourceUnreadableReason;
+        Assert.Contains(PluginName.ToUpperInvariant(), reason, StringComparison.Ordinal);
+        Assert.Contains(PluginName.ToLowerInvariant(), reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APluginSourceThatFailsItsRead_SaysWhichFileStoppedIt()
+    {
+        var backup = BackupOfTheNpcDocumentClaimingItsFormKeyAgain();
+
+        using var index = Reconciled();
+
+        Assert.Contains(Path.GetFileName(backup), index.PluginRowOf(Plugin)?.PluginSourceUnreadableReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ACopyInAPluginThatIsNotActiveAndWhoseSourceIsUnreadable_IsRenderedFromItsPluginFile()
     {
         Directory.Delete(SourceRoot, recursive: true);

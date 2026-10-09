@@ -1048,7 +1048,7 @@ export interface components {
             hasMatchingRecords: boolean;
             isTracked: boolean;
             hasParseFailure: boolean;
-            pluginSourceUnreadable: boolean;
+            pluginSourceUnreadableReason?: string | null;
         };
         ProblemDetails: {
             type?: string | null;

@@ -21,7 +21,7 @@ type Scene = (facts: PluginFacts) => void;
 const failed: Scene = (facts) => facts.reconciled([], [failure('Malformed record')]);
 const masters = (...missing: string[]): Scene => (facts) => facts.reconciled([held({ masterIssues: missing })], []);
 const unreadable: Scene = (facts) => facts.reconciled([held({ hasParseFailure: true })], []);
-const sourceUnreadable: Scene = (facts) => facts.reconciled([held({ isTracked: true, pluginSourceUnreadable: true })], []);
+const sourceUnreadable: Scene = (facts) => facts.reconciled([held({ isTracked: true, pluginSourceUnreadableReason: 'Its folder is gone.' })], []);
 const changed: Scene = (facts) => changedOutside(facts, 'SomeMod', 'A.esp');
 const malformed: Scene = (facts) => facts.diagnosed([diagnosis('first'), diagnosis('second')]);
 const scenes = (...parts: Scene[]): Scene => (facts) => parts.forEach((part) => part(facts));
@@ -36,7 +36,7 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     ['unreadable records', unreadable, 'error', 'unreadable records',
       ['This plugin holds a record that could not be read into its document.']],
     ['plugin source unreadable', sourceUnreadable, 'warning', 'plugin source unreadable',
-      ['read-only', 'Plugin source unreadable: its records are those of its plugin file, until decompile writes its source.']],
+      ['read-only', 'Plugin source unreadable: Its folder is gone. Its records are those of its plugin file, until decompile writes its source.']],
     ['changed outside Modbench', changed, 'warning', 'changed outside Modbench', [CHANGED_TEXT]],
     ['malformed', malformed, 'warning', 'malformed', ['Malformed: first; second']],
   ] as const)('%s', (_label, scene, icon, words, tooltipLines) => {
@@ -69,7 +69,7 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
   it('lists every status in the spec order whatever the order they landed in', () => {
     const facts = new PluginFacts();
     scenes(malformed, changed)(facts);
-    facts.reconciled([held({ hasParseFailure: true, pluginSourceUnreadable: true, masterIssues: ['Ghost.esm'] })], [failure('Malformed record')]);
+    facts.reconciled([held({ hasParseFailure: true, pluginSourceUnreadableReason: 'Its folder is gone.', masterIssues: ['Ghost.esm'] })], [failure('Malformed record')]);
 
     expect(facts.description(A)).toBe('failed to read, 1 master issue, unreadable records, plugin source unreadable, changed outside Modbench, malformed');
   });
@@ -231,7 +231,7 @@ describe('PluginFacts — what a row states about its plugin', () => {
     ['a tracked, editable plugin', { isTracked: true }, ['tracked', 'editable'], { tracked: true, editable: true }],
     ['a tracked, read-only plugin', { isTracked: true, isImmutable: true }, ['tracked'], { tracked: true, editable: false }],
     ['an untracked, read-only plugin', { isImmutable: true }, ['untracked'], { tracked: false, editable: false }],
-    ['a tracked plugin whose plugin source is unreadable', { isTracked: true, pluginSourceUnreadable: true }, ['tracked'], { tracked: true, editable: false }],
+    ['a tracked plugin whose plugin source is unreadable', { isTracked: true, pluginSourceUnreadableReason: 'Its folder is gone.' }, ['tracked'], { tracked: true, editable: false }],
   ] as const)('%s', (_label, overrides, flags, conditions) => {
     const facts = new PluginFacts();
     if (overrides !== undefined) facts.reconciled([held(overrides)], []);
