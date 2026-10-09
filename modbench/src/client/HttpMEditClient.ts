@@ -181,6 +181,7 @@ class HttpMEditClient implements MEditClient {
     noContent?: T;
   }): Promise<T | WriteRefused> {
     try {
+      await this.handOver.sent();
       const { data, error, response } = await spec.post();
       if (!response.ok) {
         const text = errorText(error);
@@ -206,13 +207,13 @@ class HttpMEditClient implements MEditClient {
   }
 
   async getRenameSourceChanges(
-    plugin: PluginAddress, newName: string, unsaved: readonly UnsavedDocument[],
+    plugin: PluginAddress, newName: string,
   ): Promise<RenameSourceChangesOutcome | WriteRefused> {
     return this.mutate<RenameSourceChangesOutcome>({
       op: `getRenameSourceChanges(${plugin.name}, ${plugin.origin})`,
       failMsg: `Could not rename the source of "${plugin.name}"`,
       post: () => this.apiClient.POST('/plugins/rename-source-changes', {
-        body: { origin: plugin.origin, name: plugin.name, newName, documents: [...unsaved] },
+        body: { origin: plugin.origin, name: plugin.name, newName },
       }),
     });
   }
@@ -384,7 +385,7 @@ class HttpMEditClient implements MEditClient {
   }
 
   async getCreateChanges(
-    { name: plugin, origin }: PluginAddress, recordType: string, unsaved: readonly UnsavedDocument[],
+    { name: plugin, origin }: PluginAddress, recordType: string,
     into?: { container?: string; position?: GridPosition },
   ): Promise<CreateChangesOutcome | WriteRefused> {
     return this.mutate<CreateChangesOutcome>({
@@ -392,33 +393,32 @@ class HttpMEditClient implements MEditClient {
       failMsg: `Could not create a new ${recordType} record in "${plugin}"`,
       post: () => this.apiClient.POST('/plugins/{plugin}/create-record-changes', {
         params: { path: { plugin } },
-        body: { origin, recordType, documents: [...unsaved], ...into },
+        body: { origin, recordType, ...into },
       }),
     });
   }
 
   async getDeleteChanges(
-    records: readonly RecordAddress[], unsaved: readonly UnsavedDocument[],
+    records: readonly RecordAddress[],
   ): Promise<DeleteChangesOutcome | WriteRefused> {
     const counted = records.length === 1 ? '1 record' : `${records.length} records`;
     const answer = await this.mutate({
       op: `getDeleteChanges(${counted})`,
       failMsg: `Could not delete ${counted}`,
-      post: () => this.apiClient.POST('/records/delete-changes', { body: { records: [...records], documents: [...unsaved] } }),
+      post: () => this.apiClient.POST('/records/delete-changes', { body: { records: [...records] } }),
     });
     return isRefused(answer) ? answer : { applied: answer.applied, refused: itemRefusals(answer.refused) };
   }
 
   async getCopyChanges(
     records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
-    unsaved: readonly UnsavedDocument[],
   ): Promise<CopyChangesOutcome | WriteRefused> {
     const counted = records.length === 1 ? '1 record' : `${records.length} records`;
     const answer = await this.mutate({
       op: `getCopyChanges(${counted}, ${mode})`,
       failMsg: `Could not copy ${counted}`,
       post: () => this.apiClient.POST('/records/copy-changes', {
-        body: { records: [...records], mode, destinations: [...destinations], replace, documents: [...unsaved] },
+        body: { records: [...records], mode, destinations: [...destinations], replace },
       }),
     });
     return isRefused(answer) ? answer : { applied: answer.applied, refused: itemRefusals(answer.refused) };
@@ -452,12 +452,12 @@ class HttpMEditClient implements MEditClient {
   /** A refusal (untracked plugin, a link that would dangle) comes back typed (ADR-0014); only a
    *  transport failure rejects. */
   async getEditChanges(
-    formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope, text: string,
-    unsaved: readonly UnsavedDocument[],
+    formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope,
   ): Promise<RecordEditChangesOutcome> {
+    await this.handOver.sent();
     const { data, error, response } = await this.apiClient.POST('/records/{formKey}/edit-changes', {
       params: { path: { formKey } },
-      body: { edit: { plugin, origin, ...envelope }, text, documents: [...unsaved] },
+      body: { edit: { plugin, origin, ...envelope } },
     });
     if (response.ok && data) {
       const { moves, deletions, documents, newFormKey } = data;

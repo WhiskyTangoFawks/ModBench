@@ -158,7 +158,7 @@ describe('HttpMEditClient — a 503 from a write', () => {
 
     const result = await client.getCopyChanges(
       [{ formKey: '000800:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' }], 'Override',
-      [{ name: 'Other.esp', origin: 'ModB' }], false, []);
+      [{ name: 'Other.esp', origin: 'ModB' }], false);
 
     expect(result).toEqual({ refused: true, message: 'Could not copy 1 record — No load order has been received.' });
   });
@@ -168,25 +168,24 @@ describe('HttpMEditClient — creating a record answers the changes', () => {
   const plugin = { name: 'MyPatch.esp', origin: 'ModA' };
   const changes = { moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
 
-  it('sends the plugin, the type and the unsaved documents, and reads the new FormKey with its changes', async () => {
+  it('sends the plugin and the type, and reads the new FormKey with its changes', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { formKey: '000900:MyPatch.esp', ...changes })));
-    const unsaved = [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Header.json', text: '{"h":1}' }];
 
-    const result = await makeClient(fetch).getCreateChanges(plugin, 'npc_', unsaved);
+    const result = await makeClient(fetch).getCreateChanges(plugin, 'npc_');
 
     expect(result).toEqual({ formKey: '000900:MyPatch.esp', ...changes });
     const request = fetch.mock.calls[0]?.[0];
     expect(request?.url).toMatch(/\/plugins\/MyPatch\.esp\/create-record-changes$/);
-    expect(await request?.json()).toEqual({ origin: 'ModA', recordType: 'npc_', documents: unsaved });
+    expect(await request?.json()).toEqual({ origin: 'ModA', recordType: 'npc_' });
   });
 
   it('sends the container and the grid position it is given', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { formKey: '000900:MyPatch.esp', ...changes })));
 
-    await makeClient(fetch).getCreateChanges(plugin, 'cell', [], { container: '000800:MyPatch.esp', position: { x: 1, y: -2 } });
+    await makeClient(fetch).getCreateChanges(plugin, 'cell', { container: '000800:MyPatch.esp', position: { x: 1, y: -2 } });
 
     expect(await fetch.mock.calls[0]?.[0].json()).toEqual({
-      origin: 'ModA', recordType: 'cell', documents: [], container: '000800:MyPatch.esp', position: { x: 1, y: -2 },
+      origin: 'ModA', recordType: 'cell', container: '000800:MyPatch.esp', position: { x: 1, y: -2 },
     });
   });
 
@@ -194,7 +193,7 @@ describe('HttpMEditClient — creating a record answers the changes', () => {
     const detail = 'MyPatch.esp has no FormKey free at or above its Next Object ID, up to 0xFFF, the last a light plugin can address. Clear the light flag in the header to draw above it.';
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { detail })));
 
-    const result = await makeClient(fetch).getCreateChanges(plugin, 'npc_', []);
+    const result = await makeClient(fetch).getCreateChanges(plugin, 'npc_');
 
     expect(result).toEqual({ refused: true, message: `Could not create a new npc_ record in "MyPatch.esp" — ${detail}` });
     expect(fetch).toHaveBeenCalledOnce();
@@ -205,18 +204,18 @@ describe('HttpMEditClient — deleting records answers the changes per record', 
   const kept = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const gone = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const untracked = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
-  const unsaved = [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Cell.json', text: '{}' }];
+  const cellPath = '/mods/ModA/plugin-source/MyPatch.esp/Cell.json';
 
-  it('sends the selection and the unsaved documents as one call, and reads each record\'s moves, deletions and documents, each refusal with its message', async () => {
+  it('sends the selection as one call, and reads each record\'s moves, deletions and documents, each refusal with its message', async () => {
     const keptChanges = { record: kept, moves: [], deletions: ['/mods/ModA/plugin-source/MyPatch.esp/Npcs/Kept'], documents: [] };
-    const goneChanges = { record: gone, moves: [], deletions: [], documents: [{ path: unsaved[0]?.path, text: '{"cut": true}' }] };
+    const goneChanges = { record: gone, moves: [], deletions: [], documents: [{ path: cellPath, text: '{"cut": true}' }] };
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
       applied: [keptChanges, goneChanges],
       refused: [{ item: untracked, refusal: 'PluginNotTracked', message: 'Other.esp is not tracked.' }],
     })));
     const client = makeClient(fetch);
 
-    const outcome = await client.getDeleteChanges([kept, untracked, gone], unsaved);
+    const outcome = await client.getDeleteChanges([kept, untracked, gone]);
 
     expect(outcome).toEqual({
       applied: [keptChanges, goneChanges],
@@ -225,14 +224,14 @@ describe('HttpMEditClient — deleting records answers the changes per record', 
     expect(fetch).toHaveBeenCalledOnce();
     const request = fetch.mock.calls[0]?.[0];
     expect(request?.url).toMatch(/\/records\/delete-changes$/);
-    expect(await request?.json()).toEqual({ records: [kept, untracked, gone], documents: unsaved });
+    expect(await request?.json()).toEqual({ records: [kept, untracked, gone] });
   });
 
   it('resolves a WriteRefused carrying the count and the server text on a non-ok response', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(400, 'Bad Request')));
     const client = makeClient(fetch);
 
-    const result = await client.getDeleteChanges([kept, gone], []);
+    const result = await client.getDeleteChanges([kept, gone]);
 
     expect(result).toEqual({ refused: true, message: 'Could not delete 2 records — Bad Request' });
   });
@@ -241,7 +240,7 @@ describe('HttpMEditClient — deleting records answers the changes per record', 
     const fetch = vi.fn(() => Promise.reject(new Error('socket hang up')));
     const client = makeClient(fetch);
 
-    const result = await client.getDeleteChanges([kept], []);
+    const result = await client.getDeleteChanges([kept]);
 
     expect(result).toEqual({ refused: true, message: 'Could not delete 1 record — socket hang up' });
   });
@@ -251,9 +250,9 @@ describe('HttpMEditClient — deleting records answers the changes per record', 
     const thrown = makeClient(vi.fn(() => Promise.reject(new Error('socket hang up'))));
 
     const answers = [
-      await client.getDeleteChanges([kept], []),
-      await thrown.getCreateChanges({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_', []),
-      await thrown.getCopyChanges([kept], 'New', [{ name: 'Patch.esp', origin: 'PatchMod' }], false, []),
+      await client.getDeleteChanges([kept]),
+      await thrown.getCreateChanges({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_'),
+      await thrown.getCopyChanges([kept], 'New', [{ name: 'Patch.esp', origin: 'PatchMod' }], false),
     ];
 
     for (const answer of answers) expect(answer).toMatchObject({ refused: true });
@@ -296,22 +295,21 @@ describe('HttpMEditClient — renaming a plugin source answers the changes', () 
   const plugin = { name: 'Old.esp', origin: 'ModA' };
   const changes = { treeName: 'Old.esp', moves: [{ from: '/m/plugin-source/Old.esp', to: '/m/plugin-source/New.esp' }], deletions: [], documents: [{ path: '/m/plugin-source/New.esp/h.json', text: '{}' }] };
 
-  it('sends the plugin, the new name and the unsaved documents, and reads the changes', async () => {
+  it('sends the plugin and the new name, and reads the changes', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, changes)));
-    const unsaved = [{ path: '/m/plugin-source/Old.esp/h.json', text: '{"h":1}' }];
 
-    const result = await makeClient(fetch).getRenameSourceChanges(plugin, 'New.esp', unsaved);
+    const result = await makeClient(fetch).getRenameSourceChanges(plugin, 'New.esp');
 
     expect(result).toEqual(changes);
     const request = fetch.mock.calls[0]?.[0];
     expect(request?.url).toMatch(/\/plugins\/rename-source-changes$/);
-    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'Old.esp', newName: 'New.esp', documents: unsaved });
+    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'Old.esp', newName: 'New.esp' });
   });
 
   it('resolves a WriteRefused carrying the name and the server text on a refusal', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(409, { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' })));
 
-    const result = await makeClient(fetch).getRenameSourceChanges(plugin, 'New.esp', []);
+    const result = await makeClient(fetch).getRenameSourceChanges(plugin, 'New.esp');
 
     expect(result).toEqual({ refused: true, message: 'Could not rename the source of "Old.esp" — ModA already holds New.esp.' });
   });
@@ -333,17 +331,17 @@ describe('HttpMEditClient — copying records answers the changes per record and
   const patch = { name: 'Patch.esp', origin: 'PatchMod' };
   const other = { name: 'Other.esp', origin: 'OtherMod' };
 
-  const unsaved = [{ path: '/mods/PatchMod/plugin-source/Patch.esp/Header.json', text: '{"h":1}' }];
+  const copiedDocuments = [{ path: '/mods/PatchMod/plugin-source/Patch.esp/Header.json', text: '{"h":1}' }];
 
-  it('sends the records, the mode, the destinations, the replace Option and the unsaved documents as one call, and reads each item', async () => {
-    const copied = { record: npc, destination: patch, moves: [], deletions: [], documents: unsaved };
+  it('sends the records, the mode, the destinations, the replace Option as one call, and reads each item', async () => {
+    const copied = { record: npc, destination: patch, moves: [], deletions: [], documents: copiedDocuments };
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
       applied: [copied],
       refused: [{ item: { record: npc, destination: other }, refusal: 'DestinationHoldsRecord', message: 'Other.esp already holds it.' }],
     })));
     const client = makeClient(fetch);
 
-    const outcome = await client.getCopyChanges([npc], 'Override', [patch, other], true, unsaved);
+    const outcome = await client.getCopyChanges([npc], 'Override', [patch, other], true);
 
     expect(outcome).toEqual({
       applied: [copied],
@@ -352,7 +350,7 @@ describe('HttpMEditClient — copying records answers the changes per record and
     const request = fetch.mock.calls[0]?.[0];
     expect(request?.url).toMatch(/\/records\/copy-changes$/);
     expect(await request?.json()).toEqual({
-      records: [npc], mode: 'Override', destinations: [patch, other], replace: true, documents: unsaved,
+      records: [npc], mode: 'Override', destinations: [patch, other], replace: true,
     });
   });
 
@@ -547,7 +545,7 @@ describe('HttpMEditClient — an edit answered as its source changes', () => {
   const plugin = { name: 'MyPatch.esp', origin: 'ModA' };
   const renamed: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'Renamed' };
 
-  it('getEditChanges posts the envelope and the document\'s text, and reads each move and document', async () => {
+  it('getEditChanges posts the envelope, and reads each move and document', async () => {
     const to = 'plugin-source/MyPatch.esp/Npcs/Renamed - 000800_MyPatch.esp.json';
     const moves = [{ from: 'plugin-source/MyPatch.esp/Npcs/Old - 000800_MyPatch.esp.json', to }];
     const documents = [{ path: to, text: '{"EditorID": "Renamed"}' }];
@@ -558,11 +556,11 @@ describe('HttpMEditClient — an edit answered as its source changes', () => {
       return Promise.resolve(jsonResponse(200, { formKey: '000800:MyPatch.esp', path: 'EditorID', moves, deletions, documents, newFormKey: null }));
     });
 
-    const outcome = await makeClient(fetch).getEditChanges('000800:MyPatch.esp', plugin, renamed, '{"EditorID": "Old"}', [{ path: '/m/Master.json', text: 'unsaved' }]);
+    const outcome = await makeClient(fetch).getEditChanges('000800:MyPatch.esp', plugin, renamed);
 
     expect(outcome).toEqual({ applied: true, moves, deletions, documents });
     expect(new URL(seen?.url ?? '').pathname).toBe('/records/000800%3AMyPatch.esp/edit-changes');
-    expect(await seen?.json()).toEqual({ edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed }, text: '{"EditorID": "Old"}', documents: [{ path: '/m/Master.json', text: 'unsaved' }] });
+    expect(await seen?.json()).toEqual({ edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed } });
   });
 
   it('getEditChanges carries the new FormKey an edit of the FormID answers with', async () => {
@@ -571,7 +569,7 @@ describe('HttpMEditClient — an edit answered as its source changes', () => {
     })));
 
     const outcome = await makeClient(fetch).getEditChanges(
-      '000800:MyPatch.esp', plugin, { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' }, '{}', []);
+      '000800:MyPatch.esp', plugin, { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' });
 
     expect(outcome).toEqual({ applied: true, moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp' });
   });
@@ -581,7 +579,7 @@ describe('HttpMEditClient — an edit answered as its source changes', () => {
       refusal: 'PluginNotTracked', detail: 'MyPatch.esp is not tracked, so it is read-only.',
     })));
 
-    const outcome = await makeClient(fetch).getEditChanges('000800:MyPatch.esp', plugin, renamed, '{}', []);
+    const outcome = await makeClient(fetch).getEditChanges('000800:MyPatch.esp', plugin, renamed);
 
     expect(outcome).toEqual({ applied: false, refusal: 'PluginNotTracked', message: 'MyPatch.esp is not tracked, so it is read-only.' });
   });
@@ -596,7 +594,7 @@ describe('HttpMEditClient — the not-OK response text', () => {
     const client = makeClient(fetch);
 
     const outcome = await client.getEditChanges(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' }, '{}', [],
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
     );
 
     expect(outcome).toEqual({
@@ -611,7 +609,7 @@ describe('HttpMEditClient — the not-OK response text', () => {
     const client = makeClient(fetch);
 
     const outcome = await client.getEditChanges(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' }, '{}', [],
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
     );
 
     expect(outcome).toEqual({
@@ -624,7 +622,7 @@ describe('HttpMEditClient — the not-OK response text', () => {
     const client = makeClient(fetch);
 
     const outcome = await client.getEditChanges(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' }, '{}', [],
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
     );
 
     expect(outcome).toEqual({ applied: false, refusal: 'Unknown', message: 'No load order has been received.' });
@@ -1240,5 +1238,52 @@ describe('HttpMEditClient — a plugin address on the wire', () => {
 
     expect(new URL(request.url).pathname).toContain('/plugins/Shared.esp/');
     expect(new URL(request.url).searchParams.get('origin')).toBe('ModA');
+  });
+});
+
+describe('HttpMEditClient — a changes request reads the documents mEdit holds', () => {
+  const plugin = { name: 'MyPatch.esp', origin: 'ModA' };
+  const record = { formKey: '000800:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+  const envelope: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'Renamed' };
+
+  const gestures: [string, (client: MEditClient) => Promise<unknown>, route: string][] = [
+    ['edit', (client) => client.getEditChanges(record.formKey, plugin, envelope), '/edit-changes'],
+    ['create', (client) => client.getCreateChanges(plugin, 'npc_'), '/create-record-changes'],
+    ['delete', (client) => client.getDeleteChanges([record]), '/delete-changes'],
+    ['copy', (client) => client.getCopyChanges([record], 'Override', [plugin], false), '/copy-changes'],
+    ['rename source', (client) => client.getRenameSourceChanges(plugin, 'New.esp'), '/rename-source-changes'],
+  ];
+
+  it.each(gestures)('sends the %s request only once the pending hand-over has answered', async (_name, gesture, route) => {
+    let answerHandOver!: () => void;
+    const answered = new Promise<void>((resolve) => { answerHandOver = resolve; });
+    const handedOver = vi.fn();
+    const requests: string[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', () => { handedOver(); return answered.then(() => new Response(null, { status: 204 })); }],
+      [route, (req) => { requests.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, { applied: [], refused: [] })); }],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    await vi.waitFor(() => expect(handedOver).toHaveBeenCalled());
+
+    const gesturing = gesture(client);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests).toEqual([]);
+
+    answerHandOver();
+    await gesturing;
+    expect(requests).toHaveLength(1);
+  });
+
+  it('carries no documents of its own: an edit sends its envelope alone', async () => {
+    let seen: Request | undefined;
+    const client = makeClient(vi.fn((req: Request) => { seen = req; return Promise.resolve(jsonResponse(200, { moves: [], deletions: [], documents: [] })); }));
+
+    await client.getEditChanges(record.formKey, plugin, envelope);
+
+    expect(await seen?.json()).toEqual({ edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...envelope } });
   });
 });

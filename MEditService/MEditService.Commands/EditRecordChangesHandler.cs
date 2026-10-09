@@ -19,34 +19,29 @@ public sealed class EditRecordChangesHandler
     private readonly ILogger<EditRecordChangesHandler> _logger;
     private readonly FormKeyChange _formKeyChange;
     private readonly CellLanding _cellLanding;
+    private readonly UnsavedDocuments _unsaved;
 
     internal EditRecordChangesHandler(
-        WriteTargets targets, LoadOrderResolution resolution, SchemaReflector schemaReflector,
+        WriteTargets targets, LoadOrderResolution resolution, SchemaReflector schemaReflector, UnsavedDocuments unsaved,
         ILogger<EditRecordChangesHandler> logger)
     {
-        (_targets, _resolution, _schemaReflector, _logger) = (targets, resolution, schemaReflector, logger);
+        (_targets, _resolution, _schemaReflector, _unsaved, _logger) = (targets, resolution, schemaReflector, unsaved, logger);
         _formKeyChange = new(logger);
         _cellLanding = new(resolution, schemaReflector, logger);
     }
 
-    /// <summary>Over <paramref name="unsaved"/>, which stand in for their files, and <paramref name="given"/>,
-    /// which stands in for the file of the document holding the record, whatever <paramref name="unsaved"/> holds of it.</summary>
-    public RecordEditChanges Changes(
-        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given, IReadOnlyList<DocumentChange> unsaved) =>
+    /// <summary>Over the unsaved documents mEdit holds, which stand in for their files.</summary>
+    public RecordEditChanges Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
         WriteFailure.Refused(
-            EditSource(plugin, formKey, envelope, given, unsaved), refused => refused, $"Could not read the source of {formKey}", _logger);
+            EditSource(plugin, formKey, envelope), refused => refused, $"Could not read the source of {formKey}", _logger);
 
-    private SourceAnswer<RecordEditChanges> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given,
-        IReadOnlyList<DocumentChange> unsaved)
+    private SourceAnswer<RecordEditChanges> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
-        if (!_targets.TryResolveEditTarget(plugin, formKey, given, out var onDisk, out var blocked)) return blocked;
-        if (!onDisk.Repository.DocumentOf(plugin, onDisk.Identity).Holds(out var file, out var unread)) return unread;
-        var documentFile = file ?? throw new InvalidOperationException($"Expected the document holding {formKey} to have been located.");
-
-        var texts = unsaved.Where(change => change.Path != documentFile.Path).Append(new DocumentChange(documentFile.Path, given));
-        var batch = SourceBatch.Over(onDisk.Repository, [.. texts]);
-        return Edit(plugin, formKey, envelope, onDisk with { Repository = batch.Repository }, new UnsavedBatches(unsaved))
+        var batches = new UnsavedBatches(_unsaved.Current);
+        if (_targets.ResolveEditTarget(plugin, formKey, batches, out var target) is { } blocked) return blocked;
+        var batch = _targets.BatchOf(plugin, batches);
+        return Edit(plugin, formKey, envelope, target, batches)
             .Then(outcome => SourceAnswer.Of(new RecordEditChanges(outcome, batch.Changes)));
     }
 

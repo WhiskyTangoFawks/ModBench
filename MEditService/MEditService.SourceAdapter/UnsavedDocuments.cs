@@ -7,9 +7,10 @@ public sealed class UnsavedDocuments
     private IReadOnlyList<DocumentChange> _held = [];
     private readonly Lock _applying = new();
 
-    internal IReadOnlyList<DocumentChange> Current => Volatile.Read(ref _held);
+    public IReadOnlyList<DocumentChange> Current => Volatile.Read(ref _held);
 
-    /// <summary>Raised by every Apply, with the path of each document it handed or dropped.</summary>
+    /// <summary>Raised by an Apply that changes the held set, with the path of each document whose text it changed,
+    /// handed or dropped.</summary>
     public event Action<IReadOnlyList<string>>? Arrived;
 
     public void Apply(IReadOnlyList<DocumentChange> documents)
@@ -17,9 +18,12 @@ public sealed class UnsavedDocuments
         IReadOnlyList<string> paths;
         lock (_applying)
         {
-            paths = [.. _held.Concat(documents).Select(document => document.Path)];
+            paths = [.. Differing(_held, documents).Concat(Differing(documents, _held)).Distinct(StringComparer.Ordinal)];
             Volatile.Write(ref _held, documents);
         }
-        Arrived?.Invoke(paths);
+        if (paths.Count > 0) Arrived?.Invoke(paths);
     }
+
+    private static IEnumerable<string> Differing(IReadOnlyList<DocumentChange> from, IReadOnlyList<DocumentChange> against) =>
+        from.Where(document => !against.Contains(document)).Select(document => document.Path);
 }

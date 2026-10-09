@@ -4,6 +4,7 @@ using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -28,11 +29,13 @@ public static class CommandHandlers
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<LoadOrderResolution>(),
             sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<ILogger<EditRecordChangesHandler>>()));
 
         services.AddSingleton(sp => new DeleteRecordChangesHandler(
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<ILogger<DeleteRecordChangesHandler>>()));
 
         services.AddSingleton(sp => new CreateRecordChangesHandler(
@@ -40,6 +43,7 @@ public static class CommandHandlers
             sp.GetRequiredService<LoadOrderResolution>(),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<ILogger<CreateRecordChangesHandler>>()));
 
         // The container half both copy modes take. Held once: singletons only, nothing per
@@ -61,6 +65,7 @@ public static class CommandHandlers
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(NewRecordCopy))),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<LoadOrderResolution>(),
+            sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<ILogger<CopyRecordChangesHandler>>()));
 
         services.AddSingleton(sp => new TrackHandler(
@@ -74,7 +79,7 @@ public static class CommandHandlers
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<ILogger<DecompilePluginHandler>>()));
 
-        services.AddSingleton(sp => new RenameSourceChangesHandler(sp.GetRequiredService<LoadOrderHolder>()));
+        services.AddSingleton(sp => new RenameSourceChangesHandler(sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<UnsavedDocuments>()));
 
         services.AddSingleton(sp => new MoveLastWrittenHandler(sp.GetRequiredService<LoadOrderHolder>()));
 

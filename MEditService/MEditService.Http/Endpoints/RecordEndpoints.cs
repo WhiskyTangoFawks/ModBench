@@ -148,7 +148,7 @@ internal static class RecordEndpoints
         .WithName("EditRecordChanges")
         .WithSummary("The changes an edit of a record makes to plugin source, writing nothing.")
         .WithDescription(
-            "Given the edit and the current text of the document carrying the record, the text each document the edit " +
+            "Over the unsaved documents mEdit holds, the text each document the edit " +
             "changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each " +
             "against the tree the one before it left, and each document's " +
             "path is where it stands once moved. Every path is absolute. Any other document the edit reads is read from " +
@@ -166,7 +166,7 @@ internal static class RecordEndpoints
         .WithName("DeleteRecordChanges")
         .WithSummary("The changes deleting records makes to plugin source, writing nothing, each record on its own.")
         .WithDescription(
-            "Given the current text of any unsaved document, each record's deletion as the files and folders it " +
+            "Over the unsaved documents mEdit holds, each record's deletion as the files and folders it " +
             "deletes and the text each document it changes holds afterwards, as an edit's are. Each item answers on " +
             "the ones before it, and applying them in order leaves the records deleted. A record is changed or " +
             "refused on its own, and the answer names both. No reference cascade — a FormLink elsewhere pointing at " +
@@ -182,7 +182,7 @@ internal static class RecordEndpoints
         .WithName("CopyRecordChanges")
         .WithSummary("The changes copying records into destination plugins makes to plugin source, writing nothing, each record into each destination on its own.")
         .WithDescription(
-            "Given the current text of any unsaved document, each copy as the files and folders it deletes and the " +
+            "Over the unsaved documents mEdit holds, each copy as the files and folders it deletes and the " +
             "text each document it changes or creates holds afterwards, as an edit's are. Each item answers on the ones " +
             "before it, and applying them in order leaves the records copied. " +
             "Override: the source record's own text lands verbatim in the destination under the same " +
@@ -221,13 +221,10 @@ internal static class RecordEndpoints
                         edit?.Op, spelled, decoded, edit?.Plugin, edit?.Origin);
                 }
             },
-            validate: () => request.Text is null
-                ? Results.Problem("The text of the document carrying the record is required.", statusCode: 400)
-                : WriteEndpointMapping.MissingDocuments(request.Documents) ?? EditRequestProblem(edit),
+            validate: () => EditRequestProblem(edit),
             execute: () => edits.Changes(
                 new PluginAddress(request.Edit.Plugin, request.Edit.Origin), decoded,
-                new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.Value), request.Text,
-                WriteEndpointMapping.Unsaved(request.Documents)),
+                new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.Value)),
             outcome: answer => answer.Outcome,
             onApplied: answer => Results.Ok(RecordEditChangesResponse.Of(decoded, spelled, answer)));
     }
@@ -249,11 +246,11 @@ internal static class RecordEndpoints
         {
             logger.LogInformation("Received DeleteRecordChanges for {Count} records", records.Count);
         }
-        return OverRecords(records, validateOptions: () => WriteEndpointMapping.MissingDocuments(request.Documents), answer: addressed =>
+        return OverRecords(records, validateOptions: () => null, answer: addressed =>
         {
             return WriteEndpointMapping.Answered(
                 "Delete", logger,
-                edits.DeleteRecords(addressed, WriteEndpointMapping.Unsaved(request.Documents)),
+                edits.DeleteRecords(addressed),
                 WriteEndpointMapping.Refusal,
                 landed => new RecordDeleteChanges(
                     Addressed(landed.Item),
@@ -277,7 +274,6 @@ internal static class RecordEndpoints
         }
         return OverRecords(records, validateOptions: () =>
         {
-            if (WriteEndpointMapping.MissingDocuments(request.Documents) is { } missing) return missing;
             if (destinations.Count == 0)
                 return Results.Problem("At least one destination is required.", statusCode: 400);
             if (destinations.Any(d => string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.Origin)))
@@ -287,9 +283,7 @@ internal static class RecordEndpoints
         {
             return WriteEndpointMapping.Answered(
                 "Copy", logger,
-                edits.CopyRecords(
-                    addressed, request.Mode, destinations, request.Replace,
-                    WriteEndpointMapping.Unsaved(request.Documents)),
+                edits.CopyRecords(addressed, request.Mode, destinations, request.Replace),
                 WriteEndpointMapping.Refusal,
                 landed => new RecordCopyChanges(
                     Addressed(landed.Item.Record), landed.Item.Destination,

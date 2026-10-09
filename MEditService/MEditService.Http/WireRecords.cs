@@ -52,9 +52,7 @@ internal sealed record RecordEditRequest(
     IReadOnlyList<PathHop> Path,
     [property: JsonConverter(typeof(KeepsJsonNullConverter))] JsonElement? Value = null);
 
-/// <summary>An edit asked for the changes it makes, given <see cref="Text"/>, the current text of the
-/// document carrying the record, and Documents the unsaved texts of every dirty document.</summary>
-internal sealed record RecordEditChangesRequest(RecordEditRequest Edit, string Text, IReadOnlyList<DocumentChange> Documents);
+internal sealed record RecordEditChangesRequest(RecordEditRequest Edit);
 
 /// <summary>The changes an edit makes to plugin source, written nowhere: each move, then each deletion,
 /// then each document's new text at its absolute path once moved. A refusal is ProblemDetails, as the edit's is.</summary>
@@ -84,9 +82,9 @@ internal sealed record DocumentChange(string Path, string Text);
 // established.
 
 /// <summary>Container is the FormKey, in the plugin the request names, of the record the new one goes into;
-/// Position is an exterior cell's grid position, and only a worldspace takes one. Documents are unsaved texts.</summary>
+/// Position is an exterior cell's grid position, and only a worldspace takes one.</summary>
 internal sealed record RecordCreateChangesRequest(
-    string Origin, string RecordType, IReadOnlyList<DocumentChange> Documents, string? Container = null, GridPosition? Position = null);
+    string Origin, string RecordType, string? Container = null, GridPosition? Position = null);
 
 /// <summary>Changes to plugin source as the wire carries them: moves, then deletions, then each document's text, by absolute path.</summary>
 internal sealed record SourceChangesResponse(
@@ -138,8 +136,7 @@ internal sealed record CopyMissing(string FormKey, PluginAddress Plugin, CopyMis
 /// when Missing is not empty.</summary>
 internal sealed record CompareRecordsResponse(CompareResult? Compare, IReadOnlyList<CopyMissing> Missing);
 
-/// <summary>Records to delete, and the unsaved text of the documents that stand in for their files.</summary>
-internal sealed record RecordDeleteChangesRequest(IReadOnlyList<RecordAddress> Records, IReadOnlyList<DocumentChange> Documents);
+internal sealed record RecordDeleteChangesRequest(IReadOnlyList<RecordAddress> Records);
 
 /// <summary>The changes deleting one record makes to plugin source, written nowhere, as an edit's are.</summary>
 internal sealed record RecordDeleteChanges(
@@ -149,10 +146,9 @@ internal sealed record RecordDeleteChanges(
 /// Made in the order answered, the items leave the records deleted one after another.</summary>
 internal sealed record RecordDeleteChangesResponse(IReadOnlyList<RecordDeleteChanges> Applied, IReadOnlyList<RecordAddressRefusal> Refused);
 
-/// <summary>Copy's Argument and Options (commands.md, Record, `copy`), and the unsaved texts that stand in for
-/// their files. <see cref="Replace"/> lets an override copy over the one a destination holds.</summary>
+/// <summary>Copy's Argument and Options (commands.md, Record, `copy`). <see cref="Replace"/> lets an override copy over the one a destination holds.</summary>
 internal sealed record RecordCopyRequest(
-    IReadOnlyList<RecordAddress> Records, CopyMode Mode, IReadOnlyList<PluginAddress> Destinations, IReadOnlyList<DocumentChange> Documents, bool Replace = false);
+    IReadOnlyList<RecordAddress> Records, CopyMode Mode, IReadOnlyList<PluginAddress> Destinations, bool Replace = false);
 
 /// <summary>The changes copying one record into one destination makes to plugin source, written nowhere, as an
 /// edit's are.</summary>

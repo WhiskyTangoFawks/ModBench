@@ -62,7 +62,9 @@ public sealed class CreateRecordApiTests : HostedTests
         var headerFile = Path.Combine(modFolder, "plugin-source", Plugin, $"000000_{Plugin}.json");
         var unsavedHeader = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(await File.ReadAllBytesAsync(headerFile), 0xA00));
 
-        var response = await Client.CreateRecord(Plugin, Origin, "npc_", unsaved: [(headerFile, unsavedHeader)]);
+        await Client.HandUnsaved((headerFile, unsavedHeader));
+
+        var response = await Client.CreateRecord(Plugin, Origin, "npc_");
 
         response.EnsureSuccessStatusCode();
         Assert.Equal("000A00:" + Plugin, (await response.Body()).GetProperty("formKey").GetString());

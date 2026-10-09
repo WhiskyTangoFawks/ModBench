@@ -54,7 +54,7 @@ export function registerRenamePluginCommand(
           if (!applied) return 'notApplied';
           return notSaved.length > 0 ? 'unsaved' : 'saved';
         };
-        const result = await renamePlugin({ adapter, client, source: { unsaved: source.unsaved, applyAndSave } }, plugin, newName, instance.value.gameRelease);
+        const result = await renamePlugin({ adapter, client, source: { applyAndSave } }, plugin, newName, instance.value.gameRelease);
         if (result.applied || 'reported' in result) return;
         if (!result.sourceRenamed) {
           reporter.report('error', result.refusal);

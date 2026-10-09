@@ -144,7 +144,7 @@ export interface paths {
         put?: never;
         /**
          * The changes renaming a tracked plugin's source makes, writing nothing.
-         * @description Given the current text of any unsaved document, the files and folders renaming the plugin's source moves and the text each document it changes holds afterwards: every FormKey of the plugin follows. Moves come first, then deletions, then documents, and every path is absolute. The plugin file, its plugins.txt lines and what Modbench last wrote stay as they are.
+         * @description Over the unsaved documents mEdit holds, the files and folders renaming the plugin's source moves and the text each document it changes holds afterwards: every FormKey of the plugin follows. Moves come first, then deletions, then documents, and every path is absolute. The plugin file, its plugins.txt lines and what Modbench last wrote stay as they are.
          */
         post: operations["RenameSourceChanges"];
         delete?: never;
@@ -428,7 +428,7 @@ export interface paths {
         put?: never;
         /**
          * The changes creating a record makes to plugin source, writing nothing.
-         * @description Given the current text of any unsaved document, the files and folders creating a new record deletes and moves and the text each document it changes or creates holds afterwards: a new source file of its own, or, for a record created in a container, an entry in the container's document. Moves come first, then deletions, then documents, and every path is absolute. The answer names the new FormKey. Git-native: the record answers at Effective only until committed and compiled.
+         * @description Over the unsaved documents mEdit holds, the files and folders creating a new record deletes and moves and the text each document it changes or creates holds afterwards: a new source file of its own, or, for a record created in a container, an entry in the container's document. Moves come first, then deletions, then documents, and every path is absolute. The answer names the new FormKey. Git-native: the record answers at Effective only until committed and compiled.
          */
         post: operations["CreateRecordChanges"];
         delete?: never;
@@ -569,7 +569,7 @@ export interface paths {
         put?: never;
         /**
          * The changes an edit of a record makes to plugin source, writing nothing.
-         * @description Given the edit and the current text of the document carrying the record, the text each document the edit changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each against the tree the one before it left, and each document's path is where it stands once moved. Every path is absolute. Any other document the edit reads is read from disk. A refusal is the one the edit itself gives.
+         * @description Over the unsaved documents mEdit holds, the text each document the edit changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each against the tree the one before it left, and each document's path is where it stands once moved. Every path is absolute. Any other document the edit reads is read from disk. A refusal is the one the edit itself gives.
          */
         post: operations["EditRecordChanges"];
         delete?: never;
@@ -589,7 +589,7 @@ export interface paths {
         put?: never;
         /**
          * The changes deleting records makes to plugin source, writing nothing, each record on its own.
-         * @description Given the current text of any unsaved document, each record's deletion as the files and folders it deletes and the text each document it changes holds afterwards, as an edit's are. Each item answers on the ones before it, and applying them in order leaves the records deleted. A record is changed or refused on its own, and the answer names both. No reference cascade — a FormLink elsewhere pointing at a deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0007).
+         * @description Over the unsaved documents mEdit holds, each record's deletion as the files and folders it deletes and the text each document it changes holds afterwards, as an edit's are. Each item answers on the ones before it, and applying them in order leaves the records deleted. A record is changed or refused on its own, and the answer names both. No reference cascade — a FormLink elsewhere pointing at a deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0007).
          */
         post: operations["DeleteRecordChanges"];
         delete?: never;
@@ -609,7 +609,7 @@ export interface paths {
         put?: never;
         /**
          * The changes copying records into destination plugins makes to plugin source, writing nothing, each record into each destination on its own.
-         * @description Given the current text of any unsaved document, each copy as the files and folders it deletes and the text each document it changes or creates holds afterwards, as an edit's are. Each item answers on the ones before it, and applying them in order leaves the records copied. Override: the source record's own text lands verbatim in the destination under the same FormKey, without its child records; the master dependency is derived at compile (ADR-0008). New: a duplicate without its child records under the destination's next free FormID, with an EditorID derived from the source's, and a self-reference follows the copy. A cell or a worldspace is refused as New. In every mode, a container the destination lacks is copied in as an override. Replace applies to Override only. Under Override, a destination that already holds the record is refused unless replace is given, and a replacement changes the record's own fields only, keeping the children the destination's copy carries. Each record and destination is applied or refused on its own, and the answer names both.
+         * @description Over the unsaved documents mEdit holds, each copy as the files and folders it deletes and the text each document it changes or creates holds afterwards, as an edit's are. Each item answers on the ones before it, and applying them in order leaves the records copied. Override: the source record's own text lands verbatim in the destination under the same FormKey, without its child records; the master dependency is derived at compile (ADR-0008). New: a duplicate without its child records under the destination's next free FormID, with an EditorID derived from the source's, and a self-reference follows the copy. A cell or a worldspace is refused as New. In every mode, a container the destination lacks is copied in as an override. Replace applies to Override only. Under Override, a destination that already holds the record is refused unless replace is given, and a replacement changes the record's own fields only, keeping the children the destination's copy carries. Each record and destination is applied or refused on its own, and the answer names both.
          */
         post: operations["CopyRecordChanges"];
         delete?: never;
@@ -1151,13 +1151,11 @@ export interface components {
             records: components["schemas"]["RecordAddress"][];
             mode: components["schemas"]["CopyMode"];
             destinations: components["schemas"]["PluginAddress"][];
-            documents: components["schemas"]["DocumentChange"][];
             replace: boolean;
         };
         RecordCreateChangesRequest: {
             origin: string;
             recordType: string;
-            documents: components["schemas"]["DocumentChange"][];
             container?: string | null;
             position?: components["schemas"]["GridPosition"] | null;
         };
@@ -1175,7 +1173,6 @@ export interface components {
         };
         RecordDeleteChangesRequest: {
             records: components["schemas"]["RecordAddress"][];
-            documents: components["schemas"]["DocumentChange"][];
         };
         RecordDeleteChangesResponse: {
             applied: components["schemas"]["RecordDeleteChanges"][];
@@ -1194,8 +1191,6 @@ export interface components {
         };
         RecordEditChangesRequest: {
             edit: components["schemas"]["RecordEditRequest"];
-            text: string;
-            documents: components["schemas"]["DocumentChange"][];
         };
         RecordEditChangesResponse: {
             formKey: string;
@@ -1254,7 +1249,6 @@ export interface components {
             origin: string;
             name: string;
             newName: string;
-            documents: components["schemas"]["DocumentChange"][];
         };
         RenameSourceChangesResponse: {
             treeName: string;

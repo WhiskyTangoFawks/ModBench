@@ -66,7 +66,6 @@ const CREATABLE = [
   { type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' },
 ];
 const NEW_NPC = { formKey: '000900:MyPatch.esp', moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
-const UNSAVED = { path: '/mods/ModA/plugin-source/MyPatch.esp/Cells/Cell.json', text: '{"dirty":true}' };
 
 function harness(viewSelection: readonly PluginsTreeNode[] = []) {
   const client = new InMemoryMEditClient();
@@ -74,14 +73,13 @@ function harness(viewSelection: readonly PluginsTreeNode[] = []) {
   client.setQueryAnswer('getChildRecordTypes', QUEST_HOLDS);
   const steps: string[] = [];
   client.setCommandHandler('getCreateChanges', (...args) => {
-    const [plugin, recordType, , into] = args;
+    const [plugin, recordType, into] = args;
     steps.push(`create ${plugin.name} ${plugin.origin} ${recordType}${into === undefined ? '' : ` ${JSON.stringify(into)}`}`);
     return Promise.resolve(NEW_NPC);
   });
   const reporter = recordingReporter();
   const writing: string[] = [];
   const source = {
-    unsaved: () => [UNSAVED],
     applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])),
     oneAtATime: <T,>(job: () => Promise<T>) => job(),
     refreshSourceControlFor: vi.fn(),
@@ -206,12 +204,12 @@ describe('modbench.record.create', () => {
 });
 
 describe('modbench.record.create makes the changes mEdit answers', () => {
-  it('asks over the unsaved documents, applies the answer as one workspace edit, refreshes Source Control, and selects the new record', async () => {
+  it('asks, applies the answer as one workspace edit, refreshes Source Control, and selects the new record', async () => {
     const { client, steps, source, create } = harness();
 
     await create(NPC_GROUP);
 
-    expect(client.calls.find((c) => c.method === 'getCreateChanges')?.args).toEqual([MY_PATCH, 'npc_', [UNSAVED], undefined]);
+    expect(client.calls.find((c) => c.method === 'getCreateChanges')?.args).toEqual([MY_PATCH, 'npc_', undefined]);
     expect(source.applyWorkspaceChanges).toHaveBeenCalledWith([NEW_NPC]);
     expect(source.refreshSourceControlFor).toHaveBeenCalledWith(MY_PATCH);
     expect(steps).toContain('select 000900:MyPatch.esp in npc_');

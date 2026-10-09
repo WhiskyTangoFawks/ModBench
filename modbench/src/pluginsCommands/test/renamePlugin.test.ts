@@ -18,7 +18,6 @@ const CHILD = { name: 'Child.esp', origin: 'ChildMod' };
 const OTHER = { name: 'Other.esp', origin: 'OtherMod' };
 
 const CHANGES = { treeName: 'Tracked Patch Mod.esp', moves: [{ from: '/m/plugin-source/Tracked Patch Mod.esp', to: '/m/plugin-source/Renamed Patch.esp' }], deletions: [], documents: [] };
-const UNSAVED = [{ path: '/m/plugin-source/Tracked Patch Mod.esp/h.json', text: '{}' }];
 
 describe('renamePlugin — the plugin source first, then the file and its lines', () => {
   let root: string;
@@ -30,7 +29,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     return Promise.resolve(savedAs);
   });
   const rename = (newName: string, plugin = PLUGIN) =>
-    renamePlugin({ adapter: adapterOver(root), client, source: { unsaved: () => UNSAVED, applyAndSave: apply } }, plugin, newName, 'Fallout4');
+    renamePlugin({ adapter: adapterOver(root), client, source: { applyAndSave: apply } }, plugin, newName, 'Fallout4');
 
   beforeEach(() => {
     root = cloneCorpusFixture();
@@ -49,7 +48,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     expect(await rename('Renamed Patch.esp')).toEqual({ applied: true });
 
     expect(client.calls).toEqual([
-      { method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed Patch.esp', UNSAVED] },
+      { method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed Patch.esp'] },
       { method: 'moveLastWritten', args: [PLUGIN, 'Tracked Patch Mod.esp', 'Renamed Patch.esp'] },
     ]);
     expect(applied).toEqual([CHANGES]);
@@ -110,7 +109,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     const adapter = adapterOver(root);
     vi.spyOn(adapter, 'renamePlugin').mockRejectedValue(new Error('disk full'));
 
-    const result = await renamePlugin({ adapter, client, source: { unsaved: () => UNSAVED, applyAndSave: apply } }, PLUGIN, 'Renamed Patch.esp', 'Fallout4');
+    const result = await renamePlugin({ adapter, client, source: { applyAndSave: apply } }, PLUGIN, 'Renamed Patch.esp', 'Fallout4');
 
     expect(result).toEqual({ applied: false, sourceRenamed: true, refusal: 'disk full' });
   });
@@ -120,7 +119,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     const checkOnAdapter = vi.spyOn(adapter, 'checkPluginRename').mockResolvedValue({ applied: true });
     const renamePluginOnAdapter = vi.spyOn(adapter, 'renamePlugin').mockResolvedValue();
 
-    await renamePlugin({ adapter, client, source: { unsaved: () => UNSAVED, applyAndSave: apply } }, { name: 'Run.esp', origin: OVERWRITE_ORIGIN }, 'Ran.esp', 'Fallout4');
+    await renamePlugin({ adapter, client, source: { applyAndSave: apply } }, { name: 'Run.esp', origin: OVERWRITE_ORIGIN }, 'Ran.esp', 'Fallout4');
 
     expect(checkOnAdapter).toHaveBeenCalledWith({ kind: 'runtimeOutput' }, 'Run.esp', 'Ran.esp', 'Fallout4');
     expect(renamePluginOnAdapter).toHaveBeenCalledWith({ kind: 'runtimeOutput' }, 'Run.esp', 'Ran.esp', 'Fallout4');

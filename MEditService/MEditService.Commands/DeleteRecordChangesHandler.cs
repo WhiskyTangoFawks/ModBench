@@ -12,21 +12,22 @@ public sealed class DeleteRecordChangesHandler
 {
     private readonly WriteTargets _targets;
     private readonly LoadOrderHolder _loadOrder;
+    private readonly UnsavedDocuments _unsaved;
     private readonly ILogger<DeleteRecordChangesHandler> _logger;
 
     // Internal because the shared module is, which is why this assembly registers its own handlers
     // (MEditService.Commands.Composition) rather than the host naming a type it cannot see.
-    internal DeleteRecordChangesHandler(WriteTargets targets, LoadOrderHolder loadOrder, ILogger<DeleteRecordChangesHandler> logger) =>
-        (_targets, _loadOrder, _logger) = (targets, loadOrder, logger);
+    internal DeleteRecordChangesHandler(
+        WriteTargets targets, LoadOrderHolder loadOrder, UnsavedDocuments unsaved, ILogger<DeleteRecordChangesHandler> logger) =>
+        (_targets, _loadOrder, _unsaved, _logger) = (targets, loadOrder, unsaved, logger);
 
-    /// <summary>Each record's deletion answered as the changes it makes over <paramref name="unsaved"/>, written
+    /// <summary>Each record's deletion answered as the changes it makes over the held unsaved documents, written
     /// nowhere (ADR-0001). Each item sees the ones before it. Throws <see cref="NoLoadOrderException"/> when no
     /// load order is held (ADR-0013).</summary>
-    public Task<SelectionResult<RecordAt, RecordEditRefusal, SourceChanges>> DeleteRecords(
-        IReadOnlyList<RecordAt> records, IReadOnlyList<DocumentChange> unsaved)
+    public Task<SelectionResult<RecordAt, RecordEditRefusal, SourceChanges>> DeleteRecords(IReadOnlyList<RecordAt> records)
     {
         _loadOrder.Require();
-        var batches = new UnsavedBatches(unsaved);
+        var batches = new UnsavedBatches(_unsaved.Current);
         return ItemWrite.Over(
             records, SameRecord.Instance,
             record => Delete(record.Plugin, record.FormKey, batches),
@@ -46,7 +47,7 @@ public sealed class DeleteRecordChangesHandler
     private SourceAnswer<RecordEditChanges> Delete(
         PluginAddress plugin, string formKey, UnsavedBatches batches)
     {
-        if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
+        if (_targets.ResolveEditTarget(plugin, formKey, batches, out var target) is { } blocked) return blocked;
         var (_, identity, _) = target;
         if (RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
 

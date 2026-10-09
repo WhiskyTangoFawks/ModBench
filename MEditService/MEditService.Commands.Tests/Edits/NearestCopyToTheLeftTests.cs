@@ -66,14 +66,14 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
 
     private Fallout4Mod Edited => _edited ?? throw new InvalidOperationException("Load the plugins first.");
 
-    private RecordEditResult WriteFlags(FormKey formKey, int raw, IReadOnlyList<DocumentChange>? unsaved = null) =>
+    private RecordEditResult WriteFlags(FormKey formKey, int raw) =>
         _plugins.EditHandler.Edit(
             Address(Edited), formKey.ToString(),
-            SetAt(JsonDocument.Parse(raw.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")), unsaved);
+            SetAt(JsonDocument.Parse(raw.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")));
 
-    private JsonObject Written(FormKey formKey, int raw, IReadOnlyList<DocumentChange>? unsaved = null)
+    private JsonObject Written(FormKey formKey, int raw)
     {
-        var result = WriteFlags(formKey, raw, unsaved);
+        var result = WriteFlags(formKey, raw);
         Assert.True(result.Applied, result.Message);
         return JsonNode.Parse(_plugins.Text(Edited, formKey)).Require().AsObject();
     }
@@ -216,7 +216,9 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         var file = _plugins.DocumentFileOf(middle, TheNpc);
         var unsaved = new DocumentChange(file, File.ReadAllText(file).Replace("Saved", "Unsaved", StringComparison.Ordinal));
 
-        var undeleted = Written(TheNpc, 0, [unsaved]);
+        _plugins.Unsaved.Apply([unsaved]);
+
+        var undeleted = Written(TheNpc, 0);
 
         Assert.Equal("Unsaved", undeleted["EditorID"]?.GetValue<string>());
     }

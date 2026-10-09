@@ -16,7 +16,7 @@ internal static class WriteEndpointMapping
     internal static PluginAddress PluginAddressOf(string routePlugin, string origin) =>
         new(Uri.UnescapeDataString(routePlugin), origin);
 
-    /// <summary>The unsaved texts a request carries, which stand in for their files.</summary>
+    /// <summary>The unsaved texts a hand-over carries, which stand in for their files.</summary>
     internal static IReadOnlyList<SourceAdapter.DocumentChange> Unsaved(IReadOnlyList<DocumentChange> documents) =>
         [.. documents.Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))];
 

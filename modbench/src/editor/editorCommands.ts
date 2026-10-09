@@ -66,7 +66,6 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     meditClient,
     documentOf: (address) => recordEditorProvider.documentCarrying(address),
     moving: (moves, edited, newFormKey) => recordEditorProvider.moving(moves, edited, newFormKey),
-    unsaved: deps.sourceEditing.unsaved,
     oneAtATime: deps.sourceEditing.oneAtATime,
     refreshSourceControlFor: deps.sourceEditing.refreshSourceControlFor,
     // Surfaces a refused edit (ADR-0019).

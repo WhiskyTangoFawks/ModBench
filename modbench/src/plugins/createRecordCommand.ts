@@ -119,7 +119,7 @@ export function registerRecordCreateCommand(
     try {
       await deps.write(() => deps.source.oneAtATime(async () => {
         const into = container === undefined ? undefined : { container, position };
-        const changes = await deps.client.getCreateChanges(plugin, recordType, deps.source.unsaved(), into);
+        const changes = await deps.client.getCreateChanges(plugin, recordType, into);
         if (isRefused(changes)) {
           deps.reporter.report('error', changes.message);
           return;

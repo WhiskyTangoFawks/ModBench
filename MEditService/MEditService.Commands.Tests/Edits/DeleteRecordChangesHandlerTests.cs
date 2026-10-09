@@ -89,11 +89,27 @@ public sealed class DeleteRecordChangesHandlerTests
         var unsaved = new DocumentChange(
             TreeTampering.FileOf(fixture.ModFolder, fixture.Plugin, owner.Identity), owner.Body.Replace(ContainerModPlugin.NavmeshEditorId, "UnsavedNavmesh", StringComparison.Ordinal));
 
-        var result = fixture.DeleteHandler.DeleteChangesSync([new RecordAt(fixture.Plugin, fixture.TemporaryRef.ToString())], [unsaved]);
+        fixture.Unsaved.Apply([unsaved]);
+
+        var result = fixture.DeleteHandler.DeleteChangesSync([new RecordAt(fixture.Plugin, fixture.TemporaryRef.ToString())]);
 
         var document = Assert.Single(Assert.Single(result.Landed).Outcome.Documents);
         Assert.Contains("UnsavedNavmesh", document.Text, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerModPlugin.TemporaryRefEditorId, document.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DeleteChanges_OfARecordWhoseUnsavedTextGivesItAnotherFormKey_DeleteItsFileUnderThatKey()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        var npc = TrackedTree.DocumentCarrying(mod.ModFolder, mod.Plugin, SourceEditFixture.NpcEditorId);
+        var retyped = $"000F00:{mod.Plugin.Name}";
+        var file = TreeTampering.FileOf(mod.ModFolder, mod.Plugin, mod.NpcIdentity);
+        mod.Unsaved.Apply([new DocumentChange(file, npc.Body.Replace(mod.Npc.ToString(), retyped, StringComparison.Ordinal))]);
+
+        var result = mod.DeleteHandler.DeleteChangesSync([new RecordAt(mod.Plugin, retyped)]);
+
+        Assert.Equal(file, Assert.Single(Assert.Single(result.Landed).Outcome.Deletions));
     }
 
     [Fact]

@@ -35,7 +35,6 @@ import type { RecordEditEnvelope } from '../../wire/messages';
 
 const FILE = '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json';
 const MOVED = '/mods/ModA/plugin-source/A.esp/Npcs/Renamed.json';
-const OTHER_DIRTY = { path: '/mods/ModA/plugin-source/Master.esp/Npcs/Master.json', text: 'unsaved master' };
 const plugin = { name: 'A.esp', origin: 'ModA' };
 const address = { formKey: '000800:A.esp', plugin };
 const height: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'Height' }], value: 0.75 };
@@ -47,7 +46,7 @@ function makeDeps(answer: Awaited<ReturnType<InMemoryMEditClient['getEditChanges
   const refreshSourceControlFor = vi.fn();
   const moving = vi.fn<RecordWriteDeps['moving']>();
   const deps: RecordWriteDeps = {
-    meditClient, reporter, refreshSourceControlFor, moving, oneAtATime: oneAtATime(), unsaved: () => [OTHER_DIRTY],
+    meditClient, reporter, refreshSourceControlFor, moving, oneAtATime: oneAtATime(),
     documentOf: () => Promise.resolve({ uri: fakeUri(FILE) }),
   };
   return { deps, meditClient, reporter, refreshSourceControlFor, moving };
@@ -61,12 +60,12 @@ beforeEach(() => {
 });
 
 describe('an edit of a record', () => {
-  it('asks mEdit for the edit given the text of the document carrying the record', async () => {
+  it('asks mEdit for the edit, which reads the documents it holds', async () => {
     const { deps, meditClient } = makeDeps({ applied: true, moves: [], deletions: [], documents: [] });
 
     await applyRecordEdit(deps, address, height);
 
-    expect(meditClient.calls).toContainEqual({ method: 'getEditChanges', args: ['000800:A.esp', plugin, height, `text of ${FILE}`, [OTHER_DIRTY]] });
+    expect(meditClient.calls).toContainEqual({ method: 'getEditChanges', args: ['000800:A.esp', plugin, height] });
   });
 
   it('tells the panel host the moves and the new FormKey, refreshes Source Control, and resolves the new FormKey', async () => {

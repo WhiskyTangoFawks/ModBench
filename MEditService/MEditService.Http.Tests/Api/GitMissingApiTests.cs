@@ -35,8 +35,7 @@ public sealed class GitMissingApiTests : HostedTests
         {
             response = await Client.PostAsJsonAsync("/records/delete-changes", new
             {
-                records = npcs.Select(formKey => new { formKey, plugin = Plugin, origin = Origin }).ToArray(),
-                documents = Array.Empty<object>(),
+                records = npcs.Select(formKey => new { formKey, plugin = Plugin, origin = Origin }).ToArray()
             });
         }
         finally
@@ -76,8 +75,7 @@ public sealed class GitMissingApiTests : HostedTests
             {
                 records = new[] { new { formKey = npc, plugin = Plugin, origin = Origin } },
                 mode = "New",
-                destinations = new[] { new { name = "Second.esp", origin = "SecondMod" } },
-                documents = Array.Empty<object>(),
+                destinations = new[] { new { name = "Second.esp", origin = "SecondMod" } }
             });
         }
         finally

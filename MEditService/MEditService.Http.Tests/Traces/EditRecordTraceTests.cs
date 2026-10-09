@@ -146,8 +146,7 @@ public sealed class EditRecordTraceTests : HostedTests
         using var fx = await Loaded(Origin);
         var formKey = await Client.FirstFormKey(Plugin, Origin);
 
-        var response = await Client.EditChanges(
-            formKey, Plugin, Origin, "HeightMax", 1, await Client.CopyDocumentText(formKey, Plugin, Origin), op: "frobnicate");
+        var response = await Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 1, op: "frobnicate");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var problem = await Body(response);
@@ -254,8 +253,9 @@ public sealed class EditRecordTraceTests : HostedTests
         var headerFile = Path.Combine(modFolder, "plugin-source", OtherPlugin, $"000000_{OtherPlugin}.json");
         var unsavedHeader = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(await File.ReadAllBytesAsync(headerFile), 0xA00));
 
-        var response = await Client.Copy(
-            [(formKey, Plugin, Origin)], "New", [(OtherPlugin, OtherOrigin)], unsaved: [(headerFile, unsavedHeader)]);
+        await Client.HandUnsaved((headerFile, unsavedHeader));
+
+        var response = await Client.Copy([(formKey, Plugin, Origin)], "New", [(OtherPlugin, OtherOrigin)]);
 
         response.EnsureSuccessStatusCode();
         var landed = Assert.Single((await Body(response)).GetProperty("applied").EnumerateArray());

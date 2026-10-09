@@ -89,7 +89,7 @@ describe('a rename while a recompute is reading', () => {
     registerRenamePluginCommand({
       client, adapter: { ...writer, renamePlugin: async (...args) => { await writer.renamePlugin(...args); release(); } },
       ask: scriptedDialog('Rename'), instance, reporter: recordingReporter(),
-      source: { unsaved: () => [], applyWorkspaceChanges: () => Promise.resolve([]), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
+      source: { applyWorkspaceChanges: () => Promise.resolve([]), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     }, () => []);
     await present(handlers.get('modbench.plugin.rename'), 'the rename plugin command')(new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin));
     await overlapping;

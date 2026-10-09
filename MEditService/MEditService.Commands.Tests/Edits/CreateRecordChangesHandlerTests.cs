@@ -40,7 +40,7 @@ public sealed class CreateRecordChangesHandlerTests
         using var mod = SourceEditFixture.Tracked();
         var before = TrackedTree.Records(mod.ModFolder, mod.Plugin);
 
-        var (outcome, changes) = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", []);
+        var (outcome, changes) = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.Equal(FixtureNextObjectId, outcome.NewFormKey);
         Assert.Equal(before, TrackedTree.Records(mod.ModFolder, mod.Plugin));
@@ -60,7 +60,9 @@ public sealed class CreateRecordChangesHandlerTests
         var unsavedHeader = Encoding.UTF8.GetString(
             HeaderDocument.WithNextObjectId(File.ReadAllBytes(headerFile), 0x900));
 
-        var (outcome, _) = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", [new DocumentChange(headerFile, unsavedHeader)]);
+        mod.Unsaved.Apply([new DocumentChange(headerFile, unsavedHeader)]);
+
+        var (outcome, _) = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 
         Assert.Equal("000900:Fixture.esp", outcome.NewFormKey);
     }

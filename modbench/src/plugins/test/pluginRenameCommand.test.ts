@@ -74,7 +74,6 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
   const queue = oneAtATime();
   const queued = vi.fn();
   const source: SourceEditing = {
-    unsaved: () => [{ path: '/instance/mods/ModA/plugin-source/Patch.esp/h.json', text: '{}' }],
     applyWorkspaceChanges: apply,
     oneAtATime: (job) => { queued(); return queue(job); },
     refreshSourceControlFor: vi.fn(),
@@ -104,12 +103,12 @@ beforeEach(() => {
 describe('modbench.plugin.rename', () => {
   it('asks with the current name filled in, then renames the source and the file, under the Plugins bar and a read after', async () => {
     showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, renameFiles, reporter, source, run } = setup();
+    const { client, renameFiles, reporter, run } = setup();
 
     await run(row());
 
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'Patch.esp' }));
-    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([{ method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed.esp', source.unsaved()] }]);
+    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([{ method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed.esp'] }]);
     expect(renameFiles).toHaveBeenCalledWith({ kind: 'mod', name: 'ModA' }, 'Patch.esp', 'Renamed.esp', 'Fallout4');
     expect(progressSteps).toEqual(['progress opens on modbench.pluginListTree', 'Instance loader: read every file again', 'progress closes']);
     expect(reporter.reports).toEqual([]);
@@ -117,11 +116,11 @@ describe('modbench.plugin.rename', () => {
 
   it('takes the one selected plugin from a key or the palette, which pass no row', async () => {
     showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, source, run } = setup([row()]);
+    const { client, run } = setup([row()]);
 
     await run();
 
-    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([{ method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed.esp', source.unsaved()] }]);
+    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([{ method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed.esp'] }]);
   });
 
   it('renames nothing when the confirmation of its dependants is declined, and says nothing', async () => {
