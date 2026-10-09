@@ -1305,6 +1305,12 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await vi.waitFor(() => expect(settled).toHaveBeenCalledWith({ failed: 'refused', refusal: 'Not plugin source.' }));
   });
 
+  it('rejects a thrown request with the words for it, never fetch\'s text', async () => {
+    const client = makeClient(vi.fn(() => Promise.reject(new Error('fetch failed'))));
+
+    await expect(client.getEditChanges(record.formKey, plugin, envelope)).rejects.toThrow(new Error('mEdit could not be reached.'));
+  });
+
   it('carries no documents of its own: an edit sends its envelope alone', async () => {
     let seen: Request | undefined;
     const client = makeClient(vi.fn((req: Request) => { seen = req; return Promise.resolve(jsonResponse(200, { moves: [], deletions: [], documents: [] })); }));

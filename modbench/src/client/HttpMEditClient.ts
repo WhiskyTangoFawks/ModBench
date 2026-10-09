@@ -453,10 +453,17 @@ class HttpMEditClient implements MEditClient {
     formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope,
   ): Promise<RecordEditChangesOutcome> {
     await this.handOver.sent();
-    const { data, error, response } = await this.apiClient.POST('/records/{formKey}/edit-changes', {
-      params: { path: { formKey } },
-      body: { edit: { plugin, origin, ...envelope } },
-    });
+    let result;
+    try {
+      result = await this.apiClient.POST('/records/{formKey}/edit-changes', {
+        params: { path: { formKey } },
+        body: { edit: { plugin, origin, ...envelope } },
+      });
+    } catch (e) {
+      this.log(`[HttpMEditClient] getEditChanges(${formKey}) threw: ${errorMessage(e)}`);
+      throw new Error(failureReason(UNREACHABLE));
+    }
+    const { data, error, response } = result;
     if (response.ok && data) {
       const { moves, deletions, documents, newFormKey } = data;
       return newFormKey ? { applied: true, moves, deletions, documents, newFormKey } : { applied: true, moves, deletions, documents };

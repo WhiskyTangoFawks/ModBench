@@ -4,7 +4,7 @@ import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension,
   type ColumnCopy, type ExtensionToWebview, type RecordRead, type ViewState, type WebviewToExtension,
 } from '../wire/messages';
-import type { CompareRecordsResponse, MEditClient, PluginLoadFailure } from '../client';
+import type { CompareRecordsResponse, MEditClient, PluginLoadFailure, PluginMetadata } from '../client';
 import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
 import { pickRecord, type RecordPickerDeps } from './recordPicker';
@@ -173,25 +173,23 @@ async function answerRecordLoad(
   const [plugins] = await Promise.allSettled([deps.meditClient.getPlugins()]);
   const listed = plugins.status === 'fulfilled' && !isReadFailed(plugins.value) ? plugins.value : null;
   const pluginActive = listed?.some((p) => p.inLoadOrder && samePluginAddress(p, deps.plugin)) ?? false;
-  const [settled] = await Promise.allSettled([(async (): Promise<(RecordRead & { fileCopyAlone: boolean }) | ReadFailed> => {
-    const documentText = await deps.documentText(pluginActive);
-    const own = { formKey: m.formKey, plugin: deps.plugin, documentText };
-    if (m.columns.length > 0) return withFileCopy(readOf(await deps.meditClient.getRecordsComparison([own, ...m.columns])), false);
-    const text = documentText === undefined ? undefined
-      : { plugin: deps.plugin, documentText, alone: !pluginActive && deps.modFacts.standingOf(deps.plugin).kind === 'disabled' };
-    const compare = await deps.meditClient.getComparison(m.formKey, text);
-    if (isReadFailed(compare)) return compare;
-    if (compare) return { compare, fileCopyAlone: text?.alone ?? false };
-    // Only the typed answer tells a record held by no plugin from one a disabled plugin holds.
-    return withFileCopy(readOf(await deps.meditClient.getRecordsComparison([own])), false);
-  })()]);
+  const [settled] = await Promise.allSettled([readRecord(deps, m, pluginActive)]);
   const read = settled.status === 'rejected' ? { failed: 'refused', refusal: errorMessage(settled.reason) } as const : settled.value;
   if (isReadFailed(read)) {
     deps.channel.warn(`Failed to read ${m.formKey}: ${failureReason(read)}`);
     deps.reply({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: false, failure: read });
     return;
   }
-  const answered = read;
+  tellAnswered(deps, m, read, listed, pluginActive);
+}
+
+function tellAnswered(
+  deps: RouteRecordPanelMessageDeps,
+  m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD }>,
+  answered: RecordRead & { fileCopyAlone: boolean },
+  listed: PluginMetadata[] | null,
+  pluginActive: boolean,
+): void {
   if (answered.compare === null) deps.channel.warn([`Held by no plugin: ${answered.gone.join(', ')}.`, ...answered.copiesLacking].join(' '));
   const overrides = answered.compare?.overrides;
   const origins = (overrides ?? []).map((o) => o.origin);
@@ -206,6 +204,23 @@ async function answerRecordLoad(
     conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
     modsByOrigin: modsByOrigin(origins, deps.modFacts), fileOverriddenBy,
   });
+}
+
+async function readRecord(
+  deps: RouteRecordPanelMessageDeps,
+  m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD }>,
+  pluginActive: boolean,
+): Promise<(RecordRead & { fileCopyAlone: boolean }) | ReadFailed> {
+  const documentText = await deps.documentText(pluginActive);
+  const own = { formKey: m.formKey, plugin: deps.plugin, documentText };
+  if (m.columns.length > 0) return withFileCopy(readOf(await deps.meditClient.getRecordsComparison([own, ...m.columns])), false);
+  const text = documentText === undefined ? undefined
+    : { plugin: deps.plugin, documentText, alone: !pluginActive && deps.modFacts.standingOf(deps.plugin).kind === 'disabled' };
+  const compare = await deps.meditClient.getComparison(m.formKey, text);
+  if (isReadFailed(compare)) return compare;
+  if (compare) return { compare, fileCopyAlone: text?.alone ?? false };
+  // Only the typed answer tells a record held by no plugin from one a disabled plugin holds.
+  return withFileCopy(readOf(await deps.meditClient.getRecordsComparison([own])), false);
 }
 
 // Only a record no plugin holds is gone; a copy its plugin alone lacks refuses the read (editor.md, States, stories 2 and 4).
