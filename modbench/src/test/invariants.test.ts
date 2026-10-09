@@ -15,7 +15,10 @@ describe('every MO2 text-file write command has a corpus test', () => {
   const corpus = tsFiles(SRC, { exclude: ['generated'] }).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => readFileSync(f, 'utf8')).join('\n');
 
   it('finds the write verbs', () => {
-    expect(writeVerbs).toContain('setModsEnabled');
+    for (const verb of [
+      'setModsEnabled', 'moveMods', 'moveSeparators', 'markFiles', 'insertSeparator', 'renameSeparator',
+      'deleteSeparators', 'uninstallMods', 'createEmptyMod', 'renameMod',
+    ]) expect(writeVerbs).toContain(verb);
     expect(writeVerbs).toContain('switchProfile');
     expect(writeVerbs).toContain('excludeDownloads');
     expect(writeVerbs).toContain('modSyncOver');
@@ -26,6 +29,20 @@ describe('every MO2 text-file write command has a corpus test', () => {
 
   it.each(writeVerbs)('%s', (verb) => {
     expect(corpus).toMatch(new RegExp(`\\b${verb}\\(`));
+  });
+});
+
+describe('the Mods view fires the bound modlist commands', () => {
+  const valueImportOfCore = (source: string): boolean =>
+    /^import\s+(?!type\b)[^;]*from\s+'[^']*\/modlist\/modlist'/m.test(source);
+
+  it('sees a value import of the core box, and not a type import', () => {
+    expect(valueImportOfCore("import { modlistCommands, type ModlistCommands } from '../modlist/modlist';")).toBe(true);
+    expect(valueImportOfCore("import type { ModlistCommands } from '../modlist/modlist';")).toBe(false);
+  });
+
+  it('imports nothing but types from the core box in any file of the view', () => {
+    expect(sourceFiles().filter((f) => f.startsWith('mods/') && !f.includes('/test/') && valueImportOfCore(read(f)))).toEqual([]);
   });
 });
 
