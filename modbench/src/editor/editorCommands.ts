@@ -23,6 +23,7 @@ import { recordTitle } from './recordTitle';
 import { followReportedCopies } from './recordCopy';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from './childRecordDocument';
+import { holdOneTextPerFile } from './oneTextPerFile';
 import { recordDocument, type RecordCopy } from '../drivingLib/recordDocument';
 import type { ModFacts } from './modsByOrigin';
 
@@ -86,6 +87,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     extendedFields,
     new RenderedDocuments(meditClient),
     new ChildRecordDocuments(meditClient),
+    holdOneTextPerFile(outputChannel),
     { dispose: meditClient.onLoadOrderSettled(() => { announceConflictsComputed(tabs); }) },
     vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, keepsItsPlace),
     { dispose: meditClient.onNotification('load-order-status', () => { recordEditorProvider.readAgain(); }) },

@@ -65,6 +65,8 @@ vi.mock('vscode', () => ({
       },
     },
     onDidCloseTextDocument: () => ({ dispose: () => undefined }),
+    onDidOpenTextDocument: () => ({ dispose: () => undefined }),
+    onDidSaveTextDocument: () => ({ dispose: () => undefined }),
     openTextDocument: (uri: unknown) => {
       h.openedDocuments.push(uri);
       return Promise.resolve({ uri, getText: () => '{}' });
@@ -795,7 +797,7 @@ describe('a record file\'s tab', () => {
       const document = fileDocument('{}', true);
       const tab = await openFile(FILE, document);
 
-      changeDocument({ document: fileDocument('{}', true), contentChanges: [typed] });
+      changeDocument({ document: { ...fileDocument('{}', true), uri: { scheme: 'file', fsPath: '/other.json' } }, contentChanges: [typed] });
       changeDocument({ document, contentChanges: [] });
       changeDocument({ document, contentChanges: [typed] });
 
@@ -1342,7 +1344,7 @@ describe('a child record\'s tab', () => {
     const tab = await openDocument(CHILD, document);
     const typed = { range: {}, text: 'x' };
 
-    changeDocument({ document: { isDirty: true, getText: () => '{}' }, contentChanges: [typed] });
+    changeDocument({ document: { uri: { scheme: 'file', fsPath: '/other.json' }, isDirty: true, getText: () => '{}' }, contentChanges: [typed] });
     changeDocument({ document, contentChanges: [typed] });
 
     expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: PLACED }]]);
