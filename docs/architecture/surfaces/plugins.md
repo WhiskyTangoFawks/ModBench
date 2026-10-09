@@ -188,6 +188,7 @@ As a user, I want:
 4. A light plugin whose records fall outside the light range refused, naming the records and the remedies: clear the light flag, rename the plugin off `.esl`, or change the records' FormIDs.
 5. An interrupted compile to leave the old binary or the new one, and neither to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Compiling again fixes it. This is an exception to A failed gesture writes nothing.
 6. A plugin whose plugin source is unreadable refused, naming it and pointing at decompile. Source: Never silently wrong
+7. `compile` to save the plugin's unsaved plugin source first, without asking, as Run Build Task saves before it builds: the index shows my unsaved documents, and compile builds what the index shows. A file VS Code does not save refuses compile, naming it. Source: VS Code's save before run; ADR-0001; Never silently wrong
 
 ### Rename plugin
 
