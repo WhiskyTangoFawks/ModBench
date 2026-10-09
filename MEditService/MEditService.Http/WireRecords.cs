@@ -81,10 +81,21 @@ internal sealed record DocumentChange(string Path, string Text);
 // established.
 
 /// <summary>Container is the FormKey, in the plugin the request names, of the record the new one goes into;
-/// Position is an exterior cell's grid position, and only a worldspace takes one.</summary>
-internal sealed record RecordCreateRequest(string Origin, string RecordType, string? Container = null, GridPosition? Position = null);
+/// Position is an exterior cell's grid position, and only a worldspace takes one. Documents are the unsaved
+/// text of the files that stand in for their files.</summary>
+internal sealed record RecordCreateChangesRequest(
+    string Origin, string RecordType, string? Container = null, GridPosition? Position = null, IReadOnlyList<DocumentChange>? Documents = null);
 
-internal sealed record RecordCreateResponse(bool Applied, string FormKey, string RecordType);
+/// <summary>The changes creating a record makes to plugin source, written nowhere, as an edit's are.</summary>
+internal sealed record RecordCreateChangesResponse(
+    string FormKey, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents)
+{
+    internal static RecordCreateChangesResponse Of(string formKey, RecordEditChanges answer) =>
+        new(formKey,
+            [.. answer.Changes.Moves.Select(move => new SourceMove(move.From, move.To))],
+            answer.Changes.Deletions,
+            [.. answer.Changes.Documents.Select(document => new DocumentChange(document.Path, document.Text))]);
+}
 
 /// <summary>A record and the plugin holding it (ADR-0012).</summary>
 internal sealed record RecordAddress(string FormKey, string Plugin, string Origin);

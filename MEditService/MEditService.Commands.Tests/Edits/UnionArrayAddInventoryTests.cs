@@ -58,7 +58,7 @@ public class UnionArrayAddInventoryTests
 
     private static string Created(DocumentEditFixture fixture, string table)
     {
-        var created = fixture.CreateHandler.CreateRecord(fixture.Plugin, table);
+        var created = fixture.CreateHandler.CreateRecordSync(fixture.Plugin, table);
         Assert.True(created.Applied, created.Message);
         return created.NewFormKey.Require();
     }

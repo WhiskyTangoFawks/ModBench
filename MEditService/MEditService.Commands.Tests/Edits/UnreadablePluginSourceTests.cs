@@ -33,7 +33,7 @@ public sealed class UnreadablePluginSourceTests
         using var mod = SourceEditFixture.Tracked();
         DeleteTheSourceOf(mod.ModFolder, SourceEditFixture.PluginName);
 
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
+        var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
 
         Assert.Equal(RecordEditRefusal.PluginSourceUnreadable, result.Refusal);
         Assert.False(HoldsASourceFor(mod.ModFolder, SourceEditFixture.PluginName));

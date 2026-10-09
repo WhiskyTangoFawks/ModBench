@@ -71,7 +71,7 @@ internal sealed class WriteTargets(
             RecordEditRefusal.RecordNotFound,
             $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document carries it.");
 
-    private static RecordEditResult? ResolveInTheTree(
+    internal static RecordEditResult? ResolveInTheTree(
         PluginAddress plugin, string formKey, SourceRepository repository, GameRelease release, out EditTarget target,
         out SourceDocument? found)
     {

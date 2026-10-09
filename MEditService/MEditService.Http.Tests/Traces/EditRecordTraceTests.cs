@@ -111,8 +111,7 @@ public sealed class EditRecordTraceTests : HostedTests
         using var fx = await Loaded(Origin);
         using var stream = await Client.NotificationStream();
 
-        var created = await Client.PostAsJsonAsync(
-            $"/plugins/{Plugin}/records", new { origin = Origin, recordType = "npc_" });
+        var created = await Client.CreateRecord(Plugin, Origin, "npc_");
 
         created.EnsureSuccessStatusCode();
         var formKey = (await Body(created)).GetProperty("formKey").GetString().Require();

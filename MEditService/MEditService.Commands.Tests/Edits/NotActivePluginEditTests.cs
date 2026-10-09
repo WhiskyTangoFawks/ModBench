@@ -78,7 +78,7 @@ public sealed class NotActivePluginEditTests
         using var mod = OverriddenAndUnlistedFixture.Create();
         var (plugin, _) = NotActivePlugin[which](mod);
 
-        var result = mod.CreateHandler.CreateRecord(plugin, "npc_");
+        var result = mod.CreateHandler.CreateRecordSync(plugin, "npc_");
 
         Assert.True(result.Applied, result.Message);
     }

@@ -33,7 +33,7 @@ public sealed class CreateRecordApiTests : HostedTests
     }
 
     private Task<HttpResponseMessage> Create(string origin, string recordType, string? container = null, object? position = null) =>
-        Client.PostAsJsonAsync($"/plugins/{Plugin}/records", new { origin, recordType, container, position });
+        Client.CreateRecord(Plugin, origin, recordType, container, position);
 
     [Fact]
     public async Task CreatingARecord_InATrackedPlugin_AnswersTheNewFormKey()

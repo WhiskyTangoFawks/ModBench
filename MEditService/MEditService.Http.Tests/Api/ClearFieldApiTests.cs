@@ -34,11 +34,7 @@ public sealed class ClearFieldApiTests(LoadedApiFixture<TestPluginFixture> loade
         (await _client.Track(Origin)).EnsureSuccessStatusCode();
         await _client.NextSnapshot(fx, Origin);
         await _client.PluginReportsTracked(Plugin);
-        var created = await _client.PostAsJsonAsync($"/plugins/{Plugin}/records", new
-        {
-            origin = Origin,
-            recordType = "npc_",
-        });
+        var created = await _client.CreateRecord(Plugin, Origin, "npc_");
         created.EnsureSuccessStatusCode();
         var formKey = DocumentNodes.StringValueOf((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));
         await _client.NextSnapshot(fx, Origin);

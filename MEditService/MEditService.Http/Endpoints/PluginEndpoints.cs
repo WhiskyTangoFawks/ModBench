@@ -190,17 +190,19 @@ internal static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // Create-record — the plugin hosts the new group, so it owns the route the way Compile
-        // does; the FormKey doesn't exist yet, which is exactly why this isn't under /records/{formKey}.
-        app.MapPost("/plugins/{plugin}/records", CreateRecord)
-            .WithName("CreateRecord")
-            .WithSummary("Create a new record as a working-tree change.")
+        // The plugin hosts the new group, so it owns the route the way Compile does; the FormKey doesn't
+        // exist yet, which is exactly why this isn't under /records/{formKey}.
+        app.MapPost("/plugins/{plugin}/create-record-changes", CreateRecordChanges)
+            .WithName("CreateRecordChanges")
+            .WithSummary("The changes creating a record makes to plugin source, writing nothing.")
             .WithDescription(
-                "Mints a new record in the plugin's working tree: a new source file of its own, or, for a record created " +
-                "in a container, an entry in the container's document. A git-native create, answering at Effective only " +
-                "until committed and compiled.")
+                "Given the current text of any unsaved document, the files and folders creating a new record deletes and " +
+                "moves and the text each document it changes or creates holds afterwards: a new source file of its own, or, " +
+                "for a record created in a container, an entry in the container's document. Moves come first, then " +
+                "deletions, then documents, and every path is absolute. The answer names the new FormKey. " +
+                "Git-native: the record answers at Effective only until committed and compiled.")
             .WithTags(Tag)
-            .Produces<RecordCreateResponse>()
+            .Produces<RecordCreateChangesResponse>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)
@@ -318,8 +320,8 @@ internal static class PluginEndpoints
 
     // logReceived is null on purpose: no PluginEndpoints handler logs on entry,
     // UseSerilogRequestLogging's per-request summary covers it.
-    internal static IResult CreateRecord(
-        string plugin, RecordCreateRequest req, CreateRecordHandler edits, ILoggerFactory loggerFactory)
+    internal static IResult CreateRecordChanges(
+        string plugin, RecordCreateChangesRequest req, CreateRecordHandler edits, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         return WriteEndpointMapping.Execute(
@@ -333,8 +335,12 @@ internal static class PluginEndpoints
                     return Results.Problem("A record type is required.", statusCode: 400);
                 return null;
             },
-            execute: () => edits.CreateRecord(WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType, req.Container, req.Position),
-            onApplied: result => Results.Ok(new RecordCreateResponse(true, WriteEndpointMapping.RequireNewFormKey(result), req.RecordType)));
+            execute: () => edits.CreateRecord(
+                WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType,
+                [.. (req.Documents ?? []).Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))],
+                req.Container, req.Position),
+            outcome: answer => answer.Outcome,
+            onApplied: answer => Results.Ok(RecordCreateChangesResponse.Of(WriteEndpointMapping.RequireNewFormKey(answer.Outcome), answer)));
     }
 
     private static IResult PluginRecordAnswer<T>(

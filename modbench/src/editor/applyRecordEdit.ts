@@ -4,11 +4,10 @@ import type { MEditClient, RecordEditEnvelope, SourceChanges } from '../client';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { PathHop } from '../wire/messages';
 import type { RecordDocument } from '../drivingLib/recordDocument';
+import { applyWorkspaceChanges, type FileMove } from '../drivingLib/applyWorkspaceChanges';
+import type { OneAtATime } from '../drivingLib/oneAtATime';
 import { errorMessage } from '../ports/errorMessage';
 import type { EditAddress } from './recordTab';
-
-/** A file or folder an edit moves. */
-export interface SourceMove { from: vscode.Uri; to: vscode.Uri }
 
 /** What any record-panel gesture needs to write, whichever surface it arrives from — the webview's
  *  inline and keyboard edits through the message router, the right-click menus straight from the
@@ -19,23 +18,13 @@ export interface RecordWriteDeps {
   documentOf: (address: EditAddress) => Promise<RecordDocument>;
   // Told before VS Code moves a file, so a tab the move takes along shows its record where it lands.
   // What it answers undoes that, when VS Code makes no move.
-  moving: (moves: readonly SourceMove[], edited: EditAddress, newFormKey: string | undefined) => () => void;
+  moving: (moves: readonly FileMove[], edited: EditAddress, newFormKey: string | undefined) => () => void;
   // Each edit is built on the text the one before it left.
-  oneAtATime: <T>(edit: () => Promise<T>) => Promise<T>;
+  oneAtATime: OneAtATime;
   // The native Source Control panel does not pick up a field edit's working-tree change on its own.
   // The records and their badges are not the edit's to touch: they follow mEdit's changed rows.
   refreshSourceControlFor: (plugin: PluginAddress) => void;
   reporter: Reporter;
-}
-
-/** Runs each edit given it after the one before it settles. */
-export function oneAtATime(): RecordWriteDeps['oneAtATime'] {
-  let last: Promise<unknown> = Promise.resolve();
-  return (edit) => {
-    const next = last.then(edit, edit);
-    last = next.catch(() => undefined);
-    return next;
-  };
 }
 
 function spellField(path: PathHop[]): string {
@@ -70,7 +59,7 @@ async function editDocuments(
   }
   if (isNoChange(outcome)) return outcome.newFormKey;
 
-  const unsaved = await applySourceChanges([outcome], {
+  const unsaved = await applyWorkspaceChanges([outcome], {
     read: document.uri,
     moving: (moves) => deps.moving(moves, address, outcome.newFormKey),
   });
@@ -81,56 +70,3 @@ async function editDocuments(
 
 const isNoChange = ({ moves, deletions, documents }: SourceChanges) =>
   moves.length === 0 && deletions.length === 0 && documents.length === 0;
-
-const within = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`) || path.startsWith(`${folder}\\`);
-
-/** Makes what mEdit answered as one workspace edit and saves what it changed (ADR-0001). A document keeps its
- *  last text; one a later item deletes is not written. Throws unless applied; resolves the unsaved files. */
-export async function applySourceChanges(
-  items: readonly SourceChanges[],
-  options: { read?: vscode.Uri; moving?: (moves: readonly SourceMove[]) => () => void } = {},
-): Promise<string[]> {
-  const lastWriter = new Map<string, number>();
-  items.forEach(({ documents }, index) => { for (const { path } of documents) lastWriter.set(path, index); });
-  const deletedLater = (path: string, index: number) =>
-    items.slice(index + 1).some(({ deletions }) => deletions.some((deleted) => within(path, deleted)));
-
-  const changes = new vscode.WorkspaceEdit();
-  const moves: SourceMove[] = [];
-  const changed: vscode.Uri[] = [];
-  items.forEach((item, index) => {
-    for (const { from, to } of item.moves) {
-      const move = { from: vscode.Uri.file(from), to: vscode.Uri.file(to) };
-      moves.push(move);
-      changes.renameFile(move.from, move.to);
-    }
-    for (const path of item.deletions) changes.deleteFile(vscode.Uri.file(path), { recursive: true, ignoreIfNotExists: true });
-    for (const { path, text } of item.documents) {
-      if (lastWriter.get(path) !== index || deletedLater(path, index)) continue;
-      const uri = documentAt(path, options.read);
-      changes.createFile(uri, { ignoreIfExists: true });
-      changes.replace(uri, new vscode.Range(0, 0, Number.MAX_SAFE_INTEGER, 0), text);
-      changed.push(uri);
-    }
-  });
-
-  const notMoving = options.moving?.(moves);
-  let applied = false;
-  try {
-    applied = await vscode.workspace.applyEdit(changes);
-  } finally {
-    if (!applied) notMoving?.();
-  }
-  if (!applied) throw new Error('VS Code did not apply the changes mEdit answered.');
-  const unsaved = await Promise.all(changed.map(async (uri) => {
-    const saved = await vscode.workspace.openTextDocument(uri);
-    return saved.isDirty && !await saved.save() ? [uri.fsPath] : [];
-  }));
-  return unsaved.flat();
-}
-
-// The file the edit read is changed through the document it read, so a child record's tab keeps its own.
-function documentAt(path: string, read: vscode.Uri | undefined): vscode.Uri {
-  const file = vscode.Uri.file(path);
-  return file.path === read?.path ? read : file;
-}

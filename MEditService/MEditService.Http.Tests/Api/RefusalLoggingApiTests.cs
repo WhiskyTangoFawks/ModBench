@@ -55,8 +55,7 @@ public sealed class RefusalLoggingApiTests : HostedTests
     {
         await LoadedAndTracked();
 
-        await Client.PostAsJsonAsync(
-            $"/plugins/{Plugin}/records", new { origin = Origin, recordType = "nosuch" });
+        await Client.CreateRecord(Plugin, Origin, "nosuch");
 
         AssertLoggedOnce("Refused Create record", "RecordTypeNotFound");
     }

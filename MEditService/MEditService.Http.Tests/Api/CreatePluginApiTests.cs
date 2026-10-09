@@ -40,9 +40,7 @@ public sealed class CreatePluginApiTests : HostedTests
         Directory.CreateDirectory(Path.Combine(fx.Root, name)).FullName;
 
     private Task<HttpResponseMessage> CreateARecordIn(string plugin, string origin = Origin) =>
-        Client.PostAsJsonAsync(
-            $"/plugins/{Uri.EscapeDataString(plugin)}/records",
-            new { origin, recordType = "npc_" });
+        Client.CreateRecord(plugin, origin, "npc_");
 
     [Fact]
     public async Task CreatingAPluginInAMod_AnswersWithThePluginItWrote_AndRegistersNothing()

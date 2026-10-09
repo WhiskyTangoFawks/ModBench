@@ -5,7 +5,7 @@ import { showWebviewPage } from '../drivingLib/webviewPage';
 import { routeRecordPanelMessage, routerDepsForTab, type SharedRecordPanelDeps, type TabDocument } from './recordPanelMessageRouter';
 import type { EditAddress, RecordTab } from './recordTab';
 import type { RecordTabs } from './recordTabs';
-import type { SourceMove } from './applyRecordEdit';
+import type { FileMove } from '../drivingLib/applyWorkspaceChanges';
 import { recordTitle } from './recordTitle';
 import { inTabsStead, type TabShowOptions } from './inTabsStead';
 import type { CopyChanged } from './recordCopy';
@@ -32,7 +32,7 @@ interface GridPage { columns: readonly RecordCopy[]; place?: ViewState }
 interface MovedTab extends RecordCopy { from?: string; columns: readonly RecordCopy[]; place: ViewState | undefined }
 
 // Where `uri` stands once each move is made in order, each against the tree the one before it left.
-const movedTo = (uri: vscode.Uri, moves: readonly SourceMove[]): vscode.Uri => moves.reduce((at, { from, to }) => {
+const movedTo = (uri: vscode.Uri, moves: readonly FileMove[]): vscode.Uri => moves.reduce((at, { from, to }) => {
   if (at.path === from.path) return to;
   return at.path.startsWith(`${from.path}/`) ? to.with({ path: to.path + at.path.slice(from.path.length) }) : at;
 }, uri);
@@ -131,7 +131,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
 
   /** Each file's tab a move takes along shows, where it lands, the record it showed, or the one the
    *  edit moved it to, with the same columns and place. Answers what undoes that for a move not made. */
-  moving(moves: readonly SourceMove[], edited: EditAddress, newFormKey: string | undefined): () => void {
+  moving(moves: readonly FileMove[], edited: EditAddress, newFormKey: string | undefined): () => void {
     const landings: string[] = [];
     for (const tab of this.deps.tabs) {
       const { document: uri, copy } = tab;

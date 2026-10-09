@@ -6,6 +6,7 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { RecordWrite } from '../drivingLib/writingGesture';
+import type { SourceEditing } from '../drivingLib/sourceEditing';
 import { originFiles } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import { reportSyncFailures, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
@@ -55,6 +56,7 @@ export interface PluginsViewDeps {
   registerRepositories: () => Promise<void>;
   ask: AskQuestion;
   recordWrite: RecordWrite;
+  sourceEditing: SourceEditing;
   /** The rows of the focused Mods or Plugins view, which the palette's track acts on. */
   trackSelection: () => readonly unknown[];
   /** The Mods view's id, whose bar a track from a Mods row runs under. */
@@ -166,7 +168,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
 }
 
 function registerPluginGestures(
-  { instance, adapter, client, ask, registerRepositories, pluginSync, reporterFor, recordWrite, trackSelection, modsView }: PluginsViewDeps,
+  { instance, adapter, client, ask, registerRepositories, pluginSync, reporterFor, recordWrite, sourceEditing, trackSelection, modsView }: PluginsViewDeps,
   { tree, view, progress, selection, compileProblems }: {
     tree: PluginsTreeProvider; view: vscode.TreeView<PluginsTreeNode>; progress: PluginsViewProgress;
     selection: () => readonly PluginsTreeNode[]; compileProblems: CompileProblems;
@@ -183,7 +185,7 @@ function registerPluginGestures(
       originFiles: (origin) => originFiles(instance.value, origin),
     }, selection),
     registerRecordCreateCommand({
-      client, reporter: reporterFor('record.create'), write: recordWrite,
+      client, reporter: reporterFor('record.create'), write: recordWrite, source: sourceEditing,
       createdRecords: createdRecordSelection({ client, rowOf: (place, formKey) => tree.recordRow(place, formKey), view }),
     }, selection),
     registerRenamePluginCommand({ client, adapter, ask, instance, reporter: reporterFor('plugin.rename') }, selection),

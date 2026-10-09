@@ -15,7 +15,7 @@ public sealed class WriteRouteSeamTests
         ("POST /plugins/decompile", "Decompile"),
         ("POST /plugins/compile", "Compile"),
         ("POST /plugins/rename-source", "RenameSource"),
-        ("POST /plugins/{plugin}/records", "CreateRecord"),
+        ("POST /plugins/{plugin}/create-record-changes", "CreateRecordChanges"),
         ("PUT /load-order", "PutLoadOrder"),
     ];
 
