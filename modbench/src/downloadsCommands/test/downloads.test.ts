@@ -5,9 +5,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import {
-  deleteDownloads, excludeDownloads, includeDownloads,
-} from '../downloads';
+import { downloadsCommands } from '../downloads';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { adapterOver, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
@@ -48,14 +46,14 @@ describe('excludeDownloads / includeDownloads — one name', () => {
   const refusedFor = (name: string, reasonContains: string) => ({ landed: [], refused: [{ item: name, reasonContains }] });
 
   it('excluding a file gone from disk is refused, naming it, and writes it no metadata', async () => {
-    assertSelectionOutcome(await excludeDownloads(adapter, ['foo.7z']), refusedFor('foo.7z', 'foo.7z'));
+    assertSelectionOutcome(await downloadsCommands(adapter).excludeDownloads(['foo.7z']), refusedFor('foo.7z', 'foo.7z'));
     await expect(readFile(metaPath('foo.7z'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('including a file gone from disk is refused, naming it, and leaves its stale metadata alone', async () => {
     await writeFile(metaPath('foo.7z'), '[General]\r\nremoved=true\r\n');
 
-    assertSelectionOutcome(await includeDownloads(adapter, ['foo.7z']), refusedFor('foo.7z', 'foo.7z'));
+    assertSelectionOutcome(await downloadsCommands(adapter).includeDownloads(['foo.7z']), refusedFor('foo.7z', 'foo.7z'));
     expect(await readFile(metaPath('foo.7z'), 'utf8')).toBe('[General]\r\nremoved=true\r\n');
   });
 
@@ -63,13 +61,13 @@ describe('excludeDownloads / includeDownloads — one name', () => {
     await writeArchive('foo.7z');
     await mkdir(metaPath('foo.7z'));
 
-    assertSelectionOutcome(await excludeDownloads(adapter, ['foo.7z']), refusedFor('foo.7z', 'EISDIR'));
+    assertSelectionOutcome(await downloadsCommands(adapter).excludeDownloads(['foo.7z']), refusedFor('foo.7z', 'EISDIR'));
   });
 
   it('an exclude racing an installed mark leaves both marks set, rather than the second writer dropping the first key', async () => {
     await writeArchive('foo.7z');
 
-    await Promise.all([excludeDownloads(adapter, ['foo.7z']), adapter.markDownloadedFile('foo.7z', 'Installed')]);
+    await Promise.all([downloadsCommands(adapter).excludeDownloads(['foo.7z']), adapter.markDownloadedFile('foo.7z', 'Installed')]);
 
     expect(await statusOf('foo.7z')).toMatchObject({ excluded: true, status: 'Installed' });
   });
@@ -80,7 +78,7 @@ describe('deleteDownloads', () => {
     const file = await writeArchive('manual.7z');
     const { trash, trashed } = recordingTrash();
 
-    const outcome = await deleteDownloads(adapter, [file], trash);
+    const outcome = await downloadsCommands(adapter).deleteDownloads([file], trash);
 
     expect(outcome).toEqual({ landed: [{ name: 'manual.7z' }], refused: [] });
     expect(trashed).toEqual([file.path]);
@@ -97,7 +95,7 @@ describe('deleteDownloads', () => {
       },
     };
 
-    await deleteDownloads(counted, [file], recordingTrash().trash);
+    await downloadsCommands(counted).deleteDownloads([file], recordingTrash().trash);
 
     expect(asked).toEqual(['foo.7z']);
   });

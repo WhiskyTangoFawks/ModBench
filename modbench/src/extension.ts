@@ -42,6 +42,8 @@ import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { pluginSyncOver } from './pluginsCommands/plugins';
 import { modSyncOver, modlistCommands } from './modlist/modlist';
 import { warnIfFomod } from './install/fomodWarning';
+import { installCommands } from './install/install';
+import { downloadsCommands } from './downloadsCommands/downloads';
 import { refresh } from './instanceCommands/loadOrder';
 import { editingFlow } from './instanceCommands/editing';
 import { instanceSyncs, loadOrderPutHandler, loadOrderPutOnEachValue } from './syncWiring';
@@ -106,7 +108,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   } = deps;
   const log = (msg: string) => outputChannel.info(msg);
   const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides, gameDirectoryChanged: onGameDirectoryChange });
-  const access = { instanceRoot, adapter };
+  const install = installCommands({ instanceRoot, adapter });
   const instance = own(new Instance({
     adapter, window: vscode.window, log, logReadFailure: (line) => outputChannel.error(line),
   }));
@@ -125,12 +127,12 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
   const { view: downloadsView, nameFilter: downloadsFilter } = own(createDownloadsView({
-    adapter, instance, reporter: reporterFor('downloadList'), ask, trash,
+    commands: downloadsCommands(adapter), instance, reporter: reporterFor('downloadList'), ask, trash,
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
   const mods = own(createModsView({
-    instance, access, commands: modlistCommands(adapter), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
+    instance, install, commands: modlistCommands(adapter), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
     downloadInstall: {
       reporter: reporterFor('downloadList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),

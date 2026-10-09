@@ -7,11 +7,9 @@ import {
   type ModFolder, type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk, newModNameRefusal } from '../coreLib/commandRefusals';
+import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 export type { SelectionResult };
-
-type TailOf<F extends (adapter: InstanceAdapter, ...args: never[]) => unknown> =
-  F extends (adapter: InstanceAdapter, ...args: infer A) => unknown ? A : never;
 
 async function changeModOrder(adapter: InstanceAdapter, profile: string, decide: DecideModOrder): Promise<CommandResult> {
   try {
