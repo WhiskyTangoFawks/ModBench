@@ -306,7 +306,6 @@ describe('modbench.plugin.compile', () => {
   const PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const FILES = valueWithFolders({ modDirs: new Map([['ModA', '/instance/mods/ModA'], ['ModB', '/instance/mods/ModB']]) });
-  const PATCH_FILES = originFiles(FILES, 'ModA');
 
   function row(plugin: { name: string; origin: string }, contextValue = 'plugin enabled inTrackedMod tracked editable'): PluginNode {
     const node = new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
