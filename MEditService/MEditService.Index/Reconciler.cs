@@ -836,8 +836,7 @@ internal sealed class Reconciler(
         else if (scope.Held.ClearFailure(key)) PublishStatus();
     }
 
-    /// <summary>Drops the scope: the plugins it has open and the store's connection. Cancels an in-flight
-    /// reconcile and waits for it to stop first. False when a read outlived
+    /// <summary>Drops the scope after stopping an in-flight reconcile. False when a read outlived
     /// <see cref="Store.EndReads"/>: that index stays open, so nothing opens a store on its file.</summary>
     public bool Close()
     {
