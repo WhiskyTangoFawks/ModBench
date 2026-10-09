@@ -1,4 +1,6 @@
+using System.Text;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -166,70 +168,49 @@ public sealed class ContainerDocumentEditsTests
         Assert.Equal(Text(expected), RecordTextCodec.RoundTrip(edited, Release, RecordTypeOf(expected)));
     }
 
-    private static (string Text, FormKey First, FormKey Second) TopicWithTwoResponses()
+    private static (Cell Cell, PlacedObject Placed) CellWithAPersistentRef()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Append.esp"), Fallout4Release.Fallout4);
-        var topic = new DialogTopic(mod) { EditorID = "Topic" };
-        var first = new DialogResponses(mod) { EditorID = "R1" };
-        var second = new DialogResponses(mod) { EditorID = "R2" };
-        topic.Responses.Add(first);
-        topic.Responses.Add(second);
-        return (Text(topic), first.FormKey, second.FormKey);
+        var placed = new PlacedObject(mod) { EditorID = "PersistRef" };
+        var cell = new Cell(mod) { EditorID = "InteriorCell" };
+        cell.Persistent.Add(placed);
+        return (cell, placed);
     }
 
-    private static (byte[] Bytes, EmbeddedChildSpan Span) Located(string text, FormKey child) =>
-        (System.Text.Encoding.UTF8.GetBytes(text),
-            EmbeddedChildLocator.Find(System.Text.Encoding.UTF8.GetBytes(text), "DialogTopic", child.ToString(), Release) ?? throw new InvalidOperationException("child not found"));
+    private static EmbeddedChildSpan Located(byte[] ownerBytes, Cell cell, PlacedObject child) =>
+        EmbeddedChildLocator.Find(ownerBytes, RecordTypeOf(cell), child.FormKey.ToString(), Release)
+            ?? throw new InvalidOperationException("The fixture's child is not in its owner.");
 
     [Fact]
-    public void ChildTextOf_AnEmbeddedChild_IsItsOwnStandaloneText()
+    public void AnEmbeddedChild_IsReadAsItsOwnStandaloneText_AtColumnZeroAndWithoutTheDiscriminatorItsSlotCarries()
     {
-        var (text, first, _) = TopicWithTwoResponses();
+        var (cell, placed) = CellWithAPersistentRef();
+        var ownerText = Text(cell);
+        Assert.Contains(LoquiUnions.UnionTypeDiscriminator, ownerText, StringComparison.Ordinal);
 
-        var childText = ContainerDocumentEdits.ChildTextOf(System.Text.Encoding.UTF8.GetBytes(text), "DialogTopic", first.ToString(), Release);
+        var childText = ContainerDocumentEdits.ChildTextOf(Encoding.UTF8.GetBytes(ownerText), RecordTypeOf(cell), placed.FormKey.ToString(), Release);
 
-        Assert.Equal("R1", JsonDocument.Parse(Assert.IsType<string>(childText)).RootElement.GetProperty("EditorID").GetString());
+        Assert.Equal(Text(placed), childText);
     }
 
     [Fact]
-    public void ChildTextOf_AFormKeyNoSlotCarries_IsNull() =>
+    public void AFormKeyNoSlotCarries_HasNoChildText() =>
         Assert.Null(ContainerDocumentEdits.ChildTextOf(
-            System.Text.Encoding.UTF8.GetBytes(TopicWithTwoResponses().Text), "DialogTopic", "FFFFFF:Append.esp", Release));
+            Encoding.UTF8.GetBytes(Text(CellWithAPersistentRef().Cell)), RecordTypeOf(CellWithAPersistentRef().Cell), "FFFFFF:Append.esp", Release));
 
     [Fact]
-    public void WithChildReplaced_ChangesTheChildsSpanOnly()
+    public void ReplacingAChild_OfAHandFormattedContainer_ChangesNoByteOutsideTheChildsSpan()
     {
-        var (text, first, _) = TopicWithTwoResponses();
-        var (bytes, span) = Located(text, first);
+        var (cell, placed) = CellWithAPersistentRef();
+        var handFormatted = Text(cell)
+            .Replace("\"InteriorCell\"", "   \"InteriorCell\"  ", StringComparison.Ordinal)
+            .Replace("\"Persistent\": ", "\"Persistent\":   ", StringComparison.Ordinal);
+        var bytes = Encoding.UTF8.GetBytes(handFormatted);
+        var span = Located(bytes, cell, placed);
+        var renamed = ContainerDocumentEdits.ChildTextAt(bytes, span, Release).Replace("PersistRef", "Renamed", StringComparison.Ordinal);
 
-        var replaced = ContainerDocumentEdits.WithChildReplaced(
-            bytes, span, ContainerDocumentEdits.ChildTextAt(bytes, span, Release).Replace("\"R1\"", "\"Renamed\"", StringComparison.Ordinal));
+        var replaced = ContainerDocumentEdits.WithChildReplaced(bytes, span, renamed);
 
-        Assert.Equal(text.Replace("\"R1\"", "\"Renamed\"", StringComparison.Ordinal), replaced);
-    }
-
-    [Fact]
-    public void WithChildCut_OneOfTwoListElements_LeavesTheOtherInAParsableList()
-    {
-        var (text, first, second) = TopicWithTwoResponses();
-        var (bytes, span) = Located(text, first);
-
-        var cut = JsonDocument.Parse(ContainerDocumentEdits.WithChildCut(bytes, span)).RootElement.GetProperty("Responses");
-
-        Assert.Equal([second.ToString()], cut.EnumerateArray().Select(r => r.GetProperty("FormKey").GetString()));
-    }
-
-    [Fact]
-    public void WithChildCut_TheOnlyListElement_RemovesTheSlot()
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName("Append.esp"), Fallout4Release.Fallout4);
-        var topic = new DialogTopic(mod) { EditorID = "Topic" };
-        var only = new DialogResponses(mod) { EditorID = "R1" };
-        topic.Responses.Add(only);
-        var (bytes, span) = Located(Text(topic), only.FormKey);
-
-        var cut = JsonDocument.Parse(ContainerDocumentEdits.WithChildCut(bytes, span)).RootElement;
-
-        Assert.False(cut.TryGetProperty("Responses", out _));
+        Assert.Equal(handFormatted.Replace("PersistRef", "Renamed", StringComparison.Ordinal), replaced);
     }
 }
