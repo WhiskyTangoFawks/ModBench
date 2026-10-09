@@ -126,7 +126,7 @@ export function registerRecordCreateCommand(
         }
         const applied = await applyAnswered(
           deps.source, deps.reporter, [changes], [plugin],
-          { notApplied: `Could not create the ${typeName} record.`, notSaved: `Could not save ${changes.formKey}.` });
+          `Could not create the ${typeName} record.`);
         if (!applied) return;
         answer.formKey = changes.formKey;
         deps.reporter.landed(`Created ${changes.formKey}.`);

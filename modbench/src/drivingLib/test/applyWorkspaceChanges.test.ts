@@ -3,9 +3,7 @@ import { fakeUri, Range } from '../../test/vscodeMock';
 
 const h = vi.hoisted(() => ({
   applied: [] as unknown[][],
-  saved: [] as string[],
-  savesLand: true,
-  saveThrows: false,
+  options: [] as unknown[],
   applyLands: true,
 }));
 
@@ -20,11 +18,7 @@ vi.mock('vscode', () => ({
     replace(uri: { path: string }, _range: unknown, text: string) { this.made.push(['replace', uri.path, text]); }
   },
   workspace: {
-    openTextDocument: (uri: { path: string }) => h.saveThrows ? Promise.reject(new Error('gone')) : Promise.resolve({
-      uri, isDirty: true,
-      save: () => { h.saved.push(uri.path); return Promise.resolve(h.savesLand); },
-    }),
-    applyEdit: (edit: { made: unknown[] }) => { h.applied.push(edit.made); return Promise.resolve(h.applyLands); },
+    applyEdit: (edit: { made: unknown[] }, options: unknown) => { h.applied.push(edit.made); h.options.push(options); return Promise.resolve(h.applyLands); },
   },
 }));
 
@@ -36,18 +30,15 @@ const none = { moves: [], deletions: [], documents: [] };
 
 beforeEach(() => {
   h.applied.length = 0;
-  h.saved.length = 0;
-  h.savesLand = true;
-  h.saveThrows = false;
+  h.options.length = 0;
   h.applyLands = true;
 });
 
 describe('applying workspace changes', () => {
-  it('makes each move in order, then puts each document\'s text, as one edit, and saves each document', async () => {
+  it('makes each move in order, then puts each document\'s text, as one edit', async () => {
     await applyWorkspaceChanges([{ moves: [{ from: '/a/Npc.json', to: '/a/Renamed.json' }], deletions: [], documents: [{ path: '/a/Renamed.json', text: 'renamed' }] }]);
 
     expect(h.applied).toEqual([[['move', '/a/Npc.json', '/a/Renamed.json'], ['create', '/a/Renamed.json'], ['replace', '/a/Renamed.json', 'renamed']]]);
-    expect(h.saved).toEqual(['/a/Renamed.json']);
   });
 
   it('tells the caller the moves before VS Code applies, and does not undo when VS Code applies', async () => {
@@ -60,7 +51,7 @@ describe('applying workspace changes', () => {
     expect(undo).not.toHaveBeenCalled();
   });
 
-  it('undoes what the caller was told, throws, and saves nothing when VS Code applies nothing', async () => {
+  it('undoes what the caller was told, and throws when VS Code applies nothing', async () => {
     const undo = vi.fn();
     h.applyLands = false;
 
@@ -68,7 +59,6 @@ describe('applying workspace changes', () => {
       .rejects.toThrow('VS Code did not apply');
 
     expect(undo).toHaveBeenCalledOnce();
-    expect(h.saved).toEqual([]);
   });
 
   it('changes a document through the Uri of the one the changes read', async () => {
@@ -79,16 +69,10 @@ describe('applying workspace changes', () => {
     expect(h.applied[0]).toEqual([['create', OWNER], ['replace', OWNER, 'x']]);
   });
 
-  it('resolves a file as not saved when opening it to save throws, after the edit is in place', async () => {
-    h.saveThrows = true;
+  it('applies the edit as a refactoring and saves no document itself', async () => {
+    await applyWorkspaceChanges([{ ...none, documents: [{ path: OWNER, text: 'x' }] }]);
 
-    expect(await applyWorkspaceChanges([{ ...none, documents: [{ path: OWNER, text: 'x' }] }])).toEqual([OWNER]);
-  });
-
-  it('resolves the files VS Code did not save', async () => {
-    h.savesLand = false;
-
-    expect(await applyWorkspaceChanges([{ ...none, documents: [{ path: OWNER, text: 'x' }] }])).toEqual([OWNER]);
+    expect(h.options).toEqual([{ isRefactoring: true }]);
   });
 });
 
@@ -105,10 +89,9 @@ describe('applying the changes of several items as one workspace edit', () => {
       ['create', OWNER],
       ['replace', OWNER, 'without both'],
     ]]);
-    expect(h.saved).toEqual([OWNER]);
   });
 
-  it('writes no document a later item deletes, and saves only the documents that stay', async () => {
+  it('writes no document a later item deletes', async () => {
     await applyWorkspaceChanges([
       { ...none, documents: [{ path: `${FOLDER}/Child.json`, text: 'cut' }, { path: OWNER, text: 'cut' }] },
       { ...none, deletions: [FOLDER] },
@@ -119,7 +102,6 @@ describe('applying the changes of several items as one workspace edit', () => {
       ['replace', OWNER, 'cut'],
       ['delete', FOLDER, { recursive: true, ignoreIfNotExists: true }],
     ]]);
-    expect(h.saved).toEqual([OWNER]);
   });
 
   it('writes a document beside a deleted folder whose name only begins the same, on either separator', async () => {

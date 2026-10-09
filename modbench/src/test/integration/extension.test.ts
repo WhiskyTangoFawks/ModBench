@@ -1100,13 +1100,14 @@ describe('an edit in a tracked copy\'s grid', () => {
 
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => {
+    await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     answerEdit = () => refusedAsUntracked;
     if (existsSync(MOVED_FILE)) renameSync(MOVED_FILE, TRACKED_FILE);
     writeFileSync(TRACKED_FILE, savedText);
   });
 
-  it('changes the file\'s document to the text mEdit answers for the document\'s own text, and saves it', async () => {
+  it('changes the file\'s document to the text mEdit answers for the document\'s own text, and leaves it unsaved', async () => {
     await openFileTab();
     answerEdit = answeredIn(TRACKED_FILE);
 
@@ -1114,8 +1115,8 @@ describe('an edit in a tracked copy\'s grid', () => {
 
     assert.strictEqual(editsAsked.at(-1)?.text, savedText);
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
-    assert.deepStrictEqual(shown(document), { text: `${savedText}+1`, unsaved: false });
-    assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1`);
+    assert.deepStrictEqual(shown(document), { text: `${savedText}+1`, unsaved: true });
+    assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), savedText);
   });
 
   it('is undone by VS Code\'s Undo in the tab, over the document', async () => {
@@ -1130,13 +1131,14 @@ describe('an edit in a tracked copy\'s grid', () => {
     await waitFor('the document as it was before the edit', () => document.getText() === savedText);
   });
 
-  it('builds each edit on the text the one before it left, the second fired before the first is saved', async () => {
+  it('builds each edit on the text the one before it left, the second fired before the first is applied', async () => {
     await openFileTab();
     answerEdit = answeredIn(TRACKED_FILE);
 
     await Promise.all([edit(TRACKED_FORM_KEY, 1), edit(TRACKED_FORM_KEY, 2)]);
 
-    assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1+2`);
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    assert.strictEqual(document.getText(), `${savedText}+1+2`);
   });
 
   it('changes no document when mEdit refuses the edit, and says why, naming the field', async () => {
@@ -1178,7 +1180,7 @@ describe('an edit in a tracked copy\'s grid', () => {
       Array.isArray(asked) && JSON.stringify(asked.map((copy: unknown) => isRecord(copy) && copy.formKey)) === JSON.stringify([MOVED_FORM_KEY, column.formKey])));
   });
 
-  it('edits a child record through its own tab\'s document, and saves its container\'s document with it', async () => {
+  it('edits a child record through its own tab\'s document, which its container\'s document shows, both unsaved', async () => {
     const cell = path.join(path.dirname(TRACKED_FILE), 'EditedCell.json');
     writeFileSync(cell, savedText);
     carriedIn.set(CHILD_FORM_KEY, cell);
@@ -1193,12 +1195,44 @@ describe('an edit in a tracked copy\'s grid', () => {
 
       await edit(CHILD_FORM_KEY, 1);
 
-      assert.deepStrictEqual(shown(child), { text: `${savedText}+1`, unsaved: false });
+      assert.deepStrictEqual(shown(child), { text: `${savedText}+1`, unsaved: true });
+      await waitFor('the container\'s document to show the edit, unsaved', () => container.getText() === `${savedText}+1` && container.isDirty);
+      assert.strictEqual(readFileSync(cell, 'utf8'), savedText);
+    } finally {
+      await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+      await vscode.window.showTextDocument(vscode.Uri.file(cell));
+      await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+      carriedIn.delete(CHILD_FORM_KEY);
+      rmSync(cell, { force: true });
+    }
+  });
+  it('leaves its own tab and its container\'s both saved with the edit when VS Code\'s refactoring auto-save saves the container\'s file, an edit that also deletes a folder', async () => {
+    const cell = path.join(path.dirname(TRACKED_FILE), 'EditedCell.json');
+    const doomed = path.join(path.dirname(TRACKED_FILE), 'DoomedWithEdit');
+    mkdirSync(doomed, { recursive: true });
+    writeFileSync(path.join(doomed, 'Child.json'), '{}');
+    writeFileSync(cell, savedText);
+    carriedIn.set(CHILD_FORM_KEY, cell);
+    try {
+      const container = await vscode.workspace.openTextDocument(vscode.Uri.file(cell));
+      await openRecord({ formKey: CHILD_FORM_KEY, plugin });
+      const tab = await waitFor('the child\'s tab', () => openTabs().find((t) =>
+        t.input instanceof vscode.TabInputCustom && t.input.viewType === 'modbench.record' && t.input.uri.scheme !== 'file'));
+      if (!(tab.input instanceof vscode.TabInputCustom)) throw new Error('expected a custom editor tab');
+      const child = await vscode.workspace.openTextDocument(tab.input.uri);
+      answerEdit = (asked) => ({
+        status: 200,
+        body: { formKey: CHILD_FORM_KEY, path: 'Edits', moves: [], deletions: [doomed], newFormKey: null, documents: [{ path: cell, text: editedText(asked) }] },
+      });
+
+      await edit(CHILD_FORM_KEY, 1);
+
+      await waitFor('both documents to show the edit, saved', () => [child, container].every((each) => each.getText() === `${savedText}+1` && !each.isDirty));
       assert.strictEqual(readFileSync(cell, 'utf8'), `${savedText}+1`);
-      await waitFor('the container\'s document saved with the edit', () => container.getText() === `${savedText}+1` && !container.isDirty);
     } finally {
       carriedIn.delete(CHILD_FORM_KEY);
       rmSync(cell, { force: true });
+      rmSync(doomed, { recursive: true, force: true });
     }
   });
 });
@@ -1222,7 +1256,7 @@ describe('deleting a record in a tracked copy', () => {
     answerDelete = { status: 200, body: { applied: [], refused: [] } };
   });
 
-  it('asks after mEdit was handed the dirty plugin source, deletes the answered folder recursively, and saves the rewritten document', async () => {
+  it('asks after mEdit was handed the dirty plugin source, deletes the answered folder recursively, and VS Code\'s refactoring auto-save saves the rewritten document', async () => {
     mkdirSync(path.join(folder, 'Nested'), { recursive: true });
     writeFileSync(path.join(folder, 'Nested', 'Child.json'), '{}');
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
@@ -1246,7 +1280,7 @@ describe('deleting a record in a tracked copy', () => {
     assert.deepStrictEqual(asked, { held: [{ path: TRACKED_FS_PATH, text: unsavedText }] });
     assert.ok(!existsSync(folder), 'the answered folder should be deleted with what is in it');
     assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), 'rewritten');
-    assert.ok(!document.isDirty, 'the rewritten document should be saved');
+    assert.ok(!document.isDirty, 'VS Code\'s refactoring auto-save should have saved the rewritten document');
   });
 });
 

@@ -80,7 +80,7 @@ function harness(viewSelection: readonly PluginsTreeNode[] = []) {
   const reporter = recordingReporter();
   const writing: string[] = [];
   const source = {
-    applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])),
+    applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve()),
     oneAtATime: <T,>(job: () => Promise<T>) => job(),
     refreshSourceControlFor: vi.fn(),
   };
@@ -225,21 +225,6 @@ describe('modbench.record.create makes the changes mEdit answers', () => {
     expect(reporter.landings).toEqual([]);
     expect(source.refreshSourceControlFor).toHaveBeenCalledWith(MY_PATCH);
     expect(steps).toEqual(['watch MyPatch.esp ModA', 'create MyPatch.esp ModA npc_', 'forget']);
-  });
-
-  it('reports a file VS Code did not save as a part of the outcome, and still selects the record that landed', async () => {
-    const { steps, source, reporter, create } = harness();
-    source.applyWorkspaceChanges.mockResolvedValue(['/mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json']);
-
-    await create(NPC_GROUP);
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not save 000900:MyPatch.esp.',
-      detail: 'VS Code did not save /mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json.',
-    }]);
-    expect(reporter.landings).toEqual(['Created 000900:MyPatch.esp.']);
-    expect(source.refreshSourceControlFor).toHaveBeenCalledWith(MY_PATCH);
-    expect(steps).toContain('select 000900:MyPatch.esp in npc_');
   });
 });
 

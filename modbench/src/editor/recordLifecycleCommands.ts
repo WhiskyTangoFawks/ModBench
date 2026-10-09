@@ -107,7 +107,7 @@ export function registerRecordLifecycleCommands(
         const touched = answer.applied.map(({ record }) => record);
         const applied = await applyAnswered(
           source, reporter, answer.applied, touched.map(pluginAddressOf),
-          { notApplied: 'Could not delete the records.', notSaved: 'Could not save the deletions.' });
+          'Could not delete the records.');
         outcome(applied ? touched : []);
       });
       await (records.length > 0 ? write(reportOutcome, invokedFrom) : reportOutcome());
@@ -226,7 +226,7 @@ export function registerRecordCopyCommands(
         const attempted = copiesWritten(answered, mode).length + answer.refused.length;
         const applied = await applyAnswered(
           source, reporter, answer.applied, answered.map(({ destination }) => destination),
-          { notApplied: 'Could not copy the records.', notSaved: 'Could not save the copies.' });
+          'Could not copy the records.');
         const landed = applied ? answered : [];
         const written = copiesWritten(landed, mode);
         if (written.length > 0) reporter.landed(landedMessage(written, labels));

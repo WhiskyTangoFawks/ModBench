@@ -3,8 +3,6 @@ import { fakeUri, Range } from '../../test/vscodeMock';
 
 const h = vi.hoisted(() => ({
   applied: [] as unknown[][],
-  saved: [] as string[],
-  savesLand: true,
   applyLands: true,
 }));
 
@@ -19,10 +17,6 @@ vi.mock('vscode', () => ({
     replace(uri: { path: string }, _range: unknown, text: string) { this.made.push(['replace', uri.path, text]); }
   },
   workspace: {
-    openTextDocument: (uri: { path: string }) => Promise.resolve({
-      uri, isDirty: true, getText: () => `text of ${uri.path}`,
-      save: () => { h.saved.push(uri.path); return Promise.resolve(h.savesLand); },
-    }),
     applyEdit: (edit: { made: unknown[] }) => { h.applied.push(edit.made); return Promise.resolve(h.applyLands); },
   },
 }));
@@ -54,8 +48,6 @@ function makeDeps(answer: Awaited<ReturnType<InMemoryMEditClient['getEditChanges
 
 beforeEach(() => {
   h.applied.length = 0;
-  h.saved.length = 0;
-  h.savesLand = true;
   h.applyLands = true;
 });
 
@@ -136,15 +128,5 @@ describe('an edit of a record', () => {
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not edit Height.', detail: 'A.esp (ModA) holds no 000800:A.esp.' }]);
     expect(meditClient.calls.filter(c => c.method === 'getEditChanges')).toEqual([]);
-  });
-
-  it('reports a document VS Code did not save as a part that failed, and still refreshes Source Control', async () => {
-    const { deps, reporter, refreshSourceControlFor } = makeDeps({ applied: true, moves: [], deletions: [], documents: [{ path: FILE, text: 'edited' }] });
-    h.savesLand = false;
-
-    await applyRecordEdit(deps, address, height);
-
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not save the edit of Height.', detail: `VS Code did not save ${FILE}.` }]);
-    expect(refreshSourceControlFor).toHaveBeenCalledWith(plugin);
   });
 });
