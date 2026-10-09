@@ -96,7 +96,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         var holder = new LoadOrderHolder();
         holder.Apply(SnapshotPlugins.Snapshot(_game, _root, release, []));
 
-        var result = TestEditService.Over(holder).GetRequiredService<RenameSourceHandler>().RenameSource(Old, "New.txt");
+        var result = TestEditService.Over(holder).GetRequiredService<RenameSourceChangesHandler>().RenameSource(Old, "New.txt", []);
 
         Assert.EndsWith(expected, result.Message, StringComparison.Ordinal);
     }
@@ -150,21 +150,47 @@ public sealed class RenameSourceHandlerTests : IDisposable
     }
 
     [Fact]
-    public void RenameSource_WhenGitRefusesTheWrite_RefusesIt_AndPutsTheSourceBack()
+    public void RenameSource_AnswersTheChangesOverTheUnsavedTexts_AndWritesNothing()
     {
         var before = TrackedTree.Records(_trackedMod, Old);
+        var npc = TrackedTree.DocumentCarrying(_trackedMod, Old, "SelfNpc");
+        var path = Path.Combine(_trackedMod, TrackedTree.DocumentFile(_trackedMod, Old, npc.FormKey).Require());
+
+        var result = Changes.RenameSource(Old, "New.esp", [new DocumentChange(path, npc.Body.Replace("SelfNpc", "Unsaved", StringComparison.Ordinal))]);
+
+        Assert.Null(result.Refusal);
+        Assert.Contains(result.Changes.Require().Documents, document => document.Text.Contains("Unsaved", StringComparison.Ordinal));
+        Assert.Equal(before, TrackedTree.Records(_trackedMod, Old));
+        Assert.True(SourceRepository.SourceReads(new RegisteredPlugin(Old.Name, TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod), Line: null)));
+    }
+
+    [Fact]
+    public void MoveLastWritten_WhenGitRefusesTheRefUpdate_RefusesIt()
+    {
         LastWriteRecord.RefuseRefUpdates(_trackedMod);
 
-        var result = RenameSource(Old, "New.esp");
+        var result = Moving.MoveLastWritten(Old, "New.esp");
 
         Assert.Equal(RenameSourceRefusal.WriteFailed, result.Refusal);
         Assert.Contains(Old.Name, result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, TrackedTree.Records(_trackedMod, Old));
-        Assert.False(SourceRepository.SourceReads(new RegisteredPlugin("New.esp", TrackedModName, "", new PluginProvider.FromMod(TrackedModName, _trackedMod), Line: null)));
     }
 
-    private RenameSourceResult RenameSource(PluginAddress plugin, string newName) =>
-        TestEditService.Over(_holder).GetRequiredService<RenameSourceHandler>().RenameSource(plugin, newName);
+    private RenameSourceChangesHandler Changes => TestEditService.Over(_holder).GetRequiredService<RenameSourceChangesHandler>();
+
+    private MoveLastWrittenHandler Moving => TestEditService.Over(_holder).GetRequiredService<MoveLastWrittenHandler>();
+
+    // The gesture as the extension makes it: the changes saved, then the ref moved.
+    private RenameSourceResult RenameSource(PluginAddress plugin, string newName)
+    {
+        var answered = Changes.RenameSource(plugin, newName, []);
+        if (answered.Changes is not { } changes) return answered;
+
+        EditSaving.Save(
+            changes.Moves.Select(move => (move.From, move.To)), changes.Deletions,
+            changes.Documents.Select(document => (document.Path, document.Text)));
+        var moved = Moving.MoveLastWritten(plugin, newName);
+        return moved.Refusal is null ? answered : moved;
+    }
 
     private async Task<byte[]> CompiledBytes(PluginAddress plugin)
     {

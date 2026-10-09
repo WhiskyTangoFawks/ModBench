@@ -11,7 +11,8 @@ public sealed class CommandHandlerConventionTests
         typeof(CreateRecordChangesHandler),
         typeof(CreatePluginHandler),
         typeof(PutLoadOrderHandler),
-        typeof(RenameSourceHandler),
+        typeof(RenameSourceChangesHandler),
+        typeof(MoveLastWrittenHandler),
     ];
 
     private static readonly Type[] SelectionHandlers =

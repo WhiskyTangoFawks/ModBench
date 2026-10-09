@@ -1,7 +1,9 @@
+using MEditService.SourceAdapter;
+
 namespace MEditService.Commands;
 
-/// <summary>Whether rename source moved the plugin's source, or why it wrote nothing.</summary>
-public sealed record RenameSourceResult(RenameSourceRefusal? Refusal = null, string? Message = null);
+/// <summary>The changes that move the plugin source, absent for the move of what Modbench last wrote; or why nothing changed.</summary>
+public sealed record RenameSourceResult(RenameSourceRefusal? Refusal = null, string? Message = null, SourceChanges? Changes = null);
 
 /// <summary>Why rename source wrote nothing (ADR-0019): each value is a different way out.</summary>
 public enum RenameSourceRefusal

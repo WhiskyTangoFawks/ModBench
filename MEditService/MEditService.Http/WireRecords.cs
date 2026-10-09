@@ -96,6 +96,17 @@ internal sealed record RecordCreateChangesResponse(
             [.. answer.Changes.Documents.Select(document => new DocumentChange(document.Path, document.Text))]);
 }
 
+/// <summary>What renaming a plugin's source changes: moves, then deletions, then each document's text, by absolute path.</summary>
+internal sealed record RenameSourceChangesResponse(
+    IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents)
+{
+    internal static RenameSourceChangesResponse Of(SourceAdapter.SourceChanges changes) =>
+        new(
+            [.. changes.Moves.Select(move => new SourceMove(move.From, move.To))],
+            changes.Deletions,
+            [.. changes.Documents.Select(document => new DocumentChange(document.Path, document.Text))]);
+}
+
 /// <summary>A record and the plugin holding it (ADR-0012).</summary>
 internal sealed record RecordAddress(string FormKey, string Plugin, string Origin);
 

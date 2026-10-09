@@ -133,6 +133,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/rename-source-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The changes renaming a tracked plugin's source makes, writing nothing.
+         * @description Given the current text of any unsaved document, the files and folders renaming the plugin's source moves and the text each document it changes holds afterwards: every FormKey of the plugin follows. Moves come first, then deletions, then documents, and every path is absolute. The plugin file, its plugins.txt lines and what Modbench last wrote stay as they are.
+         */
+        post: operations["RenameSourceChanges"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins": {
         parameters: {
             query?: never;
@@ -364,7 +384,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/rename-source": {
+    "/plugins/move-last-written": {
         parameters: {
             query?: never;
             header?: never;
@@ -373,8 +393,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Moves a tracked plugin's source, and what Modbench last wrote for it, to the new name as working-tree changes: every FormKey of the plugin follows. The plugin file and its plugins.txt lines stay as they are. */
-        post: operations["RenameSource"];
+        /** @description Moves what Modbench last wrote for a plugin to the plugin's new name, once the source rename is applied and saved. */
+        post: operations["MoveLastWritten"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1203,6 +1223,17 @@ export interface components {
             recordTypeName: string;
             editorId?: string | null;
         };
+        RenameSourceChangesRequest: {
+            origin: string;
+            name: string;
+            newName: string;
+            documents?: components["schemas"]["DocumentChange"][] | null;
+        };
+        RenameSourceChangesResponse: {
+            moves: components["schemas"]["SourceMove"][];
+            deletions: string[];
+            documents: components["schemas"]["DocumentChange"][];
+        };
         RenameSourceRequest: {
             origin: string;
             name: string;
@@ -1608,6 +1639,84 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": components["schemas"]["NotificationEvent"];
+                };
+            };
+        };
+    };
+    RenameSourceChanges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameSourceChangesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenameSourceChangesResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -2228,7 +2337,7 @@ export interface operations {
             };
         };
     };
-    RenameSource: {
+    MoveLastWritten: {
         parameters: {
             query?: never;
             header?: never;
@@ -2268,15 +2377,6 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -188,7 +188,7 @@ function registerPluginGestures(
       client, reporter: reporterFor('record.create'), write: recordWrite, source: sourceEditing,
       createdRecords: createdRecordSelection({ client, rowOf: (place, formKey) => tree.recordRow(place, formKey), view }),
     }, selection),
-    registerRenamePluginCommand({ client, adapter, ask, instance, reporter: reporterFor('plugin.rename') }, selection),
+    registerRenamePluginCommand({ client, adapter, ask, instance, reporter: reporterFor('plugin.rename'), source: sourceEditing }, selection),
     registerCreatePluginCommand(client, instance, reporterFor('newPlugin')),
     vscode.commands.registerCommand('modbench.plugin.sync', (value: InstanceValue) => pluginSync.run(value.pluginSyncArguments)),
   ];

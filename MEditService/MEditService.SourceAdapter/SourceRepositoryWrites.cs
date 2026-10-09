@@ -215,36 +215,40 @@ internal sealed class SourceRepositoryWrites(
         }
     }
 
-    internal void RenameSource(string from, string to)
+    /// <summary>What renaming a plugin's source changes: the root and each leaf named for a record of the plugin
+    /// move, top down, and each document whose text changes, or is unsaved, is written at its moved path.</summary>
+    internal SourceChanges ChangesToRenameSource(string from, string to)
     {
-        var fromRoot = SourceRepositoryLayout.RootIn(_modFolder, from);
-        var held = Directory.GetFiles(fromRoot, "*", SearchOption.AllDirectories)
+        var held = files.FilesIn(SourceRepositoryLayout.RootIn(_modFolder, from), "*", SearchOption.AllDirectories)
             .Order(StringComparer.Ordinal)
-            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
+            .Select(path => (Path: path, Relative: Path.GetRelativePath(_modFolder, path), Bytes: files.ReadAllBytes(path)))
             .ToList();
-        var renamed = held
-            .Select(file => PluginSourceRename.Renamed(Path.GetRelativePath(_modFolder, file.Path), file.Bytes, from, to))
-            .ToList();
-
-        var journal = new WriteJournal(_modFolder);
-        try
-        {
-            journal.RecordUndo(git.LastWrittenPutBack(from, to), description: $"what Modbench last wrote for {from}");
-            journal.WriteAll(renamed, _modFolder);
-            git.MoveLastWritten(from, to);
-            foreach (var file in held) journal.DeleteIfHolds(file.Path, file.Bytes);
-            journal.DeleteEmptyDirectories(fromRoot);
-        }
-        catch (Exception cause) when (cause is not OutOfMemoryException)
-        {
-            if (journal.Report(cause, journal.UndoSince(0)) is { } report) throw report;
-            throw;
-        }
-        finally
-        {
-            locator.Forget();
-        }
+        var renamed = held.Select(file => PluginSourceRename.Renamed(file.Relative, file.Bytes, from, to)).ToList();
+        var documents = held.Zip(renamed)
+            .Where(pair => pair.Second.RelativePath.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)
+                && (!pair.Second.Content.AsSpan().SequenceEqual(pair.First.Bytes) || files.HoldsUnsavedText(pair.First.Path)))
+            .Select(pair => new DocumentChange(pair.Second.RelativePath, Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(pair.Second.Content))));
+        return new SourceChanges(MovesTopDown(held.Select(file => file.Relative), renamed.Select(file => file.RelativePath)), [], [.. documents]);
     }
+
+    // A directory moves before what is in it, so each move names a path as the moves before it left it.
+    private static List<SourceMove> MovesTopDown(IEnumerable<string> from, IEnumerable<string> to)
+    {
+        var paths = from.Zip(to, (held, renamed) => (From: held.Split(Path.DirectorySeparatorChar), To: renamed.Split(Path.DirectorySeparatorChar))).ToList();
+        var moves = new List<SourceMove>();
+        var moved = new HashSet<string>(StringComparer.Ordinal);
+        for (var depth = 0; depth < paths.Max(path => path.From.Length); depth++)
+        {
+            foreach (var (held, renamed) in paths.Where(path => path.From.Length > depth))
+            {
+                if (held[depth] != renamed[depth] && moved.Add(Path.Combine(held[..(depth + 1)])))
+                    moves.Add(new SourceMove(Path.Combine([.. renamed[..depth], held[depth]]), Path.Combine(renamed[..(depth + 1)])));
+            }
+        }
+        return moves;
+    }
+
+    internal void MoveLastWritten(string from, string to) => git.MoveLastWritten(from, to);
 
     private readonly record struct LeafMoves(IReadOnlyList<(string From, string To)> Moves, string Written);
 

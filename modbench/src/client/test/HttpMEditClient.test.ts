@@ -293,28 +293,39 @@ describe('HttpMEditClient — creating a plugin', () => {
   });
 });
 
-describe('HttpMEditClient — renaming a plugin source', () => {
+describe('HttpMEditClient — renaming a plugin source answers the changes', () => {
   const plugin = { name: 'Old.esp', origin: 'ModA' };
+  const changes = { moves: [{ from: '/m/plugin-source/Old.esp', to: '/m/plugin-source/New.esp' }], deletions: [], documents: [{ path: '/m/plugin-source/New.esp/h.json', text: '{}' }] };
 
-  it('sends the plugin and the new name, and answers renamed on a 204', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 204 })));
-    const client = makeClient(fetch);
+  it('sends the plugin, the new name and the unsaved documents, and reads the changes', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, changes)));
+    const unsaved = [{ path: '/m/plugin-source/Old.esp/h.json', text: '{"h":1}' }];
 
-    const result = await client.renameSource(plugin, 'New.esp');
+    const result = await makeClient(fetch).getRenameSourceChanges(plugin, 'New.esp', unsaved);
 
-    expect(result).toEqual({ renamed: true });
+    expect(result).toEqual(changes);
     const request = fetch.mock.calls[0]?.[0];
-    expect(request?.url).toMatch(/\/plugins\/rename-source$/);
-    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'Old.esp', newName: 'New.esp' });
+    expect(request?.url).toMatch(/\/plugins\/rename-source-changes$/);
+    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'Old.esp', newName: 'New.esp', documents: unsaved });
   });
 
   it('resolves a WriteRefused carrying the name and the server text on a refusal', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(409, { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' })));
-    const client = makeClient(fetch);
 
-    const result = await client.renameSource(plugin, 'New.esp');
+    const result = await makeClient(fetch).getRenameSourceChanges(plugin, 'New.esp', []);
 
     expect(result).toEqual({ refused: true, message: 'Could not rename the source of "Old.esp" — ModA already holds New.esp.' });
+  });
+
+  it('moves what was last written, answering moved on a 204', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 204 })));
+
+    const result = await makeClient(fetch).moveLastWritten(plugin, 'New.esp');
+
+    expect(result).toEqual({ moved: true });
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.url).toMatch(/\/plugins\/move-last-written$/);
+    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'Old.esp', newName: 'New.esp' });
   });
 });
 

@@ -81,13 +81,15 @@ describe('a rename while a recompute is reading', () => {
     const overlapping = instance.refresh();
     await filesReadBeforeRename;
     const client = new InMemoryMEditClient();
-    client.setCommandResult('renameSource', { renamed: true });
+    client.setCommandResult('getRenameSourceChanges', { moves: [], deletions: [], documents: [] });
+    client.setCommandResult('moveLastWritten', { moved: true });
     client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esl', '.esp']);
     client.setQueryAnswer('getPluginDependants', { dependants: [], unreadable: [] });
     showInputBox.mockResolvedValue(RENAMED);
     registerRenamePluginCommand({
       client, adapter: { ...writer, renamePlugin: async (...args) => { await writer.renamePlugin(...args); release(); } },
       ask: scriptedDialog('Rename'), instance, reporter: recordingReporter(),
+      source: { unsaved: () => [], applyWorkspaceChanges: () => Promise.resolve([]), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     }, () => []);
     await present(handlers.get('modbench.plugin.rename'), 'the rename plugin command')(new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin));
     await overlapping;

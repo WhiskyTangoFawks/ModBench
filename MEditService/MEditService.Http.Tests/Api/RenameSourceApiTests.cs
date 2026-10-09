@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -29,23 +30,50 @@ public sealed class RenameSourceApiTests : HostedTests
     }
 
     private Task<HttpResponseMessage> RenameSource(string name, string origin, string newName) =>
-        Client.PostAsJsonAsync("/plugins/rename-source", new { origin, name, newName });
+        Client.PostAsJsonAsync("/plugins/rename-source-changes", new { origin, name, newName, documents = Array.Empty<object>() });
+
+    private Task<HttpResponseMessage> MoveLastWritten(string name, string origin, string newName) =>
+        Client.PostAsJsonAsync("/plugins/move-last-written", new { origin, name, newName });
 
     private static async Task<string?> RefusalOf(HttpResponseMessage response, HttpStatusCode status) =>
         (await response.AssertIsProblem(status)).GetProperty("refusal").GetString();
 
     [Fact]
-    public async Task RenamingATrackedPluginsSource_Is204_AndItsSourceTakesTheNewName()
+    public async Task RenamingATrackedPluginsSource_Is200_AnswersTheChanges_AndWritesNothing()
     {
         await Tracked();
 
         var response = await RenameSource(Plugin, Origin, "Renamed.esp");
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.False(Directory.Exists(PluginSourceRoot.In(ModFolder, Plugin)));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var changes = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.NotEmpty(changes.GetProperty("moves").EnumerateArray());
         Assert.Contains(
-            Directory.EnumerateFiles(PluginSourceRoot.In(ModFolder, "Renamed.esp"), "*", SearchOption.AllDirectories),
-            file => File.ReadAllText(file).Contains(Npc, StringComparison.Ordinal));
+            changes.GetProperty("documents").EnumerateArray(),
+            document => document.GetProperty("text").GetString().Require().Contains("Renamed.esp", StringComparison.Ordinal));
+        Assert.True(Directory.Exists(PluginSourceRoot.In(ModFolder, Plugin)));
+        Assert.False(Directory.Exists(PluginSourceRoot.In(ModFolder, "Renamed.esp")));
+    }
+
+    [Fact]
+    public async Task MovingWhatWasLastWritten_Is204()
+    {
+        await Tracked();
+
+        var response = await MoveLastWritten(Plugin, Origin, "Renamed.esp");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task MovingWhatWasLastWrittenWhenGitRefuses_Is500()
+    {
+        await Tracked();
+        GitHooks.Write(ModFolder, "reference-transaction", "[ \"$1\" = prepared ] && exit 1\nexit 0");
+
+        var response = await MoveLastWritten(Plugin, Origin, "Renamed.esp");
+
+        Assert.Equal("WriteFailed", await RefusalOf(response, HttpStatusCode.InternalServerError));
     }
 
     [Fact]
@@ -90,17 +118,6 @@ public sealed class RenameSourceApiTests : HostedTests
     }
 
     [Fact]
-    public async Task RenamingWhenGitRefusesTheWrite_Is500()
-    {
-        await Tracked();
-        GitHooks.Write(ModFolder, "reference-transaction", "[ \"$1\" = prepared ] && exit 1\nexit 0");
-
-        var response = await RenameSource(Plugin, Origin, "Renamed.esp");
-
-        Assert.Equal("WriteFailed", await RefusalOf(response, HttpStatusCode.InternalServerError));
-    }
-
-    [Fact]
     public async Task RenamingWithNoLoadOrder_Is503()
     {
         var response = await RenameSource(Plugin, Origin, "Renamed.esp");
@@ -141,7 +158,7 @@ public sealed class RenameSourceWithoutGitApiTests : HostedTests
         Environment.SetEnvironmentVariable("PATH", string.Empty);
         try
         {
-            response = await Client.PostAsJsonAsync("/plugins/rename-source", new { origin = Origin, name = Plugin, newName = "Renamed.esp" });
+            response = await Client.PostAsJsonAsync("/plugins/rename-source-changes", new { origin = Origin, name = Plugin, newName = "Renamed.esp", documents = Array.Empty<object>() });
         }
         finally
         {

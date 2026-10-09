@@ -196,9 +196,11 @@ export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
   createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
-  // Renames the plugin source and moves the last-compile ref, as working-tree changes with no
-  // commit. Its file and its lines are the Instance adapter's.
-  renameSource(plugin: PluginAddress, newName: string): Promise<{ renamed: true } | WriteRefused>;
+  // The changes renaming the plugin source makes, as working-tree changes with no commit. `unsaved` stands in for
+  // the files it names. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
+  getRenameSourceChanges(plugin: PluginAddress, newName: string, unsaved: readonly UnsavedDocument[]): Promise<SourceChanges | WriteRefused>;
+  // Moves what Modbench last wrote for the plugin to its new name, once the source rename is applied and saved.
+  moveLastWritten(plugin: PluginAddress, newName: string): Promise<{ moved: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   track(mods: readonly string[], options?: { onProgress?: (status: TrackStatus) => void }): Promise<TrackOutcome | WriteRefused>;
   // `unsaved` stands in for the files it names. A WriteRefused is the call failing or mEdit refusing. Nothing is written.

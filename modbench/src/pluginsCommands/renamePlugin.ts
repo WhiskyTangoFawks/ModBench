@@ -1,15 +1,23 @@
-// Rename plugin (rename-plugin trace). The client's reach is the plugin source, which only mEdit
-// can rename, and the dependants query; the file and its lines are the Instance adapter's.
+// Rename plugin (rename-plugin trace). The client's reach is the plugin source's changes, which only mEdit
+// can answer, and the dependants query; the file and its lines are the Instance adapter's.
 
 import { OVERWRITE_ORIGIN, type FileOrigin, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { isRefused, type MEditClient } from '../client';
+import { isRefused, type MEditClient, type SourceChanges, type UnsavedDocument } from '../client';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
 
+/** How the gesture reaches plugin source in VS Code: the dirty documents mEdit reads in place of their files,
+ *  and the changes applied as one workspace edit and saved. Resolves the files not saved. */
+export interface RenameSourceEditing {
+  readonly unsaved: () => readonly UnsavedDocument[];
+  readonly apply: (changes: SourceChanges) => Promise<readonly string[]>;
+}
+
 export interface PluginRenameAccess {
   readonly adapter: InstanceAdapter;
-  readonly client: Pick<MEditClient, 'renameSource'>;
+  readonly client: Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten'>;
+  readonly source: RenameSourceEditing;
 }
 
 export interface PluginRenameConfirmation {
@@ -68,8 +76,18 @@ export async function renamePlugin(
   const checked = await access.adapter.checkPluginRename(origin, plugin.name, newName, gameRelease);
   if (!checked.applied) return { applied: false, sourceRenamed: false, refusal: checked.refusal };
 
-  const source = await access.client.renameSource(plugin, newName);
-  if (isRefused(source)) return { applied: false, sourceRenamed: false, refusal: source.message };
+  const changes = await access.client.getRenameSourceChanges(plugin, newName, access.source.unsaved());
+  if (isRefused(changes)) return { applied: false, sourceRenamed: false, refusal: changes.message };
+  let notSaved: readonly string[];
+  try {
+    notSaved = await access.source.apply(changes);
+  } catch (err) {
+    return { applied: false, sourceRenamed: false, refusal: errorMessage(err) };
+  }
+  if (notSaved.length > 0) return { applied: false, sourceRenamed: true, refusal: `VS Code did not save ${notSaved.join(', ')}.` };
+
+  const moved = await access.client.moveLastWritten(plugin, newName);
+  if (isRefused(moved)) return { applied: false, sourceRenamed: true, refusal: moved.message };
   try {
     await access.adapter.renamePlugin(origin, plugin.name, newName, gameRelease);
     return { applied: true };

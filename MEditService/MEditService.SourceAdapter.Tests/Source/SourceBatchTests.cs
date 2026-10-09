@@ -405,7 +405,7 @@ public sealed class SourceBatchTests : IDisposable
 
     [Theory]
     [InlineData("replace")]
-    [InlineData("rename")]
+    [InlineData("moveLast")]
     [InlineData("binary")]
     public void AVerbThatWritesTheDiskItself_RefusesOnABatchsRepository_AndWritesNothing(string verb)
     {
@@ -416,7 +416,7 @@ public sealed class SourceBatchTests : IDisposable
         Assert.Throws<InvalidOperationException>(() => verb switch
         {
             "replace" => batch.Repository.ReplaceSourceFrom(Plugin, [], "ABCDEF0123"),
-            "rename" => batch.Repository.RenameSource(Plugin, "Renamed.esp").Holds(out _, out var failure) ? null : failure,
+            "moveLast" => batch.Repository.MoveLastWrittenTo(Plugin, "Renamed.esp"),
             _ => batch.Repository.WriteBinary(Plugin, "ABCDEF0123", () => wrote = true).Holds(out _, out var failure) ? null : failure,
         });
 

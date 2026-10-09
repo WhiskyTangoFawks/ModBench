@@ -182,6 +182,8 @@ public sealed class SourceBatch : ISourceFiles
     byte[] ISourceFiles.ReadAllBytes(string path) =>
         HeldText(path, out var onDisk) is { } text ? Encoding.UTF8.GetBytes(text) : File.ReadAllBytes(onDisk);
 
+    bool ISourceFiles.HoldsUnsavedText(string path) => HeldText(path, out _) is not null && Written(Path.GetFullPath(path)) is null;
+
     string ISourceFiles.ReadAllText(string path) => HeldText(path, out var onDisk) ?? File.ReadAllText(onDisk);
 
     IEnumerable<string> ISourceFiles.EntriesUnder(string directory) => Descendants(directory).Select(entry => entry.Path);

@@ -16,7 +16,7 @@ type QueryMethod =
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
-  | 'createPlugin' | 'renameSource' | 'rebuildIndex' | 'track' | 'getCreateChanges' | 'getDeleteChanges'
+  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'track' | 'getCreateChanges' | 'getDeleteChanges'
   | 'copyRecords' | 'decompile' | 'compile';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
@@ -263,8 +263,11 @@ export class InMemoryMEditClient implements MEditClient {
   createPlugin(...args: Parameters<MEditClient['createPlugin']>): ReturnType<MEditClient['createPlugin']> {
     return this.command('createPlugin', args);
   }
-  renameSource(...args: Parameters<MEditClient['renameSource']>): ReturnType<MEditClient['renameSource']> {
-    return this.command('renameSource', args);
+  getRenameSourceChanges(...args: Parameters<MEditClient['getRenameSourceChanges']>): ReturnType<MEditClient['getRenameSourceChanges']> {
+    return this.command('getRenameSourceChanges', args);
+  }
+  moveLastWritten(...args: Parameters<MEditClient['moveLastWritten']>): ReturnType<MEditClient['moveLastWritten']> {
+    return this.command('moveLastWritten', args);
   }
   rebuildIndex(...args: Parameters<MEditClient['rebuildIndex']>): ReturnType<MEditClient['rebuildIndex']> {
     return this.command('rebuildIndex', args);

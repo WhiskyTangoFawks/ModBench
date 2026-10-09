@@ -74,7 +74,9 @@ public static class CommandHandlers
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<ILogger<DecompilePluginHandler>>()));
 
-        services.AddSingleton(sp => new RenameSourceHandler(sp.GetRequiredService<LoadOrderHolder>()));
+        services.AddSingleton(sp => new RenameSourceChangesHandler(sp.GetRequiredService<LoadOrderHolder>()));
+
+        services.AddSingleton(sp => new MoveLastWrittenHandler(sp.GetRequiredService<LoadOrderHolder>()));
 
         services.AddSingleton(sp => new CompilePluginHandler(
             new PluginCompileService(

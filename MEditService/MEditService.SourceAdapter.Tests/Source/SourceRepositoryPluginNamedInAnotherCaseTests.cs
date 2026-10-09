@@ -110,11 +110,12 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [Fact]
-    public void RenameSource_ForThePluginNamedInAnotherCase_MovesItsTree()
+    public void ChangesToRenameSource_ForThePluginNamedInAnotherCase_MoveItsTree()
     {
         var renamed = new PluginAddress("Renamed.esp", TestMod.Name);
 
-        Assert.True(Repository.RenameSource(Recased, renamed.Name).Value());
+        var changes = Repository.ChangesToRenameSource(Recased, renamed.Name).Value().Require();
+        Assert.Null(SourceTransaction.Atomically(Repository, transaction => transaction.Apply(SourceAnswer.Of(changes))));
 
         Assert.Equal(2, TreeDocuments.Of(Repository, renamed).Count);
         Assert.False(SourceRepository.SourceReads(Registered(AsTreeNamesIt)));
