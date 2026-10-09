@@ -248,15 +248,17 @@ public sealed class EditRecordChangesTests : IDisposable
     {
         using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
         var leaving = Path.Combine(world.ModFolder, TrackedTree.DocumentFile(world.ModFolder, world.Plugin, keys["Mover"].ToString()).Require());
-        var given = TextOf(world, world.Plugin, keys["Mover"].ToString())
-            .Replace("\"EditorID\": \"Here\"", "\"EditorID\":\"Here\"", StringComparison.Ordinal);
+        var held = TextOf(world, world.Plugin, keys["Mover"].ToString());
+        var given = HandFormatted(held, "Here");
+        var withoutWanderer = JsonNode.Parse(held).Require().AsObject();
+        withoutWanderer.Remove("Persistent");
 
         var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Wanderer"].ToString(), Flags(0), given);
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        var left = Assert.Single(answer.Changes.Documents, document => document.Path == leaving).Text;
-        Assert.Contains("\"EditorID\":\"Here\"", left, StringComparison.Ordinal);
-        Assert.DoesNotContain("Wanderer", left, StringComparison.Ordinal);
+        Assert.Equal(
+            HandFormatted(RecordTextCodec.RoundTrip(withoutWanderer.ToJsonString(), GameRelease.Fallout4, "cell"), "Here"),
+            Assert.Single(answer.Changes.Documents, document => document.Path == leaving).Text);
     }
 
     [Fact]
@@ -264,16 +266,23 @@ public sealed class EditRecordChangesTests : IDisposable
     {
         using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys, withAPersistentCell: true);
         var worldspace = Path.Combine(world.ModFolder, TrackedTree.DocumentFile(world.ModFolder, world.Plugin, keys["World"].ToString()).Require());
-        File.WriteAllText(
-            worldspace, File.ReadAllText(worldspace).Replace("\"EditorID\": \"World\"", "\"EditorID\":\"World\"", StringComparison.Ordinal));
+        var held = File.ReadAllText(worldspace);
+        File.WriteAllText(worldspace, HandFormatted(held, "World"));
+        var mover = JsonNode.Parse(TextOf(world, world.Plugin, keys["Mover"].ToString())).Require()["Temporary"].Require()[0].Require().DeepClone();
+        mover["MajorRecordFlagsRaw"] = Persistent;
+        var withMover = JsonNode.Parse(held).Require().AsObject();
+        withMover["TopCell"].Require()["Persistent"] = new JsonArray(mover);
 
         var answer = Changes(world, world.Plugin, keys["Mover"].ToString(), Flags(Persistent));
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        var landed = Assert.Single(answer.Changes.Documents, document => document.Path == worldspace).Text;
-        Assert.Contains("\"EditorID\":\"World\"", landed, StringComparison.Ordinal);
-        Assert.Contains("\"Mover\"", landed, StringComparison.Ordinal);
+        Assert.Equal(
+            HandFormatted(RecordTextCodec.RoundTrip(withMover.ToJsonString(), GameRelease.Fallout4, "wrld"), "World"),
+            Assert.Single(answer.Changes.Documents, document => document.Path == worldspace).Text);
     }
+
+    private static string HandFormatted(string text, string editorId) =>
+        text.Replace($"\"EditorID\": \"{editorId}\"", $"\"EditorID\":\"{editorId}\"", StringComparison.Ordinal);
 
     [Fact]
     public void ThePlacedRecordsGroup_IsTheOneTheTextItIsGivenHoldsItIn()
