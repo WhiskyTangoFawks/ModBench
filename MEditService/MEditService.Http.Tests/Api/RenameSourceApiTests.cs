@@ -30,7 +30,7 @@ public sealed class RenameSourceApiTests : HostedTests
     }
 
     private Task<HttpResponseMessage> RenameSource(string name, string origin, string newName) =>
-        Client.PostAsJsonAsync("/plugins/rename-source-changes", new { origin, name, newName, documents = Array.Empty<object>() });
+        Client.PostAsJsonAsync("/plugins/rename-source-changes", new { origin, name, newName });
 
     private Task<HttpResponseMessage> MoveLastWritten(string name, string origin, string newName) =>
         Client.PostAsJsonAsync("/plugins/move-last-written", new { origin, name, treeName = name, newName });
@@ -158,7 +158,7 @@ public sealed class RenameSourceWithoutGitApiTests : HostedTests
         Environment.SetEnvironmentVariable("PATH", string.Empty);
         try
         {
-            response = await Client.PostAsJsonAsync("/plugins/rename-source-changes", new { origin = Origin, name = Plugin, newName = "Renamed.esp", documents = Array.Empty<object>() });
+            response = await Client.PostAsJsonAsync("/plugins/rename-source-changes", new { origin = Origin, name = Plugin, newName = "Renamed.esp" });
         }
         finally
         {

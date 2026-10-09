@@ -16,29 +16,17 @@ internal sealed class WriteTargets(
 
     // The working tree is the only thing asked (ADR-0015), so a second edit builds on
     // the first. The copy gestures read the source instead.
-    internal RecordEditResult? ResolveEditTarget(PluginAddress plugin, string formKey, out EditTarget target) =>
-        TryResolveEditTarget(plugin, formKey, out target, out _, out var refused) ? null : refused;
-
-    /// <summary>The edit target and the record's own text in one read of the tree.</summary>
-    internal bool TryResolveEditTarget(
-        PluginAddress plugin, string formKey, out EditTarget target,
-        [NotNullWhen(true)] out SourceDocument? document, [NotNullWhen(false)] out RecordEditResult? refused)
+    internal RecordEditResult? ResolveEditTarget(PluginAddress plugin, string formKey, UnsavedBatches batches, out EditTarget target)
     {
-        (target, document) = (default, null);
-
-        refused = RefuseUnlessEditable(plugin, out var openedRepository);
-        if (refused is not null) return false;
-        var repository = openedRepository
-            ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
-
-        refused = ResolveInTheTree(plugin, formKey, repository, loadOrder.Current.GameRelease, out target, out document);
-        return refused is null && document is not null;
+        target = default;
+        if (RefuseUnlessEditable(plugin, out _) is { } blocked) return blocked;
+        return ResolveInTheTree(plugin, formKey, BatchOf(plugin, batches).Repository, loadOrder.Current.GameRelease, out target, out _);
     }
 
-    /// <summary>The edit target with <paramref name="text"/> standing in for the file of the document holding
-    /// the record: the tree only says which document that is.</summary>
+    /// <summary>The edit target over <paramref name="unsaved"/>, which stand in for their files.</summary>
     internal bool TryResolveEditTarget(
-        PluginAddress plugin, string formKey, string text, out EditTarget target, [NotNullWhen(false)] out RecordEditResult? refused)
+        PluginAddress plugin, string formKey, IReadOnlyList<DocumentChange> unsaved, out EditTarget target,
+        [NotNullWhen(false)] out RecordEditResult? refused)
     {
         target = default;
         refused = RefuseUnlessEditable(plugin, out var openedRepository);
@@ -46,18 +34,9 @@ internal sealed class WriteTargets(
         var repository = openedRepository
             ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
 
-        if (!repository.RecordFromText(plugin, formKey, text).Holds(out var found, out var failure))
-        {
-            refused = RefuseUnresolved(formKey, failure);
-            return false;
-        }
-        if (found is not { } record)
-        {
-            refused = RecordNotFound(plugin, formKey);
-            return false;
-        }
-        target = new EditTarget(loadOrder.Current.GameRelease, record.Identity, repository);
-        return true;
+        refused = ResolveInTheTree(
+            plugin, formKey, SourceBatch.Over(repository, unsaved).Repository, loadOrder.Current.GameRelease, out target, out _);
+        return refused is null;
     }
 
     private static RecordEditResult RefuseUnresolved(string formKey, SourceFailure failure) =>

@@ -221,13 +221,10 @@ internal static class RecordEndpoints
                         edit?.Op, spelled, decoded, edit?.Plugin, edit?.Origin);
                 }
             },
-            validate: () => request.Text is null
-                ? Results.Problem("The text of the document carrying the record is required.", statusCode: 400)
-                : WriteEndpointMapping.MissingDocuments(request.Documents) ?? EditRequestProblem(edit),
+            validate: () => EditRequestProblem(edit),
             execute: () => edits.Changes(
                 new PluginAddress(request.Edit.Plugin, request.Edit.Origin), decoded,
-                new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.Value), request.Text,
-                WriteEndpointMapping.Unsaved(request.Documents)),
+                new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.Value)),
             outcome: answer => answer.Outcome,
             onApplied: answer => Results.Ok(RecordEditChangesResponse.Of(decoded, spelled, answer)));
     }
@@ -249,11 +246,11 @@ internal static class RecordEndpoints
         {
             logger.LogInformation("Received DeleteRecordChanges for {Count} records", records.Count);
         }
-        return OverRecords(records, validateOptions: () => WriteEndpointMapping.MissingDocuments(request.Documents), answer: addressed =>
+        return OverRecords(records, validateOptions: () => null, answer: addressed =>
         {
             return WriteEndpointMapping.Answered(
                 "Delete", logger,
-                edits.DeleteRecords(addressed, WriteEndpointMapping.Unsaved(request.Documents)),
+                edits.DeleteRecords(addressed),
                 WriteEndpointMapping.Refusal,
                 landed => new RecordDeleteChanges(
                     Addressed(landed.Item),
@@ -277,7 +274,6 @@ internal static class RecordEndpoints
         }
         return OverRecords(records, validateOptions: () =>
         {
-            if (WriteEndpointMapping.MissingDocuments(request.Documents) is { } missing) return missing;
             if (destinations.Count == 0)
                 return Results.Problem("At least one destination is required.", statusCode: 400);
             if (destinations.Any(d => string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.Origin)))
@@ -287,9 +283,7 @@ internal static class RecordEndpoints
         {
             return WriteEndpointMapping.Answered(
                 "Copy", logger,
-                edits.CopyRecords(
-                    addressed, request.Mode, destinations, request.Replace,
-                    WriteEndpointMapping.Unsaved(request.Documents)),
+                edits.CopyRecords(addressed, request.Mode, destinations, request.Replace),
                 WriteEndpointMapping.Refusal,
                 landed => new RecordCopyChanges(
                     Addressed(landed.Item.Record), landed.Item.Destination,

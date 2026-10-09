@@ -123,8 +123,10 @@ public sealed class CopyRecordChangesHandlerTests
             TreeTampering.FileOf(mod.SourceModFolder, mod.SourcePlugin, npc.Identity),
             npc.Body.Replace(CopyFixture.SourceNpcEditorId, "UnsavedNpc", StringComparison.Ordinal));
 
+        mod.Unsaved.Apply([unsaved]);
+
         var result = mod.CopyHandler.CopyChangesSync(
-            [new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false, [unsaved]);
+            [new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false);
 
         var changes = Assert.Single(result.Landed).Outcome.Changes;
         Assert.Contains(changes.Documents, document => document.Text.Contains("UnsavedNpc", StringComparison.Ordinal));

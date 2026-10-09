@@ -107,8 +107,9 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         var moved = JsonNode.Parse(File.ReadAllText(file)).Require().AsObject();
         moved[RecordTypes.CellGridMember] = PlacedCell.GridAt(20, 21);
 
-        var (outcome, changes) = _plugins.CreateHandler.CreateRecord(
-            Edited, "cell", [new DocumentChange(file, moved.ToJsonString())], World.ToString(), new GridPosition(5, 6));
+        _plugins.Unsaved.Apply([new DocumentChange(file, moved.ToJsonString())]);
+
+        var (outcome, changes) = _plugins.CreateHandler.CreateRecord(Edited, "cell", World.ToString(), new GridPosition(5, 6));
 
         Assert.True(outcome.Applied, outcome.Message);
         Assert.Contains(changes.Documents, document => document.Text.Contains(outcome.NewFormKey.Require(), StringComparison.Ordinal));
@@ -124,8 +125,9 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         var moved = JsonNode.Parse(File.ReadAllText(file)).Require().AsObject();
         moved[RecordTypes.CellGridMember] = PlacedCell.GridAt(20, 21);
 
-        var (outcome, _) = trackedMaster.CreateHandler.CreateRecord(
-            Edited, "cell", [new DocumentChange(file, moved.ToJsonString())], World.ToString(), new GridPosition(3, 3));
+        trackedMaster.Unsaved.Apply([new DocumentChange(file, moved.ToJsonString())]);
+
+        var (outcome, _) = trackedMaster.CreateHandler.CreateRecord(Edited, "cell", World.ToString(), new GridPosition(3, 3));
 
         Assert.True(outcome.Applied, outcome.Message);
     }

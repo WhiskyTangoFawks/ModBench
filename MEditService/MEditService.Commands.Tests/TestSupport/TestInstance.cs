@@ -51,7 +51,8 @@ public abstract class TestInstance : IDisposable
         }
     }
 
-    public TestEditor EditHandler => new(Handler<EditRecordChangesHandler>(), Holder);
+    public UnsavedDocuments Unsaved => _services.Value.GetRequiredService<UnsavedDocuments>();
+    public TestEditor EditHandler => new(Handler<EditRecordChangesHandler>());
     public EditRecordChangesHandler EditChangesHandler => Handler<EditRecordChangesHandler>();
     public DeleteRecordChangesHandler DeleteHandler => Handler<DeleteRecordChangesHandler>();
     public CreateRecordChangesHandler CreateHandler => Handler<CreateRecordChangesHandler>();

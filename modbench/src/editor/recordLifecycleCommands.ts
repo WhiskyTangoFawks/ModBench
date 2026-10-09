@@ -99,7 +99,7 @@ export function registerRecordLifecycleCommands(
       if (records.length > 0 && await askToDelete(records.map(label), ask) !== 'Delete') return;
 
       const reportOutcome = () => source.oneAtATime(async () => {
-        const answer = records.length > 0 ? await client.getDeleteChanges(records, source.unsaved()) : { applied: [], refused: [] };
+        const answer = records.length > 0 ? await client.getDeleteChanges(records) : { applied: [], refused: [] };
         if (isRefused(answer)) { reporter.report('error', answer.message); return; }
         const refused = [...unreadable, ...answer.refused];
         const outcome = (landed: readonly RecordAddress[]) => reporter.selectionOutcome(
@@ -220,7 +220,7 @@ export function registerRecordCopyCommands(
       if (confirmed === 'cancelled') return;
 
       await write(() => source.oneAtATime(async () => {
-        const answer = await client.getCopyChanges(records, mode, destinations, confirmed.replace, source.unsaved());
+        const answer = await client.getCopyChanges(records, mode, destinations, confirmed.replace);
         if (isRefused(answer)) { reporter.report('error', answer.message); return; }
         const answered = answer.applied.map(({ record, destination }) => ({ record, destination }));
         const attempted = copiesWritten(answered, mode).length + answer.refused.length;

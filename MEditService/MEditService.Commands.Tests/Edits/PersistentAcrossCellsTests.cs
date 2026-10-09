@@ -104,11 +104,11 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
     private Fallout4Mod Override => _edited ?? throw new InvalidOperationException("Load the plugins first.");
 
-    private void SetFlags(string placed, int raw, IReadOnlyList<DocumentChange>? unsaved = null)
+    private void SetFlags(string placed, int raw)
     {
         var result = _plugins.EditHandler.Edit(
             Address(Override), _keys[placed].ToString(),
-            SetAt(JsonDocument.Parse(raw.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")), unsaved);
+            SetAt(JsonDocument.Parse(raw.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")));
         Assert.True(result.Applied, result.Message);
     }
 
@@ -181,7 +181,8 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     {
         Load(masterTracked: true);
 
-        SetFlags("Mover", Persistent, [MastersUnsaved(World, "MasterPersistentCell", "UnsavedPersistent")]);
+        _plugins.Unsaved.Apply([MastersUnsaved(World, "MasterPersistentCell", "UnsavedPersistent")]);
+        SetFlags("Mover", Persistent);
 
         Assert.Equal("UnsavedPersistent", Document(World)["TopCell"].Require()["EditorID"].Require().GetValue<string>());
     }
@@ -193,7 +194,8 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         var file = _plugins.DocumentFileOf(Override, World);
         var dirty = new DocumentChange(file, File.ReadAllText(file).Replace("\"World\"", "\"DirtyWorld\"", StringComparison.Ordinal));
 
-        SetFlags("Mover", Persistent, [dirty]);
+        _plugins.Unsaved.Apply([dirty]);
+        SetFlags("Mover", Persistent);
 
         Assert.Equal("DirtyWorld", Document(World)["EditorID"].Require().GetValue<string>());
     }
@@ -203,7 +205,8 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     {
         Load(masterTracked: true);
 
-        SetFlags("Leaver", 0, [MastersUnsaved(MasterGridCell, "MasterGrid", "UnsavedGrid")]);
+        _plugins.Unsaved.Apply([MastersUnsaved(MasterGridCell, "MasterGrid", "UnsavedGrid")]);
+        SetFlags("Leaver", 0);
 
         Assert.Equal("UnsavedGrid", Document(MasterGridCell)["EditorID"].Require().GetValue<string>());
     }
@@ -267,7 +270,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Load(masterTracked: false);
         var modFolder = _plugins.FolderOf(Override);
         var services = TestEditService.Over(_plugins.Holder, adapter: new UntrackingAModWhenAMasterIsRead(modFolder));
-        var handler = new TestEditor(services.GetRequiredService<EditRecordChangesHandler>(), _plugins.Holder);
+        var handler = new TestEditor(services.GetRequiredService<EditRecordChangesHandler>());
 
         var result = handler.Edit(
             Address(Override), _keys["Leaver"].ToString(), SetAt(JsonDocument.Parse("0").RootElement, Member("MajorRecordFlagsRaw")));
@@ -282,7 +285,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     {
         Load(masterTracked: false);
         var services = TestEditService.Over(_plugins.Holder, adapter: new FaultingOnClosingAMasterAskedForACell());
-        var handler = new TestEditor(services.GetRequiredService<EditRecordChangesHandler>(), _plugins.Holder);
+        var handler = new TestEditor(services.GetRequiredService<EditRecordChangesHandler>());
 
         var fault = Assert.Throws<InvalidOperationException>(() => handler.Edit(
             Address(Override), _keys["Leaver"].ToString(), SetAt(JsonDocument.Parse("0").RootElement, Member("MajorRecordFlagsRaw"))));

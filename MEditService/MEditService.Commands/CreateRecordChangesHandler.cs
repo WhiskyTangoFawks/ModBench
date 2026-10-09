@@ -19,6 +19,7 @@ public sealed class CreateRecordChangesHandler
     private readonly LoadOrderResolution _resolution;
     private readonly LoadOrderHolder _loadOrder;
     private readonly SchemaReflector _schemaReflector;
+    private readonly UnsavedDocuments _unsaved;
     private readonly ILogger<CreateRecordChangesHandler> _logger;
 
     // Internal because the shared module is, which is why this assembly registers its own handlers
@@ -28,18 +29,19 @@ public sealed class CreateRecordChangesHandler
         LoadOrderResolution resolution,
         LoadOrderHolder loadOrder,
         SchemaReflector schemaReflector,
+        UnsavedDocuments unsaved,
         ILogger<CreateRecordChangesHandler> logger)
     {
-        (_targets, _resolution, _loadOrder, _schemaReflector, _logger) =
-            (targets, resolution, loadOrder, schemaReflector, logger);
+        (_targets, _resolution, _loadOrder, _schemaReflector, _unsaved, _logger) =
+            (targets, resolution, loadOrder, schemaReflector, unsaved, logger);
     }
 
-    /// <summary>The changes creating the record makes over <paramref name="unsaved"/>, which stand in for their files.
-    /// The outcome carries the new FormKey.</summary>
+    /// <summary>The changes creating the record makes over the unsaved documents mEdit holds, which stand in for their
+    /// files. The outcome carries the new FormKey.</summary>
     public RecordEditChanges CreateRecord(
-        PluginAddress plugin, string recordType, IReadOnlyList<DocumentChange> unsaved, string? container = null, GridPosition? position = null) =>
+        PluginAddress plugin, string recordType, string? container = null, GridPosition? position = null) =>
         WriteFailure.Refused(
-            MintRecord(plugin, recordType, unsaved, container, position), refused => refused,
+            MintRecord(plugin, recordType, container, position), refused => refused,
             $"Could not read the source to create the new {recordType}", _logger);
 
     private static RecordEditResult MalformedPosition(string why) =>
@@ -56,9 +58,9 @@ public sealed class CreateRecordChangesHandler
         return cell.ToJsonString();
     }
 
-    private SourceAnswer<RecordEditChanges> MintRecord(
-        PluginAddress plugin, string recordType, IReadOnlyList<DocumentChange> unsaved, string? container, GridPosition? position)
+    private SourceAnswer<RecordEditChanges> MintRecord(PluginAddress plugin, string recordType, string? container, GridPosition? position)
     {
+        var unsaved = _unsaved.Current;
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
         if (_targets.RefuseUnlessEditable(plugin, out var openedRepository) is { } blocked) return blocked;
         var onDisk = openedRepository

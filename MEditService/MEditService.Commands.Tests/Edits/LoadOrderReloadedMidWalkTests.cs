@@ -38,8 +38,7 @@ public sealed class LoadOrderReloadedMidWalkTests : IDisposable
             (edited, true));
         var handler = new TestEditor(
             TestEditService.Over(_plugins.Holder, adapter: new DroppingAPluginOnTheFirstRead(_plugins.Holder, Address(master)))
-                .GetRequiredService<EditRecordChangesHandler>(),
-            _plugins.Holder);
+                .GetRequiredService<EditRecordChangesHandler>());
 
         var result = handler.Set(Address(edited), TheNpc.ToString(), "MajorRecordFlagsRaw", JsonDocument.Parse("0").RootElement);
 

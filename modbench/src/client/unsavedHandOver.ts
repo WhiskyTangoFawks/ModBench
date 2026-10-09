@@ -11,6 +11,8 @@ export interface UnsavedHandOver {
   hand: (documents: readonly UnsavedDocument[]) => void;
   /** Each put as it answers: undefined when mEdit took the documents, else why not. */
   onSettled: (listener: (failure: string | undefined) => void) => () => void;
+  /** Resolves once every put handed so far has answered. */
+  sent: () => Promise<void>;
 }
 
 /** Puts each hand-over at once and in order while mEdit runs, and the newest again whenever the
@@ -30,6 +32,7 @@ export function createUnsavedHandOver(wire: UnsavedDocumentsWire): UnsavedHandOv
       newest = documents;
       if (wire.status() === 'running') put(documents);
     },
+    sent: () => sending,
     onSettled: (listener) => {
       listeners.add(listener);
       return () => { listeners.delete(listener); };

@@ -15,20 +15,20 @@ public sealed class CopyRecordChangesHandler
     private readonly NewRecordCopy _new;
     private readonly LoadOrderHolder _loadOrder;
     private readonly LoadOrderResolution _resolution;
+    private readonly UnsavedDocuments _unsaved;
     private readonly ILogger<CopyRecordChangesHandler> _logger;
 
     // Internal because the shared module is, which is why this assembly registers its own handlers
     // (MEditService.Commands.Composition) rather than the host naming a type it cannot see.
     internal CopyRecordChangesHandler(
         OverrideCopy overrideCopy, NewRecordCopy newRecordCopy, LoadOrderHolder loadOrder, LoadOrderResolution resolution,
-        ILogger<CopyRecordChangesHandler> logger) =>
-        (_override, _new, _loadOrder, _resolution, _logger) = (overrideCopy, newRecordCopy, loadOrder, resolution, logger);
+        UnsavedDocuments unsaved, ILogger<CopyRecordChangesHandler> logger) =>
+        (_override, _new, _loadOrder, _resolution, _unsaved, _logger) = (overrideCopy, newRecordCopy, loadOrder, resolution, unsaved, logger);
 
     /// <summary>Each record's copy into each destination, containers first, answered as the changes it makes over
-    /// <paramref name="unsaved"/>, written nowhere. Throws <see cref="NoLoadOrderException"/> with no load order held.</summary>
+    /// the unsaved documents mEdit holds, written nowhere. Throws <see cref="NoLoadOrderException"/> with no load order held.</summary>
     public async Task<SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges>> CopyRecords(
-        IReadOnlyList<RecordAt> records, CopyMode mode, IReadOnlyList<PluginAddress> destinations, bool replace,
-        IReadOnlyList<DocumentChange> unsaved)
+        IReadOnlyList<RecordAt> records, CopyMode mode, IReadOnlyList<PluginAddress> destinations, bool replace)
     {
         if (replace && mode == CopyMode.New)
         {
@@ -37,7 +37,7 @@ public sealed class CopyRecordChangesHandler
         }
 
         _loadOrder.Require();
-        var batches = new UnsavedBatches(unsaved);
+        var batches = new UnsavedBatches(_unsaved.Current);
         using var sources = new CopySources(_resolution, batches);
         var containersFirst = records.OrderBy(record => sources.Of(record.Plugin).ContainmentDepth(record.FormKey));
         return await ItemWrite.Over(

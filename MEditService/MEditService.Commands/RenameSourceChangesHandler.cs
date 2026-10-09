@@ -8,13 +8,14 @@ namespace MEditService.Commands;
 public sealed class RenameSourceChangesHandler
 {
     private readonly LoadOrderHolder _loadOrder;
+    private readonly UnsavedDocuments _unsaved;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal RenameSourceChangesHandler(LoadOrderHolder loadOrder) => _loadOrder = loadOrder;
+    internal RenameSourceChangesHandler(LoadOrderHolder loadOrder, UnsavedDocuments unsaved) => (_loadOrder, _unsaved) = (loadOrder, unsaved);
 
-    /// <summary>The changes renaming the plugin's source makes over <paramref name="unsaved"/>, which stand in for
+    /// <summary>The changes renaming the plugin's source makes over the unsaved documents mEdit holds, which stand in for
     /// their files, written nowhere (ADR-0001). Throws <see cref="NoLoadOrderException"/> when none is held.</summary>
-    public RenameSourceResult RenameSource(PluginAddress plugin, string newName, IReadOnlyList<DocumentChange> unsaved)
+    public RenameSourceResult RenameSource(PluginAddress plugin, string newName)
     {
         var loadOrder = _loadOrder.Require();
         if (!RenameSourceTarget.Of(loadOrder, plugin, newName, out var target, out var refused))
@@ -23,7 +24,7 @@ public sealed class RenameSourceChangesHandler
         if (!SourceRepository.SourceReads(loaded))
             return RenameSourceResult.Refused(RenameSourceRefusal.NotTracked, RenameSourceTarget.NotTrackedMessage(plugin));
 
-        var batch = SourceBatch.Over(SourceRepository.Over(mod, loadOrder.GameRelease), unsaved);
+        var batch = SourceBatch.Over(SourceRepository.Over(mod, loadOrder.GameRelease), _unsaved.Current);
         if (!batch.Repository.ChangesToRenameSource(plugin, newName).Holds(out var changes, out var failure))
         {
             return failure switch

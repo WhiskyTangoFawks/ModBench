@@ -2,6 +2,7 @@ using MEditService.Commands.Composition;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -17,10 +18,11 @@ internal static class TestEditService
     /// so two holders get two independent write sides.</summary>
     internal static IServiceProvider Over(
         LoadOrderHolder holder, Action<ILoggingBuilder>? logging = null, IPluginAdapter? adapter = null,
-        INotificationPublisher? notifications = null) =>
+        INotificationPublisher? notifications = null, UnsavedDocuments? unsaved = null) =>
         new ServiceCollection()
             .AddLogging(logging ?? (_ => { }))
             .AddSingleton(holder)
+            .AddSingleton(unsaved ?? new UnsavedDocuments())
             .AddSingleton(TimeProvider.System)
             .AddSingleton(notifications ?? new InMemoryNotificationPublisher())
             .AddSingleton(adapter ?? TestAdapters.Mutagen())
@@ -29,7 +31,7 @@ internal static class TestEditService
             .BuildServiceProvider();
 
     internal static TestEditor EditHandler(LoadOrderHolder holder) =>
-        new(Over(holder).GetRequiredService<EditRecordChangesHandler>(), holder);
+        new(Over(holder).GetRequiredService<EditRecordChangesHandler>());
 
     internal static DeleteRecordChangesHandler DeleteHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<DeleteRecordChangesHandler>();

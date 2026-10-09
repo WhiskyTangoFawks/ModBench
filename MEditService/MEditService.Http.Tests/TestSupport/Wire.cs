@@ -71,12 +71,12 @@ internal static class Wire
         this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins) =>
         client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });
 
-    /// <summary>An edit as Modbench makes one: mEdit is given the text of the record's file and answers the changes
-    /// the edit makes, and each move and then each document is saved. The answer is mEdit's.</summary>
+    /// <summary>An edit as Modbench makes one: mEdit answers the changes the edit makes, and each move and then each
+    /// document is saved. The answer is mEdit's.</summary>
     internal static async Task<HttpResponseMessage> Edit(
         this HttpClient client, string formKey, string plugin, string origin, string member, object value)
     {
-        var response = await client.EditChanges(formKey, plugin, origin, member, value, await client.CopyDocumentText(formKey, plugin, origin));
+        var response = await client.EditChanges(formKey, plugin, origin, member, value);
         if (!response.IsSuccessStatusCode) return response;
 
         var changes = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
@@ -96,7 +96,6 @@ internal static class Wire
         var response = await client.PostAsJsonAsync("/records/delete-changes", new
         {
             records = records.Select(r => new { formKey = r.FormKey, plugin = r.Plugin, origin = r.Origin }),
-            documents = Array.Empty<object>(),
         });
         if (!response.IsSuccessStatusCode) return response;
 
@@ -115,12 +114,11 @@ internal static class Wire
     /// <summary>A create as Modbench makes one: mEdit answers the changes creating the record makes, and each move,
     /// deletion and document is saved. The answer is mEdit's.</summary>
     internal static async Task<HttpResponseMessage> CreateRecord(
-        this HttpClient client, string plugin, string origin, string recordType, string? container = null, object? position = null,
-        IEnumerable<(string Path, string Text)>? unsaved = null)
+        this HttpClient client, string plugin, string origin, string recordType, string? container = null, object? position = null)
     {
         var response = await client.PostAsJsonAsync(
             $"/plugins/{Uri.EscapeDataString(plugin)}/create-record-changes",
-            new { origin, recordType, container, position, documents = (unsaved ?? []).Select(d => new { path = d.Path, text = d.Text }) });
+            new { origin, recordType, container, position });
         if (!response.IsSuccessStatusCode) return response;
 
         var changes = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
@@ -145,18 +143,21 @@ internal static class Wire
     }
 
     internal static Task<HttpResponseMessage> EditChanges(
-        this HttpClient client, string formKey, string plugin, string origin, string member, object value, string? text, string op = "set",
-        IEnumerable<(string Path, string Text)>? unsaved = null) =>
+        this HttpClient client, string formKey, string plugin, string origin, string member, object value, string op = "set") =>
         client.PostAsJsonAsync(
             $"/records/{Uri.EscapeDataString(formKey)}/edit-changes",
-            new { edit = new { plugin, origin, op, path = new[] { new { kind = "member", name = member } }, value }, text, documents = (unsaved ?? []).Select(document => new { path = document.Path, text = document.Text }) });
+            new { edit = new { plugin, origin, op, path = new[] { new { kind = "member", name = member } }, value } });
+
+    /// <summary>The unsaved documents Modbench hands mEdit, which every changes request after it reads.</summary>
+    internal static async Task HandUnsaved(this HttpClient client, params (string Path, string Text)[] unsaved) =>
+        (await client.PutAsJsonAsync("/unsaved-documents", new { documents = unsaved.Select(d => new { path = d.Path, text = d.Text }) }))
+        .EnsureSuccessStatusCode();
 
     /// <summary>A copy as Modbench makes one: mEdit answers the changes each copy makes, and each landed item's are
     /// saved in the order answered. The answer is mEdit's.</summary>
     internal static async Task<HttpResponseMessage> Copy(
         this HttpClient client, IEnumerable<(string FormKey, string Plugin, string Origin)> records, string mode,
-        IEnumerable<(string Plugin, string Origin)> destinations, bool replace = false,
-        IEnumerable<(string Path, string Text)>? unsaved = null)
+        IEnumerable<(string Plugin, string Origin)> destinations, bool replace = false)
     {
         var response = await client.PostAsJsonAsync("/records/copy-changes", new
         {
@@ -164,7 +165,6 @@ internal static class Wire
             mode,
             destinations = destinations.Select(d => new { name = d.Plugin, origin = d.Origin }),
             replace,
-            documents = (unsaved ?? []).Select(d => new { path = d.Path, text = d.Text }),
         });
         if (!response.IsSuccessStatusCode) return response;
 

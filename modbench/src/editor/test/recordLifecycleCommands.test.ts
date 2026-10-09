@@ -40,7 +40,6 @@ import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 
 beforeEach(() => {
-  reads.length = 0;
   handlers.clear();
   vi.clearAllMocks();
 });
@@ -69,9 +68,6 @@ function recordingWrite(): { write: RecordWrite; writing: string[]; viewsAskedFo
   };
 }
 
-const reads: string[] = [];
-
-const UNSAVED = { path: '/mods/ModA/plugin-source/MyPatch.esp/Cell.json', text: '{}' };
 const changes = (record: RecordAddress) => ({ record, moves: [], deletions: [], documents: [] });
 
 describe('registerRecordLifecycleCommands', () => {
@@ -80,7 +76,7 @@ describe('registerRecordLifecycleCommands', () => {
     const ask = scriptedDialog(...answers);
     const { write, writing, viewsAskedFor } = recordingWrite();
     const serially = vi.fn();
-    const source = { unsaved: () => { reads.push(serially.mock.calls.length > 0 ? 'inside the queue' : 'outside the queue'); return [UNSAVED]; }, applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
+    const source = { applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
     registerRecordLifecycleCommands(client, reporter, ask, selections, write, source);
     return { reporter, ask, writing, viewsAskedFor, source };
   }
@@ -315,16 +311,6 @@ describe('registerRecordLifecycleCommands', () => {
       ]);
     });
 
-    it('gives mEdit the dirty plugin source in place of its files', async () => {
-      const client = new InMemoryMEditClient();
-      client.setCommandResult('getDeleteChanges', { applied: [], refused: [] });
-      invoke(client, 'Delete');
-
-      await deleteRecords(SECOND_NODE);
-
-      expect(client.calls.filter(c => c.method === 'getDeleteChanges').map(c => c.args[1])).toEqual([[UNSAVED]]);
-    });
-
     it('makes what mEdit answered as one workspace edit, then refreshes Source Control once for each plugin it changed', async () => {
       const client = new InMemoryMEditClient();
       const answered = [changes(FIRST), changes(SECOND), changes(UNTRACKED)];
@@ -379,7 +365,6 @@ describe('registerRecordLifecycleCommands', () => {
       await deleteRecords(SECOND_NODE);
 
       expect(source.serially).toHaveBeenCalledOnce();
-      expect(reads).toEqual(['inside the queue']);
     });
 
     it('runs the delete inside the write, which ends when the call is answered', async () => {
@@ -450,7 +435,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     const ask = scriptedDialog(...answers);
     const { write, writing, viewsAskedFor } = recordingWrite();
     const serially = vi.fn();
-    const source = { unsaved: () => { reads.push(serially.mock.calls.length > 0 ? 'inside the queue' : 'outside the queue'); return [UNSAVED]; }, applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
+    const source = { applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
     registerRecordCopyCommands(client, reporter, ask, selections, write, source);
     return { reporter, ask, writing, viewsAskedFor, source };
   }
@@ -485,7 +470,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
 
       await copy(arg);
 
-      expect(copyCalls(client)).toEqual([[[SOURCE], 'New', [PATCH, OTHER], false, [UNSAVED]]]);
+      expect(copyCalls(client)).toEqual([[[SOURCE], 'New', [PATCH, OTHER], false]]);
     });
 
   it('refuses a row that carries no record Argument, naming it, and still copies the rest', async () => {
@@ -497,7 +482,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
 
     await copy(RECORD_NODE, [RECORD_NODE, { label: 'Lost.esp', formKey: '000700:Lost.esp', plugin: 'Lost.esp', origin: 'ModA' }]);
 
-    expect(copyCalls(client)).toEqual([[[SOURCE], 'New', [PATCH], false, [UNSAVED]]]);
+    expect(copyCalls(client)).toEqual([[[SOURCE], 'New', [PATCH], false]]);
     expect(reporter.reports).toEqual([{
       severity: 'error',
       message: 'Could not copy 1 of 2 records.',
@@ -514,7 +499,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
 
     await copy(RECORD_NODE, [RECORD_NODE, SECOND_NODE]);
 
-    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'New', [PATCH], false, [UNSAVED]]]);
+    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'New', [PATCH], false]]);
   });
 
   it('from the palette, takes the Plugins selection', async () => {
@@ -527,7 +512,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
 
     await copy();
 
-    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'New', [PATCH], false, [UNSAVED]]]);
+    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'New', [PATCH], false]]);
   });
 
   it('asks for the destinations in one pick of many, each with its load position', async () => {
@@ -580,7 +565,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
       'Second [000802:MyPatch.esp] in Patch.esp (PatchMod)',
       'Second [000802:MyPatch.esp] in Other.esp (OtherMod)',
     ]);
-    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'Override', [PATCH, OTHER], true, [UNSAVED]]]);
+    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'Override', [PATCH, OTHER], true]]);
   });
 
   it('copies nothing when the replacement is not confirmed', async () => {
@@ -608,7 +593,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     await copy(RECORD_NODE);
 
     expect(ask.asked).toEqual([]);
-    expect(copyCalls(client)).toEqual([[[SOURCE], 'Override', [PATCH], false, [UNSAVED]]]);
+    expect(copyCalls(client)).toEqual([[[SOURCE], 'Override', [PATCH], false]]);
   });
 
   it('asks nothing of a record\'s own plugin picked for a mixed selection, which holds the record and no copy to replace, and says nothing of it', async () => {
@@ -631,7 +616,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     await copy(RECORD_NODE, [RECORD_NODE, carrying(elsewhere)]);
 
     expect(ask.asked).toEqual([]);
-    expect(copyCalls(client)).toEqual([[[SOURCE, elsewhere], 'Override', [PATCH, OTHER], false, [UNSAVED]]]);
+    expect(copyCalls(client)).toEqual([[[SOURCE, elsewhere], 'Override', [PATCH, OTHER], false]]);
     expect(reporter.landings).toEqual(['Made 2 copies.']);
     expect(reporter.reports.map((r) => r.message)).toEqual(['Could not make 1 of 3 copies.']);
   });
@@ -806,7 +791,6 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
       const { source } = await copyAnswered([]);
 
       expect(source.serially).toHaveBeenCalledOnce();
-      expect(reads).toEqual(['inside the queue']);
     });
 
     it('reports a workspace edit VS Code did not make as one that may have partly landed, lands none, refreshes Source Control, and counts the copies asked', async () => {

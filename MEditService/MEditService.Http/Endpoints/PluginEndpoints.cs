@@ -258,11 +258,7 @@ internal static class PluginEndpoints
     {
         if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return Results.Problem("Plugin name and origin are required.", statusCode: 400);
 
-        if (WriteEndpointMapping.MissingDocuments(req.Documents) is { } missing) return missing;
-
-        var result = rename.RenameSource(
-            plugin, req.NewName ?? string.Empty,
-            WriteEndpointMapping.Unsaved(req.Documents));
+        var result = rename.RenameSource(plugin, req.NewName ?? string.Empty);
         return result.Match(
             (changes, treeName) => Results.Ok(RenameSourceChangesResponse.Of(treeName, changes)),
             (refusal, message) => Refused(loggerFactory, "Rename source", refusal, message, plugin));
@@ -363,7 +359,6 @@ internal static class PluginEndpoints
             logReceived: null,
             validate: () =>
             {
-                if (WriteEndpointMapping.MissingDocuments(req.Documents) is { } missing) return missing;
                 if (string.IsNullOrWhiteSpace(req.Origin))
                     return Results.Problem("Origin is required.", statusCode: 400);
                 if (string.IsNullOrWhiteSpace(req.RecordType))
@@ -371,9 +366,7 @@ internal static class PluginEndpoints
                 return null;
             },
             execute: () => edits.CreateRecord(
-                WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType,
-                WriteEndpointMapping.Unsaved(req.Documents),
-                req.Container, req.Position),
+                WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType, req.Container, req.Position),
             outcome: answer => answer.Outcome,
             onApplied: answer => Results.Ok(RecordCreateChangesResponse.Of(WriteEndpointMapping.RequireNewFormKey(answer.Outcome), answer)));
     }
@@ -404,9 +397,8 @@ internal sealed record PluginDependantsResponse(IReadOnlyList<PluginAddress> Dep
 /// it, and nothing registers it.</summary>
 internal sealed record PluginCreatedResponse(string Name, string Origin);
 
-/// <summary>The plugin by its origin and file name (ADR-0012), the file name its source takes, and the unsaved texts
-/// that stand in for their files.</summary>
-internal sealed record RenameSourceChangesRequest(string Origin, string Name, string NewName, IReadOnlyList<DocumentChange> Documents);
+/// <summary>The plugin by its origin and file name (ADR-0012), and the file name its source takes.</summary>
+internal sealed record RenameSourceChangesRequest(string Origin, string Name, string NewName);
 
 /// <summary>The plugin, the name its tree was filed under before the rename, and the file name its source took.</summary>
 internal sealed record MoveLastWrittenRequest(string Origin, string Name, string TreeName, string NewName);

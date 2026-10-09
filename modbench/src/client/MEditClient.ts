@@ -205,28 +205,27 @@ export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
   createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
-  // The changes renaming the plugin source makes over `unsaved`, and the name its tree is filed under. A WriteRefused
-  // is the call failing or mEdit refusing. Nothing is written.
-  getRenameSourceChanges(plugin: PluginAddress, newName: string, unsaved: readonly UnsavedDocument[]): Promise<RenameSourceChangesOutcome | WriteRefused>;
+  // The changes renaming the plugin source makes over the unsaved documents mEdit holds, and the name its tree is
+  // filed under. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
+  getRenameSourceChanges(plugin: PluginAddress, newName: string): Promise<RenameSourceChangesOutcome | WriteRefused>;
   // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
   moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   track(mods: readonly string[], options?: { onProgress?: (status: TrackStatus) => void }): Promise<TrackOutcome | WriteRefused>;
-  // `unsaved` stands in for the files it names. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
+  // Over the unsaved documents mEdit holds. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
   getCreateChanges(
-    plugin: PluginAddress, recordType: string, unsaved: readonly UnsavedDocument[],
+    plugin: PluginAddress, recordType: string,
     into?: { container?: string; position?: GridPosition },
   ): Promise<CreateChangesOutcome | WriteRefused>;
-  // commands.md, A selection is one gesture, and each item lands on its own. `unsaved` stands in for the files
-  // it names. A WriteRefused is the call itself failing. Nothing is written.
+  // commands.md, A selection is one gesture, and each item lands on its own. Over the unsaved documents
+  // mEdit holds. A WriteRefused is the call itself failing. Nothing is written.
   getDeleteChanges(
-    records: readonly RecordAddress[], unsaved: readonly UnsavedDocument[],
+    records: readonly RecordAddress[],
   ): Promise<DeleteChangesOutcome | WriteRefused>;
   // Each record into each destination is one item, changed or refused on its own. `replace` lets an override
-  // copy over a held one. `unsaved` stands in for its files. A WriteRefused is the call failing. Nothing is written.
+  // copy over a held one. Over the unsaved documents mEdit holds. A WriteRefused is the call failing. Nothing is written.
   getCopyChanges(
     records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
-    unsaved: readonly UnsavedDocument[],
   ): Promise<CopyChangesOutcome | WriteRefused>;
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
@@ -274,10 +273,9 @@ export interface MEditClient {
   /** The record whose own document the file at the absolute `path` is; null when mEdit answers the file holds
    *  no record. Rejects with mEdit's reason when it cannot read the file. */
   getRecordOfFile(path: string): Promise<RecordAddress | null>;
-  /** `unsaved` is every dirty document, read in place of its file; `text` is the current text of the one
-   *  carrying the record, and stands over its own entry. mEdit writes nothing. */
+  /** Over the unsaved documents mEdit holds. mEdit writes nothing. */
   getEditChanges(
-    formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope, text: string, unsaved: readonly UnsavedDocument[],
+    formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope,
   ): Promise<RecordEditChangesOutcome>;
   getWorldspaces(plugin: PluginAddress): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: PluginAddress, worldspaceFormKey: string): Promise<WorldspaceBlocks>;

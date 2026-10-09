@@ -2,7 +2,7 @@
 // can answer, and the dependants query; the file and its lines are the Instance adapter's.
 
 import { OVERWRITE_ORIGIN, type FileOrigin, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { isRefused, type MEditClient, type SourceChanges, type UnsavedDocument } from '../client';
+import { isRefused, type MEditClient, type SourceChanges } from '../client';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
@@ -11,7 +11,6 @@ import type { PluginAddress } from '../wire/pluginAddress';
 export type SourceApplied = 'saved' | 'unsaved' | 'notApplied';
 
 interface RenameSourceEditing {
-  readonly unsaved: () => readonly UnsavedDocument[];
   readonly applyAndSave: (changes: SourceChanges) => Promise<SourceApplied>;
 }
 
@@ -79,7 +78,7 @@ export async function renamePlugin(
   const checked = await access.adapter.checkPluginRename(origin, plugin.name, newName, gameRelease);
   if (!checked.applied) return { applied: false, sourceRenamed: false, refusal: checked.refusal };
 
-  const changes = await access.client.getRenameSourceChanges(plugin, newName, access.source.unsaved());
+  const changes = await access.client.getRenameSourceChanges(plugin, newName);
   if (isRefused(changes)) return { applied: false, sourceRenamed: false, refusal: changes.message };
   const savedAs = await access.source.applyAndSave(changes);
   if (savedAs !== 'saved') return { applied: false, reported: true };

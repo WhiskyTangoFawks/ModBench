@@ -7,7 +7,7 @@ public sealed class UnsavedDocuments
     private IReadOnlyList<DocumentChange> _held = [];
     private readonly Lock _applying = new();
 
-    internal IReadOnlyList<DocumentChange> Current => Volatile.Read(ref _held);
+    public IReadOnlyList<DocumentChange> Current => Volatile.Read(ref _held);
 
     /// <summary>Raised by every Apply, with the path of each document it handed or dropped.</summary>
     public event Action<IReadOnlyList<string>>? Arrived;

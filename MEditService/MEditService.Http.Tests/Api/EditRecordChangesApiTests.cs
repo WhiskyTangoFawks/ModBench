@@ -44,7 +44,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
         var file = NpcFile(fx);
         var before = TreeSnapshot.Of(ModFolderOf(fx));
 
-        var response = await Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75, File.ReadAllText(file));
+        var response = await Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var answer = await response.Body();
@@ -71,12 +71,10 @@ public sealed class EditRecordChangesApiTests : HostedTests
         await Client.PluginReportsTracked("Override.esp");
         var formKey = await Client.FirstFormKey("Override.esp", "OverrideMod");
         var masterFile = Directory.EnumerateFiles(ModFolderOf(fx, "Master.esp"), "Saved - *.json", SearchOption.AllDirectories).Single();
-        var overrideFile = Directory.EnumerateFiles(ModFolderOf(fx, "Override.esp"), "*.json", SearchOption.AllDirectories)
-            .Single(file => File.ReadAllText(file).Contains(formKey, StringComparison.Ordinal));
 
-        var response = await Client.EditChanges(
-            formKey, "Override.esp", "OverrideMod", "MajorRecordFlagsRaw", 0, File.ReadAllText(overrideFile),
-            unsaved: [(masterFile, File.ReadAllText(masterFile).Replace("Saved", "Unsaved", StringComparison.Ordinal))]);
+        await Client.HandUnsaved((masterFile, File.ReadAllText(masterFile).Replace("Saved", "Unsaved", StringComparison.Ordinal)));
+
+        var response = await Client.EditChanges(formKey, "Override.esp", "OverrideMod", "MajorRecordFlagsRaw", 0);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var document = Assert.Single((await response.Body()).GetProperty("documents").EnumerateArray());
@@ -84,19 +82,11 @@ public sealed class EditRecordChangesApiTests : HostedTests
     }
 
     [Fact]
-    public async Task AnEditWithoutTheDocumentsText_Is400()
-    {
-        var (_, formKey) = await Loaded(tracked: true);
-
-        await (await Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75, text: null)).AssertIsProblem(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
     public async Task AnEditNamingAFieldTheRecordHasNot_Is404_WithItsOwnRefusal()
     {
         var (fx, formKey) = await Loaded(tracked: true);
 
-        var response = await Client.EditChanges(formKey, Plugin, Origin, "no_such_field", 1, File.ReadAllText(NpcFile(fx)));
+        var response = await Client.EditChanges(formKey, Plugin, Origin, "no_such_field", 1);
 
         Assert.Equal("FieldNotFound", (await response.AssertIsProblem(HttpStatusCode.NotFound)).GetProperty("refusal").GetString());
     }
@@ -106,7 +96,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
     {
         var (_, formKey) = await Loaded(tracked: false);
 
-        var response = await Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75, "{}");
+        var response = await Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75);
 
         Assert.Equal("PluginNotTracked", (await response.AssertIsProblem(HttpStatusCode.Conflict)).GetProperty("refusal").GetString());
     }
@@ -117,7 +107,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
         var (fx, formKey) = await Loaded(tracked: true);
         Directory.Delete(PluginSourceRoot.In(ModFolderOf(fx), Plugin), recursive: true);
 
-        var response = await Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75, "{}");
+        var response = await Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75);
 
         Assert.Equal("PluginSourceUnreadable", (await response.AssertIsProblem(HttpStatusCode.Conflict)).GetProperty("refusal").GetString());
     }
@@ -127,7 +117,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
     {
         var (fx, formKey) = await Loaded(tracked: true);
 
-        var response = await Client.EditChanges(formKey, Plugin, Origin, "FormKey", "not a FormKey", File.ReadAllText(NpcFile(fx)));
+        var response = await Client.EditChanges(formKey, Plugin, Origin, "FormKey", "not a FormKey");
 
         Assert.Equal("CodecRejected", (await response.AssertIsProblem(HttpStatusCode.UnprocessableEntity)).GetProperty("refusal").GetString());
     }
