@@ -53,13 +53,13 @@ public sealed class SourceRepository : ISourceRepositoryReads
     public static string? InstanceRootNotFound(string? instanceRoot) =>
         Directory.Exists(instanceRoot) ? null : $"Instance root not found: {instanceRoot}";
 
-    /// <summary>Whether the plugin's source reads: its mod is tracked and holds the plugin's tree. A tracked mod
-    /// can hold none for a plugin another tool put there, or whose source was deleted.</summary>
+    /// <summary>Whether the plugin's source reads: its mod is tracked and holds one tree for it. A tracked mod
+    /// holds none for a plugin another tool put there or whose source was deleted.</summary>
     public static bool SourceReads(RegisteredPlugin plugin) =>
         plugin.Provider is PluginProvider.FromMod mod && HoldsTreeFor(mod.Folder, plugin.Name);
 
     private static bool HoldsTreeFor(string modFolder, string pluginFileName) =>
-        IsTracked(modFolder) && Directory.Exists(SourceRepositoryLayout.RootIn(modFolder, pluginFileName));
+        IsTracked(modFolder) && SourceRepositoryLayout.TreeNameIn(modFolder, pluginFileName) is not null;
 
     /// <summary>A <c>.git</c> with no <c>main</c> that Track did not mark as its own: someone else's, which Track never
     /// writes to (ADR-0003).</summary>
@@ -89,7 +89,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// what carries it.</summary>
     public SourceDocument? RecordOf(PluginAddress plugin, RecordIdentity identity)
     {
-        if (Locator.Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
+        if (Locator.Locate(InTreeSpelling(plugin), identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
 
         var body = DocumentText.RecordBodyFromOwnerBytes(File.ReadAllBytes(unit.FullPath), unit, identity.FormKey, _release);
         return body == null ? null : new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body);
@@ -100,8 +100,9 @@ public sealed class SourceRepository : ISourceRepositoryReads
     public SourceDocument? Get(
         PluginAddress plugin, string formKey)
     {
-        if (Locator.IdentityOf(plugin, formKey) is { } identity) return RecordOf(plugin, identity);
-        return Locator.UnreadableDocumentFor(plugin, formKey) is { } why
+        var spelled = InTreeSpelling(plugin);
+        if (Locator.IdentityOf(spelled, formKey) is { } identity) return RecordOf(spelled, identity);
+        return Locator.UnreadableDocumentFor(spelled, formKey) is { } why
             ? throw new UnreadableSourceDocumentException($"{plugin.Name}'s document for {formKey} is no record document: {why}")
             : null;
     }
@@ -112,8 +113,9 @@ public sealed class SourceRepository : ISourceRepositoryReads
     public void RefuseUnreadable(
         PluginAddress plugin, RecordIdentity identity, string body)
     {
-        if (Locator.Locate(plugin, identity) is not { } unit) return;
-        using var documents = new SourceTreeDocuments(_modFolder, plugin.Name, _release);
+        var spelled = InTreeSpelling(plugin);
+        if (Locator.Locate(spelled, identity) is not { } unit) return;
+        using var documents = new SourceTreeDocuments(_modFolder, spelled.Name, _release);
         documents.RefuseUnreadable(identity.RecordType, identity.FormKey, body, unit.FullPath);
     }
 
@@ -122,7 +124,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <see cref="UnreadableSourceDocumentException"/>.</summary>
     public (RecordIdentity Record, SourceDocument Carrying)? CarryingFromText(
         PluginAddress plugin, string formKey, string text) =>
-        Locator.CarryingFromText(plugin, formKey, text);
+        Locator.CarryingFromText(InTreeSpelling(plugin), formKey, text);
 
     /// <summary>The record at <paramref name="formKey"/> with its own text read out of <paramref name="text"/>, the
     /// document carrying it by <see cref="CarryingFromText"/>'s rule. Null and throws as that does.</summary>
@@ -143,28 +145,34 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// for a record with a document of its own.</summary>
     public DocumentContainment? ContainerOf(
         PluginAddress plugin, RecordIdentity identity) =>
-        Locator.ContainerOf(plugin, identity);
+        Locator.ContainerOf(InTreeSpelling(plugin), identity);
 
     /// <summary>The document holding <paramref name="identity"/>, relative to the mod folder — a
     /// diagnostic's path for the Problems panel. Null when nothing there holds it.</summary>
     public string? RelativePathOf(PluginAddress plugin, RecordIdentity identity) =>
-        Locator.Locate(plugin, identity)?.RelativePath;
+        Locator.Locate(InTreeSpelling(plugin), identity)?.RelativePath;
 
     /// <summary>The file in this tree holding <paramref name="identity"/>; null when nothing there holds it.</summary>
     public DocumentFile? DocumentOf(PluginAddress plugin, RecordIdentity identity) =>
-        Locator.Locate(plugin, identity) is { } unit && File.Exists(unit.FullPath) ? new DocumentFile(unit.FullPath, unit.IsEmbedded) : null;
+        Locator.Locate(InTreeSpelling(plugin), identity) is { } unit && File.Exists(unit.FullPath) ? new DocumentFile(unit.FullPath, unit.IsEmbedded) : null;
 
     /// <summary>What the file at <paramref name="path"/> holds, read from its text as the index reads it.</summary>
     internal static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path)
     {
         var fullPath = Path.GetFullPath(path);
         if (SourceRepositoryLayout.CarriesNoRecord(fullPath)) return new RecordOfFileAnswer.HoldsNone();
-        if (loadOrder.Plugins.FirstOrDefault(plugin => plugin.Provider is PluginProvider.FromMod mod
-                && SourceRepositoryLocator.IsUnder(Path.GetFullPath(SourceRepositoryLayout.RootIn(mod.Folder, plugin.Name)), fullPath)
-                && SourceReads(plugin)) is not { Provider: PluginProvider.FromMod source } holder)
-            return new RecordOfFileAnswer.Refused($"{fullPath} is under no tracked plugin's source.");
-
-        return Over(source, loadOrder.GameRelease).Locator.RecordOfFile(holder.Key, fullPath);
+        foreach (var plugin in loadOrder.Plugins)
+        {
+            if (plugin.Provider is PluginProvider.FromMod mod
+                && SourceRepositoryLayout.TreeFolderHolding(mod.Folder, fullPath) is { } tree
+                && tree.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
+                && IsTracked(mod.Folder)
+                && string.Equals(SourceRepositoryLayout.TreeNameIn(mod.Folder, plugin.Name), tree, SourceRepositoryLocator.PathComparison))
+            {
+                return Over(mod, loadOrder.GameRelease).Locator.RecordOfFile(plugin.Key, tree, fullPath);
+            }
+        }
+        return new RecordOfFileAnswer.Refused($"{fullPath} is under no tracked plugin's source.");
     }
 
     /// <summary>The name the layout gives the file of the record's own document.</summary>
@@ -185,8 +193,9 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// plugin does not hold. A cell filed under neither a cell group nor a worldspace refuses with the reader's words.</summary>
     public CellStructure? CellStructureOf(PluginAddress plugin, RecordIdentity identity)
     {
-        if (Locator.Locate(plugin, identity) is null) return null;
-        return Locator.CellPlacementOf(plugin, identity)?.Structure
+        var spelled = InTreeSpelling(plugin);
+        if (Locator.Locate(spelled, identity) is null) return null;
+        return Locator.CellPlacementOf(spelled, identity)?.Structure
             ?? throw new UnreadableSourceDocumentException(
                 $"{identity.FormKey} sits under neither a cell group nor a worldspace's blocks, so the tree names no place for it.");
     }
@@ -195,60 +204,70 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <paramref name="y"/>) of <paramref name="worldspace"/>, or null when it holds none there.</summary>
     public SourceDocument? GetCellAt(
         PluginAddress plugin, string worldspace, int x, int y) =>
-        Locator.CellFormKeyAt(plugin, worldspace, x, y) is { } formKey ? Get(plugin, formKey) : null;
+        Locator.CellFormKeyAt(InTreeSpelling(plugin), worldspace, x, y) is { } formKey ? Get(plugin, formKey) : null;
 
     /// <summary>Every EditorID the plugin's tree holds now, a record with a document of its own and
     /// an embedded child alike — what a derived EditorID is checked against to stay unique in the
     /// destination.</summary>
     public IReadOnlySet<string> EditorIdsHeld(PluginAddress plugin) =>
-        DocumentTokens.EditorIdsOf(Locator.ReadAll(plugin));
+        DocumentTokens.EditorIdsOf(Locator.ReadAll(InTreeSpelling(plugin)));
 
     /// <summary>Every FormKey the plugin's working tree uses: a record's own, an embedded child's and the
     /// header's synthetic one.</summary>
     public IReadOnlySet<string> FormKeysUsed(PluginAddress plugin) =>
-        DocumentTokens.FormKeysOf(Locator.ReadAll(plugin), _release);
+        DocumentTokens.FormKeysOf(Locator.ReadAll(InTreeSpelling(plugin)), _release);
 
     /// <summary>The plugin's tree as the documents it holds right now, each record's own. The caller
     /// disposes it.</summary>
     public IPluginDocuments OpenDocuments(
         PluginAddress plugin) =>
-        new SourceTreeDocuments(_modFolder, plugin.Name, _release);
+        new SourceTreeDocuments(_modFolder, InTreeSpelling(plugin).Name, _release);
 
     /// <summary>The plugin's source in the working tree as the whole-mod door reads it, empty when there is
     /// none. A directory holding several documents, none named for it, throws
     /// <see cref="AmbiguousSourceUnitException"/>.</summary>
     public PluginSourceFiles TreeOf(PluginAddress plugin)
     {
-        var held = Locator.FilesOf(plugin);
-        return held with { Files = SourceRepositoryLayout.DoorTreeOf(plugin.Name, held.Files, _release) };
+        var spelled = InTreeSpelling(plugin);
+        var held = Locator.FilesOf(spelled);
+        return held with { Files = SourceRepositoryLayout.DoorTreeOf(spelled.Name, held.Files, _release) };
     }
 
     /// <summary><paramref name="diagnosis"/> of a read of <see cref="TreeOf"/>'s tree, each file it names
     /// named as this tree holds it, relative to the mod folder.</summary>
-    public PluginDiagnosis InSourceNames(PluginAddress plugin, PluginDiagnosis diagnosis) =>
-        SourceRepositoryLayout.InSourceNames(plugin.Name, diagnosis, Locator.FilesOf(plugin).Files, _release);
+    public PluginDiagnosis InSourceNames(PluginAddress plugin, PluginDiagnosis diagnosis)
+    {
+        var spelled = InTreeSpelling(plugin);
+        return SourceRepositoryLayout.InSourceNames(spelled.Name, diagnosis, Locator.FilesOf(spelled).Files, _release);
+    }
 
     /// <summary>Which of <paramref name="formKeys"/> more than one document claims. Asked of the
     /// files, not of the compiled mod: the reader's FormKey-keyed RecordCache collapses two documents
     /// in one group folder to the last read.</summary>
-    public IReadOnlyList<string> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys) =>
-        PluginSourceChecks.CollidingFormKeys(plugin.Name, Locator.FilesOf(plugin), formKeys, _release);
+    public IReadOnlyList<string> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys)
+    {
+        var spelled = InTreeSpelling(plugin);
+        return PluginSourceChecks.CollidingFormKeys(spelled.Name, Locator.FilesOf(spelled), formKeys, _release);
+    }
 
     /// <summary>Where the source and <paramref name="serialized"/>, the whole-mod door's tree, first part ways,
     /// and the files held at another leaf name than the layout's. An unreadable file outranks the rest.</summary>
-    public SourceComparison Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>
-        PluginSourceChecks.Compare(plugin.Name, Locator.FilesOf(plugin), serialized);
+    public SourceComparison Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized)
+    {
+        var spelled = InTreeSpelling(plugin);
+        return PluginSourceChecks.Compare(spelled.Name, Locator.FilesOf(spelled), serialized);
+    }
 
     /// <summary>One listing of the plugin's tree. A file whose file-system stamp is unchanged and
     /// settled is not read again.</summary>
-    public RecordStamps StampsOf(PluginAddress plugin) => TreeStamps.StampsOf(_modFolder, plugin);
+    public RecordStamps StampsOf(PluginAddress plugin) => TreeStamps.StampsOf(_modFolder, InTreeSpelling(plugin));
 
     /// <summary>Every record the tree holds whose text differs from the last commit's, an embedded
     /// child among them; a tree with no repository is all added. A failed read throws
     /// <see cref="UnreadableSourceDocumentException"/>, never reads as a deletion.</summary>
     public IReadOnlyDictionary<string, RecordChange> ChangedSinceLastCommit(
         PluginAddress plugin) =>
-        LastCommitComparison.Of(_modFolder, _release, _git, Locator, plugin);
+        LastCommitComparison.Of(_modFolder, _release, _git, Locator, InTreeSpelling(plugin));
 
     /// <summary>Creates or replaces the record's document, placing an absent one from its identity
     /// alone with the levels above it. A record another document carries is replaced at its own slot.
@@ -258,36 +277,36 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary>What <see cref="Put"/> changes, written nowhere. A file at its path that is no document throws
     /// as unreadable.</summary>
-    public SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document) => Writes.ChangesToPut(plugin, document);
+    public SourceChanges ChangesToPut(PluginAddress plugin, SourceDocument document) => Writes.ChangesToPut(InTreeSpelling(plugin), document);
 
     /// <summary>What rewriting a document the tree holds changes, written nowhere. One no document holds
     /// throws: an edit never creates.</summary>
-    public SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) => Writes.ChangesToRewrite(plugin, document);
+    public SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) => Writes.ChangesToRewrite(InTreeSpelling(plugin), document);
 
     /// <summary>What putting an exterior cell changes, written nowhere: a new cell lands in its grid's block
     /// under <paramref name="worldspace"/>, a held one where it is. A file there that is no document throws
     /// as unreadable.</summary>
     public SourceChanges ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
-        Writes.ChangesToPutInWorldspace(plugin, cell, worldspace);
+        Writes.ChangesToPutInWorldspace(InTreeSpelling(plugin), cell, worldspace);
 
     /// <summary>What changing the FormKey of <paramref name="identity"/> changes, from the text of the document
     /// <paramref name="carrying"/> it, written nowhere. A folder already at the new key's leaf name throws.</summary>
     public SourceChanges ChangesToRekey(
         PluginAddress plugin, SourceDocument carrying, RecordIdentity identity, string newFormKey, DocumentRekey rekey) =>
-        Writes.ChangesToRekey(plugin, carrying, identity, newFormKey, rekey);
+        Writes.ChangesToRekey(InTreeSpelling(plugin), carrying, identity, newFormKey, rekey);
 
     /// <summary>Takes the record out of the tree: its file, its directory, or its element of another
     /// record's document. Already gone is the state asked for; the other two outcomes say what
     /// stopped it.</summary>
-    public SourceRemoval Remove(PluginAddress plugin, RecordIdentity identity) => Writes.Remove(plugin, identity);
+    public SourceRemoval Remove(PluginAddress plugin, RecordIdentity identity) => Writes.Remove(InTreeSpelling(plugin), identity);
 
     /// <summary>The plugin's source in the working tree becomes <paramref name="tree"/>, the whole-mod door's,
     /// and the last-compile ref names only the binary it was read from. A failure leaves both as they
     /// were.</summary>
     public void ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256)
     {
-        RefuseUnlessProvidedByThisMod(plugin);
-        Writes.ReplaceSourceFrom(plugin.Name, SourceRepositoryLayout.PristineFilesOf(plugin.Name, tree), binarySha256);
+        var name = ProvidedByThisMod(plugin).Name;
+        Writes.ReplaceSourceFrom(name, SourceRepositoryLayout.PristineFilesOf(name, tree), binarySha256);
     }
 
     /// <summary>The plugin's source and what Modbench last wrote move to <paramref name="newName"/>, and
@@ -295,7 +314,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// that name, compared without case.</summary>
     public bool RenameSource(PluginAddress plugin, string newName)
     {
-        RefuseUnlessProvidedByThisMod(plugin);
+        var name = ProvidedByThisMod(plugin).Name;
         var sources = Path.Combine(_modFolder, SourceRepositoryLayout.RootFolderName);
         if (Directory.EnumerateFileSystemEntries(sources)
             .Any(entry => string.Equals(Path.GetFileName(entry), newName, StringComparison.OrdinalIgnoreCase)))
@@ -303,35 +322,35 @@ public sealed class SourceRepository : ISourceRepositoryReads
             return false;
         }
 
-        Writes.RenameSource(plugin.Name, newName);
+        Writes.RenameSource(name, newName);
         return true;
     }
 
     /// <summary>Runs <paramref name="write"/>, recording <paramref name="binarySha256"/> as the one last
     /// written; an interrupted write leaves the old and new (ADR-0003). Git failing before the write
     /// throws with nothing written; after it, false.</summary>
-    public bool WriteBinary(PluginAddress plugin, string binarySha256, Action write)
-    {
-        RefuseUnlessProvidedByThisMod(plugin);
-        return _git.WriteBinary(plugin.Name, binarySha256, write);
-    }
+    public bool WriteBinary(PluginAddress plugin, string binarySha256, Action write) =>
+        _git.WriteBinary(ProvidedByThisMod(plugin).Name, binarySha256, write);
 
     /// <summary>Every binary hash Modbench last wrote for the plugin: one, or several while a write
     /// was interrupted. Empty when none is recorded.</summary>
-    public IReadOnlyList<string> LastWrittenBinarySha256s(PluginAddress plugin)
-    {
-        RefuseUnlessProvidedByThisMod(plugin);
-        return _git.LastWrittenBinarySha256s(plugin.Name);
-    }
+    public IReadOnlyList<string> LastWrittenBinarySha256s(PluginAddress plugin) =>
+        _git.LastWrittenBinarySha256s(ProvidedByThisMod(plugin).Name);
 
-    private void RefuseUnlessProvidedByThisMod(PluginAddress plugin)
+    private PluginAddress ProvidedByThisMod(PluginAddress plugin)
     {
         if (!string.Equals(plugin.Origin, _modName, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
                 $"{plugin.Name} is provided by '{plugin.Origin}', and this repository holds '{_modName}'.", nameof(plugin));
         }
+        return InTreeSpelling(plugin);
     }
+
+    // A plugin's tree is read and written as its folder spells it. With no tree to say, or twins spelled
+    // otherwise, the name stays as given: SourceReads refuses the twins.
+    private PluginAddress InTreeSpelling(PluginAddress plugin) =>
+        plugin with { Name = SourceRepositoryLayout.TreeNameIn(_modFolder, plugin.Name) ?? plugin.Name };
 }
 
 /// <summary>Why a record is or is not out of the tree — three states a caller must tell apart, since
