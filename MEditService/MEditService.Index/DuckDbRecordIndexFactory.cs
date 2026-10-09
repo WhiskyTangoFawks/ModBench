@@ -24,8 +24,8 @@ internal sealed class DuckDbRecordIndexFactory(
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     /// <summary>A null <paramref name="instanceRoot"/> means an in-memory index that dies with this
-    /// object. <paramref name="openedPlugins"/> is what the index's reads answer
-    /// <see cref="IRecordReads.OpenedPlugins"/> with. <paramref name="indexed"/> says whether the whole set is read.</summary>
+    /// object. <paramref name="openedPlugins"/> answers <see cref="IRecordReads.OpenedPlugins"/>;
+    /// <paramref name="indexed"/> says whether the whole set is read.</summary>
     public DuckDbRecordIndex? Create(
         GameRelease gameRelease, string? instanceRoot,
         Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed, out string? refusal)
