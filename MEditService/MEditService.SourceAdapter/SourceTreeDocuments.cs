@@ -148,17 +148,8 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         // A record filed here that nothing can read would go missing from the read model. The caller
         // degrades to the binary and says so, which is visible; dropping it here would not be.
         var declared = DocumentText.FormKeyDeclaredIn(text, relativePath, _pluginFileName);
-        try
-        {
-            using var document = JsonDocument.Parse(text);
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-                throw Unreadable(file, "its root is not an object");
-            _ = RequireReadable(_modFolder, DocumentNodes.EditorIdOf(document.RootElement), file, declared);
-        }
-        catch (JsonException ex)
-        {
-            throw Unreadable(file, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
-        }
+        if (DocumentTokens.WhyNotADocument(text) is { } why) throw Unreadable(file, $"it is no JSON document: {why}");
+        _ = RequireReadable(_modFolder, DocumentTokens.EditorIdIn(text), file, declared);
 
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
             ?? _types.RecordTypeNamed(DocumentTokens.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator))
@@ -199,8 +190,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     /// read refuses: an EditorID that is no string, or an embedded child that is untyped or holds one.</summary>
     internal void RefuseUnreadable(string recordType, string formKey, string text, string file)
     {
-        using (var document = JsonDocument.Parse(text))
-            _ = RequireReadable(_modFolder, DocumentNodes.EditorIdOf(document.RootElement), file, formKey);
+        _ = RequireReadable(_modFolder, DocumentTokens.EditorIdIn(text), file, formKey);
         foreach (var embedded in EmbeddedTexts(recordType, formKey, text)) _ = RequireReadable(_modFolder, embedded.Child, file);
     }
 

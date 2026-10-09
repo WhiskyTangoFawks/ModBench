@@ -149,6 +149,19 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
             "plugin-source", PluginName, "Worldspaces", "000800_Vendor.esp", "0, -1", "1, -2", "000801_Vendor.esp"));
 
     [Fact]
+    public void GetCellAt_AGridWhoseCellDocumentRootIsNotAnObject_RefusesNamingThatFile()
+    {
+        InTheTree(Worldspace, "wrld");
+        Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
+        File.WriteAllText(Path.Combine(_modFolder, CellDocumentAtNineMinusNine), "[]");
+
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.GetCellAt(Plugin, Worldspace, 9, -9).Stopped());
+
+        Assert.Equal(CellDocumentAtNineMinusNine, refused.File?.SourceRelativePath);
+        Assert.Contains("its root is not a JSON object", refused.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void GetCellAt_AGridWhoseCellDocumentIsNoJson_RefusesNamingThatFile()
     {
         InTheTree(Worldspace, "wrld");

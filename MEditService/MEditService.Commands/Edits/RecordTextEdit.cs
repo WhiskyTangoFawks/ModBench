@@ -353,7 +353,7 @@ internal static class RecordTextEdit
 
         var node = value.ValueKind == JsonValueKind.Null ? null : JsonNode.Parse(value.GetRawText());
         if (PreCheck(node, cursor.Meta, cursor.Node, spelled) is { } refused) return refused;
-        node = AsRead(node, cursor.Meta);
+        node = LeafSpelling.AsRead(node, cursor.Meta);
         Cascade(node, cursor.Meta, cursor.Node);
 
         if (cursor.OwnerArray != null)
@@ -398,14 +398,6 @@ internal static class RecordTextEdit
         edited = node;
         return null;
     }
-
-    // A colour holding no alpha lands as Mutagen's binary read spells it, so a value pasted back as its
-    // cell copies it writes the document a fresh read gives (editor-fields.md, Every field, story 4).
-    private static JsonNode? AsRead(JsonNode? value, FieldMetadata meta) =>
-        DocumentNodes.Rewrite(value, meta, (node, shape) =>
-            node is JsonValue leaf && shape.Type == ColorReading.ApiType && !shape.HoldsAlpha && leaf.TryGetValue<string>(out var text)
-                ? JsonValue.Create(ColorReading.AsReadWithoutAlpha(text))
-                : node);
 
     // The cascade over a whole value: wherever it changes a governing member from what the document
     // holds, only the slots the new value uses stay, so a stale slot cannot ride in beside it. An
@@ -490,36 +482,13 @@ internal static class RecordTextEdit
 
         var element = value is { ValueKind: not JsonValueKind.Null } given
             ? JsonNode.Parse(given.GetRawText())
-            : DefaultElement(elementMeta);
+            : LeafSpelling.Minted(elementMeta);
         if (PreCheck(element, elementMeta, null, $"{spelled}[{array.Count}]") is { } refused) return refused;
-        element = AsRead(element, elementMeta);
+        element = LeafSpelling.AsRead(element, elementMeta);
         Cascade(element, elementMeta, null);
         array.Add(element);
         edited = array;
         return null;
-    }
-
-    // "formKey" defaults to "Null", Mutagen's sentinel for an unset FormLink; a struct names only its
-    // discriminator, the schema's first leaf, and the codec fills in the rest.
-    private static JsonNode? DefaultElement(FieldMetadata meta) => meta.Type switch
-    {
-        "string" => "",
-        "formKey" => "Null",
-        "int" or "float" => 0,
-        "bool" => false,
-        "flags" or "array" => new JsonArray(),
-        "enum" => meta.EnumMembers.Count > 0 ? meta.EnumMembers[0].Value : "",
-        "hex" => "[]",
-        "struct" => DefaultStruct(meta),
-        _ => "",
-    };
-
-    private static JsonObject DefaultStruct(FieldMetadata meta)
-    {
-        var element = new JsonObject();
-        foreach (var field in meta.Fields ?? [])
-            if (field.IsDiscriminator && field.EnumMembers.Count > 0) element[field.Name] = field.EnumMembers[0].Value;
-        return element;
     }
 
     private static RecordEditResult? Remove(Cursor cursor, out JsonNode? edited, out FieldMetadata editedMeta)

@@ -1,3 +1,4 @@
+using MEditService.RepositoriesLib;
 namespace MEditService.SourceAdapter;
 
 /// <summary>Source changes to one repository, or to the batch it reads through, applied all or restored all
@@ -31,14 +32,14 @@ public sealed class SourceTransaction
 
     /// <summary><see cref="Atomically(SourceRepository, Action{SourceTransaction})"/>, answering what
     /// <paramref name="write"/> answers. A failure it answers puts back what it applied too.</summary>
-    public static SourceAnswer<T> Atomically<T>(SourceRepository repository, Func<SourceTransaction, SourceAnswer<T>> write)
+    public static Answer<T, SourceFailure> Atomically<T>(SourceRepository repository, Func<SourceTransaction, Answer<T, SourceFailure>> write)
     {
         var transaction = new SourceTransaction(repository);
         return SourceFailure.Answer(() => transaction.Settled(transaction.Run(write))).Then(settled => settled);
     }
 
     // What the transaction answers once its writes stand, or the throw that puts them back.
-    private SourceAnswer<T> Settled<T>(SourceAnswer<T> answered)
+    private Answer<T, SourceFailure> Settled<T>(Answer<T, SourceFailure> answered)
     {
         if (!answered.Holds(out _, out var failure)) _stopped ??= failure;
         return _stopped is { } stopped ? throw PutBack(stopped) : answered;
@@ -74,7 +75,7 @@ public sealed class SourceTransaction
 
     /// <summary>Makes each move of <paramref name="changes"/>, then each deletion, then writes each document, holding what each
     /// replaced. Changes that failed stop the transaction, and nothing after them applies.</summary>
-    public void Apply(SourceAnswer<SourceChanges> changes)
+    public void Apply(Answer<SourceChanges, SourceFailure> changes)
     {
         if (_stopped is not null) return;
         if (!changes.Holds(out var made, out var failure))

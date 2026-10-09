@@ -7,6 +7,7 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -225,7 +226,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
     private sealed class FaultingOnClosingAMasterAskedForACell() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override PluginAnswer<IPluginRecords> OpenRecordLookup(
+        public override Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
             RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
             base.OpenRecordLookup(plugin, gameRelease, schemas).Map<IPluginRecords, IPluginRecords>(records => new Faulting(records));
 
@@ -233,13 +234,13 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         {
             private bool _askedForACell;
 
-            public PluginAnswer<RecordIdentity?> IdentityOf(string formKey) => inner.IdentityOf(formKey);
-            public PluginAnswer<long?> RecordFlagsOf(string formKey) => inner.RecordFlagsOf(formKey);
-            public PluginAnswer<string?> TextOf(string formKey) => inner.TextOf(formKey);
-            public PluginAnswer<DocumentContainment?> ContainmentOf(string formKey) => inner.ContainmentOf(formKey);
-            public PluginAnswer<CellStructure?> CellStructureOf(string formKey) => inner.CellStructureOf(formKey);
+            public Answer<RecordIdentity?, PluginFailure> IdentityOf(string formKey) => inner.IdentityOf(formKey);
+            public Answer<long?, PluginFailure> RecordFlagsOf(string formKey) => inner.RecordFlagsOf(formKey);
+            public Answer<string?, PluginFailure> TextOf(string formKey) => inner.TextOf(formKey);
+            public Answer<DocumentContainment?, PluginFailure> ContainmentOf(string formKey) => inner.ContainmentOf(formKey);
+            public Answer<CellStructure?, PluginFailure> CellStructureOf(string formKey) => inner.CellStructureOf(formKey);
 
-            public PluginAnswer<string?> CellAt(string worldspace, int x, int y)
+            public Answer<string?, PluginFailure> CellAt(string worldspace, int x, int y)
             {
                 _askedForACell = true;
                 return inner.CellAt(worldspace, x, y);
@@ -255,7 +256,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
     private sealed class UntrackingAModWhenAMasterIsRead(string modFolder) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override PluginAnswer<IPluginRecords> OpenRecordLookup(
+        public override Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
             RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas)
         {
             var repository = Path.Combine(modFolder, ".git");

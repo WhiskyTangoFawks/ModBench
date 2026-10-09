@@ -1,6 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -13,7 +14,7 @@ public interface IPluginAdapter
     /// <summary>The plugin as the documents its source tree would hold (ADR-0007). Owns the open
     /// until the result is disposed; omitting <paramref name="strings"/> is not neutral for a
     /// localized plugin.</summary>
-    PluginAnswer<IPluginDocuments> OpenDocuments(
+    Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
@@ -21,7 +22,7 @@ public interface IPluginAdapter
 
     /// <summary>The same plugin for a caller asking about a handful of records by key rather than
     /// streaming all of them. Owns the open until the result is disposed.</summary>
-    PluginAnswer<IPluginRecords> OpenRecordLookup(
+    Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
         RegisteredPlugin plugin,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas);
@@ -36,13 +37,13 @@ public interface IPluginAdapter
     void KeepHashesOf(IReadOnlySet<string> pluginPaths);
 
     /// <summary>The hash and malformed-record diagnoses from one fresh read of the file.</summary>
-    PluginAnswer<FileClaim> ClaimOf(string pluginPath);
+    Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath);
 
     bool GameFolderExists(string gameFolder);
 
     /// <summary>What a plugin's own binary says about itself, which is what the Index holds for it.
     /// <c>Unreachable</c> stopped a full walk: the count is a readout, not a gate.</summary>
-    PluginAnswer<(PluginContent Content, PluginFailure? Unreachable)> ReadContent(
+    Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null);
 
     /// <summary>What each of <paramref name="formKeys"/> names in the files the game loads (ADR-0013), or in every
@@ -54,43 +55,43 @@ public interface IPluginAdapter
 
     /// <summary>One source tree compiled to the mod it describes, which the tree holds so the caller
     /// does not (ADR-0005).</summary>
-    Task<PluginAnswer<CompiledTree>> ReadTreeAsync(
+    Task<Answer<CompiledTree, PluginFailure>> ReadTreeAsync(
         IReadOnlyList<TreeFile> files,
         GameRelease gameRelease,
         CancellationToken cancel = default);
 
     /// <summary>The tree in <paramref name="files"/> compiled to <paramref name="destinationPath"/>,
     /// its masters in <paramref name="masterOrder"/> (ADR-0008). Answers the path it wrote.</summary>
-    Task<PluginAnswer<string>> WriteFromTreeAsync(
+    Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
         CancellationToken cancel = default);
 
     /// <summary>A plugin's binary read as the source tree it would commit.</summary>
-    Task<PluginAnswer<PluginSource>> ReadSourceOfAsync(
+    Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
         RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default);
 
     /// <summary>How the plugin at <paramref name="recompiledPath"/> differs from the named one as the
     /// codec models them; null when they are model-identical. Both are reparsed, since only written
     /// bytes show what the writer does.</summary>
-    PluginAnswer<string?> DivergenceFrom(
+    Answer<string?, PluginFailure> DivergenceFrom(
         string pluginFileName, string pluginFilePath, string recompiledPath, GameRelease gameRelease, PluginStrings strings);
 
     /// <summary>How the file at <paramref name="recompiledPath"/> differs at the byte level from the one
     /// at <paramref name="originalPath"/>.</summary>
-    Task<PluginAnswer<PluginByteComparison>> CompareBytesAsync(
+    Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
         string originalPath, string recompiledPath, CancellationToken cancel = default);
 
     /// <summary>A new plugin in <paramref name="folder"/>: a header whose flags the extension alone
     /// sets, no records and no masters. Written whole or not at all, into no folder it made and over
     /// no file.</summary>
-    Task<PluginAnswer<EmptyPluginCreated>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease);
+    Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease);
 
     /// <summary>Where <see cref="CreateAndWriteAsync"/> puts the plugin.</summary>
     string PathOfEmpty(ModKey modKey, string folder);
 
     /// <summary>Deletes the plugin <see cref="CreateAndWriteAsync"/> wrote, only while it still holds the
     /// bytes that call wrote, as <paramref name="written"/> hashes them (ADR-0003): a file another program changed is left as it is.</summary>
-    PluginAnswer<EmptyPluginTakeBack> TakeBackEmpty(ModKey modKey, string folder, string written);
+    Answer<EmptyPluginTakeBack, PluginFailure> TakeBackEmpty(ModKey modKey, string folder, string written);
 }
 
 /// <summary>What <see cref="IPluginAdapter.TakeBackEmpty"/> did.</summary>

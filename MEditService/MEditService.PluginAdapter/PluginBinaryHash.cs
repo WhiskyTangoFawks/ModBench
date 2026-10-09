@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using MEditService.Codec.Serialization;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.PluginAdapter;
 
@@ -34,7 +35,7 @@ internal static class PluginBinaryHash
     }
 
     /// <summary>The hash and diagnoses from one read of the file.</summary>
-    internal static PluginAnswer<FileClaim> ClaimOfFile(string path)
+    internal static Answer<FileClaim, PluginFailure> ClaimOfFile(string path)
     {
         byte[] bytes;
         try
@@ -51,4 +52,4 @@ internal static class PluginBinaryHash
 }
 
 /// <summary>A plugin file's hash, and the malformed records the same read of it found.</summary>
-public sealed record FileClaim(string Hash, PluginAnswer<IReadOnlyList<PluginDiagnosis>> Diagnoses);
+public sealed record FileClaim(string Hash, Answer<IReadOnlyList<PluginDiagnosis>, PluginFailure> Diagnoses);

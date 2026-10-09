@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Serialization;
@@ -126,6 +127,20 @@ public static class DocumentTokens
     }
 
     private static readonly byte[] EditorIdPropertyName = Encoding.UTF8.GetBytes(RecordMembers.EditorId);
+
+    /// <summary>The EditorID at the document's own root. Malformed text names none.</summary>
+    public static EditorIdRead EditorIdIn(string text)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return DocumentNodes.EditorIdOf(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            return EditorIdRead.None;
+        }
+    }
 
     /// <summary>A member of the document's own root object, as a string. Malformed text declares
     /// nothing.</summary>

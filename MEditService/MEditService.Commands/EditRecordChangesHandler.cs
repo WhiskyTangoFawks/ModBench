@@ -4,6 +4,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -35,7 +36,7 @@ public sealed class EditRecordChangesHandler
         WriteFailure.Refused(
             EditSource(plugin, formKey, envelope), refused => refused, $"Could not read the source of {formKey}", _logger);
 
-    private SourceAnswer<RecordEditChanges> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
+    private Answer<RecordEditChanges, SourceFailure> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
         var batches = new UnsavedBatches(_unsaved.Current);
@@ -45,7 +46,7 @@ public sealed class EditRecordChangesHandler
             .Then(outcome => SourceAnswer.Of(new RecordEditChanges(outcome, batch.Changes)));
     }
 
-    private SourceAnswer<RecordEditResult> Edit(
+    private Answer<RecordEditResult, SourceFailure> Edit(
         PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteTargets.EditTarget editTarget,
         UnsavedBatches batches)
     {
@@ -90,7 +91,7 @@ public sealed class EditRecordChangesHandler
             return WriteTargets.RefuseUnreadable(formKey, why, spelled);
         if (refused is { } rejected) return rejected;
 
-        var written = new SourceDocument(identity.FormKey, identity.RecordType, EditorIds.In(newText), newText);
+        var written = new SourceDocument(identity.FormKey, identity.RecordType, DocumentTokens.EditorIdIn(newText).EditorId, newText);
         if (move is { Into: { } into }) return _cellLanding.Land(plugin, editTarget, move.From, written, into, spelled, batches);
         if (move is { StaysInItsCell: true })
         {

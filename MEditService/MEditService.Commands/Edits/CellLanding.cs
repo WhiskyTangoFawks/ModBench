@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -13,10 +14,10 @@ namespace MEditService.Commands.Edits;
 /// cell the plugin lacks is copied in from the nearest of its masters to hold it, or created, as xEdit's Add does.</summary>
 internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger)
 {
-    private sealed record Landed(RecordIdentity Cell, Func<SourceAnswer<SourceChanges>>? PutCell, SourceAnswer<SourceChanges> HeaderChanges);
+    private sealed record Landed(RecordIdentity Cell, Func<Answer<SourceChanges, SourceFailure>>? PutCell, Answer<SourceChanges, SourceFailure> HeaderChanges);
 
     // A cell copied in or minted, and the header's changes a minted one needs.
-    private sealed record CellIn(SourceDocument Cell, SourceAnswer<SourceChanges> HeaderChanges);
+    private sealed record CellIn(SourceDocument Cell, Answer<SourceChanges, SourceFailure> HeaderChanges);
 
     private sealed record Move(
         PluginAddress Plugin, SourceRepository Repository, GameRelease Release, RecordIdentity Moved, string Worldspace,
@@ -31,27 +32,27 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
 
         internal abstract Step<TNext> Then<TNext>(Func<T, Step<TNext>> next);
 
-        internal abstract SourceAnswer<RecordEditResult> Finish(Func<T, SourceAnswer<RecordEditResult>> last);
+        internal abstract Answer<RecordEditResult, SourceFailure> Finish(Func<T, Answer<RecordEditResult, SourceFailure>> last);
 
         internal sealed record Refused(RecordEditResult Why) : Step<T>
         {
             internal override Step<TNext> Then<TNext>(Func<T, Step<TNext>> next) => new Step<TNext>.Refused(Why);
 
-            internal override SourceAnswer<RecordEditResult> Finish(Func<T, SourceAnswer<RecordEditResult>> last) => Why;
+            internal override Answer<RecordEditResult, SourceFailure> Finish(Func<T, Answer<RecordEditResult, SourceFailure>> last) => Why;
         }
 
         internal sealed record Stopped(SourceFailure Why) : Step<T>
         {
             internal override Step<TNext> Then<TNext>(Func<T, Step<TNext>> next) => new Step<TNext>.Stopped(Why);
 
-            internal override SourceAnswer<RecordEditResult> Finish(Func<T, SourceAnswer<RecordEditResult>> last) => Why;
+            internal override Answer<RecordEditResult, SourceFailure> Finish(Func<T, Answer<RecordEditResult, SourceFailure>> last) => Why;
         }
 
         internal sealed record Done(T Value) : Step<T>
         {
             internal override Step<TNext> Then<TNext>(Func<T, Step<TNext>> next) => next(Value);
 
-            internal override SourceAnswer<RecordEditResult> Finish(Func<T, SourceAnswer<RecordEditResult>> last) => last(Value);
+            internal override Answer<RecordEditResult, SourceFailure> Finish(Func<T, Answer<RecordEditResult, SourceFailure>> last) => last(Value);
         }
     }
 
@@ -65,7 +66,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
         return WriteFailure.Refused(Cross(plugin, edit, from, moved, into, spelled, batches), refused => refused, failed, logger);
     }
 
-    private SourceAnswer<RecordEditResult> Cross(
+    private Answer<RecordEditResult, SourceFailure> Cross(
         PluginAddress plugin, WriteTargets.EditTarget edit, HeldIn from, SourceDocument moved, AnotherCell into, string spelled,
         UnsavedBatches batches)
     {
@@ -161,7 +162,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
     }
 
     private static SourceDocument CellOf(string text, Move move) =>
-        new(GridCellHolder.FormKeyOf(JsonNode.Parse(text) as JsonObject), move.CellType, EditorIds.In(text), text);
+        new(GridCellHolder.FormKeyOf(JsonNode.Parse(text) as JsonObject), move.CellType, DocumentTokens.EditorIdIn(text).EditorId, text);
 
     private static JsonObject Parsed(string text, string formKey) =>
         JsonNode.Parse(text) as JsonObject ?? throw new InvalidOperationException($"Expected {formKey}'s document to hold a JSON object.");

@@ -155,7 +155,7 @@ internal sealed class PluginCompileService(
         foreach (var document in tree.Documents())
         {
             var schema = schemas[document.RecordType];
-            records.Add(new SourceRecord(document.RecordType, schema, document, EditorIds.In(document.Text)));
+            records.Add(new SourceRecord(document.RecordType, schema, document, DocumentTokens.EditorIdIn(document.Text).EditorId));
             required.Add(document, schema);
         }
 

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Edits;
@@ -156,11 +157,11 @@ public sealed record RecordEditResult(
 
     /// <summary>The edit that lands as <paramref name="outcome"/> by making <paramref name="writes"/> through
     /// <paramref name="repository"/> all together, or why they could not be made.</summary>
-    internal static SourceAnswer<RecordEditResult> Making(
+    internal static Answer<RecordEditResult, SourceFailure> Making(
         RecordEditResult outcome, SourceRepository repository, Action<SourceTransaction> writes) =>
         SourceTransaction.Atomically(repository, writes) is { } failure ? failure : outcome;
 
-    public static implicit operator SourceAnswer<RecordEditChanges>(RecordEditResult outcome) =>
+    public static implicit operator Answer<RecordEditChanges, SourceFailure>(RecordEditResult outcome) =>
         SourceAnswer.Of<RecordEditChanges>(outcome);
 }
 
@@ -171,6 +172,6 @@ public sealed record RecordEditChanges(RecordEditResult Outcome, SourceChanges C
     public static implicit operator RecordEditChanges(RecordEditResult outcome) => new(outcome, SourceChanges.None);
 
     /// <summary><paramref name="outcome"/>, which changes nothing, or why it could not be reached.</summary>
-    internal static SourceAnswer<RecordEditChanges> Of(SourceAnswer<RecordEditResult> outcome) =>
+    internal static Answer<RecordEditChanges, SourceFailure> Of(Answer<RecordEditResult, SourceFailure> outcome) =>
         outcome.Then(reached => SourceAnswer.Of<RecordEditChanges>(reached));
 }

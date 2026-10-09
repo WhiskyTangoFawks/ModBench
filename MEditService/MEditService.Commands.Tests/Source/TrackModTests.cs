@@ -4,6 +4,7 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -64,10 +65,10 @@ public sealed class TrackModTests
 
     private sealed class LockedPluginAdapter(string lockedName) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override Task<PluginAnswer<PluginSource>> ReadSourceOfAsync(
+        public override Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
             RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
             plugin.Name.Equals(lockedName, StringComparison.OrdinalIgnoreCase)
-                ? Task.FromResult<PluginAnswer<PluginSource>>(PluginFailures.Inaccessible())
+                ? Task.FromResult<Answer<PluginSource, PluginFailure>>(PluginFailures.Inaccessible())
                 : base.ReadSourceOfAsync(plugin, gameRelease, strings, cancel);
     }
 

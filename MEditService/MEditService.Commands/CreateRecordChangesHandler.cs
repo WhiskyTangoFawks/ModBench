@@ -5,6 +5,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -58,7 +59,7 @@ public sealed class CreateRecordChangesHandler
         return cell.ToJsonString();
     }
 
-    private SourceAnswer<RecordEditChanges> MintRecord(PluginAddress plugin, string recordType, string? container, GridPosition? position)
+    private Answer<RecordEditChanges, SourceFailure> MintRecord(PluginAddress plugin, string recordType, string? container, GridPosition? position)
     {
         var unsaved = _unsaved.Current;
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
@@ -109,10 +110,10 @@ public sealed class CreateRecordChangesHandler
         return Landed(batch, targetFormKey);
     }
 
-    private static SourceAnswer<RecordEditChanges> Landed(SourceBatch batch, string formKey) =>
+    private static Answer<RecordEditChanges, SourceFailure> Landed(SourceBatch batch, string formKey) =>
         SourceAnswer.Of(new RecordEditChanges(RecordEditResult.Success(formKey), batch.Changes));
 
-    private SourceAnswer<RecordEditChanges> MintChild(
+    private Answer<RecordEditChanges, SourceFailure> MintChild(
         SourceBatch batch, UnsavedBatches unsavedByFolder, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
         string container, GridPosition? position)
     {
@@ -160,7 +161,7 @@ public sealed class CreateRecordChangesHandler
         }
     }
 
-    private SourceAnswer<RecordEditChanges> CreateCellAt(
+    private Answer<RecordEditChanges, SourceFailure> CreateCellAt(
         SourceBatch batch, UnsavedBatches unsavedByFolder, PluginAddress plugin, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         GameRelease release, string worldspace, (int X, int Y) grid)
     {
@@ -208,7 +209,7 @@ public sealed class CreateRecordChangesHandler
 
     private sealed record Landing(RecordIdentity Container, JsonObject Root, string Slot);
 
-    private SourceAnswer<RecordEditChanges> AppendChild(
+    private Answer<RecordEditChanges, SourceFailure> AppendChild(
         SourceBatch batch, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
         Landing landing)
     {

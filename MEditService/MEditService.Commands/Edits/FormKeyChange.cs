@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda.Plugins;
@@ -20,7 +21,7 @@ internal sealed class FormKeyChange(ILogger logger)
         envelope is { Op: RecordEditEnvelope.Set, Path: [{ Kind: PathHop.MemberKind, Name: Member }] };
 
     /// <summary>The record under its new key.</summary>
-    internal SourceAnswer<RecordEditResult> Change(
+    internal Answer<RecordEditResult, SourceFailure> Change(
         PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, JsonElement? value)
     {
         var (release, identity, repository) = editTarget;

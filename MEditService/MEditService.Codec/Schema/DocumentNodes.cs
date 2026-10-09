@@ -64,7 +64,7 @@ public static class DocumentNodes
 
     /// <summary>The value, mutated in place, with <paramref name="rewrite"/> given every node in it
     /// beside the shape the schema gives that node, children before the node holding them.</summary>
-    public static JsonNode? Rewrite(JsonNode? node, FieldMetadata meta, Func<JsonNode, FieldMetadata, JsonNode?> rewrite)
+    internal static JsonNode? Rewrite(JsonNode? node, FieldMetadata meta, Func<JsonNode, FieldMetadata, JsonNode?> rewrite)
     {
         switch (node)
         {

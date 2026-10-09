@@ -35,6 +35,7 @@
   <ItemGroup>
     <!-- One test project per box: the drawn list plus the kernel, mirroring
          MEditService.Http's own ProjectReference list. -->
+    <ProjectReference Include="..\MEditService.RepositoriesLib\MEditService.RepositoriesLib.csproj" />
     <ProjectReference Include="..\MEditService.Http\MEditService.Http.csproj" />
     <ProjectReference Include="..\MEditService.Commands\MEditService.Commands.csproj" />
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />

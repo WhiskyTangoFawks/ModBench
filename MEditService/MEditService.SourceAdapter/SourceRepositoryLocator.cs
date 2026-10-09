@@ -361,15 +361,9 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         {
             if (!_files.FileExists(document)) continue;
             var text = _files.ReadAllText(document);
-            JsonNode? cell;
-            try
-            {
-                cell = JsonNode.Parse(text);
-            }
-            catch (JsonException ex)
-            {
-                throw SourceStopException.UnreadableIn(_modFolder, document, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
-            }
+            if (DocumentTokens.WhyNotADocument(text) is { } why)
+                throw SourceStopException.UnreadableIn(_modFolder, document, $"it is no JSON document: {why}");
+            var cell = JsonNode.Parse(text);
             if (cell is JsonObject held && PlacedCell.Grid(held) == (x, y)) return DocumentText.FormKeyDeclaredIn(text, document, plugin.Name);
         }
         return null;
@@ -519,7 +513,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
                          ?? DocumentTokens.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator);
-        return recordType == null ? null : (formKey, recordType, DocumentText.EditorIdIn(text));
+        return recordType == null ? null : (formKey, recordType, DocumentTokens.EditorIdIn(text));
     }
 
     internal PluginSourceFiles FilesOf(PluginAddress plugin)

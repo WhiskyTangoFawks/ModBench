@@ -4,6 +4,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Resolution;
@@ -27,7 +28,7 @@ internal sealed class LoadOrderResolution(
     private MastersWalk WalkIn(
         LoadOrderSnapshot snapshot, SourceRepository repository, PluginAddress plugin,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, UnsavedBatches batches) =>
-        new(this, snapshot, plugin, batches, new Lazy<SourceAnswer<IReadOnlySet<string>>>(() => RequiredMasters.InTheTree(repository, plugin, schemas)));
+        new(this, snapshot, plugin, batches, new Lazy<Answer<IReadOnlySet<string>, SourceFailure>>(() => RequiredMasters.InTheTree(repository, plugin, schemas)));
 
     /// <summary>The first master the copy needs that <paramref name="destination"/> loads before, an underride:
     /// its origin, then each plugin holding a record <paramref name="body"/> references (ADR-0008; xEdit).</summary>
@@ -103,7 +104,7 @@ internal sealed class LoadOrderResolution(
     }
 
     internal sealed class MastersWalk(
-        LoadOrderResolution resolution, LoadOrderSnapshot snapshot, PluginAddress plugin, UnsavedBatches batches, Lazy<SourceAnswer<IReadOnlySet<string>>> masters)
+        LoadOrderResolution resolution, LoadOrderSnapshot snapshot, PluginAddress plugin, UnsavedBatches batches, Lazy<Answer<IReadOnlySet<string>, SourceFailure>> masters)
     {
         /// <summary>The nearest master's copy of <paramref name="formKey"/> that <paramref name="says"/> accepts,
         /// passing over one whose header holds a flag of <paramref name="passOver"/>. An unreadable copy ends the walk.</summary>

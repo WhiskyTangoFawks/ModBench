@@ -1,6 +1,7 @@
 using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -105,7 +106,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary>The record's own text, or null when no document holds it. The identity comes back as
     /// asked; the body is the tree's answer, spliced out of another record's document when that is
     /// what carries it.</summary>
-    public SourceAnswer<SourceDocument?> RecordOf(PluginAddress plugin, RecordIdentity identity) =>
+    public Answer<SourceDocument?, SourceFailure> RecordOf(PluginAddress plugin, RecordIdentity identity) =>
         SourceFailure.Answer(() => OwnTextOf(Spelled(plugin), identity));
 
     private SourceDocument? OwnTextOf(PluginAddress spelled, RecordIdentity identity)
@@ -118,7 +119,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary>The record the tree holds at <paramref name="formKey"/>, or null when nothing carries
     /// it. A document named for the key whose text is no document is unreadable.</summary>
-    public SourceAnswer<SourceDocument?> Get(PluginAddress plugin, string formKey) =>
+    public Answer<SourceDocument?, SourceFailure> Get(PluginAddress plugin, string formKey) =>
         SourceFailure.Answer(() => Held(Spelled(plugin), formKey));
 
     private SourceDocument? Held(PluginAddress spelled, string formKey)
@@ -145,13 +146,13 @@ public sealed class SourceRepository : ISourceRepositoryReads
             documents.RefuseUnreadable(identity.RecordType, identity.FormKey, body, unit.FullPath);
         });
 
-    private SourceAnswer<(RecordIdentity Record, SourceDocument Carrying)?> CarryingFromText(
+    private Answer<(RecordIdentity Record, SourceDocument Carrying)?, SourceFailure> CarryingFromText(
         PluginAddress plugin, string formKey, string text) =>
         SourceFailure.Answer(() => Locator.CarryingFromText(Spelled(plugin), formKey, text));
 
     /// <summary>The record at <paramref name="formKey"/> with its own text read out of <paramref name="text"/>, the
     /// document holding it by the rule of that document, and answering as that does.</summary>
-    public SourceAnswer<SourceDocument?> RecordFromText(PluginAddress plugin, string formKey, string text) =>
+    public Answer<SourceDocument?, SourceFailure> RecordFromText(PluginAddress plugin, string formKey, string text) =>
         CarryingFromText(plugin, formKey, text).Then(found =>
             SourceAnswer.Of(found is var (record, carrying) ? OwnTextIn(text, record, carrying) : null));
 
@@ -167,16 +168,16 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary>The record that carries <paramref name="identity"/> inline, and the slot it sits in; null
     /// for a record with a document of its own.</summary>
-    public SourceAnswer<DocumentContainment?> ContainerOf(PluginAddress plugin, RecordIdentity identity) =>
+    public Answer<DocumentContainment?, SourceFailure> ContainerOf(PluginAddress plugin, RecordIdentity identity) =>
         SourceFailure.Answer(() => Locator.ContainerOf(Spelled(plugin), identity));
 
     /// <summary>The document holding <paramref name="identity"/>, relative to the mod folder — a
     /// diagnostic's path for the Problems panel. Null when nothing there holds it.</summary>
-    public SourceAnswer<string?> RelativePathOf(PluginAddress plugin, RecordIdentity identity) =>
+    public Answer<string?, SourceFailure> RelativePathOf(PluginAddress plugin, RecordIdentity identity) =>
         SourceFailure.Answer(() => Locator.Locate(Spelled(plugin), identity)?.RelativePath);
 
     /// <summary>The file in this tree holding <paramref name="identity"/>; null when nothing there holds it.</summary>
-    public SourceAnswer<DocumentFile?> DocumentOf(PluginAddress plugin, RecordIdentity identity) =>
+    public Answer<DocumentFile?, SourceFailure> DocumentOf(PluginAddress plugin, RecordIdentity identity) =>
         SourceFailure.Answer(() => Locator.Locate(Spelled(plugin), identity) is { } unit && Files.FileExists(unit.FullPath)
             ? new DocumentFile(unit.FullPath, unit.IsEmbedded)
             : null);
@@ -212,17 +213,17 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary>The name of the file in this tree holding <paramref name="identity"/>, whatever it was renamed to; null
     /// when nothing here holds it.</summary>
-    public SourceAnswer<string?> FileNameOf(PluginAddress plugin, RecordIdentity identity) =>
+    public Answer<string?, SourceFailure> FileNameOf(PluginAddress plugin, RecordIdentity identity) =>
         RelativePathOf(plugin, identity).Then(path => SourceAnswer.Of(path is null ? null : Path.GetFileName(path)));
 
     /// <summary>The worldspace carrying the cell <paramref name="identity"/> names; null for an interior
     /// cell or one the plugin does not hold. A cell filed under neither is unreadable.</summary>
-    public SourceAnswer<string?> WorldspaceOf(PluginAddress plugin, RecordIdentity identity) =>
+    public Answer<string?, SourceFailure> WorldspaceOf(PluginAddress plugin, RecordIdentity identity) =>
         CellStructureOf(plugin, identity).Then(cell => SourceAnswer.Of(cell?.ParentWorldspace));
 
     /// <summary>Where the GRUP hierarchy puts the cell <paramref name="identity"/> names; null for one the
     /// plugin does not hold. A cell filed under neither a cell group nor a worldspace is unreadable.</summary>
-    public SourceAnswer<CellStructure?> CellStructureOf(PluginAddress plugin, RecordIdentity identity) =>
+    public Answer<CellStructure?, SourceFailure> CellStructureOf(PluginAddress plugin, RecordIdentity identity) =>
         SourceFailure.Answer<CellStructure?>(() =>
         {
             var spelled = Spelled(plugin);
@@ -234,7 +235,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary>The exterior cell this plugin's tree holds at grid (<paramref name="x"/>,
     /// <paramref name="y"/>) of <paramref name="worldspace"/>, or null when it holds none there.</summary>
-    public SourceAnswer<SourceDocument?> GetCellAt(PluginAddress plugin, string worldspace, int x, int y) =>
+    public Answer<SourceDocument?, SourceFailure> GetCellAt(PluginAddress plugin, string worldspace, int x, int y) =>
         SourceFailure.Answer(() =>
         {
             var spelled = Spelled(plugin);
@@ -244,12 +245,12 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary>Every EditorID the plugin's tree holds now, a record with a document of its own and
     /// an embedded child alike — what a derived EditorID is checked against to stay unique in the
     /// destination.</summary>
-    public SourceAnswer<IReadOnlySet<string>> EditorIdsHeld(PluginAddress plugin) =>
+    public Answer<IReadOnlySet<string>, SourceFailure> EditorIdsHeld(PluginAddress plugin) =>
         SourceFailure.Answer<IReadOnlySet<string>>(() => EditorIdsOf(Locator.ReadAll(Spelled(plugin))));
 
     /// <summary>Every FormKey the plugin's working tree uses: a record's own, an embedded child's and the
     /// header's synthetic one.</summary>
-    public SourceAnswer<IReadOnlySet<string>> FormKeysUsed(PluginAddress plugin) =>
+    public Answer<IReadOnlySet<string>, SourceFailure> FormKeysUsed(PluginAddress plugin) =>
         SourceFailure.Answer<IReadOnlySet<string>>(() => FormKeysOf(Locator.ReadAll(Spelled(plugin))));
 
     private HashSet<string> FormKeysOf(IEnumerable<SourceDocument> documents)
@@ -282,7 +283,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary>What <paramref name="read"/> makes of the plugin's tree, streamed as each record's own
     /// document. One the stream cannot read stops <paramref name="read"/>, and the answer is why.</summary>
-    public SourceAnswer<T> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read) =>
+    public Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read) =>
         SourceFailure.Answer(() =>
         {
             using var documents = new SourceTreeDocuments(_modFolder, Spelled(plugin).Name, _release, Files);
@@ -291,7 +292,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary>The plugin's source in the working tree as the whole-mod door reads it, empty when there is
     /// none. A directory holding several documents, none named for it, is ambiguous.</summary>
-    public SourceAnswer<PluginSourceFiles> TreeOf(PluginAddress plugin) =>
+    public Answer<PluginSourceFiles, SourceFailure> TreeOf(PluginAddress plugin) =>
         SourceFailure.Answer(() =>
         {
             var spelled = Spelled(plugin);
@@ -301,7 +302,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary><paramref name="diagnosis"/> of a read of <see cref="TreeOf"/>'s tree, each file it names
     /// named as this tree holds it, relative to the mod folder.</summary>
-    public SourceAnswer<PluginDiagnosis> InSourceNames(PluginAddress plugin, PluginDiagnosis diagnosis) =>
+    public Answer<PluginDiagnosis, SourceFailure> InSourceNames(PluginAddress plugin, PluginDiagnosis diagnosis) =>
         SourceFailure.Answer(() =>
         {
             var spelled = Spelled(plugin);
@@ -311,7 +312,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary>Which of <paramref name="formKeys"/> more than one document claims. Asked of the
     /// files, not of the compiled mod: the reader's FormKey-keyed RecordCache collapses two documents
     /// in one group folder to the last read.</summary>
-    public SourceAnswer<IReadOnlyList<string>> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys) =>
+    public Answer<IReadOnlyList<string>, SourceFailure> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys) =>
         SourceFailure.Answer(() =>
         {
             var spelled = Spelled(plugin);
@@ -320,7 +321,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary>Where the source and <paramref name="serialized"/>, the whole-mod door's tree, first part ways,
     /// and the files held at another leaf name than the layout's. An unreadable file outranks the rest.</summary>
-    public SourceAnswer<SourceComparison> Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>
+    public Answer<SourceComparison, SourceFailure> Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>
         SourceFailure.Answer(() =>
         {
             var spelled = Spelled(plugin);
@@ -334,41 +335,41 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary>Every record the tree holds whose text differs from the last commit's, an embedded
     /// child among them; a tree with no repository is all added. A failed read answers why, never
     /// reads as a deletion.</summary>
-    public SourceAnswer<IReadOnlyDictionary<string, RecordChange>> ChangedSinceLastCommit(PluginAddress plugin) =>
+    public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin) =>
         SourceFailure.Answer(() => LastCommitComparison.Of(_modFolder, _release, _git, Locator, Spelled(plugin)));
 
     /// <summary>The changes that create or replace the record's document, placing an absent one from its identity
     /// alone, written nowhere. A file at its path that is no document is unreadable.</summary>
-    public SourceAnswer<SourceChanges> ChangesToPut(PluginAddress plugin, SourceDocument document) =>
+    public Answer<SourceChanges, SourceFailure> ChangesToPut(PluginAddress plugin, SourceDocument document) =>
         SourceFailure.Answer(() => Writes.ChangesToPut(Spelled(plugin), document));
 
     /// <summary>What rewriting a document the tree holds changes, written nowhere. One no document holds
     /// is not carried: an edit never creates.</summary>
-    public SourceAnswer<SourceChanges> ChangesToRewrite(PluginAddress plugin, SourceDocument document) =>
+    public Answer<SourceChanges, SourceFailure> ChangesToRewrite(PluginAddress plugin, SourceDocument document) =>
         SourceFailure.Answer(() => Writes.ChangesToRewrite(Spelled(plugin), document));
 
     /// <summary>What putting an exterior cell changes, written nowhere: a new cell lands in its grid's block
     /// under <paramref name="worldspace"/>, a held one where it is. A file there that is no document is
     /// unreadable.</summary>
-    public SourceAnswer<SourceChanges> ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
+    public Answer<SourceChanges, SourceFailure> ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
         SourceFailure.Answer(() => Writes.ChangesToPutInWorldspace(Spelled(plugin), cell, worldspace));
 
     /// <summary>What putting <paramref name="child"/> at the end of <paramref name="slot"/> of
     /// <paramref name="container"/> changes, written nowhere, in whichever document carries the container.
     /// A single-value slot that is filled answers <see cref="SourceFailure.SlotHeld"/>.</summary>
-    public SourceAnswer<SourceChanges> ChangesToPutChild(
+    public Answer<SourceChanges, SourceFailure> ChangesToPutChild(
         PluginAddress plugin, RecordIdentity container, string slot, SourceDocument child) =>
         SourceFailure.Answer(() => Writes.ChangesToPutChild(Spelled(plugin), container, slot, child));
 
     /// <summary>What changing the FormKey of <paramref name="identity"/> changes, written nowhere. Text the codec
     /// cannot give the new key is unreadable.</summary>
-    public SourceAnswer<SourceChanges> ChangesToRekey(PluginAddress plugin, RecordIdentity identity, string newFormKey) =>
+    public Answer<SourceChanges, SourceFailure> ChangesToRekey(PluginAddress plugin, RecordIdentity identity, string newFormKey) =>
         SourceFailure.Answer(() => Writes.ChangesToRekey(Spelled(plugin), identity, newFormKey));
 
     /// <summary>What taking the record out of the tree changes, written nowhere: its file, its directory, or its
     /// element of another record's document. A record no document holds, or whose document lacks it, is not
     /// carried.</summary>
-    public SourceAnswer<SourceChanges> ChangesToRemove(PluginAddress plugin, RecordIdentity identity) =>
+    public Answer<SourceChanges, SourceFailure> ChangesToRemove(PluginAddress plugin, RecordIdentity identity) =>
         SourceFailure.Answer(() => Writes.ChangesToRemove(Spelled(plugin), identity));
 
     /// <summary>The plugin's source in the working tree becomes <paramref name="tree"/>, the whole-mod door's,
@@ -386,7 +387,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary>What renaming the plugin's source to <paramref name="newName"/> changes, written nowhere: the tree
     /// moves, and every FormKey of the plugin follows. None, when a plugin source of the mod holds that name,
     /// compared without case.</summary>
-    public SourceAnswer<SourceChanges?> ChangesToRenameSource(PluginAddress plugin, string newName) =>
+    public Answer<SourceChanges?, SourceFailure> ChangesToRenameSource(PluginAddress plugin, string newName) =>
         SourceFailure.Answer<SourceChanges?>(() =>
         {
             var name = Spelled(plugin).Name;
@@ -412,7 +413,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary>Runs <paramref name="write"/>, recording <paramref name="binarySha256"/> as the one last
     /// written; an interrupted write leaves the old and new (ADR-0003). Git failing before the write
     /// answers why, with nothing written; after it, false.</summary>
-    public SourceAnswer<bool> WriteBinary(PluginAddress plugin, string binarySha256, Action write)
+    public Answer<bool, SourceFailure> WriteBinary(PluginAddress plugin, string binarySha256, Action write)
     {
         RefuseInABatch();
         var name = Spelled(plugin).Name;
@@ -421,7 +422,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary>Every binary hash Modbench last wrote for the plugin: one, or several while a write
     /// was interrupted. Empty when none is recorded.</summary>
-    public SourceAnswer<IReadOnlyList<string>> LastWrittenBinarySha256s(PluginAddress plugin)
+    public Answer<IReadOnlyList<string>, SourceFailure> LastWrittenBinarySha256s(PluginAddress plugin)
     {
         var name = Spelled(plugin).Name;
         return SourceFailure.Answer(() => _git.LastWrittenBinarySha256s(name));
@@ -437,7 +438,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     private PluginAddress Spelled(PluginAddress plugin) =>
         new(TreeNameFor(plugin).Holds(out var tree, out _) ? tree : plugin.Name, _modName);
 
-    private SourceAnswer<string> TreeNameFor(PluginAddress plugin)
+    private Answer<string, SourceFailure> TreeNameFor(PluginAddress plugin)
     {
         if (!string.Equals(plugin.Origin, _modName, StringComparison.OrdinalIgnoreCase))
         {

@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -19,7 +20,7 @@ public sealed class PluginReadabilityTests : IDisposable
 
     public void Dispose() => _data.Dispose();
 
-    private Task<PluginAnswer<PluginSource>> ReadSourceAt(string path) =>
+    private Task<Answer<PluginSource, PluginFailure>> ReadSourceAt(string path) =>
         Adapter.ReadSourceOfAsync(
             new RegisteredPlugin(Path.GetFileName(path), PluginOrigin.DataDirectory, path, PluginProvider.Game, Line: null),
             GameRelease.Fallout4, new PluginStrings(null, _data.DataFolder));

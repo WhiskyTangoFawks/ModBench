@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -50,7 +51,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
     /// <summary>The folder of the mod's plugin source holding <paramref name="pluginFileName"/>'s tree: the one spelled
     /// so, else the only one spelled so without case, as a ModKey compares a name. Else why there is none.</summary>
-    internal static SourceAnswer<string> TreeNameIn(string modFolder, string pluginFileName) =>
+    internal static Answer<string, SourceFailure> TreeNameIn(string modFolder, string pluginFileName) =>
         SourceFailure.Answer(() => NamedIn(Path.Combine(modFolder, RootFolderName), pluginFileName))
             .Then<string>(named => named switch
             {

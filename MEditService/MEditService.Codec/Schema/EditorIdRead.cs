@@ -8,7 +8,7 @@ public readonly struct EditorIdRead
 
     private EditorIdRead(string? editorId, string? whyUnreadable) => (_editorId, WhyUnreadable) = (editorId, whyUnreadable);
 
-    public static EditorIdRead None => default;
+    internal static EditorIdRead None => default;
 
     internal static EditorIdRead Of(string editorId) => new(editorId, null);
 

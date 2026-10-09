@@ -1,6 +1,7 @@
 using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Cache;
@@ -37,27 +38,27 @@ internal sealed class ModRecordLookup : IPluginRecords
         _cellsByGrid = new Lazy<Dictionary<(string Worldspace, int X, int Y), string>>(BuildCellsByGrid);
     }
 
-    public PluginAnswer<RecordIdentity?> IdentityOf(string formKey) =>
+    public Answer<RecordIdentity?, PluginFailure> IdentityOf(string formKey) =>
         PluginFailure.Answer(() => Resolve(formKey) is { } record
             ? new RecordIdentity(record.FormKey.ToString(), _types.RecordTypeOf(record), record.EditorID)
             : (RecordIdentity?)null);
 
-    public PluginAnswer<long?> RecordFlagsOf(string formKey) =>
+    public Answer<long?, PluginFailure> RecordFlagsOf(string formKey) =>
         PluginFailure.Answer(() => (long?)Resolve(formKey)?.MajorRecordFlagsRaw);
 
-    public PluginAnswer<string?> TextOf(string formKey) =>
+    public Answer<string?, PluginFailure> TextOf(string formKey) =>
         PluginFailure.Answer(() => Resolve(formKey) is { } record
             ? Encoding.UTF8.GetString(DeletedRecord.Serialize(
                 record, _schemas[_types.RecordTypeOf(record)], _mod.GameRelease, () => _file.HoldsNoFields(record.FormKey)))
             : null);
 
-    public PluginAnswer<DocumentContainment?> ContainmentOf(string formKey) =>
+    public Answer<DocumentContainment?, PluginFailure> ContainmentOf(string formKey) =>
         PluginFailure.Answer(() => _containments.Value.TryGetValue(formKey, out var found) ? found : (DocumentContainment?)null);
 
-    public PluginAnswer<CellStructure?> CellStructureOf(string formKey) =>
+    public Answer<CellStructure?, PluginFailure> CellStructureOf(string formKey) =>
         PluginFailure.Answer(() => _cells.Value.TryGetValue(formKey, out var cell) ? cell.Structure : (CellStructure?)null);
 
-    public PluginAnswer<string?> CellAt(string worldspace, int x, int y) =>
+    public Answer<string?, PluginFailure> CellAt(string worldspace, int x, int y) =>
         PluginFailure.Answer(() => _cellsByGrid.Value.TryGetValue((worldspace, x, y), out var cell) ? cell : null);
 
     public void Dispose()

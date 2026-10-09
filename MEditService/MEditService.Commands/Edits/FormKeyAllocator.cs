@@ -3,6 +3,7 @@ using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -38,7 +39,7 @@ internal sealed class FormKeyAllocator
         _used = used;
     }
 
-    internal static SourceAnswer<FormKeyAllocator> Over(SourceRepository repository, PluginAddress plugin, GameRelease release) =>
+    internal static Answer<FormKeyAllocator, SourceFailure> Over(SourceRepository repository, PluginAddress plugin, GameRelease release) =>
         repository.RecordOf(plugin, PluginHeader.IdentityOf(plugin.Name)).Then(header =>
             repository.FormKeysUsed(plugin).Then(used => SourceAnswer.Of(new FormKeyAllocator(repository, plugin, release, header, used))));
 
@@ -77,7 +78,7 @@ internal sealed class FormKeyAllocator
 
     /// <summary>The header document's rewrite that moves its Next Object ID past every FormKey drawn or
     /// claimed, written nowhere. None when nothing passed it.</summary>
-    internal SourceAnswer<SourceChanges> HeaderChanges() =>
+    internal Answer<SourceChanges, SourceFailure> HeaderChanges() =>
         _header is { } header && _nextObjectId > _nextObjectIdHeld
             ? _repository.ChangesToRewrite(_plugin, header with
             {

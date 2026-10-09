@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Headers;
@@ -30,7 +31,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     // The header is read with the open: a header Mutagen cannot read is the open's failure, not a
     // throw out of the ingest that follows.
-    public PluginAnswer<IPluginDocuments> OpenDocuments(
+    public Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
@@ -42,7 +43,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             return documents;
         });
 
-    public PluginAnswer<IPluginRecords> OpenRecordLookup(
+    public Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
         RegisteredPlugin plugin,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
@@ -53,7 +54,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     }
 
     // The open passes to what its result holds; until it has, a failure disposes it here.
-    private static PluginAnswer<T> Opened<T>(
+    private static Answer<T, PluginFailure> Opened<T>(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings, Func<ILoadedMod, T> holding)
     {
         ILoadedMod? loaded = null;
@@ -81,9 +82,9 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public void KeepHashesOf(IReadOnlySet<string> pluginPaths) => _hashes.Keep(pluginPaths);
 
-    public PluginAnswer<FileClaim> ClaimOf(string pluginPath) => PluginBinaryHash.ClaimOfFile(pluginPath);
+    public Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath) => PluginBinaryHash.ClaimOfFile(pluginPath);
 
-    public PluginAnswer<(PluginContent Content, PluginFailure? Unreachable)> ReadContent(
+    public Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
         Opened(modPath, gameRelease, strings, loaded =>
         {
@@ -122,28 +123,28 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     private static bool SameFile(RegisteredPlugin plugin, RegisteredPlugin other) =>
         plugin.Name.Equals(other.Name, StringComparison.OrdinalIgnoreCase);
 
-    public Task<PluginAnswer<CompiledTree>> ReadTreeAsync(
+    public Task<Answer<CompiledTree, PluginFailure>> ReadTreeAsync(
         IReadOnlyList<TreeFile> files,
         GameRelease gameRelease,
         CancellationToken cancel = default) =>
         PluginTrees.ReadTreeAsync(files, gameRelease, cancel);
 
-    public Task<PluginAnswer<string>> WriteFromTreeAsync(
+    public Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
         CancellationToken cancel = default) =>
         PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
 
-    public Task<PluginAnswer<PluginSource>> ReadSourceOfAsync(
+    public Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
         RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
         PluginTrees.ReadAsync(
             new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), plugin.Name, gameRelease, strings, cancel);
 
-    public PluginAnswer<string?> DivergenceFrom(
+    public Answer<string?, PluginFailure> DivergenceFrom(
         string pluginFileName, string pluginFilePath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
         PluginFailure.Answer(() => PluginTrees.DivergenceBetween(
             new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, gameRelease, strings)?.Describe());
 
-    public Task<PluginAnswer<PluginByteComparison>> CompareBytesAsync(
+    public Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
         string originalPath, string recompiledPath, CancellationToken cancel = default) =>
         PluginFailure.AnswerAsync(async () =>
         {
@@ -173,7 +174,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public string PathOfEmpty(ModKey modKey, string folder) => Path.Combine(folder, modKey.FileName.String);
 
-    public PluginAnswer<EmptyPluginTakeBack> TakeBackEmpty(ModKey modKey, string folder, string written) =>
+    public Answer<EmptyPluginTakeBack, PluginFailure> TakeBackEmpty(ModKey modKey, string folder, string written) =>
         PluginFailure.Answer(() =>
         {
             var path = PathOfEmpty(modKey, folder);
@@ -185,7 +186,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             return EmptyPluginTakeBack.TakenBack;
         });
 
-    public async Task<PluginAnswer<EmptyPluginCreated>> CreateAndWriteAsync(
+    public async Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
         ModKey modKey, string folder, GameRelease gameRelease)
     {
         var destinationPath = PathOfEmpty(modKey, folder);
