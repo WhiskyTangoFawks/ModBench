@@ -12,6 +12,7 @@ import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
 import type { PluginAddress } from './wire/pluginAddress';
 import { createSourceLanguage } from './sourceLanguage';
+import { saveDirtyPluginSource } from './sourceLanguage/dirtyPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
 import type { RecordWrite } from './drivingLib/writingGesture';
@@ -118,7 +119,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
   const plugins = own(createPluginsView({
     instance, adapter, recordBrowser, client: pluginFacts, pluginSync, channel: outputChannel, statusBar, registerRepositories, reporterFor,
-    ask, recordWrite, sourceEditing: deps.sourceEditing, trackSelection, modsView: MODS_KEY_ARGS.view,
+    ask, recordWrite, sourceEditing: deps.sourceEditing, saveUnsavedPluginSource: saveDirtyPluginSource, trackSelection, modsView: MODS_KEY_ARGS.view,
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     log: (level, msg) => outputChannel[level](msg),
   }));
