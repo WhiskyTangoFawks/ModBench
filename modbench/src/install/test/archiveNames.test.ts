@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
+import { ARCHIVE_EXTENSIONS } from '../archiveExtensions';
 import { defaultModName, defaultModNameForFolder, isArchiveName } from '../archiveNames';
 
 describe('isArchiveName', () => {
@@ -31,5 +32,11 @@ describe('defaultModName', () => {
 
   it('leaves a name with no recognised archive extension untouched', () => {
     expect(defaultModName('/downloads/notes.txt')).toBe('notes.txt');
+  });
+});
+
+describe('ARCHIVE_EXTENSIONS', () => {
+  it('is the archive extensions install can extract, lower-cased', () => {
+    expect([...ARCHIVE_EXTENSIONS].sort()).toEqual(['7z', 'rar', 'zip']);
   });
 });
