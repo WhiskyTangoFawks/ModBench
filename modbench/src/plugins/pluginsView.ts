@@ -57,8 +57,8 @@ export interface PluginsViewDeps {
   ask: AskQuestion;
   recordWrite: RecordWrite;
   sourceEditing: SourceEditing;
-  /** Saves the unsaved plugin source under a folder; answers the paths VS Code left unsaved. */
-  saveUnsavedPluginSource: (folder: string) => Promise<string[]>;
+  /** Saves a plugin's unsaved plugin source; answers the paths VS Code left unsaved, or undefined when the plugin has no folder. */
+  saveUnsavedPluginSource: (plugin: PluginAddress) => Promise<string[] | undefined>;
   /** The rows of the focused Mods or Plugins view, which the palette's track acts on. */
   trackSelection: () => readonly unknown[];
   /** The Mods view's id, whose bar a track from a Mods row runs under. */

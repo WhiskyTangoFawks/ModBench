@@ -7,7 +7,6 @@ import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { modArgumentOf, pluginArgumentOf, rowNameOf } from '../drivingLib/argument';
 import { recordArgumentOf } from '../drivingLib/recordArgument';
-import { pluginSourceFolderOf } from '../instanceAdapter/instanceAdapter';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { trackProgressMessage } from './trackProgress';
@@ -207,8 +206,8 @@ export interface CompileDeps {
   reporter: Reporter;
   problems: CompileProblems;
   originFiles: OriginFilesOf;
-  /** Saves the unsaved plugin source under a folder; answers the paths VS Code left unsaved. */
-  saveUnsaved: (folder: string) => Promise<string[]>;
+  /** Saves the plugin's unsaved plugin source; answers the paths VS Code left unsaved, or undefined when the plugin has no folder. */
+  saveUnsaved: (plugin: PluginAddress) => Promise<string[] | undefined>;
 }
 
 /** commands.md, `compile`: the plugins, the selection included, from a Plugins row, a record tab's
@@ -275,9 +274,9 @@ async function savedFirst(deps: CompileDeps, plugins: readonly PluginAddress[]):
   const unsaved: string[] = [];
   const homeless: string[] = [];
   for (const plugin of plugins) {
-    const files = deps.originFiles(plugin.origin);
-    if (files === undefined) homeless.push(rowName(plugin));
-    else unsaved.push(...await deps.saveUnsaved(files.file(pluginSourceFolderOf(plugin.name))));
+    const left = await deps.saveUnsaved(plugin);
+    if (left === undefined) homeless.push(rowName(plugin));
+    else unsaved.push(...left);
   }
   if (homeless.length > 0) {
     deps.reporter.report('error', 'Could not compile: no folder for the plugin source of these plugins.', homeless.join('\n'));

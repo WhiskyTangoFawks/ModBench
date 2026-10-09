@@ -104,7 +104,7 @@ const BOUND_COMMAND_BOXES = {
 };
 /** The Plugins box reaches the Instance adapter for its plugin-file rule alone; no other view reaches it. */
 /** @type {Record<string, string[]>} */
-const ADAPTER_NAMES_A_VIEW_MAY_IMPORT = { plugins: ['fileExtension', 'pluginSourceFolderOf'] };
+const ADAPTER_NAMES_A_VIEW_MAY_IMPORT = { plugins: ['fileExtension'] };
 /** @param {string} view */
 const boundCommandImports = (view) => ['error', {
     patterns: [
