@@ -37,7 +37,7 @@ internal static class TreeDocuments
         return
         [
             .. roots.Select(
-                document => new SourceDocument(document.FormKey, document.RecordType, EditorIdOf(document.Text), document.Text)),
+                document => new SourceDocument(document.FormKey, document.RecordType, DocumentTokens.EditorIdIn(document.Text).EditorId, document.Text)),
         ];
     }
 
@@ -66,13 +66,5 @@ internal static class TreeDocuments
                 foreach (var item in element.EnumerateArray()) Collect(item, found, atRoot: false);
                 break;
         }
-    }
-
-    private static string? EditorIdOf(string text)
-    {
-        using var json = JsonDocument.Parse(text);
-        return json.RootElement.TryGetProperty("EditorID", out var editorId) && editorId.ValueKind == JsonValueKind.String
-            ? editorId.GetString()
-            : null;
     }
 }
