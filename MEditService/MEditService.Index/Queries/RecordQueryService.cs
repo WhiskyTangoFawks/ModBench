@@ -215,7 +215,7 @@ internal sealed class RecordQueryService(
         List<RecordDetail> outsideTheComparison)
     {
         var release = _loadOrder.Require().GameRelease;
-                // With no active copy there is nothing to compare: the copy outside it stands alone.
+        // With no active copy there is nothing to compare: the copy outside it stands alone.
         var classification = committedOverrides.Count > 0
             ? _conflictClassifier.Classify(
                 committedOverrides, release, resolveFormKey, loadOrderFormIds, Indexed, outsideTheComparison)
