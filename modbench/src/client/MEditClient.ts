@@ -185,7 +185,7 @@ export type RecordAddress = components['schemas']['RecordAddress'];
 export type CopyMode = components['schemas']['CopyMode'];
 /** What copying one record into one destination changes in plugin source. A copy as new names the FormKey
  *  mEdit minted for it. */
-export type CopyChanges = components['schemas']['RecordCopyChanges'];
+type CopyChanges = components['schemas']['RecordCopyChanges'];
 /** One record into one destination: the unit a copy lands or is refused by. */
 export type CopyItem = Pick<CopyChanges, 'record' | 'destination'>;
 
