@@ -40,8 +40,6 @@ internal sealed class Reconciler(
     private string? _heldElsewhereMessage;
     // The same lifetime as _heldElsewhereMessage, for the reconcile's other known-unknown outcome.
     private string? _failureMessage;
-    // A hand-over's validation answers for its trees alone, so a clean one clears only this, never the
-    // reconcile's whole-set failure.
     private string? _handOverFailure;
     // The version the reconcile door last finished answering for: never a superseded attempt's,
     // since that one returns before reaching its own update.
@@ -210,19 +208,18 @@ internal sealed class Reconciler(
                 _handed.Clear();
             }
 
-            string? failure;
+            bool moved;
             _exclusive.Enter();
             try
             {
-                failure = ValidationFailure(() => ValidateTreesOf(paths));
+                var failure = ValidationFailure(() => ValidateTreesOf(paths));
+                lock (_lock)
+                {
+                    moved = _handOverFailure != failure;
+                    _handOverFailure = failure;
+                }
             }
             finally { _exclusive.Exit(); }
-            bool moved;
-            lock (_lock)
-            {
-                moved = _handOverFailure != failure;
-                _handOverFailure = failure;
-            }
             if (moved) PublishStatus();
         }
     }
