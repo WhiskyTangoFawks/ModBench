@@ -1,6 +1,8 @@
+import { isString } from '../../src/wire/messages';
 import { toStr } from './recordUtils';
 import { formKeyLabel } from './FormKeyLink';
-import { isFieldType, type FieldMetadata, type FormKeyResolution } from './types';
+import { isFieldType } from '../../src/wire/fieldType';
+import type { FieldMetadata, FormKeyResolution } from './types';
 
 // One definition of a cell's edit value, so the readout and what Ctrl+C copies cannot drift from
 // the editor (editor-fields.md, Every field, story 4). Struct/array is JSON, because an edit value
@@ -10,7 +12,7 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
   if (isFieldType(meta.type)) {
     switch (meta.type) {
       case 'formKey':
-        return typeof value === 'string' && value ? formKeyLabel(value, resolution) : '';
+        return isString(value) && value ? formKeyLabel(value, resolution) : '';
       case 'flags':
         return flagNames(value, meta).join(', ');
       case 'int':
@@ -112,7 +114,7 @@ export function flagsValue(names: readonly string[], meta: FieldMetadata): unkno
 // The codec spells a translated string as an object whose `Value` is the text.
 function translatedText(value: unknown): string | undefined {
   const text = (value as { Value?: unknown } | null | undefined)?.Value;
-  return typeof text === 'string' ? text : undefined;
+  return isString(text) ? text : undefined;
 }
 
 // The codec's own spelling of a translated string, with only its text changed.

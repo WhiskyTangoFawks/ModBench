@@ -1,4 +1,4 @@
-import type { components } from '../../src/wire/generated/api';
+import type { components } from './generated/api';
 
 type WireSchemas = components['schemas'];
 

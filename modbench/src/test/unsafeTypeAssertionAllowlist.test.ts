@@ -5,7 +5,7 @@ import ts from 'typescript';
 
 const RULE = '@typescript-eslint/no-unsafe-type-assertion';
 
-const HELPER_FILES = ['src/wire/columnKey.ts', 'webview/src/parseCompareResult.ts'];
+const HELPER_FILES = ['src/wire/columnKey.ts'];
 
 const RECORD_DOCUMENT_TRAVERSAL_FILES = [
   'webview/src/recordUtils.ts', 'webview/src/presentation.ts', 'webview/src/siblingsInUse.ts',
@@ -68,7 +68,7 @@ describe('the no-unsafe-type-assertion allowlist', () => {
     expect(offBlocks()).toHaveLength(2);
   });
 
-  it('names exactly these two single-function modules as helpers, each its own file', () => {
+  it('names exactly this single-function module as the helper', () => {
     const helperBlock = offBlocks().find((b) => b.files.includes('src/wire/columnKey.ts'));
 
     expect(helperBlock?.files).toEqual(HELPER_FILES);

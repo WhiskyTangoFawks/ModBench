@@ -263,7 +263,7 @@ function isModsByOrigin(value: unknown): value is Record<string, ModRepository> 
     && Object.values(value).every((state) => state === 'tracked' || state === 'untracked');
 }
 
-function isString(value: unknown): value is string {
+export function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
