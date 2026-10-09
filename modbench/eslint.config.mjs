@@ -96,7 +96,7 @@ function restrictedImports({ vscode, packages, path, client = false, inAdapter =
 
 // A view fires the commands the root bound to the Instance adapter; it takes only types from the core box.
 /** @type {Record<string, string[]>} */
-const BOUND_COMMAND_BOXES = { mods: ['modlist/modlist', 'install/install'], downloads: ['downloadsCommands/downloads'] };
+const BOUND_COMMAND_BOXES = { mods: ['modlist/modlist', 'install/install'], downloads: ['downloadsCommands/downloads'], toolbox: ['instanceCommands/instanceCommands'] };
 /** @param {string} view */
 const boundCommandImports = (view) => ['error', {
     patterns: BOUND_COMMAND_BOXES[view].map((core) => ({
