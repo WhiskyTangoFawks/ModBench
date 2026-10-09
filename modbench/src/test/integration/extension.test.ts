@@ -101,11 +101,17 @@ function documentTextOf(body: string): unknown {
   return typeof parsed === 'object' && parsed !== null && 'documentText' in parsed ? parsed.documentText : undefined;
 }
 
+/** What mEdit reads of the tracked file when asked: the text it was handed, else the file. */
+function trackedTextHeld(): string {
+  const held = handedUnsaved.at(-1)?.find((each) => isRecord(each) && each.path === TRACKED_FS_PATH);
+  return isRecord(held) && typeof held.text === 'string' ? held.text : readFileSync(TRACKED_FILE, 'utf8');
+}
+
 interface EditAsked { value: unknown; text: string }
 function editAskedOf(body: string): EditAsked {
   const parsed: unknown = JSON.parse(body);
-  if (!isRecord(parsed) || !isRecord(parsed.edit) || typeof parsed.text !== 'string') throw new Error(`expected an edit and a text, got: ${body}`);
-  return { value: parsed.edit.value, text: parsed.text };
+  if (!isRecord(parsed) || !isRecord(parsed.edit)) throw new Error(`expected an edit, got: ${body}`);
+  return { value: parsed.edit.value, text: trackedTextHeld() };
 }
 const editsAsked: EditAsked[] = [];
 const carriedIn = new Map<string, string>();
@@ -332,10 +338,9 @@ function createMockBackend(): http.Server {
       return;
     }
     if (method === 'POST' && url === '/records/delete-changes') {
-      let body = '';
-      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.resume();
       req.on('end', () => {
-        deletesAsked.push(JSON.parse(body));
+        deletesAsked.push({ held: handedUnsaved.at(-1) });
         res.writeHead(answerDelete.status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(answerDelete.body));
       });
@@ -1039,7 +1044,7 @@ describe('deleting a record in a tracked copy', () => {
     answerDelete = { status: 200, body: { applied: [], refused: [] } };
   });
 
-  it('reads the dirty plugin source in place of its file, deletes the answered folder recursively, and saves the rewritten document', async () => {
+  it('asks after mEdit was handed the dirty plugin source, deletes the answered folder recursively, and saves the rewritten document', async () => {
     mkdirSync(path.join(folder, 'Nested'), { recursive: true });
     writeFileSync(path.join(folder, 'Nested', 'Child.json'), '{}');
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
@@ -1060,8 +1065,7 @@ describe('deleting a record in a tracked copy', () => {
     });
 
     const asked = deletesAsked.at(-1);
-    assert.ok(isRecord(asked) && Array.isArray(asked.documents));
-    assert.deepStrictEqual(asked.documents, [{ path: TRACKED_FS_PATH, text: unsavedText }]);
+    assert.deepStrictEqual(asked, { held: [{ path: TRACKED_FS_PATH, text: unsavedText }] });
     assert.ok(!existsSync(folder), 'the answered folder should be deleted with what is in it');
     assert.strictEqual(readFileSync(TRACKED_FILE, 'utf8'), 'rewritten');
     assert.ok(!document.isDirty, 'the rewritten document should be saved');
