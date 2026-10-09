@@ -7,11 +7,9 @@ import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
 
-/** `notApplied` and `unsaved` have been reported by whoever applied the changes. */
-export type SourceApplied = 'saved' | 'unsaved' | 'notApplied';
-
 interface RenameSourceEditing {
-  readonly applyAndSave: (changes: SourceChanges) => Promise<SourceApplied>;
+  /** Resolves whether the changes were applied; a failure has been reported by whoever applied them. */
+  readonly apply: (changes: SourceChanges) => Promise<boolean>;
 }
 
 export interface PluginRenameAccess {
@@ -80,8 +78,7 @@ export async function renamePlugin(
 
   const changes = await access.client.getRenameSourceChanges(plugin, newName);
   if (isRefused(changes)) return { applied: false, sourceRenamed: false, refusal: changes.message };
-  const savedAs = await access.source.applyAndSave(changes);
-  if (savedAs !== 'saved') return { applied: false, reported: true };
+  if (!await access.source.apply(changes)) return { applied: false, reported: true };
 
   const moved = await access.client.moveLastWritten(plugin, changes.treeName, newName);
   if (isRefused(moved)) return { applied: false, sourceRenamed: true, refusal: moved.message };
