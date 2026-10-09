@@ -24,6 +24,7 @@ internal static class WriteFailure
     {
         SourceFailure.Ambiguous => RecordEditRefusal.AmbiguousSourceUnit,
         SourceFailure.NotCarried => RecordEditRefusal.SourceUnitNotFound,
+        SourceFailure.SlotHeld => RecordEditRefusal.ChildSlotHeldByAnotherRecord,
         SourceFailure.Unreadable => RecordEditRefusal.RecordParseFailed,
         SourceFailure.GitUnavailable => RecordEditRefusal.GitUnavailable,
         SourceFailure.Inaccessible or SourceFailure.GitFailed => RecordEditRefusal.SourceAccessFailed,

@@ -63,6 +63,23 @@ internal sealed class SourceRepositoryWrites(
             : ChangesToPlace(plugin, cell, PlacementIn(worldspace, cell));
     }
 
+    /// <summary>What putting a new child at the end of <paramref name="slot"/> of <paramref name="container"/>
+    /// changes: the container's own text with the child appended, rewritten as <see cref="ChangesToRewrite"/> says.</summary>
+    internal SourceChanges ChangesToPutChild(PluginAddress plugin, RecordIdentity container, string slot, SourceDocument child)
+    {
+        var unit = locator.Locate(plugin, container) is { } held && (held.IsEmbedded || File.Exists(held.FullPath))
+            ? held
+            : throw SourceStopException.NotCarried(
+                $"No document in {plugin.Name}'s tree holds {container.FormKey}, so there is no slot to put a child in. " +
+                SourceFailure.NotCarried.MovedOrRemovedOutside);
+        var containerText = DocumentText.RecordBodyFromOwnerBytes(OwnerBytes(unit), unit, container.FormKey, _release)
+            ?? throw NoLongerCarried(unit, container.FormKey);
+        var withChild = Read(() => ContainerDocumentEdits.WithChildAppended(
+                containerText, _release, container.RecordType, container.FormKey, slot, child.Body, child.RecordType))
+            ?? throw NoLongerCarried(unit, container.FormKey);
+        return ChangesToHeld(unit, new SourceDocument(container.FormKey, container.RecordType, container.EditorId, withChild));
+    }
+
     /// <summary>What rewriting a document the tree holds changes: its text, inside its owner's when embedded, and
     /// the move to its leaf name. One no document holds throws, since an edit never creates.</summary>
     internal SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) =>
@@ -143,6 +160,10 @@ internal sealed class SourceRepositoryWrites(
         try
         {
             return read();
+        }
+        catch (ChildSlotHeldByAnotherRecordException ex)
+        {
+            throw SourceStopException.Of(new SourceFailure.SlotHeld(ex.Message), ex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

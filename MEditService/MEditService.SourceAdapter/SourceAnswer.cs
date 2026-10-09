@@ -95,6 +95,14 @@ public abstract record SourceFailure
             $"{relativePath} was found holding {formKey}, but its own text does not carry it. {DefectOrOutsideChange}";
     }
 
+    /// <summary>A single-value slot a child is put in already holds another record.</summary>
+    public sealed record SlotHeld : SourceFailure
+    {
+        internal SlotHeld(string reason) : base(reason)
+        {
+        }
+    }
+
     /// <summary>git cannot be run (ADR-0007).</summary>
     public sealed record GitUnavailable : SourceFailure
     {
