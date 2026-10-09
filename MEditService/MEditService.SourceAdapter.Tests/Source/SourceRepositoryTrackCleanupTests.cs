@@ -97,7 +97,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     [Fact]
     public void Track_WhenAPluginsWriteThrowsAnythingElse_TakesBackEveryPluginsFiles_AndThrows()
     {
-        var nulInPath = new TreeFile("plugin-source/Bad.esp/npc_/\0.json", "{}"u8.ToArray());
+        var nulInPath = new TreeFile("npc_/\0.json", "{}"u8.ToArray());
 
         Assert.ThrowsAny<ArgumentException>(
             () => SourceRepository.Track(_modFolder, [Baseline("A.esp"), ([nulInPath], new DecompiledPlugin("Bad.esp", null))]));
@@ -213,7 +213,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     {
         var theirs = Path.Combine(_modFolder, "plugin-source", "A.esp", "theirs.txt");
         var files = new FilesThatFailMidway(
-            new TreeFile("plugin-source/A.esp/npc_/A.esp/000001.json", "{}"u8.ToArray()),
+            new TreeFile("npc_/A.esp/000001.json", "{}"u8.ToArray()),
             () => File.WriteAllText(theirs, "theirs"));
 
         var failure = Assert.Throws<AggregateException>(
@@ -287,12 +287,12 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     }
 
     private static (IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin) Baseline(string plugin) =>
-        ([new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())], new DecompiledPlugin(plugin, null));
+        ([new TreeFile($"npc_/{plugin}/000001.json", "{}"u8.ToArray())], new DecompiledPlugin(plugin, null));
 
     private static (IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin) BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies(string plugin) =>
         ([
-            new TreeFile($"plugin-source/{plugin}/npc_", "{}"u8.ToArray()),
-            new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()),
+            new TreeFile("npc_", "{}"u8.ToArray()),
+            new TreeFile($"npc_/{plugin}/000001.json", "{}"u8.ToArray()),
         ], new DecompiledPlugin(plugin, null));
 
     private string[] SubjectsOnMain() =>

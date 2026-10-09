@@ -14,7 +14,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     private readonly ScratchDirectory _modFolder = new("medit-replace-source-");
 
     public SourceRepositoryReplaceSourceTests() =>
-        PluginBaselines.Track(_modFolder, [File("npc_/A.esp/000001.json", "{\"was\":1}")]);
+        SourceRepository.Track(_modFolder, [([File("npc_/A.esp/000001.json", "{\"was\":1}")], new DecompiledPlugin(Plugin, null))]);
 
     public void Dispose() => _modFolder.Dispose();
 
@@ -26,6 +26,14 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.Equal(["npc_/A.esp/000002.json"], FilesUnderRoot());
         Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address));
         Assert.Equal(" D plugin-source/A.esp/npc_/A.esp/000001.json", Git("status", "--porcelain", "--untracked-files=no").TrimEnd('\n'));
+    }
+
+    [Fact]
+    public void ReplaceSourceFrom_TakesTheDoorsTree_SoItsRootDocumentLandsAsTheHeader()
+    {
+        Repository.ReplaceSourceFrom(Address, [new TreeFile("RecordData.json", "{}"u8.ToArray())], Sha);
+
+        Assert.Equal(["000000_A.esp.json"], FilesUnderRoot());
     }
 
     [Fact]
@@ -199,7 +207,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     private string Root => PluginSourceRoot.In(_modFolder, Plugin);
 
     private static TreeFile File(string underRoot, string text) =>
-        new($"plugin-source/{Plugin}/{underRoot}", System.Text.Encoding.UTF8.GetBytes(text));
+        new(underRoot, System.Text.Encoding.UTF8.GetBytes(text));
 
     private string[] FilesUnderRoot() =>
         [.. Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories)
@@ -229,7 +237,7 @@ public sealed class SourceRepositoryReplaceSourceWithoutGitTests : IDisposable
         try
         {
             Assert.Throws<System.ComponentModel.Win32Exception>(() => repository.ReplaceSourceFrom(
-                new PluginAddress("A.esp", "TestMod"), [new TreeFile("plugin-source/A.esp/npc_/A.esp/000002.json", "{}"u8.ToArray())], "ABCDEF0123"));
+                new PluginAddress("A.esp", "TestMod"), [new TreeFile("npc_/A.esp/000002.json", "{}"u8.ToArray())], "ABCDEF0123"));
         }
         finally
         {

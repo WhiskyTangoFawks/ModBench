@@ -39,7 +39,7 @@ internal sealed class NewRecordCopy
         var (source, identity, destination, release, _) = copy;
         if (RefuseIfDisallowedForCopyAsNewRecord(identity.RecordType, RecordTypes.For(release)) is { } disallowedRefusal) return disallowedRefusal;
 
-        if (RecordTypes.For(release).FolderNameFor(identity.RecordType) is null
+        if (RecordTypes.For(release).GroupOf(identity.RecordType) is null
             && source.ContainerOf(identity) is { } container)
         {
             return CopyEmbeddedChildAsNewRecord(copy, container, destinationPlugin);

@@ -65,35 +65,20 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// writes to (ADR-0003).</summary>
     public static bool HoldsAnotherRepository(string modFolder) => SourceRepositoryGit.HoldsAnotherRepository(modFolder);
 
-    /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and
-    /// decompile write.</summary>
-    public static IReadOnlyList<TreeFile> PristineFilesOf(string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
-        SourceRepositoryLayout.PristineFilesOf(pluginFileName, treeFiles);
-
-    /// <summary>Files of <see cref="PristineFilesOf"/> as the whole-mod door reads them.</summary>
-    public static IReadOnlyList<TreeFile> DoorFilesOf(
-        string pluginFileName, IEnumerable<TreeFile> files, GameRelease gameRelease) =>
-        SourceRepositoryLayout.DoorFilesOf(pluginFileName, files, gameRelease);
-
-    /// <summary><paramref name="doorText"/>, the door's words about <paramref name="pluginFileName"/>'s tree,
-    /// with the header's file named as the layout names it.</summary>
-    public static string SourceTextOf(
-        string pluginFileName, string doorText, IEnumerable<TreeFile> files, GameRelease gameRelease) =>
-        SourceRepositoryLayout.SourceTextOf(pluginFileName, doorText, files, gameRelease);
+    /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="TreeOf"/> answers it once written:
+    /// what a round-trip gate compiles, so that it compiles what is written.</summary>
+    public static IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
+        SourceRepositoryLayout.DoorTreeOf(pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, tree), gameRelease);
 
     /// <summary>Throws <see cref="GitUnavailableException"/> when git cannot be run, so no repository
     /// can be made or written here.</summary>
     public static void EnsureTrackable() => GitCli.EnsureOnPath();
 
-    /// <summary>A repository for a mod that has none: one commit, <c>Track &lt;mod&gt;</c>, holding every plugin that
-    /// tracked, on <c>main</c>, which stays checked out. Answers each plugin whose files could not be written.</summary>
+    /// <summary>A repository for a mod that has none: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>, of
+    /// each plugin's door tree. Answers each plugin whose files could not be written.</summary>
     public static IReadOnlyList<(string Plugin, string Reason)> Track(
-        string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin)> plugins) =>
+        string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins) =>
         GitTracking.Track(modFolder, plugins);
-
-    /// <summary>A scratch folder for <paramref name="pluginFileName"/>, outside every mod folder so
-    /// a half-written plugin is never mistaken for a tracked one.</summary>
-    public static ScratchPlugin ScratchFor(string pluginFileName) => ScratchPlugin.For(pluginFileName);
 
     /// <summary>The stamp of one document's text, as the UTF-8 the index stores it in: every side hashes
     /// through here, so a file that is not valid UTF-8 stamps alike on disk and in the index.</summary>
@@ -229,9 +214,19 @@ public sealed class SourceRepository : ISourceRepositoryReads
         PluginAddress plugin) =>
         new SourceTreeDocuments(_modFolder, plugin.Name, _release);
 
-    /// <summary>Every file one plugin's source tree holds in the working tree, relative to the mod
-    /// folder — the carrier Track hands in, handed back out. Empty when there is no source there.</summary>
-    public PluginSourceFiles FilesOf(PluginAddress plugin) => Locator.FilesOf(plugin);
+    /// <summary>The plugin's source in the working tree as the whole-mod door reads it, empty when there is
+    /// none. A directory holding several documents, none named for it, throws
+    /// <see cref="AmbiguousSourceUnitException"/>.</summary>
+    public PluginSourceFiles TreeOf(PluginAddress plugin)
+    {
+        var held = Locator.FilesOf(plugin);
+        return held with { Files = SourceRepositoryLayout.DoorTreeOf(plugin.Name, held.Files, _release) };
+    }
+
+    /// <summary><paramref name="diagnosis"/> of a read of <see cref="TreeOf"/>'s tree, each file it names
+    /// named as this tree holds it, relative to the mod folder.</summary>
+    public PluginDiagnosis InSourceNames(PluginAddress plugin, PluginDiagnosis diagnosis) =>
+        SourceRepositoryLayout.InSourceNames(plugin.Name, diagnosis, Locator.FilesOf(plugin).Files, _release);
 
     /// <summary>Which of <paramref name="formKeys"/> more than one document claims. Asked of the
     /// files, not of the compiled mod: the reader's FormKey-keyed RecordCache collapses two documents
@@ -239,7 +234,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     public IReadOnlyList<string> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys) =>
         PluginSourceChecks.CollidingFormKeys(plugin.Name, Locator.FilesOf(plugin), formKeys, _release);
 
-    /// <summary>Where the source and <paramref name="serialized"/>, the door's tree, first part ways,
+    /// <summary>Where the source and <paramref name="serialized"/>, the whole-mod door's tree, first part ways,
     /// and the files held at another leaf name than the layout's. An unreadable file outranks the rest.</summary>
     public SourceComparison Compare(PluginAddress plugin, IReadOnlyList<TreeFile> serialized) =>
         PluginSourceChecks.Compare(plugin.Name, Locator.FilesOf(plugin), serialized);
@@ -286,13 +281,13 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// stopped it.</summary>
     public SourceRemoval Remove(PluginAddress plugin, RecordIdentity identity) => Writes.Remove(plugin, identity);
 
-    /// <summary>The plugin's source in the working tree becomes <paramref name="files"/>, and the
-    /// last-compile ref names only the binary they were read from. A failure leaves both as they
+    /// <summary>The plugin's source in the working tree becomes <paramref name="tree"/>, the whole-mod door's,
+    /// and the last-compile ref names only the binary it was read from. A failure leaves both as they
     /// were.</summary>
-    public void ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> files, string binarySha256)
+    public void ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256)
     {
         RefuseUnlessProvidedByThisMod(plugin);
-        Writes.ReplaceSourceFrom(plugin.Name, files, binarySha256);
+        Writes.ReplaceSourceFrom(plugin.Name, SourceRepositoryLayout.PristineFilesOf(plugin.Name, tree), binarySha256);
     }
 
     /// <summary>The plugin's source and what Modbench last wrote move to <paramref name="newName"/>, and

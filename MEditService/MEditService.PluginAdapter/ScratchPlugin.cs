@@ -1,14 +1,14 @@
-namespace MEditService.SourceAdapter;
+namespace MEditService.PluginAdapter;
 
-/// <summary>A folder holding one recompiled plugin and nothing else, removed on dispose. Where those
-/// bytes land is the repository's answer (ADR-0014); what they mean is the caller's.</summary>
+/// <summary>A folder holding one recompiled plugin and nothing else, outside every mod folder so a
+/// half-written plugin is never mistaken for a tracked one; removed on dispose.</summary>
 public sealed class ScratchPlugin : IDisposable
 {
     private readonly string _folder;
 
     private ScratchPlugin(string folder, string pluginPath) => (_folder, PluginPath) = (folder, pluginPath);
 
-    internal static ScratchPlugin For(string pluginFileName)
+    public static ScratchPlugin For(string pluginFileName)
     {
         var folder = Directory.CreateTempSubdirectory("medit-trackverify-").FullName;
         return new ScratchPlugin(folder, Path.Combine(folder, pluginFileName));

@@ -28,7 +28,7 @@ internal static class TrackedMods
 
         SourceRepository.Track(
             modFolder,
-            [(SourceRepository.PristineFilesOf(pluginName, files),
+            [(files,
               new DecompiledPlugin(pluginName, PluginBinaryHash.TrailerFormOfFile(pluginPath)))]);
     }
 

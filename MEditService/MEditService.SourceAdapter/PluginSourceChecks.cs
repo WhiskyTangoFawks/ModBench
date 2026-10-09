@@ -4,8 +4,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>A plugin's whole source tree, and the file the read stopped at. Files is empty when one
-/// is named: half a tree compiles to a binary missing records.</summary>
+/// <summary>A plugin's whole source tree, and the file the read stopped at, relative to the mod folder.
+/// Files is empty when one is named: half a tree compiles to a binary missing records.</summary>
 public sealed record PluginSourceFiles(IReadOnlyList<TreeFile> Files, string? Unreadable);
 
 public enum SourceDivergenceKind
