@@ -21,7 +21,7 @@ public static class ByteSliceHex
     /// <summary>Hex, with an optional <c>0x</c> prefix, or Mutagen's <c>"[]"</c> for an empty
     /// slice. Odd-length and non-hex text have no byte reading and decline here rather than being
     /// silently truncated to one.</summary>
-    public static bool TryParseHex(string text, out byte[] bytes)
+    internal static bool TryParseHex(string text, out byte[] bytes)
     {
         if (text == "[]") { bytes = []; return true; }
 

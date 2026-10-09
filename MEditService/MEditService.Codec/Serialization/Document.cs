@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using ChildDocument = MEditService.Codec.Serialization.ContainerDocuments.ChildDocument;
 
@@ -7,7 +8,7 @@ namespace MEditService.Codec.Serialization;
 
 /// <summary>A record's document: the JSON document itself, addressed by path, and the only model of the
 /// record (ADR-0005).</summary>
-internal sealed class Document
+public sealed class Document
 {
     private const string NoObjectRoot = "its root is not a JSON object.";
 
@@ -16,8 +17,13 @@ internal sealed class Document
     private Document(JsonElement root) => _root = root;
 
     /// <summary>False, with the reader's words, when the text is no JSON or its root is no object.</summary>
-    internal static bool TryRead(string text, [NotNullWhen(true)] out Document? document, [NotNullWhen(false)] out string? whyNot) =>
+    public static bool TryRead(string text, [NotNullWhen(true)] out Document? document, [NotNullWhen(false)] out string? whyNot) =>
         TryParse(() => JsonElement.Parse(text), out document, out whyNot);
+
+    /// <summary>Text already known to be a record's document; throws, with the reader's words, for text
+    /// that is none.</summary>
+    public static Document Parse(string text) =>
+        TryRead(text, out var document, out var whyNot) ? document : throw new InvalidDataException(whyNot);
 
     internal static Document? Read(byte[] utf8) => TryParse(() => JsonElement.Parse(utf8), out var document, out _) ? document : null;
 
@@ -47,8 +53,80 @@ internal sealed class Document
 
     /// <summary>The string at <paramref name="path"/>, one member name per hop from the root; null where the
     /// document omits it or holds no string there.</summary>
-    internal string? StringAt(params ReadOnlySpan<string> path) =>
+    public string? StringAt(params ReadOnlySpan<string> path) =>
         At(path) is { ValueKind: JsonValueKind.String } value ? DocumentNodes.StringValueOf(value) : null;
+
+    /// <summary>The integer at <paramref name="path"/>; null where the document omits it or holds no
+    /// integer there.</summary>
+    public long? IntegerAt(params ReadOnlySpan<string> path) =>
+        At(path) is { ValueKind: JsonValueKind.Number } value && value.TryGetInt64(out var integer) ? integer : null;
+
+    /// <summary>The object at <paramref name="path"/>, read as a document of its own.</summary>
+    public Document? DocumentAt(params ReadOnlySpan<string> path) => At(path) is { } node ? Over(node) : null;
+
+    /// <summary>The document's text, written compact.</summary>
+    public string Text => JsonSerializer.Serialize(_root);
+
+    public Document With(long value, params ReadOnlySpan<string> path)
+    {
+        var member = path[^1];
+        var owner = path[..^1].ToArray();
+        return Edited(root => OwnerAt(root, owner)[member] = value);
+    }
+
+    /// <summary>The member at <paramref name="path"/> as <paramref name="from"/> holds it, absent where
+    /// <paramref name="from"/> omits it.</summary>
+    public Document WithCopyOf(Document from, params ReadOnlySpan<string> path)
+    {
+        if (from.At(path) is not { ValueKind: not JsonValueKind.Null } copied) return Without(path);
+        var member = path[^1];
+        var owner = path[..^1].ToArray();
+        return Edited(root => OwnerAt(root, owner)[member] = JsonNode.Parse(copied.GetRawText()));
+    }
+
+    public Document Without(params ReadOnlySpan<string> path)
+    {
+        if (At(path) is null) return this;
+        var member = path[^1];
+        var owner = path[..^1].ToArray();
+        return Edited(root => OwnerAt(root, owner).Remove(member));
+    }
+
+    /// <summary>This document without the other spellings of <paramref name="column"/>'s value, which sit beside
+    /// the member they spell again and which the reader takes over it.</summary>
+    public Document WithoutAliasesOf(ColumnSpec column)
+    {
+        var owner = (column.Synthetic?.BackingPath ?? column.PropertyName).Split('.')[..^1];
+        var document = this;
+        foreach (var alias in column.Aliases) document = document.Without([.. owner, alias]);
+        return document;
+    }
+
+    /// <summary>A copy of this document changed by <paramref name="edit"/> on its mutable tree.</summary>
+    internal Document Edited(Action<JsonObject> edit)
+    {
+        var root = Tree();
+        edit(root);
+        return Of(root);
+    }
+
+    internal JsonObject Tree() =>
+        JsonNode.Parse(_root.GetRawText()) as JsonObject
+            ?? throw new InvalidOperationException("Expected a document's root to stay a JSON object.");
+
+    internal static Document Of(JsonObject root) => new(JsonElement.Parse(root.ToJsonString()));
+
+    // The object at the path, made where the document omits it.
+    private static JsonObject OwnerAt(JsonObject root, string[] path)
+    {
+        var owner = root;
+        foreach (var hop in path)
+        {
+            if (owner[hop] is not JsonObject inner) owner[hop] = inner = new JsonObject();
+            owner = inner;
+        }
+        return owner;
+    }
 
     internal JsonElement? At(params ReadOnlySpan<string> path)
     {

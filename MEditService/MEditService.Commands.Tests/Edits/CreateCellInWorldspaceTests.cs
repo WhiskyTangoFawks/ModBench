@@ -1,4 +1,3 @@
-using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -78,7 +77,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var created = result.NewFormKey.Require();
         Assert.Equal(_edited.ModKey, FormKey.Factory(created).ModKey);
-        var cell = JsonNode.Parse(TrackedTree.Body(_plugins.FolderOf(_edited), Edited, created)).Require().AsObject();
+        var cell = Document.Parse(TrackedTree.Body(_plugins.FolderOf(_edited), Edited, created));
         Assert.Equal((x, y), PlacedCell.Grid(cell));
         Assert.False(PlacedCell.IsInterior(cell));
         var file = TrackedTree.DocumentFile(_plugins.FolderOf(_edited), Edited, created).Require();
@@ -104,10 +103,9 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     {
         var before = Tree;
         var file = _plugins.DocumentFileOf(_edited, _ownCell);
-        var moved = JsonNode.Parse(File.ReadAllText(file)).Require().AsObject();
-        moved[RecordTypes.CellGridMember] = PlacedCell.GridAt(20, 21);
+        var moved = PlacedCell.WithGrid(Document.Parse(File.ReadAllText(file)), 20, 21);
 
-        _plugins.Unsaved.Apply([new DocumentChange(file, moved.ToJsonString())]);
+        _plugins.Unsaved.Apply([new DocumentChange(file, moved.Text)]);
 
         var (outcome, changes) = _plugins.CreateHandler.CreateRecord(Edited, "cell", World.ToString(), new GridPosition(5, 6));
 
@@ -122,10 +120,9 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         using var trackedMaster = new LoadOrderOfPlugins();
         trackedMaster.Load((_master, true), (_edited, true));
         var file = trackedMaster.DocumentFileOf(_master, MasterCell);
-        var moved = JsonNode.Parse(File.ReadAllText(file)).Require().AsObject();
-        moved[RecordTypes.CellGridMember] = PlacedCell.GridAt(20, 21);
+        var moved = PlacedCell.WithGrid(Document.Parse(File.ReadAllText(file)), 20, 21);
 
-        trackedMaster.Unsaved.Apply([new DocumentChange(file, moved.ToJsonString())]);
+        trackedMaster.Unsaved.Apply([new DocumentChange(file, moved.Text)]);
 
         var (outcome, _) = trackedMaster.CreateHandler.CreateRecord(Edited, "cell", World.ToString(), new GridPosition(3, 3));
 

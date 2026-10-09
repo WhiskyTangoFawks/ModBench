@@ -1,4 +1,3 @@
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -90,7 +89,7 @@ internal sealed class LoadOrderResolution(
                 return new GridCellHolder.Unreadable(
                     left.Refusal(spelled, $"{subject} is read from the nearest of {plugin.Name}'s masters"));
             case LeftCopy.Found found:
-                var formKey = GridCellHolder.FormKeyOf(JsonNode.Parse(found.Text) as JsonObject);
+                var formKey = GridCellHolder.FormKeyOf(Document.Parse(found.Text));
                 if (!repository.Get(plugin, formKey).Holds(out var copy, out failure)) return Unreadable(failure);
                 return copy is not null ? new GridCellHolder.Plugins(copy) : new GridCellHolder.Masters(found, formKey);
             default:
@@ -108,24 +107,24 @@ internal sealed class LoadOrderResolution(
     {
         /// <summary>The nearest master's copy of <paramref name="formKey"/> that <paramref name="says"/> accepts,
         /// passing over one whose header holds a flag of <paramref name="passOver"/>. An unreadable copy ends the walk.</summary>
-        internal LeftCopy NearestCopy(string formKey, Func<JsonObject, bool> says, long passOver = 0) =>
+        internal LeftCopy NearestCopy(string formKey, Func<Document, bool> says, long passOver = 0) =>
             Walk(formKey, source => source.Identity(formKey).Then<string?>(held =>
             {
                 if (held is not { } identity) return (string?)null;
                 return source.RecordFlags(identity).Then<string?>(flags =>
                     passOver != 0 && (flags & passOver) != 0
                         ? (string?)null
-                        : source.Body(identity).Then<string?>(body => JsonNode.Parse(body) is JsonObject copy && says(copy) ? body : null));
+                        : source.Body(identity).Then<string?>(body => says(Document.Parse(body)) ? body : null));
             }));
 
         /// <summary>The copy saying where <paramref name="cell"/> sits is its own, else its nearest copy to the left
         /// (xEdit's highest override). A refusal when the walk cannot read, <paramref name="unsaid"/> when none says.</summary>
         internal RecordEditResult? WhereItSits(
-            JsonObject cell, string spelled, string needs, Func<RecordEditResult> unsaid, out JsonObject said)
+            Document cell, string spelled, string needs, Func<RecordEditResult> unsaid, out Document said)
         {
             said = cell;
             if (PlacedCell.Says(cell)) return null;
-            var copy = cell[RecordMembers.FormKey]?.GetValue<string>() is { } formKey ? NearestCopy(formKey, PlacedCell.Says) : null;
+            var copy = cell.StringAt(RecordMembers.FormKey) is { } formKey ? NearestCopy(formKey, PlacedCell.Says) : null;
             if (copy is LeftCopy.Unreadable unreadable) return unreadable.Refusal(spelled, needs);
             if (PlacedCell.SaidBy(cell, copy?.FoundText) is not { } found) return unsaid();
             said = found;

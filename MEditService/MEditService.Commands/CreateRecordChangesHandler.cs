@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -48,16 +46,7 @@ public sealed class CreateRecordChangesHandler
     private static RecordEditResult MalformedPosition(string why) =>
         RecordEditResult.Refused(RecordEditRefusal.InvalidEnvelope, $"A grid position is for a cell in a worldspace, and the request {why}.");
 
-    private static JsonObject ObjectOf(string document, string what) =>
-        JsonNode.Parse(document) as JsonObject
-            ?? throw new InvalidOperationException($"Expected {what}'s document to hold a JSON object.");
-
-    private static string AsInteriorCell(string bareCell)
-    {
-        var cell = ObjectOf(bareCell, "a minted cell");
-        PlacedCell.MarkInterior(cell);
-        return cell.ToJsonString();
-    }
+    private static string AsInteriorCell(string bareCell) => PlacedCell.MarkedInterior(Document.Parse(bareCell)).Text;
 
     private Answer<RecordEditChanges, SourceFailure> MintRecord(PluginAddress plugin, string recordType, string? container, GridPosition? position)
     {
@@ -135,8 +124,7 @@ public sealed class CreateRecordChangesHandler
             place = cell?.Place;
         }
 
-        using var parsed = JsonDocument.Parse(containerDocument.Body);
-        var childSlot = ChildRecordTypes.SlotFor(containerType, parsed.RootElement, place, recordType, release);
+        var childSlot = ChildRecordTypes.SlotFor(containerType, containerDocument.Body, place, recordType, release);
         var containerHoldsIt = childSlot is not ChildSlot.NotHeld;
         if (exteriorCell && containerHoldsIt)
         {
@@ -148,9 +136,8 @@ public sealed class CreateRecordChangesHandler
         switch (childSlot)
         {
             case ChildSlot.Open(var slot):
-                var root = JsonObject.Create(parsed.RootElement)
-                    ?? throw new InvalidOperationException($"Expected {container}'s document to hold a JSON object.");
-                return AppendChild(batch, plugin, recordType, schema, release, new Landing(target.Identity, root, slot));
+                return AppendChild(
+                    batch, plugin, recordType, schema, release, new Landing(target.Identity, Document.Parse(containerDocument.Body), slot));
             case ChildSlot.Filled(var slot, var held):
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ChildSlotHeldByAnotherRecord,
@@ -186,9 +173,10 @@ public sealed class CreateRecordChangesHandler
         }
 
         if (!FormKeyAllocator.Over(repository, plugin, release).Holds(out var allocator, out var unread)) return unread;
-        if (GridCells.Mint(allocator, schemas[recordType], release, grid, out var cell) is { } exhausted) return exhausted;
+        if (GridCells.Mint(allocator, schemas[recordType], release, grid, out var minted) is { } exhausted) return exhausted;
+        var cell = minted ?? throw new InvalidOperationException("Expected Mint to answer a cell when it does not refuse.");
         var formKey = GridCellHolder.FormKeyOf(cell);
-        var text = RecordTextCodec.RoundTrip(cell.ToJsonString(), release, recordType);
+        var text = RecordTextCodec.RoundTrip(cell.Text, release, recordType);
         if (SourceTransaction.Atomically(repository, transaction =>
             {
                 transaction.Apply(repository.ChangesToPutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace));
@@ -207,7 +195,7 @@ public sealed class CreateRecordChangesHandler
         return Landed(batch, formKey);
     }
 
-    private sealed record Landing(RecordIdentity Container, JsonObject Root, string Slot);
+    private sealed record Landing(RecordIdentity Container, Document Root, string Slot);
 
     private Answer<RecordEditChanges, SourceFailure> AppendChild(
         SourceBatch batch, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
@@ -217,10 +205,10 @@ public sealed class CreateRecordChangesHandler
         var (container, root, slot) = landing;
         if (!FormKeyAllocator.Over(repository, plugin, release).Holds(out var allocator, out var unread)) return unread;
         if (allocator.Next(out var formKey) is { } refusedTarget) return refusedTarget;
-        var child = ObjectOf(RecordMint.BareDocument(schema, release, formKey, editorId: null), $"the minted {recordType}");
-        if (!PlacedCell.TryAsCreatedIn(child, slot, root, release, out var unplaceable))
+        var bare = Document.Parse(RecordMint.BareDocument(schema, release, formKey, editorId: null));
+        if (!PlacedCell.TryAsCreatedIn(bare, slot, root, release, out var child, out var unplaceable))
             return RecordEditResult.Refused(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, unplaceable);
-        var childDocument = new SourceDocument(formKey.ToString(), recordType, null, child.ToJsonString());
+        var childDocument = new SourceDocument(formKey.ToString(), recordType, null, child.Text);
 
         if (SourceTransaction.Atomically(repository, transaction =>
             {

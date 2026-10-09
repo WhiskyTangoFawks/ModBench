@@ -3,7 +3,6 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
-using MEditService.Commands.Tests.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -172,7 +171,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
 
     private static IEnumerable<string> Strays(string gesture, string before, string after, string path)
     {
-        var diffs = ConditionEditTests.DocumentDiff(before, after);
+        var diffs = DocumentDiffs.Of(before, after);
         if (diffs.Count == 0) yield return $"{gesture}: nothing changed";
         foreach (var stray in diffs.Where(d => !d.StartsWith(path, StringComparison.Ordinal)))
             yield return $"{gesture}: {stray}";

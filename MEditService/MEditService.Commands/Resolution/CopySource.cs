@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -52,16 +50,7 @@ internal sealed class CopySource(
         if (_tree is not { } tree)
             return FromFile(records => records.RecordFlagsOf(identity.FormKey)).Then<long>(flags => flags ?? throw NoLongerHeld(identity.FormKey));
         return BodyInTheTree(tree, identity).Then<long>(body =>
-        {
-            try
-            {
-                return JsonNode.Parse(body) is JsonObject document ? RecordFlagsWrite.HeldBy(document) : 0;
-            }
-            catch (JsonException ex)
-            {
-                return CopyRead<long>.Unreadable(ex.Message);
-            }
-        });
+            Codec.Serialization.Document.TryRead(body, out var document, out var whyNot) ? RecordFlagsWrite.HeldBy(document) : CopyRead<long>.Unreadable(whyNot));
     }
 
     /// <summary>Whether the record's header carries Partial Form, on a type that can.</summary>

@@ -6,13 +6,13 @@ namespace MEditService.Codec.Schema;
 
 /// <summary>How the codec spells a leaf and what it may change in one it kept: hex prefixes, colour and
 /// vector spellings, flag bits, the unset-link and empty-hex sentinels, and a leaf's minted default.</summary>
-public static class LeafSpelling
+internal static class LeafSpelling
 {
     private const string UnsetLink = "Null";
     private const string EmptyHex = "[]";
 
     /// <summary>Two leaves spelling one value under the leaf's type.</summary>
-    public static bool Same(JsonValue written, JsonValue patched, FieldMetadata? meta)
+    internal static bool Same(JsonValue written, JsonValue patched, FieldMetadata? meta)
     {
         var w = JsonSerializer.SerializeToElement(written);
         var p = JsonSerializer.SerializeToElement(patched);
@@ -32,12 +32,12 @@ public static class LeafSpelling
 
     /// <summary>Two flags arrays naming the same bits: the codec names a defined bit and spells an
     /// undefined one in hex.</summary>
-    public static bool SameFlags(JsonArray written, JsonArray patched, FieldMetadata? meta) =>
+    internal static bool SameFlags(JsonArray written, JsonArray patched, FieldMetadata? meta) =>
         BitsOf(written, meta) is { } writtenBits && BitsOf(patched, meta) is { } patchedBits && writtenBits == patchedBits;
 
     /// <summary>Whether the leaf holds what a leaf of its type is minted with: false, zero, the empty
     /// string, the unset link or the empty hex.</summary>
-    public static bool IsUnset(JsonValue value, FieldMetadata? meta)
+    internal static bool IsUnset(JsonValue value, FieldMetadata? meta)
     {
         var element = JsonSerializer.SerializeToElement(value);
         return element.ValueKind switch
@@ -52,7 +52,7 @@ public static class LeafSpelling
 
     /// <summary>What a new element of the shape is minted as. A struct names only its discriminator,
     /// the schema's first leaf, and the codec fills in the rest.</summary>
-    public static JsonNode? Minted(FieldMetadata meta) => meta.Type switch
+    internal static JsonNode? Minted(FieldMetadata meta) => meta.Type switch
     {
         "string" => "",
         "formKey" => UnsetLink,
@@ -67,7 +67,7 @@ public static class LeafSpelling
 
     /// <summary>A colour holding no alpha as Mutagen's binary read spells it, so a value pasted back
     /// as its cell copies it writes the document a fresh read gives.</summary>
-    public static JsonNode? AsRead(JsonNode? value, FieldMetadata meta) =>
+    internal static JsonNode? AsRead(JsonNode? value, FieldMetadata meta) =>
         DocumentNodes.Rewrite(value, meta, (node, shape) =>
             node is JsonValue leaf && shape.Type == ColorReading.ApiType && !shape.HoldsAlpha && leaf.TryGetValue<string>(out var text)
                 ? JsonValue.Create(ColorReading.AsReadWithoutAlpha(text))

@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
@@ -11,13 +9,12 @@ namespace MEditService.Commands.Edits;
 /// the new bit names, of its own cell or of <see cref="Into"/> another, as xEdit's TwbMainRecord.UpdateCellChildGroup does.</summary>
 internal sealed record CellGroupMove(HeldIn From, string Destination, AnotherCell? Into = null)
 {
-    /// <summary>The move a write of <paramref name="value"/> makes on the record <paramref name="held"/>
+    /// <summary>The move a write of the <paramref name="requested"/> flags makes on the record <paramref name="held"/>
     /// holds, or null when it leaves Persistent as it was.</summary>
-    internal static CellGroupMove? Of(
-        JsonObject record, HeldIn? held, RecordTableSchema schema, ColumnSpec column, JsonElement? value)
+    internal static CellGroupMove? Of(Document record, HeldIn? held, long? requested)
     {
         if (held is not { IsPlaced: true } placed) return null;
-        if (RecordFlagsWrite.Of(record, schema, column, value) is not { } write || !write.Changes(PersistentFlag.Bit)) return null;
+        if (RecordFlagsWrite.Of(record, requested) is not { } write || !write.Changes(PersistentFlag.Bit)) return null;
         return new(placed, (write.Next & PersistentFlag.Bit) != 0 ? PersistentFlag.PersistentGroup : PersistentFlag.TemporaryGroup);
     }
 
@@ -29,12 +26,11 @@ internal sealed record CellGroupMove(HeldIn From, string Destination, AnotherCel
     /// <summary>The cell <paramref name="record"/> leaves its own for, in <paramref name="into"/>. Its own keeps it when
     /// interior, when it is the persistent cell taking it in, or when its grid holds the record's position.</summary>
     internal RecordEditResult? RefuseUnknownCell(
-        JsonObject record, GameRelease release, LoadOrderResolution.MastersWalk masters, string spelled, out AnotherCell? into)
+        Document record, GameRelease release, LoadOrderResolution.MastersWalk masters, string spelled, out AnotherCell? into)
     {
         into = null;
-        var cell = JsonNode.Parse(From.Container.Body) as JsonObject
-            ?? throw new InvalidOperationException($"Expected the own text of {From.Container.FormKey} to hold a JSON object.");
-        var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
+        var cell = Document.Parse(From.Container.Body);
+        var formKey = record.StringAt(RecordMembers.FormKey);
         var inThePersistentCell = From.ContainerHeldIn is { IsThePersistentCell: true };
         (int X, int Y)? grid = null;
         if (!inThePersistentCell)
@@ -44,7 +40,7 @@ internal sealed record CellGroupMove(HeldIn From, string Destination, AnotherCel
                 $"which cell xEdit would move {formKey} into depends on where its cell sits, which only that cell's nearest copy to the left says",
                 () => Unknown(
                     spelled, formKey,
-                    $"its cell {cell[RecordMembers.FormKey]?.GetValue<string>()} says neither that it is interior nor where it " +
+                    $"its cell {cell.StringAt(RecordMembers.FormKey)} says neither that it is interior nor where it " +
                     "sits in its worldspace, and no copy of it to its left says either"),
                 out var said) is { } refusal)
                 return refusal;

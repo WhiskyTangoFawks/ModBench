@@ -31,7 +31,7 @@ public sealed class ConditionEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             ["Conditions[0].CompareOperator: \"GreaterThan\" -> \"LessThan\""],
-            DocumentDiff(before, _fixture.Body(_fixture.Cobj)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Cobj)));
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public sealed class ConditionEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             ["Conditions[0].Data.Unknown3: <absent> -> 7"],
-            DocumentDiff(before, _fixture.Body(_fixture.Cobj)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Cobj)));
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public sealed class ConditionEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             ["Conditions[0].Flags[1]: <absent> -> \"ParametersUseAliases\""],
-            DocumentDiff(before, _fixture.Body(_fixture.Cobj)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Cobj)));
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class ConditionEditTests : IDisposable
                 "Conditions[0].MutagenObjectType: \"ConditionFloat\" -> \"ConditionGlobal\"",
                 $"Conditions[0].ComparisonValue: 2.5 -> \"{_fixture.Global}\"",
             ],
-            DocumentDiff(before, _fixture.Body(_fixture.Cobj)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Cobj)));
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public sealed class ConditionEditTests : IDisposable
                 "Conditions[0].Data.ParameterOneNumber: 2049 -> <absent>",
                 "Conditions[0].Data.ParameterOneString: \"bAllowRotation\" -> <absent>",
             ],
-            DocumentDiff(before, _fixture.Body(_fixture.Cobj)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Cobj)));
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public sealed class ConditionEditTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         var after = _fixture.Body(_fixture.Cobj);
-        Assert.All(DocumentDiff(before, after), d => Assert.StartsWith("Conditions[2]", d, StringComparison.Ordinal));
+        Assert.All(DocumentDiffs.Of(before, after), d => Assert.StartsWith("Conditions[2]", d, StringComparison.Ordinal));
         var appended = JsonNode.Parse(after).Require()["Conditions"].Require().AsArray()[2].Require();
         Assert.Equal(leaf, appended["MutagenObjectType"].Require().GetValue<string>());
         Assert.Equal(
@@ -173,7 +173,7 @@ public sealed class ConditionEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             ["Effects[0].Conditions[0].Conditions[0].Data.Function: \"GetIsID\" -> \"GetIsSex\""],
-            DocumentDiff(before, _fixture.Body(_fixture.Perk)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Perk)));
     }
 
     [Fact]
@@ -189,39 +189,7 @@ public sealed class ConditionEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             ["MenuButtons[0].Conditions[0].Data.RunOnType: <absent> -> \"Target\""],
-            DocumentDiff(before, _fixture.Body(_fixture.Message)));
-    }
-
-    internal static List<string> DocumentDiff(string before, string after)
-    {
-        var diffs = new List<string>();
-        Walk("", JsonNode.Parse(before), JsonNode.Parse(after), diffs);
-        return diffs;
-    }
-
-    private static void Walk(string path, JsonNode? before, JsonNode? after, List<string> diffs)
-    {
-        if (before is JsonObject b && after is JsonObject a)
-        {
-            foreach (var name in b.Select(p => p.Key).Concat(a.Select(p => p.Key)).Distinct(StringComparer.Ordinal))
-                Walk(path.Length == 0 ? name : $"{path}.{name}", b[name], a[name], diffs);
-            return;
-        }
-        if (before is JsonArray ba && after is JsonArray aa)
-        {
-            for (var i = 0; i < Math.Max(ba.Count, aa.Count); i++)
-            {
-                Walk($"{path}[{i}]",
-                    i < ba.Count ? ba[i] : null,
-                    i < aa.Count ? aa[i] : null,
-                    diffs);
-            }
-            return;
-        }
-
-        var left = before?.ToJsonString() ?? "<absent>";
-        var right = after?.ToJsonString() ?? "<absent>";
-        if (!string.Equals(left, right, StringComparison.Ordinal)) diffs.Add($"{path}: {left} -> {right}");
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Message)));
     }
 
     private sealed class ConditionFixture : TestInstance

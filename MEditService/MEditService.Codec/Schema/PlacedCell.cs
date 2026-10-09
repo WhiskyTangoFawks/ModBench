@@ -22,56 +22,60 @@ public static class PlacedCell
 
     /// <summary>Whether the cell's document says where it sits: interior, or at a grid. A Partial Form
     /// copy says neither.</summary>
-    public static bool Says(JsonObject cell) => IsInterior(cell) || Grid(cell) != null;
+    public static bool Says(Document cell) => IsInterior(cell) || cell.Grid != null;
 
     /// <summary>The copy that says where the cell sits: its own, or else its nearest copy to the left, which
     /// xEdit reads as the highest override visible to the file. Null when neither says.</summary>
-    public static JsonObject? SaidBy(JsonObject cell, string? copyOnTheLeft)
+    public static Document? SaidBy(Document cell, string? copyOnTheLeft)
     {
         if (Says(cell)) return cell;
-        return copyOnTheLeft is { } text ? JsonNode.Parse(text) as JsonObject : null;
+        return copyOnTheLeft is { } text ? Document.Parse(text) : null;
     }
 
-    public static void MarkInterior(JsonObject cell) => cell[FlagsMember] = new JsonArray(InteriorFlag);
+    public static Document MarkedInterior(Document cell) => cell.Edited(root => root[FlagsMember] = new JsonArray(InteriorFlag));
 
-    public static bool IsInterior(JsonObject cell) =>
-        cell[FlagsMember] is JsonArray flags && flags.Any(flag => flag?.GetValue<string>() == InteriorFlag);
+    public static bool IsInterior(Document cell) =>
+        cell.At(FlagsMember) is { ValueKind: JsonValueKind.Array } flags
+        && flags.EnumerateArray().Any(flag => flag.GetString() == InteriorFlag);
 
     /// <summary>The cell's grid, or null when its document carries none. The codec omits a zero point.</summary>
     public static (int X, int Y)? Grid(JsonObject cell) => Document.Over(JsonSerializer.SerializeToElement(cell))?.Grid;
 
-    /// <summary>A cell's grid member at (<paramref name="x"/>, <paramref name="y"/>), as the codec writes
-    /// it: the inverse of <see cref="Grid"/>.</summary>
-    public static JsonObject GridAt(int x, int y) =>
-        (x, y) == (0, 0) ? [] : new JsonObject { [GridPointMember] = ReflectedTypes.VectorText(new { X = x, Y = y }) };
+    public static (int X, int Y)? Grid(Document cell) => cell.Grid;
+
+    /// <summary>The cell at grid (<paramref name="x"/>, <paramref name="y"/>), its grid member as the codec
+    /// writes it.</summary>
+    public static Document WithGrid(Document cell, int x, int y) =>
+        cell.Edited(root => root[RecordTypes.CellGridMember] =
+            (x, y) == (0, 0) ? new JsonObject() : new JsonObject { [GridPointMember] = ReflectedTypes.VectorText(new { X = x, Y = y }) });
 
     /// <summary>The grid cell a placed record's position falls in, or null when it has no position or
     /// the game has no cell width here.</summary>
-    public static (int X, int Y)? GridHolding(JsonObject placed, GameRelease release) =>
+    public static (int X, int Y)? GridHolding(Document placed, GameRelease release) =>
         SchemaAnnotations.For(release.ToCategory()).ExteriorCellWidth is { } width
-        && placed[PositionMember] is JsonValue position && position.TryGetValue<string>(out var spelled)
-        && Components(spelled) is [var x, var y, _]
+        && Components(placed.StringAt(PositionMember)) is [var x, var y, _]
             ? ((int)Math.Floor(x / width), (int)Math.Floor(y / width))
             : null;
 
     /// <summary>What xEdit creates in <paramref name="group"/>: persistent in the persistent group, and in the
     /// temporary group of a cell with a grid, at its centre. False, changing nothing, where the game's cell width is unknown.</summary>
     public static bool TryAsCreatedIn(
-        JsonObject placed, string group, JsonObject cell, GameRelease release, [NotNullWhen(false)] out string? refusal)
+        Document placed, string group, Document cell, GameRelease release, out Document created, [NotNullWhen(false)] out string? refusal)
     {
-        refusal = null;
+        (created, refusal) = (placed, null);
         if (group == PersistentFlag.PersistentGroup)
         {
-            placed[RecordHeaderFlags.Member] = PersistentFlag.Bit;
+            created = placed.With(PersistentFlag.Bit, RecordHeaderFlags.Member);
             return true;
         }
-        if (group != PersistentFlag.TemporaryGroup || Grid(cell) is not (int x, int y)) return true;
+        if (group != PersistentFlag.TemporaryGroup || cell.Grid is not (int x, int y)) return true;
         if (SchemaAnnotations.For(release.ToCategory()).ExteriorCellWidth is not { } width)
         {
-            refusal = $"{cell[RecordMembers.FormKey]} has a grid, and mEdit knows no cell width for {release} to place a new reference at its centre.";
+            refusal = $"{cell.StringAt(RecordMembers.FormKey)} has a grid, and mEdit knows no cell width for {release} to place a new reference at its centre.";
             return false;
         }
-        placed[PositionMember] = ReflectedTypes.VectorText(new { X = (x + 0.5f) * width, Y = (y + 0.5f) * width, Z = 0f });
+        var position = ReflectedTypes.VectorText(new { X = (x + 0.5f) * width, Y = (y + 0.5f) * width, Z = 0f });
+        created = placed.Edited(root => root[PositionMember] = position);
         return true;
     }
 

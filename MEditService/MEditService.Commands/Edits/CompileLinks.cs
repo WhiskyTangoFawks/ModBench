@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
@@ -6,7 +5,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
@@ -64,8 +62,9 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
             .ToList();
         foreach (var record in records)
         {
-            var errors = CheckErrors(
-                record.Schema, record.Document.Text, Resolve, WhyUnchecked, loadOrder.GameRelease);
+            var errors = record.Schema.LinkErrorsIn(record.Document.Text, Resolve, WhyUnchecked, loadOrder.GameRelease)
+                .Select(link => $"{link.Field}: {link.Error}")
+                .ToList();
             if (errors.Count == 0) continue;
 
             // Only records with something to report pay for their path, which keeps a container's
@@ -91,27 +90,4 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
             ? path
             : throw new InvalidOperationException(
                 $"Expected the tree this compile read to hold {identity.FormKey}'s document: {failure?.Reason ?? "it holds none"}");
-
-    // The same fields the editor shows a CheckError on, from the same builder, so compile and the
-    // record panel cannot hold two definitions of what is broken.
-    private static List<string> CheckErrors(
-        RecordTableSchema schema, string text, Func<string, ResolvedFormKey?> resolve,
-        Func<string, string?> whyUnchecked, GameRelease release)
-    {
-        var errors = new List<string>();
-        using var document = JsonDocument.Parse(text);
-        var root = document.RootElement;
-        foreach (var column in schema.RecordColumns)
-        {
-            var meta = column.Field;
-            // The collector's own gate: a column with no formKey leaf has nothing to check.
-            if (!FormReferences.CarriesFormKeys(meta)) continue;
-
-            var checkError = CheckErrorBuilder.Build(
-                DocumentNodes.VariantFor(meta, root), DocumentNodes.At(root, column.PropertyName), resolve, release,
-                indexed: true, whyUnchecked);
-            if (checkError != null) errors.Add($"{meta.Name}: {checkError}");
-        }
-        return errors;
-    }
 }

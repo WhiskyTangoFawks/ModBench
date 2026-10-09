@@ -1,4 +1,3 @@
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
@@ -95,13 +94,13 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
                 move.Spelled, move.Moved.FormKey, $"{move.Plugin.Name} holds no document for its worldspace {move.Worldspace}"));
         }
 
-        if (Parsed(worldspace.Body, move.Worldspace)[PlacedCell.WorldspacePersistentCellMember] is JsonObject persistentCell)
+        if (Document.Parse(worldspace.Body).DocumentAt(PlacedCell.WorldspacePersistentCellMember) is { } persistentCell)
             return new Step<Landed>.Done(new(new(GridCellHolder.FormKeyOf(persistentCell), move.CellType, null), null, SourceChanges.None));
 
         return CopiedOrNew(
                 move,
-                MastersWalkOf(move).NearestCopy(move.Worldspace, copy => copy[PlacedCell.WorldspacePersistentCellMember] is JsonObject),
-                copy => Parsed(copy, move.Worldspace)[PlacedCell.WorldspacePersistentCellMember],
+                MastersWalkOf(move).NearestCopy(move.Worldspace, copy => copy.DocumentAt(PlacedCell.WorldspacePersistentCellMember) is not null),
+                copy => Document.Parse(copy).DocumentAt(PlacedCell.WorldspacePersistentCellMember),
                 PersistentFlag.Bit, (0, 0))
             .Then<Landed>(copied => new Step<Landed>.Done(new(
                 copied.Cell.Identity,
@@ -125,7 +124,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
         };
 
         Step<Landed> New(LeftCopy left) =>
-            CopiedOrNew(move, left, copy => JsonNode.Parse(copy), 0, (grid.X, grid.Y)).Then<Landed>(copied => new Step<Landed>.Done(new(
+            CopiedOrNew(move, left, Document.Parse, 0, (grid.X, grid.Y)).Then<Landed>(copied => new Step<Landed>.Done(new(
                 copied.Cell.Identity,
                 () => move.Repository.ChangesToPutInWorldspace(move.Plugin, copied.Cell, move.Worldspace),
                 copied.HeaderChanges)));
@@ -136,7 +135,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
         resolution.WalkAmongMastersOf(move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release), move.Batches);
 
     // The own fields of the nearest master's copy, as an override, or else a new cell native to the plugin.
-    private Step<CellIn> CopiedOrNew(Move move, LeftCopy left, Func<string, JsonNode?> cellIn, long flags, (int X, int Y) grid)
+    private Step<CellIn> CopiedOrNew(Move move, LeftCopy left, Func<string, Document?> cellIn, long flags, (int X, int Y) grid)
     {
         switch (left)
         {
@@ -144,7 +143,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
                 return new Step<CellIn>.Refused(unreadable.Refusal(
                     move.Spelled, $"the cell {move.Moved.FormKey} moves into is copied in from the nearest of {move.Plugin.Name}'s masters to hold it"));
             case LeftCopy.Found found:
-                var copy = cellIn(found.Text)?.ToJsonString()
+                var copy = cellIn(found.Text)?.Text
                     ?? throw new InvalidOperationException($"The copy of a master of {move.Plugin.Name} holds no cell where it was found.");
                 return new Step<CellIn>.Done(new(
                     CellOf(ContainerDocumentEdits.WithoutChildren(copy, move.Release, move.CellType), move), SourceChanges.None));
@@ -154,16 +153,14 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
             return new Step<CellIn>.Stopped(unread);
         if (GridCells.Mint(
                 allocator, schemaReflector.GetSchemas(move.Release)[move.CellType], move.Release, grid,
-                out var cell) is { } exhausted)
+                out var minted) is { } exhausted)
             return new Step<CellIn>.Refused(exhausted with { Path = move.Spelled });
-        if (flags != 0) cell[RecordHeaderFlags.Member] = flags;
+        var cell = minted ?? throw new InvalidOperationException("Expected Mint to answer a cell when it does not refuse.");
+        if (flags != 0) cell = cell.With(flags, RecordHeaderFlags.Member);
         return new Step<CellIn>.Done(new(
-            CellOf(RecordTextCodec.RoundTrip(cell.ToJsonString(), move.Release, move.CellType), move), allocator.HeaderChanges()));
+            CellOf(RecordTextCodec.RoundTrip(cell.Text, move.Release, move.CellType), move), allocator.HeaderChanges()));
     }
 
     private static SourceDocument CellOf(string text, Move move) =>
-        new(GridCellHolder.FormKeyOf(JsonNode.Parse(text) as JsonObject), move.CellType, DocumentTokens.EditorIdIn(text).EditorId, text);
-
-    private static JsonObject Parsed(string text, string formKey) =>
-        JsonNode.Parse(text) as JsonObject ?? throw new InvalidOperationException($"Expected {formKey}'s document to hold a JSON object.");
+        new(GridCellHolder.FormKeyOf(Document.Parse(text)), move.CellType, DocumentTokens.EditorIdIn(text).EditorId, text);
 }

@@ -12,7 +12,7 @@ public static class ColorReading
 
     /// <summary>Whether the text spells an alpha other than the 00 Mutagen's binary read gives a colour
     /// that holds none.</summary>
-    public static bool SpellsAlpha(string text)
+    internal static bool SpellsAlpha(string text)
     {
         var hex = text.StartsWith('#') ? text[1..] : text;
         return hex.Length == 8
