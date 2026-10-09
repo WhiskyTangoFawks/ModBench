@@ -64,6 +64,36 @@ public sealed class RecordTypesTests
         Assert.Equal("wrld", RecordTypes.For(GameRelease.Fallout4).Worldspace);
     }
 
+    [Fact]
+    public void ARecordsGroup_IsTheModsGroupHoldingIt_AsMutagenNamesIt()
+    {
+        Assert.Equal("Npcs", RecordTypes.For(GameRelease.Fallout4).GroupOf("npc_"));
+    }
+
+    [Fact]
+    public void ACellsGroup_IsTheCellsGroup_ThoughItHoldsBlocksOfCells()
+    {
+        Assert.Equal("Cells", RecordTypes.For(GameRelease.Fallout4).GroupOf("cell"));
+    }
+
+    [Fact]
+    public void ARecordHeldOnlyInsideAnother_HasNoGroup()
+    {
+        Assert.Null(RecordTypes.For(GameRelease.Fallout4).GroupOf("refr"));
+    }
+
+    [Fact]
+    public void AGroupOfOneRecordClass_HoldsThatRecordType()
+    {
+        Assert.Equal("npc_", RecordTypes.For(GameRelease.Fallout4).OnlyRecordTypeIn("Npcs"));
+    }
+
+    [Fact]
+    public void AGroupOfSeveralRecordClasses_HoldsNoOneRecordType_ThoughTheyShareATable()
+    {
+        Assert.Null(RecordTypes.For(GameRelease.Fallout4).OnlyRecordTypeIn("Globals"));
+    }
+
     public class RecordOfNoGameClass : DispatchProxy
     {
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) => throw new NotSupportedException();

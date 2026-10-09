@@ -8,15 +8,15 @@ namespace MEditService.SourceAdapter.Tests.Source;
 
 public sealed class SourceRepositoryTreeOfTests : IDisposable
 {
-    private const string PluginName = "FilesOf.esp";
-    private const string NpcFormKey = "000800:FilesOf.esp";
+    private const string PluginName = "TreeOf.esp";
+    private const string NpcFormKey = "000800:TreeOf.esp";
     private const string NpcEditorId = "FixtureNpc";
-    private const string NpcBody = "{\n  \"FormKey\": \"000800:FilesOf.esp\",\n  \"EditorID\": \"FixtureNpc\"\n}";
+    private const string NpcBody = "{\n  \"FormKey\": \"000800:TreeOf.esp\",\n  \"EditorID\": \"FixtureNpc\"\n}";
 
-    private static readonly PluginAddress Plugin = new(PluginName, "FilesOfMod");
+    private static readonly PluginAddress Plugin = new(PluginName, "TreeOfMod");
     private static readonly RecordIdentity Npc = new(NpcFormKey, "npc_", NpcEditorId);
 
-    private readonly ScratchDirectory _modFolder = new("medit-filesof-");
+    private readonly ScratchDirectory _modFolder = new("medit-treeof-");
 
     public SourceRepositoryTreeOfTests()
     {
@@ -53,7 +53,7 @@ public sealed class SourceRepositoryTreeOfTests : IDisposable
     {
         var files = Repository.TreeOf(Plugin).Files;
 
-        var npcDoorPath = Path.Combine("Npcs", "FixtureNpc - 000800_FilesOf.esp.json");
+        var npcDoorPath = Path.Combine("Npcs", "FixtureNpc - 000800_TreeOf.esp.json");
         Assert.Equal([npcDoorPath, "RecordData.json"], [.. files.Select(f => f.RelativePath).Order(StringComparer.Ordinal)]);
         Assert.Equal(File.ReadAllBytes(NpcFullPath), files.Single(f => f.RelativePath == npcDoorPath).Content);
     }
@@ -67,8 +67,8 @@ public sealed class SourceRepositoryTreeOfTests : IDisposable
         repository.Put(
             Plugin,
             new SourceDocument(
-                "000950:FilesOf.esp", "npc_", "MemoNpc",
-                "{\n  \"FormKey\": \"000950:FilesOf.esp\",\n  \"EditorID\": \"MemoNpc\"\n}"));
+                "000950:TreeOf.esp", "npc_", "MemoNpc",
+                "{\n  \"FormKey\": \"000950:TreeOf.esp\",\n  \"EditorID\": \"MemoNpc\"\n}"));
 
         Assert.Equal(before + 1, repository.TreeOf(Plugin).Files.Count);
     }

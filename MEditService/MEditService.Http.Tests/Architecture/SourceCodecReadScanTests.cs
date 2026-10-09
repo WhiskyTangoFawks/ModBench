@@ -51,7 +51,7 @@ public sealed class SourceCodecReadScanTests
         Directory.CreateDirectory(Path.Combine(root, "MEditService.SourceAdapter", "obj"));
         File.WriteAllText(
             Path.Combine(root, "MEditService.SourceAdapter", "Permitted.cs"),
-            "var folder = RecordTypes.For(release).FolderNameFor(recordType);\n"
+            "var group = RecordTypes.For(release).GroupOf(recordType);\n"
             + "var minted = RecordTextCodec.BlankDocument(level, release, identity);\n");
         File.WriteAllText(
             Path.Combine(root, "MEditService.SourceAdapter", "Planted.cs"),

@@ -60,7 +60,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         // Only a directory-per-record type (Cell, Worldspace) can have a directory of its own; a type
         // with no group of its own is always embedded, so nothing is scanned for it.
         var sourceRoot = Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name));
-        if (RecordTypes.For(_release).GroupFolderNameFor(identity.RecordType) is not null
+        if (GroupFolders.For(_release).FolderOf(identity.RecordType) is not null
             && FindOwnUnit(sourceRoot, plugin.Name, identity.FormKey, byText) is { } own)
         {
             return Unit(own, identity.FormKey, identity.RecordType, isEmbedded: false);
@@ -409,7 +409,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     // or inside its worldspace's.
     internal string? FindOwnUnit(string sourceRoot, string pluginFileName, string formKey, bool byText = true) =>
         OwnDocumentUnder(
-            [.. RecordTypes.For(_release).DirectoryPerRecordFolderNames
+            [.. GroupFolders.For(_release).DirectoryPerRecordFolders
                 .Select(groupFolder => Path.Combine(sourceRoot, groupFolder))],
             pluginFileName, formKey, byText);
 

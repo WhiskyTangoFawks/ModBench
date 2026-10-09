@@ -618,7 +618,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void ChangesToRewrite_OfAChildItsOwnersTextNamesWhereItsTypeHoldsNone_RefusesAsNoDocumentHoldingIt()
     {
-        var folder = RecordTypes.For(Release).FolderNameFor("globalfloat").Require();
+        var folder = RecordTypes.For(Release).GroupOf("globalfloat").Require();
         var carrier = Path.Combine(_modFolder, Root, folder, $"Carrier - 00A000_{PluginName}.json");
         Directory.CreateDirectory(Path.GetDirectoryName(carrier).Require());
         File.WriteAllText(
@@ -694,7 +694,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     [Fact]
     public void RelativePathOf_ForAChildInsideADocumentOfAPathAmbiguousGroup_FindsThatDocument_ThoughGlobalsMapsToFourTypesSoOnlyTheDocumentNamesItsOwn()
     {
-        var folder = RecordTypes.For(Release).FolderNameFor("globalfloat")
+        var folder = RecordTypes.For(Release).GroupOf("globalfloat")
             ?? throw new InvalidOperationException("Expected 'globalfloat' to resolve to a group folder.");
         var carrier = Path.Combine(_modFolder, Root, folder, "Carrier - 00A000_Embedded.esp.json");
         Directory.CreateDirectory(Path.GetDirectoryName(carrier) ?? throw new InvalidOperationException($"Expected '{carrier}' to have a parent directory."));

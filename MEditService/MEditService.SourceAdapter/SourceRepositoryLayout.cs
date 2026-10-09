@@ -120,7 +120,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     {
         var path = new LayoutPath(relativePath);
         return path.IsContainerDocument
-            && RecordTypes.For(gameRelease).DirectoryPerRecordFolderNames.Contains(path.GroupFolderName);
+            && GroupFolders.For(gameRelease).DirectoryPerRecordFolders.Contains(path.GroupFolderName);
     }
 
     /// <summary>Each container directory's document among <paramref name="relativePaths"/>, by the one rule of
@@ -171,7 +171,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     internal static string FlatPathFor(
         string pluginFileName, string recordType, string formKeyString, string? editorId, GameRelease gameRelease)
     {
-        var folder = RecordTypes.For(gameRelease).FolderNameFor(recordType)
+        var folder = GroupFolders.For(gameRelease).FlatFolderOf(recordType)
             ?? throw new NotSupportedException(
                 $"'{recordType}' has no flat source path under the source layout — it is a " +
                 "directory-per-record container type (Cell/Worldspace), or has no top-level " +
@@ -193,13 +193,13 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         GameRelease gameRelease,
         IReadOnlyList<string>? blockPath = null)
     {
-        var types = RecordTypes.For(gameRelease);
+        var folders = GroupFolders.For(gameRelease);
 
         // A flat record has a top-level group folder of its own and needs no directory.
-        if (types.FolderNameFor(recordType) is not null)
+        if (folders.FlatFolderOf(recordType) is not null)
             return new SourcePlacement(FlatPathFor(pluginFileName, recordType, formKeyString, editorId, gameRelease));
 
-        var groupFolder = types.GroupFolderNameFor(recordType)
+        var groupFolder = folders.FolderOf(recordType)
             ?? throw new NotSupportedException(
                 $"'{recordType}' has no group folder at all — it is an embedded child, which lands inside " +
                 "its container's document rather than at a path of its own.");
@@ -265,7 +265,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
         var path = new LayoutPath(relativePath);
         return path.IsContainerDocument
-            ? RecordTypes.For(gameRelease)
+            ? GroupFolders.For(gameRelease)
                 .DirectoryPerRecordTypeIn(path.GroupFolderName, nested: path.ContainerIsNested)
             : null;
     }
@@ -280,7 +280,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
             return new SourceRecordIdentity(path.PluginFileName, PluginHeader.RecordType);
 
         if (!path.IsFlatDocument) return null;
-        if (RecordTypes.For(gameRelease).RecordTypeForFolder(path.GroupFolderName) is not { } recordType)
+        if (GroupFolders.For(gameRelease).RecordTypeIn(path.GroupFolderName) is not { } recordType)
             return null;
 
         return new SourceRecordIdentity(path.PluginFileName, recordType);
@@ -323,7 +323,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         PluginAddress plugin, RecordIdentity identity, CellPlacement? placement)
     {
         var types = RecordTypes.For(_release);
-        if (types.GroupFolderNameFor(identity.RecordType) is not { } groupFolder) return null;
+        if (GroupFolders.For(_release).FolderOf(identity.RecordType) is not { } groupFolder) return null;
 
         // The one document that does not sit in a group folder at all. Only the placement it is put
         // with tells an exterior cell from an interior one, which has no worldspace above it.

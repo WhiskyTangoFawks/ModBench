@@ -69,7 +69,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         foreach (var groupDirectory in Directory.EnumerateDirectories(_root))
         {
             var folder = Path.GetFileName(groupDirectory);
-            var directoryPerRecord = _types.DirectoryPerRecordTypeIn(folder, nested: false);
+            var directoryPerRecord = GroupFolders.For(_release).DirectoryPerRecordTypeIn(folder, nested: false);
 
             var documents = directoryPerRecord switch
             {
