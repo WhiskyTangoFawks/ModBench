@@ -183,8 +183,6 @@ export type GridPosition = components['schemas']['GridPosition'];
 export type RecordAddress = components['schemas']['RecordAddress'];
 /** Copy's mode Option (commands.md, Record, `copy`). */
 export type CopyMode = components['schemas']['CopyMode'];
-/** What copying one record into one destination changes in plugin source. A copy as new names the FormKey
- *  mEdit minted for it. */
 type CopyChanges = components['schemas']['RecordCopyChanges'];
 /** One record into one destination: the unit a copy lands or is refused by. */
 export type CopyItem = Pick<CopyChanges, 'record' | 'destination'>;
@@ -219,9 +217,8 @@ export interface MEditClient {
   getDeleteChanges(
     records: readonly RecordAddress[], unsaved: readonly UnsavedDocument[],
   ): Promise<DeleteChangesOutcome | WriteRefused>;
-  // Each record into each destination is one item, changed or refused on its own. `replace` lets an
-  // override copy over the one a destination already holds. `unsaved` stands in for the files it names.
-  // A WriteRefused is the call itself failing. Nothing is written.
+  // Each record into each destination is one item, changed or refused on its own. `replace` lets an override
+  // copy over a held one. `unsaved` stands in for its files. A WriteRefused is the call failing. Nothing is written.
   getCopyChanges(
     records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
     unsaved: readonly UnsavedDocument[],

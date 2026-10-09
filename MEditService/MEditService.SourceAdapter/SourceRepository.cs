@@ -305,8 +305,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
         SourceFailure.Answer(() => LastCommitComparison.Of(_modFolder, _release, _git, Locator, Spelled(plugin)));
 
     /// <summary>The changes that create or replace the record's document, placing an absent one from its identity
-    /// alone with the levels above it, written nowhere. A record another document carries is replaced at its own
-    /// slot. A file at its path that is no document is unreadable.</summary>
+    /// alone, written nowhere. A file at its path that is no document is unreadable.</summary>
     public SourceAnswer<SourceChanges> ChangesToPut(PluginAddress plugin, SourceDocument document) =>
         SourceFailure.Answer(() => Writes.ChangesToPut(Spelled(plugin), document));
 

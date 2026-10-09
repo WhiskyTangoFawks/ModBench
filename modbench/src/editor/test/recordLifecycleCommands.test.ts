@@ -1,5 +1,6 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
-import type { RecordAddress } from '../../client';
+import type { CopyItem, RecordAddress } from '../../client';
+import type { ItemRefusal } from '../../ports/selectionOutcome';
 import type { SourceEditing } from '../../drivingLib/sourceEditing';
 
 interface PickItem { label: string; description?: string; mode?: string; plugin?: { name: string } }
@@ -779,7 +780,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   describe('the changes mEdit answers', () => {
     const answered = () => [copyChanges(SOURCE, PATCH), copyChanges(SECOND, PATCH), copyChanges(SOURCE, OTHER)];
 
-    async function copyAnswered(applied: readonly ReturnType<typeof copyChanges>[], refused: unknown[] = []) {
+    async function copyAnswered(applied: readonly ReturnType<typeof copyChanges>[], refused: ItemRefusal<CopyItem>[] = []) {
       const client = new InMemoryMEditClient();
       destinations(client);
       client.setCommandResult('getCopyChanges', { applied, refused });
