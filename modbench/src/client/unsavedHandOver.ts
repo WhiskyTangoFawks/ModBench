@@ -23,7 +23,7 @@ export function createUnsavedHandOver(wire: UnsavedDocumentsWire): UnsavedHandOv
   let newest: readonly UnsavedDocument[] = [];
   let sending = Promise.resolve();
   const put = (documents: readonly UnsavedDocument[]): void => {
-    sending = sending.then(() => wire.put(documents)).then(settle);
+    sending = sending.then(() => wire.put(documents)).then(settle, () => { settle({ failed: 'unreachable' }); });
   };
   wire.onStatusChanged((status) => { if (status === 'running') put(newest); });
   wire.onReconnected(() => { put(newest); });

@@ -14,7 +14,7 @@ import type { FocusedCellContext } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
 import type { TitledColumn } from './recordTitle';
 import { modsByOrigin, type ModFacts } from './modsByOrigin';
-import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
+import { failureReason, isReadFailed, localFailure, type ReadFailed } from '../wire/readFailed';
 
 type TitleFromRead = (formKey: string, columns: readonly TitledColumn[] | undefined) => void;
 
@@ -174,7 +174,7 @@ async function answerRecordLoad(
   const listed = plugins.status === 'fulfilled' && !isReadFailed(plugins.value) ? plugins.value : null;
   const pluginActive = listed?.some((p) => p.inLoadOrder && samePluginAddress(p, deps.plugin)) ?? false;
   const [settled] = await Promise.allSettled([readRecord(deps, m, pluginActive)]);
-  const read = settled.status === 'rejected' ? { failed: 'refused', refusal: errorMessage(settled.reason) } as const : settled.value;
+  const read = settled.status === 'rejected' ? localFailure(errorMessage(settled.reason)) : settled.value;
   if (isReadFailed(read)) {
     deps.channel.warn(`Failed to read ${m.formKey}: ${failureReason(read)}`);
     deps.reply({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: false, failure: read });

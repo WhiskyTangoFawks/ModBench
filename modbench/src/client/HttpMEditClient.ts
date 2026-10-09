@@ -662,7 +662,7 @@ class HttpMEditClient implements MEditClient {
   getActiveFilter(): Promise<RecordFilter | null | ReadFailed> {
     return this.read('getActiveFilter', (signal) => this.apiClient.GET('/load-order/filter', { signal }), (data) => {
       if (data?.sql == null) return null;
-      return data.source == null ? NO_ANSWER : { sql: data.sql, source: data.source };
+      return data.source == null ? { failed: 'unreadable', cause: 'mEdit answered a record filter with no source.' } : { sql: data.sql, source: data.source };
     });
   }
 

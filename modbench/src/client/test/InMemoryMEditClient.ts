@@ -125,8 +125,8 @@ export class InMemoryMEditClient implements MEditClient {
     this.queryAnswers[method] = boxed;
   }
 
-  /** Every call to `method` fails with `failure` until re-scripted: a read answers a ReadFailed, anything else rejects — the failure-shaped sibling
-   *  of {@link setQueryAnswer}. */
+  /** Every call to `method` fails until re-scripted, answering a ReadFailed or rejecting
+   *  with an Error — the failure-shaped sibling of {@link setQueryAnswer}. */
   setQueryFailure(method: QueryMethod, failure: Error | ReadFailed): void {
     this.queryFailures.set(method, failure);
   }
@@ -137,7 +137,7 @@ export class InMemoryMEditClient implements MEditClient {
     this.pushQueryStep(method, { kind: 'answer', value: answer });
   }
 
-  /** {@link setQueryAnswerOnce}'s failure-shaped sibling — queues one rejection. */
+  /** {@link setQueryAnswerOnce}'s failure-shaped sibling — queues one failure, answered or rejected as {@link setQueryFailure} does. */
   setQueryFailureOnce(method: QueryMethod, failure: Error | ReadFailed): void {
     this.pushQueryStep(method, { kind: 'failure', error: failure });
   }
@@ -154,7 +154,7 @@ export class InMemoryMEditClient implements MEditClient {
     this.commandResults[method] = boxed;
   }
 
-  /** Every call to `method` fails with `failure` until re-scripted: a read answers a ReadFailed, anything else rejects — the failure-shaped sibling
+  /** Every call to `method` rejects with `error` until re-scripted — the failure-shaped sibling
    *  of {@link setCommandResult}. */
   setCommandFailure(method: CommandMethod, error: Error): void {
     this.commandFailures.set(method, error);

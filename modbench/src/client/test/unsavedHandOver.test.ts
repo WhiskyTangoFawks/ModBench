@@ -69,6 +69,23 @@ describe('handing mEdit the unsaved documents', () => {
     expect(mEdit.put).toEqual(['typed', 'typed']);
   });
 
+  it('settles a put that rejects as unreachable, and still puts the next', async () => {
+    const mEdit = fakeWire('running');
+    const answers: (ReadFailed | undefined)[] = [];
+    mEdit.answerWith(() => Promise.reject(new Error('socket hang up')));
+    const handOver = createUnsavedHandOver(mEdit.wire);
+    handOver.onSettled((failure) => { answers.push(failure); });
+
+    handOver.hand(typed('first'));
+    await settled();
+    mEdit.answerWith(() => Promise.resolve(undefined));
+    handOver.hand(typed('second'));
+    await settled();
+
+    expect(mEdit.put).toEqual(['first', 'second']);
+    expect(answers).toEqual([{ failed: 'unreachable' }, undefined]);
+  });
+
   it('answers each put, why not when it failed, and still puts the next', async () => {
     const mEdit = fakeWire('running');
     const answers: (ReadFailed | undefined)[] = [];

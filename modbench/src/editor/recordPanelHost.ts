@@ -15,7 +15,7 @@ import {
 } from '../drivingLib/recordDocument';
 import { errorMessage } from '../ports/errorMessage';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension, type ViewState } from '../wire/messages';
-import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
+import { failureReason, isReadFailed, localFailure, type ReadFailed } from '../wire/readFailed';
 
 export const RECORD_VIEW_TYPE = 'modbench.record';
 
@@ -195,7 +195,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
         const { formKey, ...copy } = record;
         this.showFile(panel, tab, document, { formKey, plugin: pluginAddressOf(copy) }, { columns, place }, () => undefined);
       } catch (err) {
-        fail({ failed: 'refused', refusal: errorMessage(err) });
+        fail(localFailure(errorMessage(err)));
       }
     };
     await tab.askWhichRecord(read);
