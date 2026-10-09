@@ -135,4 +135,10 @@ public sealed class ChildRecordTypesTests
     {
         Assert.Empty(Of(new Npc(Mod)));
     }
+
+    [Fact]
+    public void AContainerWhoseTextIsNoRecordDocument_IsRefusedRatherThanReadAsNotDeleted()
+    {
+        Assert.Throws<InvalidOperationException>(() => ChildRecordTypes.Of("cell", "[]", CellPlace.Interior, GameRelease.Fallout4));
+    }
 }

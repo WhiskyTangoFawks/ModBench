@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
@@ -37,11 +38,7 @@ public static class PlacedCell
         cell[FlagsMember] is JsonArray flags && flags.Any(flag => flag?.GetValue<string>() == InteriorFlag);
 
     /// <summary>The cell's grid, or null when its document carries none. The codec omits a zero point.</summary>
-    public static (int X, int Y)? Grid(JsonObject cell)
-    {
-        if (cell[RecordTypes.CellGridMember] is not JsonObject grid) return null;
-        return Components(grid[GridPointMember]) is [var x, var y] ? ((int)x, (int)y) : (0, 0);
-    }
+    public static (int X, int Y)? Grid(JsonObject cell) => Document.Over(JsonSerializer.SerializeToElement(cell))?.Grid;
 
     /// <summary>A cell's grid member at (<paramref name="x"/>, <paramref name="y"/>), as the codec writes
     /// it: the inverse of <see cref="Grid"/>.</summary>
@@ -52,7 +49,8 @@ public static class PlacedCell
     /// the game has no cell width here.</summary>
     public static (int X, int Y)? GridHolding(JsonObject placed, GameRelease release) =>
         SchemaAnnotations.For(release.ToCategory()).ExteriorCellWidth is { } width
-        && Components(placed[PositionMember]) is [var x, var y, _]
+        && placed[PositionMember] is JsonValue position && position.TryGetValue<string>(out var spelled)
+        && Components(spelled) is [var x, var y, _]
             ? ((int)Math.Floor(x / width), (int)Math.Floor(y / width))
             : null;
 
@@ -78,9 +76,9 @@ public static class PlacedCell
     }
 
     // The codec writes a vector as its components in English, comma-separated (ReflectedTypes.VectorText).
-    private static double[]? Components(JsonNode? vector)
+    internal static double[]? Components(string? spelled)
     {
-        if (vector is not JsonValue text || !text.TryGetValue<string>(out var spelled)) return null;
+        if (spelled is null) return null;
         var components = new List<double>();
         foreach (var component in spelled.Split(','))
         {
