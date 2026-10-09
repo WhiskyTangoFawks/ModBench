@@ -2,6 +2,7 @@ import type { CompareResult, MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { formKeyAt, recordLabel } from './sourceText';
+import { answerOf } from '../wire/readFailed';
 
 interface SourceHover {
   start: number;
@@ -27,7 +28,7 @@ export async function hoverAt(
   const found = formKeyAt(text, offset);
   if (!found) return undefined;
   try {
-    const comparison = await client.getComparison(found.formKey);
+    const comparison = answerOf(await client.getComparison(found.formKey));
     return comparison ? { start: found.start, end: found.end, markdown: markdownOf(found.formKey, comparison) } : undefined;
   } catch (error) {
     reporter.shownOnSurface('error', `Hover cannot describe ${found.formKey}.`, errorMessage(error));

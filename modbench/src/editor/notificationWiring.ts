@@ -1,5 +1,6 @@
 import type { MEditClient } from '../client';
 import type { RecordTab } from './recordTab';
+import { isReadFailed } from '../wire/readFailed';
 
 // On reconnect, a tab waiting on a missed report reads once mEdit holds it.
 export function subscribeRecordTabsToNotifications(
@@ -15,7 +16,7 @@ export function subscribeRecordTabsToNotifications(
       if (!formKey) continue;
       // A failed ask leaves the tab waiting, as a missing key does: the report still reads it.
       client.getRecordOwner(formKey).then(
-        owner => { if (owner) tab.release(formKey); },
+        owner => { if (owner && !isReadFailed(owner)) tab.release(formKey); },
         () => undefined);
     }
   });

@@ -11,6 +11,7 @@ import {
 import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { UnreadableSource } from '../wire/unreadableSource';
+import type { ReadFailed } from '../wire/readFailed';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 /** What `getEditChanges` is handed, re-exported because its caller reaches the backend only through
@@ -235,58 +236,58 @@ export interface MEditClient {
   compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
-  // filter, active filter).
-  getPlugins(): Promise<PluginMetadata[]>;
-  getDiagnoses(): Promise<PluginDiagnosisReport[]>;
-  // Rejects while mEdit has not finished indexing: a plugin it has not opened would read as no dependant.
-  getPluginDependants(plugin: PluginAddress): Promise<PluginDependants>;
-  // Rejects while mEdit has not finished indexing: a plugin it has not reached would read as clean.
-  getPluginProblems(): Promise<PluginProblems[]>;
-  getRecordTypes(plugin: PluginAddress): Promise<PluginRecordTypeCount[]>;
-  getWorkingTreeStatesBeneath(plugin: PluginAddress): Promise<WorkingTreeStatesBeneath>;
+  // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).
+  getPlugins(): Promise<PluginMetadata[] | ReadFailed>;
+  getDiagnoses(): Promise<PluginDiagnosisReport[] | ReadFailed>;
+  // Fails while mEdit has not finished indexing: a plugin it has not opened would read as no dependant.
+  getPluginDependants(plugin: PluginAddress): Promise<PluginDependants | ReadFailed>;
+  // Fails while mEdit has not finished indexing: a plugin it has not reached would read as clean.
+  getPluginProblems(): Promise<PluginProblems[] | ReadFailed>;
+  getRecordTypes(plugin: PluginAddress): Promise<PluginRecordTypeCount[] | ReadFailed>;
+  getWorkingTreeStatesBeneath(plugin: PluginAddress): Promise<WorkingTreeStatesBeneath | ReadFailed>;
   // The game's, not a plugin's: every plugin of the load order shares it.
-  getCreatableRecordTypes(): Promise<RecordTypeChoice[]>;
+  getCreatableRecordTypes(): Promise<RecordTypeChoice[] | ReadFailed>;
   /** The types the plugin's copy of a container record can hold, in name order. */
-  getChildRecordTypes(plugin: PluginAddress, formKey: string): Promise<RecordTypeChoice[]>;
-  getCreatablePluginExtensions(): Promise<string[]>;
-  getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage>;
+  getChildRecordTypes(plugin: PluginAddress, formKey: string): Promise<RecordTypeChoice[] | ReadFailed>;
+  getCreatablePluginExtensions(): Promise<string[] | ReadFailed>;
+  getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed>;
   /** Every active plugin's copies, or one plugin's. */
-  searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage>;
-  getRecordOwner(formKey: string): Promise<PluginAddress | undefined>;
+  searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage | ReadFailed>;
+  getRecordOwner(formKey: string): Promise<PluginAddress | undefined | ReadFailed>;
   /** Every plugin that holds a copy of the record, its own included. */
-  getRecordHolders(formKey: string): Promise<PluginAddress[]>;
+  getRecordHolders(formKey: string): Promise<PluginAddress[] | ReadFailed>;
   /** One record as every active plugin has it, untransformed (target-architecture.d2 `modbench_driving.editor`).
    *  Null: no active plugin holds it and no `text` gives it. With `text`, that plugin's column reads
    *  from it, outside the conflict states if inactive. */
-  getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null>;
+  getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null | ReadFailed>;
   /** Several records side by side: one column per copy, in order, with no conflict state. With no
    *  `compare`, `missing` names each copy no plugin gave and why. */
-  getRecordsComparison(copies: RecordCopy[]): Promise<CompareRecordsResponse>;
-  getReferences(formKey: string): Promise<ReferenceResult[]>;
+  getRecordsComparison(copies: RecordCopy[]): Promise<CompareRecordsResponse | ReadFailed>;
+  getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
   /** The referrers of the active plugins and of the inactive tracked ones. */
-  getReferencesInActiveOrTrackedPlugins(formKey: string): Promise<ReferenceResult[]>;
+  getReferencesInActiveOrTrackedPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
   /** Null: the plugin holds no such record. */
-  getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null>;
+  getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed>;
   /** Null: the plugin holds no such record. `location` is the path of the copy's own file, of the file of the
    *  record carrying it, or the name of its rendered document, as `kind` says. */
-  getCopyDocument(plugin: PluginAddress, formKey: string): Promise<CopyDocument | null>;
+  getCopyDocument(plugin: PluginAddress, formKey: string): Promise<CopyDocument | null | ReadFailed>;
   /** The record whose own document the file at the absolute `path` is; null when mEdit answers the file holds
-   *  no record. Rejects with mEdit's reason when it cannot read the file. */
-  getRecordOfFile(path: string): Promise<RecordAddress | null>;
+   *  no record. Fails with mEdit's reason when it cannot read the file. */
+  getRecordOfFile(path: string): Promise<RecordAddress | null | ReadFailed>;
   /** Over the unsaved documents mEdit holds. mEdit writes nothing. */
   getEditChanges(
     formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope,
   ): Promise<RecordEditChangesOutcome>;
-  getWorldspaces(plugin: PluginAddress): Promise<WorldspaceSummary[]>;
-  getWorldspaceBlocks(plugin: PluginAddress, worldspaceFormKey: string): Promise<WorldspaceBlocks>;
-  getCellChildRecords(plugin: PluginAddress, cellFormKey: string): Promise<CellChildRecords>;
-  getInteriorCells(plugin: PluginAddress): Promise<InteriorCellBlock[]>;
-  getContainerChildren(plugin: PluginAddress, parentFormKey: string): Promise<ContainerChildSummary[]>;
+  getWorldspaces(plugin: PluginAddress): Promise<WorldspaceSummary[] | ReadFailed>;
+  getWorldspaceBlocks(plugin: PluginAddress, worldspaceFormKey: string): Promise<WorldspaceBlocks | ReadFailed>;
+  getCellChildRecords(plugin: PluginAddress, cellFormKey: string): Promise<CellChildRecords | ReadFailed>;
+  getInteriorCells(plugin: PluginAddress): Promise<InteriorCellBlock[] | ReadFailed>;
+  getContainerChildren(plugin: PluginAddress, parentFormKey: string): Promise<ContainerChildSummary[] | ReadFailed>;
   /** Null when mEdit took the filter, or the reason it did not. */
   setFilter(filter: RecordFilter): Promise<string | null>;
   /** Null when mEdit dropped the filter, or the reason it did not. */
   clearFilter(): Promise<string | null>;
-  getActiveFilter(): Promise<RecordFilter | null>;
+  getActiveFilter(): Promise<RecordFilter | null | ReadFailed>;
 
   /** A listener handed its kind's payload. A frame missing its kind's payload
    *  reaches no listener. */
@@ -314,7 +315,7 @@ export interface MEditClient {
    *  Put at once and in order while mEdit runs, and the newest again whenever the process may hold none. */
   handUnsavedDocuments(documents: readonly UnsavedDocument[]): void;
   /** Each put of the unsaved documents as it answers: undefined when mEdit took them, else why not. */
-  onUnsavedHandOver(listener: (failure: string | undefined) => void): () => void;
+  onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void;
 
   // The backend process: today's four values, read as a current value and observed through a
   // status-changed event.

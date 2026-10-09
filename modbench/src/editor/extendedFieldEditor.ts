@@ -7,6 +7,7 @@ import { columnKey } from '../wire/columnKey';
 import { pluginAddressOf, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import type { EditAddress } from './recordTab';
 import { followReportedCopies, type CopyChanged } from './recordCopy';
+import { answerOf } from '../wire/readFailed';
 
 /** Where a cell's text lives: the plugin copy of the record, and the field's path. */
 export interface FieldAddress extends EditAddress { path: PathHop[] }
@@ -113,7 +114,7 @@ class FieldFileSystem implements vscode.FileSystemProvider {
   private async read(uri: vscode.Uri): Promise<{ text: string; field: KnownField }> {
     const field = this.fieldAt(uri);
     const { formKey, plugin } = field.address;
-    const result = await this.deps.client.getComparison(formKey);
+    const result = answerOf(await this.deps.client.getComparison(formKey));
     if (!result) throw vscode.FileSystemError.FileNotFound(`The record ${formKey} is gone.`);
     const text = textAt(result, field.address);
     if (text === undefined) throw vscode.FileSystemError.FileNotFound(`The record ${formKey} has no such field in ${plugin.name}.`);

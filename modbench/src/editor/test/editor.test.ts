@@ -677,23 +677,23 @@ describe('a record file\'s tab', () => {
   it('shows "Failed to load:" and mEdit\'s reason when mEdit refuses the file, with a line in the Output', async () => {
     const client = fileClient();
     const why = `${FILE} declares no FormKey, so it is no record's document.`;
-    client.setQueryFailure('getRecordOfFile', new Error(why));
+    client.setQueryFailure('getRecordOfFile', { failed: 'refused', refusal: why });
     const { openFile, outputChannel } = makeEditor(client);
 
     const tab = await openFile(FILE);
 
-    expect(pageGlobal(tab, 'mEditLoadError')).toBe(why);
+    expect(pageGlobal(tab, 'mEditLoadError')).toEqual({ failed: 'refused', refusal: why });
     expect(pageGlobal(tab, 'mEditFormKey')).toBeUndefined();
     expect(outputChannel.warn).toHaveBeenCalledWith(`Failed to read ${FILE}: ${why}`);
   });
 
   it('asks again on mEdit\'s next load-order status, and shows the record once mEdit answers', async () => {
     const client = fileClient();
-    client.setQueryFailureOnce('getRecordOfFile', new Error('mEdit has not started'));
+    client.setQueryFailureOnce('getRecordOfFile', { failed: 'unreachable' });
     client.setQueryAnswer('getRecordOfFile', holding(GUN));
     const { openFile } = makeEditor(client);
     const tab = await openFile(FILE);
-    expect(pageGlobal(tab, 'mEditLoadError')).toBe('mEdit has not started');
+    expect(pageGlobal(tab, 'mEditLoadError')).toEqual({ failed: 'unreachable' });
 
     client.emit({
       kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
@@ -782,7 +782,7 @@ describe('a record file\'s tab', () => {
     it('reads the file\'s column from the file on disk when mEdit cannot say whether its plugin is active, so it shows either way', async () => {
       h.disk.set(FILE, '{ "EditorID": "OnDisk" }');
       const client = holdingClient();
-      client.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
+      client.setQueryFailure('getPlugins', { failed: 'unreachable' });
       const { openFile } = makeEditor(client);
       const tab = await openFile(FILE, fileDocument('{}', false));
 
@@ -1156,13 +1156,13 @@ describe('what a record tab\'s webview posts', () => {
       it('is refused, not gone, when only a plugin other than the tab\'s holds it', async () => {
         const { tab } = await answeredFor({ compare: null, missing: [{ ...gone, reason: 'NotInPlugin', message: `${GUN} is not in A.esp (ModA).` }] });
 
-        expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ ok: false, error: `${GUN} is not in A.esp (ModA).` }));
+        expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ ok: false, failure: { failed: 'refused', refusal: `${GUN} is not in A.esp (ModA).` } }));
       });
     });
 
     it('is answered with a null plugin list, rather than failed, when only the list fails', async () => {
       const mEdit = client();
-      mEdit.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
+      mEdit.setQueryFailure('getPlugins', { failed: 'unreachable' });
       const { openDocument } = makeEditor(mEdit);
       const tab = await openDocument(renderedUri(GUN, 'Gun.json'), { getText: () => '{}' });
 
@@ -1218,7 +1218,7 @@ describe('what a record tab\'s webview posts', () => {
 
     it('is failed, naming the record in the Output and leaving the tab\'s title, when the comparison fails', async () => {
       const mEdit = client();
-      mEdit.setQueryFailure('getComparison', new Error('ECONNREFUSED'));
+      mEdit.setQueryFailure('getComparison', { failed: 'unreachable' });
       const { openDocument, outputChannel } = makeEditor(mEdit);
       const tab = await openDocument({
         scheme: 'modbench-child-record', path: '/mods/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000801%3AA.esp&name=A.esp&origin=ModA',
@@ -1227,8 +1227,8 @@ describe('what a record tab\'s webview posts', () => {
       tab.receive(loadRequest);
       await settle();
 
-      expect(loadAnswered(tab)).toEqual([{ type: 'recordLoadAnswered', requestId: 'r1', ok: false, error: 'ECONNREFUSED' }]);
-      expect(outputChannel.warn).toHaveBeenCalledWith(`Failed to read ${GUN}: ECONNREFUSED`);
+      expect(loadAnswered(tab)).toEqual([{ type: 'recordLoadAnswered', requestId: 'r1', ok: false, failure: { failed: 'unreachable' } }]);
+      expect(outputChannel.warn).toHaveBeenCalledWith(`Failed to read ${GUN}: mEdit could not be reached.`);
       expect(tab.title).toBe(GUN);
     });
   });
@@ -1420,7 +1420,7 @@ describe('several records opened at once', () => {
     const GUN_FILE = '/mods/ModA/plugin-source/A.esp/Weapons/Gun.json';
     const client = severalClient();
     client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
-    client.setQueryFailureOnce('getRecordOfFile', new Error('mEdit has not started'));
+    client.setQueryFailureOnce('getRecordOfFile', { failed: 'unreachable' });
     client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
     const { openDocument } = makeEditor(client);
     const tab = await openDocument(fakeUri(GUN_FILE));
@@ -1481,7 +1481,7 @@ describe('several records opened at once', () => {
       const { tab, client } = await loadWithAColumn(missing(AMMO, 'NotInPlugin'));
 
       expect(tab.webview.postMessage).toHaveBeenCalledWith(
-        { type: 'recordLoadAnswered', requestId: 'r1', ok: false, error: `${AMMO} is not in B.esp (ModB).` });
+        { type: 'recordLoadAnswered', requestId: 'r1', ok: false, failure: { failed: 'refused', refusal: `${AMMO} is not in B.esp (ModB).` } });
       expect(comparisonsAsked(client)).toEqual([]);
     });
 

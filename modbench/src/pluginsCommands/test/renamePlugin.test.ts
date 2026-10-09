@@ -186,7 +186,7 @@ describe('confirmRename — what is known before any write', () => {
   });
 
   it('refuses, asking nothing, when mEdit cannot say who depends on the plugin', async () => {
-    client.setQueryFailure('getPluginDependants', new Error('mEdit has not finished indexing the plugins.'));
+    client.setQueryFailure('getPluginDependants', { failed: 'refused', refusal: 'mEdit has not finished indexing the plugins.' });
     const ask = scriptedDialog('Rename');
 
     expect(await confirm(ask)).toEqual({ confirmed: false, refusal: 'mEdit has not finished indexing the plugins.' });

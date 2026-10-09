@@ -19,6 +19,7 @@ import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
+import { answerOf } from '../wire/readFailed';
 
 /** The Plugins tree's one progress surface (plugins.md, States, story 2): a spinner over the
  *  view while the work runs, and the view's own message line. */
@@ -242,7 +243,7 @@ async function pickCompilable(deps: CompileDeps, entry: GestureEntry<PluginsTree
   const selected = compilableSelected(entry.selection);
   const selectedKey = selected && pluginAddressKey({ name: selected.plugin.name, origin: selected.origin });
   const isSelected = (item: { label: string; description: string }) => pluginAddressKey({ name: item.label, origin: item.description }) === selectedKey;
-  const plugins = await deps.client.getPlugins().catch((err: unknown) => {
+  const plugins = await deps.client.getPlugins().then(answerOf).catch((err: unknown) => {
     deps.reporter.report('error', 'Could not list the plugins to compile.', errorMessage(err));
     return undefined;
   });

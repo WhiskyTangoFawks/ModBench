@@ -1,13 +1,14 @@
 import * as vscode from 'vscode';
+import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 
 // What this lib reads of mEdit's answers, by shape: a lib references only boxes every box using it
 // references (target-architecture.md, The rule is the reference list).
 interface CopyPlugin { name: string; origin: string }
 
 export interface RecordDocumentClient {
-  getRecordOwner(formKey: string): Promise<CopyPlugin | undefined>;
+  getRecordOwner(formKey: string): Promise<CopyPlugin | undefined | ReadFailed>;
   getCopyDocument(plugin: CopyPlugin, formKey: string): Promise<
-    { kind: 'OwnFile' | 'ContainersFile' | 'Rendered'; location: string } | null>;
+    { kind: 'OwnFile' | 'ContainersFile' | 'Rendered'; location: string } | null | ReadFailed>;
 }
 
 /** A plugin's copy of a record, as a document of that one copy states it. */
@@ -56,11 +57,13 @@ export async function recordDocument(
   client: RecordDocumentClient, { formKey, plugin: given }: Pick<RecordCopy, 'formKey'> & Partial<RecordCopy>,
 ): Promise<RecordDocument | undefined> {
   const plugin = given ?? await client.getRecordOwner(formKey);
+  if (isReadFailed(plugin)) return { refused: failureReason(plugin) };
   return plugin && copyDocument(client, { formKey, plugin });
 }
 
 export async function copyDocument(client: RecordDocumentClient, { formKey, plugin }: RecordCopy): Promise<RecordDocument> {
   const document = await client.getCopyDocument(plugin, formKey);
+  if (isReadFailed(document)) return { refused: failureReason(document) };
   if (document === null) return { refused: holdsNoCopy({ formKey, plugin }) };
   switch (document.kind) {
     case 'OwnFile': return { uri: vscode.Uri.file(document.location) };

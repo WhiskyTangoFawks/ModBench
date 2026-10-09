@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { MEditClient, PluginMetadata } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
+import { answerOf } from '../wire/readFailed';
 
 function trackedFoldersOf(
   plugins: readonly Pick<PluginMetadata, 'name' | 'origin'>[],
@@ -86,7 +87,7 @@ export function trackedRepositoriesOver(deps: TrackedRepositoriesDeps): TrackedR
       const exports = gitExtension.isActive ? gitExtension.exports : await gitExtension.activate();
       const gitApi = exports.getAPI(1);
 
-      const plugins = await client.getPlugins();
+      const plugins = answerOf(await client.getPlugins());
       const folders = trackedFoldersOf(plugins, trackedMods(), modDirs());
       const folderRepositories = await registerTrackedRepositories(
         (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), [...folders.values()]);

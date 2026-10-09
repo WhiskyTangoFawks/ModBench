@@ -18,7 +18,7 @@ const fakeLogChannel = () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), er
 
 function makeClient(
   fetch: (input: Request) => Promise<Response>,
-  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs'> = {},
+  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs' | 'log'> = {},
 ) {
   return createMEditClient({
     backend: {
@@ -242,7 +242,7 @@ describe('HttpMEditClient — deleting records answers the changes per record', 
 
     const result = await client.getDeleteChanges([kept]);
 
-    expect(result).toEqual({ refused: true, message: 'Could not delete 1 record — socket hang up' });
+    expect(result).toEqual({ refused: true, message: 'Could not delete 1 record — mEdit could not be reached.' });
   });
 
   it('refuses a success with no body, and a thrown create or copy', async () => {
@@ -408,11 +408,13 @@ describe('HttpMEditClient — getComparison', () => {
     expect(await client.getComparison('000801:Gone.esp')).toBeNull();
   });
 
-  it('rejects on any other non-OK answer', async () => {
+  it('fails on any other non-OK answer with mEdit\'s reason alone, and files the verb and status in the log', async () => {
+    const log = vi.fn();
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(500, { detail: 'boom' })));
-    const client = makeClient(fetch);
+    const client = makeClient(fetch, { log });
 
-    await expect(client.getComparison('000801:Broken.esp')).rejects.toThrow(/getComparison.*failed \(500\)/);
+    await expect(client.getComparison('000801:Broken.esp')).resolves.toEqual({ failed: 'refused', refusal: 'boom' });
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/getComparison.*failed \(500\): boom/));
   });
 });
 
@@ -444,10 +446,10 @@ describe('HttpMEditClient — getRecordsComparison', () => {
     expect(await makeClient(fetch).getRecordsComparison(copies)).toEqual(answer);
   });
 
-  it('rejects on any other non-OK answer', async () => {
+  it('fails on any other non-OK answer', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(400, { detail: 'No records.' })));
 
-    await expect(makeClient(fetch).getRecordsComparison([])).rejects.toThrow(/getRecordsComparison.*failed \(400\)/);
+    await expect(makeClient(fetch).getRecordsComparison([])).resolves.toEqual({ failed: 'refused', refusal: 'No records.' });
   });
 });
 
@@ -669,7 +671,7 @@ describe('HttpMEditClient — rebuildIndex', () => {
 
     const outcome = await client.rebuildIndex('/instance', 'Fallout4');
 
-    expect(outcome).toEqual({ rebuilt: false, heldElsewhere: false, detail: 'fetch failed' });
+    expect(outcome).toEqual({ rebuilt: false, heldElsewhere: false, detail: 'mEdit could not be reached.' });
   });
 });
 
@@ -690,6 +692,12 @@ describe('HttpMEditClient — the record filter', () => {
     expect(await client.getActiveFilter()).toEqual({ sql: 'SELECT 1', source: 'armor.sql' });
   });
 
+  it('fails, saying mEdit answered a filter with no source', async () => {
+    const client = makeClient(vi.fn(() => Promise.resolve(jsonResponse(200, { sql: 'SELECT 1', source: null }))));
+
+    expect(await client.getActiveFilter()).toEqual({ failed: 'unreadable', cause: 'mEdit answered a record filter with no source.' });
+  });
+
   it('reads no filter when mEdit holds none', async () => {
     const client = makeClient(vi.fn(() => Promise.resolve(jsonResponse(200, { sql: null, source: null }))));
 
@@ -705,7 +713,7 @@ describe('HttpMEditClient — the record filter', () => {
   it('answers a thrown clear with its reason, never a rejection', async () => {
     const client = makeClient(vi.fn(() => Promise.reject(new Error('fetch failed'))));
 
-    expect(await client.clearFilter()).toBe('fetch failed');
+    expect(await client.clearFilter()).toBe('mEdit could not be reached.');
   });
 
   it('answers a clear mEdit took with null', async () => {
@@ -960,11 +968,11 @@ describe('HttpMEditClient — the record types the game can create', () => {
     expect(fetch.mock.calls[0]?.[0].url).toMatch(/\/record-types\/creatable$/);
   });
 
-  it('rejects, naming the reason, when mEdit cannot answer', async () => {
+  it('fails, naming the reason, when mEdit cannot answer', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
     const client = makeClient(fetch);
 
-    await expect(client.getCreatableRecordTypes()).rejects.toThrow(/No load order has been loaded/);
+    await expect(client.getCreatableRecordTypes()).resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
   });
 });
 
@@ -981,12 +989,12 @@ describe('HttpMEditClient — the record types a container record can hold', () 
     expect(url.searchParams.get('origin')).toBe('ModA');
   });
 
-  it('rejects, naming the reason, when mEdit cannot answer', async () => {
+  it('fails, naming the reason, when mEdit cannot answer', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
     const client = makeClient(fetch);
 
     await expect(client.getChildRecordTypes({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
-      .rejects.toThrow(/No load order has been loaded/);
+      .resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
   });
 });
 
@@ -1011,12 +1019,12 @@ describe('HttpMEditClient — a copy rendered as its document', () => {
     await expect(client.getRenderedDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp')).resolves.toBeNull();
   });
 
-  it('rejects, naming the reason, when mEdit cannot answer', async () => {
+  it('fails, naming the reason, when mEdit cannot answer', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
     const client = makeClient(fetch);
 
     await expect(client.getRenderedDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
-      .rejects.toThrow(/No load order has been loaded/);
+      .resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
   });
 });
 
@@ -1039,12 +1047,12 @@ describe('HttpMEditClient — the document of a copy of a record', () => {
     await expect(client.getCopyDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp')).resolves.toBeNull();
   });
 
-  it('rejects, naming the reason, when mEdit cannot answer', async () => {
+  it('fails, naming the reason, when mEdit cannot answer', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
     const client = makeClient(fetch);
 
     await expect(client.getCopyDocument({ name: 'Shared.esp', origin: 'ModA' }, '000800:Shared.esp'))
-      .rejects.toThrow(/No load order has been loaded/);
+      .resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
   });
 });
 
@@ -1069,12 +1077,12 @@ describe('HttpMEditClient — the record a file holds', () => {
     await expect(client.getRecordOfFile(path)).resolves.toBeNull();
   });
 
-  it('rejects with mEdit\'s reason when it cannot read the file', async () => {
+  it('fails with mEdit\'s reason when it cannot read the file', async () => {
     const detail = `${path} declares no FormKey, so it is no record's document.`;
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { detail })));
     const client = makeClient(fetch);
 
-    await expect(client.getRecordOfFile(path)).rejects.toThrow(detail);
+    await expect(client.getRecordOfFile(path)).resolves.toEqual({ failed: 'refused', refusal: detail });
   });
 });
 
@@ -1087,11 +1095,11 @@ describe('HttpMEditClient — the extensions a new plugin may take', () => {
     expect(fetch.mock.calls[0]?.[0].url).toMatch(/\/plugins\/creatable-extensions$/);
   });
 
-  it('rejects, naming the reason, when mEdit cannot answer', async () => {
+  it('fails, naming the reason, when mEdit cannot answer', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
     const client = makeClient(fetch);
 
-    await expect(client.getCreatablePluginExtensions()).rejects.toThrow(/No load order has been loaded/);
+    await expect(client.getCreatablePluginExtensions()).resolves.toEqual({ failed: 'refused', refusal: 'No load order has been loaded.' });
   });
 });
 
@@ -1103,17 +1111,17 @@ describe('HttpMEditClient — the plugins that list a plugin as a master', () =>
     await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).resolves.toEqual(answer);
   });
 
-  it('rejects a response with no body, so a rename never goes ahead unasked on no answer', async () => {
+  it('fails a response with no body, so a rename never goes ahead unasked on no answer', async () => {
     const client = makeClient(vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 200 }))));
 
-    await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).rejects.toThrow(/no answer/);
+    await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).resolves.toEqual({ failed: 'no-answer' });
   });
 
-  it('rejects, naming the reason, while mEdit has not finished indexing', async () => {
+  it('fails, naming the reason, while mEdit has not finished indexing', async () => {
     const client = makeClient(vi.fn((_req: Request) =>
       Promise.resolve(jsonResponse(503, { detail: 'mEdit has not finished indexing the plugins.' }))));
 
-    await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).rejects.toThrow(/not finished indexing/);
+    await expect(client.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })).resolves.toEqual({ failed: 'refused', refusal: 'mEdit has not finished indexing the plugins.' });
   });
 });
 
@@ -1133,22 +1141,32 @@ describe('HttpMEditClient — the problems in each tracked plugin\'s source', ()
     expect(new URL(asked?.url ?? '').pathname).toBe('/plugins/problems');
   });
 
-  it('rejects a response with no body, so no plugin reads as clean on no answer', async () => {
+  it('fails a response with no body, so no plugin reads as clean on no answer', async () => {
     const client = makeClient(vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 200 }))));
 
-    await expect(client.getPluginProblems()).rejects.toThrow(/no answer/);
+    await expect(client.getPluginProblems()).resolves.toEqual({ failed: 'no-answer' });
   });
 
-  it('rejects, naming the reason, while mEdit has not finished indexing', async () => {
+  it('fails, naming the reason, while mEdit has not finished indexing', async () => {
     const client = makeClient(vi.fn((_req: Request) =>
       Promise.resolve(jsonResponse(503, { detail: 'mEdit has not finished indexing the plugins.' }))));
 
-    await expect(client.getPluginProblems()).rejects.toThrow(/not finished indexing/);
+    await expect(client.getPluginProblems()).resolves.toEqual({ failed: 'refused', refusal: 'mEdit has not finished indexing the plugins.' });
+  });
+});
+
+describe('HttpMEditClient — a read the request never reaches mEdit with', () => {
+  it('fails as unreachable, and files the fetch error in the log alone', async () => {
+    const log = vi.fn();
+    const client = makeClient(vi.fn(() => Promise.reject(new Error('fetch failed'))), { log });
+
+    await expect(client.getPlugins()).resolves.toEqual({ failed: 'unreachable' });
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('fetch failed'));
   });
 });
 
 describe('HttpMEditClient — read timeout, checked through getRecordTypes, standing in for the read verbs that share the race', () => {
-  it('rejects a hung read after the configured timeout, aborting the request', async () => {
+  it('fails a hung read after the configured timeout, aborting the request', async () => {
     let sawSignal: AbortSignal | undefined;
     const fetch = vi.fn((req: Request) => {
       sawSignal = req.signal;
@@ -1156,7 +1174,7 @@ describe('HttpMEditClient — read timeout, checked through getRecordTypes, stan
     });
     const client = makeClient(fetch, { timeoutMs: 20 });
 
-    await expect(client.getRecordTypes({ name: 'MyPatch.esp', origin: 'ModA' })).rejects.toThrow(/timed out after 20ms/);
+    await expect(client.getRecordTypes({ name: 'MyPatch.esp', origin: 'ModA' })).resolves.toEqual({ failed: 'timed-out' });
     expect(sawSignal?.aborted).toBe(true);
   });
 
@@ -1276,6 +1294,27 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     answerHandOver();
     await gesturing;
     expect(requests).toHaveLength(1);
+  });
+
+  it('fails a refused hand-over with mEdit\'s reason alone', async () => {
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', () => Promise.resolve(jsonResponse(400, { detail: 'Not plugin source.' }))],
+    ]);
+    const client = makeClient(fetch);
+    const settled = vi.fn();
+    client.onUnsavedHandOver(settled);
+    await client.start();
+
+    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+
+    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith({ failed: 'refused', refusal: 'Not plugin source.' }));
+  });
+
+  it('rejects a thrown request with the words for it, never fetch\'s text', async () => {
+    const client = makeClient(vi.fn(() => Promise.reject(new Error('fetch failed'))));
+
+    await expect(client.getEditChanges(record.formKey, plugin, envelope)).rejects.toThrow(new Error('mEdit could not be reached.'));
   });
 
   it('carries no documents of its own: an edit sends its envelope alone', async () => {

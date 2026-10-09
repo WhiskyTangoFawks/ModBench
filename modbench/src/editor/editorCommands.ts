@@ -26,6 +26,7 @@ import { ChildRecordDocuments } from './childRecordDocument';
 import { holdOneTextPerFile } from './oneTextPerFile';
 import { recordDocument, type RecordCopy } from '../drivingLib/recordDocument';
 import type { ModFacts } from './modsByOrigin';
+import { failureReason, isReadFailed } from '../wire/readFailed';
 
 export interface EditorCommandDeps {
   context: Pick<vscode.ExtensionContext, 'extensionUri'>;
@@ -159,5 +160,6 @@ const noActivePluginHolds = (formKey: string) => ({ refused: `No active plugin h
 // A record given without a plugin is its winning copy.
 async function copyToOpen(client: OpenClient, { formKey, plugin }: RecordToOpen): Promise<RecordCopy | { refused: string }> {
   const owner = plugin ?? await client.getRecordOwner(formKey);
+  if (isReadFailed(owner)) return { refused: failureReason(owner) };
   return owner ? { formKey, plugin: owner } : noActivePluginHolds(formKey);
 }
