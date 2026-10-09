@@ -179,7 +179,6 @@ public sealed class RenameSourceHandlerTests : IDisposable
 
     private MoveLastWrittenHandler Moving => TestEditService.Over(_holder).GetRequiredService<MoveLastWrittenHandler>();
 
-    // The gesture as the extension makes it: the changes saved, then the ref moved.
     private RenameSourceResult RenameSource(PluginAddress plugin, string newName)
     {
         var answered = Changes.RenameSource(plugin, newName, []);

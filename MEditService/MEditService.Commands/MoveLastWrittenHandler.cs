@@ -19,7 +19,7 @@ public sealed class MoveLastWrittenHandler
         var loadOrder = _loadOrder.Require();
         if (!RenameSourceTarget.Of(loadOrder, plugin, newName, out var target, out var refused)) return refused;
 
-        return SourceRepository.Over(target.Mod,loadOrder.GameRelease).MoveLastWrittenTo(plugin, newName) switch
+        return SourceRepository.Over(target.Mod, loadOrder.GameRelease).MoveLastWrittenTo(plugin, newName) switch
         {
             null => new RenameSourceResult(),
             SourceFailure.GitUnavailable unavailable => RenameSourceTarget.Refused(RenameSourceRefusal.GitUnavailable, unavailable.Reason),

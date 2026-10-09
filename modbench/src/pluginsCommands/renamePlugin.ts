@@ -7,8 +7,6 @@ import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
 
-/** How the gesture reaches plugin source in VS Code: the dirty documents mEdit reads in place of their files,
- *  and the changes applied as one workspace edit and saved. Resolves the files not saved. */
 interface RenameSourceEditing {
   readonly unsaved: () => readonly UnsavedDocument[];
   readonly apply: (changes: SourceChanges) => Promise<readonly string[]>;

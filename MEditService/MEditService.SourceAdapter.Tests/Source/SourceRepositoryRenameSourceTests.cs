@@ -241,7 +241,6 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old).Value());
     }
 
-    // Applies the changes to the disk as VS Code would, and answers whether the name was free.
     private bool Rename(string newName, IReadOnlyList<DocumentChange>? unsaved = null)
     {
         var batch = SourceBatch.Over(Repository, unsaved ?? []);
