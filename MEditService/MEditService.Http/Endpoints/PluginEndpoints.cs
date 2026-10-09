@@ -193,7 +193,7 @@ internal static class PluginEndpoints
         // The plugin hosts the new group, so it owns the route the way Compile does; the FormKey doesn't
         // exist yet, which is exactly why this isn't under /records/{formKey}.
         app.MapPost("/plugins/{plugin}/create-record-changes", CreateRecordChanges)
-            .WithName("CreateRecord")
+            .WithName("CreateRecordChanges")
             .WithSummary("The changes creating a record makes to plugin source, writing nothing.")
             .WithDescription(
                 "Given the current text of any unsaved document, the files and folders creating a new record deletes and " +
@@ -321,7 +321,7 @@ internal static class PluginEndpoints
     // logReceived is null on purpose: no PluginEndpoints handler logs on entry,
     // UseSerilogRequestLogging's per-request summary covers it.
     internal static IResult CreateRecordChanges(
-        string plugin, RecordCreateChangesRequest req, CreateRecordHandler edits, ILoggerFactory loggerFactory)
+        string plugin, RecordCreateChangesRequest req, CreateRecordChangesHandler edits, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         return WriteEndpointMapping.Execute(

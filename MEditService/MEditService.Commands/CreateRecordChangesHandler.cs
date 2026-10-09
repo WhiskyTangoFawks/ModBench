@@ -13,22 +13,22 @@ namespace MEditService.Commands;
 
 /// <summary>The Create gesture's handler (ADR-0014): answers the changes that mint a bare record (plugins.md, Create record,
 /// story 2) under the next free FormKey, written nowhere (ADR-0001).</summary>
-public sealed class CreateRecordHandler
+public sealed class CreateRecordChangesHandler
 {
     private readonly WriteTargets _targets;
     private readonly LoadOrderResolution _resolution;
     private readonly LoadOrderHolder _loadOrder;
     private readonly SchemaReflector _schemaReflector;
-    private readonly ILogger<CreateRecordHandler> _logger;
+    private readonly ILogger<CreateRecordChangesHandler> _logger;
 
     // Internal because the shared module is, which is why this assembly registers its own handlers
     // (MEditService.Commands.Composition) rather than the host naming a type it cannot see.
-    internal CreateRecordHandler(
+    internal CreateRecordChangesHandler(
         WriteTargets targets,
         LoadOrderResolution resolution,
         LoadOrderHolder loadOrder,
         SchemaReflector schemaReflector,
-        ILogger<CreateRecordHandler> logger)
+        ILogger<CreateRecordChangesHandler> logger)
     {
         (_targets, _resolution, _loadOrder, _schemaReflector, _logger) =
             (targets, resolution, loadOrder, schemaReflector, logger);

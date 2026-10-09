@@ -410,7 +410,7 @@ export interface paths {
          * The changes creating a record makes to plugin source, writing nothing.
          * @description Given the current text of any unsaved document, the files and folders creating a new record deletes and moves and the text each document it changes or creates holds afterwards: a new source file of its own, or, for a record created in a container, an entry in the container's document. Moves come first, then deletions, then documents, and every path is absolute. The answer names the new FormKey. Git-native: the record answers at Effective only until committed and compiled.
          */
-        post: operations["CreateRecord"];
+        post: operations["CreateRecordChanges"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2355,7 +2355,7 @@ export interface operations {
             };
         };
     };
-    CreateRecord: {
+    CreateRecordChanges: {
         parameters: {
             query?: never;
             header?: never;

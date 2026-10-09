@@ -8,7 +8,7 @@ public sealed class CommandHandlerConventionTests
 {
     private static readonly Type[] SingleWriteHandlers =
     [
-        typeof(CreateRecordHandler),
+        typeof(CreateRecordChangesHandler),
         typeof(CreatePluginHandler),
         typeof(PutLoadOrderHandler),
         typeof(RenameSourceHandler),

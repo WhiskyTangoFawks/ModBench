@@ -12,7 +12,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class CreateRecordHandlerTests
+public sealed class CreateRecordChangesHandlerTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 

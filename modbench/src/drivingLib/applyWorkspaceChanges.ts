@@ -50,11 +50,17 @@ export async function applyWorkspaceChanges(
     if (!applied) notMoving?.();
   }
   if (!applied) throw new Error('VS Code did not apply the changes.');
-  const unsaved = await Promise.all(changed.map(async (uri) => {
-    const saved = await vscode.workspace.openTextDocument(uri);
-    return saved.isDirty && !await saved.save() ? [uri.fsPath] : [];
-  }));
+  const unsaved = await Promise.all(changed.map(async (uri) => await saves(uri) ? [] : [uri.fsPath]));
   return unsaved.flat();
+}
+
+async function saves(uri: vscode.Uri): Promise<boolean> {
+  try {
+    const saved = await vscode.workspace.openTextDocument(uri);
+    return !saved.isDirty || await saved.save();
+  } catch {
+    return false;
+  }
 }
 
 function documentAt(path: string, read: vscode.Uri | undefined): vscode.Uri {

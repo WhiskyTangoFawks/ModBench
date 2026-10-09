@@ -237,7 +237,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const recordWrite = recordWriteOver(instance, meditClient);
   const sourceEditing: SourceEditing = {
     unsaved: dirtyPluginSource,
-    apply: (items) => applyWorkspaceChanges(items),
+    applyWorkspaceChanges: (items) => applyWorkspaceChanges(items),
     oneAtATime: oneAtATime(),
     refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
   };

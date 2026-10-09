@@ -84,7 +84,7 @@ export async function register({
     recordViewIds: ['test.view'],
     modFacts: { trackedMods: () => new Set(), modDirs: () => new Map(), standingOf: () => ({ kind: 'enabled' }), onChange: () => ({ dispose: () => undefined }) },
     recordWrite: (command) => command(),
-    sourceEditing: { unsaved: () => [], apply: () => Promise.resolve([]), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
+    sourceEditing: { unsaved: () => [], applyWorkspaceChanges: () => Promise.resolve([]), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
   });
   focusedView.follow('test.view', {
     get selection() { return selection(); },

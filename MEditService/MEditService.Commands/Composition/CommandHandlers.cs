@@ -35,12 +35,12 @@ public static class CommandHandlers
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ILogger<DeleteRecordChangesHandler>>()));
 
-        services.AddSingleton(sp => new CreateRecordHandler(
+        services.AddSingleton(sp => new CreateRecordChangesHandler(
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<LoadOrderResolution>(),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<ILogger<CreateRecordHandler>>()));
+            sp.GetRequiredService<ILogger<CreateRecordChangesHandler>>()));
 
         // The container half both copy modes take. Held once: singletons only, nothing per
         // request.

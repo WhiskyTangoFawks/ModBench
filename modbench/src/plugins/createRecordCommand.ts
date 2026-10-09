@@ -53,7 +53,7 @@ const labelOf = ({ label }: vscode.TreeItem): string => (typeof label === 'objec
 
 async function pickRecordType(
   choices: () => Promise<RecordTypeChoice[]>, holder: string, reporter: Reporter,
-): Promise<string | undefined> {
+): Promise<{ type: string; name: string } | undefined> {
   let items: (vscode.QuickPickItem & { type: string })[];
   try {
     items = (await choices()).map(({ type, displayName }) => ({ label: displayName, description: type, type }));
@@ -66,8 +66,8 @@ async function pickRecordType(
     reporter.report('error', `"${holder}" can hold no new record.`);
     return undefined;
   }
-  if (rest.length === 0) return only.type;
-  return (await vscode.window.showQuickPick(items, { placeHolder: 'Record type' }))?.type;
+  const picked = rest.length === 0 ? only : await vscode.window.showQuickPick(items, { placeHolder: 'Record type' });
+  return picked && { type: picked.type, name: picked.label };
 }
 
 const GRID_POSITION = /^\s*(-?\d+)\s*,\s*(-?\d+)\s*$/;
@@ -84,15 +84,18 @@ async function askGridPosition(): Promise<GridPosition | undefined> {
 
 async function chosenOptions(
   row: CreateRow, target: Target, option: unknown, reporter: Reporter,
-): Promise<{ recordType: string; position?: GridPosition } | undefined> {
+): Promise<{ recordType: string; typeName: string; position?: GridPosition } | undefined> {
   const given = optionsOf(option);
-  const recordType = 'recordType' in target
-    ? target.recordType
-    : given.recordType ?? await pickRecordType(target.choices, labelOf(row), reporter);
-  if (recordType === undefined) return undefined;
-  if (row.kind !== 'worldspace' || recordType !== CELL_RECORD_TYPE) return { recordType };
+  const chosen = 'recordType' in target
+    ? { type: target.recordType, name: labelOf(row) }
+    : given.recordType === undefined
+      ? await pickRecordType(target.choices, labelOf(row), reporter)
+      : { type: given.recordType, name: given.recordType };
+  if (chosen === undefined) return undefined;
+  const { type: recordType, name: typeName } = chosen;
+  if (row.kind !== 'worldspace' || recordType !== CELL_RECORD_TYPE) return { recordType, typeName };
   const position = given.position ?? await askGridPosition();
-  return position && { recordType, position };
+  return position && { recordType, typeName, position };
 }
 
 /** xEdit's Add (plugins.md, Create record). */
@@ -107,7 +110,7 @@ export function registerRecordCreateCommand(
     if (chosen === undefined) return;
 
     const { plugin } = target;
-    const { recordType, position } = chosen;
+    const { recordType, typeName, position } = chosen;
     const container = 'container' in target ? target.container : undefined;
     const place: RecordPlace<PluginsTreeNode> = container === undefined ? { plugin, recordType } : { container: row };
     const created = deps.createdRecords.watch(plugin);
@@ -122,9 +125,9 @@ export function registerRecordCreateCommand(
         }
         let notSaved: readonly string[];
         try {
-          notSaved = await deps.source.apply([changes]);
+          notSaved = await deps.source.applyWorkspaceChanges([changes]);
         } catch (error) {
-          deps.reporter.report('error', `Could not create the ${recordType} record.`, errorMessage(error));
+          deps.reporter.report('error', `Could not create the ${typeName} record.`, errorMessage(error));
           return;
         }
         answer.formKey = changes.formKey;

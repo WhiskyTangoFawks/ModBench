@@ -34,8 +34,8 @@ internal static class TestEditService
     internal static DeleteRecordChangesHandler DeleteHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<DeleteRecordChangesHandler>();
 
-    internal static CreateRecordHandler CreateHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<CreateRecordHandler>();
+    internal static CreateRecordChangesHandler CreateHandler(LoadOrderHolder holder) =>
+        Over(holder).GetRequiredService<CreateRecordChangesHandler>();
 
     internal static CopyRecordHandler CopyHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<CopyRecordHandler>();

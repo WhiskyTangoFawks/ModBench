@@ -30,7 +30,7 @@ internal static class SyncHandlers
 
     /// <summary>Create, then its changes made on disk, as the editor makes them.</summary>
     internal static RecordEditResult CreateRecordSync(
-        this CreateRecordHandler handler, PluginAddress plugin, string recordType, string? container = null,
+        this CreateRecordChangesHandler handler, PluginAddress plugin, string recordType, string? container = null,
         GridPosition? position = null, IReadOnlyList<DocumentChange>? unsaved = null)
     {
         var (outcome, changes) = handler.CreateRecord(plugin, recordType, unsaved ?? [], container, position);

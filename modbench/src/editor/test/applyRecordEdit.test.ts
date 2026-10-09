@@ -5,7 +5,6 @@ const h = vi.hoisted(() => ({
   applied: [] as unknown[][],
   saved: [] as string[],
   savesLand: true,
-  applyLands: true,
 }));
 
 vi.mock('vscode', () => ({
@@ -23,7 +22,7 @@ vi.mock('vscode', () => ({
       uri, isDirty: true, getText: () => `text of ${uri.path}`,
       save: () => { h.saved.push(uri.path); return Promise.resolve(h.savesLand); },
     }),
-    applyEdit: (edit: { made: unknown[] }) => { h.applied.push(edit.made); return Promise.resolve(h.applyLands); },
+    applyEdit: (edit: { made: unknown[] }) => { h.applied.push(edit.made); return Promise.resolve(true); },
   },
 }));
 
@@ -56,7 +55,6 @@ beforeEach(() => {
   h.applied.length = 0;
   h.saved.length = 0;
   h.savesLand = true;
-  h.applyLands = true;
 });
 
 describe('an edit of a record', () => {
@@ -68,15 +66,13 @@ describe('an edit of a record', () => {
     expect(meditClient.calls).toContainEqual({ method: 'getEditChanges', args: ['000800:A.esp', plugin, height, `text of ${FILE}`] });
   });
 
-  it('makes each move mEdit answers in order, then puts each document\'s text, saves each, and resolves the new FormKey', async () => {
+  it('tells the panel host the moves and the new FormKey, refreshes Source Control, and resolves the new FormKey', async () => {
     const { deps, refreshSourceControlFor, moving } = makeDeps({
       applied: true, newFormKey: '000900:A.esp', moves: [{ from: FILE, to: MOVED }], deletions: [], documents: [{ path: MOVED, text: 'renamed' }],
     });
 
     const newFormKey = await applyRecordEdit(deps, address, height);
 
-    expect(h.applied).toEqual([[['move', FILE, MOVED], ['create', MOVED], ['replace', MOVED, 'renamed']]]);
-    expect(h.saved).toEqual([MOVED]);
     expect(newFormKey).toBe('000900:A.esp');
     expect(moving.mock.calls.map(([moves, ...rest]) => [moves.map(({ from, to }) => [from.path, to.path]), ...rest])).toEqual([[[[FILE, MOVED]], address, '000900:A.esp']]);
     expect(refreshSourceControlFor).toHaveBeenCalledWith(plugin);

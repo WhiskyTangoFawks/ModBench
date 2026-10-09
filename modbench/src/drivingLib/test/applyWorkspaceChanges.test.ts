@@ -5,6 +5,7 @@ const h = vi.hoisted(() => ({
   applied: [] as unknown[][],
   saved: [] as string[],
   savesLand: true,
+  saveThrows: false,
   applyLands: true,
 }));
 
@@ -19,7 +20,7 @@ vi.mock('vscode', () => ({
     replace(uri: { path: string }, _range: unknown, text: string) { this.made.push(['replace', uri.path, text]); }
   },
   workspace: {
-    openTextDocument: (uri: { path: string }) => Promise.resolve({
+    openTextDocument: (uri: { path: string }) => h.saveThrows ? Promise.reject(new Error('gone')) : Promise.resolve({
       uri, isDirty: true,
       save: () => { h.saved.push(uri.path); return Promise.resolve(h.savesLand); },
     }),
@@ -37,6 +38,7 @@ beforeEach(() => {
   h.applied.length = 0;
   h.saved.length = 0;
   h.savesLand = true;
+  h.saveThrows = false;
   h.applyLands = true;
 });
 
@@ -75,6 +77,12 @@ describe('applying workspace changes', () => {
     await applyWorkspaceChanges([{ ...none, documents: [{ path: OWNER, text: 'x' }] }], { read });
 
     expect(h.applied[0]).toEqual([['create', OWNER], ['replace', OWNER, 'x']]);
+  });
+
+  it('resolves a file as not saved when opening it to save throws, after the edit is in place', async () => {
+    h.saveThrows = true;
+
+    expect(await applyWorkspaceChanges([{ ...none, documents: [{ path: OWNER, text: 'x' }] }])).toEqual([OWNER]);
   });
 
   it('resolves the files VS Code did not save', async () => {

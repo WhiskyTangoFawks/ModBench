@@ -105,7 +105,7 @@ export function registerRecordLifecycleCommands(
           `Could not delete ${refused.length} of ${records.length + unreadable.length} records.`, { landed, refused }, label);
         let notSaved: readonly string[] = [];
         try {
-          if (answer.applied.length > 0) notSaved = await source.apply(answer.applied);
+          if (answer.applied.length > 0) notSaved = await source.applyWorkspaceChanges(answer.applied);
         } catch (error) {
           reporter.report('error', 'Could not delete the records.', errorMessage(error));
           outcome([]);
