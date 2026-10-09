@@ -44,7 +44,7 @@ function pending(logThrown: (reason: string) => void) {
 
 export function editingFlow(deps: EditingDeps): EditingFlow {
   const { client, instanceRoot, around, onPut, reporterFor, log } = deps;
-  const reportStopped = async (tag: string, detail?: string): Promise<void> => { reporterFor(tag).report('error', STOPPED, detail); };
+  const reportStopped = (tag: string, detail?: string): void => { reporterFor(tag).report('error', STOPPED, detail); };
   const tells = pending((reason) => { log(`[loadOrder] handing mEdit the load order threw: ${reason}`); });
   const launches = pending((reason) => { log(`[loadOrder] telling the launch of mEdit threw: ${reason}`); });
   let entering = false;
@@ -60,7 +60,8 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
   const tellLaunch = async (launched: Promise<LaunchOutcome>): Promise<void> => {
     const outcome = await launched;
     if (outcome.outcome === 'failed') {
-      await (outcome.error === undefined ? reportStopped('enterEditing') : reportStopped('launch', outcome.error));
+      if (outcome.error === undefined) reportStopped('enterEditing');
+      else reportStopped('launch', outcome.error);
       return;
     }
     if (outcome.outcome === 'stopped') return;
@@ -72,7 +73,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     client.onLoadOrderResent((snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => {
       tellPut(Promise.resolve({ sent: true, snapshot, outcome }));
     }),
-    client.onExit(() => { void tells.track(reportStopped('mEditExit')); }),
+    client.onExit(() => { void tells.track(Promise.resolve().then(() => { reportStopped('mEditExit'); })); }),
     client.onLaunch((launched) => {
       const shown = launches.track(tellLaunch(launched));
       if (!entering) void around(() => shown);
