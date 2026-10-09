@@ -201,35 +201,38 @@ describe('HttpMEditClient — creating a record', () => {
   });
 });
 
-describe('HttpMEditClient — deleting records answers per record', () => {
+describe('HttpMEditClient — deleting records answers the changes per record', () => {
   const kept = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const gone = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const untracked = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
+  const unsaved = [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Cell.json', text: '{}' }];
 
-  it('sends the whole selection as one call and reads what was applied as landed, each refusal with its message', async () => {
+  it('sends the selection and the unsaved documents as one call, and reads each record\'s moves, deletions and documents, each refusal with its message', async () => {
+    const keptChanges = { record: kept, moves: [], deletions: ['/mods/ModA/plugin-source/MyPatch.esp/Npcs/Kept'], documents: [] };
+    const goneChanges = { record: gone, moves: [], deletions: [], documents: [{ path: unsaved[0]?.path, text: '{"cut": true}' }] };
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
-      applied: [kept, gone],
+      applied: [keptChanges, goneChanges],
       refused: [{ item: untracked, refusal: 'PluginNotTracked', message: 'Other.esp is not tracked.' }],
     })));
     const client = makeClient(fetch);
 
-    const outcome = await client.deleteRecords([kept, untracked, gone]);
+    const outcome = await client.getDeleteChanges([kept, untracked, gone], unsaved);
 
     expect(outcome).toEqual({
-      landed: [kept, gone],
+      applied: [keptChanges, goneChanges],
       refused: [{ item: untracked, reason: 'Other.esp is not tracked.' }],
     });
     expect(fetch).toHaveBeenCalledOnce();
     const request = fetch.mock.calls[0]?.[0];
-    expect(request?.url).toMatch(/\/records\/delete$/);
-    expect(await request?.json()).toEqual({ records: [kept, untracked, gone] });
+    expect(request?.url).toMatch(/\/records\/delete-changes$/);
+    expect(await request?.json()).toEqual({ records: [kept, untracked, gone], documents: unsaved });
   });
 
   it('resolves a WriteRefused carrying the count and the server text on a non-ok response', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(400, 'Bad Request')));
     const client = makeClient(fetch);
 
-    const result = await client.deleteRecords([kept, gone]);
+    const result = await client.getDeleteChanges([kept, gone], []);
 
     expect(result).toEqual({ refused: true, message: 'Could not delete 2 records — Bad Request' });
   });
@@ -238,7 +241,7 @@ describe('HttpMEditClient — deleting records answers per record', () => {
     const fetch = vi.fn(() => Promise.reject(new Error('socket hang up')));
     const client = makeClient(fetch);
 
-    const result = await client.deleteRecords([kept]);
+    const result = await client.getDeleteChanges([kept], []);
 
     expect(result).toEqual({ refused: true, message: 'Could not delete 1 record — socket hang up' });
   });
@@ -248,7 +251,7 @@ describe('HttpMEditClient — deleting records answers per record', () => {
     const thrown = makeClient(vi.fn(() => Promise.reject(new Error('socket hang up'))));
 
     const answers = [
-      await client.deleteRecords([kept]),
+      await client.getDeleteChanges([kept], []),
       await thrown.createRecord({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_'),
       await thrown.copyRecords([kept], 'New', [{ name: 'Patch.esp', origin: 'PatchMod' }], false),
     ];
@@ -542,28 +545,29 @@ describe('HttpMEditClient — an edit answered as its source changes', () => {
     const to = 'plugin-source/MyPatch.esp/Npcs/Renamed - 000800_MyPatch.esp.json';
     const moves = [{ from: 'plugin-source/MyPatch.esp/Npcs/Old - 000800_MyPatch.esp.json', to }];
     const documents = [{ path: to, text: '{"EditorID": "Renamed"}' }];
+    const deletions = ['plugin-source/MyPatch.esp/Npcs/Gone'];
     let seen: Request | undefined;
     const fetch = vi.fn((req: Request) => {
       seen = req;
-      return Promise.resolve(jsonResponse(200, { formKey: '000800:MyPatch.esp', path: 'EditorID', moves, documents, newFormKey: null }));
+      return Promise.resolve(jsonResponse(200, { formKey: '000800:MyPatch.esp', path: 'EditorID', moves, deletions, documents, newFormKey: null }));
     });
 
     const outcome = await makeClient(fetch).getEditChanges('000800:MyPatch.esp', plugin, renamed, '{"EditorID": "Old"}');
 
-    expect(outcome).toEqual({ applied: true, moves, documents });
+    expect(outcome).toEqual({ applied: true, moves, deletions, documents });
     expect(new URL(seen?.url ?? '').pathname).toBe('/records/000800%3AMyPatch.esp/edit-changes');
     expect(await seen?.json()).toEqual({ edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed }, text: '{"EditorID": "Old"}' });
   });
 
   it('getEditChanges carries the new FormKey an edit of the FormID answers with', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
-      formKey: '000800:MyPatch.esp', path: 'FormKey', moves: [], documents: [], newFormKey: '000900:MyPatch.esp',
+      formKey: '000800:MyPatch.esp', path: 'FormKey', moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp',
     })));
 
     const outcome = await makeClient(fetch).getEditChanges(
       '000800:MyPatch.esp', plugin, { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' }, '{}');
 
-    expect(outcome).toEqual({ applied: true, moves: [], documents: [], newFormKey: '000900:MyPatch.esp' });
+    expect(outcome).toEqual({ applied: true, moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp' });
   });
 
   it('getEditChanges answers the edit\'s typed refusal as the backend worded it', async () => {

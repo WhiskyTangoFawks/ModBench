@@ -16,7 +16,7 @@ import {
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyItem, type CopyMode,
-  type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditChangesOutcome, type RecordPage,
+  type GridPosition, type RecordAddress, type RecordCreateResponse, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
@@ -370,14 +370,16 @@ class HttpMEditClient implements MEditClient {
     return answer;
   }
 
-  async deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused> {
+  async getDeleteChanges(
+    records: readonly RecordAddress[], unsaved: readonly UnsavedDocument[],
+  ): Promise<DeleteChangesOutcome | WriteRefused> {
     const counted = records.length === 1 ? '1 record' : `${records.length} records`;
     const answer = await this.mutate({
-      op: `deleteRecords(${counted})`,
+      op: `getDeleteChanges(${counted})`,
       failMsg: `Could not delete ${counted}`,
-      post: () => this.apiClient.POST('/records/delete', { body: { records: [...records] } }),
+      post: () => this.apiClient.POST('/records/delete-changes', { body: { records: [...records], documents: [...unsaved] } }),
     });
-    return isRefused(answer) ? answer : selectionOutcome(answer);
+    return isRefused(answer) ? answer : { applied: answer.applied, refused: itemRefusals(answer.refused) };
   }
 
   async copyRecords(
@@ -429,8 +431,8 @@ class HttpMEditClient implements MEditClient {
       body: { edit: { plugin, origin, ...envelope }, text },
     });
     if (response.ok && data) {
-      const { moves, documents, newFormKey } = data;
-      return newFormKey ? { applied: true, moves, documents, newFormKey } : { applied: true, moves, documents };
+      const { moves, deletions, documents, newFormKey } = data;
+      return newFormKey ? { applied: true, moves, deletions, documents, newFormKey } : { applied: true, moves, deletions, documents };
     }
 
     const outcome = editRefused(error, response.status);

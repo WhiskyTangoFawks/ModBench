@@ -8,7 +8,7 @@ public sealed class WriteRouteSeamTests
     private static readonly (string Route, string Method)[] Routes =
     [
         ("POST /records/{formKey}/edit-changes", "EditRecordChanges"),
-        ("POST /records/delete", "DeleteRecord"),
+        ("POST /records/delete-changes", "DeleteRecordChanges"),
         ("POST /records/copy", "CopyRecord"),
         ("POST /plugins/create", "CreatePlugin"),
         ("POST /plugins/track", "Track"),

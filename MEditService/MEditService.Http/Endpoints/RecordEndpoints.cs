@@ -161,18 +161,18 @@ internal static class RecordEndpoints
         .ProducesProblem(422)
         .ProducesProblem(500);
 
-        app.MapPost("/records/delete", (RecordDeleteRequest request, DeleteRecordHandler edits) =>
-            DeleteRecord(request, edits, logger))
-        .WithName("DeleteRecord")
-        .WithSummary("Delete records as working-tree changes, each on its own.")
+        app.MapPost("/records/delete-changes", (RecordDeleteChangesRequest request, DeleteRecordChangesHandler edits) =>
+            DeleteRecordChanges(request, edits, logger))
+        .WithName("DeleteRecordChanges")
+        .WithSummary("The changes deleting records makes to plugin source, writing nothing, each record on its own.")
         .WithDescription(
-            "Deletes each record's source file — a git-native, null-Body working-tree change: " +
-            "gone at Effective, still served at Head until the deletion is committed and " +
-            "compiled. Each record is deleted or refused on its own, and the answer names both. No " +
-            "reference cascade — a FormLink elsewhere pointing at a deleted record goes dangling and " +
-            "surfaces as an ordinary compile diagnostic (ADR-0007), the same as any other dangling link.")
+            "Given the current text of any unsaved document, each record's deletion as the files and folders it " +
+            "deletes and the text each document it changes holds afterwards, as an edit's are. Each item answers on " +
+            "the ones before it, and applying them in order leaves the records deleted. A record is changed or " +
+            "refused on its own, and the answer names both. No reference cascade — a FormLink elsewhere pointing at " +
+            "a deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0007).")
         .WithTags("Records")
-        .Produces<RecordDeleteResponse>()
+        .Produces<RecordDeleteChangesResponse>()
         .ProducesProblem(400)
         .ProducesProblem(500)
         .ProducesProblem(503);
@@ -239,22 +239,27 @@ internal static class RecordEndpoints
     }
 
 
-    internal static Task<IResult> DeleteRecord(RecordDeleteRequest request, DeleteRecordHandler edits, ILogger logger)
+    internal static Task<IResult> DeleteRecordChanges(RecordDeleteChangesRequest request, DeleteRecordChangesHandler edits, ILogger logger)
     {
         var records = request.Records ?? [];
+        var unsaved = request.Documents ?? [];
         if (logger.IsEnabled(LogLevel.Information))
         {
-            logger.LogInformation("Received DeleteRecord for {Count} records", records.Count);
+            logger.LogInformation("Received DeleteRecordChanges for {Count} records", records.Count);
         }
         return OverRecords(records, validateOptions: () => null, answer: addressed =>
         {
             return WriteEndpointMapping.Answered(
                 "Delete", logger,
-                edits.DeleteRecords(addressed),
+                edits.DeleteRecords(addressed, [.. unsaved.Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))]),
                 WriteEndpointMapping.Refusal,
-                landed => Addressed(landed.Item),
+                landed => new RecordDeleteChanges(
+                    Addressed(landed.Item),
+                    [.. landed.Outcome.Moves.Select(move => new SourceMove(move.From, move.To))],
+                    landed.Outcome.Deletions,
+                    [.. landed.Outcome.Documents.Select(document => new DocumentChange(document.Path, document.Text))]),
                 refused => new RecordAddressRefusal(Addressed(refused.Item), refused.Refusal, refused.Message),
-                (applied, refused) => new RecordDeleteResponse(applied, refused));
+                (applied, refused) => new RecordDeleteChangesResponse(applied, refused));
         });
     }
 

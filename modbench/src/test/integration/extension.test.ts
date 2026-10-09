@@ -112,6 +112,8 @@ const heldIn = new Map<string, string>();
 type EditAnswer = { status: number; body: unknown };
 const refusedAsUntracked: EditAnswer = { status: 409, body: { refusal: 'PluginNotTracked', detail: 'Tracked.esp is not tracked, so it is read-only.' } };
 let answerEdit: (asked: EditAsked) => EditAnswer = () => refusedAsUntracked;
+const deletesAsked: unknown[] = [];
+let answerDelete: EditAnswer = { status: 200, body: { applied: [], refused: [] } };
 
 function pluginNamesOf(body: string): string[] {
   const parsed: unknown = JSON.parse(body);
@@ -313,6 +315,16 @@ function createMockBackend(): http.Server {
         const { status, body: answer } = answerEdit(asked);
         res.writeHead(status, { 'Content-Type': status === 200 ? 'application/json' : 'application/problem+json' });
         res.end(JSON.stringify(answer));
+      });
+      return;
+    }
+    if (method === 'POST' && url === '/records/delete-changes') {
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        deletesAsked.push(JSON.parse(body));
+        res.writeHead(answerDelete.status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(answerDelete.body));
       });
       return;
     }
@@ -825,7 +837,7 @@ describe('a child record of a tracked plugin', () => {
     await openRecord(childCopy);
     await childDocument();
     answerEdit = () => ({ status: 200, body: {
-      formKey: CHILD_FORM_KEY, path: 'FormKey', moves: [], newFormKey: NEW_KEY, documents: [{ path: TRACKED_FILE, text: containerText }],
+      formKey: CHILD_FORM_KEY, path: 'FormKey', moves: [], deletions: [], newFormKey: NEW_KEY, documents: [{ path: TRACKED_FILE, text: containerText }],
     } });
 
     await vscode.commands.executeCommand('modbench.record.editField',
@@ -890,7 +902,7 @@ describe('an edit in a tracked copy\'s grid', () => {
   const editedText = ({ text, value }: EditAsked) => `${text}+${String(value)}`;
   const answeredIn = (file: string, moved: { moves: unknown[]; newFormKey: string } = { moves: [], newFormKey: '' }) => (asked: EditAsked): EditAnswer => ({
     status: 200,
-    body: { formKey: TRACKED_FORM_KEY, path: 'Edits', ...moved, newFormKey: moved.newFormKey || null, documents: [{ path: file, text: editedText(asked) }] },
+    body: { formKey: TRACKED_FORM_KEY, path: 'Edits', deletions: [], ...moved, newFormKey: moved.newFormKey || null, documents: [{ path: file, text: editedText(asked) }] },
   });
   const recordTabsOn = (fsPath: string) => openTabs().filter((t) =>
     t.input instanceof vscode.TabInputCustom && t.input.viewType === 'modbench.record' && t.input.uri.fsPath === fsPath);
@@ -992,6 +1004,54 @@ describe('an edit in a tracked copy\'s grid', () => {
 
     assert.deepStrictEqual(shown(child), { text: `${savedText}+1`, unsaved: false });
     assert.strictEqual(fs.readFileSync(TRACKED_FILE, 'utf8'), `${savedText}+1`);
+  });
+});
+
+describe('deleting a record in a tracked copy', () => {
+  const plugin = { name: TRACKED_PLUGIN, origin: TRACKED_ORIGIN };
+  const savedText = fs.readFileSync(TRACKED_FILE, 'utf8');
+  const folder = path.join(path.dirname(TRACKED_FILE), 'DoomedNpc');
+  const warn = vscode.window.showWarningMessage;
+
+  afterEach(async () => {
+    (vscode.window as { showWarningMessage: unknown }).showWarningMessage = warn;
+    await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    fs.rmSync(folder, { recursive: true, force: true });
+    const restored = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    const restoring = new vscode.WorkspaceEdit();
+    restoring.replace(restored.uri, new vscode.Range(0, 0, restored.lineCount, 0), savedText);
+    await vscode.workspace.applyEdit(restoring);
+    await restored.save();
+    answerDelete = { status: 200, body: { applied: [], refused: [] } };
+  });
+
+  it('reads the dirty plugin source in place of its file, deletes the answered folder recursively, and saves the rewritten document', async () => {
+    fs.mkdirSync(path.join(folder, 'Nested'), { recursive: true });
+    fs.writeFileSync(path.join(folder, 'Nested', 'Child.json'), '{}');
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
+    await vscode.window.showTextDocument(document);
+    const dirtied = new vscode.WorkspaceEdit();
+    dirtied.insert(document.uri, new vscode.Position(0, 0), ' ');
+    await vscode.workspace.applyEdit(dirtied);
+    assert.ok(document.isDirty, 'the plugin source should be unsaved before the delete');
+    const unsavedText = document.getText();
+    answerDelete = { status: 200, body: { applied: [{
+      record: { formKey: TRACKED_FORM_KEY, plugin: plugin.name, origin: plugin.origin },
+      moves: [], deletions: [folder], documents: [{ path: TRACKED_FILE, text: 'rewritten' }],
+    }], refused: [] } };
+    (vscode.window as { showWarningMessage: unknown }).showWarningMessage = () => Promise.resolve('Delete');
+
+    await vscode.commands.executeCommand('modbench.record.delete', {
+      label: 'TrackedGun', argument: { kind: 'record', plugin, formKey: TRACKED_FORM_KEY },
+    });
+
+    const asked = deletesAsked.at(-1);
+    assert.ok(isRecord(asked) && Array.isArray(asked.documents));
+    assert.deepStrictEqual(asked.documents, [{ path: TRACKED_FS_PATH, text: unsavedText }]);
+    assert.ok(!fs.existsSync(folder), 'the answered folder should be deleted with what is in it');
+    assert.strictEqual(fs.readFileSync(TRACKED_FILE, 'utf8'), 'rewritten');
+    assert.ok(!document.isDirty, 'the rewritten document should be saved');
   });
 });
 
