@@ -32,20 +32,6 @@ describe('every MO2 text-file write command has a corpus test', () => {
   });
 });
 
-describe('the Mods view fires the bound modlist commands', () => {
-  const valueImportOfCore = (source: string): boolean =>
-    /^import\s+(?!type\b)[^;]*from\s+'[^']*\/modlist\/modlist'/m.test(source);
-
-  it('sees a value import of the core box, and not a type import', () => {
-    expect(valueImportOfCore("import { modlistCommands, type ModlistCommands } from '../modlist/modlist';")).toBe(true);
-    expect(valueImportOfCore("import type { ModlistCommands } from '../modlist/modlist';")).toBe(false);
-  });
-
-  it('imports nothing but types from the core box in any file of the view', () => {
-    expect(sourceFiles().filter((f) => f.startsWith('mods/') && !f.includes('/test/') && valueImportOfCore(read(f)))).toEqual([]);
-  });
-});
-
 describe('only the Instance adapter touches a downloaded file\'s .meta', () => {
   const importsTheSidecarPath = (source: string): boolean =>
     [...source.matchAll(/import\s*\{([^}]*)\}\s*from/g)].some((m) => /\bdownloadSidecarFile\b/.test(m[1] ?? ''));

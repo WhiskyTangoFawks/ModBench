@@ -94,6 +94,18 @@ function restrictedImports({ vscode, packages, path, client = false, inAdapter =
     }];
 }
 
+// A view fires the commands the root bound to the Instance adapter; it takes only types from the core box.
+/** @type {Record<string, string[]>} */
+const BOUND_COMMAND_BOXES = { mods: ['modlist'] };
+/** @param {string} view */
+const boundCommandImports = (view) => ['error', {
+    patterns: BOUND_COMMAND_BOXES[view].map((core) => ({
+        group: [`**/${core}/${core}`],
+        allowTypeImports: true,
+        message: 'The root binds the core box\'s commands to the Instance adapter; the view receives them.',
+    })),
+}];
+
 const SYNTAX = {
     message: MESSAGE_API_SITES.map((selector) => ({ selector, message: SURFACING_GOES_THROUGH_THE_REPORTER })),
     watcher: ['CallExpression[callee.name=/^create\\w*Watcher$/]', 'CallExpression[callee.property.name=/^create\\w*Watcher$/]']
@@ -192,6 +204,11 @@ export default defineConfig(
                 clientSeam: box !== 'client',
             }),
         },
+    })),
+    ...Object.keys(BOUND_COMMAND_BOXES).map((view) => ({
+        files: [`src/${view}/**/*.ts`],
+        ignores: NOT_PRODUCTION,
+        rules: { '@typescript-eslint/no-restricted-imports': boundCommandImports(view) },
     })),
     // No test reads a plugin's bytes either (ADR-0004).
     {
