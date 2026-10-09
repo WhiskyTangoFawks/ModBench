@@ -37,9 +37,19 @@ public sealed class EditRecordChangesHandler
     private SourceAnswer<RecordEditChanges> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
-        if (!_targets.TryResolveEditTarget(plugin, formKey, given, out var editTarget, out var document, out var blocked)) return blocked;
-        return EditDocument(plugin, formKey, envelope, editTarget, document)
-            .Then(edit => SourceAnswer.Of(edit with { Changes = edit.Changes.Under(editTarget.Repository) }));
+        if (!_targets.TryResolveEditTarget(plugin, formKey, given, out var onDisk, out var document, out var blocked)) return blocked;
+        if (!onDisk.Repository.DocumentOf(plugin, onDisk.Identity).Holds(out var file, out var unread)) return unread;
+        var carrying = file ?? throw new InvalidOperationException($"Expected the document carrying {formKey} to have been located.");
+
+        var batch = SourceBatch.Over(onDisk.Repository, [new DocumentChange(carrying.Path, given)]);
+        var editTarget = onDisk with { Repository = batch.Repository };
+        return SourceTransaction.Atomically(batch.Repository, transaction =>
+                EditDocument(plugin, formKey, envelope, editTarget, document).Then(edit =>
+                {
+                    transaction.Apply(SourceAnswer.Of(edit.Changes));
+                    return SourceAnswer.Of(edit.Outcome);
+                }))
+            .Then(outcome => SourceAnswer.Of(new RecordEditChanges(outcome, batch.Changes)));
     }
 
     private SourceAnswer<RecordEditChanges> EditDocument(

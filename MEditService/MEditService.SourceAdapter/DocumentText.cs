@@ -15,11 +15,11 @@ internal static class DocumentText
     internal static byte[] StripUtf8Bom(byte[] bytes) =>
         bytes.AsSpan(0, Math.Min(bytes.Length, Utf8Bom.Length)).SequenceEqual(Utf8Bom) ? bytes[Utf8Bom.Length..] : bytes;
 
-    internal static byte[]? BytesOrNull(string path)
+    internal static byte[]? BytesOrNull(ISourceFiles files, string path)
     {
         try
         {
-            return File.Exists(path) ? StripUtf8Bom(File.ReadAllBytes(path)) : null;
+            return files.FileExists(path) ? StripUtf8Bom(files.ReadAllBytes(path)) : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -27,14 +27,14 @@ internal static class DocumentText
         }
     }
 
-    internal static string? ReadOrNull(string path) =>
-        BytesOrNull(path) is { } bytes ? Encoding.UTF8.GetString(bytes) : null;
+    internal static string? ReadOrNull(ISourceFiles files, string path) =>
+        BytesOrNull(files, path) is { } bytes ? Encoding.UTF8.GetString(bytes) : null;
 
     /// <summary>The FormKey the document at <paramref name="filePath"/> declares — an embedded child's
     /// owner's, since the file is the owner's document. Null when it cannot be read or declares
     /// none.</summary>
-    internal static string? FormKeyDeclaredBy(string filePath, string pluginFileName) =>
-        ReadOrNull(filePath) is { } text ? FormKeyDeclaredIn(text, filePath, pluginFileName) : null;
+    internal static string? FormKeyDeclaredBy(ISourceFiles files, string filePath, string pluginFileName) =>
+        ReadOrNull(files, filePath) is { } text ? FormKeyDeclaredIn(text, filePath, pluginFileName) : null;
 
     /// <summary>The same answer for a caller holding the text already, so a whole-tree pass reads each
     /// file once.</summary>

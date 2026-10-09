@@ -1,17 +1,21 @@
 namespace MEditService.SourceAdapter;
 
-/// <summary>Source changes to one repository, applied all or restored all (commands.md,
-/// A failed gesture writes nothing; ADR-0003).</summary>
+/// <summary>Source changes to one repository, or to the batch it reads through, applied all or restored all
+/// (commands.md, A failed gesture writes nothing; ADR-0003).</summary>
 public sealed class SourceTransaction
 {
     private readonly SourceRepository _repository;
     private readonly WriteJournal _journal;
+    private readonly SourceBatch? _batch;
+    private readonly SourceChanges? _batchChangesBefore;
     private SourceFailure? _stopped;
 
     private SourceTransaction(SourceRepository repository)
     {
         _repository = repository;
         _journal = new WriteJournal(repository.ModFolder);
+        _batch = repository.Files as SourceBatch;
+        _batchChangesBefore = _batch?.Changes;
     }
 
     /// <summary>Runs <paramref name="write"/> on a new transaction. A change that failed puts back what it
@@ -48,7 +52,7 @@ public sealed class SourceTransaction
         }
         catch (Exception cause) when (cause is not OutOfMemoryException)
         {
-            if (_journal.Report(cause, _journal.UndoSince(0)) is { } report) throw report;
+            if (_journal.Report(cause, UndoAll()) is { } report) throw report;
             throw;
         }
     }
@@ -57,7 +61,15 @@ public sealed class SourceTransaction
     private Exception PutBack(SourceFailure stopped)
     {
         var stop = SourceStopException.Of(stopped);
-        return _journal.Report(stop, _journal.UndoSince(0)) ?? stop;
+        return _journal.Report(stop, UndoAll()) ?? stop;
+    }
+
+    private List<Unrestored> UndoAll()
+    {
+        if (_batch is not null && _batchChangesBefore is not null) _batch.Changes = _batchChangesBefore;
+        var unrestored = _journal.UndoSince(0);
+        _repository.Locator.Forget();
+        return unrestored;
     }
 
     /// <summary>Makes each move of <paramref name="changes"/>, then each deletion, then writes each document, holding what each
@@ -74,6 +86,11 @@ public sealed class SourceTransaction
         var absolute = made.Under(_repository);
         try
         {
+            if (_batch is not null)
+            {
+                _batch.Apply(absolute);
+                return;
+            }
             foreach (var (from, to) in absolute.Moves) _journal.Move(from, to);
             foreach (var path in absolute.Deletions) _journal.DeletePath(path);
             foreach (var (path, text) in absolute.Documents) _journal.WriteText(path, text);
