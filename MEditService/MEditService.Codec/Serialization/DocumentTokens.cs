@@ -1,19 +1,31 @@
 using System.Text;
 using System.Text.Json;
-using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
-namespace MEditService.SourceAdapter;
+namespace MEditService.Codec.Serialization;
 
-/// <summary>The FormKeys and EditorIDs a document's bytes carry, from one token pass.</summary>
-internal static class DocumentTokens
+/// <summary>Where a FormKey sits in a document: the record's own at the root, an embedded child's in
+/// the slot its container embeds it in, or any other FormKey member.</summary>
+public enum FormKeyPosition
+{
+    Root,
+    Embedded,
+    Other,
+}
+
+/// <summary>A FormKey a document's bytes carry, and where.</summary>
+public readonly record struct DocumentFormKey(string FormKey, FormKeyPosition Position);
+
+/// <summary>What a document's text carries and declares: the FormKeys and EditorIDs its bytes hold, its
+/// root's strings, whether it is a document at all, and whether it may spell a given FormKey.</summary>
+public static class DocumentTokens
 {
     // The codec writes a link as a bare string and a child as an object with a FormKey of its
     // own, so the slot a key sits under tells the two apart. Malformed text yields what it read.
-    internal static List<(string FormKey, bool AtRoot, bool InAnEmbedSlot)> FormKeysIn(byte[] bytes, GameRelease release)
+    public static List<DocumentFormKey> FormKeysIn(byte[] bytes, GameRelease release)
     {
         var embeddedSlotNames = RecordTypes.For(release).EmbeddedSlotNames;
-        var found = new List<(string, bool, bool)>();
+        var found = new List<DocumentFormKey>();
         var reader = new Utf8JsonReader(bytes);
 
         // The member that opened the container at each depth; null where an array element or the
@@ -39,7 +51,7 @@ internal static class DocumentTokens
                     case JsonTokenType.String when atFormKey:
                         var formKey = reader.GetString()
                             ?? throw new InvalidOperationException("Expected a JSON string value to read a non-null string.");
-                        found.Add((formKey, keyDepth == 1, UnderAnEmbedSlot(openedBy, keyDepth, embeddedSlotNames)));
+                        found.Add(new DocumentFormKey(formKey, PositionOf(openedBy, keyDepth, embeddedSlotNames)));
                         break;
                 }
                 atFormKey = false;
@@ -59,6 +71,12 @@ internal static class DocumentTokens
         openedBy[depth] = member;
     }
 
+    private static FormKeyPosition PositionOf(List<string?> openedBy, int keyDepth, IReadOnlySet<string> embeddedSlotNames)
+    {
+        if (keyDepth == 1) return FormKeyPosition.Root;
+        return UnderAnEmbedSlot(openedBy, keyDepth, embeddedSlotNames) ? FormKeyPosition.Embedded : FormKeyPosition.Other;
+    }
+
     // A child record's own FormKey sits inside the slot its container embeds it in, at any depth: a
     // worldspace embeds its TopCell, which embeds its placed references.
     private static bool UnderAnEmbedSlot(List<string?> openedBy, int keyDepth, IReadOnlySet<string> embeddedSlotNames)
@@ -70,12 +88,12 @@ internal static class DocumentTokens
         return false;
     }
 
-    private static ReadOnlySpan<byte> FormKeyPropertyName => "FormKey"u8;
+    private static readonly byte[] FormKeyPropertyName = Encoding.UTF8.GetBytes(RecordMembers.FormKey);
 
     // Every EditorID member's value the document's bytes carry, at its own root or an embedded
     // child's, null for one that is no string: RecordMembers.EditorId is the one property name every
     // record's document uses for it.
-    internal static List<string?> EditorIdsIn(byte[] bytes)
+    public static List<string?> EditorIdsIn(byte[] bytes)
     {
         var found = new List<string?>();
         var reader = new Utf8JsonReader(bytes);
@@ -109,31 +127,43 @@ internal static class DocumentTokens
 
     private static readonly byte[] EditorIdPropertyName = Encoding.UTF8.GetBytes(RecordMembers.EditorId);
 
-    internal static HashSet<string> FormKeysOf(IEnumerable<SourceDocument> documents, GameRelease release)
+    /// <summary>A member of the document's own root object, as a string. Malformed text declares
+    /// nothing.</summary>
+    public static string? RootStringIn(string text, string member)
     {
-        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var document in documents)
+        try
         {
-            keys.Add(document.FormKey);
-
-            // A child inlined in this document is a record of its own with a FormKey of its own, so its
-            // ID is as taken as any other.
-            foreach (var (formKey, _, inAnEmbedSlot) in FormKeysIn(Encoding.UTF8.GetBytes(document.Body), release))
-            {
-                if (inAnEmbedSlot) keys.Add(formKey);
-            }
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty(member, out var value)
+                   && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
         }
-        return keys;
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
-    internal static HashSet<string> EditorIdsOf(IEnumerable<SourceDocument> documents)
+    /// <summary>Why <paramref name="text"/> is no document, in the reader's words; null when its root is a
+    /// JSON object, which a member can be read from.</summary>
+    public static string? WhyNotADocument(string text)
     {
-        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var document in documents)
+        try
         {
-            foreach (var editorId in EditorIdsIn(Encoding.UTF8.GetBytes(document.Body)))
-                ids.Add(editorId ?? throw new InvalidOperationException($"{document.FormKey}'s document reached EditorIdsOf unread."));
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement.ValueKind == JsonValueKind.Object ? null : "its root is not a JSON object.";
         }
-        return ids;
+        catch (JsonException ex)
+        {
+            return ex.Message;
+        }
     }
+
+    /// <summary>False only when the bytes certainly do not spell <paramref name="formKeyUtf8"/>: JSON spells
+    /// it other than literally only through a \u escape, since no plugin file name holds a quote,
+    /// backslash, slash or control character.</summary>
+    public static bool MayCarry(byte[] document, byte[] formKeyUtf8) =>
+        document.AsSpan().IndexOf(formKeyUtf8) >= 0 || document.AsSpan().IndexOf(@"\u"u8) >= 0;
 }

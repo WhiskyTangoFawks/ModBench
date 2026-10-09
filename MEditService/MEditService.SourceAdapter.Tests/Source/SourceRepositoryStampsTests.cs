@@ -115,14 +115,25 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_AFileThatIsNotValidJson_SaysSo_WhereTheReaderStopped()
+    public void StampsOf_AFileThatIsNotValidJson_SaysWhereTheReaderStopped()
     {
         File.WriteAllText(NpcFile, "{\n  \"FormKey\": \"000800:Fixture.esp\",\n  \"EditorID\": }");
 
         var unreadable = Assert.Single(_repository.StampsOf(Plugin).Unreadable);
 
-        Assert.Contains("is not valid JSON", unreadable.Message, StringComparison.Ordinal);
+        Assert.Contains("is no record document", unreadable.Message, StringComparison.Ordinal);
         Assert.Contains("LineNumber: 2", unreadable.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StampsOf_AFileOfValidJsonWhoseRootIsAnArray_SaysItsRootIsNoObject_NotThatTheJsonIsInvalid()
+    {
+        File.WriteAllText(NpcFile, "[1, 2]");
+
+        var unreadable = Assert.Single(_repository.StampsOf(Plugin).Unreadable);
+
+        Assert.Contains("its root is not a JSON object", unreadable.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("not valid JSON", unreadable.Message, StringComparison.Ordinal);
     }
 
     [Fact]

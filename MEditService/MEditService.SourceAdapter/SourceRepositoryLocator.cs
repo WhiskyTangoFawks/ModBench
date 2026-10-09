@@ -152,7 +152,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         string documentPath, string text, string pluginFileName)
     {
         var relativePath = Path.GetRelativePath(_modFolder, documentPath);
-        if (NotADocument(text) is { } why)
+        if (DocumentTokens.WhyNotADocument(text) is { } why)
             throw SourceStopException.Unreadable($"The text given for {relativePath} is not a readable document: {why}");
         var document = ReadableDocumentAt(relativePath, text, pluginFileName)
             ?? throw SourceStopException.Unreadable($"The text given for {relativePath} names no record.");
@@ -174,7 +174,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
         foreach (var documentPath in DocumentsNaming(sourceRoot, parsed.ToString()))
         {
-            if (DocumentText.ReadOrNull(_files, documentPath) is { } text && NotADocument(text) is { } why) return why;
+            if (DocumentText.ReadOrNull(_files, documentPath) is { } text && DocumentTokens.WhyNotADocument(text) is { } why) return why;
         }
         return null;
     }
@@ -186,25 +186,10 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             Path.GetRelativePath(SourceRepositoryLayout.RootIn(_modFolder, treeName), fullPath));
         var text = DocumentText.ReadOrNull(_files, fullPath);
         if (text is null) return new RecordOfFileAnswer.Refused($"{fullPath} could not be read.");
-        if (NotADocument(text) is { } why) return new RecordOfFileAnswer.Refused($"{fullPath} is no record document: {why}");
+        if (DocumentTokens.WhyNotADocument(text) is { } why) return new RecordOfFileAnswer.Refused($"{fullPath} is no record document: {why}");
         return FormKey.TryFactory(DocumentText.FormKeyDeclaredIn(text, relativePath, treeName), out var declared)
             ? new RecordOfFileAnswer.Holds(new RecordAt(plugin, declared.ToString()))
             : new RecordOfFileAnswer.Refused($"{fullPath} declares no FormKey, so it is no record's document.");
-    }
-
-    // Its root has to be a JSON object before any member of it can be read; anything else is a file
-    // something else wrote over the document, and the reader's message is the whole diagnosis.
-    internal static string? NotADocument(string text)
-    {
-        try
-        {
-            using var document = System.Text.Json.JsonDocument.Parse(text);
-            return document.RootElement.ValueKind == JsonValueKind.Object ? null : "its root is not a JSON object.";
-        }
-        catch (JsonException ex)
-        {
-            return ex.Message;
-        }
     }
 
     // Every entry whose leaf name carries the FormKey, as the path of the document it stands for.
@@ -315,7 +300,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
     private int ChildrenCarrying(string document, string formKey) =>
         DocumentText.BytesOrNull(_files, document) is { } bytes
-            ? DocumentTokens.FormKeysIn(bytes, _release).Count(key => key.InAnEmbedSlot && key.FormKey == formKey)
+            ? DocumentTokens.FormKeysIn(bytes, _release).Count(key => key.Position == FormKeyPosition.Embedded && key.FormKey == formKey)
             : 0;
 
     // Every read that finds a document by its text remembers it, so no put later in this operation
@@ -533,7 +518,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             return null;
 
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
-                         ?? DocumentText.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator);
+                         ?? DocumentTokens.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator);
         return recordType == null ? null : (formKey, recordType, DocumentText.EditorIdIn(text));
     }
 

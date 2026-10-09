@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
+using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 
@@ -107,8 +108,8 @@ internal static class TreeStamps
         {
             unreadable.Add(new UnreadableFile(
                 relativePath,
-                DocumentText.JsonErrorIn(text) is { } error
-                    ? $"'{relativePath}' is not valid JSON: {error}"
+                DocumentTokens.WhyNotADocument(text) is { } error
+                    ? $"'{relativePath}' is no record document: {error}"
                     : $"'{relativePath}' declares no FormKey, so the records it holds could not be validated."));
             return null;
         }

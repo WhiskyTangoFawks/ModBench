@@ -43,25 +43,7 @@ internal static class DocumentText
         // FormKey the index files it under.
         SourceRepositoryLayout.IsHeaderDocumentPath(filePath, pluginFileName)
             ? SourceRepositoryLayout.HeaderFormKeyOf(pluginFileName)
-            : RootStringIn(text, "FormKey");
-
-    // A member of the document's own root object, as a string. Malformed text declares nothing.
-    internal static string? RootStringIn(string text, string member)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(text);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty(member, out var value)
-                   && value.ValueKind == JsonValueKind.String
-                ? value.GetString()
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
+            : DocumentTokens.RootStringIn(text, RecordMembers.FormKey);
 
     /// <summary>The EditorID at the document's own root. Malformed text names none.</summary>
     internal static EditorIdRead EditorIdIn(string text)
@@ -74,21 +56,6 @@ internal static class DocumentText
         catch (JsonException)
         {
             return EditorIdRead.None;
-        }
-    }
-
-    /// <summary>What the JSON reader says is wrong with <paramref name="text"/>, where it stopped; null
-    /// for valid JSON.</summary>
-    internal static string? JsonErrorIn(string text)
-    {
-        try
-        {
-            using var _ = JsonDocument.Parse(text);
-            return null;
-        }
-        catch (JsonException ex)
-        {
-            return ex.Message;
         }
     }
 

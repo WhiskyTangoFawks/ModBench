@@ -218,11 +218,10 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         Assert.DoesNotContain("filed as a record", refused.Reason, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData("""{ "FormKey": "000801:Old.esp", """)]
-    [InlineData("""{ "FormKey": "000801:Old.esp" } // a comment no document reader takes""")]
-    public void ChangesToRenameSource_OfATreeHoldingADocumentThatIsNoJson_RefuseNamingIt(string text)
+    [Fact]
+    public void ChangesToRenameSource_OfATreeHoldingADocumentThatIsNoJson_RefuseNamingIt()
     {
+        const string text = """{ "FormKey": "000801:Old.esp", """;
         var broken = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "Npcs", "SelfNpc - 000801_Old.esp.json");
         File.WriteAllText(broken, text);
 

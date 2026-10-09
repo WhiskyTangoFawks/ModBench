@@ -9,7 +9,8 @@ namespace MEditService.Codec.Serialization;
 public readonly record struct NamedDocument(string Text, string? EditorId);
 
 /// <summary>A record's own identity and links changed as documents: the codec reads the text, edits
-/// the graph it built, and writes the text back (ADR-0005).</summary>
+/// the graph it built, and writes the text back (ADR-0005). A plugin's rename splices its strings
+/// into the text.</summary>
 public static class RecordDocumentEdits
 {
     /// <summary>The record under <paramref name="newFormKey"/> with every child slot cleared and its
@@ -47,4 +48,10 @@ public static class RecordDocumentEdits
 
     private static Dictionary<FormKey, FormKey> Mapping(string oldFormKey, string newFormKey) =>
         new() { [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey) };
+
+    /// <summary>The document with every FormKey of <paramref name="from"/> (and the header's
+    /// ModKey) under <paramref name="to"/>, every other byte as it was. Throws <see cref="System.Text.Json.JsonException"/>
+    /// for text that is no JSON.</summary>
+    public static byte[] WithPluginRenamed(byte[] text, bool isHeader, ModKey from, ModKey to) =>
+        PluginRenameSplice.Apply(text, isHeader, from, to);
 }

@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;
@@ -69,8 +70,8 @@ internal sealed class TreeScan
         var keys = DocumentTokens.FormKeysIn(bytes, _release);
         return _keysByDocument[documentPath] = new DocumentKeys(
             bytes,
-            [.. keys.Where(k => k.AtRoot).Select(k => k.FormKey)],
-            [.. keys.Where(k => k.InAnEmbedSlot).Select(k => k.FormKey)]);
+            [.. keys.Where(k => k.Position == FormKeyPosition.Root).Select(k => k.FormKey)],
+            [.. keys.Where(k => k.Position == FormKeyPosition.Embedded).Select(k => k.FormKey)]);
     }
 
     private void Scan(IEnumerable<string> listed)
@@ -81,10 +82,10 @@ internal sealed class TreeScan
         {
             if (SourceRepositoryLayout.CarriesNoRecord(documentPath)) continue;
             if (DocumentText.BytesOrNull(_files, documentPath) is not { } bytes) continue;
-            if (_onlyKey is { } key && !MaySpell(bytes, key)) continue;
+            if (_onlyKey is { } key && !DocumentTokens.MayCarry(bytes, key)) continue;
 
             var keys = DocumentTokens.FormKeysIn(bytes, _release);
-            if (keys.FirstOrDefault(k => k.AtRoot).FormKey is not { } root) continue;
+            if (keys.FirstOrDefault(k => k.Position == FormKeyPosition.Root).FormKey is not { } root) continue;
 
             if (!byRoot.TryGetValue(root, out var declaring)) byRoot[root] = declaring = [];
             declaring.Add(documentPath);
@@ -94,18 +95,13 @@ internal sealed class TreeScan
             var recordType = SourceRepositoryLayout.RecordTypeOf(Path.GetRelativePath(ModFolder, documentPath), _release);
 
             var owner = new OwnerDocument(documentPath, root, recordType);
-            foreach (var (childFormKey, _, inAnEmbedSlot) in keys)
+            foreach (var (childFormKey, position) in keys)
             {
-                if (!inAnEmbedSlot) continue;
+                if (position != FormKeyPosition.Embedded) continue;
                 if (!byChild.TryGetValue(childFormKey, out var owners)) byChild[childFormKey] = owners = [];
                 owners.Add(owner);
             }
         }
         (_byChild, _byRoot) = (byChild, byRoot);
     }
-
-    // JSON spells a FormKey other than literally only through a \u escape: no plugin's file name
-    // holds a quote, a backslash, a slash or a control character, the only others it escapes.
-    private static bool MaySpell(byte[] document, byte[] formKey) =>
-        document.AsSpan().IndexOf(formKey) >= 0 || document.AsSpan().IndexOf(@"\u"u8) >= 0;
 }
