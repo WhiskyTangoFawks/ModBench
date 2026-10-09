@@ -40,7 +40,6 @@ public static class RecordIndexServices
             sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<ISourceAdapter>()));
         services.AddSingleton(sp => new ContainerChildQueryService(
             sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>()));
-        services.AddSingleton(sp => new ChildRecordQueryService(sp.GetRequiredService<IQueryIndex>()));
         return services;
     }
 

@@ -17,8 +17,6 @@ internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder hol
 
     internal ContainerChildQueryService Containers { get; } = container.GetRequiredService<ContainerChildQueryService>();
 
-    internal ChildRecordQueryService ChildRecords { get; } = container.GetRequiredService<ChildRecordQueryService>();
-
     internal MalformedPluginQueryService Malformed { get; } = container.GetRequiredService<MalformedPluginQueryService>();
 
     internal PluginDependantsQueryService Dependants { get; } = container.GetRequiredService<PluginDependantsQueryService>();

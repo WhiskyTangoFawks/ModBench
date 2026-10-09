@@ -107,12 +107,5 @@ internal sealed record RecordCopyItem(RecordAddress Record, PluginAddress Destin
 
 internal sealed record RecordCopyRefusal(RecordCopyItem Item, RecordEditRefusal Refusal, string Message);
 
-internal sealed record RecordsWithChildrenRequest(IReadOnlyList<RecordAddress> Records);
-
-internal sealed record ChildrenInDestinationsRequest(IReadOnlyList<RecordAddress> Records, IReadOnlyList<PluginAddress> Destinations);
-
-/// <summary>The destinations that hold any of the record's child records, at any depth.</summary>
-internal sealed record RecordChildHolders(RecordAddress Record, IReadOnlyList<PluginAddress> Destinations);
-
 /// <summary>Applied or refusal, per record and destination (ADR-0019).</summary>
 internal sealed record RecordCopyResponse(IReadOnlyList<RecordCopyLanded> Applied, IReadOnlyList<RecordCopyRefusal> Refused);

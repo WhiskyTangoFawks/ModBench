@@ -598,40 +598,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/records/with-children": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Which of the records have child records in their own plugin. */
-        post: operations["GetRecordsWithChildren"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/records/children-in-destinations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** For each record, the destination plugins that hold any of its child records, at any depth. */
-        post: operations["GetChildrenInDestinations"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/plugins/{plugin}/records/{formKey}/children": {
         parameters: {
             query?: never;
@@ -748,10 +714,6 @@ export interface components {
             fullName?: string | null;
             baseEditorId?: string | null;
             parseDiagnosis?: string | null;
-        };
-        ChildrenInDestinationsRequest: {
-            records: components["schemas"]["RecordAddress"][];
-            destinations: components["schemas"]["PluginAddress"][];
         };
         CompareOverride: {
             formKey: string;
@@ -1112,10 +1074,6 @@ export interface components {
             refusal: components["schemas"]["RecordEditRefusal"];
             message: string;
         };
-        RecordChildHolders: {
-            record: components["schemas"]["RecordAddress"];
-            destinations: components["schemas"]["PluginAddress"][];
-        };
         RecordCopy: {
             formKey: string;
             plugin: components["schemas"]["PluginAddress"];
@@ -1220,9 +1178,6 @@ export interface components {
         RecordTypeChoice: {
             type: string;
             displayName: string;
-        };
-        RecordsWithChildrenRequest: {
-            records: components["schemas"]["RecordAddress"][];
         };
         ReferenceResult: {
             formKey: string;
@@ -2963,90 +2918,6 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    GetRecordsWithChildren: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RecordsWithChildrenRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecordAddress"][];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    GetChildrenInDestinations: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChildrenInDestinationsRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecordChildHolders"][];
-                };
-            };
-            /** @description Bad Request */
-            400: {
                 headers: {
                     [name: string]: unknown;
                 };
