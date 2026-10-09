@@ -4,14 +4,16 @@ import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 
 const CONTAINER_SCHEMES = new Set(['file', CHILD_RECORD_SCHEME]);
 
+export const isPluginSourceDocument = ({ scheme, fsPath }: vscode.Uri): boolean =>
+  CONTAINER_SCHEMES.has(scheme) && isPluginSourcePath(fsPath);
+
 /** Each unsaved plugin-source file's text by absolute path. A child record's document is its container's whole
  *  text; the document over a file that `changedAt` ranks latest holds it.  */
 export function dirtyPluginSource(changedAt: (uri: vscode.Uri) => number): { path: string; text: string }[] {
   const held = new Map<string, { text: string; at: number }>();
   for (const document of vscode.workspace.textDocuments) {
-    if (!document.isDirty || !CONTAINER_SCHEMES.has(document.uri.scheme)) continue;
+    if (!document.isDirty || !isPluginSourceDocument(document.uri)) continue;
     const path = document.uri.fsPath;
-    if (!isPluginSourcePath(path)) continue;
     const at = changedAt(document.uri);
     const rival = held.get(path);
     if (rival === undefined || at >= rival.at) held.set(path, { text: document.getText(), at });

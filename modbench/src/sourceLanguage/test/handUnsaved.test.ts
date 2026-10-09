@@ -78,4 +78,19 @@ describe('handing mEdit the unsaved plugin source', () => {
 
     expect(handed.at(-1)).toEqual([{ path: MOVED, text: 'moved text' }]);
   });
+
+  it.each([
+    ['a file outside plugin source', 'file', '/mods/ModA/readme.txt'],
+    ['a version-control document of plugin source', 'git', FILE],
+  ])('hands nothing over for %s changing, opening or closing', (_name, scheme, path) => {
+    const other = document(scheme, path, 'typed');
+    h.workspace.textDocuments = [other];
+    const handed = handing();
+
+    changed(other);
+    for (const listener of h.handlers.open) listener(other);
+    for (const listener of h.handlers.close) listener(other);
+
+    expect(handed).toEqual([]);
+  });
 });
