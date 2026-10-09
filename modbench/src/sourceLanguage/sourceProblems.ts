@@ -40,10 +40,13 @@ function onText(text: string, problem: SourceProblem): ProblemOnFile {
 
 interface Told { key: string; message: string; why: string }
 
-function tellingOnce(say: (message: string, why: string) => void): (standing: Told[]) => void {
+// Tells when a failure begins; with `againOnNewReason`, when its reason changes too.
+function tellingOnce(say: (message: string, why: string) => void, againOnNewReason: boolean): (standing: Told[]) => void {
   let told = new Map<string, string>();
   return (standing) => {
-    for (const { key, message, why } of standing) if (told.get(key) !== why) say(message, why);
+    for (const { key, message, why } of standing) {
+      if (!told.has(key) || (againOnNewReason && told.get(key) !== why)) say(message, why);
+    }
     told = new Map(standing.map(({ key, why }) => [key, why]));
   };
 }
@@ -106,9 +109,9 @@ function nextHeld(held: Map<string, Contribution>, answered: Map<string, Contrib
  *  language status says why. */
 export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const { client, reporter, publish, languageStatus } = deps;
-  const tellingOnSurface = () => tellingOnce((message, why) => { reporter.shownOnSurface('warning', message, why); });
-  const tellUnplaced = tellingOnSurface();
-  const tellUnread = tellingOnSurface();
+  const tellingOnSurface = (againOnNewReason: boolean) => tellingOnce((message, why) => { reporter.shownOnSurface('warning', message, why); }, againOnNewReason);
+  const tellUnplaced = tellingOnSurface(false);
+  const tellUnread = tellingOnSurface(true);
   const lastRead = (why: string) => `Showing the last good read: ${why}`;
   let held = new Map<string, Contribution>();
   let unplacedStatus: string | undefined;

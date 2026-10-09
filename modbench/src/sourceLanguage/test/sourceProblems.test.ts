@@ -213,12 +213,14 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3);
   });
 
-  it('tells of a plugin whose problems mEdit could not place, once while the reason stands and again when it changes', async () => {
+  it('tells of a plugin whose problems mEdit could not place once per failure, however the reason changes, and again when it fails anew', async () => {
     const { answered, reporter } = feed({});
     const failed = (failure: string): PluginProblems[] => [{ plugin: PLUGIN, problems: [], failure }];
 
     await answered(failed('Refers.esp\'s source holds no file for 000800:Refers.esp.'));
     await answered(failed('Refers.esp\'s source holds no file for 000800:Refers.esp.'));
+    await answered(failed('Refers.esp is tracked but no mod folder provides it.'));
+    await answered([{ plugin: PLUGIN, problems: [] }]);
     await answered(failed('Refers.esp is tracked but no mod folder provides it.'));
 
     expect(reporter.shownOnSurface.mock.calls).toEqual([

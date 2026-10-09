@@ -164,4 +164,31 @@ describe('PluginFactsFeed', () => {
 
     expect(changes).not.toHaveBeenCalled();
   });
+
+  describe('a later read that failed', () => {
+    const failing = (message: string) => held({ laterReadFailure: [{ sourceRelativePath: 'A.esp/Npc.json', message }] });
+    const warnings = (logged: { items: { level: string }[] }) => logged.items.filter(({ level }) => level === 'warn');
+
+    it('logs one line when the failure begins, however many reads and error texts follow, and again for the next failure', async () => {
+      const { feed, client, logged } = feedOver();
+      for (const answer of [failing('Unexpected end at 1.'), failing('Unexpected end at 2.'), failing('Unexpected end at 2.'), held(), failing('Unexpected end at 3.')]) {
+        client.setQueryAnswer('getPlugins', [answer]);
+        await feed.refresh();
+      }
+
+      expect(warnings(logged)).toHaveLength(2);
+    });
+
+    it('is on the rows after a refresh and gone after the next good read, with no notification', async () => {
+      const { feed, client } = feedOver();
+      client.setQueryAnswer('getPlugins', [failing('bad')]);
+      await feed.refresh();
+      expect(feed.rows.laterReadFailureMessage()).toContain('bad');
+
+      client.setQueryAnswer('getPlugins', [held()]);
+      await feed.refresh();
+
+      expect(feed.rows.laterReadFailureMessage()).toBeUndefined();
+    });
+  });
 });
