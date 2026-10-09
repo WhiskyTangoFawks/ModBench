@@ -210,7 +210,7 @@ internal sealed class DuckDbRecordIndex : IDisposable
     public void Register(PluginMetadata registered)
     {
         using var tx = Connection.BeginTransaction();
-        Respell(registered.Key);
+        Respell(registered.Key, registered.Path);
         UpsertRegistration(registered);
         _store.BumpSequence();
         tx.Commit();
@@ -218,7 +218,7 @@ internal sealed class DuckDbRecordIndex : IDisposable
 
     // Every table compares plugin names without case, so rows spelled before a case-only change still
     // belong to the plugin; they are renamed to the file's spelling now, with no re-read.
-    private void Respell(PluginAddress now)
+    private void Respell(PluginAddress now, string path)
     {
         using (var cmd = Connection.CreateCommand())
         {
@@ -236,6 +236,8 @@ internal sealed class DuckDbRecordIndex : IDisposable
                 WHERE {pluginColumn} = $1 AND {originColumn} = $2
                 """, now.Name, now.Origin);
         }
+        DuckDbSql.ExecuteFor(Connection, $"UPDATE {Store.FilesRelation} SET file_path = $3 WHERE plugin = $1 AND origin = $2",
+            now.Name, now.Origin, Path.GetFullPath(path));
     }
 
     /// <summary>Removes <paramref name="key"/>'s <c>registrations</c> row and nothing else: its rows

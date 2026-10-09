@@ -22,6 +22,26 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
         get { lock (_lock) return [.. _failed.Values.SelectMany(failure => failure.Files)]; }
     }
 
+    /// <summary>Whether a failure stands under a spelling other than <paramref name="now"/>.</summary>
+    public bool IsSpelledOtherwise(PluginAddress now)
+    {
+        lock (_lock) return OldSpellingOf(now) is not null;
+    }
+
+    public void Respell(PluginAddress now)
+    {
+        lock (_lock)
+        {
+            if (OldSpellingOf(now) is not { } old) return;
+            var failure = _failed[old];
+            _failed.Remove(old);
+            _failed[now] = failure with { Files = [.. failure.Files.Select(file => file with { Plugin = now })] };
+        }
+    }
+
+    private PluginAddress? OldSpellingOf(PluginAddress now) =>
+        _failed.Keys.Where(key => PluginAddress.Comparer.Equals(key, now) && key != now).Select(key => (PluginAddress?)key).FirstOrDefault();
+
     public bool Holds(PluginAddress key)
     {
         lock (_lock) return _failed.ContainsKey(key);

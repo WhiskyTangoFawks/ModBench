@@ -366,8 +366,9 @@ internal sealed class Reconciler(
             .ToList();
         var moved = resolved
             .Select(r => r.Key)
-            .Where(key => open.TryGetValue(key, out var h) && (h.Key != key || h.Registration != Registration.In(snapshot, key)))
+            .Where(key => open.TryGetValue(key, out var h) && (h.Key != key || h.Path != wanted[key].Path || h.Registration != Registration.In(snapshot, key)))
             .ToList();
+        var respelled = resolved.Select(r => r.Key).Where(key => held.IsSpelledOtherwise(key) || scope.Failed.IsSpelledOtherwise(key)).ToList();
         // A plugin in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
         var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !scope.Failed.StillFailing(r)).ToList();
@@ -379,7 +380,7 @@ internal sealed class Reconciler(
 
         bool conflictsComputed;
         lock (_lock) conflictsComputed = _conflictsComputed;
-        if (leaving.Count == 0 && moved.Count == 0 && arriving.Count == 0 && reDerived.Count == 0 && conflictsComputed)
+        if (leaving.Count == 0 && moved.Count == 0 && respelled.Count == 0 && arriving.Count == 0 && reDerived.Count == 0 && conflictsComputed)
         {
             logger.LogDebug("Load order snapshot is identical to what is held; nothing to reconcile");
             return false;
@@ -406,12 +407,17 @@ internal sealed class Reconciler(
         if (leaving.Count > 0) PublishStatus();
 
         // ADR-0012.
-        if (moved.Count > 0) index.Commit(_ => moved.ForEach(key => index.Register(held.Update(open[key], key, Registration.In(snapshot, key)))));
-        if (moved.Count > 0)
+        if (moved.Count > 0) index.Commit(_ => moved.ForEach(key => index.Register(held.Update(open[key], wanted[key], Registration.In(snapshot, key)))));
+        if (respelled.Count > 0)
         {
+            foreach (var key in respelled)
+            {
+                held.RespellFailure(key);
+                scope.Failed.Respell(key);
+            }
             lock (_lock)
             {
-                foreach (var key in moved)
+                foreach (var key in respelled)
                 {
                     var at = _indexed.FindIndex(i => PluginAddress.Comparer.Equals(i, key));
                     if (at >= 0) _indexed[at] = key;

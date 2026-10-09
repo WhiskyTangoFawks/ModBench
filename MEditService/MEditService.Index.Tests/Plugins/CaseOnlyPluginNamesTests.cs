@@ -175,4 +175,19 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
 
         Assert.Equal(["fine.esp"], FailedNames(index));
     }
+
+    [PosixFact]
+    public void Reconcile_AFileRenamedOnDiskOnlyInCase_KeepsItsRowsUnderTheNewSpelling()
+    {
+        var fine = Named("Fine.esp");
+        using var index = Reconciled(fine);
+        var renamed = Path.Combine(Path.GetDirectoryName(fine.Path).Require(), "fine.esp");
+        File.Move(fine.Path, renamed);
+
+        Arrive(index, fine with { Name = "fine.esp", Path = renamed });
+
+        Assert.Empty(index.Status.Failures);
+        var record = index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Items.Single();
+        Assert.Equal(("fine.esp", "FromFine"), (record.Plugin, record.EditorId));
+    }
 }
