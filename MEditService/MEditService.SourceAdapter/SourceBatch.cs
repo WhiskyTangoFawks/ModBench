@@ -9,11 +9,11 @@ public sealed class SourceBatch : ISourceFiles
 {
     private enum Kind { None, File, Directory }
 
-    private readonly IReadOnlyList<DocumentChange> _unsaved;
+    private readonly UnsavedFiles _unsaved;
 
     private SourceBatch(SourceRepository repository, IEnumerable<DocumentChange> unsaved)
     {
-        _unsaved = [.. unsaved.Select(document => document with { Path = Path.GetFullPath(document.Path) })];
+        _unsaved = new UnsavedFiles(unsaved);
         Repository = repository.Over(this);
     }
 
@@ -102,10 +102,10 @@ public sealed class SourceBatch : ISourceFiles
 
     private Kind OnDisk(string path) => Unmoved(path) is { } origin ? DiskKind(origin) : Kind.None;
 
-    private static Kind DiskKind(string path)
+    private Kind DiskKind(string path)
     {
-        if (File.Exists(path)) return Kind.File;
-        return Directory.Exists(path) ? Kind.Directory : Kind.None;
+        if (_unsaved.FileExists(path)) return Kind.File;
+        return _unsaved.DirectoryExists(path) ? Kind.Directory : Kind.None;
     }
 
     private string? Unmoved(string path)
@@ -138,14 +138,16 @@ public sealed class SourceBatch : ISourceFiles
 
         var children = new Dictionary<string, Kind>(
             OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        if (!Deleted(full) && Unmoved(full) is { } origin && Directory.Exists(origin))
+        if (!Deleted(full) && Unmoved(full) is { } origin && _unsaved.DirectoryExists(origin))
         {
-            foreach (var entry in new DirectoryInfo(origin).EnumerateFileSystemInfos())
+            var listing = _unsaved.DirectoriesIn(origin).Select(entry => (Entry: entry, Kind: Kind.Directory))
+                .Concat(_unsaved.FilesIn(origin, "*", SearchOption.TopDirectoryOnly).Select(entry => (Entry: entry, Kind: Kind.File)));
+            foreach (var (entry, listed) in listing)
             {
-                var path = Path.Combine(full, entry.Name);
-                var listed = entry is DirectoryInfo ? Kind.Directory : Kind.File;
-                children[entry.Name] = Overlaid(path)
-                    ?? (Unmoved(path) is { } unmoved && Same(unmoved, entry.FullName) ? listed : OnDisk(path));
+                var name = Path.GetFileName(entry);
+                var path = Path.Combine(full, name);
+                children[name] = Overlaid(path)
+                    ?? (Unmoved(path) is { } unmoved && Same(unmoved, entry) ? listed : OnDisk(path));
             }
         }
         foreach (var to in Changes.Moves.Select(move => move.To).Where(to => Same(PathShape.DirectoryOf(to), full)))
@@ -165,14 +167,13 @@ public sealed class SourceBatch : ISourceFiles
     private static bool Matches(string pattern, string path) =>
         FileSystemName.MatchesSimpleExpression(pattern, Path.GetFileName(path), ignoreCase: OperatingSystem.IsWindows());
 
-    private string? HeldText(string path, out string onDisk)
+    private (string? Written, string Origin) Held(string path)
     {
-        onDisk = Path.GetFullPath(path);
-        if (Written(onDisk) is { } document) return document.Text;
-        if (KindOf(onDisk) != Kind.File || Unmoved(onDisk) is not { } origin)
+        var full = Path.GetFullPath(path);
+        if (Written(full) is { } document) return (document.Text, full);
+        if (KindOf(full) != Kind.File || Unmoved(full) is not { } origin)
             throw new FileNotFoundException($"Could not find file '{path}'.", path);
-        onDisk = origin;
-        return _unsaved.FirstOrDefault(unsaved => Same(unsaved.Path, origin))?.Text;
+        return (null, origin);
     }
 
     bool ISourceFiles.FileExists(string path) => KindOf(Path.GetFullPath(path)) == Kind.File;
@@ -180,11 +181,12 @@ public sealed class SourceBatch : ISourceFiles
     bool ISourceFiles.DirectoryExists(string path) => KindOf(Path.GetFullPath(path)) == Kind.Directory;
 
     byte[] ISourceFiles.ReadAllBytes(string path) =>
-        HeldText(path, out var onDisk) is { } text ? Encoding.UTF8.GetBytes(text) : File.ReadAllBytes(onDisk);
+        Held(path) is var (written, origin) && written is not null ? Encoding.UTF8.GetBytes(written) : _unsaved.ReadAllBytes(origin);
 
-    bool ISourceFiles.HoldsUnsavedText(string path) => HeldText(path, out _) is not null && Written(Path.GetFullPath(path)) is null;
+    bool ISourceFiles.HoldsUnsavedText(string path) => Held(path) is (null, var origin) && _unsaved.HoldsUnsavedText(origin);
 
-    string ISourceFiles.ReadAllText(string path) => HeldText(path, out var onDisk) ?? File.ReadAllText(onDisk);
+    string ISourceFiles.ReadAllText(string path) =>
+        Held(path) is var (written, origin) && written is not null ? written : _unsaved.ReadAllText(origin);
 
     IEnumerable<string> ISourceFiles.EntriesUnder(string directory) => Descendants(directory).Select(entry => entry.Path);
 
