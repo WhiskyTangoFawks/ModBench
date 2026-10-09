@@ -23,28 +23,24 @@ vi.mock('vscode', async () => {
 
 import { progressSteps } from '../../test/recordedProgress';
 
-const { switchProfile } = vi.hoisted(() => ({ switchProfile: vi.fn() }));
-
-vi.mock('../../instanceCommands/profile', () => ({ switchProfile }));
+const switchProfile = vi.fn<InstanceCommands['switchProfile']>();
 
 import { registerRefreshCommand, registerToolboxCommands } from '../toolboxCommands';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
-import { adapterOver } from '../../test/mo2/adapterOver';
 import type { RefreshResult } from '../../instanceCommands/loadOrder';
+import type { InstanceCommands } from '../../instanceCommands/instanceCommands';
 
 const value = instanceValueFixture({ activeProfile: 'Default', profiles: ['Default', 'Modding', 'Survival'] });
-
-const adapter = adapterOver('/instance');
 
 type ToolboxCommandDeps = Parameters<typeof registerToolboxCommands>[0];
 
 function register(over: Partial<ToolboxCommandDeps> = {}) {
   const reporter = recordingReporter();
   registerToolboxCommands({
-    adapter,
+    commands: { switchProfile },
     instance: { value, refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
     extensionId: 'publisher.modbench',
     reporterFor: () => reporter,
@@ -60,7 +56,7 @@ beforeEach(() => {
   handlers.clear();
   progressSteps.length = 0;
   vi.clearAllMocks();
-  switchProfile.mockResolvedValue({ applied: true });
+  switchProfile.mockResolvedValue({ applied: true, wrote: true });
 });
 
 describe('Open settings', () => {
@@ -107,15 +103,15 @@ describe('Switch profile', () => {
   });
 
   it('switches to the picked profile', async () => {
-    switchProfile.mockResolvedValueOnce({ applied: true });
+    switchProfile.mockResolvedValueOnce({ applied: true, wrote: true });
 
     await switchProfileChoosing('Modding');
 
-    expect(switchProfile).toHaveBeenCalledWith(adapter, 'Modding', ['Default', 'Modding', 'Survival']);
+    expect(switchProfile).toHaveBeenCalledWith('Modding', ['Default', 'Modding', 'Survival']);
   });
 
   it('writes the switch under the Toolbox\'s progress, which closes once the Instance loader has read again', async () => {
-    switchProfile.mockImplementationOnce(() => { progressSteps.push('write'); return Promise.resolve({ applied: true }); });
+    switchProfile.mockImplementationOnce(() => { progressSteps.push('write'); return Promise.resolve({ applied: true, wrote: true }); });
 
     const { reporter } = await switchProfileChoosing('Modding');
 
@@ -169,9 +165,10 @@ describe('Refresh', () => {
     const reporter = recordingReporter();
     const released: true[] = [];
     registerRefreshCommand({
-      refresh: () => { progressSteps.push('instance commands: refresh'); return Promise.resolve(result); },
+      commands: { refresh: () => { progressSteps.push('instance commands: refresh'); return Promise.resolve(result); } },
       nextRefill: () => ({ ended: refill, release: () => { released.push(true); } }),
       instance: {
+        value,
         refresh: () => {
           progressSteps.push('Instance loader: read every file again');
           return Promise.resolve(undefined);
@@ -182,6 +179,21 @@ describe('Refresh', () => {
     });
     return { reporter, released, run: () => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')() };
   }
+
+  it('asks instance commands to refresh the instance value\'s game', async () => {
+    const asked: unknown[] = [];
+    registerRefreshCommand({
+      commands: { refresh: (game) => { asked.push(game); return Promise.resolve({ applied: true }); } },
+      nextRefill: () => ({ ended: Promise.resolve(), release: () => {} }),
+      instance: { value, refresh: () => Promise.resolve(undefined) },
+      reporter: recordingReporter(),
+      instanceRoot: '/instance',
+    });
+
+    await present(handlers.get('modbench.instance.refresh'), 'the refresh handler')();
+
+    expect(asked).toEqual([value]);
+  });
 
   it('asks instance commands to refresh, then the Instance loader to read every file again, under the Toolbox\'s progress', async () => {
     const { reporter, run } = registerRefresh({ applied: true });
