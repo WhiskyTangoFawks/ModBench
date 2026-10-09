@@ -9,7 +9,7 @@ import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } 
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
-import { createUnsavedHandOver } from './unsavedHandOver';
+import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
@@ -84,7 +84,7 @@ class HttpMEditClient implements MEditClient {
   private readonly notifications: SseNotificationSubscriber;
   private readonly loadOrder: LoadOrderSender;
   private readonly loadOrderStatusKept: LoadOrderStatusKeeper;
-  private readonly handOver: (documents: readonly UnsavedDocument[]) => void;
+  private readonly handOver: UnsavedHandOver;
   constructor(deps: HttpMEditClientDeps) {
     this.log = deps.log ?? (() => {});
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
@@ -115,7 +115,7 @@ class HttpMEditClient implements MEditClient {
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
       onReconnected: (listener) => this.notifications.onReconnected(listener),
       put: (documents) => this.putUnsavedDocuments(documents),
-    }, this.log);
+    });
   }
 
   // The port is the lifecycle's to choose, so the generated client is built once it is known.
@@ -154,7 +154,8 @@ class HttpMEditClient implements MEditClient {
     return this.loadOrder.onResent(listener);
   }
 
-  handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.handOver(documents); }
+  handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.handOver.hand(documents); }
+  onUnsavedHandOver(listener: (failure: string | undefined) => void): () => void { return this.handOver.onSettled(listener); }
 
   private async putUnsavedDocuments(documents: readonly UnsavedDocument[]): Promise<void> {
     const { error, response } = await this.apiClient.PUT('/unsaved-documents', { body: { documents: [...documents] } });

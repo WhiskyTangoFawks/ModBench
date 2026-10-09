@@ -31,7 +31,7 @@ describe('handing mEdit the unsaved documents', () => {
     const mEdit = fakeWire('running');
     let answerFirst!: () => void;
     mEdit.answerWith(() => new Promise((resolve) => { answerFirst = resolve; }));
-    const hand = createUnsavedHandOver(mEdit.wire, () => {});
+    const hand = createUnsavedHandOver(mEdit.wire).hand;
 
     hand(typed('first'));
     hand(typed('second'));
@@ -45,7 +45,7 @@ describe('handing mEdit the unsaved documents', () => {
 
   it('puts nothing while mEdit is not running, then the newest once it runs', async () => {
     const mEdit = fakeWire('starting');
-    const hand = createUnsavedHandOver(mEdit.wire, () => {});
+    const hand = createUnsavedHandOver(mEdit.wire).hand;
 
     hand(typed('first'));
     hand(typed('second'));
@@ -59,7 +59,7 @@ describe('handing mEdit the unsaved documents', () => {
 
   it('puts the newest again when the stream reopens, onto a process that may hold none', async () => {
     const mEdit = fakeWire('running');
-    const hand = createUnsavedHandOver(mEdit.wire, () => {});
+    const hand = createUnsavedHandOver(mEdit.wire).hand;
     hand(typed('typed'));
 
     mEdit.reopens();
@@ -68,17 +68,20 @@ describe('handing mEdit the unsaved documents', () => {
     expect(mEdit.put).toEqual(['typed', 'typed']);
   });
 
-  it('says why a put failed, and still puts the next', async () => {
+  it('answers each put, why not when it failed, and still puts the next', async () => {
     const mEdit = fakeWire('running');
-    const said: string[] = [];
+    const answers: (string | undefined)[] = [];
     mEdit.answerWith(() => Promise.reject(new Error('connection reset')));
-    const hand = createUnsavedHandOver(mEdit.wire, (line) => { said.push(line); });
+    const handOver = createUnsavedHandOver(mEdit.wire);
+    handOver.onSettled((failure) => { answers.push(failure); });
 
-    hand(typed('first'));
-    hand(typed('second'));
+    handOver.hand(typed('first'));
+    await settled();
+    mEdit.answerWith(() => Promise.resolve());
+    handOver.hand(typed('second'));
     await settled();
 
     expect(mEdit.put).toEqual(['first', 'second']);
-    expect(said).toEqual([expect.stringContaining('connection reset'), expect.stringContaining('connection reset')]);
+    expect(answers).toEqual(['connection reset', undefined]);
   });
 });

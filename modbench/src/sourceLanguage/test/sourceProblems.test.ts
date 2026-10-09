@@ -397,3 +397,28 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     expect(status.at(-1)).toBeUndefined();
   });
 });
+
+describe('feedSourceProblems, when mEdit cannot take the unsaved plugin source', () => {
+  const lastRead = (why: string) => `Showing the last good read: mEdit could not take the unsaved plugin source: ${why}`;
+
+  it('says so in the language status, with one line in the Output for a reason told again', () => {
+    const { client, reporter, status } = feed({});
+
+    client.settleHandOver('connection reset');
+    client.settleHandOver('connection reset');
+
+    expect(status.at(-1)).toBe(lastRead('connection reset'));
+    expect(reporter.shownOnSurface.mock.calls).toEqual([
+      ['warning', 'The Problems panel shows what mEdit last took of the unsaved plugin source.', 'connection reset'],
+    ]);
+  });
+
+  it('clears the language status once the next hand-over lands', () => {
+    const { client, status } = feed({});
+    client.settleHandOver('connection reset');
+
+    client.settleHandOver(undefined);
+
+    expect(status.at(-1)).toBeUndefined();
+  });
+});
