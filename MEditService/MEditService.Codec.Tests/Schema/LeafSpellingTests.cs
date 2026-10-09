@@ -1,87 +1,102 @@
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Tests.Schema;
 
 public sealed class LeafSpellingTests
 {
-    private static FieldMetadata Leaf(string type, bool holdsAlpha = false) =>
-        new("Leaf", type, false, [], [], HoldsAlpha: holdsAlpha);
+    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
+        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    private static JsonValue V(object value) => JsonValue.Create(value) ?? throw new InvalidOperationException("Not a JSON value.");
+    private const string Bare = """{"FormKey":"000800:LeafSpelling.esp"}""";
 
-    [Theory]
-    [InlineData("hex", "0xAB12", "ab12", true)]
-    [InlineData("hex", "0xAB12", "0xAB13", false)]
-    [InlineData("color", "#ff0000", "#FF0000", true)]
-    [InlineData("color", "#FF0000", "#00FF00", false)]
-    [InlineData("formKey", "0008aa:A.esp", "0008AA:A.esp", true)]
-    [InlineData("formKey", "0008AA:A.esp", "0008AB:A.esp", false)]
-    [InlineData("vector", "1, 2", "1,2.0", true)]
-    [InlineData("vector", "1, 2", "1, 3", false)]
-    [InlineData("string", "Abc", "abc", false)]
-    public void Same_ASpellingTheCodecMayChange_IsTheSameValue(string type, string written, string patched, bool same)
+    private static DocumentEdit.Patch Patched(string table, EditOp op, string? value, string member)
     {
-        Assert.Equal(same, LeafSpelling.Same(V(written), V(patched), Leaf(type)));
+        Assert.Null(DocumentEdit.Locate(Document.Parse(Bare), Schemas[table], op, [new(member, null)], out var edit));
+        Assert.Null(edit.Require().Apply(value, out var patch));
+        return patch.Require();
     }
 
-    [Fact]
-    public void Same_NumbersAreComparedByMagnitude_AndAKindMismatchIsNeverTheSame()
+    private static string? DroppedWhenWrittenAs(string table, string member, string patched, string? written)
     {
-        Assert.True(LeafSpelling.Same(V(2), V(2.0), Leaf("float")));
-        Assert.False(LeafSpelling.Same(V(2), V("2"), Leaf("float")));
-    }
-
-    [Fact]
-    public void SameFlags_ABitNamedByAMemberAndTheSameBitSpelledInHex_AreTheSameBits()
-    {
-        var flags = new FieldMetadata("Flags", "flags", true, [], [new EnumMember("Quest", "2")]);
-
-        Assert.True(LeafSpelling.SameFlags(["Quest"], ["0x2"], flags));
-        Assert.False(LeafSpelling.SameFlags(["Quest"], ["0x4"], flags));
+        var patch = Patched(table, EditOp.Set, patched, member);
+        var text = written is null ? Bare : $$"""{"FormKey":"000800:LeafSpelling.esp","{{member}}":{{written}}}""";
+        return patch.FirstDropped(patch.Document, Document.Parse(text));
     }
 
     [Theory]
-    [InlineData("string", "", true)]
-    [InlineData("formKey", "Null", true)]
-    [InlineData("hex", "[]", true)]
-    [InlineData("string", "Null", false)]
-    [InlineData("hex", "0x01", false)]
-    public void IsUnset_TheSentinelAFieldIsMintedWith_IsUnset(string type, string text, bool unset)
+    [InlineData("npc_", "NAM5", "\"0xAB12\"", "\"ab12\"", true)]
+    [InlineData("npc_", "NAM5", "\"0xAB12\"", "\"0xAB13\"", false)]
+    [InlineData("npc_", "TextureLighting", "\"#ff0000\"", "\"#FF0000\"", true)]
+    [InlineData("npc_", "TextureLighting", "\"#FF0000\"", "\"#00FF00\"", false)]
+    [InlineData("npc_", "Race", "\"0008aa:A.esp\"", "\"0008AA:A.esp\"", true)]
+    [InlineData("npc_", "Race", "\"0008AA:A.esp\"", "\"0008AB:A.esp\"", false)]
+    [InlineData("mato", "ProjectionVector", "\"1, 2\"", "\"1,2.0\"", true)]
+    [InlineData("mato", "ProjectionVector", "\"1, 2\"", "\"1, 3\"", false)]
+    [InlineData("npc_", "EditorID", "\"Abc\"", "\"abc\"", false)]
+    public void ASpellingTheCodecMayChange_IsTheSameValue_AndAnyOtherIsDroppedByName(
+        string table, string member, string patched, string written, bool same)
     {
-        Assert.Equal(unset, LeafSpelling.IsUnset(V(text), Leaf(type)));
+        Assert.Equal(same ? null : member, DroppedWhenWrittenAs(table, member, patched, written));
+    }
+
+    [Fact]
+    public void NumbersAreComparedByMagnitude_AndAKindMismatchIsNeverTheSame()
+    {
+        Assert.Null(DroppedWhenWrittenAs("npc_", "HeightMax", "2", "2.0"));
+        Assert.Equal("HeightMax", DroppedWhenWrittenAs("npc_", "HeightMax", "2", "\"2\""));
+    }
+
+    [Fact]
+    public void ABitNamedByAMemberAndTheSameBitSpelledInHex_AreTheSameBits()
+    {
+        Assert.Null(DroppedWhenWrittenAs("npc_", "Flags", """["Essential"]""", """["0x2"]"""));
+        Assert.Equal("Flags", DroppedWhenWrittenAs("npc_", "Flags", """["Essential"]""", """["0x4"]"""));
     }
 
     [Theory]
-    [InlineData("string", "")]
-    [InlineData("formKey", "Null")]
-    [InlineData("hex", "[]")]
-    public void Minted_ALeafIsMintedAsTheSentinelItsTypeHas(string type, string sentinel)
+    [InlineData("EditorID", "\"\"", true)]
+    [InlineData("Race", "\"Null\"", true)]
+    [InlineData("NAM5", "\"[]\"", true)]
+    [InlineData("EditorID", "\"Null\"", false)]
+    [InlineData("NAM5", "\"0x01\"", false)]
+    public void TheSentinelAFieldIsMintedWith_IsKeptWhereTheCodecOmitsIt(string member, string patched, bool unset)
     {
-        var minted = Assert.IsAssignableFrom<JsonValue>(LeafSpelling.Minted(Leaf(type)));
+        Assert.Equal(unset ? null : member, DroppedWhenWrittenAs("npc_", member, patched, written: null));
+    }
 
-        Assert.Equal(sentinel, minted.GetValue<string>());
-        Assert.True(LeafSpelling.IsUnset(minted, Leaf(type)));
+    [Theory]
+    [InlineData("race", "MovementTypeNames", "")]
+    [InlineData("npc_", "Keywords", "Null")]
+    [InlineData("mato", "DNAMs", "[]")]
+    public void AnElementAddedWithoutAValue_IsMintedAsTheSentinelItsTypeHas(string table, string member, string sentinel)
+    {
+        var patch = Patched(table, EditOp.Add, null, member);
+
+        Assert.Equal(sentinel, JsonNode.Parse(patch.Document.Text).Require()[member].Require()[0].Require().GetValue<string>());
     }
 
     [Fact]
-    public void Minted_AStructNamesOnlyItsDiscriminator()
+    public void AStructElementAddedWithoutAValue_NamesOnlyItsDiscriminator()
     {
-        var discriminator = new FieldMetadata("Type", "enum", false, [], [new EnumMember("First"), new EnumMember("Second")], IsDiscriminator: true);
-        var other = new FieldMetadata("Other", "int", false, [], []);
-        var shape = new FieldMetadata("S", "struct", false, [], [], Fields: [discriminator, other]);
+        var element = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementType.Require();
+        var discriminator = element.Fields.Require().Single(f => f.IsDiscriminator);
 
-        var minted = Assert.IsType<JsonObject>(LeafSpelling.Minted(shape));
+        var patch = Patched("cobj", EditOp.Add, null, "Conditions");
 
-        Assert.Equal(["Type"], minted.Select(p => p.Key));
-        Assert.Equal("First", minted["Type"]?.GetValue<string>());
+        var minted = JsonNode.Parse(patch.Document.Text).Require()["Conditions"].Require()[0].Require().AsObject();
+        Assert.Equal([discriminator.Name], minted.Select(p => p.Key));
+        Assert.Equal(discriminator.EnumMembers[0].Value, minted[discriminator.Name]?.GetValue<string>());
     }
 
     [Fact]
-    public void AsRead_AColourHoldingNoAlpha_LandsAsMutagensBinaryReadSpellsIt()
+    public void AColourHoldingNoAlpha_LandsAsMutagensBinaryReadSpellsIt()
     {
-        var read = LeafSpelling.AsRead(V("#112233"), Leaf("color"));
+        var patch = Patched("mato", EditOp.Set, "\"#112233\"", "SinglePassColor");
 
-        Assert.Equal("#00112233", read?.GetValue<string>());
+        Assert.Equal("#00112233", patch.Document.StringAt("SinglePassColor"));
     }
 }

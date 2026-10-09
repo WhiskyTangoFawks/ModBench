@@ -15,7 +15,7 @@ public static class DocumentNodes
 
     /// <summary>Two nodes spelling one value: numbers by magnitude, since the codec and a default's
     /// own spelling may differ in form (2 and 2.0), everything else by text.</summary>
-    public static bool SameValue(JsonElement a, JsonElement b) =>
+    internal static bool SameValue(JsonElement a, JsonElement b) =>
         a.ValueKind == JsonValueKind.Number && b.ValueKind == JsonValueKind.Number
             ? a.GetDouble().CompareTo(b.GetDouble()) == 0
             : a.GetRawText() == b.GetRawText();
@@ -104,7 +104,7 @@ public static class DocumentNodes
             : member;
 
     /// <summary>The same question over the write path's mutable tree.</summary>
-    public static FieldMetadata VariantFor(FieldMetadata member, JsonNode? owner) =>
+    internal static FieldMetadata VariantFor(FieldMetadata member, JsonNode? owner) =>
         owner is JsonObject obj && obj[LoquiUnions.UnionTypeDiscriminator] is JsonValue leaf && leaf.TryGetValue<string>(out var name)
             ? Variant(member, name)
             : member;

@@ -1,8 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using MEditService.Codec.Schema;
 
-namespace MEditService.Commands.Edits;
+namespace MEditService.Codec.Schema;
 
 /// <summary>What the codec wrote back holds what the patch asked: every member the patch spelled
 /// is present in the codec's spelling, unless a default the codec omits. A dropped member names the

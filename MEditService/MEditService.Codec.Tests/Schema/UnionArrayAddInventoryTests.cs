@@ -1,25 +1,21 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
+using static MEditService.Codec.Tests.TestSupport.DocumentEditing;
 
-namespace MEditService.Commands.Tests.Edits;
+namespace MEditService.Codec.Tests.Schema;
 
 public class UnionArrayAddInventoryTests
 {
-    private const string LandscapeTable = "land";
-
-    private static readonly ModKey Key = ModKey.FromFileName("UnionArrayAdd710.esp");
+    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
+        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     public static TheoryData<string, string> UnionArrays()
     {
-        var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         var data = new TheoryData<string, string>();
-        var columns = schemas
+        var columns = Schemas
             .OrderBy(table => table.Key, StringComparer.Ordinal)
             .SelectMany(table => table.Value.RecordColumns
                 .Where(column => column.Field.ElementType?.Fields?.Any(field => field.IsDiscriminator) == true)
@@ -39,14 +35,12 @@ public class UnionArrayAddInventoryTests
     [MemberData(nameof(UnionArrays))]
     public void ArrayAdd_BuildsAnElementTheCodecAccepts(string table, string column)
     {
-        using var fixture = new DocumentEditFixture();
-        var formKey = table == LandscapeTable ? fixture.SeedLandscape(new Fallout4Mod(Key, Fallout4Release.Fallout4)) : Created(fixture, table);
-        var col = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(c => c.Name == column);
+        var schema = Schemas[table];
+        var bare = RecordMint.BareDocument(schema, GameRelease.Fallout4, "000800:UnionArrayAdd710.esp", editorId: null);
+        var col = schema.RecordColumns.Single(c => c.Name == column);
 
-        var (result, after) = fixture.Apply(formKey, Envelopes.AddAt(Envelopes.Member(column)));
+        var after = Edited(bare, table, EditOp.Add, null, Member(column));
 
-        Assert.True(result.Applied, result.Message);
-        Assert.NotNull(after);
         using var document = JsonDocument.Parse(after);
         var written = document.RootElement.GetProperty(col.PropertyName);
         Assert.Equal(1, written.GetArrayLength());
@@ -54,12 +48,5 @@ public class UnionArrayAddInventoryTests
         Assert.Equal(
             discriminator.EnumMembers[0].Value,
             written[0].GetProperty(discriminator.Name).GetString());
-    }
-
-    private static string Created(DocumentEditFixture fixture, string table)
-    {
-        var created = fixture.CreateHandler.CreateRecordSync(fixture.Plugin, table);
-        Assert.True(created.Applied, created.Message);
-        return created.NewFormKey.Require();
     }
 }

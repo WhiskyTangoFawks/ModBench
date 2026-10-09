@@ -2,7 +2,7 @@
 namespace MEditService.Codec.Schema;
 
 // The facts a leaf carries whether it becomes a column or a sub-field.
-public sealed record LeafSpec(
+internal sealed record LeafSpec(
     string ApiType,
     string[] ValidFormKeyTypes,
     IReadOnlyList<EnumMember> EnumMembers,

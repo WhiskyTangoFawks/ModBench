@@ -21,7 +21,7 @@ public sealed record ColumnSpec(
 {
     /// <summary>The document's other spellings of this column's value, which the reader takes over
     /// it, so a write clears them.</summary>
-    public IReadOnlyList<string> Aliases { get; init; } = [];
+    internal IReadOnlyList<string> Aliases { get; init; } = [];
 
     /// <summary>The document's own member name, which is the wire name and the view column name.</summary>
     public string Name => Field.Name;
@@ -76,6 +76,26 @@ public sealed class RecordTableSchema
 
     // A ModHeader cannot carry the Partial Form flag.
     public bool IsPartialForm(JsonElement document) => !IsHeader && Document.OfRecord(document).IsPartialForm(RecordType);
+
+    public bool IsPartialForm(Document document) => !IsHeader && document.IsPartialForm(RecordType);
+
+    /// <summary>Each column holding a link whose check error <paramref name="text"/> carries, from the
+    /// builder the record panel reads, so compile and the panel hold one definition of what is broken.</summary>
+    public IEnumerable<(string Field, string Error)> LinkErrorsIn(
+        string text, Func<string, ResolvedFormKey?> resolve, Func<string, string?> whyUnchecked, GameRelease release)
+    {
+        using var document = JsonDocument.Parse(text);
+        var root = document.RootElement;
+        foreach (var column in RecordColumns)
+        {
+            var meta = column.Field;
+            if (!FormReferences.CarriesFormKeys(meta)) continue;
+            if (CheckErrorBuilder.Build(
+                    DocumentNodes.VariantFor(meta, root), DocumentNodes.At(root, column.PropertyName), resolve, release,
+                    indexed: true, whyUnchecked) is { } error)
+                yield return (meta.Name, error);
+        }
+    }
 
     /// <summary>Whether a record of this table can carry the Partial Form flag at all.</summary>
     public bool IsPartialFormable => PartialFormFlag.IsPartialFormable(RecordType);

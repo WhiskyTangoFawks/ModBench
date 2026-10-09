@@ -2,12 +2,16 @@
 ...@../styles
 shape: sequence_diagram
 editor: "Plugins · Editor" {class: driving}
+sourcelanguage: @../target-architecture.modbench_driving.sourcelanguage
+sourcelanguage.label: Source language
 client: @../target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
 queries: @../target-architecture.medit_readmodel.index.queries
 queries.label: Queries
+index: @../target-architecture.medit_readmodel.index
+index.label: Record index
 commands: @../target-architecture.medit_core.commands
 commands.label: Commands
 source: @../target-architecture.medit_data.source
@@ -30,17 +34,25 @@ create: "create: the type pick first" {
   client -> editor: the record types {class: query}
 }
 
-editor -> client: "the gesture, its Options and any unsaved document text" {class: edit}
+unsaved: "on each change to plugin source, and on connect" {
+  sourcelanguage -> client: "the unsaved plugin-source documents, whole" {class: edit}
+  client -> http: "the unsaved documents" {class: edit}
+  http -> sourceadapter: "the unsaved documents, held" {class: edit}
+  sourceadapter -> index: "the trees whose held text changed" {class: signal}
+}
+
+editor -> client: "the gesture and its Options" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 source -> sourceadapter: documents {class: edit}
-sourceadapter -> commands: "the documents it reads" {class: edit}
+sourceadapter -> commands: "the documents it reads, an unsaved one in place of its file" {class: edit}
 commands -> http: "each document's new text, each create, delete and move, per item" {class: edit}
 http -> client: "the changes, per item" {class: edit}
 client -> editor: "the changes, per item" {class: edit}
 editor -> vscode: "the changes, as one workspace edit" {class: outside}
-vscode."apply; save"
-vscode -> source: "the saved files" {class: outside}
+vscode."apply, as a refactoring"
+vscode -> sourcelanguage: "the changed documents, handed as above" {class: outside}
+vscode -> source: "the files it saves, as after any refactoring" {class: outside}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader."the next snapshot: index-load-order"

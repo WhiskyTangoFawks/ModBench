@@ -22,6 +22,12 @@ public static class FormReferences
         return refs;
     }
 
+    public static List<FormReference> Collect(string text, IReadOnlyList<ColumnSpec> columns)
+    {
+        using var document = JsonDocument.Parse(text);
+        return Collect(document.RootElement, columns);
+    }
+
     private delegate void RefVisitor(string fieldPath, string targetFormKey);
 
     // Every reference one column of the document holds, read off the document by the column's own
@@ -45,7 +51,7 @@ public static class FormReferences
     private static readonly ConcurrentDictionary<ColumnSpec, (FieldMetadata Meta, bool CarriesFormKeys)> Plans =
         new(ReferenceEqualityComparer.Instance);
 
-    public static bool CarriesFormKeys(FieldMetadata meta) =>
+    internal static bool CarriesFormKeys(FieldMetadata meta) =>
         meta.Type switch
         {
             "formKey" => true,

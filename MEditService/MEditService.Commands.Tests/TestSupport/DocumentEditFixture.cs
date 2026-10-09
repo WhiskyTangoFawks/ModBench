@@ -33,15 +33,6 @@ internal sealed class DocumentEditFixture : TestInstance
         return record.FormKey.ToString();
     }
 
-    /// <summary>A landscape has no file of its own, so a new one is seeded inside a cell's document;
-    /// returns the landscape's FormKey.</summary>
-    internal string SeedLandscape(IFallout4Mod mod)
-    {
-        var landscape = new Landscape(mod);
-        Seed(new Cell(mod) { Landscape = landscape }, "cell");
-        return landscape.FormKey.ToString();
-    }
-
     /// <summary>Seeds an exact document body, for a case whose input is a shape the codec itself
     /// would not produce.</summary>
     internal void SeedRaw(string formKey, string recordType, string? editorId, string body) =>

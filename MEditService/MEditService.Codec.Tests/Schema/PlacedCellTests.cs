@@ -27,18 +27,14 @@ public sealed class PlacedCellTests
     [Fact]
     public void APlacedRecordCreatedInAGridCell_OfAGameWithNoKnownCellWidth_IsRefusedNamingTheCell_AndKeepsTheBareDocument()
     {
-        var placed = new JsonObject { [RecordMembers.FormKey] = "000802:Holds.esm" };
-        var cell = new JsonObject
-        {
-            [RecordMembers.FormKey] = "000801:Holds.esm",
-            [RecordTypes.CellGridMember] = PlacedCell.GridAt(3, -2),
-        };
+        var placed = Document.Parse("""{ "FormKey": "000802:Holds.esm" }""");
+        var cell = PlacedCell.WithGrid(Document.Parse("""{ "FormKey": "000801:Holds.esm" }"""), 3, -2);
 
-        Assert.False(PlacedCell.TryAsCreatedIn(placed, PersistentFlag.TemporaryGroup, cell, GameRelease.Starfield, out var refusal));
+        Assert.False(PlacedCell.TryAsCreatedIn(placed, PersistentFlag.TemporaryGroup, cell, GameRelease.Starfield, out var created, out var refusal));
 
         Assert.Equal(
             "000801:Holds.esm has a grid, and mEdit knows no cell width for Starfield to place a new reference at its centre.",
             refusal);
-        Assert.Equal("""{"FormKey":"000802:Holds.esm"}""", placed.ToJsonString());
+        Assert.Equal("""{"FormKey":"000802:Holds.esm"}""", created.Text);
     }
 }
