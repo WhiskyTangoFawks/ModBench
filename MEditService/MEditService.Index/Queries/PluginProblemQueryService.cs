@@ -26,9 +26,8 @@ public enum ProblemsFailureKind
     LaterRead,
 }
 
-/// <summary><paramref name="Failure"/> is set, with its <paramref name="FailureKind"/>, when the plugin's links
-/// could not be placed on files, or its rows are the last good read's, so its <paramref name="Problems"/> are
-/// not a clean bill (ADR-0019).</summary>
+/// <summary><paramref name="Failure"/> and its <paramref name="FailureKind"/> are set when the plugin's
+/// <paramref name="Problems"/> are not a clean bill (ADR-0019).</summary>
 public sealed record PluginProblems(
     PluginAddress Plugin, IReadOnlyList<SourceProblem> Problems, string? Failure = null, ProblemsFailureKind? FailureKind = null);
 
