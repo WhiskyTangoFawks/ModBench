@@ -1,4 +1,4 @@
-export type ReadFailedKind = 'refused' | 'no-answer' | 'timed-out' | 'unreachable';
+type ReadFailedKind = 'refused' | 'no-answer' | 'timed-out' | 'unreachable';
 
 /** A read that did not land, as data (ADR-0019). `refusal` is mEdit's own sentence, on `refused` alone;
  *  the transport's verb, path and status are not in it. */
