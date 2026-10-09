@@ -26,10 +26,10 @@ public sealed class DeleteRecordChangesHandler
         IReadOnlyList<RecordAt> records, IReadOnlyList<DocumentChange> unsaved)
     {
         _loadOrder.Require();
-        var batches = new Dictionary<string, SourceBatch>(StringComparer.Ordinal);
+        var batches = new UnsavedBatches(unsaved);
         return ItemWrite.Over(
             records, SameRecord.Instance,
-            record => Delete(record.Plugin, record.FormKey, unsaved, batches),
+            record => Delete(record.Plugin, record.FormKey, batches),
             changes => changes.Changes,
             record => $"Could not delete the source file for {record.FormKey} in {record.Plugin.Name} ({record.Plugin.Origin})",
             _logger);
@@ -44,13 +44,15 @@ public sealed class DeleteRecordChangesHandler
             : null;
 
     private SourceAnswer<RecordEditChanges> Delete(
-        PluginAddress plugin, string formKey, IReadOnlyList<DocumentChange> unsaved, Dictionary<string, SourceBatch> batches)
+        PluginAddress plugin, string formKey, UnsavedBatches batches)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
-        var (_, identity, onDisk) = target;
+        var (release, identity, _) = target;
         if (RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
 
-        var batch = BatchOf(plugin, onDisk, unsaved, batches);
+        if (_loadOrder.Current.Plugin(plugin)?.Provider is not PluginProvider.FromMod mod)
+            throw new InvalidOperationException($"Expected {plugin.Name}, once editable, to be provided by a mod.");
+        var batch = batches.Over(mod, release);
         var repository = batch.Repository;
 
         // Read before the removal, so what the log names is where it took from.
@@ -69,15 +71,5 @@ public sealed class DeleteRecordChangesHandler
                 formKey, plugin.Name, plugin.Origin, relativePath);
         }
         return SourceAnswer.Of(new RecordEditChanges(RecordEditResult.Success(), batch.ChangesAddedSince(before)));
-    }
-
-    // One batch per mod folder, so an item sees what the ones before it changed there.
-    private SourceBatch BatchOf(
-        PluginAddress plugin, SourceRepository repository, IReadOnlyList<DocumentChange> unsaved, Dictionary<string, SourceBatch> batches)
-    {
-        if (_loadOrder.Current.Plugin(plugin)?.Provider is not PluginProvider.FromMod mod)
-            throw new InvalidOperationException($"Expected {plugin.Name}, once editable, to be provided by a mod.");
-        if (!batches.TryGetValue(mod.Folder, out var batch)) batches[mod.Folder] = batch = SourceBatch.Over(repository, unsaved);
-        return batch;
     }
 }

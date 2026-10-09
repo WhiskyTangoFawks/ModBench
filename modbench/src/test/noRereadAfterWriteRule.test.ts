@@ -147,7 +147,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   });
 
   it('fails a re-read chained on a write with .finally, past a .then, as part of the caller', () => {
-    const messages = lint('function f(client, tree) { return client.copyRecords(x).then(report).finally(() => tree.invalidate()); }\n');
+    const messages = lint('function f(client, tree) { return client.track(x).then(report).finally(() => tree.invalidate()); }\n');
 
     expect(messages).toHaveLength(1);
   });
@@ -243,7 +243,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   });
 
   it('passes a write that re-reads nothing', () => {
-    const messages = lint('async function f(client, reporter) { await client.copyRecords(x); reporter.landed("Copied."); }\n');
+    const messages = lint('async function f(client, reporter) { await client.track(x); reporter.landed("Copied."); }\n');
 
     expect(messages).toEqual([]);
   });

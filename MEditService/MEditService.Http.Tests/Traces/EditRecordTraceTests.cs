@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
+using MEditService.Codec.Serialization;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -241,6 +243,23 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.Single((await Body(response)).GetProperty("applied").EnumerateArray());
         await Client.NextSnapshot(fx);
         await Wire.Eventually(async () => await HeightMax(formKey) == copiedHeight, "the replacement to be answered");
+    }
+
+    [Fact]
+    public async Task CopyingAsNew_GivenTheUnsavedTextOfTheDestinationsHeader_TakesTheNextObjectIdItHolds()
+    {
+        using var fx = await Loaded(OtherOrigin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
+        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(plugin => plugin.Origin == OtherOrigin).Path).Require();
+        var headerFile = Path.Combine(modFolder, "plugin-source", OtherPlugin, $"000000_{OtherPlugin}.json");
+        var unsavedHeader = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(await File.ReadAllBytesAsync(headerFile), 0xA00));
+
+        var response = await Client.Copy(
+            [(formKey, Plugin, Origin)], "New", [(OtherPlugin, OtherOrigin)], unsaved: [(headerFile, unsavedHeader)]);
+
+        response.EnsureSuccessStatusCode();
+        var landed = Assert.Single((await Body(response)).GetProperty("applied").EnumerateArray());
+        Assert.Equal("000A00:" + OtherPlugin, landed.GetProperty("newFormKey").GetString());
     }
 
     private async Task<double?> HeightMax(string formKey) =>

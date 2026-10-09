@@ -381,18 +381,19 @@ class HttpMEditClient implements MEditClient {
     return isRefused(answer) ? answer : { applied: answer.applied, refused: itemRefusals(answer.refused) };
   }
 
-  async copyRecords(
+  async getCopyChanges(
     records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
-  ): Promise<SelectionOutcome<CopyItem> | WriteRefused> {
+    unsaved: readonly UnsavedDocument[],
+  ): Promise<CopyChangesOutcome | WriteRefused> {
     const counted = records.length === 1 ? '1 record' : `${records.length} records`;
     const answer = await this.mutate({
-      op: `copyRecords(${counted}, ${mode})`,
+      op: `getCopyChanges(${counted}, ${mode})`,
       failMsg: `Could not copy ${counted}`,
-      post: () => this.apiClient.POST('/records/copy', {
-        body: { records: [...records], mode, destinations: [...destinations], replace },
+      post: () => this.apiClient.POST('/records/copy-changes', {
+        body: { records: [...records], mode, destinations: [...destinations], replace, documents: [...unsaved] },
       }),
     });
-    return isRefused(answer) ? answer : selectionOutcome(answer);
+    return isRefused(answer) ? answer : { applied: answer.applied, refused: itemRefusals(answer.refused) };
   }
 
   async decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {

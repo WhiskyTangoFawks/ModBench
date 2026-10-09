@@ -177,12 +177,14 @@ internal static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // Copy (plugins.md, Copy) writes each destination's working tree (ADR-0007).
-        app.MapPost("/records/copy", (RecordCopyRequest request, CopyRecordHandler edits) =>
-            CopyRecord(request, edits, logger))
-        .WithName("CopyRecord")
-        .WithSummary("Copy records into destination plugins, each record into each destination on its own.")
+        app.MapPost("/records/copy-changes", (RecordCopyRequest request, CopyRecordChangesHandler edits) =>
+            CopyRecordChanges(request, edits, logger))
+        .WithName("CopyRecordChanges")
+        .WithSummary("The changes copying records into destination plugins makes to plugin source, writing nothing, each record into each destination on its own.")
         .WithDescription(
+            "Given the current text of any unsaved document, each copy as the files and folders it deletes and the " +
+            "text each document it changes or creates holds afterwards, as an edit's are. Each item answers on the ones " +
+            "before it, and applying them in order leaves the records copied. " +
             "Override: the source record's own text lands verbatim in the destination under the same " +
             "FormKey, without its child records; the master dependency is derived at compile (ADR-0008). " +
             "New: a duplicate without its child records under the destination's next free FormID, with an EditorID derived from the source's, " +
@@ -193,7 +195,7 @@ internal static class RecordEndpoints
             "copy carries. Each record and destination is applied or refused on its own, and the " +
             "answer names both.")
         .WithTags("Records")
-        .Produces<RecordCopyResponse>()
+        .Produces<RecordCopyChangesResponse>()
         .ProducesProblem(400)
         .ProducesProblem(500)
         .ProducesProblem(503);
@@ -263,14 +265,15 @@ internal static class RecordEndpoints
         });
     }
 
-    internal static Task<IResult> CopyRecord(RecordCopyRequest request, CopyRecordHandler edits, ILogger logger)
+    internal static Task<IResult> CopyRecordChanges(RecordCopyRequest request, CopyRecordChangesHandler edits, ILogger logger)
     {
         var records = request.Records ?? [];
         var destinations = request.Destinations ?? [];
+        var unsaved = request.Documents ?? [];
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
-                "Received CopyRecord {Mode} for {Count} records into {DestinationCount} destinations (replace: {Replace})",
+                "Received CopyRecordChanges {Mode} for {Count} records into {DestinationCount} destinations (replace: {Replace})",
                 request.Mode, records.Count, destinations.Count, request.Replace);
         }
         return OverRecords(records, validateOptions: () =>
@@ -284,12 +287,18 @@ internal static class RecordEndpoints
         {
             return WriteEndpointMapping.Answered(
                 "Copy", logger,
-                edits.Copy(addressed, request.Mode, destinations, request.Replace),
+                edits.CopyRecords(
+                    addressed, request.Mode, destinations, request.Replace,
+                    [.. unsaved.Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))]),
                 WriteEndpointMapping.Refusal,
-                landed => new RecordCopyLanded(Addressed(landed.Item.Record), landed.Item.Destination, landed.Outcome),
+                landed => new RecordCopyChanges(
+                    Addressed(landed.Item.Record), landed.Item.Destination, landed.Outcome.Outcome.NewFormKey,
+                    [.. landed.Outcome.Changes.Moves.Select(move => new SourceMove(move.From, move.To))],
+                    landed.Outcome.Changes.Deletions,
+                    [.. landed.Outcome.Changes.Documents.Select(document => new DocumentChange(document.Path, document.Text))]),
                 refused => new RecordCopyRefusal(
                     new RecordCopyItem(Addressed(refused.Item.Record), refused.Item.Destination), refused.Refusal, refused.Message),
-                (applied, refused) => new RecordCopyResponse(applied, refused));
+                (applied, refused) => new RecordCopyChangesResponse(applied, refused));
         });
     }
 

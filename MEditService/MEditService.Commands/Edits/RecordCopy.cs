@@ -44,6 +44,12 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         return appended;
     }
 
+    /// <summary>What a copy made over <paramref name="batch"/> since <paramref name="before"/>, once it applied.</summary>
+    internal static SourceAnswer<RecordEditChanges> ChangesSince(
+        SourceBatch batch, SourceChanges before, SourceAnswer<RecordEditResult> copied) =>
+        copied.Then(result => SourceAnswer.Of(
+            result.Applied ? new RecordEditChanges(result, batch.ChangesAddedSince(before)) : result));
+
     private static RecordEditResult RefuseSlotHeldByAnotherRecord(PluginAddress destinationPlugin, SourceFailure.SlotHeld held) =>
         RecordEditResult.Refused(
             RecordEditRefusal.ChildSlotHeldByAnotherRecord,

@@ -183,9 +183,17 @@ export type GridPosition = components['schemas']['GridPosition'];
 export type RecordAddress = components['schemas']['RecordAddress'];
 /** Copy's mode Option (commands.md, Record, `copy`). */
 export type CopyMode = components['schemas']['CopyMode'];
-/** One record into one destination: the unit a copy lands or is refused by. A new record's copy
- *  that landed names the FormKey mEdit minted for it. */
-export type CopyItem = Pick<components['schemas']['RecordCopyLanded'], 'record' | 'destination' | 'newFormKey'>;
+/** What copying one record into one destination changes in plugin source. A copy as new names the FormKey
+ *  mEdit minted for it. */
+export type CopyChanges = components['schemas']['RecordCopyChanges'];
+/** One record into one destination: the unit a copy lands or is refused by. */
+export type CopyItem = Pick<CopyChanges, 'record' | 'destination'>;
+
+/** A copy's changes per record and destination, in the order to make them, and the items mEdit refused. */
+export interface CopyChangesOutcome {
+  applied: readonly CopyChanges[];
+  refused: readonly ItemRefusal<CopyItem>[];
+}
 export type ReferenceResult = components['schemas']['ReferenceResult'];
 /** The record filter mEdit holds: its SQL and the name of the source it came from
  *  (plugins.md, Record filter). */
@@ -211,11 +219,13 @@ export interface MEditClient {
   getDeleteChanges(
     records: readonly RecordAddress[], unsaved: readonly UnsavedDocument[],
   ): Promise<DeleteChangesOutcome | WriteRefused>;
-  // Each record into each destination is one item, landed or refused on its own. `replace` lets an
-  // override copy over the one a destination already holds.
-  copyRecords(
+  // Each record into each destination is one item, changed or refused on its own. `replace` lets an
+  // override copy over the one a destination already holds. `unsaved` stands in for the files it names.
+  // A WriteRefused is the call itself failing. Nothing is written.
+  getCopyChanges(
     records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
-  ): Promise<SelectionOutcome<CopyItem> | WriteRefused>;
+    unsaved: readonly UnsavedDocument[],
+  ): Promise<CopyChangesOutcome | WriteRefused>;
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
   decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;

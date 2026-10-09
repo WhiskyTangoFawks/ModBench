@@ -67,7 +67,7 @@ public sealed class LoadOrderReloadedMidWalkTests : IDisposable
         var destination = Plugin("Dest.esp", mod => mod.Statics.Add(new Static(staticKey, Fallout4Release.Fallout4) { EditorID = "DestStatic" }));
         _plugins.Load((master, false), (source, false), (destination, true));
         var handler = TestEditService.Over(_plugins.Holder, adapter: new DroppingAPluginOnTheFirstRead(_plugins.Holder, Address(master)))
-            .GetRequiredService<CopyRecordHandler>();
+            .GetRequiredService<CopyRecordChangesHandler>();
 
         handler.CopySync([new RecordAt(Address(source), placed.ToString())], CopyMode.Override, [Address(destination)], replace: false)
             .OnlyLanded();

@@ -304,14 +304,9 @@ public sealed class SourceRepository : ISourceRepositoryReads
     public SourceAnswer<IReadOnlyDictionary<string, RecordChange>> ChangedSinceLastCommit(PluginAddress plugin) =>
         SourceFailure.Answer(() => LastCommitComparison.Of(_modFolder, _release, _git, Locator, Spelled(plugin)));
 
-    /// <summary>Creates or replaces the record's document, placing an absent one from its identity
-    /// alone with the levels above it. A record another document carries is replaced at its own slot.
-    /// A failure writes nothing.</summary>
-    public SourceFailure? Put(PluginAddress plugin, SourceDocument document) =>
-        SourceTransaction.Atomically(this, transaction => transaction.Apply(ChangesToPut(plugin, document)));
-
-    /// <summary>What <see cref="Put"/> changes, written nowhere. A file at its path that is no document is
-    /// unreadable.</summary>
+    /// <summary>The changes that create or replace the record's document, placing an absent one from its identity
+    /// alone with the levels above it, written nowhere. A record another document carries is replaced at its own
+    /// slot. A file at its path that is no document is unreadable.</summary>
     public SourceAnswer<SourceChanges> ChangesToPut(PluginAddress plugin, SourceDocument document) =>
         SourceFailure.Answer(() => Writes.ChangesToPut(Spelled(plugin), document));
 

@@ -437,12 +437,17 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   afterEach(() => { viewSelection = []; });
   beforeEach(function dropUnansweredPicksSoTheyDoNotAnswerTheNextTest() { showQuickPick.mockReset(); });
 
+  const copyChanges = (record: RecordAddress, destination: { name: string; origin: string }, newFormKey?: string) =>
+    ({ record, destination, newFormKey, moves: [], deletions: [], documents: [] });
+
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
     const { write, writing, viewsAskedFor } = recordingWrite();
-    registerRecordCopyCommands(client, reporter, ask, selections, write);
-    return { reporter, ask, writing, viewsAskedFor };
+    const serially = vi.fn();
+    const source = { unsaved: () => [UNSAVED], applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
+    registerRecordCopyCommands(client, reporter, ask, selections, write, source);
+    return { reporter, ask, writing, viewsAskedFor, source };
   }
 
   const copy = (...args: unknown[]) =>
@@ -463,31 +468,31 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
       Promise.resolve(picked && items.filter((item) => picked.some((p) => p.name === item.plugin?.name))));
   }
 
-  const copyCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'copyRecords').map((c) => c.args);
+  const copyCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'getCopyChanges').map((c) => c.args);
 
   it.each([['a row', RECORD_NODE], ['the Editor\'s record header', HEADER]])(
     'copies the record %s names into every destination picked, in the mode picked', async (_what, arg) => {
       const client = new InMemoryMEditClient();
       destinations(client);
-      client.setCommandResult('copyRecords', { landed: [], refused: [] });
+      client.setCommandResult('getCopyChanges', { applied: [], refused: [] });
       pick('New', [PATCH, OTHER]);
       invoke(client);
 
       await copy(arg);
 
-      expect(copyCalls(client)).toEqual([[[SOURCE], 'New', [PATCH, OTHER], false]]);
+      expect(copyCalls(client)).toEqual([[[SOURCE], 'New', [PATCH, OTHER], false, [UNSAVED]]]);
     });
 
   it('refuses a row that carries no record Argument, naming it, and still copies the rest', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
-    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    client.setCommandResult('getCopyChanges', { applied: [], refused: [] });
     pick('New', [PATCH]);
     const { reporter } = invoke(client);
 
     await copy(RECORD_NODE, [RECORD_NODE, { label: 'Lost.esp', formKey: '000700:Lost.esp', plugin: 'Lost.esp', origin: 'ModA' }]);
 
-    expect(copyCalls(client)).toEqual([[[SOURCE], 'New', [PATCH], false]]);
+    expect(copyCalls(client)).toEqual([[[SOURCE], 'New', [PATCH], false, [UNSAVED]]]);
     expect(reporter.reports).toEqual([{
       severity: 'error',
       message: 'Could not copy 1 of 2 records.',
@@ -498,26 +503,26 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   it('takes the whole selection when the right-clicked row is one of several selected', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
-    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    client.setCommandResult('getCopyChanges', { applied: [], refused: [] });
     pick('New', [PATCH]);
     invoke(client);
 
     await copy(RECORD_NODE, [RECORD_NODE, SECOND_NODE]);
 
-    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'New', [PATCH], false]]);
+    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'New', [PATCH], false, [UNSAVED]]]);
   });
 
   it('from the palette, takes the Plugins selection', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
-    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    client.setCommandResult('getCopyChanges', { applied: [], refused: [] });
     pick('New', [PATCH]);
     viewSelection = [RECORD_NODE, SECOND_NODE];
     invoke(client);
 
     await copy();
 
-    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'New', [PATCH], false]]);
+    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'New', [PATCH], false, [UNSAVED]]]);
   });
 
   it('asks for the destinations in one pick of many, each with its load position', async () => {
@@ -556,7 +561,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     destinations(client);
     client.setQueryAnswerOnce('getRecordHolders', [{ name: 'MyPatch.esp', origin: 'ModA' }, PATCH]);
     client.setQueryAnswerOnce('getRecordHolders', [{ name: 'MyPatch.esp', origin: 'ModA' }, PATCH, OTHER]);
-    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    client.setCommandResult('getCopyChanges', { applied: [], refused: [] });
     pick('Override', [PATCH, OTHER]);
     const { ask } = invoke(client, 'Replace');
 
@@ -570,7 +575,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
       'Second [000802:MyPatch.esp] in Patch.esp (PatchMod)',
       'Second [000802:MyPatch.esp] in Other.esp (OtherMod)',
     ]);
-    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'Override', [PATCH, OTHER], true]]);
+    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'Override', [PATCH, OTHER], true, [UNSAVED]]]);
   });
 
   it('copies nothing when the replacement is not confirmed', async () => {
@@ -591,14 +596,14 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     const client = new InMemoryMEditClient();
     destinations(client);
     client.setQueryAnswer('getRecordHolders', [{ name: 'MyPatch.esp', origin: 'ModA' }]);
-    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    client.setCommandResult('getCopyChanges', { applied: [], refused: [] });
     pick('Override', [PATCH]);
     const { ask } = invoke(client);
 
     await copy(RECORD_NODE);
 
     expect(ask.asked).toEqual([]);
-    expect(copyCalls(client)).toEqual([[[SOURCE], 'Override', [PATCH], false]]);
+    expect(copyCalls(client)).toEqual([[[SOURCE], 'Override', [PATCH], false, [UNSAVED]]]);
   });
 
   it('asks nothing of a record\'s own plugin picked for a mixed selection, which holds the record and no copy to replace, and says nothing of it', async () => {
@@ -607,11 +612,11 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     const elsewhere = { formKey: '000900:Patch.esp', plugin: 'Patch.esp', origin: 'PatchMod' };
     client.setQueryAnswerOnce('getRecordHolders', [{ name: 'MyPatch.esp', origin: 'ModA' }]);
     client.setQueryAnswerOnce('getRecordHolders', [PATCH]);
-    client.setCommandResult('copyRecords', {
-      landed: [
-        { record: SOURCE, destination: PATCH },
-        { record: elsewhere, destination: PATCH },
-        { record: elsewhere, destination: OTHER },
+    client.setCommandResult('getCopyChanges', {
+      applied: [
+        copyChanges(SOURCE, PATCH),
+        copyChanges(elsewhere, PATCH),
+        copyChanges(elsewhere, OTHER),
       ],
       refused: [{ item: { record: SOURCE, destination: OTHER }, reason: 'boom' }],
     });
@@ -621,7 +626,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     await copy(RECORD_NODE, [RECORD_NODE, carrying(elsewhere)]);
 
     expect(ask.asked).toEqual([]);
-    expect(copyCalls(client)).toEqual([[[SOURCE, elsewhere], 'Override', [PATCH, OTHER], false]]);
+    expect(copyCalls(client)).toEqual([[[SOURCE, elsewhere], 'Override', [PATCH, OTHER], false, [UNSAVED]]]);
     expect(reporter.landings).toEqual(['Made 2 copies.']);
     expect(reporter.reports.map((r) => r.message)).toEqual(['Could not make 1 of 3 copies.']);
   });
@@ -629,7 +634,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   it('never asks to replace a copy as new, which lands under a FormID of its own', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
-    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    client.setCommandResult('getCopyChanges', { applied: [], refused: [] });
     pick('New', [PATCH]);
     const { ask } = invoke(client);
 
@@ -642,8 +647,8 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   it('says where the copies landed, naming each refused item and why', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
-    client.setCommandResult('copyRecords', {
-      landed: [{ record: SOURCE, destination: PATCH }],
+    client.setCommandResult('getCopyChanges', {
+      applied: [copyChanges(SOURCE, PATCH)],
       refused: [{ item: { record: SOURCE, destination: OTHER }, reason: 'Other.esp is not tracked' }],
     });
     pick('New', [PATCH, OTHER]);
@@ -662,7 +667,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   it('reports a refused call at error', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
-    client.setCommandResult('copyRecords', { refused: true, message: 'Could not copy 1 record — boom' });
+    client.setCommandResult('getCopyChanges', { refused: true, message: 'Could not copy 1 record — boom' });
     pick('New', [PATCH]);
     const { reporter } = invoke(client);
 
@@ -723,9 +728,9 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     destinations(client);
     pick('New', [PATCH, OTHER]);
     const { writing } = invoke(client);
-    client.setCommandHandler('copyRecords', () => {
+    client.setCommandHandler('getCopyChanges', () => {
       writing.push('copy');
-      return Promise.resolve({ landed: [{ record: SOURCE, destination: PATCH, newFormKey: '000900:Patch.esp' }], refused: [] });
+      return Promise.resolve({ applied: [copyChanges(SOURCE, PATCH, '000900:Patch.esp')], refused: [] });
     });
 
     await copy(RECORD_NODE);
@@ -736,7 +741,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   it.each(['Override', 'New'] as const)('runs a copy as %s under Referenced By\'s bar when the rows are Referenced By\'s', async (mode) => {
     const client = new InMemoryMEditClient();
     destinations(client);
-    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    client.setCommandResult('getCopyChanges', { applied: [], refused: [] });
     client.setQueryAnswer('getRecordHolders', []);
     pick(mode, [PATCH]);
     const { viewsAskedFor } = invoke(client);
@@ -761,7 +766,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   it('ends the write after mEdit refuses the call, and reports it', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
-    client.setCommandResult('copyRecords', { refused: true, message: 'Could not copy 1 record — socket hang up' });
+    client.setCommandResult('getCopyChanges', { refused: true, message: 'Could not copy 1 record — socket hang up' });
     pick('New', [PATCH]);
     const { writing, reporter } = invoke(client);
 
@@ -769,5 +774,68 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
 
     expect(writing).toEqual(['opens', 'ends']);
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not copy 1 record — socket hang up', detail: undefined }]);
+  });
+
+  describe('the changes mEdit answers', () => {
+    const answered = () => [copyChanges(SOURCE, PATCH), copyChanges(SECOND, PATCH), copyChanges(SOURCE, OTHER)];
+
+    async function copyAnswered(applied: readonly ReturnType<typeof copyChanges>[], refused: unknown[] = []) {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      client.setCommandResult('getCopyChanges', { applied, refused });
+      pick('New', [PATCH, OTHER]);
+      const invoked = invoke(client);
+      await copy(RECORD_NODE);
+      return invoked;
+    }
+
+    it('makes them as one workspace edit, then refreshes Source Control once for each destination plugin', async () => {
+      const applied = answered();
+      const { source } = await copyAnswered(applied);
+
+      expect(source.applyWorkspaceChanges.mock.calls).toEqual([[applied]]);
+      expect(source.refreshSourceControlFor.mock.calls).toEqual([[PATCH], [OTHER]]);
+    });
+
+    it('runs the whole copy after the edits in flight settle', async () => {
+      const { source } = await copyAnswered([]);
+
+      expect(source.serially).toHaveBeenCalledOnce();
+    });
+
+    it('reports a workspace edit VS Code did not make, lands nothing, and still names the items mEdit refused', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      const refusal = { item: { record: SOURCE, destination: OTHER }, reason: 'Other.esp is not tracked' };
+      client.setCommandResult('getCopyChanges', { applied: [copyChanges(SOURCE, PATCH)], refused: [refusal] });
+      pick('New', [PATCH, OTHER]);
+      const { reporter, source } = invoke(client);
+      source.applyWorkspaceChanges.mockRejectedValue(new Error('VS Code did not apply the changes.'));
+
+      await copy(RECORD_NODE);
+
+      expect(reporter.reports[0]).toEqual(
+        { severity: 'error', message: 'Could not copy the records.', detail: 'VS Code did not apply the changes.' });
+      expect(reporter.landings).toEqual([]);
+      expect(reporter.reports.map((r) => r.message)).toEqual(['Could not copy the records.', 'Could not make 1 of 1 copies.']);
+      expect(source.refreshSourceControlFor).not.toHaveBeenCalled();
+    });
+
+    it('reports the files VS Code did not save as a part that failed, with the copies landed and Source Control refreshed', async () => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      client.setCommandResult('getCopyChanges', { applied: [copyChanges(SOURCE, PATCH)], refused: [] });
+      pick('New', [PATCH]);
+      const { reporter, source } = invoke(client);
+      source.applyWorkspaceChanges.mockResolvedValue(['/mods/PatchMod/plugin-source/Patch.esp/Npcs/Copy.json']);
+
+      await copy(RECORD_NODE);
+
+      expect(reporter.reports).toEqual([
+        { severity: 'error', message: 'Could not save the copies.', detail: 'VS Code did not save /mods/PatchMod/plugin-source/Patch.esp/Npcs/Copy.json.' },
+      ]);
+      expect(reporter.landings).toEqual(['Copied 000801:MyPatch.esp into Patch.esp.']);
+      expect(source.refreshSourceControlFor).toHaveBeenCalledWith(PATCH);
+    });
   });
 });

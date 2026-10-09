@@ -578,7 +578,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/records/copy": {
+    "/records/copy-changes": {
         parameters: {
             query?: never;
             header?: never;
@@ -588,10 +588,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Copy records into destination plugins, each record into each destination on its own.
-         * @description Override: the source record's own text lands verbatim in the destination under the same FormKey, without its child records; the master dependency is derived at compile (ADR-0008). New: a duplicate without its child records under the destination's next free FormID, with an EditorID derived from the source's, and a self-reference follows the copy. A cell or a worldspace is refused as New. In every mode, a container the destination lacks is copied in as an override. Replace applies to Override only. Under Override, a destination that already holds the record is refused unless replace is given, and a replacement changes the record's own fields only, keeping the children the destination's copy carries. Each record and destination is applied or refused on its own, and the answer names both.
+         * The changes copying records into destination plugins makes to plugin source, writing nothing, each record into each destination on its own.
+         * @description Given the current text of any unsaved document, each copy as the files and folders it deletes and the text each document it changes or creates holds afterwards, as an edit's are. Each item answers on the ones before it, and applying them in order leaves the records copied. Override: the source record's own text lands verbatim in the destination under the same FormKey, without its child records; the master dependency is derived at compile (ADR-0008). New: a duplicate without its child records under the destination's next free FormID, with an EditorID derived from the source's, and a self-reference follows the copy. A cell or a worldspace is refused as New. In every mode, a container the destination lacks is copied in as an override. Replace applies to Override only. Under Override, a destination that already holds the record is refused unless replace is given, and a replacement changes the record's own fields only, keeping the children the destination's copy carries. Each record and destination is applied or refused on its own, and the answer names both.
          */
-        post: operations["CopyRecord"];
+        post: operations["CopyRecordChanges"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1084,14 +1084,21 @@ export interface components {
             plugin: components["schemas"]["PluginAddress"];
             documentText?: string | null;
         };
-        RecordCopyItem: {
-            record: components["schemas"]["RecordAddress"];
-            destination: components["schemas"]["PluginAddress"];
-        };
-        RecordCopyLanded: {
+        RecordCopyChanges: {
             record: components["schemas"]["RecordAddress"];
             destination: components["schemas"]["PluginAddress"];
             newFormKey?: string | null;
+            moves: components["schemas"]["SourceMove"][];
+            deletions: string[];
+            documents: components["schemas"]["DocumentChange"][];
+        };
+        RecordCopyChangesResponse: {
+            applied: components["schemas"]["RecordCopyChanges"][];
+            refused: components["schemas"]["RecordCopyRefusal"][];
+        };
+        RecordCopyItem: {
+            record: components["schemas"]["RecordAddress"];
+            destination: components["schemas"]["PluginAddress"];
         };
         RecordCopyRefusal: {
             item: components["schemas"]["RecordCopyItem"];
@@ -1103,10 +1110,7 @@ export interface components {
             mode: components["schemas"]["CopyMode"];
             destinations: components["schemas"]["PluginAddress"][];
             replace: boolean;
-        };
-        RecordCopyResponse: {
-            applied: components["schemas"]["RecordCopyLanded"][];
-            refused: components["schemas"]["RecordCopyRefusal"][];
+            documents?: components["schemas"]["DocumentChange"][] | null;
         };
         RecordCreateChangesRequest: {
             origin: string;
@@ -2904,7 +2908,7 @@ export interface operations {
             };
         };
     };
-    CopyRecord: {
+    CopyRecordChanges: {
         parameters: {
             query?: never;
             header?: never;
@@ -2923,7 +2927,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordCopyResponse"];
+                    "application/json": components["schemas"]["RecordCopyChangesResponse"];
                 };
             };
             /** @description Bad Request */

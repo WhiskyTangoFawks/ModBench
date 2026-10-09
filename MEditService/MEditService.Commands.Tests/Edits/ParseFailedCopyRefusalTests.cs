@@ -82,7 +82,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
         public PluginAddress SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
         public PluginAddress DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
-        public CopyRecordHandler CopyHandler { get; }
+        public CopyRecordChangesHandler CopyHandler { get; }
 
         public ParseFailedCopyFixture()
         {

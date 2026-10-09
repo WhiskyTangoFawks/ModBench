@@ -9,7 +9,7 @@ public sealed class WriteRouteSeamTests
     [
         ("POST /records/{formKey}/edit-changes", "EditRecordChanges"),
         ("POST /records/delete-changes", "DeleteRecordChanges"),
-        ("POST /records/copy", "CopyRecord"),
+        ("POST /records/copy-changes", "CopyRecordChanges"),
         ("POST /plugins/create", "CreatePlugin"),
         ("POST /plugins/track", "Track"),
         ("POST /plugins/decompile", "Decompile"),

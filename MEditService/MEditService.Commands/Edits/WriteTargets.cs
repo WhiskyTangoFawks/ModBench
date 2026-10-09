@@ -83,20 +83,22 @@ internal sealed class WriteTargets(
     }
 
     internal readonly record struct CopyTarget(
-        CopySource Source, RecordIdentity Identity, RecordCopy.Destination Destination, GameRelease Release, string Body);
+        CopySource Source, RecordIdentity Identity, RecordCopy.Destination Destination, SourceBatch Batch, GameRelease Release,
+        string Body);
 
     // Asymmetric by construction: the write-path gate checks the destination, the source answers for
     // its own record. The text is read before anything is written, because a record the codec cannot
     // read would land as a stub.
     internal RecordEditResult? ResolveCopySource(
-        PluginAddress destinationPlugin, CopySource source, string formKey, out CopyTarget target)
+        PluginAddress destinationPlugin, CopySource source, string formKey, UnsavedBatches batches, out CopyTarget target)
     {
         target = default;
 
-        if (RefuseUnlessEditable(destinationPlugin, out var openedDestinationRepository)
-            is { } blocked) return blocked;
-        var destinationRepository = openedDestinationRepository
-            ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
+        if (RefuseUnlessEditable(destinationPlugin, out _) is { } blocked) return blocked;
+        var batch = batches.Over(
+            loadOrder.Current.Plugin(destinationPlugin)?.Provider as PluginProvider.FromMod
+                ?? throw new InvalidOperationException("Expected an editable plugin to be provided by a mod."),
+            loadOrder.Current.GameRelease);
 
         if (!source.Identity(formKey).Holds(out var held, out var why)) return RefuseUnreadableCopySource(formKey, why);
         if (held is not { } identity)
@@ -107,7 +109,7 @@ internal sealed class WriteTargets(
         if (!source.Body(identity).Holds(out var body, out why)) return RefuseUnreadableCopySource(formKey, why);
 
         target = new CopyTarget(
-            source, identity, new RecordCopy.Destination(destinationRepository, destinationPlugin), loadOrder.Current.GameRelease, body);
+            source, identity, new RecordCopy.Destination(batch.Repository, destinationPlugin), batch, loadOrder.Current.GameRelease, body);
         return null;
     }
 

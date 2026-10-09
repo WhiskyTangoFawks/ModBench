@@ -40,8 +40,24 @@ internal static class SyncHandlers
         return outcome;
     }
 
-    internal static SelectionResult<CopyItem, RecordEditRefusal, string?> CopySync(
-        this CopyRecordHandler handler, IReadOnlyList<RecordAt> records, CopyMode mode,
-        IReadOnlyList<PluginAddress> destinations, bool replace) =>
-        handler.Copy(records, mode, destinations, replace).GetAwaiter().GetResult();
+    /// <summary>What Copy answers, over <paramref name="unsaved"/>, written nowhere.</summary>
+    internal static SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges> CopyChangesSync(
+        this CopyRecordChangesHandler handler, IReadOnlyList<RecordAt> records, CopyMode mode,
+        IReadOnlyList<PluginAddress> destinations, bool replace, IReadOnlyList<DocumentChange>? unsaved = null) =>
+        handler.CopyRecords(records, mode, destinations, replace, unsaved ?? []).GetAwaiter().GetResult();
+
+    /// <summary>Copy, then each landed item's changes made on disk in the order answered, as the editor makes them.</summary>
+    internal static SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges> CopySync(
+        this CopyRecordChangesHandler handler, IReadOnlyList<RecordAt> records, CopyMode mode,
+        IReadOnlyList<PluginAddress> destinations, bool replace)
+    {
+        var result = handler.CopyChangesSync(records, mode, destinations, replace);
+        foreach (var changes in result.Landed.Select(landed => landed.Outcome.Changes))
+        {
+            EditSaving.Save(
+                changes.Moves.Select(move => (move.From, move.To)), changes.Deletions,
+                changes.Documents.Select(document => (document.Path, document.Text)));
+        }
+        return result;
+    }
 }
