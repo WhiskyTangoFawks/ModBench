@@ -43,6 +43,11 @@ function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typ
 describe('PluginHeader', () => {
   afterEach(() => new Promise(resolve => setTimeout(resolve, 0)));
 
+  it('labels a column whose plugin is not active with the file name alone', () => {
+    renderHeader({ override: { loadIndex: null }, notActive: true });
+    expect(screen.getByText('MyMod.esp').parentElement).toHaveTextContent(/^MyMod\.esp$/);
+  });
+
   it('labels the column `[XX] File name`, and says nothing of the winner', () => {
     const { header } = renderHeader();
     expect(screen.getByText('MyMod.esp').parentElement).toHaveTextContent(/^\[01\] MyMod\.esp$/);

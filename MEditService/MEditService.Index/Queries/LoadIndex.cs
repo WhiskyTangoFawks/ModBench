@@ -29,10 +29,12 @@ internal static class LoadIndex
         })];
     }
 
-    internal static string Of(
+    /// <summary>Null for a plugin that is not active: it has no load index.</summary>
+    internal static string? Of(
         PluginAddress plugin, int loadOrderIndex, LoadOrderSnapshot snapshot,
         IReadOnlyDictionary<PluginAddress, PluginContent> opened)
     {
+        if (!snapshot.Active.Any(active => PluginAddress.Comparer.Equals(active.Key, plugin))) return null;
         var style = StyleOf(plugin, opened);
         var place = Places(snapshot, opened).Take(loadOrderIndex).Count(active => active.Style == style);
         return style switch

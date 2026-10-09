@@ -121,6 +121,15 @@ public sealed class CompareFromTextTests : IDisposable
     }
 
     [Fact]
+    public void ACopyWhosePluginIsNotActive_HasNoLoadIndex_TheActiveColumnsKeepTheirs()
+    {
+        var compare = Compare(InactivePlugin, OtherChestText);
+
+        Assert.Equal(["00", "02"], compare.Overrides.Take(2).Select(o => o.LoadIndex));
+        Assert.Null(compare.Overrides[^1].LoadIndex);
+    }
+
+    [Fact]
     public void ACopyComparedAlone_IsItsOwnColumnOnly_WithNoConflictState()
     {
         var compare = _index.Records.GetCompare(Chest.ToString(), new CopyText(InactivePlugin, OtherChestText, Alone: true))
