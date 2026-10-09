@@ -53,7 +53,7 @@ export interface DeletedDownload {
 const toDeletedDownload = ({ name }: DownloadToDelete, landed?: { metadataLeftBehind?: string }): DeletedDownload =>
   landed?.metadataLeftBehind === undefined ? { name } : { name, metadataLeftBehind: landed.metadataLeftBehind };
 
-/** Never touches the mod installed from any of them. */
+// Never touches the mod installed from any of them.
 function deleteDownloads(
   adapter: InstanceAdapter, files: readonly DownloadToDelete[], trash: MoveToTrash,
 ): Promise<SelectionOutcome<DeletedDownload>> {

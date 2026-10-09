@@ -26,7 +26,7 @@ interface InstallMeta {
   installedFiles?: readonly InstalledFileId[];
 }
 
-/** Why a new mod may not take `name`, in the words install refuses it with. */
+// Why a new mod may not take `name`, in the words install refuses it with.
 const installNameRefusal = (adapter: InstanceAdapter, name: string): Promise<string | undefined> =>
   newModNameRefusal(adapter, name);
 
@@ -137,8 +137,8 @@ function metaFor(base: InstallMeta, opts: InstallOptions): InstallMeta {
   return { ...base, nexusId: opts.modID ?? base.nexusId, version: opts.version ?? base.version, installedFiles };
 }
 
-/** Extracts into the mod's own folder, then marks the downloaded file the archive is, if it is
- *  one — a failed mark is reported beside the landed install, never instead of it. */
+// Extracts into the mod's own folder, then marks the downloaded file the archive is, if it is
+// one — a failed mark is reported beside the landed install, never instead of it.
 async function installFromArchive(
   access: InstallAccess, target: InstallTarget, archivePath: string, opts: InstallOptions,
 ): Promise<InstallCommandResult> {
@@ -155,7 +155,7 @@ async function installFromArchive(
   }
 }
 
-/** Copies the folder in: the source belongs to the user, so it is never the thing moved. */
+// Copies the folder in: the source belongs to the user, so it is never the thing moved.
 async function installFromFolder(
   access: InstallAccess, target: InstallTarget, folderPath: string, opts: InstallOptions,
 ): Promise<InstallCommandResult> {

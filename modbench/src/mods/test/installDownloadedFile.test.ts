@@ -247,7 +247,7 @@ describe('installDownloadedFile: the pick among the upgrades the Instance value 
   it('choosing an upgrade calls install with the upgrade shape naming that mod, and asks no name', async () => {
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    const { root, archive } = await pickAmong(
+    const { archive } = await pickAmong(
       [{ modName: 'Harder VATS', version: '1.0' }],
       (d) => d.accept({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } }));
 
@@ -261,7 +261,7 @@ describe('installDownloadedFile: the pick among the upgrades the Instance value 
   it('choosing "Install as a new mod…" calls install with the new-mod shape', async () => {
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    const { root, archive } = await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(NEW_MOD_ITEM));
+    const { archive } = await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(NEW_MOD_ITEM));
 
     expect(installFromArchive).toHaveBeenCalledWith(
       { kind: 'new', name: 'foo' }, archive,
