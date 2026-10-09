@@ -160,7 +160,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
         if (FormKey.TryFactory(carrying.FormKey, out var declared) && declared == FormKey.Factory(record.FormKey))
             return new SourceDocument(record.FormKey, record.RecordType, record.EditorId, text);
 
-        var body = EmbeddedChildSplice.TextOf(Encoding.UTF8.GetBytes(text), carrying.RecordType, record.FormKey, _release)
+        var body = ContainerDocumentEdits.ChildTextOf(Encoding.UTF8.GetBytes(text), carrying.RecordType, record.FormKey, _release)
             ?? throw new InvalidOperationException($"Expected the text CarryingFromText found carrying {record.FormKey} to hold it.");
         return new SourceDocument(record.FormKey, record.RecordType, record.EditorId, body);
     }

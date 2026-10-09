@@ -165,4 +165,71 @@ public sealed class ContainerDocumentEditsTests
         OneInsertion.AssertKeepsEveryOtherByte(trailingComma, edited);
         Assert.Equal(Text(expected), RecordTextCodec.RoundTrip(edited, Release, RecordTypeOf(expected)));
     }
+
+    private static (string Text, FormKey First, FormKey Second) TopicWithTwoResponses()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Append.esp"), Fallout4Release.Fallout4);
+        var topic = new DialogTopic(mod) { EditorID = "Topic" };
+        var first = new DialogResponses(mod) { EditorID = "R1" };
+        var second = new DialogResponses(mod) { EditorID = "R2" };
+        topic.Responses.Add(first);
+        topic.Responses.Add(second);
+        return (Text(topic), first.FormKey, second.FormKey);
+    }
+
+    private static (byte[] Bytes, EmbeddedChildSpan Span) Located(string text, FormKey child) =>
+        (System.Text.Encoding.UTF8.GetBytes(text),
+            EmbeddedChildLocator.Find(System.Text.Encoding.UTF8.GetBytes(text), "DialogTopic", child.ToString(), Release) ?? throw new InvalidOperationException("child not found"));
+
+    [Fact]
+    public void ChildTextOf_AnEmbeddedChild_IsItsOwnStandaloneText()
+    {
+        var (text, first, _) = TopicWithTwoResponses();
+
+        var childText = ContainerDocumentEdits.ChildTextOf(System.Text.Encoding.UTF8.GetBytes(text), "DialogTopic", first.ToString(), Release);
+
+        Assert.Equal("R1", JsonDocument.Parse(Assert.IsType<string>(childText)).RootElement.GetProperty("EditorID").GetString());
+    }
+
+    [Fact]
+    public void ChildTextOf_AFormKeyNoSlotCarries_IsNull() =>
+        Assert.Null(ContainerDocumentEdits.ChildTextOf(
+            System.Text.Encoding.UTF8.GetBytes(TopicWithTwoResponses().Text), "DialogTopic", "FFFFFF:Append.esp", Release));
+
+    [Fact]
+    public void WithChildReplaced_ChangesTheChildsSpanOnly()
+    {
+        var (text, first, _) = TopicWithTwoResponses();
+        var (bytes, span) = Located(text, first);
+
+        var replaced = ContainerDocumentEdits.WithChildReplaced(
+            bytes, span, ContainerDocumentEdits.ChildTextAt(bytes, span, Release).Replace("\"R1\"", "\"Renamed\"", StringComparison.Ordinal));
+
+        Assert.Equal(text.Replace("\"R1\"", "\"Renamed\"", StringComparison.Ordinal), replaced);
+    }
+
+    [Fact]
+    public void WithChildCut_OneOfTwoListElements_LeavesTheOtherInAParsableList()
+    {
+        var (text, first, second) = TopicWithTwoResponses();
+        var (bytes, span) = Located(text, first);
+
+        var cut = JsonDocument.Parse(ContainerDocumentEdits.WithChildCut(bytes, span)).RootElement.GetProperty("Responses");
+
+        Assert.Equal([second.ToString()], cut.EnumerateArray().Select(r => r.GetProperty("FormKey").GetString()));
+    }
+
+    [Fact]
+    public void WithChildCut_TheOnlyListElement_RemovesTheSlot()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Append.esp"), Fallout4Release.Fallout4);
+        var topic = new DialogTopic(mod) { EditorID = "Topic" };
+        var only = new DialogResponses(mod) { EditorID = "R1" };
+        topic.Responses.Add(only);
+        var (bytes, span) = Located(Text(topic), only.FormKey);
+
+        var cut = JsonDocument.Parse(ContainerDocumentEdits.WithChildCut(bytes, span)).RootElement;
+
+        Assert.False(cut.TryGetProperty("Responses", out _));
+    }
 }
