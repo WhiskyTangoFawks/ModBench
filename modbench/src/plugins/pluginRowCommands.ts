@@ -205,6 +205,8 @@ export interface CompileDeps {
   reporter: Reporter;
   problems: CompileProblems;
   originFiles: OriginFilesOf;
+  /** Saves the unsaved plugin source under a folder; answers the paths VS Code left unsaved. */
+  saveUnsaved: (folder: string) => Promise<string[]>;
 }
 
 /** commands.md, `compile`: the plugins, the selection included, from a Plugins row, a record tab's
@@ -256,12 +258,26 @@ async function pickCompilable(deps: CompileDeps, entry: GestureEntry<PluginsTree
 // only bytes on disk, which the index's own mirror watch re-reads.
 async function compilePlugins(deps: CompileDeps, plugins: readonly PluginAddress[]): Promise<void> {
   if (plugins.length === 0) return;
+  if (!(await savedFirst(deps, plugins))) return;
   await runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
     const outcome = await deps.client.compile(plugins);
     if (isRefused(outcome)) { deps.reporter.report('error', outcome.message); return; }
     publishLanded(deps, outcome);
     reportCompiled(deps.reporter, outcome, plugins.length);
   });
+}
+
+// plugins.md, Compile, story 7: the plugin is built from what the user sees, so its unsaved plugin
+// source is saved first, and a file VS Code does not save refuses the compile before anything is written.
+async function savedFirst(deps: CompileDeps, plugins: readonly PluginAddress[]): Promise<boolean> {
+  const unsaved: string[] = [];
+  for (const { name, origin } of plugins) {
+    const folder = deps.originFiles(origin)?.file(`plugin-source/${name}`);
+    if (folder !== undefined) unsaved.push(...await deps.saveUnsaved(folder));
+  }
+  if (unsaved.length === 0) return true;
+  deps.reporter.report('error', 'Could not compile: VS Code did not save its plugin source.', unsaved.join('\n'));
+  return false;
 }
 
 function publishLanded(deps: CompileDeps, outcome: CompileOutcome): void {

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress } from '../client';
+import { saveDirtyPluginSource } from '../sourceLanguage/dirtyPluginSource';
 import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { Reporter } from '../ports/reporter';
@@ -182,7 +183,7 @@ function registerPluginGestures(
     registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
     registerCompileCommand({
       client, instance, reporter: reporterFor('plugin.compile'), problems: compileProblems,
-      originFiles: (origin) => originFiles(instance.value, origin),
+      originFiles: (origin) => originFiles(instance.value, origin), saveUnsaved: saveDirtyPluginSource,
     }, selection),
     registerRecordCreateCommand({
       client, reporter: reporterFor('record.create'), write: recordWrite, source: sourceEditing,
