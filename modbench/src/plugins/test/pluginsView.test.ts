@@ -175,6 +175,7 @@ function pluginsView(
     statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, registerRepositories: () => Promise.resolve(),
     ask: scriptedDialog(), recordWrite: (command) => command(),
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve([]), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
+    saveUnsavedPluginSource: () => Promise.resolve([]),
     trackSelection: () => [], modsView: 'modbench.modList',
   });
   const provider = () => present(h.providers[0], 'the Plugins tree data provider');
