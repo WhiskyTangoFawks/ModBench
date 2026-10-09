@@ -64,13 +64,14 @@ public sealed class EditRecordChangesHandler
         if (!repository.RecordOf(plugin, identity).Holds(out var own, out var unread)) return unread;
         var text = (own ?? throw new InvalidOperationException($"Expected the text given for {formKey} to carry it.")).Body;
         if (!HeldIn.Of(repository, plugin, identity).Holds(out var held, out unread)) return unread;
+        if (!Document.TryRead(text, out var record, out var whyNot)) return WriteTargets.RefuseUnreadable(formKey, whyNot, spelled);
 
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
             : patched => RecordTextCodec.RoundTrip(patched, release, identity.RecordType);
 
         var request = new RecordTextEditRequest(
-            text, held, schema, envelope, release, roundTrip, _resolution.WalkAmongMastersOf(repository, plugin, schemas, batches));
+            record, held, schema, envelope, release, roundTrip, _resolution.WalkAmongMastersOf(repository, plugin, schemas, batches));
 
         string newText;
         CellGroupMove? move;
@@ -81,8 +82,8 @@ public sealed class EditRecordChangesHandler
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            // A document JsonDocument tolerates and JsonNode does not — duplicate members, most of
-            // them — never reaches the codec, and this is the only reader that sees why.
+            // A document the reader tolerates and the edit's tree does not — duplicate members, most
+            // of them — never reaches the codec, and this is the only reader that sees why.
             return WriteTargets.RefuseUnreadable(formKey, ex.Message, spelled);
         }
         // The codec rejected the patched document; whether the unpatched one reads decides whose fault

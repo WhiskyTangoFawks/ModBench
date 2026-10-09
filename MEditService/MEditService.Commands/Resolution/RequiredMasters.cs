@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -35,8 +34,7 @@ internal sealed class RequiredMasters(PluginAddress plugin)
         // whether or not the record references anything.
         Require(document.FormKey);
 
-        using var parsed = JsonDocument.Parse(document.Text);
-        foreach (var target in FormReferences.Collect(parsed.RootElement, schema.RecordColumns).Select(reference => reference.TargetFormKey))
+        foreach (var target in FormReferences.Collect(document.Text, schema.RecordColumns).Select(reference => reference.TargetFormKey))
         {
             _links.Add(target);
             Require(target);

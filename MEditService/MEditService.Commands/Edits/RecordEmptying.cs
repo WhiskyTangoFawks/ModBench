@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
@@ -12,11 +10,11 @@ namespace MEditService.Commands.Edits;
 /// making one of a deleted copy refills it first.</summary>
 internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bool MakesPartialForm, bool Refills, bool HeldPersistent)
 {
-    /// <summary>The emptying a write of <paramref name="value"/> makes, or null when it newly sets and
+    /// <summary>The emptying a write of the <paramref name="requested"/> flags makes, or null when it newly sets and
     /// clears neither flag.</summary>
-    internal static RecordEmptying? Of(JsonObject record, RecordTableSchema schema, ColumnSpec column, JsonElement? value)
+    internal static RecordEmptying? Of(Document record, RecordTableSchema schema, long? requested)
     {
-        if (RecordFlagsWrite.Of(record, schema, column, value) is not { } write) return null;
+        if (RecordFlagsWrite.Of(record, requested) is not { } write) return null;
         var partialFormable = schema.IsPartialFormable;
         var makesPartialForm = partialFormable && write.Sets(PartialFormFlag.Bit);
         var deletes = !makesPartialForm && write.Sets(DeletedFlag.Bit);
@@ -49,11 +47,11 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
 
     /// <summary>The refusal of a Partial Form that xEdit's GetCanBePartial denies the copy.</summary>
     internal RecordEditResult? RefuseCell(
-        JsonObject record, HeldIn? held, RecordTableSchema schema, GameRelease release,
+        Document record, HeldIn? held, RecordTableSchema schema, GameRelease release,
         LoadOrderResolution.MastersWalk masters, string spelled)
     {
         if (!MakesPartialForm) return null;
-        var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
+        var formKey = record.StringAt(RecordMembers.FormKey);
         var inPersistentSlot = held is { IsThePersistentCell: true };
         var verdict = CanBePartial.Of(schema, release, formKey, CanBePartial.TemporaryExterior(HeldPersistent, inPersistentSlot, interior: null));
         if (verdict is CanBePartial.Verdict.NeedsPlacement)
@@ -86,27 +84,28 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
     /// <summary>xEdit's AssignInternal copies the left copy's flags, but a write ends as it asks (xedit.md,
     /// divergence 25): only the bits it leaves alone take the left copy's. Delete and MakePartialForm clear
     /// Compressed.</summary>
-    internal JsonElement FlagsWith(JsonObject? left)
+    internal long FlagsWith(Document? left)
     {
         var flags = left == null ? Flags : (RecordFlagsWrite.HeldBy(left) & ~Changed) | (Flags & Changed);
         if (Deletes || MakesPartialForm) flags &= ~CompressedFlag.Bit;
-        return JsonSerializer.SerializeToElement(flags);
+        return flags;
     }
 
-    internal void Apply(JsonObject record, RecordTableSchema schema, GameRelease release, JsonObject? left)
+    internal Document Apply(Document record, RecordTableSchema schema, GameRelease release, Document? left)
     {
         foreach (var field in OwnFields(schema, release))
         {
             var member = field.PropertyName;
             var isEditorId = field.Field.IsEditorId;
             var fromTheLeft = Refills && (!MakesPartialForm || isEditorId);
-            if (fromTheLeft && left?[member] is { } value) record[member] = value.DeepClone();
-            else if (fromTheLeft || Deletes || !isEditorId) record.Remove(member);
+            if (fromTheLeft && left is not null) record = record.WithCopyOf(left, member);
+            else if (fromTheLeft || Deletes || !isEditorId) record = record.Without(member);
         }
-        if (left == null) return;
-        if (left[RecordMembers.FormVersion] is { } formVersion) record[RecordMembers.FormVersion] = formVersion.DeepClone();
-        else record.Remove(RecordMembers.FormVersion);
-        foreach (var stamp in VersionControlStamps(schema)) record[stamp] = 0;
+        record = record.With(FlagsWith(left), RecordHeaderFlags.Member);
+        if (left == null) return record;
+        record = record.WithCopyOf(left, RecordMembers.FormVersion);
+        foreach (var stamp in VersionControlStamps(schema)) record = record.With(0, stamp);
+        return record;
     }
 
     // xEdit's AssignInternal sets Version Control Info 1 and 2 to 0, each where the game has it.
@@ -115,30 +114,17 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
             .Select(c => c.PropertyName)
             .Where(member => member is RecordMembers.VersionControlInfo1 or RecordMembers.VersionControlInfo2);
 
-    /// <summary>Makes <paramref name="record"/> a Partial Form as the record-flag edit does. False, changing
-    /// nothing, when it already is one.</summary>
-    internal static bool MakePartialForm(JsonObject record, RecordTableSchema schema, GameRelease release)
+    /// <summary><paramref name="record"/> made a Partial Form as the record-flag edit makes it; null when it
+    /// already is one.</summary>
+    internal static Document? AsPartialForm(Document record, RecordTableSchema schema, GameRelease release)
     {
         var flags = schema.RecordColumns.Single(c => c.Name == RecordHeaderFlags.Member);
-        var write = JsonSerializer.SerializeToElement(RecordFlagsWrite.HeldBy(record) | PartialFormFlag.Bit);
-        if (Of(record, schema, flags, write) is not { } emptying) return false;
-        ClearAliases(record, flags);
-        emptying.Apply(record, schema, release, left: null);
-        record[RecordHeaderFlags.Member] = JsonNode.Parse(emptying.FlagsWith(left: null).GetRawText());
-        return true;
+        if (Of(record, schema, RecordFlagsWrite.HeldBy(record) | PartialFormFlag.Bit) is not { } emptying) return null;
+        return emptying.Apply(record.WithoutAliasesOf(flags), schema, release, left: null);
     }
 
-    // A column's aliases sit beside the member they spell again, so they clear in that member's owner.
-    internal static void ClearAliases(JsonObject record, ColumnSpec column)
-    {
-        JsonNode? owner = record;
-        foreach (var segment in (column.Synthetic?.BackingPath ?? column.PropertyName).Split('.')[..^1]) owner = owner?[segment];
-        if (owner is not JsonObject members) return;
-        foreach (var alias in column.Aliases) members.Remove(alias);
-    }
-
-    internal static JsonObject? LeftOf(LeftCopy? copyOnTheLeft) =>
-        copyOnTheLeft?.FoundText is { } text ? JsonNode.Parse(text) as JsonObject : null;
+    internal static Document? LeftOf(LeftCopy? copyOnTheLeft) =>
+        copyOnTheLeft?.FoundText is { } text ? Document.Parse(text) : null;
 
     private static IEnumerable<ColumnSpec> OwnFields(RecordTableSchema schema, GameRelease release)
     {

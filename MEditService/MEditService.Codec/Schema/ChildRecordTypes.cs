@@ -46,13 +46,14 @@ public static class ChildRecordTypes
     /// <summary>Where a new <paramref name="recordType"/> lands in the container, as Of reads it;
     /// <see cref="ChildSlot.Filled"/> only when a held single-record member is all that stands in the way.</summary>
     public static ChildSlot SlotFor(
-        string containerType, JsonElement container, CellPlace? place, string recordType,
+        string containerType, string containerText, CellPlace? place, string recordType,
         GameRelease release)
     {
         if (!XEditAddList.TryGetValue(containerType, out var adds)
             || adds.Where(add => add.Type.Equals(recordType, StringComparison.OrdinalIgnoreCase)).ToList() is not [var offered])
             return new ChildSlot.NotHeld();
-        return SlotFor(offered, place, Read(containerType, container, release), release);
+        using var document = JsonDocument.Parse(containerText);
+        return SlotFor(offered, place, Read(containerType, document.RootElement, release), release);
     }
 
     private static ChildSlot SlotFor(

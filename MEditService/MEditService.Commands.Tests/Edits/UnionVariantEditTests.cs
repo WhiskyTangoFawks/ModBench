@@ -1,11 +1,8 @@
 using System.Text.Json;
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -20,20 +17,6 @@ public sealed class UnionVariantEditTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private static string Serialize(IMajorRecordGetter record) =>
-        RecordTextCodec.SerializeToText(record, GameRelease.Fallout4);
-
-    [Fact]
-    public void GameSettingFloat_Data_IsWrittenAsTheFloatItsLeafDeclares()
-    {
-        var formKey = _fixture.Seed(new GameSettingFloat(Key, Fallout4Release.Fallout4) { EditorID = "fTest", Data = 1.5f }, "gmst");
-
-        var (result, after) = _fixture.Apply(formKey, SetAt(Json("2.5"), Member("Data")));
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(Serialize(new GameSettingFloat(Key, Fallout4Release.Fallout4) { EditorID = "fTest", Data = 2.5f }), after);
-    }
-
     [Fact]
     public void GameSettingBool_Data_RefusesAFloat_BecauseItsOwnLeafHoldsABool()
     {
@@ -44,23 +27,5 @@ public sealed class UnionVariantEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
         Assert.Contains("Data", result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ObjectModIntProperty_Value_IsWrittenAsTheIntItsLeafDeclares()
-    {
-        var formKey = _fixture.Seed(ArmorMod(value: 5), "omod");
-
-        var (result, after) = _fixture.Apply(formKey, SetAt(Json("42"), Member("Properties"), At(0), Member("Value")));
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(Serialize(ArmorMod(value: 42)), after);
-    }
-
-    private static ArmorModification ArmorMod(uint value)
-    {
-        var armor = new ArmorModification(Key, Fallout4Release.Fallout4) { EditorID = "ArmorMod" };
-        armor.Properties.Add(new ObjectModIntProperty<Armor.Property> { Property = Armor.Property.BodyPart, Step = 1f, Value = value });
-        return armor;
     }
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Codec.Serialization;
 
 namespace MEditService.Codec.Schema;
 
@@ -6,7 +7,9 @@ namespace MEditService.Codec.Schema;
 /// spells for its flags member.</summary>
 public static class SyntheticBits
 {
-    public static bool IsSet(JsonElement root, SyntheticBit bit) =>
-        DocumentNodes.At(root, bit.BackingPath) is { ValueKind: JsonValueKind.Array } names
+    public static bool IsSet(Document document, SyntheticBit bit) =>
+        document.At(bit.BackingPath.Split('.')) is { ValueKind: JsonValueKind.Array } names
         && names.EnumerateArray().Any(n => n.GetString() == bit.FlagName);
+
+    internal static bool IsSet(JsonElement root, SyntheticBit bit) => Document.Over(root) is { } document && IsSet(document, bit);
 }
