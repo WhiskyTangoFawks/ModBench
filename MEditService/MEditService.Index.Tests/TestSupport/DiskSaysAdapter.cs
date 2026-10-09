@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -32,7 +33,7 @@ internal sealed class DiskSaysAdapter(TimeProvider? clock = null)
         return _changed.ContainsKey(pluginPath) ? ChangedHash : base.HashOf(pluginPath);
     }
 
-    public override PluginAnswer<FileClaim> ClaimOf(string pluginPath)
+    public override Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath)
     {
         if (IsGone(pluginPath)) return PluginFailures.Inaccessible();
         return _changed.ContainsKey(pluginPath) && base.ClaimOf(pluginPath).Holds(out var claim, out _)
@@ -40,11 +41,11 @@ internal sealed class DiskSaysAdapter(TimeProvider? clock = null)
             : base.ClaimOf(pluginPath);
     }
 
-    public override PluginAnswer<(PluginContent Content, PluginFailure? Unreachable)> ReadContent(
+    public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
         IsGone(modPath.Path) ? PluginFailures.Inaccessible() : base.ReadContent(modPath, gameRelease, strings);
 
-    public override PluginAnswer<IPluginDocuments> OpenDocuments(
+    public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         PluginStrings? strings = null) =>
         IsGone(modPath.Path) ? PluginFailures.Inaccessible() : base.OpenDocuments(modPath, gameRelease, schemas, strings);

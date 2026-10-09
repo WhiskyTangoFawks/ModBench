@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -14,7 +15,7 @@ namespace MEditService.PluginAdapter;
 internal static class PluginTrees
 {
     /// <summary>A plugin's own binary read as the documents its tree would hold.</summary>
-    internal static async Task<PluginAnswer<PluginSource>> ReadAsync(
+    internal static async Task<Answer<PluginSource, PluginFailure>> ReadAsync(
         ModPath modPath, string pluginName, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default)
     {
@@ -81,7 +82,7 @@ internal static class PluginTrees
     /// <summary>The tree in <paramref name="files"/> compiled to bytes at
     /// <paramref name="destinationPath"/>, in place with no rename: a scratch verification, never a
     /// replacement of the real plugin.</summary>
-    internal static async Task<PluginAnswer<string>> WriteFromTreeAsync(
+    internal static async Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
         CancellationToken cancel = default)
     {
@@ -155,7 +156,7 @@ internal static class PluginTrees
 
     /// <summary>One source tree's files read into the mod they compile to, in a scratch folder of the
     /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005).</summary>
-    internal static async Task<PluginAnswer<CompiledTree>> ReadTreeAsync(
+    internal static async Task<Answer<CompiledTree, PluginFailure>> ReadTreeAsync(
         IReadOnlyList<TreeFile> files, GameRelease gameRelease,
         CancellationToken cancel = default)
     {
@@ -235,7 +236,7 @@ public sealed class CompiledTree
 
     /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> and handed to
     /// <paramref name="land"/>, whose Commit renames it into place; discarded once it returns.</summary>
-    public async Task<PluginAnswer<T>> SaveAsync<T>(
+    public async Task<Answer<T, PluginFailure>> SaveAsync<T>(
         string pluginPath, IReadOnlyList<string> loadOrder, Func<PreparedPluginSave, T> land)
     {
         var landing = false;

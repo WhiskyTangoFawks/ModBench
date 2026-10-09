@@ -1,3 +1,4 @@
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -33,6 +34,6 @@ internal static class WriteFailure
 
     /// <summary><paramref name="answer"/>'s value, or the refusal its failure comes to as
     /// <see cref="Refusal"/> says; <paramref name="refused"/> makes one of a refusal.</summary>
-    internal static T Refused<T>(SourceAnswer<T> answer, Func<RecordEditResult, T> refused, string what, ILogger logger) =>
+    internal static T Refused<T>(Answer<T, SourceFailure> answer, Func<RecordEditResult, T> refused, string what, ILogger logger) =>
         answer.Holds(out var value, out var failure) ? value : refused(Refusal(failure, what, logger));
 }

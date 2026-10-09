@@ -2,6 +2,7 @@ using MEditService.Index;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
@@ -34,9 +35,9 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IRecordQue
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => throw Failed();
     public IReadOnlyList<ReferenceResult> GetReferencesInActiveOrTrackedPlugins(string targetFormKey) => throw Failed();
 
-    public SourceAnswer<RenderedDocument?> GetRenderedDocument(PluginAddress plugin, string formKey) => throw Failed();
+    public Answer<RenderedDocument?, SourceFailure> GetRenderedDocument(PluginAddress plugin, string formKey) => throw Failed();
 
-    public SourceAnswer<CopyDocument?> GetCopyDocument(PluginAddress plugin, string formKey) => throw Failed();
+    public Answer<CopyDocument?, SourceFailure> GetCopyDocument(PluginAddress plugin, string formKey) => throw Failed();
 
     public RecordOfFileAnswer GetRecordOfFile(string path) => throw Failed();
 

@@ -5,6 +5,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
@@ -150,7 +151,7 @@ internal sealed class CopySource(
             .Then<string>(held => held?.Body ?? throw NoLongerHeld(identity.FormKey));
 
     // A plugin the load order does not register holds nothing, which is an answer.
-    private CopyRead<T?> FromFile<T>(Func<IPluginRecords, PluginAnswer<T?>> read)
+    private CopyRead<T?> FromFile<T>(Func<IPluginRecords, Answer<T?, PluginFailure>> read)
     {
         if (loadOrder.Plugin(plugin) is not { } registered) return default(T);
         if (!_opened)

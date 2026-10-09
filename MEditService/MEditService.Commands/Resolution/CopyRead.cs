@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using MEditService.Commands.Edits;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Resolution;
@@ -22,11 +23,11 @@ internal abstract class CopyRead<T>
     internal static CopyRead<T> Unreadable(string why) => new Unread(new CopyUnread(why, RecordEditRefusal.RecordParseFailed));
 
     /// <summary>The plugin adapter's answer, its failure in its own words.</summary>
-    internal static CopyRead<T> Of(PluginAnswer<T> answer) =>
+    internal static CopyRead<T> Of(Answer<T, PluginFailure> answer) =>
         answer.Holds(out var value, out var failure) ? new Read(value) : Unreadable(failure.Reason);
 
     /// <summary>The source adapter's answer, its failure in its own words and of its own kind.</summary>
-    internal static CopyRead<T> Of(SourceAnswer<T> answer) =>
+    internal static CopyRead<T> Of(Answer<T, SourceFailure> answer) =>
         answer.Holds(out var value, out var failure)
             ? new Read(value)
             : new Unread(new CopyUnread(failure.Reason, WriteFailure.KindOf(failure)));

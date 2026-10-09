@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -27,7 +28,7 @@ internal sealed class OverrideCopy
 
     /// <summary>An unreadable source record refuses rather than landing as a stub.
     /// <paramref name="replace"/> lets it take a held record's place.</summary>
-    internal SourceAnswer<RecordEditChanges> Copy(
+    internal Answer<RecordEditChanges, SourceFailure> Copy(
         CopySource source, string formKey, PluginAddress destinationPlugin, bool replace, UnsavedBatches batches)
     {
         if (_targets.ResolveCopySource(destinationPlugin, source, formKey, batches, out var copy) is { } blocked) return blocked;
@@ -37,7 +38,7 @@ internal sealed class OverrideCopy
         return RecordCopy.ChangesSince(copy.Batch, before, CopyAsOverride(copy, destinationPlugin, replace));
     }
 
-    private SourceAnswer<RecordEditResult> CopyAsOverride(
+    private Answer<RecordEditResult, SourceFailure> CopyAsOverride(
         WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, bool replace)
     {
         if (RefuseIfUnderride(copy.Identity, copy.Body, destinationPlugin) is { } underrideRefusal) return underrideRefusal;
@@ -45,7 +46,7 @@ internal sealed class OverrideCopy
         return LandRecord(copy, destinationPlugin, replace);
     }
 
-    private SourceAnswer<RecordEditResult> LandRecord(
+    private Answer<RecordEditResult, SourceFailure> LandRecord(
         WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, bool replace)
     {
         var (source, identity, destination, _, release, body) = copy;
@@ -72,7 +73,7 @@ internal sealed class OverrideCopy
             : LandNewRecord(copy, body, destinationPlugin);
     }
 
-    private SourceAnswer<RecordEditResult> LandNewRecord(
+    private Answer<RecordEditResult, SourceFailure> LandNewRecord(
         WriteTargets.CopyTarget copy, string body, PluginAddress destinationPlugin)
     {
         var (source, identity, destination, _, release, _) = copy;
@@ -118,12 +119,12 @@ internal sealed class OverrideCopy
         return put;
     }
 
-    private static SourceAnswer<RecordEditResult> Put(RecordCopy.Destination destination, SourceDocument document) =>
+    private static Answer<RecordEditResult, SourceFailure> Put(RecordCopy.Destination destination, SourceDocument document) =>
         RecordEditResult.Making(
             RecordEditResult.Success(), destination.Repository,
             transaction => transaction.Apply(destination.Repository.ChangesToPut(destination.Plugin, document)));
 
-    private SourceAnswer<RecordEditResult> ReplaceHeldCopy(
+    private Answer<RecordEditResult, SourceFailure> ReplaceHeldCopy(
         CopySource source, RecordIdentity identity, string body, RecordIdentity existingTarget,
         RecordCopy.Destination destination, GameRelease release)
     {

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
 
@@ -23,7 +24,7 @@ public sealed class PluginFileHashesTests : IDisposable
     private static MutagenPluginAdapter WithTheClockPastEveryWrite() =>
         new(new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1)));
 
-    private static PluginAnswer<FileClaim> ClaimOf(string path) => TestAdapters.Mutagen().ClaimOf(path);
+    private static Answer<FileClaim, PluginFailure> ClaimOf(string path) => TestAdapters.Mutagen().ClaimOf(path);
 
     private FileStream HeldAgainstReaders()
     {

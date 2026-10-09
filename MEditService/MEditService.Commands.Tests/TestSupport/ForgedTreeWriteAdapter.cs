@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -11,7 +12,7 @@ namespace MEditService.Commands.Tests.TestSupport;
 internal sealed class ForgedTreeWriteAdapter(Func<string, CancellationToken, Task<IMod>> deserialize)
     : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {
-    public override async Task<PluginAnswer<string>> WriteFromTreeAsync(
+    public override async Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath,
         IReadOnlyList<string> masterOrder, CancellationToken cancel = default)
     {

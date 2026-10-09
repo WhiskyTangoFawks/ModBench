@@ -3,7 +3,7 @@ namespace MEditService.Http.Tests.Architecture;
 public sealed class TestProjectReferenceScanTests
 {
     private const string TestSupport = "MEditService.TestSupport";
-    private static readonly string[] Repositories = ["MEditService.PluginAdapter", "MEditService.SourceAdapter"];
+    private static readonly string[] Repositories = ["MEditService.PluginAdapter", "MEditService.RepositoriesLib", "MEditService.SourceAdapter"];
     private static readonly string[] Kernel = ["MEditService.Codec", "MEditService.LoadOrder", "MEditService.Ports"];
 
     [Fact]

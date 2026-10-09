@@ -1,5 +1,6 @@
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
@@ -25,9 +26,9 @@ public interface IRecordQueryService
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
     IReadOnlyList<ReferenceResult> GetReferencesInActiveOrTrackedPlugins(string targetFormKey);
     // Null when the plugin holds no such record; a failure when its source tree cannot say.
-    SourceAnswer<RenderedDocument?> GetRenderedDocument(PluginAddress plugin, string formKey);
+    Answer<RenderedDocument?, SourceFailure> GetRenderedDocument(PluginAddress plugin, string formKey);
     // Null when the plugin holds no such record; a failure when its source tree cannot say.
-    SourceAnswer<CopyDocument?> GetCopyDocument(PluginAddress plugin, string formKey);
+    Answer<CopyDocument?, SourceFailure> GetCopyDocument(PluginAddress plugin, string formKey);
     RecordOfFileAnswer GetRecordOfFile(string path);
 
     // Answered in every state, "no load order yet" included (ADR-0013).

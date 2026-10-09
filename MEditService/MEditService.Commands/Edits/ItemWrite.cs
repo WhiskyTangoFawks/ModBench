@@ -1,3 +1,4 @@
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -55,7 +56,7 @@ internal static class ItemWrite
     /// <paramref name="failure"/> names what could not be written. <paramref name="landed"/> makes a landed item's outcome.</summary>
     internal static Task<SelectionResult<TItem, RecordEditRefusal, TOutcome>> Over<TItem, TOutcome>(
         IEnumerable<TItem> items, IEqualityComparer<TItem> sameItem,
-        Func<TItem, SourceAnswer<RecordEditChanges>> write, Func<RecordEditChanges, TOutcome> landed,
+        Func<TItem, Answer<RecordEditChanges, SourceFailure>> write, Func<RecordEditChanges, TOutcome> landed,
         Func<TItem, string> failure, ILogger logger) =>
         OverAsync(
             items, sameItem, RecordEditRefusal.GitUnavailable,

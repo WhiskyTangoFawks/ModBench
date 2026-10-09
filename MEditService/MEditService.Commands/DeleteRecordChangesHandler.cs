@@ -1,6 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -44,7 +45,7 @@ public sealed class DeleteRecordChangesHandler
                 "The plugin header cannot be deleted — it is not an ordinary record.")
             : null;
 
-    private SourceAnswer<RecordEditChanges> Delete(
+    private Answer<RecordEditChanges, SourceFailure> Delete(
         PluginAddress plugin, string formKey, UnsavedBatches batches)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, batches, out var target) is { } blocked) return blocked;

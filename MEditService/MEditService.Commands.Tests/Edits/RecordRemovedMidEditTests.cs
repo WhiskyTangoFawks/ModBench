@@ -6,6 +6,7 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
@@ -37,7 +38,7 @@ public sealed class RecordRemovedMidEditTests : IDisposable
     {
         internal IReadOnlyList<string> TreeAsRemoved { get; private set; } = [];
 
-        public override PluginAnswer<IPluginRecords> OpenRecordLookup(
+        public override Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
             RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas)
         {
             File.Delete(document);

@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 
 namespace MEditService.TestSupport;
@@ -13,32 +14,32 @@ public static class RequireExtensions
         value ?? throw new InvalidOperationException($"Expected a non-null {typeof(T).Name} here; the fixture does not hold what the test built.");
 
     /// <summary>The value a plugin read or write answered; its failure here is a broken fixture.</summary>
-    public static T Answered<T>(this PluginAnswer<T> answer) =>
+    public static T Answered<T>(this Answer<T, PluginFailure> answer) =>
         answer.Holds(out var value, out var failure)
             ? value
             : throw new InvalidOperationException($"Expected the plugin adapter to answer here: {failure.Reason}");
 
     /// <summary>A double's answer in place of <paramref name="answer"/>'s value, its failure passed on.</summary>
-    public static PluginAnswer<TOut> Map<T, TOut>(this PluginAnswer<T> answer, Func<T, TOut> map) =>
+    public static Answer<TOut, PluginFailure> Map<T, TOut>(this Answer<T, PluginFailure> answer, Func<T, TOut> map) =>
         answer.Holds(out var value, out var failure) ? PluginAnswer.Of(map(value)) : failure;
 
     /// <summary>A double's answer of a value it makes.</summary>
-    public static PluginAnswer<T> AnswerOf<T>(Func<T> make) => PluginAnswer.Of(make());
+    public static Answer<T, PluginFailure> AnswerOf<T>(Func<T> make) => PluginAnswer.Of(make());
 
     /// <summary>The failure a plugin read or write answered, which the test asked for.</summary>
-    public static PluginFailure Failure<T>(this PluginAnswer<T> answer) =>
+    public static PluginFailure Failure<T>(this Answer<T, PluginFailure> answer) =>
         answer.Holds(out _, out var failure)
             ? throw new InvalidOperationException("Expected the plugin adapter to answer a failure here.")
             : failure;
 
     /// <summary>The value a source read or write answered; its failure here is a broken fixture.</summary>
-    public static T Value<T>(this SourceAnswer<T> answer) =>
+    public static T Value<T>(this Answer<T, SourceFailure> answer) =>
         answer.Holds(out var value, out var failure)
             ? value
             : throw new InvalidOperationException($"Expected the source adapter to answer here: {failure.Reason}");
 
     /// <summary>The failure a source read or write answered, which the test asked for.</summary>
-    public static SourceFailure Stopped<T>(this SourceAnswer<T> answer) =>
+    public static SourceFailure Stopped<T>(this Answer<T, SourceFailure> answer) =>
         answer.Holds(out _, out var failure)
             ? throw new InvalidOperationException("Expected the source adapter to answer a failure here.")
             : failure;

@@ -1,44 +1,12 @@
-using System.Diagnostics.CodeAnalysis;
 using MEditService.Codec.Serialization;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>What a read or write of a plugin file answers (ADR-0019): its value, or why it stopped.</summary>
-public abstract class PluginAnswer<T>
-{
-    private PluginAnswer()
-    {
-    }
-
-    internal static PluginAnswer<T> Of(T value) => new Answered(value);
-
-    public static implicit operator PluginAnswer<T>(PluginFailure failure) => new Failed(failure);
-
-    public abstract bool Holds([MaybeNullWhen(false)] out T value, [NotNullWhen(false)] out PluginFailure? failure);
-
-    private sealed class Answered(T answer) : PluginAnswer<T>
-    {
-        public override bool Holds([MaybeNullWhen(false)] out T value, [NotNullWhen(false)] out PluginFailure? failure)
-        {
-            (value, failure) = (answer, null);
-            return true;
-        }
-    }
-
-    private sealed class Failed(PluginFailure stopped) : PluginAnswer<T>
-    {
-        public override bool Holds([MaybeNullWhen(false)] out T value, [NotNullWhen(false)] out PluginFailure? failure)
-        {
-            (value, failure) = (default, stopped);
-            return false;
-        }
-    }
-}
-
-/// <summary>Builds the answers <see cref="PluginAnswer{T}"/> carries.</summary>
+/// <summary>Builds the answers <see cref="Answer{T, TFailure}"/> carries.</summary>
 public static class PluginAnswer
 {
-    public static PluginAnswer<T> Of<T>(T value) => PluginAnswer<T>.Of(value);
+    public static Answer<T, PluginFailure> Of<T>(T value) => value;
 }
 
 /// <summary>Why a read or write of a plugin file stopped, in the words a refusal or a status names
@@ -120,11 +88,11 @@ public abstract record PluginFailure
     internal static bool StandsFor(Exception ex) => ex is not (OutOfMemoryException or OperationCanceledException);
 
     /// <summary><paramref name="read"/>'s value, or the failure its throw stands for.</summary>
-    internal static PluginAnswer<T> Answer<T>(Func<T> read)
+    internal static Answer<T, PluginFailure> Answer<T>(Func<T> read)
     {
         try
         {
-            return PluginAnswer<T>.Of(read());
+            return PluginAnswer.Of(read());
         }
         catch (Exception ex) when (StandsFor(ex))
         {
@@ -133,11 +101,11 @@ public abstract record PluginFailure
     }
 
     /// <summary><see cref="Answer{T}(Func{T})"/> for a read that awaits.</summary>
-    internal static async Task<PluginAnswer<T>> AnswerAsync<T>(Func<Task<T>> read)
+    internal static async Task<Answer<T, PluginFailure>> AnswerAsync<T>(Func<Task<T>> read)
     {
         try
         {
-            return PluginAnswer<T>.Of(await read());
+            return PluginAnswer.Of(await read());
         }
         catch (Exception ex) when (StandsFor(ex))
         {
