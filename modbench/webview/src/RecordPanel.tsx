@@ -22,10 +22,11 @@ import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
 import { RecordHeaderRow, FormIdRow } from './RecordHeaderRows';
 import { navigate, type FocusedCell } from './gridNavigation';
 import { recordRows, shownCell, visibleRows, navRows, FORM_ID_PATH, type GridCell, type RecordRow, type ValueCell } from './recordRows';
+import { failureReason, type ReadFailed } from '../../src/wire/readFailed';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
-  mEditLoadError?: string;
+  mEditLoadError?: ReadFailed;
   mEditViewState?: unknown;
 };
 
@@ -67,7 +68,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [fileColumn, setFileColumn] = useState<ColumnKey | undefined>(undefined);
   const [fileCopyAlone, setFileCopyAlone] = useState(false);
   const [fileOverriddenBy, setFileOverriddenBy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(mEditWindow.mEditLoadError ?? null);
+  const [error, setError] = useState<string | null>(mEditWindow.mEditLoadError ? failureReason(mEditWindow.mEditLoadError) : null);
   const [given] = useState(placeGiven);
   const [collapsedRows, setCollapsedRows] = useState<Set<string>>(() => new Set(given.collapsedRows));
   const toggleRow = (rowKey: string) => setCollapsedRows(prev => {
@@ -142,7 +143,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     try {
       const loaded = await client.load(fk);
       if (read !== latestRead.current) return;
-      if (!loaded.ok) throw new Error(loaded.error);
+      if (!loaded.ok) throw new Error(failureReason(loaded.failure));
       setFormKey(fk);
       setError(null);
       setResult(loaded.result);

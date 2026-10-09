@@ -62,11 +62,11 @@ describe('PluginFactsFeed', () => {
 
   it('names an unreadable plugin list on the rows, logs it as an error, and answers undefined', async () => {
     const { feed, client, logged } = feedOver();
-    client.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
+    client.setQueryFailure('getPlugins', { failed: 'unreachable' });
 
     expect(await feed.reconciled([])).toBeUndefined();
 
-    expect(feed.rows.expansion(A)).toEqual({ kind: 'error', message: 'ECONNREFUSED' });
+    expect(feed.rows.expansion(A)).toEqual({ kind: 'error', message: 'mEdit could not be reached.' });
     expect(logged.items.map((l) => l.level)).toEqual(['error']);
   });
 
@@ -122,7 +122,7 @@ describe('PluginFactsFeed', () => {
   it('a failed scan only warns and leaves the last answer', async () => {
     const { feed, client, logged, diagnoses } = feedOver();
     client.setQueryAnswer('getPlugins', [held()]);
-    client.setQueryFailure('getDiagnoses', new Error('503'));
+    client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: '503' });
     const warned = logged.next();
 
     await feed.reconciled([]);

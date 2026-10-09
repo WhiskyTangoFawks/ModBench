@@ -5,6 +5,7 @@ import { pluginAddressOf } from '../wire/pluginAddress';
 import type { RecordCopy } from '../drivingLib/recordDocument';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
 import { formKeyAt, referenceSpan } from './sourceText';
+import { answerOf } from '../wire/readFailed';
 
 interface ReferencesDeps<Document> extends RecordLocationDeps<Document> {
   client: RecordLocationDeps<Document>['client'] & Pick<MEditClient, 'getReferencesInActiveOrTrackedPlugins'>;
@@ -18,7 +19,7 @@ export function referencesOf<Document extends { getText(): string }>(
     const found = formKeyAt(text, offset);
     if (!found) return [];
     const { formKey } = found;
-    const rows = await client.getReferencesInActiveOrTrackedPlugins(formKey).catch((error: unknown) => {
+    const rows = await client.getReferencesInActiveOrTrackedPlugins(formKey).then(answerOf).catch((error: unknown) => {
       reporter.shownOnSurface('error', `Find All References cannot list what references ${formKey}.`, errorMessage(error));
       return [];
     });

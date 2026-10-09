@@ -283,7 +283,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
 
     it('keeps what it shows when mEdit cannot say, and reads it on the report', async () => {
       const { client, panel, tab } = openOn('000800:Mod.esp');
-      client.setQueryFailure('getRecordOwner', new Error('backend down'));
+      client.setQueryFailure('getRecordOwner', { failed: 'refused', refusal: 'backend down' });
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
       client.reconnected();

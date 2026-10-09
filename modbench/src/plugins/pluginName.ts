@@ -2,6 +2,7 @@ import type { MEditClient } from '../client';
 import { fileExtension } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
+import { answerOf } from '../wire/readFailed';
 
 const listed = new Intl.ListFormat('en-US', { type: 'disjunction' });
 
@@ -18,7 +19,7 @@ export async function creatablePluginExtensionsOf(
   client: Pick<MEditClient, 'getCreatablePluginExtensions'>, reporter: Reporter,
 ): Promise<string[] | undefined> {
   try {
-    return await client.getCreatablePluginExtensions();
+    return answerOf(await client.getCreatablePluginExtensions());
   } catch (error) {
     reporter.report('error', 'Could not look up which extensions a plugin may take.', errorMessage(error));
     return undefined;

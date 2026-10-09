@@ -16,6 +16,7 @@ import { rowLabelOf, rowNameOf } from '../drivingLib/argument';
 import { recordArgumentOf } from '../drivingLib/recordArgument';
 import { pluginAddressOf } from '../wire/pluginAddress';
 import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from './ReferencedByTreeProvider';
+import { answerOf } from '../wire/readFailed';
 
 function recordName(formKey: string, label: string | undefined): string {
   return label && label !== formKey ? `${label} [${formKey}]` : formKey;
@@ -128,7 +129,7 @@ async function pickCopyDestinations(
 ): Promise<PluginAddress[] | undefined> {
   let items: CopyDestinationItem[];
   try {
-    items = copyDestinationItems(await client.getPlugins(), mode, records);
+    items = copyDestinationItems(answerOf(await client.getPlugins()), mode, records);
   } catch (error) {
     reporter.report('error', 'Could not look up the plugins to copy into.', errorMessage(error));
     return undefined;
@@ -147,7 +148,7 @@ async function copiesAnOverrideReplaces(
 ): Promise<CopyItem[]> {
   const holders = new Map<string, PluginAddress[]>();
   for (const formKey of new Set(records.map((r) => r.formKey))) {
-    holders.set(formKey, await client.getRecordHolders(formKey));
+    holders.set(formKey, answerOf(await client.getRecordHolders(formKey)));
   }
   return heldCopies(records, destinations, holders);
 }

@@ -6,6 +6,7 @@ import { pluginAddressOf } from '../wire/pluginAddress';
 import type { RecordCopy } from '../drivingLib/recordDocument';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
 import { formKeyMember, recordLabel } from './sourceText';
+import { answerOf } from '../wire/readFailed';
 
 interface WorkspaceSymbolDeps<Document> extends RecordLocationDeps<Document> {
   client: RecordLocationDeps<Document>['client'] & Pick<MEditClient, 'getPlugins' | 'searchRecords'>;
@@ -19,7 +20,7 @@ const GESTURE = 'Go to Symbol in Workspace';
 export function workspaceSymbolsOf<Document extends { getText(): string }>({ client, reporter, open }: WorkspaceSymbolDeps<Document>) {
   const searched = async (query: string, plugin: PluginMetadata): Promise<RecordSummary[] | string> => {
     try {
-      return (await client.searchRecords(query, [], plugin)).items;
+      return answerOf(await client.searchRecords(query, [], plugin)).items;
     } catch (error) {
       return `${plugin.name} (${plugin.origin}): ${errorMessage(error)}`;
     }
@@ -28,7 +29,7 @@ export function workspaceSymbolsOf<Document extends { getText(): string }>({ cli
     if (!query.trim()) return [];
     let plugins: PluginMetadata[];
     try {
-      plugins = await client.getPlugins();
+      plugins = answerOf(await client.getPlugins());
     } catch (error) {
       reporter.shownOnSurface('error', `${GESTURE} cannot list the tracked plugins.`, errorMessage(error));
       return [];

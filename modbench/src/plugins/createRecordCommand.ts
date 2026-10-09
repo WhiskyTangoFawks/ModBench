@@ -11,6 +11,7 @@ import { applyAnswered } from '../drivingLib/applyAnswered';
 import { CREATE_ROW_KINDS, isContainerRow } from './gestureEntry';
 import { CELL_RECORD_TYPE } from './RecordBrowser';
 import { pluginAddressOf } from '../wire/pluginAddress';
+import { answerOf } from '../wire/readFailed';
 
 export interface RecordCreateDeps {
   client: Pick<MEditClient, 'getCreateChanges' | 'getCreatableRecordTypes' | 'getChildRecordTypes'>;
@@ -27,13 +28,13 @@ type Target =
   | { plugin: PluginAddress; container?: string; choices: () => Promise<RecordTypeChoice[]> };
 
 function targetOf(row: CreateRow, client: RecordCreateDeps['client']): Target | undefined {
-  if (row.kind === 'plugin') return { plugin: { name: row.plugin.name, origin: row.origin }, choices: () => client.getCreatableRecordTypes() };
+  if (row.kind === 'plugin') return { plugin: { name: row.plugin.name, origin: row.origin }, choices: async () => answerOf(await client.getCreatableRecordTypes()) };
   if (row.kind === 'recordType') return { plugin: pluginAddressOf(row), recordType: row.recordType };
   if (!isContainerRow(row)) return undefined;
   const [plugin, container] = row.kind === 'record'
     ? [pluginAddressOf({ plugin: row.record.plugin, origin: row.origin }), row.record.formKey]
     : [pluginAddressOf(row), row.formKey];
-  return { plugin, container, choices: () => client.getChildRecordTypes(plugin, container) };
+  return { plugin, container, choices: async () => answerOf(await client.getChildRecordTypes(plugin, container)) };
 }
 
 // commands.md, Principles: the gesture asks only for the Options the caller left out.

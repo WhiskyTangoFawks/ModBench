@@ -5,12 +5,13 @@ import { dropIndexIn, type Drop } from './dropIndex';
 import type { CommandResult, SelectionResult } from '../coreLib/commandResult';
 export type { SelectionResult };
 import { refuse } from '../ports/refuse';
-import type { MEditClient, PluginAddress, PluginMetadata } from '../client';
+import type { MEditClient, PluginAddress } from '../client';
 import { moveOrderRefusal, type PluginOrderFactsOf } from './pluginOrder';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type {
   DataFolderPlugins, DecidePluginOrder, InstanceAdapter, PluginEntry, PluginOrderChange,
 } from '../instanceAdapter/instanceAdapter';
+import { isReadFailed } from '../wire/readFailed';
 
 async function changePluginOrder(
   adapter: InstanceAdapter, profile: string, decide: DecidePluginOrder,
@@ -67,7 +68,8 @@ export type PluginMasters = Pick<MEditClient, 'getPlugins'>;
 // The game loads one copy of a name: the one in the load order (ADR-0012). Several copies with
 // none in it name no one copy, so none is judged; nor is anything while mEdit cannot answer.
 async function orderFactsFrom(masters: PluginMasters): Promise<PluginOrderFactsOf> {
-  const held = await masters.getPlugins().catch(() => [] as PluginMetadata[]);
+  const answer = await masters.getPlugins().catch(() => undefined);
+  const held = answer === undefined || isReadFailed(answer) ? [] : answer;
   return (name) => {
     const copies = held.filter((plugin) => pluginKey(plugin.name) === pluginKey(name));
     const loaded = copies.length === 1 ? copies : copies.filter((copy) => copy.inLoadOrder);

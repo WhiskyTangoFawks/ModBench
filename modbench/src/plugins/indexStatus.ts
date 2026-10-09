@@ -8,6 +8,7 @@ import type { RecordBrowser } from './RecordBrowser';
 import { reportSkippedPlugins } from './pluginFailures';
 import { createReconcileNarrator, type ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
+import { answerOf } from '../wire/readFailed';
 
 interface ReconciledDeps {
   log: (msg: string) => void;
@@ -91,7 +92,7 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileN
     settle: (status) => settleReconciled(status, {
       log: info, warn, statusBar, registerRepositories,
       refreshTree: () => recordBrowser.refresh(),
-      syncFilterState: () => syncActiveFilter(() => client.getActiveFilter(), { log: info, warn, showRecordFilter }),
+      syncFilterState: () => syncActiveFilter(async () => answerOf(await client.getActiveFilter()), { log: info, warn, showRecordFilter }),
       applyReconciled: (failures, totalPlugins) => applyReconciled(deps, failures, totalPlugins),
     }),
     log: (m) => log('error', `[loadOrder] ${m}`),

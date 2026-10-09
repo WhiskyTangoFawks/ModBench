@@ -128,7 +128,7 @@ describe('a file mEdit answers holds no record', () => {
 
   it('answered once mEdit holds the load order, reopens without taking the focus', async () => {
     const meditClient = answeringNone();
-    meditClient.setQueryFailureOnce('getRecordOfFile', new Error('mEdit has not started'));
+    meditClient.setQueryFailureOnce('getRecordOfFile', { failed: 'refused', refusal: 'mEdit has not started' });
     await opened(meditClient);
 
     meditClient.emit({

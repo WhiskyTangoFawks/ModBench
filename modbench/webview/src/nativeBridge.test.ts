@@ -110,9 +110,9 @@ describe('requestRecordLoad, whose request shape and reply unwrapping are its ow
     const requestId = postedFormKeyRequestId();
 
     window.dispatchEvent(new MessageEvent('message', {
-      data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, ok: false, error: 'HTTP 404' },
+      data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, ok: false, failure: { failed: 'refused', refusal: 'No such record.' } },
     }));
 
-    expect(await resultPromise).toEqual({ ok: false, error: 'HTTP 404' });
+    expect(await resultPromise).toEqual({ ok: false, failure: { failed: 'refused', refusal: 'No such record.' } });
   });
 });
