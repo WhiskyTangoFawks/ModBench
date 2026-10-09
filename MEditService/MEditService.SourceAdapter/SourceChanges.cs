@@ -5,7 +5,7 @@ namespace MEditService.SourceAdapter;
 /// Paths are relative to the mod folder.</summary>
 public sealed record SourceChanges(IReadOnlyList<SourceMove> Moves, IReadOnlyList<DocumentChange> Documents)
 {
-    public IReadOnlyList<string> Deletions { get; init; } = [];
+    internal IReadOnlyList<string> Deletions { get; init; } = [];
 
     public static SourceChanges None { get; } = new([], []);
 

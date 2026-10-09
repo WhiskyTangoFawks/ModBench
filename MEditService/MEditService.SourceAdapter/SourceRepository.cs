@@ -321,12 +321,9 @@ public sealed class SourceRepository : ISourceRepositoryReads
         PluginAddress plugin, SourceDocument carrying, RecordIdentity identity, string newFormKey) =>
         SourceFailure.Answer(() => Writes.ChangesToRekey(Spelled(plugin), carrying, identity, newFormKey));
 
-    /// <summary>Takes the record out of the tree: its file, its directory, or its element of another
-    /// record's document. A record no document holds, or whose document lacks it, is not carried.</summary>
-    public SourceFailure? Remove(PluginAddress plugin, RecordIdentity identity) =>
-        SourceTransaction.Atomically(this, transaction => transaction.Apply(ChangesToRemove(plugin, identity)));
-
-    /// <summary>What <see cref="Remove"/> changes, written nowhere.</summary>
+    /// <summary>What taking the record out of the tree changes, written nowhere: its file, its directory, or its
+    /// element of another record's document. A record no document holds, or whose document lacks it, is not
+    /// carried.</summary>
     public SourceAnswer<SourceChanges> ChangesToRemove(PluginAddress plugin, RecordIdentity identity) =>
         SourceFailure.Answer(() => Writes.ChangesToRemove(Spelled(plugin), identity));
 

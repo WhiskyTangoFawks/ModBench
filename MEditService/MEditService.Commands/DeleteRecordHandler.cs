@@ -51,7 +51,9 @@ public sealed class DeleteRecordHandler
 
         // One changed document either way: the owner without the child, or the record's own gone.
         // Every descendant's row follows from that once it is re-indexed.
-        if (repository.Remove(plugin, identity) is { } unremoved) return unremoved;
+        if (SourceTransaction.Atomically(repository, transaction => transaction.Apply(repository.ChangesToRemove(plugin, identity)))
+            is { } unremoved)
+            return unremoved;
 
         if (_logger.IsEnabled(LogLevel.Information))
         {

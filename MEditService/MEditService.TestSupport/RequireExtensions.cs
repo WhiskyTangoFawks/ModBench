@@ -1,3 +1,5 @@
+using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 
@@ -50,4 +52,8 @@ public static class RequireExtensions
     /// <summary>The failure a source write answered, which the test asked for.</summary>
     public static SourceFailure Failed(this SourceFailure? failure) =>
         failure ?? throw new InvalidOperationException("Expected the source write to answer a failure here.");
+
+    /// <summary>Applies the changes that take the record out of the tree, all or none.</summary>
+    public static SourceFailure? Remove(this SourceRepository repository, PluginAddress plugin, RecordIdentity identity) =>
+        SourceTransaction.Atomically(repository, transaction => transaction.Apply(repository.ChangesToRemove(plugin, identity)));
 }
