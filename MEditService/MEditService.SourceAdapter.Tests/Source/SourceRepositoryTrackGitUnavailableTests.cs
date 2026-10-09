@@ -8,7 +8,7 @@ namespace MEditService.SourceAdapter.Tests.Source;
 public sealed class SourceRepositoryTrackGitUnavailableTests
 {
     [Fact]
-    public void Track_WithGitNotOnPath_ThrowsGitUnavailableException_NotARawProcessException_AndLeavesTheFolderEmpty()
+    public void Track_WithGitNotOnPath_RefusesThePluginSayingGitIsNotOnPath_AndLeavesTheFolderEmpty()
     {
         using var modFolder = new ScratchDirectory("medit-track-nogit-");
         var previousPath = Environment.GetEnvironmentVariable("PATH");
@@ -17,11 +17,10 @@ public sealed class SourceRepositoryTrackGitUnavailableTests
             Environment.SetEnvironmentVariable("PATH", string.Empty);
 
             var files = new[] { new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
-            var ex = Assert.Throws<GitUnavailableException>(() =>
-                PluginBaselines.Track(modFolder, files));
+            var (plugin, reason) = Assert.Single(SourceRepository.Track(modFolder, PluginBaselines.Of(files)));
 
-            Assert.Contains("git", ex.Message, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("PATH", ex.Message, StringComparison.Ordinal);
+            Assert.Equal("Test.esp", plugin);
+            Assert.Equal("git was not found on PATH. Modbench's tracking features require git to be installed and on PATH.", reason);
             Assert.Empty(Directory.EnumerateFileSystemEntries(modFolder));
         }
         finally

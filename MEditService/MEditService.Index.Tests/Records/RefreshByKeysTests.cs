@@ -55,7 +55,7 @@ public sealed class RefreshByKeysTests : IDisposable
         var body = _index.BodyOf(_npc, _mod.KeyOf())
             .Replace(_npc, formKey, StringComparison.Ordinal)
             .Replace("\"FixtureNpc\"", "\"HandCreated\"", StringComparison.Ordinal);
-        TrackedMods.RepositoryOf(_mod).Put(_mod.KeyOf(), new SourceDocument(formKey, "npc_", "HandCreated", body));
+        TrackedMods.RepositoryOf(_mod).Put(_mod.KeyOf(), new SourceDocument(formKey, "npc_", "HandCreated", body)).Wrote();
 
         Refresh();
 

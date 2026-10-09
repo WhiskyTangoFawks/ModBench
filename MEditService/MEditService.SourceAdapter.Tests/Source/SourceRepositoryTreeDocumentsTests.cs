@@ -19,7 +19,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     private const string EditedBody = "{\n  \"FormKey\": \"000800:Fixture.esp\",\n  \"EditorID\": \"EditedSinceCompile\"\n}";
     private const string LaterBody = "{\n  \"FormKey\": \"000900:Fixture.esp\",\n  \"EditorID\": \"Later\"\n}";
 
-    private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
+    private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly ScratchDirectory _modFolder = new("medit-tree-documents-");
@@ -76,8 +76,8 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
             "{\n  \"FormKey\": \"000900:Fixture.esp\",\n  \"EditorID\": \"FixtureWeapon\"\n}");
         var race = new SourceDocument("000A00:Fixture.esp", "race", null,
             "{\n  \"FormKey\": \"000A00:Fixture.esp\"\n}");
-        repository.Put(Plugin, weapon);
-        repository.Put(Plugin, race);
+        repository.Put(Plugin, weapon).Wrote();
+        repository.Put(Plugin, race).Wrote();
 
         var read = TreeDocuments.Of(repository, Plugin);
 
@@ -91,7 +91,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     {
         var repository = Tracked();
 
-        repository.Remove(Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId));
+        repository.Remove(Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId)).Wrote();
 
         Assert.Empty(TreeDocuments.Of(repository, Plugin));
     }
@@ -100,26 +100,26 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     public void FormKeysUsed_AKeyTheWorkingTreeDeleted_IsNotUsed_ThoughTheLastCommitHoldsIt()
     {
         var repository = Tracked();
-        repository.Remove(Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId));
+        repository.Remove(Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId)).Wrote();
 
-        Assert.DoesNotContain(NpcFormKey, repository.FormKeysUsed(Plugin));
+        Assert.DoesNotContain(NpcFormKey, repository.FormKeysUsed(Plugin).Value());
     }
 
     [Fact]
     public void FormKeysUsed_AKeyCreatedSinceTheLastCommit_IsUsed()
     {
         var repository = Tracked();
-        repository.Put(Plugin, new SourceDocument("000900:Fixture.esp", "weap", "Later", LaterBody));
+        repository.Put(Plugin, new SourceDocument("000900:Fixture.esp", "weap", "Later", LaterBody)).Wrote();
 
         Assert.Equal(
             [NpcFormKey, "000900:Fixture.esp"],
-            repository.FormKeysUsed(Plugin).Order(StringComparer.Ordinal).ToList());
+            repository.FormKeysUsed(Plugin).Value().Order(StringComparer.Ordinal).ToList());
     }
 
     [Fact]
     public void FormKeysUsed_APluginWithNoSourceOfItsOwn_IsEmpty()
     {
-        Assert.Empty(Tracked().FormKeysUsed(new PluginAddress("Other.esp", "FixtureMod")));
+        Assert.Empty(Tracked().FormKeysUsed(new PluginAddress("Other.esp", TestMod.Name)).Value());
     }
 
     [Fact]
@@ -130,6 +130,6 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
         File.WriteAllText(Path.Combine(npcsFolder, "GroupRecordData.json"), "{\n  \"Type\": \"npc_\"\n}");
         File.WriteAllText(Path.Combine(npcsFolder, "notes.json"), "{\n  \"Note\": \"scratch\"\n}");
 
-        Assert.Equal([NpcFormKey], repository.FormKeysUsed(Plugin).ToList());
+        Assert.Equal([NpcFormKey], repository.FormKeysUsed(Plugin).Value().ToList());
     }
 }

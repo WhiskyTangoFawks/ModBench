@@ -40,26 +40,18 @@ public sealed class DeleteRecordHandler
                 "The plugin header cannot be deleted — it is not an ordinary record.")
             : null;
 
-    private RecordEditResult Delete(PluginAddress plugin, string formKey)
+    private SourceAnswer<RecordEditResult> Delete(PluginAddress plugin, string formKey)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
         var (_, identity, repository) = target;
         if (RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
 
-        // Read before the removal, so what the messages and the log name is the document it took from.
-        var relativePath = repository.RelativePathOf(plugin, identity);
+        // Read before the removal, so what the log names is the document it took from.
+        if (!repository.RelativePathOf(plugin, identity).Holds(out var relativePath, out var unread)) return unread;
 
         // One changed document either way: the owner without the child, or the record's own gone.
         // Every descendant's row follows from that once it is re-indexed.
-        var removal = repository.Remove(plugin, identity);
-        if (removal != SourceRemoval.Removed)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.SourceUnitNotFound,
-                removal == SourceRemoval.NoDocumentHoldsIt || relativePath is null
-                    ? $"No document in {plugin.Name}'s tree holds {formKey}. {SourceUnitNotFoundException.DefectOrOutsideChange}"
-                    : SourceUnitNotFoundException.NotCarried(relativePath, formKey));
-        }
+        if (repository.Remove(plugin, identity) is { } unremoved) return unremoved;
 
         if (_logger.IsEnabled(LogLevel.Information))
         {

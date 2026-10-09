@@ -34,9 +34,9 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IRecordQue
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => throw Failed();
     public IReadOnlyList<ReferenceResult> GetReferencesInActiveOrTrackedPlugins(string targetFormKey) => throw Failed();
 
-    public RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey) => throw Failed();
+    public SourceAnswer<RenderedDocument?> GetRenderedDocument(PluginAddress plugin, string formKey) => throw Failed();
 
-    public CopyDocument? GetCopyDocument(PluginAddress plugin, string formKey) => throw Failed();
+    public SourceAnswer<CopyDocument?> GetCopyDocument(PluginAddress plugin, string formKey) => throw Failed();
 
     public RecordOfFileAnswer GetRecordOfFile(string path) => throw Failed();
 

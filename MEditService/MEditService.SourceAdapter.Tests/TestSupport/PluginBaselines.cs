@@ -7,8 +7,11 @@ namespace MEditService.SourceAdapter.Tests.TestSupport;
 /// beyond the plugin's name.</summary>
 internal static class PluginBaselines
 {
-    internal static void Track(string modFolder, IEnumerable<TreeFile> files) =>
-        SourceRepository.Track(modFolder, Of(files));
+    internal static void Track(string modFolder, IEnumerable<TreeFile> files)
+    {
+        if (SourceRepository.Track(modFolder, Of(files)) is [var (plugin, reason), ..])
+            throw new InvalidOperationException($"Expected the fixture to track, and {plugin} was refused: {reason}");
+    }
 
     /// <summary>A repository holding one plugin with no record, for a test that brings its own.</summary>
     internal static void TrackWithNoRecords(string modFolder) =>

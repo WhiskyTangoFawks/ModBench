@@ -8,7 +8,7 @@ namespace MEditService.SourceAdapter.Tests.Source;
 
 public sealed class SourceRepositoryMintingTests : IDisposable
 {
-    private static readonly PluginAddress Plugin = new("Minting.esp", "MintingMod");
+    private static readonly PluginAddress Plugin = new("Minting.esp", TestMod.Name);
 
     private readonly ScratchDirectory _modFolder = new("medit-minting-");
 
@@ -28,7 +28,7 @@ public sealed class SourceRepositoryMintingTests : IDisposable
     {
         var repository = Tracked();
 
-        repository.Put(Plugin, new SourceDocument("000800:Minting.esp", "npc_", "Fits", "{\"FormKey\": \"000800:Minting.esp\"}"));
+        repository.Put(Plugin, new SourceDocument("000800:Minting.esp", "npc_", "Fits", "{\"FormKey\": \"000800:Minting.esp\"}")).Wrote();
 
         Assert.True(Directory.Exists(Path.Combine(PluginSourceRoot.In(_modFolder, Plugin.Name), "Npcs")));
     }
@@ -41,7 +41,7 @@ public sealed class SourceRepositoryMintingTests : IDisposable
     {
         var repository = Tracked();
 
-        repository.Put(Plugin, new SourceDocument("000800:Minting.esp", recordType, "Holder", "{\"FormKey\": \"000800:Minting.esp\"}"));
+        repository.Put(Plugin, new SourceDocument("000800:Minting.esp", recordType, "Holder", "{\"FormKey\": \"000800:Minting.esp\"}")).Wrote();
 
         var root = PluginSourceRoot.In(_modFolder, Plugin.Name);
         var files = Directory.EnumerateFiles(root, "*.json", SearchOption.AllDirectories).ToList();
@@ -56,8 +56,8 @@ public sealed class SourceRepositoryMintingTests : IDisposable
         var originWhoseFileNameNoFilesystemTakesAsALeaf = new string('a', 300) + ".esp";
         var formKey = $"000800:{originWhoseFileNameNoFilesystemTakesAsALeaf}";
 
-        Assert.ThrowsAny<IOException>(() => repository.Put(
-            Plugin, new SourceDocument(formKey, "npc_", "Overlong", $"{{\"FormKey\": \"{formKey}\"}}")));
+        Assert.IsType<SourceFailure.Inaccessible>(repository.Put(
+            Plugin, new SourceDocument(formKey, "npc_", "Overlong", $"{{\"FormKey\": \"{formKey}\"}}")).Failed());
 
         Assert.False(Directory.Exists(PluginSourceRoot.In(_modFolder, Plugin.Name)));
     }

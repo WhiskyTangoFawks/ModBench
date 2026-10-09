@@ -62,8 +62,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         FileModes.Set(asset, "000");
         try
         {
-            Assert.ThrowsAny<InvalidOperationException>(
-                () => SourceRepository.Track(_modFolder, [Baseline("A.esp")]));
+            TrackRefused("A.esp");
         }
         finally
         {
@@ -83,8 +82,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         FileModes.Set(asset, "000");
         try
         {
-            Assert.ThrowsAny<InvalidOperationException>(
-                () => SourceRepository.Track(_modFolder, [Baseline("A.esp")]));
+            TrackRefused("A.esp");
         }
         finally
         {
@@ -114,7 +112,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var failure = TrackWhoseCommitHookRuns($"echo theirs > '{theirs}'");
 
         Assert.Equal("theirs", File.ReadAllText(theirs).Trim());
-        Assert.Contains("plugin-source/A.esp — holds something this change did not write", failure.Message.Replace('\\', '/'));
+        Assert.Contains("plugin-source/A.esp — holds something this change did not write", failure.Replace('\\', '/'));
         Assert.False(File.Exists(Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json")));
     }
 
@@ -126,7 +124,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var failure = TrackWhoseCommitHookRuns($"echo theirs > '{changed}'");
 
         Assert.Equal("theirs", File.ReadAllText(changed).Trim());
-        Assert.Contains("000001.json — changed by something else", failure.Message);
+        Assert.Contains("000001.json — changed by something else", failure, StringComparison.Ordinal);
     }
 
     [PosixFact]
@@ -137,14 +135,21 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var failure = TrackWhoseCommitHookRuns($"echo theirs > '{gitignore}'");
 
         Assert.Equal("theirs", File.ReadAllText(gitignore).Trim());
-        Assert.Contains(".gitignore — changed by something else", failure.Message);
+        Assert.Contains(".gitignore — changed by something else", failure, StringComparison.Ordinal);
     }
 
-    private Exception TrackWhoseCommitHookRuns(string script)
+    private string TrackWhoseCommitHookRuns(string script)
     {
         CrashATrackAfterItMadeTheRepository();
         GitHooks.Write(_modFolder, "pre-commit", $"{script}\nexit 1");
-        return Assert.ThrowsAny<IOException>(() => SourceRepository.Track(_modFolder, [Baseline("A.esp")]));
+        return TrackRefused("A.esp");
+    }
+
+    private string TrackRefused(string plugin)
+    {
+        var (refused, reason) = Assert.Single(SourceRepository.Track(_modFolder, [Baseline(plugin)]));
+        Assert.Equal(plugin, refused);
+        return reason;
     }
 
     [Fact]
@@ -154,8 +159,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         FileModes.Set(asset, "000");
         try
         {
-            Assert.ThrowsAny<InvalidOperationException>(
-                () => SourceRepository.Track(_modFolder, [Baseline("A.esp")]));
+            TrackRefused("A.esp");
         }
         finally
         {
@@ -261,8 +265,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var gitDir = Path.Combine(_modFolder, ".git");
         try
         {
-            var failure = Assert.Throws<IOException>(() => SourceRepository.Track(_modFolder, [Baseline("Crashed.esp")]));
-            Assert.Contains(".git \u2014 could not be restored: ", failure.Message);
+            Assert.Contains(".git \u2014 could not be restored: ", TrackRefused("Crashed.esp"), StringComparison.Ordinal);
             Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
         }
         finally

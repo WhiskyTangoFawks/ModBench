@@ -124,17 +124,8 @@ public sealed class TrackHandler
                 verified.Count, modFolder, verified.Sum(v => v.Source.Files.Count));
         }
 
-        IReadOnlyList<(string Plugin, string Reason)> failed;
-        try
-        {
-            failed = SourceRepository.Track(modFolder,
-                [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Name, v.Source.BinarySha256)))]);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            _logger.LogError(ex, "Could not finish tracking into {ModFolder}", modFolder);
-            failed = [.. verified.Select(v => (v.Plugin.Name, ex.Message))];
-        }
+        var failed = SourceRepository.Track(modFolder,
+            [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Name, v.Source.BinarySha256)))]);
 
         var refused = new List<ItemRefused<PluginAddress, TrackRefusal>>();
         foreach (var plugin in verified.Select(v => v.Plugin))

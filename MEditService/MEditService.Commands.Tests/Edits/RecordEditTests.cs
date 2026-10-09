@@ -164,8 +164,8 @@ public sealed class RecordEditTests : IDisposable
         Assert.Equal(unreadableBefore, Unreadable());
     }
 
-    private string Unreadable() => Assert.Throws<UnreadableSourceDocumentException>(
-        () => _mod.Repository.Require().Get(_mod.Plugin, _mod.Npc.ToString())).Message;
+    private string Unreadable() =>
+        Assert.IsType<SourceFailure.Unreadable>(_mod.Repository.Require().Get(_mod.Plugin, _mod.Npc.ToString()).Stopped()).Reason;
 
     [Fact]
     public void EditEditorId_OfADocumentThatIsNotJson_RefusesAsUnreadable_AndRenamesNothing()

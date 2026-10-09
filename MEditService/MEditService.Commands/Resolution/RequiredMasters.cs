@@ -15,14 +15,14 @@ internal sealed class RequiredMasters(PluginAddress plugin)
     private readonly HashSet<string> _links = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The masters <paramref name="plugin"/>'s working tree requires (ADR-0008).</summary>
-    internal static IReadOnlySet<string> InTheTree(
-        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas)
-    {
-        var required = new RequiredMasters(plugin);
-        using var documents = repository.OpenDocuments(plugin);
-        foreach (var document in documents.Records) required.Add(document, schemas[document.RecordType]);
-        return required.Masters;
-    }
+    internal static SourceAnswer<IReadOnlySet<string>> InTheTree(
+        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        repository.ReadDocuments(plugin, documents =>
+        {
+            var required = new RequiredMasters(plugin);
+            foreach (var document in documents.Records) required.Add(document, schemas[document.RecordType]);
+            return required.Masters;
+        });
 
     internal IReadOnlySet<string> Masters => _masters;
 

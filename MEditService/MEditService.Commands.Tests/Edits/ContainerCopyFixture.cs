@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -279,10 +280,10 @@ public sealed class ContainerCopyFixture : TestInstance, ITrackedPlugins
     internal void AssertDestinationCellSitsAt(
         string cellFormKey, string? editorId, int blockX, int blockY, int subX, int subY)
     {
-        var repository = TrackedTree.Repository(DestinationModFolder);
+        var repository = TrackedTree.Repository(DestinationModFolder, DestinationPlugin);
         var cell = new RecordIdentity(cellFormKey, "cell", editorId);
 
-        Assert.Equal(Worldspace.ToString(), repository.WorldspaceOf(DestinationPlugin, cell));
+        Assert.Equal(Worldspace.ToString(), repository.WorldspaceOf(DestinationPlugin, cell).Value());
         TreeTampering.AssertCellSitsInBlocks(DestinationModFolder, DestinationPlugin, cell, blockX, blockY, subX, subY);
     }
 

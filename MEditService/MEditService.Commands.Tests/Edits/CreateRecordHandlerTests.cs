@@ -212,9 +212,9 @@ public sealed class CreateRecordHandlerTests
     {
         using var mod = SourceEditFixture.Tracked();
         const string masterKey = "F00000:Master.esm";
-        TrackedTree.Repository(mod.ModFolder).Put(
+        TrackedTree.Repository(mod.ModFolder, mod.Plugin).Put(
             mod.Plugin,
-            new SourceDocument(masterKey, "npc_", "Overridden", $"{{\n  \"FormKey\": \"{masterKey}\",\n  \"EditorID\": \"Overridden\"\n}}"));
+            new SourceDocument(masterKey, "npc_", "Overridden", $"{{\n  \"FormKey\": \"{masterKey}\",\n  \"EditorID\": \"Overridden\"\n}}")).Wrote();
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_");
 

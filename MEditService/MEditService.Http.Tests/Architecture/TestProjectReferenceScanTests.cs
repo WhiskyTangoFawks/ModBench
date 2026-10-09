@@ -3,7 +3,7 @@ namespace MEditService.Http.Tests.Architecture;
 public sealed class TestProjectReferenceScanTests
 {
     private const string TestSupport = "MEditService.TestSupport";
-    private const string PluginAdapter = "MEditService.PluginAdapter";
+    private static readonly string[] Repositories = ["MEditService.PluginAdapter", "MEditService.SourceAdapter"];
     private static readonly string[] Kernel = ["MEditService.Codec", "MEditService.LoadOrder", "MEditService.Ports"];
 
     [Fact]
@@ -56,7 +56,7 @@ public sealed class TestProjectReferenceScanTests
     private static SortedSet<string>? Required(string solution, string project)
     {
         if (project == TestSupport)
-            return [.. Kernel, PluginAdapter];
+            return [.. Kernel, .. Repositories];
         if (!project.EndsWith(".Tests", StringComparison.Ordinal))
             return null;
 

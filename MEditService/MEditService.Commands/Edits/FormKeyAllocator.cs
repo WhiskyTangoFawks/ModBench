@@ -24,7 +24,8 @@ internal sealed class FormKeyAllocator
     private readonly uint _nextObjectIdHeld;
     private uint _nextObjectId;
 
-    private FormKeyAllocator(SourceRepository repository, PluginAddress plugin, GameRelease release, SourceDocument? header)
+    private FormKeyAllocator(
+        SourceRepository repository, PluginAddress plugin, GameRelease release, SourceDocument? header, IReadOnlySet<string> used)
     {
         (_repository, _plugin, _release, _header) = (repository, plugin, release, header);
         var headerBody = header is null ? null : Encoding.UTF8.GetBytes(header.Body);
@@ -34,11 +35,12 @@ internal sealed class FormKeyAllocator
         var lightByExtension = plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
         _lightByFlagAlone = !lightByExtension && headerBody is not null && HeaderDocument.IsLight(headerBody);
         _isLight = lightByExtension || _lightByFlagAlone;
-        _used = repository.FormKeysUsed(plugin);
+        _used = used;
     }
 
-    internal static FormKeyAllocator Over(SourceRepository repository, PluginAddress plugin, GameRelease release) =>
-        new(repository, plugin, release, repository.RecordOf(plugin, PluginHeader.IdentityOf(plugin.Name)));
+    internal static SourceAnswer<FormKeyAllocator> Over(SourceRepository repository, PluginAddress plugin, GameRelease release) =>
+        repository.RecordOf(plugin, PluginHeader.IdentityOf(plugin.Name)).Then(header =>
+            repository.FormKeysUsed(plugin).Then(used => SourceAnswer.Of(new FormKeyAllocator(repository, plugin, release, header, used))));
 
     /// <summary>The first FormKey at or above the Next Object ID that no record uses. Non-null is the
     /// refusal, and <paramref name="formKey"/> is "" then.</summary>
@@ -75,7 +77,7 @@ internal sealed class FormKeyAllocator
 
     /// <summary>The header document's rewrite that moves its Next Object ID past every FormKey drawn or
     /// claimed, written nowhere. None when nothing passed it.</summary>
-    internal SourceChanges HeaderChanges() =>
+    internal SourceAnswer<SourceChanges> HeaderChanges() =>
         _header is { } header && _nextObjectId > _nextObjectIdHeld
             ? _repository.ChangesToRewrite(_plugin, header with
             {

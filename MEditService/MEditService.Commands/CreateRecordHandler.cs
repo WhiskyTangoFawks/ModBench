@@ -37,7 +37,7 @@ public sealed class CreateRecordHandler
     public RecordEditResult CreateRecord(
         PluginAddress plugin, string recordType, string? container = null, GridPosition? position = null) =>
         WriteFailure.Refused(
-            () => MintRecord(plugin, recordType, container, position),
+            MintRecord(plugin, recordType, container, position), refused => refused,
             $"Could not write the source file for the new {recordType}", _logger);
 
     private static RecordEditResult MalformedPosition(string why) =>
@@ -54,7 +54,7 @@ public sealed class CreateRecordHandler
         return cell.ToJsonString();
     }
 
-    private RecordEditResult MintRecord(PluginAddress plugin, string recordType, string? container, GridPosition? position)
+    private SourceAnswer<RecordEditResult> MintRecord(PluginAddress plugin, string recordType, string? container, GridPosition? position)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
         if (_targets.RefuseUnlessEditable(plugin, out var openedRepository) is { } blocked) return blocked;
@@ -77,17 +77,20 @@ public sealed class CreateRecordHandler
                 $"'{recordType}' is held inside another record's document, and creating one is not supported yet.");
         }
 
-        var allocator = FormKeyAllocator.Over(repository, plugin, release);
+        if (!FormKeyAllocator.Over(repository, plugin, release).Holds(out var allocator, out var unread)) return unread;
         if (allocator.Next(out var targetFormKey) is { } refusedTarget) return refusedTarget;
 
         var body = RecordMint.BareDocument(schema, release, targetFormKey, editorId: null);
         if (RecordTypes.For(release).IsCell(recordType)) body = AsInteriorCell(body);
 
-        SourceTransaction.Atomically(repository, transaction =>
+        if (SourceTransaction.Atomically(repository, transaction =>
+            {
+                transaction.Apply(repository.ChangesToPut(plugin, new SourceDocument(targetFormKey, recordType, null, body)));
+                transaction.Apply(allocator.HeaderChanges());
+            }) is { } unwritten)
         {
-            transaction.Apply(repository.ChangesToPut(plugin, new SourceDocument(targetFormKey, recordType, null, body)));
-            transaction.Apply(allocator.HeaderChanges());
-        });
+            return unwritten;
+        }
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -98,7 +101,7 @@ public sealed class CreateRecordHandler
         return RecordEditResult.Success(targetFormKey);
     }
 
-    private RecordEditResult MintChild(
+    private SourceAnswer<RecordEditResult> MintChild(
         SourceRepository repository, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
         string container, GridPosition? position)
     {
@@ -110,14 +113,12 @@ public sealed class CreateRecordHandler
         if (position is not null && !exteriorCell) return MalformedPosition($"creates a '{recordType}' in {container}");
 
         var schemas = _schemaReflector.GetSchemas(release);
-        CellPlace? place;
-        try
+        CellPlace? place = null;
+        if (types.IsCell(containerType))
         {
-            place = types.IsCell(containerType) ? repository.CellStructureOf(plugin, target.Identity)?.Place : null;
-        }
-        catch (UnreadableSourceDocumentException ex)
-        {
-            return WriteTargets.RefuseUnreadable(container, ex.Message);
+            if (!repository.CellStructureOf(plugin, target.Identity).Holds(out var cell, out var unread))
+                return unread is SourceFailure.Unreadable ? WriteTargets.RefuseUnreadable(container, unread.Reason) : unread;
+            place = cell?.Place;
         }
 
         using var parsed = JsonDocument.Parse(containerDocument.Body);
@@ -146,7 +147,7 @@ public sealed class CreateRecordHandler
         }
     }
 
-    private RecordEditResult CreateCellAt(
+    private SourceAnswer<RecordEditResult> CreateCellAt(
         SourceRepository repository, PluginAddress plugin, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         GameRelease release, string worldspace, (int X, int Y) grid)
     {
@@ -169,15 +170,18 @@ public sealed class CreateRecordHandler
                 throw new InvalidOperationException($"Expected HolderOfCell to answer one of its holders, not {holder.GetType().Name}.");
         }
 
-        var allocator = FormKeyAllocator.Over(repository, plugin, release);
+        if (!FormKeyAllocator.Over(repository, plugin, release).Holds(out var allocator, out var unread)) return unread;
         if (GridCells.Mint(allocator, schemas[recordType], release, grid, out var cell) is { } exhausted) return exhausted;
         var formKey = GridCellHolder.FormKeyOf(cell);
         var text = RecordTextCodec.RoundTrip(cell.ToJsonString(), release, recordType);
-        SourceTransaction.Atomically(repository, transaction =>
+        if (SourceTransaction.Atomically(repository, transaction =>
+            {
+                transaction.Apply(repository.ChangesToPutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace));
+                transaction.Apply(allocator.HeaderChanges());
+            }) is { } unwritten)
         {
-            transaction.Apply(repository.ChangesToPutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace));
-            transaction.Apply(allocator.HeaderChanges());
-        });
+            return unwritten;
+        }
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -190,12 +194,12 @@ public sealed class CreateRecordHandler
 
     private sealed record Landing(SourceDocument Container, JsonObject Root, string Slot);
 
-    private RecordEditResult AppendChild(
+    private SourceAnswer<RecordEditResult> AppendChild(
         SourceRepository repository, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
         Landing landing)
     {
         var (container, root, slot) = landing;
-        var allocator = FormKeyAllocator.Over(repository, plugin, release);
+        if (!FormKeyAllocator.Over(repository, plugin, release).Holds(out var allocator, out var unread)) return unread;
         if (allocator.Next(out var formKey) is { } refusedTarget) return refusedTarget;
         var child = ObjectOf(RecordMint.BareDocument(schema, release, formKey, editorId: null), $"the minted {recordType}");
         if (!PlacedCell.TryAsCreatedIn(child, slot, root, release, out var unplaceable))
@@ -204,11 +208,14 @@ public sealed class CreateRecordHandler
                 container.Body, release, container.RecordType, container.FormKey, slot, child.ToJsonString(), recordType)
             ?? throw new InvalidOperationException($"{container.FormKey} was found, but its own text does not carry it.");
 
-        SourceTransaction.Atomically(repository, transaction =>
+        if (SourceTransaction.Atomically(repository, transaction =>
+            {
+                transaction.Apply(repository.ChangesToRewrite(plugin, container with { Body = withChild }));
+                transaction.Apply(allocator.HeaderChanges());
+            }) is { } unwritten)
         {
-            transaction.Apply(repository.ChangesToRewrite(plugin, container with { Body = withChild }));
-            transaction.Apply(allocator.HeaderChanges());
-        });
+            return unwritten;
+        }
 
         if (_logger.IsEnabled(LogLevel.Information))
         {

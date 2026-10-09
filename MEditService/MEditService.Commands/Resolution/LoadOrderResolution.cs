@@ -27,7 +27,7 @@ internal sealed class LoadOrderResolution(
     private MastersWalk WalkIn(
         LoadOrderSnapshot snapshot, SourceRepository repository, PluginAddress plugin,
         IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        new(this, snapshot, plugin, new Lazy<IReadOnlySet<string>>(() => RequiredMasters.InTheTree(repository, plugin, schemas)));
+        new(this, snapshot, plugin, new Lazy<SourceAnswer<IReadOnlySet<string>>>(() => RequiredMasters.InTheTree(repository, plugin, schemas)));
 
     /// <summary>The first master the copy needs that <paramref name="destination"/> loads before, an underride:
     /// its origin, then each plugin holding a record <paramref name="body"/> references (ADR-0008; xEdit).</summary>
@@ -79,33 +79,30 @@ internal sealed class LoadOrderResolution(
         SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         string worldspace, (int X, int Y) grid, string spelled, string subject)
     {
-        try
+        if (!repository.GetCellAt(plugin, worldspace, grid.X, grid.Y).Holds(out var held, out var failure))
+            return Unreadable(failure);
+        if (held is not null) return new GridCellHolder.Plugins(held);
+        switch (WalkAmongMastersOf(repository, plugin, schemas).NearestCell(worldspace, grid.X, grid.Y))
         {
-            if (repository.GetCellAt(plugin, worldspace, grid.X, grid.Y) is { } held) return new GridCellHolder.Plugins(held);
-            switch (WalkAmongMastersOf(repository, plugin, schemas).NearestCell(worldspace, grid.X, grid.Y))
-            {
-                case LeftCopy.Unreadable left:
-                    return new GridCellHolder.Unreadable(
-                        left.Refusal(spelled, $"{subject} is read from the nearest of {plugin.Name}'s masters"));
-                case LeftCopy.Found found:
-                    var formKey = GridCellHolder.FormKeyOf(JsonNode.Parse(found.Text) as JsonObject);
-                    return repository.Get(plugin, formKey) is { } copy
-                        ? new GridCellHolder.Plugins(copy)
-                        : new GridCellHolder.Masters(found, formKey);
-                default:
-                    return new GridCellHolder.Nobody();
-            }
+            case LeftCopy.Unreadable left:
+                return new GridCellHolder.Unreadable(
+                    left.Refusal(spelled, $"{subject} is read from the nearest of {plugin.Name}'s masters"));
+            case LeftCopy.Found found:
+                var formKey = GridCellHolder.FormKeyOf(JsonNode.Parse(found.Text) as JsonObject);
+                if (!repository.Get(plugin, formKey).Holds(out var copy, out failure)) return Unreadable(failure);
+                return copy is not null ? new GridCellHolder.Plugins(copy) : new GridCellHolder.Masters(found, formKey);
+            default:
+                return new GridCellHolder.Nobody();
         }
-        catch (UnreadableSourceDocumentException ex)
-        {
-            return new GridCellHolder.Unreadable(RecordEditResult.RefusedAt(
-                RecordEditRefusal.RecordParseFailed, spelled,
-                $"'{spelled}': {subject} cannot be read: {ex.Message.TrimEnd('.')}. Nothing was written."));
-        }
+
+        GridCellHolder Unreadable(SourceFailure unread) =>
+            new GridCellHolder.Unreadable(RecordEditResult.RefusedAt(
+                WriteFailure.KindOf(unread), spelled,
+                $"'{spelled}': {subject} cannot be read: {unread.Reason.TrimEnd('.')}. Nothing was written."));
     }
 
     internal sealed class MastersWalk(
-        LoadOrderResolution resolution, LoadOrderSnapshot snapshot, PluginAddress plugin, Lazy<IReadOnlySet<string>> masters)
+        LoadOrderResolution resolution, LoadOrderSnapshot snapshot, PluginAddress plugin, Lazy<SourceAnswer<IReadOnlySet<string>>> masters)
     {
         /// <summary>The nearest master's copy of <paramref name="formKey"/> that <paramref name="says"/> accepts,
         /// passing over one whose header holds a flag of <paramref name="passOver"/>. An unreadable copy ends the walk.</summary>
@@ -143,15 +140,8 @@ internal sealed class LoadOrderResolution(
         // walk, named by what it was asked about, as does a source tree that cannot say which are masters.
         private LeftCopy Walk(string askedAbout, Func<CopySource, CopyRead<string?>> answer)
         {
-            IReadOnlySet<string> required;
-            try
-            {
-                required = masters.Value;
-            }
-            catch (UnreadableSourceDocumentException ex)
-            {
-                return new LeftCopy.UnreadableMastersTree(plugin, ex.Message);
-            }
+            if (!masters.Value.Holds(out var required, out var unread))
+                return new LeftCopy.UnreadableMastersTree(plugin, unread.Reason, WriteFailure.KindOf(unread));
             // With no line no judgement applies, so every judged master is to its left (commands.md § Principles).
             var asked = snapshot.JudgedCopies().Where(copy => snapshot.LoadsBefore(copy.Key, plugin) != false)
                 .Reverse().Select(registered => registered.Key)

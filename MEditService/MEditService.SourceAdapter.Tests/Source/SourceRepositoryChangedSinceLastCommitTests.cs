@@ -39,7 +39,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     }
 
     private static IReadOnlyDictionary<string, RecordChange> ChangesIn(SourceRepository repository) =>
-        repository.ChangedSinceLastCommit(Plugin);
+        repository.ChangedSinceLastCommit(Plugin).Value();
 
     [Fact]
     public void AnUnstagedEditNeverGitAdded_ToAFileTrackAlreadyCommitted_IsModified()
@@ -127,23 +127,23 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     }
 
     [Fact]
-    public void AChangedFileAnotherProcessHolds_ThrowsTheHoldUnwrapped_NeverReadsAsADeletionOrAnUnreadableDocument()
+    public void AChangedFileAnotherProcessHolds_AnswersTheHold_NeverReadsAsADeletionOrAnUnreadableDocument()
     {
         var repository = Tracked();
         var path = Path.Combine(_modFolder, NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk);
         File.WriteAllText(path, EditedBody);
         using var held = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
 
-        Assert.IsType<IOException>(Record.Exception(() => ChangesIn(repository)));
+        Assert.IsType<SourceFailure.Inaccessible>(repository.ChangedSinceLastCommit(Plugin).Stopped());
     }
 
     [Fact]
-    public void ATrackedTreeWhoseStatusGitCannotReport_Throws_NeverReadsAsEveryRecordAdded()
+    public void ATrackedTreeWhoseStatusGitCannotReport_AnswersGitsRefusal_NeverReadsAsEveryRecordAdded()
     {
         var repository = Tracked();
         File.WriteAllText(Path.Combine(_modFolder, ".git", "index"), "not an index");
 
-        Assert.Throws<GitCommandFailedException>(() => ChangesIn(repository));
+        Assert.IsType<SourceFailure.GitFailed>(repository.ChangedSinceLastCommit(Plugin).Stopped());
     }
 
     [Fact]

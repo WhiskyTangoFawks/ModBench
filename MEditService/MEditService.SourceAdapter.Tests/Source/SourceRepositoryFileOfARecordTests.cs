@@ -79,39 +79,39 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     [Fact]
     public void ARecord_IsInItsOwnDocument()
     {
-        Assert.Equal(NpcFile, Repository.DocumentOf(Plugin, Npc)?.Path);
+        Assert.Equal(NpcFile, Repository.DocumentOf(Plugin, Npc).Value()?.Path);
     }
 
     [Fact]
     public void ThePluginHeaderRecord_IsInTheRootHeaderDocument()
     {
-        Assert.Equal(HeaderFile, Repository.DocumentOf(Plugin, Header)?.Path);
+        Assert.Equal(HeaderFile, Repository.DocumentOf(Plugin, Header).Value()?.Path);
     }
 
     [Fact]
     public void AContainerRecord_IsInItsOwnDocument()
     {
-        Assert.Equal(RoomFile, Repository.DocumentOf(Plugin, Room)?.Path);
+        Assert.Equal(RoomFile, Repository.DocumentOf(Plugin, Room).Value()?.Path);
     }
 
     [Fact]
     public void AChildRecord_IsInTheDocumentOfTheRecordCarryingIt()
     {
-        Assert.Equal(RoomFile, Repository.DocumentOf(Plugin, Placed)?.Path);
+        Assert.Equal(RoomFile, Repository.DocumentOf(Plugin, Placed).Value()?.Path);
     }
 
     [Fact]
     public void AChildRecordsDocument_IsItsContainers()
     {
-        Assert.True(Repository.DocumentOf(Plugin, Placed)?.IsContainersDocument);
+        Assert.True(Repository.DocumentOf(Plugin, Placed).Value()?.IsContainersDocument);
     }
 
     [Fact]
     public void ARecordsOwnDocument_IsNotItsContainers()
     {
-        Assert.False(Repository.DocumentOf(Plugin, Npc)?.IsContainersDocument);
-        Assert.False(Repository.DocumentOf(Plugin, Room)?.IsContainersDocument);
-        Assert.False(Repository.DocumentOf(Plugin, Header)?.IsContainersDocument);
+        Assert.False(Repository.DocumentOf(Plugin, Npc).Value()?.IsContainersDocument);
+        Assert.False(Repository.DocumentOf(Plugin, Room).Value()?.IsContainersDocument);
+        Assert.False(Repository.DocumentOf(Plugin, Header).Value()?.IsContainersDocument);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         var renamed = RenameNpcFileByHand();
 
-        Assert.Equal(renamed, Repository.DocumentOf(Plugin, Npc)?.Path);
+        Assert.Equal(renamed, Repository.DocumentOf(Plugin, Npc).Value()?.Path);
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         File.Delete(NpcFile);
 
-        Assert.Null(Repository.DocumentOf(Plugin, Npc)?.Path);
+        Assert.Null(Repository.DocumentOf(Plugin, Npc).Value()?.Path);
     }
 
     [Fact]

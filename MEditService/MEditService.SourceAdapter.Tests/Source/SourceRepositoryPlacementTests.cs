@@ -11,7 +11,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     private const string Plugin = "Vendor.esp";
     private const string FormKey = "000800:Vendor.esp";
 
-    private static readonly PluginAddress Key = new(Plugin, "VendorMod");
+    private static readonly PluginAddress Key = new(Plugin, TestMod.Name);
 
     private readonly ScratchDirectory _modFolder = new("medit-placement-");
 

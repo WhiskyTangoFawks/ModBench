@@ -11,7 +11,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     private const string NpcFormKey = "000800:Fixture.esp";
     private const string NpcBody = "{\n  \"FormKey\": \"000800:Fixture.esp\",\n  \"EditorID\": \"FixtureNpc\"\n}";
 
-    private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
+    private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
 
     private readonly ScratchDirectory _modFolder = new("medit-stamps-");
     private readonly SourceRepository _repository;
@@ -21,7 +21,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
         PluginBaselines.TrackWithNoRecords(_modFolder);
         _repository = SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to be tracked.");
-        _repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody));
+        _repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody)).Wrote();
     }
 
     public void Dispose() => _modFolder.Dispose();
@@ -141,7 +141,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     [Fact]
     public void StampsOf_APluginWithNoTree_ListsNothing()
     {
-        var stamps = _repository.StampsOf(new PluginAddress("Absent.esp", "FixtureMod"));
+        var stamps = _repository.StampsOf(new PluginAddress("Absent.esp", TestMod.Name));
 
         Assert.Empty(stamps.ByFormKey);
         Assert.Empty(stamps.Unreadable);

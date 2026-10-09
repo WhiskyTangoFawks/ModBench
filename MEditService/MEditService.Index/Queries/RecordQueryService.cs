@@ -185,17 +185,14 @@ internal sealed class RecordQueryService(
         if (TreeOf(plugin) is not { } tree)
             return reads.DocumentFromText(formKey, plugin, loadOrderIndex, text);
 
-        try
+        if (!tree.RecordFromText(plugin, formKey, text).Holds(out var record, out var refused))
         {
-            return tree.RecordFromText(plugin, formKey, text) is { } record
-                ? reads.DocumentFromText(formKey, plugin, loadOrderIndex, record.Body)
-                : Unread(reads, formKey, plugin, loadOrderIndex, $"No document in {plugin.Name}'s source tree carries {formKey}.");
+            _logger.LogWarning("{FormKey} in {Plugin} cannot be read from its source tree: {Cause}", formKey, plugin.Name, refused.Reason);
+            return Unread(reads, formKey, plugin, loadOrderIndex, refused.Reason);
         }
-        catch (Exception refused) when (refused is UnreadableSourceDocumentException or AmbiguousSourceUnitException)
-        {
-            _logger.LogWarning(refused, "{FormKey} in {Plugin} cannot be read from its source tree: {Cause}", formKey, plugin.Name, refused.Message);
-            return Unread(reads, formKey, plugin, loadOrderIndex, refused.Message);
-        }
+        return record is not null
+            ? reads.DocumentFromText(formKey, plugin, loadOrderIndex, record.Body)
+            : Unread(reads, formKey, plugin, loadOrderIndex, $"No document in {plugin.Name}'s source tree carries {formKey}.");
     }
 
     private static RecordDocument? Unread(IRecordReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string why) =>
@@ -290,31 +287,37 @@ internal sealed class RecordQueryService(
     }
 
     // The index stores each copy's document as the codec writes it, or a stub (ADR-0005).
-    public RenderedDocument? GetRenderedDocument(PluginAddress plugin, string formKey)
+    public SourceAnswer<RenderedDocument?> GetRenderedDocument(PluginAddress plugin, string formKey)
     {
-        if (RequireReads().GetCopyText(formKey, plugin) is not var (identity, body)) return null;
-        return new RenderedDocument(RenderedFileName(plugin, identity), body);
+        if (RequireReads().GetCopyText(formKey, plugin) is not var (identity, body)) return SourceAnswer.Of<RenderedDocument?>(null);
+        return RenderedFileName(plugin, identity).Then(name => SourceAnswer.Of<RenderedDocument?>(new RenderedDocument(name, body)));
     }
 
     // A tracked plugin's truth is its tree (ADR-0006), so a copy whose file is gone has no answer.
-    public CopyDocument? GetCopyDocument(PluginAddress plugin, string formKey)
+    public SourceAnswer<CopyDocument?> GetCopyDocument(PluginAddress plugin, string formKey)
     {
-        if (RequireReads().GetCopyText(formKey, plugin) is not var (identity, _)) return null;
+        if (RequireReads().GetCopyText(formKey, plugin) is not var (identity, _)) return SourceAnswer.Of<CopyDocument?>(null);
         if (TreeOf(plugin) is not { } tree)
-            return new CopyDocument(CopyDocumentKind.Rendered, RenderedFileName(plugin, identity));
-        if (tree.DocumentOf(plugin, identity) is not { } file) return null;
-        var kind = file.IsContainersDocument ? CopyDocumentKind.ContainersFile : CopyDocumentKind.OwnFile;
-        return new CopyDocument(kind, file.Path);
+        {
+            return RenderedFileName(plugin, identity)
+                .Then(name => SourceAnswer.Of<CopyDocument?>(new CopyDocument(CopyDocumentKind.Rendered, name)));
+        }
+        return tree.DocumentOf(plugin, identity).Then(file => SourceAnswer.Of(file is null ? null : CopyDocumentAt(file)));
     }
 
+    private static CopyDocument CopyDocumentAt(DocumentFile file) =>
+        new(file.IsContainersDocument ? CopyDocumentKind.ContainersFile : CopyDocumentKind.OwnFile, file.Path);
+
     // A tracked copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
-    private string RenderedFileName(PluginAddress plugin, RecordIdentity identity)
+    private SourceAnswer<string> RenderedFileName(PluginAddress plugin, RecordIdentity identity)
     {
         var snapshot = _loadOrder.Require();
-        var tracked = snapshot.Plugin(plugin) is { } registered && source.IsTracked(registered)
-            ? source.Over(registered, snapshot.GameRelease)
-            : null;
-        return tracked?.FileNameOf(plugin, identity) ?? source.FileNameOf(identity);
+        if (snapshot.Plugin(plugin) is not { } registered || !source.IsTracked(registered)
+            || source.Over(registered, snapshot.GameRelease) is not { } tracked)
+        {
+            return source.FileNameOf(identity);
+        }
+        return tracked.FileNameOf(plugin, identity).Then(name => SourceAnswer.Of(name ?? source.FileNameOf(identity)));
     }
 
     private ISourceRepositoryReads? TreeOf(PluginAddress plugin)

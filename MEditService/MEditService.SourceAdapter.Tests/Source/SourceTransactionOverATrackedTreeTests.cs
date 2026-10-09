@@ -64,14 +64,14 @@ public sealed class SourceTransactionOverATrackedTreeTests : IDisposable
     public void ABatchPuttingAContainerTheTreeDoesNotHold_PlacesItAndItsBlocks_AndItsRollbackTakesThemBack()
     {
         var repository = Track(_firstFolder, "First.esp");
-        var plugin = new PluginAddress("First.esp", "FirstMod");
+        var plugin = new PluginAddress("First.esp", TestMod.Name);
         var cell = new SourceDocument("000900:First.esp", "cell", "FreshCell", "{\n  \"FormKey\": \"000900:First.esp\"\n}");
         var before = TreeSnapshot.Of(_firstFolder);
 
         var left = TransactionRollback.After(repository, transaction =>
         {
             transaction.Put(repository, plugin, cell);
-            Assert.Equal(cell.Body, repository.RecordOf(plugin, cell.Identity)?.Body);
+            Assert.Equal(cell.Body, repository.RecordOf(plugin, cell.Identity).Value()?.Body);
         });
 
         Assert.Null(left);
@@ -82,7 +82,7 @@ public sealed class SourceTransactionOverATrackedTreeTests : IDisposable
     public void ABatchWhoseRekeyFollowsAPut_PutsBothBackOnRollback()
     {
         var repository = Track(_firstFolder, "First.esp");
-        var plugin = new PluginAddress("First.esp", "FirstMod");
+        var plugin = new PluginAddress("First.esp", TestMod.Name);
         var before = TreeSnapshot.Of(_firstFolder);
 
         var left = TransactionRollback.After(repository, transaction =>
@@ -90,9 +90,7 @@ public sealed class SourceTransactionOverATrackedTreeTests : IDisposable
             var siblingInTheGroupFolderTrackAlreadyMade =
                 new SourceDocument("000900:First.esp", "npc_", "Sibling", "{\n  \"FormKey\": \"000900:First.esp\"\n}");
             transaction.Put(repository, plugin, siblingInTheGroupFolderTrackAlreadyMade);
-            transaction.Rekey(
-                repository, plugin, new RecordIdentity("000800:First.esp", "npc_", "Original"), "000901:First.esp",
-                new DocumentRekey((document, newFormKey) => document.Body.Replace(document.FormKey, newFormKey, StringComparison.Ordinal), (_, _, _) => null));
+            transaction.Rekey(repository, plugin, new RecordIdentity("000800:First.esp", "npc_", "Original"), "000901:First.esp");
             Assert.NotEqual(before, TreeSnapshot.Of(_firstFolder));
         });
 

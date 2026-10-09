@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using Serilog;
 
@@ -16,13 +17,13 @@ internal static class GitCli
         try
         {
             var psi = new ProcessStartInfo("git", "--version") { RedirectStandardOutput = true, RedirectStandardError = true };
-            using var process = Process.Start(psi) ?? throw new GitUnavailableException();
+            using var process = Process.Start(psi) ?? throw SourceStopException.GitUnavailable();
             process.WaitForExit();
-            if (process.ExitCode != 0) throw new GitUnavailableException();
+            if (process.ExitCode != 0) throw SourceStopException.GitUnavailable();
         }
-        catch (Exception ex) when (ex is not GitUnavailableException)
+        catch (Exception ex) when (ex is not SourceStopException)
         {
-            throw new GitUnavailableException(ex);
+            throw SourceStopException.GitUnavailable(ex);
         }
     }
 
@@ -49,10 +50,10 @@ internal static class GitCli
 
     // Only the subcommand and the exit code are named: the arguments and git's stderr can carry paths
     // onto the wire via a refusal's message, so they go to the log instead.
-    private static GitCommandFailedException Failed(string[] args, int exitCode, string stderr)
+    private static SourceStopException Failed(string[] args, int exitCode, string stderr)
     {
         Log.Warning("git {Args} failed ({ExitCode}): {Stderr}", args, exitCode, stderr);
-        return new GitCommandFailedException($"git {args[0]} failed ({exitCode})");
+        return SourceStopException.GitFailed($"git {args[0]} failed ({exitCode})");
     }
 
     private static ProcessStartInfo StartInfo(string gitDir, string workTree, string[] args)
@@ -75,8 +76,7 @@ internal static class GitCli
 
     private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string[] args)
     {
-        using var process = Process.Start(StartInfo(gitDir, workTree, args))
-            ?? throw new InvalidOperationException("Failed to start the git process.");
+        using var process = Start(StartInfo(gitDir, workTree, args), workTree);
         // Closed at once: git otherwise inherits this process's stdin, and a socket never reaches EOF.
         process.StandardInput.Close();
 
@@ -91,45 +91,22 @@ internal static class GitCli
         process.WaitForExit();
         return (process.ExitCode, stdout, stderr);
     }
-}
 
-/// <summary>Thrown when git cannot be run at all (ADR-0007).</summary>
-public sealed class GitUnavailableException : Exception
-{
-    private const string DefaultMessage = "git was not found on PATH. Modbench's tracking features require git to be installed and on PATH.";
-
-    // RCS1194: the three standard exception constructors; EnsureOnPath throws through the
-    // Exception?-taking one below, which pins the one actionable message.
-    internal GitUnavailableException() : base(DefaultMessage)
+    // Starting git throws Win32Exception both for a git that cannot run and for a working directory
+    // that is gone; the working directory standing leaves only git.
+    private static Process Start(ProcessStartInfo psi, string workTree)
     {
-    }
-
-    internal GitUnavailableException(string message) : base(message)
-    {
-    }
-
-    internal GitUnavailableException(string message, Exception innerException) : base(message, innerException)
-    {
-    }
-
-    internal GitUnavailableException(Exception? inner) : base(DefaultMessage, inner)
-    {
-    }
-}
-
-/// <summary>git ran and refused: a state of the repository, never a broken invariant of Modbench's
-/// own.</summary>
-public sealed class GitCommandFailedException : InvalidOperationException
-{
-    internal GitCommandFailedException()
-    {
-    }
-
-    internal GitCommandFailedException(string message) : base(message)
-    {
-    }
-
-    internal GitCommandFailedException(string message, Exception innerException) : base(message, innerException)
-    {
+        try
+        {
+            return Process.Start(psi) ?? throw SourceStopException.GitUnavailable();
+        }
+        catch (Win32Exception ex) when (Directory.Exists(workTree))
+        {
+            throw SourceStopException.GitUnavailable(ex);
+        }
+        catch (Win32Exception ex)
+        {
+            throw SourceStopException.Inaccessible(ex.Message, ex);
+        }
     }
 }

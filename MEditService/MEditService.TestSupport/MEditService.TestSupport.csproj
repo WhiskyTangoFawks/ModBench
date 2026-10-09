@@ -27,13 +27,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Test support draws no arrow: the kernel and the Plugin adapter, referenced in turn by the
+    <!-- Test support draws no arrow: the kernel and the repositories, referenced in turn by the
          test projects that need its fixtures. Not production code, so it is not on the
          target-architecture diagram and grants no InternalsVisibleTo. -->
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
     <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
     <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
+    <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />
   </ItemGroup>
 
 </Project>

@@ -67,13 +67,13 @@ public sealed class CompilePluginLinkTests : IDisposable
         _gameDirectory.Dispose();
     }
 
-    private static SourceRepository Repository(string modFolder) =>
-        SourceRepository.Open(TestMod.In(modFolder), GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected {modFolder} to already be a tracked repository.");
+    private SourceRepository HostRepository() =>
+        SourceRepository.Open(TestMod.Of(_host, _hostFolder), GameRelease.Fallout4)
+            ?? throw new InvalidOperationException($"Expected {_hostFolder} to already be a tracked repository.");
 
     private void PointTheNpcAt(FormKey keyword) =>
         SourceEdits.Rewrite<Npc>(
-            Repository(_hostFolder), _host, new RecordIdentity(_npc.ToString(), "npc_", HostNpcEditorId),
+            HostRepository(), _host, new RecordIdentity(_npc.ToString(), "npc_", HostNpcEditorId),
             GameRelease.Fallout4,
             npc => npc.Keywords = [new FormLink<IKeywordGetter>(keyword)]);
 
@@ -179,7 +179,7 @@ public sealed class CompilePluginLinkTests : IDisposable
         {
             EditorID = "HostOwnKeyword",
         };
-        SourceEdits.Write(Repository(_hostFolder), _host, ownKeyword, "kywd", GameRelease.Fallout4);
+        SourceEdits.Write(HostRepository(), _host, ownKeyword, "kywd", GameRelease.Fallout4);
         PointTheNpcAt(ownKeyword.FormKey);
 
         var answer = await CompileHost();

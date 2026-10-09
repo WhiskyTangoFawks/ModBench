@@ -16,7 +16,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
 {
     private const string PluginName = "Splice.esp";
     private const string DroppedByTheCodec = "\"NoSuchMember\": 5";
-    private static readonly PluginAddress Plugin = new(PluginName, "SpliceMod");
+    private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly ScratchDirectory _modFolder = new("medit-splice-");
@@ -95,7 +95,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     {
         HandEditDroppedMemberBeside(CellPath, "\"PersistRef\"");
 
-        var body = Repository.RecordOf(Plugin, Identity(_persistentRef, "refr"))?.Body;
+        var body = Repository.RecordOf(Plugin, Identity(_persistentRef, "refr")).Value()?.Body;
 
         Assert.NotNull(body);
         Assert.Equal(_persistentRef.FormKey.ToString(), RootFormKeyOf(body));
@@ -164,13 +164,13 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
             Plugin,
             new SourceDocument(
                 _persistentRef.FormKey.ToString(), "refr", "RenamedRef",
-                System.Text.Encoding.UTF8.GetString(Serialize(renamed))));
+                System.Text.Encoding.UTF8.GetString(Serialize(renamed)))).Wrote();
     }
 
     [Fact]
     public void Remove_OfTheOnlyChildOfAListSlot_TakesTheSlotWithIt()
     {
-        Assert.Equal(SourceRemoval.Removed, Repository.Remove(Plugin, Identity(_persistentRef, "refr")));
+        Repository.Remove(Plugin, Identity(_persistentRef, "refr")).Wrote();
 
         var cellText = File.ReadAllText(FullPath(CellPath));
         Assert.DoesNotContain("\"Persistent\"", cellText, StringComparison.Ordinal);
@@ -182,7 +182,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     [Fact]
     public void Remove_OfAChildInASingleValueSlot_TakesTheSlotWithIt()
     {
-        Assert.Equal(SourceRemoval.Removed, Repository.Remove(Plugin, Identity(_landscape, "land")));
+        Repository.Remove(Plugin, Identity(_landscape, "land")).Wrote();
 
         var cellText = File.ReadAllText(FullPath(CellPath));
         Assert.DoesNotContain("\"Landscape\"", cellText, StringComparison.Ordinal);
@@ -192,7 +192,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     [Fact]
     public void Remove_OfAnEmbeddedChild_LeavesTheOwnerReadableByTheCodec()
     {
-        Repository.Remove(Plugin, Identity(_persistentRef, "refr"));
+        Repository.Remove(Plugin, Identity(_persistentRef, "refr")).Wrote();
 
         var owner = OwnerAsTheCodecReadsIt();
 
@@ -206,7 +206,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     {
         HandEditDroppedMemberBeside(CellPath, "\"WaterHeight\"");
 
-        Assert.Equal(SourceRemoval.Removed, Repository.Remove(Plugin, Identity(_persistentRef, "refr")));
+        Repository.Remove(Plugin, Identity(_persistentRef, "refr")).Wrote();
 
         Assert.Contains(DroppedByTheCodec, File.ReadAllText(FullPath(CellPath)), StringComparison.Ordinal);
     }
@@ -214,7 +214,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     [Fact]
     public void Remove_OfTheFirstChildOfAListSlot_LeavesTheOwnerSpelledAsTheCodecWould()
     {
-        Assert.Equal(SourceRemoval.Removed, Repository.Remove(Plugin, Identity(_response, "info")));
+        Repository.Remove(Plugin, Identity(_response, "info")).Wrote();
 
         AssertTheCompileGateWouldNotRespell(QuestPath, "quest");
     }

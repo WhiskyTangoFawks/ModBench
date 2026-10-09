@@ -226,8 +226,7 @@ internal static class RecordEndpoints
                 new PluginAddress(request.Edit.Plugin, request.Edit.Origin), decoded,
                 new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.Value), request.Text),
             outcome: answer => answer.Outcome,
-            onApplied: answer => Results.Ok(new RecordEditChangesResponse(
-                decoded, spelled, answer.Changes.Moves, answer.Changes.Documents, answer.Outcome.NewFormKey)));
+            onApplied: answer => Results.Ok(RecordEditChangesResponse.Of(decoded, spelled, answer)));
     }
 
     private static IResult? EditRequestProblem(RecordEditRequest? request)

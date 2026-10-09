@@ -21,7 +21,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     [Fact]
     public void ReplaceSourceFrom_LeavesExactlyTheNewFiles_AndParksTheBinaryAlone()
     {
-        Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha);
+        Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha).Wrote();
 
         Assert.Equal(["npc_/A.esp/000002.json"], FilesUnderRoot());
         Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address));
@@ -31,7 +31,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     [Fact]
     public void ReplaceSourceFrom_TakesTheDoorsTree_SoItsRootDocumentLandsAsTheHeader()
     {
-        Repository.ReplaceSourceFrom(Address, [new TreeFile("RecordData.json", "{}"u8.ToArray())], Sha);
+        Repository.ReplaceSourceFrom(Address, [new TreeFile("RecordData.json", "{}"u8.ToArray())], Sha).Wrote();
 
         Assert.Equal(["000000_A.esp.json"], FilesUnderRoot());
     }
@@ -40,14 +40,14 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     public void ReplaceSourceFrom_WritesOnlyWhatDiffers_SoAnUnchangedFileKeepsItsStamp_AndAnEmptiedDirectoryGoes()
     {
         Repository.ReplaceSourceFrom(
-            Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{\"a\":3}"), File("weap/A.esp/000004.json", "{}")], Sha);
+            Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{\"a\":3}"), File("weap/A.esp/000004.json", "{}")], Sha).Wrote();
         var unchanged = Path.Combine(Root, "npc_", "A.esp", "000001.json");
         var rewritten = Path.Combine(Root, "armo", "A.esp", "000003.json");
         var longAgo = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         System.IO.File.SetLastWriteTimeUtc(unchanged, longAgo);
 
         Repository.ReplaceSourceFrom(
-            Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{\"a\":33}")], Sha);
+            Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{\"a\":33}")], Sha).Wrote();
 
         Assert.Equal(longAgo, System.IO.File.GetLastWriteTimeUtc(unchanged));
         Assert.Equal("{\"a\":33}", System.IO.File.ReadAllText(rewritten));
@@ -63,7 +63,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var failure = FailAfterWritingWhile($"echo theirs > '{theirs}'", [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{}")]);
 
         Assert.Equal("theirs", System.IO.File.ReadAllText(theirs).Trim());
-        Assert.Contains("armo — holds something this change did not write", failure.Message.Replace('\\', '/'));
+        Assert.Contains("armo — holds something this change did not write", failure.Reason.Replace('\\', '/'));
         Assert.False(System.IO.File.Exists(Path.Combine(Root, "armo", "A.esp", "000003.json")));
     }
 
@@ -75,7 +75,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var failure = FailAfterWritingWhile($"echo theirs > '{replaced}'", [File("npc_/A.esp/000001.json", "{\"now\":2}")]);
 
         Assert.Equal("theirs", System.IO.File.ReadAllText(replaced).Trim());
-        Assert.Contains("000001.json — changed by something else", failure.Message);
+        Assert.Contains("000001.json — changed by something else", failure.Reason);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var failure = FailAfterWritingWhile($"rm '{replaced}'", [File("npc_/A.esp/000001.json", "{\"now\":2}")]);
 
         Assert.False(System.IO.File.Exists(replaced));
-        Assert.Contains("000001.json — removed by something else", failure.Message);
+        Assert.Contains("000001.json — removed by something else", failure.Reason);
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var failure = FailAfterWritingWhile($"mkdir -p '{Path.GetDirectoryName(removed)}'\necho theirs > '{removed}'", [File("armo/A.esp/000003.json", "{}")]);
 
         Assert.Equal("theirs", System.IO.File.ReadAllText(removed).Trim());
-        Assert.Contains("000001.json — written by something else", failure.Message);
+        Assert.Contains("000001.json — written by something else", failure.Reason);
     }
 
     [Fact]
@@ -105,36 +105,35 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     {
         var theirs = Path.Combine(Root, "npc_", "A.esp", "theirs.txt");
 
-        var failure = Assert.ThrowsAny<InvalidOperationException>(() => FailAfterWriting(
-            $"echo theirs > '{theirs}'", [File("npc_/A.esp/000002.json", "{}")]));
+        var failure = FailAfterWriting($"echo theirs > '{theirs}'", [File("npc_/A.esp/000002.json", "{}")]);
 
         Assert.Equal("theirs", System.IO.File.ReadAllText(theirs).Trim());
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(Root, "npc_", "A.esp", "000001.json")));
-        Assert.DoesNotContain("Not put back", failure.Message);
+        Assert.DoesNotContain("Not put back", failure.Reason);
     }
 
     [Fact]
     public void ReplaceSourceFrom_WhenOneRollbackStepFails_StillPutsBackTheRest_AndKeepsTheCause()
     {
-        Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("npc_/A.esp/000002.json", "{\"was\":2}")], Sha);
+        Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("npc_/A.esp/000002.json", "{\"was\":2}")], Sha).Wrote();
         var first = Path.Combine(Root, "npc_", "A.esp", "000001.json");
         var second = Path.Combine(Root, "npc_", "A.esp", "000002.json");
 
         var failure = FailAfterWritingWhile(
             $"mkdir -p '{second}'\necho theirs > '{second}/theirs.txt'", [File("armo/A.esp/000003.json", "{}")]);
 
-        Assert.Contains("000002.json — could not be restored", failure.Message);
-        Assert.NotNull(failure.InnerException);
+        Assert.Contains("000002.json — could not be restored", failure.Reason);
+        Assert.NotNull(failure.Error?.InnerException);
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(first));
     }
 
-    private Exception FailAfterWritingWhile(string script, TreeFile[] files) =>
-        Assert.ThrowsAny<IOException>(() => FailAfterWriting(script, files));
+    private SourceFailure.Inaccessible FailAfterWritingWhile(string script, TreeFile[] files) =>
+        Assert.IsType<SourceFailure.Inaccessible>(FailAfterWriting(script, files));
 
-    private void FailAfterWriting(string script, TreeFile[] files)
+    private SourceFailure FailAfterWriting(string script, TreeFile[] files)
     {
         GitHooks.Write(_modFolder, "reference-transaction", $"[ \"$1\" = prepared ] || exit 0\n{script}\nexit 1");
-        Repository.ReplaceSourceFrom(Address, files, Sha);
+        return Repository.ReplaceSourceFrom(Address, files, Sha).Failed();
     }
 
     [Fact]
@@ -144,8 +143,8 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
 
         TreeFile[] secondFileNeedsADirectoryTheFirstOccupies = [File("npc_", "{}"), File("npc_/A.esp/000002.json", "{}")];
 
-        Assert.ThrowsAny<IOException>(() => Repository.ReplaceSourceFrom(
-            Address, secondFileNeedsADirectoryTheFirstOccupies, Sha));
+        Assert.IsType<SourceFailure.Inaccessible>(
+            Repository.ReplaceSourceFrom(Address, secondFileNeedsADirectoryTheFirstOccupies, Sha).Failed());
 
         Assert.Equal(["npc_/A.esp/000001.json"], FilesUnderRoot());
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(Root, "npc_", "A.esp", "000001.json")));
@@ -155,7 +154,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     [Fact]
     public void ReplaceSourceFrom_ParksTheBinaryItWasMadeFrom_NamedForDecompile()
     {
-        Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha);
+        Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha).Wrote();
 
         var parked = LastWriteRecord.RefOfTheOnlyPlugin(_modFolder);
         Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address));
@@ -168,8 +167,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var lastWrittenBefore = Repository.LastWrittenBinarySha256s(Address);
         Git("checkout", "-q", "--orphan", "unborn");
 
-        Assert.ThrowsAny<InvalidOperationException>(() => Repository.ReplaceSourceFrom(
-            Address, [File("npc_/A.esp/000002.json", "{}")], Sha));
+        Assert.IsType<SourceFailure.GitFailed>(Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Failed());
 
         Assert.Equal(["npc_/A.esp/000001.json"], FilesUnderRoot());
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(Root, "npc_", "A.esp", "000001.json")));
@@ -182,10 +180,10 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var repository = Repository;
         Directory.Delete(_modFolder, recursive: true);
 
-        var refused = Assert.Throws<InvalidOperationException>(() => repository.ReplaceSourceFrom(
-            Address, [File("npc_/A.esp/000002.json", "{}")], Sha));
+        var refused = Assert.IsType<SourceFailure.Inaccessible>(
+            repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Failed());
 
-        Assert.Contains("holds no repository", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("holds no repository", refused.Reason, StringComparison.Ordinal);
         Assert.False(Directory.Exists(_modFolder));
     }
 
@@ -195,10 +193,9 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var repository = Repository;
         Directory.Delete(_modFolder, recursive: true);
 
-        var failure = Assert.ThrowsAny<Exception>(() => repository.WriteBinary(Address, Sha, () => { }));
+        var failure = Assert.IsType<SourceFailure.Inaccessible>(repository.WriteBinary(Address, Sha, () => { }).Stopped());
 
-        Assert.IsNotType<GitUnavailableException>(failure);
-        Assert.Contains(_modFolder, failure.Message, StringComparison.Ordinal);
+        Assert.Contains(_modFolder, failure.Reason, StringComparison.Ordinal);
     }
 
     private SourceRepository Repository =>
@@ -229,15 +226,15 @@ public sealed class SourceRepositoryReplaceSourceWithoutGitTests : IDisposable
     public void Dispose() => _modFolder.Dispose();
 
     [Fact]
-    public void ReplaceSourceFrom_WithGitGoneFromPathAfterTheUpFrontCheck_ThrowsTheOsReason_AndLeavesTheSourceAsItWas()
+    public void ReplaceSourceFrom_WithGitGoneFromPathAfterTheUpFrontCheck_AnswersGitUnavailable_AndLeavesTheSourceAsItWas()
     {
         var repository = SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
         var path = Environment.GetEnvironmentVariable("PATH");
         Environment.SetEnvironmentVariable("PATH", string.Empty);
         try
         {
-            Assert.Throws<System.ComponentModel.Win32Exception>(() => repository.ReplaceSourceFrom(
-                new PluginAddress("A.esp", "TestMod"), [new TreeFile("npc_/A.esp/000002.json", "{}"u8.ToArray())], "ABCDEF0123"));
+            Assert.IsType<SourceFailure.GitUnavailable>(repository.ReplaceSourceFrom(
+                new PluginAddress("A.esp", "TestMod"), [new TreeFile("npc_/A.esp/000002.json", "{}"u8.ToArray())], "ABCDEF0123").Failed());
         }
         finally
         {

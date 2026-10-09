@@ -13,7 +13,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
     private const string NpcBody = "{\n  \"FormKey\": \"000800:Diverge.esp\",\n  \"EditorID\": \"FixtureNpc\"\n}";
     private static readonly byte[] Different = "{}"u8.ToArray();
 
-    private static readonly PluginAddress Plugin = new(PluginName, "DivergeMod");
+    private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
     private static readonly RecordIdentity Npc = new(NpcFormKey, "npc_", "FixtureNpc");
     private static readonly TreeFile Extra = new(Path.Combine("npc_", "Extra.json"), Different);
 
@@ -24,7 +24,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
         PluginBaselines.Track(
             _modFolder,
             [new TreeFile(PluginSourceRoot.HeaderDocument(PluginName), "{\"MasterReferences\": []}"u8.ToArray())]);
-        Repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody));
+        Repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody)).Wrote();
     }
 
     public void Dispose() => _modFolder.Dispose();
@@ -38,7 +38,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
     private static string ExtraPath => Path.Combine(PluginSourceRoot.For(PluginName), Extra.RelativePath);
 
     private string NpcPath =>
-        Repository.RelativePathOf(Plugin, Npc)
+        Repository.RelativePathOf(Plugin, Npc).Value()
             ?? throw new InvalidOperationException($"Expected the tree to hold {NpcFormKey}.");
 
     private static string DoorPathOf(string modFolderPath) =>
@@ -46,7 +46,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
 
     private List<TreeFile> Serialized(Func<TreeFile, TreeFile?>? change = null) =>
     [
-        .. Repository.TreeOf(Plugin).Files
+        .. Repository.TreeOf(Plugin).Value().Files
             .Select(change ?? (file => file))
             .OfType<TreeFile>(),
     ];
@@ -60,7 +60,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
     [Fact]
     public void Compare_ASerializationOfTheSameTree_IsNone()
     {
-        Assert.Null(Repository.Compare(Plugin, Serialized()).Divergence);
+        Assert.Null(Repository.Compare(Plugin, Serialized()).Value().Divergence);
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
     {
         Assert.Equal(
             new SourceDivergence(SourceDivergenceKind.DocumentChanged, NpcPath),
-            Repository.Compare(Plugin, Serialized(Respelling(NpcPath))).Divergence);
+            Repository.Compare(Plugin, Serialized(Respelling(NpcPath))).Value().Divergence);
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
     {
         Assert.Equal(
             new SourceDivergence(SourceDivergenceKind.HeaderChanged, HeaderPath),
-            Repository.Compare(Plugin, Serialized(Respelling(HeaderPath))).Divergence);
+            Repository.Compare(Plugin, Serialized(Respelling(HeaderPath))).Value().Divergence);
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
     {
         Assert.Equal(
             new SourceDivergence(SourceDivergenceKind.Unproduced, NpcPath),
-            Repository.Compare(Plugin, Serialized(Omitting(NpcPath))).Divergence);
+            Repository.Compare(Plugin, Serialized(Omitting(NpcPath))).Value().Divergence);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
     {
         Assert.Equal(
             new SourceDivergence(SourceDivergenceKind.DocumentChanged, ExtraPath),
-            Repository.Compare(Plugin, [.. Serialized(), Extra]).Divergence);
+            Repository.Compare(Plugin, [.. Serialized(), Extra]).Value().Divergence);
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
 
         Assert.Equal(
             new SourceDivergence(SourceDivergenceKind.HeaderChanged, HeaderPath),
-            Repository.Compare(Plugin, serialized).Divergence);
+            Repository.Compare(Plugin, serialized).Value().Divergence);
     }
 
     [Fact]
@@ -112,10 +112,10 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
 
         Assert.Equal(
             SourceDivergenceKind.HeaderChanged,
-            Repository.Compare(Plugin, [.. respelledHeader, Extra]).Divergence?.Kind);
+            Repository.Compare(Plugin, [.. respelledHeader, Extra]).Value().Divergence?.Kind);
         Assert.Equal(
             new SourceDivergence(SourceDivergenceKind.DocumentChanged, ExtraPath),
-            Repository.Compare(Plugin, [Extra, .. respelledHeader]).Divergence);
+            Repository.Compare(Plugin, [Extra, .. respelledHeader]).Value().Divergence);
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
 
         Assert.Equal(
             new SourceDivergence(SourceDivergenceKind.Unreadable, npcPath),
-            Repository.Compare(Plugin, serialized).Divergence);
+            Repository.Compare(Plugin, serialized).Value().Divergence);
     }
 
     private string RenameTheNpcFile(out string renamedPath)
@@ -144,7 +144,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
         var serialized = Serialized();
         var npcPath = RenameTheNpcFile(out var renamedPath);
 
-        var comparison = Repository.Compare(Plugin, serialized);
+        var comparison = Repository.Compare(Plugin, serialized).Value();
 
         Assert.Null(comparison.Divergence);
         Assert.Equal([new MisplacedFile(NpcFormKey, renamedPath, npcPath)], comparison.Misplaced);
@@ -157,7 +157,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
         var npcPath = RenameTheNpcFile(out var renamedPath);
         File.AppendAllText(Path.Combine(_modFolder, renamedPath), " ");
 
-        var comparison = Repository.Compare(Plugin, serialized);
+        var comparison = Repository.Compare(Plugin, serialized).Value();
 
         Assert.Empty(comparison.Misplaced);
         Assert.Equal(new SourceDivergence(SourceDivergenceKind.DocumentChanged, npcPath), comparison.Divergence);

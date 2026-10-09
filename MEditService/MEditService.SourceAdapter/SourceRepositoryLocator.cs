@@ -21,14 +21,14 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 {
     private readonly string _modFolder = modFolder;
     private readonly GameRelease _release = release;
-    private readonly Dictionary<string, PluginSourceFiles> _filesByPlugin = new(StringComparer.Ordinal);
+    private readonly Dictionary<PluginAddress, PluginSourceFiles> _filesByPlugin = new(PluginAddress.Comparer);
 
     // One locator is one operation, so all live and die with it: the next Track, compile or edit
     // looks at the tree again, never trusting a file timestamp (ADR-0003).
     private readonly Dictionary<string, string[]> _entriesByScanRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TreeScan> _scansBySourceRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<(string SourceRoot, string FormKey), TreeScan> _scansByKey = [];
-    private readonly Dictionary<(string Plugin, string FormKey), string> _foundByText = [];
+    private readonly Dictionary<(PluginAddress Plugin, string FormKey), string> _foundByText = [];
 
     /// <summary>The document holding <paramref name="identity"/>, and whether that document is another
     /// record's. The one place an identity becomes a path, which is why it stays here.</summary>
@@ -53,7 +53,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         if (ComputedFlatPath(plugin, identity) is { } computed)
         {
             return Unit(
-                OwnDocumentUnder([PathShape.DirectoryOf(computed)], plugin.Name, identity.FormKey, byText) ?? computed,
+                OwnDocumentUnder([PathShape.DirectoryOf(computed)], plugin, identity.FormKey, byText) ?? computed,
                 identity.FormKey, identity.RecordType, isEmbedded: false);
         }
 
@@ -61,7 +61,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         // with no group of its own is always embedded, so nothing is scanned for it.
         var sourceRoot = Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name));
         if (GroupFolders.For(_release).FolderOf(identity.RecordType) is not null
-            && FindOwnUnit(sourceRoot, plugin.Name, identity.FormKey, byText) is { } own)
+            && FindOwnUnit(sourceRoot, plugin, identity.FormKey, byText) is { } own)
         {
             return Unit(own, identity.FormKey, identity.RecordType, isEmbedded: false);
         }
@@ -94,7 +94,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
                 : null;
         }
 
-        if (OwnDocumentIdentity(sourceRoot, plugin.Name, parsed, spelled) is { } own) return own;
+        if (OwnDocumentIdentity(sourceRoot, plugin, parsed, spelled) is { } own) return own;
 
         // Nothing of its own, so another record's document carries it inline, and the codec reads its
         // type and name off that document's text.
@@ -129,20 +129,20 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         if (holding.Count == 0)
         {
             holding = DocumentsDeclaring(sourceRoot, spelled);
-            RememberFoundByText(plugin.Name, spelled, holding);
+            RememberFoundByText(plugin, spelled, holding);
         }
         if (TheOneHolding(holding, spelled) is { } own)
         {
             var document = DeclaredIn(own, text, plugin.Name);
             if (!FormKey.TryFactory(document.FormKey, out var declared) || declared != parsed)
-                throw new UnreadableSourceDocumentException($"The text given for {Path.GetRelativePath(_modFolder, own)} declares {document.FormKey}, not {spelled}.");
+                throw SourceStopException.Unreadable($"The text given for {Path.GetRelativePath(_modFolder, own)} declares {document.FormKey}, not {spelled}.");
             return (document.Identity with { FormKey = spelled }, document);
         }
 
         if (DocumentHolding(sourceRoot, spelled) is not { } owner) return null;
         var carrying = DeclaredIn(owner.FullPath, text, plugin.Name);
         var child = new ContainerDocuments(_release).EmbeddedChild(owner.RecordType, Encoding.UTF8.GetBytes(text), spelled)
-            ?? throw new UnreadableSourceDocumentException(
+            ?? throw SourceStopException.Unreadable(
                 $"The text given for {Path.GetRelativePath(_modFolder, owner.FullPath)} does not carry {spelled}.");
         return (ChildIdentity(child, owner.FullPath), carrying);
     }
@@ -152,14 +152,14 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     {
         var relativePath = Path.GetRelativePath(_modFolder, documentPath);
         if (NotADocument(text) is { } why)
-            throw new UnreadableSourceDocumentException($"The text given for {relativePath} is not a readable document: {why}");
+            throw SourceStopException.Unreadable($"The text given for {relativePath} is not a readable document: {why}");
         var document = ReadableDocumentAt(relativePath, text, pluginFileName)
-            ?? throw new UnreadableSourceDocumentException($"The text given for {relativePath} names no record.");
+            ?? throw SourceStopException.Unreadable($"The text given for {relativePath} names no record.");
         if (!FormKey.TryFactory(document.FormKey, out _))
-            throw new UnreadableSourceDocumentException($"The text given for {relativePath} declares {document.FormKey}, which is no FormKey.");
+            throw SourceStopException.Unreadable($"The text given for {relativePath} declares {document.FormKey}, which is no FormKey.");
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
             ?? RecordTypes.For(_release).RecordTypeNamed(document.RecordType)
-            ?? throw new UnreadableSourceDocumentException($"The text given for {relativePath} names no record type.");
+            ?? throw SourceStopException.Unreadable($"The text given for {relativePath} names no record type.");
         return document with { RecordType = recordType };
     }
 
@@ -229,14 +229,14 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     // A record with a document of its own, found as Locate finds it. A name the text contradicts is
     // stale, and the record it claims is elsewhere or gone.
     private RecordIdentity? OwnDocumentIdentity(
-        string sourceRoot, string pluginFileName, FormKey formKey, string spelled)
+        string sourceRoot, PluginAddress plugin, FormKey formKey, string spelled)
     {
-        var identified = IdentitiesIn(DocumentsNaming(sourceRoot, spelled), pluginFileName, formKey, spelled);
+        var identified = IdentitiesIn(DocumentsNaming(sourceRoot, spelled), plugin.Name, formKey, spelled);
         if (identified.Count == 0)
         {
             identified = IdentitiesIn(
-                DocumentsDeclaring(sourceRoot, spelled), pluginFileName, formKey, spelled);
-            RememberFoundByText(pluginFileName, spelled, [.. identified.Select(i => i.Path)]);
+                DocumentsDeclaring(sourceRoot, spelled), plugin.Name, formKey, spelled);
+            RememberFoundByText(plugin, spelled, [.. identified.Select(i => i.Path)]);
         }
 
         return TheOneHolding([.. identified.Select(i => i.Path)], spelled) is { } path
@@ -286,20 +286,20 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     // The one named for the FormKey, else one whose text declares it under any other name: a hand
     // move can rename a document, and the name alone reads a live record as deleted.
     private string? OwnDocumentUnder(
-        IReadOnlyList<string> scanRoots, string pluginFileName, string formKey, bool byText)
+        IReadOnlyList<string> scanRoots, PluginAddress plugin, string formKey, bool byText)
     {
         var roots = scanRoots.Where(Directory.Exists).ToList();
         var documents = roots
             .SelectMany(root => DocumentsNaming(root, formKey))
             .Where(File.Exists)
             .ToList();
-        if (documents.Count == 0 && RememberedFoundByText(pluginFileName, formKey) is { } found)
+        if (documents.Count == 0 && RememberedFoundByText(plugin, formKey) is { } found)
             documents = [found];
         if (documents.Count == 0 && byText)
         {
-            documents = [.. DocumentsDeclaring(Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(pluginFileName)), formKey)
+            documents = [.. DocumentsDeclaring(Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name)), formKey)
                 .Where(document => roots.Exists(root => IsUnder(root, document)))];
-            RememberFoundByText(pluginFileName, formKey, documents);
+            RememberFoundByText(plugin, formKey, documents);
         }
 
         return TheOneHolding(documents, formKey);
@@ -319,13 +319,13 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
     // Every read that finds a document by its text remembers it, so no put later in this operation
     // misses it by name and writes a second document beside it.
-    private void RememberFoundByText(string pluginFileName, string formKey, List<string> documents)
+    private void RememberFoundByText(PluginAddress plugin, string formKey, List<string> documents)
     {
-        if (documents.Count == 1) _foundByText[(pluginFileName, Canonical(formKey))] = documents[0];
+        if (documents.Count == 1) _foundByText[(plugin, Canonical(formKey))] = documents[0];
     }
 
-    private string? RememberedFoundByText(string pluginFileName, string formKey) =>
-        _foundByText.TryGetValue((pluginFileName, Canonical(formKey)), out var found) && File.Exists(found) ? found : null;
+    private string? RememberedFoundByText(PluginAddress plugin, string formKey) =>
+        _foundByText.TryGetValue((plugin, Canonical(formKey)), out var found) && File.Exists(found) ? found : null;
 
     private static string Canonical(string formKey) =>
         FormKey.TryFactory(formKey, out var parsed) ? parsed.ToString() : formKey;
@@ -354,7 +354,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
         var worldspaceDocument = SourceRepositoryLayout.ContainerDocumentHeldBy(Path.Combine(_modFolder, path.WorldspaceDirectory));
         var worldspace = DocumentText.FormKeyDeclaredBy(worldspaceDocument, plugin.Name)
-            ?? throw UnreadableSourceDocumentException.In(
+            ?? throw SourceStopException.UnreadableIn(
                 _modFolder, worldspaceDocument, "it declares no FormKey, so the worldspace its exterior cells sit in is unknown");
 
         var (blockX, blockY) = Coordinates(path.BlockFolderName);
@@ -364,7 +364,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
     internal string? CellFormKeyAt(PluginAddress plugin, string worldspace, int x, int y)
     {
-        if (FindOwnUnit(Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name)), plugin.Name, worldspace) is not { } worldspaceDocument)
+        if (FindOwnUnit(Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name)), plugin, worldspace) is not { } worldspaceDocument)
             return null;
         var placement = CellPlacement.AtGrid(worldspace, x, y);
         var subBlock = Path.Combine(
@@ -382,7 +382,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             }
             catch (JsonException ex)
             {
-                throw UnreadableSourceDocumentException.In(_modFolder, document, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
+                throw SourceStopException.UnreadableIn(_modFolder, document, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
             }
             if (cell is JsonObject held && PlacedCell.Grid(held) == (x, y)) return DocumentText.FormKeyDeclaredIn(text, document, plugin.Name);
         }
@@ -408,11 +408,11 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     // Matches the FormKey alone, never the EditorID, which a caller may hold stale mid-rename. Every
     // directory-per-record group is searched, since a cell's directory sits in its own group's blocks
     // or inside its worldspace's.
-    internal string? FindOwnUnit(string sourceRoot, string pluginFileName, string formKey, bool byText = true) =>
+    internal string? FindOwnUnit(string sourceRoot, PluginAddress plugin, string formKey, bool byText = true) =>
         OwnDocumentUnder(
             [.. GroupFolders.For(_release).DirectoryPerRecordFolders
                 .Select(groupFolder => Path.Combine(sourceRoot, groupFolder))],
-            pluginFileName, formKey, byText);
+            plugin, formKey, byText);
 
     // One listing per scan root turns a whole-mod pass from O(records × tree) into O(tree).
     private string[] EntriesUnder(string scanRoot)
@@ -467,7 +467,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
         if (IdentityOf(plugin, unit.OwnerFormKey) is not { } owner)
         {
-            throw new UnreadableSourceDocumentException(
+            throw SourceStopException.Unreadable(
                 $"{unit.RelativePath} carries {identity.FormKey}, but {unit.OwnerFormKey} names no document of its own.");
         }
         return new SourceDocument(owner.FormKey, owner.RecordType, owner.EditorId, text);
@@ -478,7 +478,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     {
         if (Locate(plugin, identity) is not { IsEmbedded: true } unit) return null;
         var owner = ContainerDocument(plugin, identity)
-            ?? throw new UnreadableSourceDocumentException($"{unit.RelativePath} could not be read.");
+            ?? throw SourceStopException.Unreadable($"{unit.RelativePath} could not be read.");
 
         using var parsed = JsonDocument.Parse(owner.Body);
         return new ContainerDocuments(_release).ContainmentOf(owner.RecordType, parsed.RootElement, identity.FormKey);
@@ -498,7 +498,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
             if (ReadableDocumentAt(Path.GetRelativePath(_modFolder, path), text, plugin.Name) is not { } document) continue;
             if (DocumentTokens.EditorIdsIn(Encoding.UTF8.GetBytes(text)).Contains(null))
             {
-                throw UnreadableSourceDocumentException.In(
+                throw SourceStopException.UnreadableIn(
                     _modFolder, path, $"a child it embeds has an '{RecordMembers.EditorId}' that is not a string");
             }
             documents.Add(document);
@@ -538,8 +538,8 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
 
     internal PluginSourceFiles FilesOf(PluginAddress plugin)
     {
-        if (!_filesByPlugin.TryGetValue(plugin.Name, out var files))
-            _filesByPlugin[plugin.Name] = files = WorkingTreeFiles(plugin);
+        if (!_filesByPlugin.TryGetValue(plugin, out var files))
+            _filesByPlugin[plugin] = files = WorkingTreeFiles(plugin);
         return files;
     }
 

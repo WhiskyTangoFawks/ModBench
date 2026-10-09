@@ -7,11 +7,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>How the text of a document changes under a new FormKey: a record's own, or an embedded
-/// child inside its owner's (null when the owner does not carry it).</summary>
-public sealed record DocumentRekey(
-    Func<SourceDocument, string, string> Own, Func<SourceDocument, string, string, string?> ChildOfOwner);
-
 /// <summary>The changes a transaction is made of, put and rekey, each by identity; and the writes made
 /// directly, remove and the whole-plugin replacement. Every write forgets what the locator remembered of the tree.</summary>
 internal sealed class SourceRepositoryWrites(
@@ -26,9 +21,13 @@ internal sealed class SourceRepositoryWrites(
             : throw new InvalidOperationException(
                 $"{cell.FormKey}'s document carries no grid, so it has no place in worldspace {worldspace}.");
 
-    internal SourceRemoval Remove(PluginAddress plugin, RecordIdentity identity)
+    internal void Remove(PluginAddress plugin, RecordIdentity identity)
     {
-        if (locator.Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
+        if (locator.Locate(plugin, identity) is not { } unit)
+        {
+            throw SourceStopException.NotCarried(
+                $"No document in {plugin.Name}'s tree holds {identity.FormKey}. {SourceFailure.NotCarried.DefectOrOutsideChange}");
+        }
 
         var journal = new WriteJournal(_modFolder);
         try
@@ -37,7 +36,7 @@ internal sealed class SourceRepositoryWrites(
             {
                 var ownerBytes = OwnerBytes(unit);
                 if (DocumentText.EmbeddedChildIn(ownerBytes, unit, identity.FormKey, _release) is not { } span)
-                    return SourceRemoval.OwnerDoesNotCarryIt;
+                    throw NoLongerCarried(unit, identity.FormKey);
 
                 journal.WriteText(unit.FullPath, EmbeddedChildSplice.Cut(ownerBytes, span));
             }
@@ -50,8 +49,6 @@ internal sealed class SourceRepositoryWrites(
             {
                 journal.Delete(unit.FullPath);
             }
-
-            return SourceRemoval.Removed;
         }
         catch (Exception cause) when (cause is not OutOfMemoryException)
         {
@@ -89,9 +86,9 @@ internal sealed class SourceRepositoryWrites(
     internal SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) =>
         locator.LocateToPlace(plugin, document.Identity) is { } unit && (unit.IsEmbedded || File.Exists(unit.FullPath))
             ? ChangesToHeld(unit, document)
-            : throw new SourceUnitNotFoundException(
+            : throw SourceStopException.NotCarried(
                 $"No document in {plugin.Name}'s tree holds {document.FormKey}, so there is none to rewrite. " +
-                SourceUnitNotFoundException.MovedOrRemovedOutside);
+                SourceFailure.NotCarried.MovedOrRemovedOutside);
 
     private SourceChanges ChangesToPlace(PluginAddress plugin, SourceDocument document, CellPlacement? placement)
     {
@@ -118,24 +115,26 @@ internal sealed class SourceRepositoryWrites(
             || !File.Exists(unit.FullPath))
             return;
         if (SourceRepositoryLocator.NotADocument(File.ReadAllText(unit.FullPath)) is { } why)
-            throw new UnreadableSourceDocumentException($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
+            throw SourceStopException.Unreadable($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
     }
 
     /// <summary>What changing <paramref name="identity"/>'s FormKey changes, read from the text of the document
     /// <paramref name="carrying"/> it: its own file or folder moves to the new leaf name, or its owner's text changes.</summary>
     internal SourceChanges ChangesToRekey(
-        PluginAddress plugin, SourceDocument carrying, RecordIdentity identity, string newFormKey, DocumentRekey rekey)
+        PluginAddress plugin, SourceDocument carrying, RecordIdentity identity, string newFormKey)
     {
         var unit = locator.Locate(plugin, identity)
             ?? throw new InvalidOperationException($"No document in {plugin.Name}'s tree carries {identity.FormKey}.");
 
         if (!carrying.FormKey.Equals(identity.FormKey, StringComparison.Ordinal))
         {
-            var ownerText = rekey.ChildOfOwner(carrying, identity.FormKey, newFormKey) ?? throw NoLongerCarried(unit, identity.FormKey);
+            var ownerText = Read(() => RecordDocumentEdits.WithEmbeddedChildFormKey(
+                    carrying.Body, _release, carrying.RecordType, identity.FormKey, newFormKey))
+                ?? throw NoLongerCarried(unit, identity.FormKey);
             return Written(unit.FullPath, ownerText);
         }
 
-        var text = rekey.Own(carrying, newFormKey);
+        var text = Read(() => RecordDocumentEdits.WithFormKey(carrying.Body, _release, carrying.RecordType, newFormKey));
         if (unit.IsDirectoryPerRecord)
         {
             var from = PathShape.DirectoryOf(unit.FullPath);
@@ -155,6 +154,20 @@ internal sealed class SourceRepositoryWrites(
         return new SourceChanges([Moved(unit.FullPath, placed.FullPath)], [Document(placed.FullPath, text)]);
     }
 
+    // The codec is the one reader that sees why a text it is given is no record, and it says so by throwing
+    // in Mutagen's open-ended ways.
+    private static T Read<T>(Func<T> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            throw SourceStopException.Unreadable(ex.Message);
+        }
+    }
+
     private SourceChanges Planned(LeafMoves plan, string text) =>
         new([.. plan.Moves.Select(move => Moved(move.From, move.To))], [Document(plan.Written, text)]);
 
@@ -169,7 +182,7 @@ internal sealed class SourceRepositoryWrites(
     {
         // A mod folder another tool removed is not written back into being.
         if (!SourceRepositoryGit.IsTracked(_modFolder))
-            throw new InvalidOperationException($"'{_modFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
+            throw SourceStopException.Inaccessible($"'{_modFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
 
         var root = SourceRepositoryLayout.RootIn(_modFolder, pluginFileName);
         var journal = new WriteJournal(_modFolder);
@@ -271,33 +284,6 @@ internal sealed class SourceRepositoryWrites(
         new($"No document in {plugin.Name}'s tree holds {identity.FormKey}, and its type has no file of " +
             "its own, so there is nowhere to write it.");
 
-    private static SourceUnitNotFoundException NoLongerCarried(SourceUnit unit, string formKey) =>
-        new(SourceUnitNotFoundException.NotCarried(unit.RelativePath, formKey));
-}
-
-/// <summary>The tree holds no document carrying the record a write needs.</summary>
-public sealed class SourceUnitNotFoundException : InvalidOperationException
-{
-    // A defect reads identically to another tool's change, and a wrong explanation sends the user hunting a
-    // problem that is not there, so this blames neither.
-    public const string DefectOrOutsideChange =
-        "If nothing outside Modbench changed that file, this is a defect — please report it; otherwise relaunch mEdit " +
-        "so the index re-reads the tree.";
-
-    public const string MovedOrRemovedOutside = "It was moved or removed outside Modbench. Check the Source Control panel.";
-
-    public static string NotCarried(string relativePath, string formKey) =>
-        $"{relativePath} was found holding {formKey}, but its own text does not carry it. {DefectOrOutsideChange}";
-
-    internal SourceUnitNotFoundException() : base("No document holds the record.")
-    {
-    }
-
-    internal SourceUnitNotFoundException(string message) : base(message)
-    {
-    }
-
-    internal SourceUnitNotFoundException(string message, Exception innerException) : base(message, innerException)
-    {
-    }
+    private static SourceStopException NoLongerCarried(SourceUnit unit, string formKey) =>
+        SourceStopException.NotCarried(SourceFailure.NotCarried.FoundButNotCarried(unit.RelativePath, formKey));
 }

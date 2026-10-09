@@ -19,7 +19,7 @@ public sealed class CopyAsOverrideContainerTests
         using var fixture = ContainerCopyFixture.Create();
         fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Worldspace.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false).OnlyLanded();
         SourceEdits.Rewrite<Worldspace>(
-            TrackedTree.Repository(fixture.DestinationModFolder), fixture.DestinationPlugin,
+            TrackedTree.Repository(fixture.DestinationModFolder, fixture.DestinationPlugin), fixture.DestinationPlugin,
             new RecordIdentity(fixture.Worldspace.ToString(), "wrld", ContainerCopyFixture.WorldspaceEditorId),
             GameRelease.Fallout4,
             worldspace => worldspace.TopCell = new Cell(FormKey.Factory($"0ABCDE:{ContainerCopyFixture.DestinationPluginName}"), Fallout4Release.Fallout4));

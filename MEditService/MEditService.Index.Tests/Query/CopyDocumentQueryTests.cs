@@ -46,7 +46,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
         TrackedMods.Track(Entry, _fixture.GameDirectory);
         using var index = Reconciled();
 
-        Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, NpcFile), index.Records.GetCopyDocument(Plugin, Npc));
+        Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, NpcFile), index.Records.GetCopyDocument(Plugin, Npc).Value());
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
         TrackedMods.Track(Entry, _fixture.GameDirectory);
         using var index = Reconciled();
 
-        Assert.Equal(new CopyDocument(CopyDocumentKind.ContainersFile, CellFile), index.Records.GetCopyDocument(Plugin, PlacedRef));
+        Assert.Equal(new CopyDocument(CopyDocumentKind.ContainersFile, CellFile), index.Records.GetCopyDocument(Plugin, PlacedRef).Value());
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
         TrackedMods.Track(Entry, _fixture.GameDirectory);
         using var index = Indexes.Reconciled(_fixture.GameDirectory, [Entry with { Enabled = false }]);
 
-        Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, NpcFile), index.Records.GetCopyDocument(Plugin, Npc));
+        Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, NpcFile), index.Records.GetCopyDocument(Plugin, Npc).Value());
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
 
         File.Delete(NpcFile);
 
-        Assert.Null(index.Records.GetCopyDocument(Plugin, Npc));
+        Assert.Null(index.Records.GetCopyDocument(Plugin, Npc).Value());
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     {
         using var index = Reconciled();
 
-        Assert.Equal(new CopyDocument(CopyDocumentKind.Rendered, "FiledNpc - 000800_Filed.esp.json"), index.Records.GetCopyDocument(Plugin, Npc));
+        Assert.Equal(new CopyDocument(CopyDocumentKind.Rendered, "FiledNpc - 000800_Filed.esp.json"), index.Records.GetCopyDocument(Plugin, Npc).Value());
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
         Directory.Delete(PluginSourceRoot.In(Entry.ModFolderOf(), Plugin.Name), recursive: true);
         using var index = Reconciled();
 
-        Assert.Equal(new CopyDocument(CopyDocumentKind.Rendered, "FiledNpc - 000800_Filed.esp.json"), index.Records.GetCopyDocument(Plugin, Npc));
+        Assert.Equal(new CopyDocument(CopyDocumentKind.Rendered, "FiledNpc - 000800_Filed.esp.json"), index.Records.GetCopyDocument(Plugin, Npc).Value());
     }
 
     [Fact]
@@ -101,6 +101,6 @@ public sealed class CopyDocumentQueryTests : IDisposable
     {
         using var index = Reconciled();
 
-        Assert.Null(index.Records.GetCopyDocument(Plugin with { Origin = "AnotherMod" }, Npc));
+        Assert.Null(index.Records.GetCopyDocument(Plugin with { Origin = "AnotherMod" }, Npc).Value());
     }
 }

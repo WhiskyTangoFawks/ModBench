@@ -14,12 +14,12 @@ internal sealed record SourceFileFailure(PluginAddress Plugin, string SourceRela
     internal static IEnumerable<SourceFileFailure> Of(PluginAddress plugin, ClaimedFormKey claim) =>
         claim.Documents.Select(document => new SourceFileFailure(plugin, document, claim.FormKey, claim.Message));
 
-    /// <summary>The files <paramref name="stoppedBy"/> names, when it names any.</summary>
-    internal static IEnumerable<SourceFileFailure> Of(PluginAddress plugin, Exception? stoppedBy) =>
-        stoppedBy switch
+    /// <summary>The files <paramref name="treeStopped"/> names, when it names any.</summary>
+    internal static IEnumerable<SourceFileFailure> Of(PluginAddress plugin, SourceFailure? treeStopped) =>
+        treeStopped switch
         {
-            UnreadableSourceDocumentException { File: { } file } => [Of(plugin, file)],
-            AmbiguousSourceUnitException { Claim: { } claim } => Of(plugin, claim),
+            SourceFailure.Unreadable { File: { } file } => [Of(plugin, file)],
+            SourceFailure.Ambiguous { Claim: { } claim } => Of(plugin, claim),
             _ => [],
         };
 }

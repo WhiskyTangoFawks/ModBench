@@ -1,6 +1,5 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
 
@@ -25,22 +24,12 @@ public sealed class CompilePluginHandler
 
     private async Task<ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileOneAsync(PluginAddress plugin)
     {
-        // A write the file system or git refuses (ADR-0003) is this plugin's refusal alone.
-        try
-        {
-            var result = await _compileService.CompileAsync(plugin);
-            return result.Succeeded
-                ? ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>.Landed(result.Diagnostics)
-                : ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>.Refused(
-                    result.Refusal,
-                    result.RefusalReason
-                        ?? throw new InvalidOperationException("Expected a refused compile to carry the reason it was refused."));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or GitCommandFailedException)
-        {
-            return ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>.Refused(
-                CompileRefusal.WriteFailed,
-                $"Could not write {plugin.Name}: {ex.Message} Its source is untouched, so compiling again rebuilds it.");
-        }
+        var result = await _compileService.CompileAsync(plugin);
+        return result.Succeeded
+            ? ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>.Landed(result.Diagnostics)
+            : ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>.Refused(
+                result.Refusal,
+                result.RefusalReason
+                    ?? throw new InvalidOperationException("Expected a refused compile to carry the reason it was refused."));
     }
 }

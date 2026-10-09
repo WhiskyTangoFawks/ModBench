@@ -1,5 +1,6 @@
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.TestSupport;
 
@@ -26,7 +27,7 @@ internal static class Copies
 
     /// <summary>The document the index holds for the copy, as the editor opens it.</summary>
     internal static string BodyOf(this OpenedIndex index, string formKey, PluginAddress plugin) =>
-        index.Records.GetRenderedDocument(plugin, formKey)?.Text
+        index.Records.GetRenderedDocument(plugin, formKey).Value()?.Text
             ?? throw new InvalidOperationException($"Expected a body for '{formKey}' in {plugin.Name} ({plugin.Origin}).");
 
     /// <summary>The copy's row, as a search by its FormKey lists it: no filter narrows it, and a record

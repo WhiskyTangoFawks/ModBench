@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using MEditService.PluginAdapter;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Resolution;
 
@@ -17,6 +18,10 @@ internal abstract class CopyRead<T>
 
     /// <summary>The plugin adapter's answer, its failure in its own words.</summary>
     internal static CopyRead<T> Of(PluginAnswer<T> answer) =>
+        answer.Holds(out var value, out var failure) ? new Read(value) : new Unread(failure.Reason);
+
+    /// <summary>The source adapter's answer, its failure in its own words.</summary>
+    internal static CopyRead<T> Of(SourceAnswer<T> answer) =>
         answer.Holds(out var value, out var failure) ? new Read(value) : new Unread(failure.Reason);
 
     internal abstract bool Holds([MaybeNullWhen(false)] out T value, [NotNullWhen(false)] out string? why);

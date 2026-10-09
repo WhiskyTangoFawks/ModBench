@@ -67,7 +67,7 @@ public sealed class DeleteRecordHandlerTests
         Assert.Equal(npc, refused.Item);
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
         Assert.Contains(mod.Npc.ToString(), refused.Message, StringComparison.Ordinal);
-        Assert.Throws<AmbiguousSourceUnitException>(() => TrackedTree.Document(mod.ModFolder, mod.Plugin, mod.Npc.ToString()));
+        Assert.IsType<SourceFailure.Ambiguous>(TrackedTree.Repository(mod.ModFolder, mod.Plugin).Get(mod.Plugin, mod.Npc.ToString()).Stopped());
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public sealed class DeleteRecordHandlerTests
         TreeTampering.DirectoryOf(mod.ModFolder, mod.Plugin, IdentityCarrying(mod, text));
 
     private static List<SourceDocument> DocumentsCarrying(SourceModFixture mod, string text) =>
-        [.. TreeDocuments.Of(SourceRepository.Over(TestMod.In(mod.ModFolder), GameRelease.Fallout4), mod.Plugin)
+        [.. TreeDocuments.Of(SourceRepository.Over(TestMod.Of(mod.Plugin, mod.ModFolder), GameRelease.Fallout4), mod.Plugin)
             .Where(document => document.Body.Contains(text, StringComparison.Ordinal))];
 
     [Fact]

@@ -25,14 +25,8 @@ internal static class ItemWrite
         IEnumerable<TItem> items, IEqualityComparer<TItem> sameItem, TRefusal gitUnavailable,
         Func<TItem, Task<ItemAnswer<TRefusal, TOutcome>>> write)
     {
-        try
-        {
-            SourceRepository.EnsureTrackable();
-        }
-        catch (GitUnavailableException ex)
-        {
-            return SelectionResult<TItem, TRefusal, TOutcome>.WholeSelectionRefused(gitUnavailable, ex.Message);
-        }
+        if (SourceRepository.WhyGitCannotRun() is { } gitMissing)
+            return SelectionResult<TItem, TRefusal, TOutcome>.WholeSelectionRefused(gitUnavailable, gitMissing.Reason);
 
         var landed = new List<ItemLanded<TItem, TOutcome>>();
         var refused = new List<ItemRefused<TItem, TRefusal>>();
@@ -52,30 +46,22 @@ internal static class ItemWrite
     }
 
     /// <summary>The refusal of a single write that needs git when git is missing, before any write.</summary>
-    internal static RecordEditResult? RefuseWithoutGit()
-    {
-        try
-        {
-            SourceRepository.EnsureTrackable();
-            return null;
-        }
-        catch (GitUnavailableException ex)
-        {
-            return RecordEditResult.Refused(RecordEditRefusal.GitUnavailable, ex.Message);
-        }
-    }
+    internal static RecordEditResult? RefuseWithoutGit() =>
+        SourceRepository.WhyGitCannotRun() is { } gitMissing
+            ? RecordEditResult.Refused(RecordEditRefusal.GitUnavailable, gitMissing.Reason)
+            : null;
 
     /// <summary>A tree another tool changed, or a file system that refused the write, is that item's
     /// answer. <paramref name="failure"/> names what could not be written; the file system's words
     /// follow it.</summary>
     internal static Task<SelectionResult<TItem, RecordEditRefusal, string?>> Over<TItem>(
         IEnumerable<TItem> items, IEqualityComparer<TItem> sameItem,
-        Func<TItem, RecordEditResult> write, Func<TItem, string> failure, ILogger logger) =>
+        Func<TItem, SourceAnswer<RecordEditResult>> write, Func<TItem, string> failure, ILogger logger) =>
         OverAsync(
             items, sameItem, RecordEditRefusal.GitUnavailable,
             item =>
             {
-                var result = WriteFailure.Refused(() => write(item), failure(item), logger);
+                var result = WriteFailure.Refused(write(item), refused => refused, failure(item), logger);
                 return Task.FromResult(result.Applied
                     ? ItemAnswer<RecordEditRefusal, string?>.Landed(result.NewFormKey)
                     : ItemAnswer<RecordEditRefusal, string?>.Refused(result.Refusal, result.Message));

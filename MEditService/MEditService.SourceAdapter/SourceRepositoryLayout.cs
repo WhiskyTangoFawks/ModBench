@@ -174,7 +174,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         {
             0 => named,
             1 => held[0],
-            _ => throw new AmbiguousSourceUnitException(
+            _ => throw SourceStopException.Ambiguous(
                 $"{directory} holds more than one document ({string.Join(", ", held.Select(Path.GetFileName))}) and none is named " +
                 "for the directory, so no one record's document can be told. Remove the extra ones by hand."),
         };
@@ -420,7 +420,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         if (placement.ParentWorldspace is not { } worldspace)
             throw new InvalidOperationException("An exterior cell's placement names no worldspace to place it under.");
 
-        if (locator.FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), plugin.Name, worldspace) is not { } document)
+        if (locator.FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), plugin, worldspace) is not { } document)
         {
             throw new InvalidOperationException(
                 $"{plugin.Name}'s tree holds no document for worldspace {worldspace}, so an exterior cell " +
@@ -483,30 +483,4 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     }
 
     private static readonly string EmptyLevelDocument = new JsonObject().ToJsonString();
-}
-
-/// <summary>Two source units under one plugin's tree carry the same FormKey: corruption, not a
-/// transient condition. An <see cref="InvalidOperationException"/>: the copy path turns it into a
-/// refusal, every other read in Core propagates it unhandled.</summary>
-public sealed class AmbiguousSourceUnitException : InvalidOperationException
-{
-    internal AmbiguousSourceUnitException() : base("More than one source unit claims one FormKey.")
-    {
-    }
-
-    internal AmbiguousSourceUnitException(string message) : base(message)
-    {
-    }
-
-    internal AmbiguousSourceUnitException(string message, Exception innerException) : base(message, innerException)
-    {
-    }
-
-    internal AmbiguousSourceUnitException(ClaimedFormKey claim) : base(claim.Message)
-    {
-        Claim = claim;
-    }
-
-    /// <summary>The FormKey and the documents that claim it, when they are known.</summary>
-    public ClaimedFormKey? Claim { get; }
 }

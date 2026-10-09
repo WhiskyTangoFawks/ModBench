@@ -99,7 +99,7 @@ public sealed class TrackModTests
         Assert.Equal(npc1.FormKey.ToString(), roundTripped.RootElement.GetProperty("FormKey").GetString());
 
         Assert.DoesNotContain(
-            TreeDocuments.Of(SourceRepository.Open(TestMod.In(modFolder), GameRelease.Fallout4).Require(), plugin),
+            TreeDocuments.Of(SourceRepository.Open(TestMod.Of(plugin, modFolder), GameRelease.Fallout4).Require(), plugin),
             document => document.Body.Contains('\r'));
     }
 

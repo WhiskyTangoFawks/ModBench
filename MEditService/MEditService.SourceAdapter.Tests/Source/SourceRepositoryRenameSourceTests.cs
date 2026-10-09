@@ -69,7 +69,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     [Fact]
     public void RenameSource_MovesTheTreeToTheNewName_AndEveryFormKeyOfThePluginFollowsIt_InTextAndInLeafNames()
     {
-        Assert.True(Repository.RenameSource(Old, "New.esm"));
+        Assert.True(Repository.RenameSource(Old, "New.esm").Value());
 
         Assert.False(Directory.Exists(PluginSourceRoot.In(_modFolder, Old.Name)));
         Assert.Equal(
@@ -120,19 +120,19 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     {
         var renamed = Old with { Name = "New.ESM" };
 
-        Repository.RenameSource(Old, renamed.Name);
+        Repository.RenameSource(Old, renamed.Name).Value();
 
         var documents = TreeDocuments.Of(Repository, renamed);
         Assert.Contains(documents, d => d.RecordType == PluginHeader.RecordType);
         Assert.Contains(
-            Repository.TreeOf(renamed).Files,
+            Repository.TreeOf(renamed).Value().Files,
             file => file.RelativePath == "RecordData.json");
     }
 
     [Fact]
     public void RenameSource_MovesWhatModbenchLastWroteToTheNewName()
     {
-        Repository.RenameSource(Old, "New.esp");
+        Repository.RenameSource(Old, "New.esp").Value();
 
         Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }));
         Assert.Empty(Repository.LastWrittenBinarySha256s(Old));
@@ -143,7 +143,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     {
         var head = Git("rev-parse", "HEAD");
 
-        Repository.RenameSource(Old, "New.esp");
+        Repository.RenameSource(Old, "New.esp").Value();
 
         Assert.Equal(head, Git("rev-parse", "HEAD"));
         Assert.Contains("plugin-source/New.esp/", Git("status", "--porcelain", "--untracked-files=all"), StringComparison.Ordinal);
@@ -155,7 +155,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         var self = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "Npcs", "SelfNpc - 000801_Old.esp.json");
         File.WriteAllBytes(self, [0xEF, 0xBB, 0xBF, .. """{"FormKey":"000801:Old.esp"}"""u8]);
 
-        Repository.RenameSource(Old, "New.esp");
+        Repository.RenameSource(Old, "New.esp").Value();
 
         Assert.Equal(
             [0xEF, 0xBB, 0xBF, .. """{"FormKey":"000801:New.esp"}"""u8],
@@ -169,7 +169,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     {
         var before = TreeOf(Old.Name);
 
-        Assert.False(Repository.RenameSource(Old, taken));
+        Assert.False(Repository.RenameSource(Old, taken).Value());
 
         Assert.Equal(before, TreeOf(Old.Name));
         Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
@@ -182,10 +182,10 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         var broken = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "Cells", "0", "0", "GroupRecordData.json");
         File.WriteAllText(broken, "{");
 
-        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.RenameSource(Old, "New.esp"));
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.RenameSource(Old, "New.esp").Stopped());
 
         Assert.Equal(Path.GetRelativePath(_modFolder, broken), refused.File?.SourceRelativePath);
-        Assert.DoesNotContain("filed as a record", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("filed as a record", refused.Reason, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -197,7 +197,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         File.WriteAllText(broken, text);
         var before = TreeOf(Old.Name);
 
-        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.RenameSource(Old, "New.esp"));
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.RenameSource(Old, "New.esp").Stopped());
 
         Assert.Equal(Path.GetRelativePath(_modFolder, broken), refused.File?.SourceRelativePath);
         Assert.Equal(before, TreeOf(Old.Name));
@@ -210,7 +210,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         var before = TreeOf(Old.Name);
         LastWriteRecord.RefuseRecordingUnder(_modFolder, "New.esp");
 
-        Assert.ThrowsAny<InvalidOperationException>(() => Repository.RenameSource(Old, "New.esp"));
+        Assert.IsType<SourceFailure.GitFailed>(Repository.RenameSource(Old, "New.esp").Stopped());
 
         Assert.Equal(before, TreeOf(Old.Name));
         Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
@@ -218,15 +218,15 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     }
 
     [Fact]
-    public void RenameSource_WhenAnotherProgramChangesAnOldFileAfterItWasRead_DoesNotRemoveIt_AndFails()
+    public void RenameSource_WhenAnotherProgramChangesAnOldFileAfterItWasRead_DoesNotRemoveIt_AndSaysSo()
     {
         var changed = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "000000_Old.esp.json");
         GitHooks.Write(_modFolder, "reference-transaction", $"[ \"$1\" = prepared ] || exit 0\necho theirs > '{changed}'");
 
-        var failure = Assert.ThrowsAny<IOException>(() => Repository.RenameSource(Old, "New.esp"));
+        var failure = Assert.IsType<SourceFailure.Inaccessible>(Repository.RenameSource(Old, "New.esp").Stopped());
 
         Assert.Equal("theirs", File.ReadAllText(changed).Trim());
-        Assert.Contains("000000_Old.esp.json was changed by another program", failure.Message);
+        Assert.Contains("000000_Old.esp.json was changed by another program", failure.Reason);
         Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
     }
 
@@ -234,11 +234,11 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     public void RenameSource_WhenGitRefusesToClearTheOldNamesRef_PutsBackBothRefs_TheNewNamesEarlierOneIncluded()
     {
         var newName = Old with { Name = "New.esp" };
-        Repository.WriteBinary(newName, "EARLIER-UNDER-THE-NEW-NAME", () => { });
+        Repository.WriteBinary(newName, "EARLIER-UNDER-THE-NEW-NAME", () => { }).Value();
         var before = TreeOf(Old.Name);
         LastWriteRecord.RefuseClearing(_modFolder, "Old.esp");
 
-        Assert.ThrowsAny<InvalidOperationException>(() => Repository.RenameSource(Old, "New.esp"));
+        Assert.IsType<SourceFailure.GitFailed>(Repository.RenameSource(Old, "New.esp").Stopped());
 
         Assert.Equal(before, TreeOf(Old.Name));
         Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
@@ -254,7 +254,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         FileModes.Set(npcs, "555");
         try
         {
-            Assert.ThrowsAny<UnauthorizedAccessException>(() => Repository.RenameSource(Old, "New.esp"));
+            Assert.IsType<SourceFailure.Inaccessible>(Repository.RenameSource(Old, "New.esp").Stopped());
         }
         finally
         {
@@ -276,9 +276,9 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
             "reference-transaction",
             $"[ \"$1\" = prepared ] || exit 0\n[ -e '{marker}' ] && exit 1\ntouch '{marker}'");
 
-        var failure = Assert.ThrowsAny<IOException>(() => Repository.RenameSource(Old, "New.esp"));
+        var failure = Assert.IsType<SourceFailure.Inaccessible>(Repository.RenameSource(Old, "New.esp").Stopped());
 
-        Assert.Contains("what Modbench last wrote for Old.esp \u2014 could not be restored: git", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("what Modbench last wrote for Old.esp \u2014 could not be restored: git", failure.Reason, StringComparison.Ordinal);
     }
 
     private SourceRepository Repository => SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require();

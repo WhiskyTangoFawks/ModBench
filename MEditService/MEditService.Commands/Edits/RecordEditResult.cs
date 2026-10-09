@@ -153,6 +153,9 @@ public sealed record RecordEditResult(
 
     internal static RecordEditResult RefusedAt(RecordEditRefusal refusal, string path, string message) =>
         new(false, refusal, message, Path: path);
+
+    public static implicit operator SourceAnswer<RecordEditChanges>(RecordEditResult outcome) =>
+        SourceAnswer.Of<RecordEditChanges>(outcome);
 }
 
 /// <summary>An edit answered without writing: its outcome, and the changes it makes to plugin source when
@@ -160,4 +163,9 @@ public sealed record RecordEditResult(
 public sealed record RecordEditChanges(RecordEditResult Outcome, SourceChanges Changes)
 {
     public static implicit operator RecordEditChanges(RecordEditResult outcome) => new(outcome, SourceChanges.None);
+
+    /// <summary>The edit that lands as <paramref name="outcome"/> by making <paramref name="changes"/>, or why
+    /// they could not be made.</summary>
+    internal static SourceAnswer<RecordEditChanges> Making(RecordEditResult outcome, SourceAnswer<SourceChanges> changes) =>
+        changes.Then(made => SourceAnswer.Of(new RecordEditChanges(outcome, made)));
 }

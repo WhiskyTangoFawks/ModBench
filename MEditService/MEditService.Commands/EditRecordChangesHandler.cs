@@ -31,18 +31,18 @@ public sealed class EditRecordChangesHandler
 
     /// <summary><paramref name="given"/> stands in for the file of the document carrying the record.</summary>
     public RecordEditChanges Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given) =>
-        WriteFailure.Refused<RecordEditChanges>(
-            () => EditSource(plugin, formKey, envelope, given), refused => refused, $"Could not read the source of {formKey}", _logger);
+        WriteFailure.Refused(
+            EditSource(plugin, formKey, envelope, given), refused => refused, $"Could not read the source of {formKey}", _logger);
 
-    private RecordEditChanges EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given)
+    private SourceAnswer<RecordEditChanges> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
         if (!_targets.TryResolveEditTarget(plugin, formKey, given, out var editTarget, out var document, out var blocked)) return blocked;
-        var (outcome, changes) = EditDocument(plugin, formKey, envelope, editTarget, document);
-        return new RecordEditChanges(outcome, changes.Under(editTarget.Repository));
+        return EditDocument(plugin, formKey, envelope, editTarget, document)
+            .Then(edit => SourceAnswer.Of(edit with { Changes = edit.Changes.Under(editTarget.Repository) }));
     }
 
-    private RecordEditChanges EditDocument(
+    private SourceAnswer<RecordEditChanges> EditDocument(
         PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteTargets.EditTarget editTarget, SourceDocument document)
     {
         var (release, identity, repository) = editTarget;
@@ -64,14 +64,15 @@ public sealed class EditRecordChangesHandler
         IReadOnlyList<PathHop> prefix = [];
         if (isEmbedded)
         {
-            var relativePath = repository.RelativePathOf(plugin, identity)
+            if (!repository.RelativePathOf(plugin, identity).Holds(out var located, out var unread)) return unread;
+            var relativePath = located
                 ?? throw new InvalidOperationException($"Expected the document carrying {formKey} to have been located.");
             var found = EmbeddedChildLocator.Find(
                 Encoding.UTF8.GetBytes(text), target.RecordType, formKey, release);
             if (found is not { } span)
             {
                 return RecordEditResult.Refused(
-                    RecordEditRefusal.SourceUnitNotFound, SourceUnitNotFoundException.NotCarried(relativePath, formKey));
+                    RecordEditRefusal.SourceUnitNotFound, SourceFailure.NotCarried.FoundButNotCarried(relativePath, formKey));
             }
             prefix = EmbeddedChildPath.HopsOf(span.Path);
         }
@@ -107,7 +108,7 @@ public sealed class EditRecordChangesHandler
         // or history entry.
         if (string.Equals(newText, text, StringComparison.Ordinal)) return RecordEditResult.Success();
 
-        return new RecordEditChanges(
+        return RecordEditChanges.Making(
             RecordEditResult.Success(),
             repository.ChangesToRewrite(plugin, new SourceDocument(target.FormKey, target.RecordType, EditorIds.In(newText), newText)));
     }

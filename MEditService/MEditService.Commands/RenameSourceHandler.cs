@@ -19,14 +19,7 @@ public sealed class RenameSourceHandler
     public RenameSourceResult RenameSource(PluginAddress plugin, string newName)
     {
         var loadOrder = _loadOrder.Require();
-        try
-        {
-            SourceRepository.EnsureTrackable();
-        }
-        catch (GitUnavailableException ex)
-        {
-            return Refused(RenameSourceRefusal.GitUnavailable, ex.Message);
-        }
+        if (SourceRepository.WhyGitCannotRun() is { } gitMissing) return Refused(RenameSourceRefusal.GitUnavailable, gitMissing.Reason);
 
         if (!ModKey.TryFromFileName(newName, out _))
         {
@@ -46,21 +39,19 @@ public sealed class RenameSourceHandler
         }
 
         var repository = SourceRepository.Over(mod, loadOrder.GameRelease);
-        try
+        if (!repository.RenameSource(plugin, newName).Holds(out var renamed, out var failure))
         {
-            return repository.RenameSource(plugin, newName)
-                ? new RenameSourceResult()
-                : Refused(RenameSourceRefusal.NameTaken,
-                    $"{mod.Name} already holds a plugin source named {newName}, so {plugin.Name}'s source was not renamed.");
+            return failure switch
+            {
+                SourceFailure.Unreadable => Refused(RenameSourceRefusal.UnreadableSource, $"{plugin.Name}'s source was not renamed: {failure.Reason}"),
+                SourceFailure.GitUnavailable => Refused(RenameSourceRefusal.GitUnavailable, failure.Reason),
+                _ => Refused(RenameSourceRefusal.WriteFailed, $"Could not rename {plugin.Name}'s source: {failure.Reason}"),
+            };
         }
-        catch (UnreadableSourceDocumentException ex)
-        {
-            return Refused(RenameSourceRefusal.UnreadableSource, $"{plugin.Name}'s source was not renamed: {ex.Message}");
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            return Refused(RenameSourceRefusal.WriteFailed, $"Could not rename {plugin.Name}'s source: {ex.Message}");
-        }
+        return renamed
+            ? new RenameSourceResult()
+            : Refused(RenameSourceRefusal.NameTaken,
+                $"{mod.Name} already holds a plugin source named {newName}, so {plugin.Name}'s source was not renamed.");
     }
 
     private static RenameSourceResult Refused(RenameSourceRefusal refusal, string message) => new(refusal, message);

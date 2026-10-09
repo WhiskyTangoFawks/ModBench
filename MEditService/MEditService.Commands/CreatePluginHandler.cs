@@ -31,23 +31,12 @@ public sealed class CreatePluginHandler
         var plugin = new RegisteredPlugin(address.Name, address.Origin, path, provider, Line: null);
         if (!SourceRepository.IsTracked(plugin)) return new PluginCreateResult();
 
-        string failure;
-        try
-        {
-            var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, folder, onParsed: () => { }, default);
-            if (decompiled.Source is { } source)
-            {
-                SourceRepository.Over((PluginProvider.FromMod)provider, loadOrder.GameRelease)
-                    .ReplaceSourceFrom(address, source.Files, source.BinarySha256);
-                return new PluginCreateResult();
-            }
-
-            failure = decompiled.Message;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            failure = ex.Message;
-        }
+        var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, folder, onParsed: () => { }, default);
+        var failure = decompiled.Source is { } source
+            ? SourceRepository.Over((PluginProvider.FromMod)provider, loadOrder.GameRelease)
+                .ReplaceSourceFrom(address, source.Files, source.BinarySha256)?.Reason
+            : decompiled.Message;
+        if (failure is null) return new PluginCreateResult();
 
         return new PluginCreateResult(PluginCreateRefusal.WriteFailed,
             $"Could not write {address.Name}'s source into {folder}: {failure} {TakeBack(modKey, address.Name, folder, written)}");
