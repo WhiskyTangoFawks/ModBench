@@ -10,15 +10,13 @@ namespace MEditService.Codec.Tests.Serialization;
 
 public sealed class ModelIdentityTests
 {
-    private static string FixturePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", fileName);
-
     [Fact]
-    public async Task FindFirst_OfARealPluginThatOnlyChangesBytesOnRewrite_ReturnsNull()
+    public async Task FindFirst_OfAPluginThatOnlyChangesBytesOnRewrite_ReturnsNull()
     {
-        var (original, recompiled, originalBytes, rewrittenBytes) = await ParseWriteAndReparse("RecruitSierra.esl");
+        var (original, recompiled, originalBytes, rewrittenBytes) = await ParseWriteAndReparse(StaleHeaderPlugins.Sierra);
 
         Assert.False(originalBytes.AsSpan().SequenceEqual(rewrittenBytes),
-            "RecruitSierra.esl's rewrite does not change bytes — this test does not exercise the byte-changing rewrite it depends on.");
+            "The generated plugin's rewrite does not change bytes — this test does not exercise the byte-changing rewrite it depends on.");
 
         var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
 
@@ -368,13 +366,15 @@ public sealed class ModelIdentityTests
     }
 
     internal static async Task<(Fallout4Mod Original, Fallout4Mod Recompiled, byte[] OriginalBytes, byte[] RewrittenBytes)>
-        ParseWriteAndReparse(string fileName)
+        ParseWriteAndReparse(GeneratedPlugin plugin)
     {
         using var scratch = new ScratchDirectory("medit-modelidentity-");
+        var fileName = plugin.FileName;
+        plugin.WriteInto(scratch.Path);
         var original = Fallout4Mod.CreateFromBinary(
-            new ModPath(ModKey.FromFileName(fileName), FixturePath(fileName)), Fallout4Release.Fallout4);
+            new ModPath(ModKey.FromFileName(fileName), Path.Combine(scratch.Path, fileName)), Fallout4Release.Fallout4);
 
-        var rewrittenPath = Path.Combine(scratch.Path, fileName);
+        var rewrittenPath = Path.Combine(Directory.CreateDirectory(Path.Combine(scratch.Path, "rewritten")).FullName, fileName);
         await original.BeginWrite
             .ToPath(rewrittenPath)
             .WithLoadOrderFromHeaderMasters()
@@ -385,7 +385,7 @@ public sealed class ModelIdentityTests
 
         var recompiled = Fallout4Mod.CreateFromBinary(
             new ModPath(ModKey.FromFileName(fileName), rewrittenPath), Fallout4Release.Fallout4);
-        var originalBytes = await File.ReadAllBytesAsync(FixturePath(fileName));
+        var originalBytes = await File.ReadAllBytesAsync(Path.Combine(scratch.Path, fileName));
         var rewrittenBytes = await File.ReadAllBytesAsync(rewrittenPath);
         return (original, recompiled, originalBytes, rewrittenBytes);
     }
