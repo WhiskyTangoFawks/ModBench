@@ -825,7 +825,7 @@ describe('a child record of a tracked plugin', () => {
     await openRecord(childCopy);
     await childDocument();
     answerEdit = () => ({ status: 200, body: {
-      formKey: CHILD_FORM_KEY, path: 'FormKey', moves: [], newFormKey: NEW_KEY, documents: [{ path: TRACKED_FILE, text: containerText }],
+      formKey: CHILD_FORM_KEY, path: 'FormKey', moves: [], deletions: [], newFormKey: NEW_KEY, documents: [{ path: TRACKED_FILE, text: containerText }],
     } });
 
     await vscode.commands.executeCommand('modbench.record.editField',
@@ -890,7 +890,7 @@ describe('an edit in a tracked copy\'s grid', () => {
   const editedText = ({ text, value }: EditAsked) => `${text}+${String(value)}`;
   const answeredIn = (file: string, moved: { moves: unknown[]; newFormKey: string } = { moves: [], newFormKey: '' }) => (asked: EditAsked): EditAnswer => ({
     status: 200,
-    body: { formKey: TRACKED_FORM_KEY, path: 'Edits', ...moved, newFormKey: moved.newFormKey || null, documents: [{ path: file, text: editedText(asked) }] },
+    body: { formKey: TRACKED_FORM_KEY, path: 'Edits', deletions: [], ...moved, newFormKey: moved.newFormKey || null, documents: [{ path: file, text: editedText(asked) }] },
   });
   const recordTabsOn = (fsPath: string) => openTabs().filter((t) =>
     t.input instanceof vscode.TabInputCustom && t.input.viewType === 'modbench.record' && t.input.uri.fsPath === fsPath);
