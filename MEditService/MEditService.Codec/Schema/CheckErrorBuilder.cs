@@ -8,9 +8,8 @@ namespace MEditService.Codec.Schema;
 /// TES5Edit's read (wbImplementation.pas); the resolved/wrong-type/unresolved split is mEdit's own.</summary>
 public static class CheckErrorBuilder
 {
-    // `resolve` is a lookup the caller already holds, never a scan started here.
-    // `whyUnchecked` answers only for a caller that can lose a target's bytes: unread is not broken.
-    // `settled` is false while `resolve` sees part of the set: a miss is not yet dangling.
+    // `resolve` is a lookup the caller already holds. `whyUnchecked` answers only for a caller that
+    // can lose a target's bytes. `settled` is false while `resolve` sees part of the set.
     public static string? Build(
         FieldMetadata meta, JsonElement? value, Func<string, ResolvedFormKey?> resolve, GameRelease release,
         Func<string, string?>? whyUnchecked = null, bool settled = true)
