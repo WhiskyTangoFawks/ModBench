@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -14,21 +13,18 @@ namespace MEditService.Commands.Tests.RealData;
 
 public sealed class StaleNextObjectIdRoundTripGateTests
 {
-    private const int HeaderLength = 24;
-    private const int InflatedLengthSize = 4;
-
     public static TheoryData<string, uint> GeneratedPluginsWithAStaleHeader => new()
     {
         { StaleHeaderPlugins.SettingsFileName, 5 },
-        { StaleHeaderPlugins.SierraFileName, 4 },
-        { StaleHeaderPlugins.HitechFileName, 11 },
+        { StaleHeaderPlugins.LightFileName, 4 },
+        { StaleHeaderPlugins.FullFileName, 11 },
     };
 
     public static TheoryData<string> TrackAndCompileGeneratedPlugins => new()
     {
         StaleHeaderPlugins.SettingsFileName,
-        StaleHeaderPlugins.SierraFileName,
-        StaleHeaderPlugins.HitechFileName,
+        StaleHeaderPlugins.LightFileName,
+        StaleHeaderPlugins.FullFileName,
     };
 
     [Theory]
@@ -77,17 +73,17 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Theory]
-    [InlineData(StaleHeaderPlugins.SierraFileName)]
-    [InlineData(StaleHeaderPlugins.HitechFileName)]
+    [InlineData(StaleHeaderPlugins.LightFileName)]
+    [InlineData(StaleHeaderPlugins.FullFileName)]
     public async Task Compile_OfAGeneratedPluginDeflatedAtAnotherLevel_RewritesItsCompressedRecordsAtMutagensLevel(string fileName)
     {
         using var scratch = new TrackedScratch(fileName);
-        var originalHeader = ZlibHeaderOfFirstMisc(await File.ReadAllBytesAsync(scratch.PluginPath));
+        var originalHeader = RawPlugin.FirstMiscZlibHeader(await File.ReadAllBytesAsync(scratch.PluginPath));
         await scratch.TrackAsync();
 
         await scratch.CompileService().CompileLandedAsync(scratch.Plugin);
 
-        Assert.NotEqual(originalHeader, ZlibHeaderOfFirstMisc(await File.ReadAllBytesAsync(scratch.PluginPath)));
+        Assert.NotEqual(originalHeader, RawPlugin.FirstMiscZlibHeader(await File.ReadAllBytesAsync(scratch.PluginPath)));
     }
 
     [Fact]
@@ -113,21 +109,6 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         Assert.Contains(extraFormKey.ToString(), result.Message);
         Assert.Contains("ExtraNpc", result.Message);
         Assert.Contains("not present in the original", result.Message);
-    }
-
-    private static int MiscGroupOffset(byte[] plugin)
-    {
-        var tes4Size = BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(4));
-        var group = HeaderLength + (int)tes4Size;
-        Assert.Equal("GRUP"u8.ToArray(), plugin[group..(group + 4)]);
-        Assert.Equal("MISC"u8.ToArray(), plugin[(group + 8)..(group + 12)]);
-        return group;
-    }
-
-    private static ushort ZlibHeaderOfFirstMisc(byte[] plugin)
-    {
-        var group = MiscGroupOffset(plugin);
-        return BinaryPrimitives.ReadUInt16BigEndian(plugin.AsSpan(group + HeaderLength + HeaderLength + InflatedLengthSize));
     }
 
     private static (uint NextObjectId, uint NumRecords) ReadHeaderStats(string pluginPath)

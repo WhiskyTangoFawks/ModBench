@@ -64,10 +64,10 @@ public sealed class PluginDiagnosisTests
     }
 
     [Fact]
-    public void FromParseException_RecognizesTheRealClipboardsMessageAsKindA()
+    public void FromParseException_RecognizesTheRealFnamMessageAsKindA()
     {
         var ex = new RecordException(
-            formKey: null, recordType: null, modKey: Mutagen.Bethesda.Plugins.ModKey.FromFileName("Clipboards to the BOS.esp"),
+            formKey: null, recordType: null, modKey: Mutagen.Bethesda.Plugins.ModKey.FromFileName("Invented Patch.esp"),
             edid: null, message: "All FNAM strings should be the same");
 
         var diagnosis = PluginDiagnosis.FromParseException(ex);
@@ -101,25 +101,25 @@ public sealed class PluginDiagnosisTests
     public void Describe_AClassedDiagnosisWithATail_CarriesBoth_NeitherShadowingTheOtherInTheRefusalText()
     {
         var diagnosis = new PluginDiagnosis(
-            Anchor: "REGN 001D2AF4 (DowntownRegion)", DefectClass: "fixed-size-subrecord-short",
+            Anchor: "REGN 00ABCDEF (InventedRegion)", DefectClass: "fixed-size-subrecord-short",
             Tail: "repairable (lossless)", Message: "RDAT is 6 bytes; a REGN RDAT is always 8");
 
         Assert.Equal(
-            "REGN 001D2AF4 (DowntownRegion) — fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8",
+            "REGN 00ABCDEF (InventedRegion) — fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8",
             diagnosis.Describe());
     }
 
     [Fact]
     public void FromWriteException_NamesTheRecordAndThePrunedMasterFromTwoDifferentExceptionTypes()
     {
-        var questFormKey = FormKey.Factory("0000DD:SpaDia_AMR.esp");
+        var questFormKey = FormKey.Factory("0000DD:Invented_Quest.esp");
         var nukaWorldFormKey = FormKey.Factory("03F98D:DLCNukaWorld.esm");
-        var modKey = ModKey.FromFileName("SpaDia_AMR.esp");
+        var modKey = ModKey.FromFileName("Invented_Quest.esp");
 
         var unmappable = new UnmappableFormIDException(
             new FormLinkInformation(nukaWorldFormKey, typeof(IFallout4MajorRecordGetter)), new StubMasterPackageWhoseEveryMemberThrowsBecauseNothingUnderTestReadsThePackageOnlyUnmappableFormKey());
         var recordEx = new RecordException(
-            formKey: questFormKey, recordType: typeof(Quest), modKey: modKey, edid: "DiaQ_LLInjector_SpadeyAMR",
+            formKey: questFormKey, recordType: typeof(Quest), modKey: modKey, edid: "Invented_QuestEdid",
             innerException: unmappable);
         var aggregate1 = new AggregateException("One or more errors occurred. (Could not map FormKey to a master index)", recordEx);
         var aggregate2 = new AggregateException("One or more errors occurred. (One or more errors occurred. (Could not map FormKey to a master index))", aggregate1);
@@ -128,12 +128,12 @@ public sealed class PluginDiagnosisTests
 
         Assert.NotNull(diagnosis.Anchor);
         Assert.Contains("Quest", diagnosis.Anchor);
-        Assert.Contains("0000DD:SpaDia_AMR.esp", diagnosis.Anchor);
-        Assert.Contains("DiaQ_LLInjector_SpadeyAMR", diagnosis.Anchor);
+        Assert.Contains("0000DD:Invented_Quest.esp", diagnosis.Anchor);
+        Assert.Contains("Invented_QuestEdid", diagnosis.Anchor);
         Assert.Contains("DLCNukaWorld.esm", diagnosis.Message);
         Assert.Equal("likely blocked upstream: Mutagen #688 (FormLinks inside a VMAD struct-list " +
             "script property are the known cause of this shape, not confirmed for every instance)", diagnosis.Tail);
-        Assert.Contains("DiaQ_LLInjector_SpadeyAMR", diagnosis.Describe());
+        Assert.Contains("Invented_QuestEdid", diagnosis.Describe());
         Assert.Contains("DLCNukaWorld.esm", diagnosis.Describe());
         Assert.Contains("Mutagen #688", diagnosis.Describe());
     }

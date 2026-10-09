@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -16,29 +15,12 @@ public sealed class ModelIdentityTests
     {
         var (original, recompiled, originalBytes, rewrittenBytes) = await ParseWriteAndReparse(NegativeZeroPlugin.Plugin);
 
-        Assert.False(FirstRecordZlibHeader(originalBytes).SequenceEqual(FirstRecordZlibHeader(rewrittenBytes)),
+        Assert.False(RawPlugin.FirstMiscZlibHeader(originalBytes).SequenceEqual(RawPlugin.FirstMiscZlibHeader(rewrittenBytes)),
             "The rewrite does not re-deflate the generated plugin's records — this test does not exercise the re-deflate it depends on.");
 
         var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
 
         Assert.Null(divergence);
-    }
-
-    private const int RecordHeaderLength = 24;
-    private const int GroupHeaderLength = 24;
-    private const int InflatedLengthSize = 4;
-    private const int ZlibHeaderLength = 2;
-    private const uint CompressedFlag = 0x40000;
-
-    private static ReadOnlySpan<byte> FirstRecordZlibHeader(byte[] plugin)
-    {
-        var group = RecordHeaderLength + (int)BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(4));
-        Assert.Equal("GRUP"u8.ToArray(), plugin[group..(group + 4)]);
-        Assert.Equal("MISC"u8.ToArray(), plugin[(group + 8)..(group + 12)]);
-        var record = group + GroupHeaderLength;
-        var flags = BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(record + 8));
-        Assert.NotEqual(0u, flags & CompressedFlag);
-        return plugin.AsSpan(record + RecordHeaderLength + InflatedLengthSize, ZlibHeaderLength);
     }
 
     [Fact]
