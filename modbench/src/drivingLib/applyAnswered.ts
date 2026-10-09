@@ -4,10 +4,12 @@ import { errorMessage } from '../ports/errorMessage';
 import type { SourceEditing } from './sourceEditing';
 import type { WorkspaceChanges } from './applyWorkspaceChanges';
 
+export type ApplyingSource = Pick<SourceEditing, 'applyWorkspaceChanges' | 'refreshSourceControlFor'>;
+
 /** Applies the changes mEdit answered and reports. VS Code keeps what it applied before a change it cannot
  *  make, so Source Control refreshes for every plugin touched. Resolves whether all were applied. */
 export async function applyAnswered(
-  source: SourceEditing, reporter: Reporter, items: readonly WorkspaceChanges[], plugins: readonly PluginAddress[],
+  source: ApplyingSource, reporter: Reporter, items: readonly WorkspaceChanges[], plugins: readonly PluginAddress[],
   failures: { notApplied: string; notSaved: string },
 ): Promise<boolean> {
   let notSaved: readonly string[] = [];

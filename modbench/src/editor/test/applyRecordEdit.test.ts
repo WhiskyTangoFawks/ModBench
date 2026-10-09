@@ -5,6 +5,7 @@ const h = vi.hoisted(() => ({
   applied: [] as unknown[][],
   saved: [] as string[],
   savesLand: true,
+  applyLands: true,
 }));
 
 vi.mock('vscode', () => ({
@@ -22,7 +23,7 @@ vi.mock('vscode', () => ({
       uri, isDirty: true, getText: () => `text of ${uri.path}`,
       save: () => { h.saved.push(uri.path); return Promise.resolve(h.savesLand); },
     }),
-    applyEdit: (edit: { made: unknown[] }) => { h.applied.push(edit.made); return Promise.resolve(true); },
+    applyEdit: (edit: { made: unknown[] }) => { h.applied.push(edit.made); return Promise.resolve(h.applyLands); },
   },
 }));
 
@@ -55,6 +56,7 @@ beforeEach(() => {
   h.applied.length = 0;
   h.saved.length = 0;
   h.savesLand = true;
+  h.applyLands = true;
 });
 
 describe('an edit of a record', () => {
@@ -108,6 +110,22 @@ describe('an edit of a record', () => {
     await applyRecordEdit(deps, address, height);
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not edit Height.', detail: 'ECONNREFUSED' }]);
+  });
+
+  it('reports an edit VS Code did not apply as one that may have partly landed, and refreshes Source Control', async () => {
+    const { deps, reporter, refreshSourceControlFor } = makeDeps({
+      applied: true, newFormKey: '000900:A.esp', moves: [{ from: FILE, to: MOVED }], deletions: [], documents: [{ path: MOVED, text: 'renamed' }],
+    });
+    h.applyLands = false;
+
+    const newFormKey = await applyRecordEdit(deps, address, height);
+
+    expect(newFormKey).toBeUndefined();
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not edit Height.',
+      detail: 'VS Code did not apply the changes. VS Code stops at the first change it cannot make, so some changes may have landed.',
+    }]);
+    expect(refreshSourceControlFor).toHaveBeenCalledWith(plugin);
   });
 
   it('reports a record with no document to edit, saying why', async () => {
