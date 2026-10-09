@@ -10,7 +10,8 @@ namespace MEditService.SourceAdapter;
 /// <summary>The changes a transaction is made of, put, remove and rekey, each by identity; and the
 /// write made directly, the whole-plugin replacement. Every write forgets what the locator remembered of the tree.</summary>
 internal sealed class SourceRepositoryWrites(
-    string modFolder, GameRelease release, SourceRepositoryLocator locator, SourceRepositoryLayout layout, SourceRepositoryGit git)
+    string modFolder, GameRelease release, SourceRepositoryLocator locator, SourceRepositoryLayout layout, SourceRepositoryGit git,
+    ISourceFiles files)
 {
     private readonly string _modFolder = modFolder;
     private readonly GameRelease _release = release;
@@ -67,7 +68,7 @@ internal sealed class SourceRepositoryWrites(
     /// changes: the container's own text with the child appended, rewritten as <see cref="ChangesToRewrite"/> says.</summary>
     internal SourceChanges ChangesToPutChild(PluginAddress plugin, RecordIdentity container, string slot, SourceDocument child)
     {
-        var unit = locator.Locate(plugin, container) is { } held && (held.IsEmbedded || File.Exists(held.FullPath))
+        var unit = locator.Locate(plugin, container) is { } held && (held.IsEmbedded || files.FileExists(held.FullPath))
             ? held
             : throw SourceStopException.NotCarried(
                 $"No document in {plugin.Name}'s tree holds {container.FormKey}, so there is no slot to put a child in. " +
@@ -83,7 +84,7 @@ internal sealed class SourceRepositoryWrites(
     /// <summary>What rewriting a document the tree holds changes: its text, inside its owner's when embedded, and
     /// the move to its leaf name. One no document holds throws, since an edit never creates.</summary>
     internal SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) =>
-        locator.LocateToPlace(plugin, document.Identity) is { } unit && (unit.IsEmbedded || File.Exists(unit.FullPath))
+        locator.LocateToPlace(plugin, document.Identity) is { } unit && (unit.IsEmbedded || files.FileExists(unit.FullPath))
             ? ChangesToHeld(unit, document)
             : throw SourceStopException.NotCarried(
                 $"No document in {plugin.Name}'s tree holds {document.FormKey}, so there is none to rewrite. " +
@@ -111,9 +112,9 @@ internal sealed class SourceRepositoryWrites(
     {
         if (document.RecordType == PluginHeader.RecordType
             || locator.LocateToPlace(plugin, document.Identity) is not { IsEmbedded: false } unit
-            || !File.Exists(unit.FullPath))
+            || !files.FileExists(unit.FullPath))
             return;
-        if (SourceRepositoryLocator.NotADocument(File.ReadAllText(unit.FullPath)) is { } why)
+        if (SourceRepositoryLocator.NotADocument(files.ReadAllText(unit.FullPath)) is { } why)
             throw SourceStopException.Unreadable($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
     }
 
@@ -139,7 +140,7 @@ internal sealed class SourceRepositoryWrites(
             var from = PathShape.DirectoryOf(unit.FullPath);
             var to = Path.Combine(
                 PathShape.DirectoryOf(from), SourceRepositoryLayout.LeafNameFor(FormKey.Factory(newFormKey), identity.EditorId, isDirectory: true));
-            if (Directory.Exists(to) || File.Exists(to))
+            if (files.DirectoryExists(to) || files.FileExists(to))
             {
                 throw new IOException(
                     $"{Path.GetFileName(to)} already exists in {Path.GetDirectoryName(to)}, so the container whose FormID changed " +
@@ -250,9 +251,9 @@ internal sealed class SourceRepositoryWrites(
 
     // The moves, in order, that put the document where its layout leaf name does, and where it is written
     // then; none when it is already there.
-    private static LeafMoves LeafPlan(SourceUnit unit, SourceDocument document)
+    private LeafMoves LeafPlan(SourceUnit unit, SourceDocument document)
     {
-        if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !File.Exists(unit.FullPath))
+        if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !files.FileExists(unit.FullPath))
             return new LeafMoves([], unit.FullPath);
 
         var formKey = FormKey.Factory(document.FormKey);
@@ -281,7 +282,7 @@ internal sealed class SourceRepositoryWrites(
     private static List<(string From, string To)> Differing(IEnumerable<(string From, string To)> moves) =>
         [.. moves.Where(move => !string.Equals(move.From, move.To, StringComparison.Ordinal))];
 
-    private static byte[] OwnerBytes(SourceUnit unit) => DocumentText.StripUtf8Bom(File.ReadAllBytes(unit.FullPath));
+    private byte[] OwnerBytes(SourceUnit unit) => DocumentText.StripUtf8Bom(files.ReadAllBytes(unit.FullPath));
 
     private static InvalidOperationException NoPlaceInTheTree(PluginAddress plugin, RecordIdentity identity) =>
         new($"No document in {plugin.Name}'s tree holds {identity.FormKey}, and its type has no file of " +

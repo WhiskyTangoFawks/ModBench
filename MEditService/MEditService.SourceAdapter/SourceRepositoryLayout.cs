@@ -19,7 +19,7 @@ internal readonly record struct SourcePlacement(string RelativePath);
 
 /// <summary>The source tree's layout: the only type spelling the root folder, the door's file names
 /// and the JSON suffix. The instance places a new document and mints the levels above it.</summary>
-internal sealed class SourceRepositoryLayout(string modFolder, GameRelease release, SourceRepositoryLocator locator)
+internal sealed class SourceRepositoryLayout(string modFolder, GameRelease release, SourceRepositoryLocator locator, ISourceFiles files)
 {
     private readonly string _modFolder = modFolder;
     private readonly GameRelease _release = release;
@@ -180,10 +180,12 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         };
     }
 
-    internal static string ContainerDocumentHeldBy(string directory) =>
+    internal static string ContainerDocumentHeldBy(ISourceFiles files, string directory) =>
         ContainerDocumentAmong(
             directory,
-            Directory.Exists(directory) ? Directory.EnumerateFiles(directory).Where(file => !CarriesNoRecord(file)) : []);
+            files.DirectoryExists(directory)
+                ? files.FilesIn(directory, "*", SearchOption.TopDirectoryOnly).Where(file => !CarriesNoRecord(file))
+                : []);
 
     /// <summary>The plugin header's own document, named for its FormKey: a header has no EditorID.</summary>
     internal static string HeaderDocumentIn(string modFolder, string pluginFileName) =>
@@ -396,7 +398,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         return (
             [.. needed
                 .Select(level => (Path: Path.Combine(level.Directory, GroupRecordDataFileName), level.Level, level.X, level.Y))
-                .Where(level => !File.Exists(level.Path))
+                .Where(level => !files.FileExists(level.Path))
                 .Select(level => LevelDocument(level.Path, BlockLevelDocument(level.Level, level.X, level.Y)))],
             ContainerDocumentIn(cell));
     }
@@ -460,7 +462,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         // document stands in.
         var documents = new List<DocumentChange>();
         var groupDocument = Path.Combine(groupDirectory, GroupRecordDataFileName);
-        if (!File.Exists(groupDocument)) documents.Add(LevelDocument(groupDocument, EmptyLevelDocument));
+        if (!files.FileExists(groupDocument)) documents.Add(LevelDocument(groupDocument, EmptyLevelDocument));
 
         int[] numbers = [(int)(formId % 10), (int)(formId / 10 % 10)];
         var path = new List<string>();
@@ -469,7 +471,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         {
             parent = Path.Combine(parent, numbers[level].ToString(CultureInfo.InvariantCulture));
             path.Add(Path.GetFileName(parent));
-            if (Directory.Exists(parent)) continue;
+            if (files.DirectoryExists(parent)) continue;
 
             documents.Add(LevelDocument(Path.Combine(parent, GroupRecordDataFileName), RecordTextCodec.BlankDocument(
                 levels[level], _release,

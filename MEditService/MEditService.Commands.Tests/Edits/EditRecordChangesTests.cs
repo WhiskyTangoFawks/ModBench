@@ -1,9 +1,11 @@
 using System.Globalization;
 using System.Text.Json;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog;
@@ -105,6 +107,18 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         var document = answer.Changes.Documents.Single(change => change.Text.Contains("000F00:Fixture.esp", StringComparison.Ordinal));
         Assert.Contains("TypedButUnsaved", document.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFormIdEdit_ToAKeyAChildInTheGivenTextHolds_IsRefusedAsACollision()
+    {
+        var cell = new Cell(_mod.Cell, Fallout4Release.Fallout4) { EditorID = "FixtureCell" };
+        cell.Temporary.Add(new PlacedObject(new FormKey(_mod.Cell.ModKey, 0xF00), Fallout4Release.Fallout4));
+        var unsaved = RecordTextCodec.SerializeToText(cell, GameRelease.Fallout4);
+
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Cell.ToString(), Set("FormKey", $"\"000F00:{_mod.Cell.ModKey}\""), unsaved);
+
+        Assert.Equal(RecordEditRefusal.FormKeyCollision, answer.Outcome.Refusal);
     }
 
     [Theory]

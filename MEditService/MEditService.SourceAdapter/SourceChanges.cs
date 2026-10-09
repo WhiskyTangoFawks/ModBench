@@ -11,7 +11,7 @@ public sealed record SourceChanges(
         new([.. Moves, .. next.Moves], [.. Deletions, .. next.Deletions], [.. Documents, .. next.Documents]);
 
     /// <summary>These changes with every path made absolute under <paramref name="repository"/>'s mod folder.</summary>
-    public SourceChanges Under(SourceRepository repository)
+    internal SourceChanges Under(SourceRepository repository)
     {
         var modFolder = repository.ModFolder;
         return new(

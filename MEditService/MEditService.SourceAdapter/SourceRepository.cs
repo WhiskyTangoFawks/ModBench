@@ -24,14 +24,19 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     internal SourceRepositoryWrites Writes { get; }
 
-    private SourceRepository(string modFolder, GameRelease release, string modName)
+    internal ISourceFiles Files { get; }
+
+    private SourceRepository(string modFolder, GameRelease release, string modName, ISourceFiles files)
     {
-        (_modFolder, _release, _modName) = (modFolder, release, modName);
+        (_modFolder, _release, _modName, Files) = (modFolder, release, modName, files);
         _git = new SourceRepositoryGit(modFolder);
-        Locator = new SourceRepositoryLocator(modFolder, release);
-        Layout = new SourceRepositoryLayout(modFolder, release, Locator);
-        Writes = new SourceRepositoryWrites(modFolder, release, Locator, Layout, _git);
+        Locator = new SourceRepositoryLocator(modFolder, release, files);
+        Layout = new SourceRepositoryLayout(modFolder, release, Locator, files);
+        Writes = new SourceRepositoryWrites(modFolder, release, Locator, Layout, _git, files);
     }
+
+    /// <summary>This repository read through <paramref name="files"/>.</summary>
+    internal SourceRepository Over(ISourceFiles files) => new(_modFolder, _release, _modName, files);
 
     /// <summary>The repository over <paramref name="mod"/>'s folder, or null when the folder is not
     /// tracked and so has no source tree to answer from.</summary>
@@ -41,7 +46,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary>The repository over a mod's folder, which refuses the last-written record of a plugin
     /// another mod provides (ADR-0012): a repository knows only its folder.</summary>
     public static SourceRepository Over(PluginProvider.FromMod mod, GameRelease release) =>
-        new(mod.Folder, release, mod.Name);
+        new(mod.Folder, release, mod.Name, DiskFiles.Instance);
 
     /// <summary>True exactly when <paramref name="modFolder"/> holds a repository whose <c>main</c>
     /// exists.</summary>
@@ -97,9 +102,9 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     private SourceDocument? OwnTextOf(PluginAddress spelled, RecordIdentity identity)
     {
-        if (Locator.Locate(spelled, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
+        if (Locator.Locate(spelled, identity) is not { } unit || !Files.FileExists(unit.FullPath)) return null;
 
-        var body = DocumentText.RecordBodyFromOwnerBytes(File.ReadAllBytes(unit.FullPath), unit, identity.FormKey, _release);
+        var body = DocumentText.RecordBodyFromOwnerBytes(Files.ReadAllBytes(unit.FullPath), unit, identity.FormKey, _release);
         return body == null ? null : new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body);
     }
 
@@ -128,7 +133,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
                     $"The source of {identity.FormKey} in {plugin.Name} ({plugin.Origin}) is not a readable document.");
             }
             if (Locator.Locate(spelled, identity) is not { } unit) return;
-            using var documents = new SourceTreeDocuments(_modFolder, spelled.Name, _release);
+            using var documents = new SourceTreeDocuments(_modFolder, spelled.Name, _release, Files);
             documents.RefuseUnreadable(identity.RecordType, identity.FormKey, body, unit.FullPath);
         });
 
@@ -167,7 +172,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary>The file in this tree holding <paramref name="identity"/>; null when nothing there holds it.</summary>
     public SourceAnswer<DocumentFile?> DocumentOf(PluginAddress plugin, RecordIdentity identity) =>
-        SourceFailure.Answer(() => Locator.Locate(Spelled(plugin), identity) is { } unit && File.Exists(unit.FullPath)
+        SourceFailure.Answer(() => Locator.Locate(Spelled(plugin), identity) is { } unit && Files.FileExists(unit.FullPath)
             ? new DocumentFile(unit.FullPath, unit.IsEmbedded)
             : null);
 
@@ -241,7 +246,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
     public SourceAnswer<T> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read) =>
         SourceFailure.Answer(() =>
         {
-            using var documents = new SourceTreeDocuments(_modFolder, Spelled(plugin).Name, _release);
+            using var documents = new SourceTreeDocuments(_modFolder, Spelled(plugin).Name, _release, Files);
             return read(documents);
         });
 

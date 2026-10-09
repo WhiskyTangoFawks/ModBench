@@ -17,15 +17,16 @@ internal sealed class TreeScan
 
     private readonly string _sourceRoot;
     private readonly GameRelease _release;
+    private readonly ISourceFiles _files;
     private readonly byte[]? _onlyKey;
     private Dictionary<string, List<OwnerDocument>> _byChild = new(StringComparer.Ordinal);
     private Dictionary<string, List<string>> _byRoot = new(StringComparer.Ordinal);
     private bool _rescanned;
     private readonly Dictionary<string, DocumentKeys> _keysByDocument = new(StringComparer.Ordinal);
 
-    internal TreeScan(string sourceRoot, GameRelease release, string? onlyKey, IEnumerable<string> listed)
+    internal TreeScan(string sourceRoot, GameRelease release, string? onlyKey, IEnumerable<string> listed, ISourceFiles files)
     {
-        (_sourceRoot, _release) = (sourceRoot, release);
+        (_sourceRoot, _release, _files) = (sourceRoot, release, files);
         _onlyKey = onlyKey is null ? null : System.Text.Encoding.UTF8.GetBytes(onlyKey);
         Scan(listed);
     }
@@ -47,7 +48,7 @@ internal sealed class TreeScan
         var holders = BorneOut(formKey);
         if (holders.Declaring.Count > 0 || holders.Carrying.Count > 0 || _rescanned) return holders;
         _rescanned = true;
-        Scan(Directory.Exists(_sourceRoot) ? Directory.EnumerateFiles(_sourceRoot, "*.json", SearchOption.AllDirectories) : []);
+        Scan(_files.DirectoryExists(_sourceRoot) ? _files.FilesIn(_sourceRoot, "*.json", SearchOption.AllDirectories) : []);
         return BorneOut(formKey);
     }
 
@@ -61,7 +62,7 @@ internal sealed class TreeScan
     // bytes are unchanged.
     private DocumentKeys? KeysOf(string documentPath)
     {
-        if (DocumentText.BytesOrNull(documentPath) is not { } bytes) return null;
+        if (DocumentText.BytesOrNull(_files, documentPath) is not { } bytes) return null;
         if (_keysByDocument.TryGetValue(documentPath, out var known) && known.Bytes.AsSpan().SequenceEqual(bytes))
             return known;
 
@@ -79,7 +80,7 @@ internal sealed class TreeScan
         foreach (var documentPath in listed)
         {
             if (SourceRepositoryLayout.CarriesNoRecord(documentPath)) continue;
-            if (DocumentText.BytesOrNull(documentPath) is not { } bytes) continue;
+            if (DocumentText.BytesOrNull(_files, documentPath) is not { } bytes) continue;
             if (_onlyKey is { } key && !MaySpell(bytes, key)) continue;
 
             var keys = DocumentTokens.FormKeysIn(bytes, _release);

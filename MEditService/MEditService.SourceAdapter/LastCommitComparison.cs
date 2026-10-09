@@ -15,7 +15,7 @@ internal static class LastCommitComparison
         string modFolder, GameRelease release, SourceRepositoryGit git, SourceRepositoryLocator locator,
         PluginAddress plugin)
     {
-        using var expansion = new SourceTreeDocuments(modFolder, plugin.Name, release);
+        using var expansion = new SourceTreeDocuments(modFolder, plugin.Name, release, DiskFiles.Instance);
         var committed = new Dictionary<string, string>(StringComparer.Ordinal);
         var working = new Dictionary<string, string>(StringComparer.Ordinal);
 

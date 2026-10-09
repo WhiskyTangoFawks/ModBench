@@ -15,6 +15,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 {
     private readonly string _modFolder;
     private readonly string _pluginFileName;
+    private readonly ISourceFiles _files;
     private readonly GameRelease _release;
     private readonly ContainerDocuments _containers;
     private readonly RecordTypes _types;
@@ -22,9 +23,10 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     private readonly string _headerRelativePath;
 
     internal SourceTreeDocuments(
-        string modFolder, string pluginFileName, GameRelease release)
+        string modFolder, string pluginFileName, GameRelease release, ISourceFiles files)
     {
         _modFolder = modFolder;
+        _files = files;
         _pluginFileName = pluginFileName;
         _release = release;
         _containers = new ContainerDocuments(release);
@@ -63,10 +65,10 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
     private IEnumerable<PluginDocument> WalkGroups()
     {
-        if (!Directory.Exists(_root)) yield break;
+        if (!_files.DirectoryExists(_root)) yield break;
 
         var holders = new OneDocumentPerFormKey(_modFolder);
-        foreach (var groupDirectory in Directory.EnumerateDirectories(_root))
+        foreach (var groupDirectory in _files.DirectoriesIn(_root))
         {
             var folder = Path.GetFileName(groupDirectory);
             var directoryPerRecord = GroupFolders.For(_release).DirectoryPerRecordTypeIn(folder, nested: false);
@@ -84,22 +86,22 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     // A group with no directory-per-record type files its records flat, and a container that is not a
     // cell or a worldspace keeps its own directory directly under it.
     private IEnumerable<PluginDocument> FlatGroup(string groupDirectory, OneDocumentPerFormKey holders) =>
-        Directory
-            .EnumerateFiles(groupDirectory, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories)
+        _files
+            .FilesIn(groupDirectory, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories)
             .SelectMany(file => DocumentsAt(file, cell: null, holders));
 
     // A block level's directory is named by its number, as the whole-mod serializer writes it.
     private IEnumerable<PluginDocument> InteriorCells(string cellsDirectory, OneDocumentPerFormKey holders)
     {
-        foreach (var blockDirectory in Directory.EnumerateDirectories(cellsDirectory))
+        foreach (var blockDirectory in _files.DirectoriesIn(cellsDirectory))
         {
             var block = Number(Path.GetFileName(blockDirectory));
-            foreach (var subBlockDirectory in Directory.EnumerateDirectories(blockDirectory))
+            foreach (var subBlockDirectory in _files.DirectoriesIn(blockDirectory))
             {
                 var structure = CellStructure.Interior(block, Number(Path.GetFileName(subBlockDirectory)));
-                foreach (var cellDirectory in Directory.EnumerateDirectories(subBlockDirectory))
+                foreach (var cellDirectory in _files.DirectoriesIn(subBlockDirectory))
                 {
-                    var cell = SourceRepositoryLayout.ContainerDocumentHeldBy(cellDirectory);
+                    var cell = SourceRepositoryLayout.ContainerDocumentHeldBy(_files, cellDirectory);
                     foreach (var document in DocumentsAt(cell, structure, holders)) yield return document;
                 }
             }
@@ -108,24 +110,24 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
     private IEnumerable<PluginDocument> Worldspaces(string worldspacesDirectory, OneDocumentPerFormKey holders)
     {
-        foreach (var worldspaceDirectory in Directory.EnumerateDirectories(worldspacesDirectory))
+        foreach (var worldspaceDirectory in _files.DirectoriesIn(worldspacesDirectory))
         {
-            var own = SourceRepositoryLayout.ContainerDocumentHeldBy(worldspaceDirectory);
+            var own = SourceRepositoryLayout.ContainerDocumentHeldBy(_files, worldspaceDirectory);
             foreach (var document in DocumentsAt(own, cell: null, holders)) yield return document;
 
-            var worldspaceFormKey = DocumentText.FormKeyDeclaredBy(own, _pluginFileName);
-            foreach (var blockDirectory in Directory.EnumerateDirectories(worldspaceDirectory))
+            var worldspaceFormKey = DocumentText.FormKeyDeclaredBy(_files, own, _pluginFileName);
+            foreach (var blockDirectory in _files.DirectoriesIn(worldspaceDirectory))
             {
                 var (blockX, blockY) = Coordinates(Path.GetFileName(blockDirectory));
-                foreach (var subBlockDirectory in Directory.EnumerateDirectories(blockDirectory))
+                foreach (var subBlockDirectory in _files.DirectoriesIn(blockDirectory))
                 {
                     var (subX, subY) = Coordinates(Path.GetFileName(subBlockDirectory));
                     var structure = new CellStructure(
                         worldspaceFormKey, blockX, blockY, subX, subY, IsInterior: false);
 
-                    foreach (var cellDirectory in Directory.EnumerateDirectories(subBlockDirectory))
+                    foreach (var cellDirectory in _files.DirectoriesIn(subBlockDirectory))
                     {
-                        var cell = SourceRepositoryLayout.ContainerDocumentHeldBy(cellDirectory);
+                        var cell = SourceRepositoryLayout.ContainerDocumentHeldBy(_files, cellDirectory);
                         foreach (var document in DocumentsAt(cell, structure, holders)) yield return document;
                     }
                 }
@@ -274,11 +276,11 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
 
     // Never exclusive owners of the file: it may vanish or lock between the listing and the read.
-    private static string? Read(string path)
+    private string? Read(string path)
     {
         try
         {
-            return Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(File.ReadAllBytes(path)));
+            return Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(_files.ReadAllBytes(path)));
         }
         catch (FileNotFoundException)
         {
