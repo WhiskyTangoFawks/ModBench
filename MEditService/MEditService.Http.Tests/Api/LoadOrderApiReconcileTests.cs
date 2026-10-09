@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -26,7 +25,7 @@ public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixtur
         Assert.True((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
 
         var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
-        var byName = plugins.EnumerateArray().ToDictionary(p => DocumentNodes.StringValueOf(p.GetProperty("name")));
+        var byName = plugins.EnumerateArray().ToDictionary(p => JsonStrings.Of(p.GetProperty("name")));
         Assert.True(byName["Active.esp"].GetProperty("inLoadOrder").GetBoolean());
         Assert.Equal(0, byName["Active.esp"].GetProperty("loadOrderIndex").GetInt32());
         Assert.False(byName["Dormant.esp"].GetProperty("inLoadOrder").GetBoolean());

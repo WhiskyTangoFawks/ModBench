@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.IO.Abstractions;
 using System.Reflection;
 using System.Text;
-using System.Text.Json.Nodes;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization;
@@ -92,11 +91,11 @@ public static class RecordTextCodec
     /// <summary>The document of an empty block level or record carrying <paramref name="identity"/>
     /// alone, so a caller places a container level rather than constructing one. A minted document fed
     /// back as the identity is its round trip.</summary>
-    public static string BlankDocument(string name, GameRelease gameRelease, JsonObject identity)
+    public static string BlankDocument(string name, GameRelease gameRelease, Document identity)
     {
         var loquiType = RecordTypes.For(gameRelease).LoquiTypeNamed(name)
             ?? throw new ArgumentException($"{gameRelease} has no block level or record type named '{name}'.", nameof(name));
-        var instance = DeserializeText(loquiType, identity.ToJsonString(), gameRelease);
+        var instance = DeserializeText(loquiType, identity.Text, gameRelease);
         var bytes = SerializeCore(instance, gameRelease, CancellationToken.None);
         return Encoding.UTF8.GetString(bytes);
     }

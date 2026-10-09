@@ -1,4 +1,3 @@
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
@@ -107,7 +106,7 @@ public sealed class ChildRecordTypesTests
             var types = RecordTypes.For(release);
             foreach (var type in schemas.Keys.Where(types.HasChildSlots))
             {
-                var text = RecordTextCodec.BlankDocument(type, release, new JsonObject { [RecordMembers.FormKey] = "000800:Holds.esp" });
+                var text = RecordTextCodec.BlankDocument(type, release, Document.Empty.With("000800:Holds.esp", RecordMembers.FormKey));
                 CellPlace?[] places = types.IsCell(type) ? [.. Enum.GetValues<CellPlace>().Cast<CellPlace?>()] : [null];
                 foreach (var place in places)
                     Assert.True(ChildRecordTypes.Of(type, text, place, release).Count > 0, $"{release} {type} in {place} holds nothing.");

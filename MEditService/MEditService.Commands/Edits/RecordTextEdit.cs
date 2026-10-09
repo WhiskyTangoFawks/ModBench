@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
@@ -56,7 +55,7 @@ internal static class RecordTextEdit
         if (groupMove?.RefuseUnknownCell(record, request.Release, request.Masters, spelled, out into) is { } unknown) return unknown;
 
         if (op == EditOp.Move && RefuseMove(edit, envelope, spelled) is { } unmoved) return unmoved;
-        var value = envelope.Value?.GetRawText();
+        var value = envelope.Value?.RawText;
         if (edit.ReadOnlyReached(value) is { } reached) return ReadOnlyRefusal(reached.Path, reached.Member, reached.Reason);
         if (edit.Apply(value, out var applied) is { } refused) return Refusal(refused);
         var patch = applied ?? throw new InvalidOperationException("Expected Apply to answer a patch when it does not refuse.");
@@ -119,7 +118,7 @@ internal static class RecordTextEdit
             return Malformed(spelled, "set takes a value (JSON null clears a member)");
         if (op is EditOp.Remove or EditOp.Move && envelope.Path[^1].Kind == PathHop.MemberKind)
             return Malformed(spelled, $"{envelope.Op} addresses an element by its index");
-        if (op == EditOp.Move && envelope.Value is not { ValueKind: JsonValueKind.Number })
+        if (op == EditOp.Move && envelope.Value is not { Kind: EditValueKind.WholeNumber })
             return Malformed(spelled, "move takes the destination index as its value");
         return null;
     }
@@ -168,7 +167,7 @@ internal static class RecordTextEdit
         // xedit.md, divergence 14.
         if (edit.InKeyedArray)
             return Malformed(spelled, $"'{RecordEditEnvelope.Spell(envelope.Path.SkipLast(1))}' is a keyed array, and a keyed array's elements take no move");
-        var destination = (envelope.Value ?? throw new InvalidOperationException("Expected a move's destination index.")).GetInt32();
+        var destination = (envelope.Value ?? throw new InvalidOperationException("Expected a move's destination index.")).Integer;
         return destination == edit.Position ? Malformed(spelled, $"the element is already at position {destination}") : null;
     }
 

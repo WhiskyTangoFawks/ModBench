@@ -1,4 +1,3 @@
-using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -763,8 +762,7 @@ internal sealed class RelationReads(
         string? editorId, string body, RecordTableSchema schema,
         Func<string, RecordLookupEntry?> resolveFormKey, string? parseDiagnosis)
     {
-        using var parsed = JsonDocument.Parse(body);
-        var root = parsed.RootElement;
+        var root = Document.Parse(body);
         var address = new PluginAddress(plugin, origin);
         var fields = schema.FieldsOf(root, RecordLookupEntry.Resolver(resolveFormKey), store.Release, indexed());
 

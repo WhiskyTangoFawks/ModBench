@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -22,7 +21,7 @@ internal sealed class FormKeyChange(ILogger logger)
 
     /// <summary>The record under its new key.</summary>
     internal Answer<RecordEditResult, SourceFailure> Change(
-        PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, JsonElement? value)
+        PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, EditValue? value)
     {
         var (release, identity, repository) = editTarget;
         if (identity.RecordType == PluginHeader.RecordType)
@@ -30,12 +29,12 @@ internal sealed class FormKeyChange(ILogger logger)
             return RecordTextEdit.ReadOnlyRefusal(Member, Member, PluginHeader.FormIdReadOnly);
         }
 
-        if (value is not { ValueKind: JsonValueKind.String } text
-            || !FormKey.TryFactory(text.GetString(), out var requested))
+        if (value is not { Kind: EditValueKind.Text } text
+            || !FormKey.TryFactory(text.Text, out var requested))
         {
             return RecordEditResult.RefusedAt(
                 RecordEditRefusal.CodecRejected, Member,
-                $"{(value is { } given ? given.GetRawText() : "Nothing")} is not a FormKey. A FormID is written " +
+                $"{(value is { } given ? given.RawText : "Nothing")} is not a FormKey. A FormID is written " +
                 $"as its FormKey, the local ID in hex and then the plugin it is native to: 000800:{plugin.Name}.");
         }
 

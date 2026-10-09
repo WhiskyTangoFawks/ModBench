@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -46,7 +45,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
 
         var created = await _client.CreateRecord(Plugin, Origin, "npc_");
         created.EnsureSuccessStatusCode();
-        var oldFormKey = DocumentNodes.StringValueOf((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));
+        var oldFormKey = JsonStrings.Of((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));
 
         await _client.NextSnapshot(fx, Origin);
         await Wire.Eventually(
@@ -58,7 +57,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         using var stream = await _client.NotificationStream();
         var edited = await _client.Edit(oldFormKey, Plugin, Origin, "FormKey", newFormKey);
         edited.EnsureSuccessStatusCode();
-        Assert.Equal(newFormKey, DocumentNodes.StringValueOf((await edited.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("newFormKey")));
+        Assert.Equal(newFormKey, JsonStrings.Of((await edited.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("newFormKey")));
         await _client.NextSnapshot(fx, Origin);
 
         var named = (await stream.EventsUntil("rows-changed", e => KeysOf(e).Contains(newFormKey)))
@@ -91,6 +90,6 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
     private async Task<List<string>> NpcFormKeys()
     {
         var listing = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_");
-        return [.. listing.GetProperty("items").EnumerateArray().Select(i => DocumentNodes.StringValueOf(i.GetProperty("formKey")))];
+        return [.. listing.GetProperty("items").EnumerateArray().Select(i => JsonStrings.Of(i.GetProperty("formKey")))];
     }
 }

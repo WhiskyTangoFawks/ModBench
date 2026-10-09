@@ -1,8 +1,8 @@
 using System.Drawing;
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -106,6 +106,6 @@ public sealed class ColorCompileRoundTripTests : IDisposable
         var compiled = (await CompileAndReparse()).MaterialObjects.Single(m => m.FormKey == _fixture.MaterialObject);
         using var document = JsonDocument.Parse(RecordTextCodec.SerializeToText(compiled, GameRelease.Fallout4));
 
-        Assert.Equal("#0001FE7F", DocumentNodes.StringValueOf(document.RootElement.GetProperty("SinglePassColor")));
+        Assert.Equal("#0001FE7F", JsonStrings.Of(document.RootElement.GetProperty("SinglePassColor")));
     }
 }

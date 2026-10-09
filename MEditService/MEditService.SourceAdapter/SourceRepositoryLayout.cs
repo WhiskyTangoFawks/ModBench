@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -446,11 +445,9 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     private string BlockLevelDocument(string level, int? x, int? y) =>
         RecordTextCodec.BlankDocument(
             level, _release,
-            new JsonObject
-            {
-                [RecordTypes.BlockNumberXMember] = x ?? 0,
-                [RecordTypes.BlockNumberYMember] = y ?? 0,
-            });
+            Document.Empty
+                .With(x ?? 0, RecordTypes.BlockNumberXMember)
+                .With(y ?? 0, RecordTypes.BlockNumberYMember));
 
     private DocumentChange LevelDocument(string fullPath, string text) => new(Path.GetRelativePath(_modFolder, fullPath), text);
 
@@ -485,14 +482,12 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
             documents.Add(LevelDocument(Path.Combine(parent, GroupRecordDataFileName), RecordTextCodec.BlankDocument(
                 levels[level], _release,
-                new JsonObject
-                {
-                    [RecordTypes.GroupTypeMember] = labels[level],
-                    [RecordTypes.BlockNumberMember] = numbers[level],
-                })));
+                Document.Empty
+                    .With(labels[level], RecordTypes.GroupTypeMember)
+                    .With(numbers[level], RecordTypes.BlockNumberMember))));
         }
         return (documents, path);
     }
 
-    private static readonly string EmptyLevelDocument = new JsonObject().ToJsonString();
+    private static readonly string EmptyLevelDocument = Document.Empty.Text;
 }

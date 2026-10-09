@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
@@ -17,8 +16,8 @@ public class PartialFormFlagTests
 
     private static bool IsPartialForm(IMajorRecordGetter record, string table)
     {
-        using var document = JsonDocument.Parse(RecordTextCodec.SerializeToText(record, GameRelease.Fallout4));
-        return SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table].IsPartialForm(document.RootElement);
+        var document = Document.Parse(RecordTextCodec.SerializeToText(record, GameRelease.Fallout4));
+        return SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table].IsPartialForm(document);
     }
 
     [Fact]
@@ -44,15 +43,6 @@ public class PartialFormFlagTests
         npc.MajorRecordFlagsRaw = PartialFormBit;
 
         Assert.False(IsPartialForm(npc, "npc_"));
-    }
-
-    [Fact]
-    public void ACellsPartialFormBit_ReadOffANodeThatIsNoRecordDocument_IsRefusedRatherThanReadAsUnset()
-    {
-        using var notADocument = JsonDocument.Parse("[]");
-
-        Assert.Throws<InvalidOperationException>(
-            () => SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["cell"].IsPartialForm(notADocument.RootElement));
     }
 
     [Fact]

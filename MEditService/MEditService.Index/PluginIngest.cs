@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Text;
-using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -201,15 +200,14 @@ internal sealed class PluginIngest
     private PreparedRecord PrepareRecord(PluginDocument document, RecordTableSchema schema)
     {
         var body = Encoding.UTF8.GetBytes(document.Text);
-        using var parsed = JsonDocument.Parse(body);
-        var root = parsed.RootElement;
-        var editorId = DocumentNodes.EditorIdOf(root).EditorId;
+        var root = Document.Parse(document.Text);
+        var editorId = root.EditorId.EditorId;
 
         // ADR-0005: where a cell sits and what a container holds come from the GRUP
         // hierarchy, so a container whose document the codec refused still lists and still holds
         // its children. A refused cell loses only its grid.
         var refused = document.ParseDiagnosis is not null;
-        JsonElement? carried = refused ? null : root;
+        Document? carried = refused ? null : root;
         var placements = PlacementRowsOf(document);
         CellLocationRow? cellLocation = document.Cell is { } structure
             ? PlacementWalker.CellLocation(document.FormKey, carried, structure)
@@ -309,7 +307,7 @@ internal sealed class PluginIngest
     // The rows a record's own links become: a child it carries inline holds its own. Shared by
     // ingest and the per-record working-tree rederivation.
     internal static List<FormReferenceRow> Rows(
-        ContainerDocuments containers, JsonElement root, RecordTableSchema schema,
+        ContainerDocuments containers, Document root, RecordTableSchema schema,
         string sourceFormKey, string? sourceEditorId, string recordType) =>
         [.. containers.OwnReferences(recordType, FormReferences.Collect(root, schema.RecordColumns))
             .Select(r => new FormReferenceRow(sourceFormKey, r.TargetFormKey, r.FieldPath, recordType, sourceEditorId))];

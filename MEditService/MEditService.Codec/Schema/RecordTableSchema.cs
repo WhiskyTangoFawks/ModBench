@@ -50,19 +50,20 @@ public sealed class RecordTableSchema
     /// <summary>Every column's node in <paramref name="document"/>, null where the document omits it,
     /// checked against what <paramref name="resolve"/> answers. No document holds a header's masters
     /// (ADR-0008), so their column reads null here.</summary>
-    public List<FieldValue> FieldsOf(JsonElement document, Func<string, ResolvedFormKey?> resolve, GameRelease release, bool indexed)
+    public List<FieldValue> FieldsOf(Document document, Func<string, ResolvedFormKey?> resolve, GameRelease release, bool indexed)
     {
+        var root = document.Element;
         var fields = new List<FieldValue>(RecordColumns.Count);
         foreach (var col in RecordColumns)
         {
             // A synthetic member is the bit it stands for, read off the member the document spells.
             var value = col.Synthetic is { } bit
-                ? JsonSerializer.SerializeToElement(SyntheticBits.IsSet(document, bit))
-                : DocumentNodes.At(document, col.PropertyName);
+                ? JsonSerializer.SerializeToElement(SyntheticBits.IsSet(root, bit))
+                : DocumentNodes.At(root, col.PropertyName);
             var meta = col.Field;
             // The check reads the shape this record's own class gives the column; the wire keeps the
             // column's whole metadata, variants included, so the editor can pick the same.
-            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, document), value, resolve, release, indexed)));
+            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, root), value, resolve, release, indexed)));
         }
         return fields;
     }
@@ -75,8 +76,6 @@ public sealed class RecordTableSchema
             .Where(record => RecordType.IsInstanceOfType(record) || RecordTypes.For(mod.GameRelease).RecordTypeOf(record) == TableName);
 
     // A ModHeader cannot carry the Partial Form flag.
-    public bool IsPartialForm(JsonElement document) => !IsHeader && Document.OfRecord(document).IsPartialForm(RecordType);
-
     public bool IsPartialForm(Document document) => !IsHeader && document.IsPartialForm(RecordType);
 
     /// <summary>Each column holding a link whose check error <paramref name="text"/> carries, from the
