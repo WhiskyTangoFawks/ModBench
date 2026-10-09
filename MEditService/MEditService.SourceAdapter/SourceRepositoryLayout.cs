@@ -49,25 +49,24 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         Path.Combine(modFolder, RootFor(pluginFileName));
 
     /// <summary>The folder of the mod's plugin source holding <paramref name="pluginFileName"/>'s tree: the one spelled
-    /// so, else the only one spelled so without case, as a ModKey compares a name. Null for none, or for twins.</summary>
-    internal static string? TreeNameIn(string modFolder, string pluginFileName)
-    {
-        List<string> named;
-        try
-        {
-            named = [.. Directory.EnumerateDirectories(Path.Combine(modFolder, RootFolderName))
+    /// so, else the only one spelled so without case, as a ModKey compares a name. None, twins, or a plugin source
+    /// that cannot be listed answer why.</summary>
+    internal static SourceAnswer<string> TreeNameIn(string modFolder, string pluginFileName) =>
+        SourceFailure.Answer(() => Directory.EnumerateDirectories(Path.Combine(modFolder, RootFolderName))
                 .Select(Path.GetFileName)
                 .OfType<string>()
-                .Where(name => name.Equals(pluginFileName, StringComparison.OrdinalIgnoreCase))];
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-
-        if (named.Contains(pluginFileName, StringComparer.Ordinal)) return pluginFileName;
-        return named is [var only] ? only : null;
-    }
+                .Where(name => name.Equals(pluginFileName, StringComparison.OrdinalIgnoreCase))
+                .Order(StringComparer.Ordinal)
+                .ToList())
+            .Then<string>(named => named switch
+            {
+                _ when named.Contains(pluginFileName, StringComparer.Ordinal) => pluginFileName,
+                [var only] => only,
+                [] => SourceStopException.Inaccessible($"{modFolder} holds no folder for {pluginFileName} in {RootFolderName}.").Failure,
+                _ => SourceStopException.Ambiguous(
+                    $"{RootFolderName} holds {string.Join(" and ", named)}, which differ only in case, and none is spelled {pluginFileName}. " +
+                    "Remove the extra ones by hand.").Failure,
+            });
 
     /// <summary>The folder of the mod's plugin source that <paramref name="fullPath"/> sits in, as the path spells
     /// it; null for a path outside the plugin source.</summary>

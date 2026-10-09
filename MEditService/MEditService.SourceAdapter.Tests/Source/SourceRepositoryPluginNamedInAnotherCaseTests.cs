@@ -155,6 +155,63 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [PosixFact]
+    public void WhySourceDoesNotRead_ForTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_NamesBothFolders()
+    {
+        MakeTwinOfTheTreeIn(Recased.Name);
+
+        var why = Assert.IsType<SourceFailure.Ambiguous>(
+            SourceRepository.WhySourceDoesNotRead(Registered(new PluginAddress("fixture.esp", TestMod.Name))));
+
+        Assert.Contains(TreeName, why.Reason, StringComparison.Ordinal);
+        Assert.Contains(Recased.Name, why.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WhySourceDoesNotRead_ForAPluginWithNoFolder_SaysSo()
+    {
+        var why = SourceRepository.WhySourceDoesNotRead(Registered(new PluginAddress("Other.esp", TestMod.Name)));
+
+        Assert.Contains("Other.esp", Assert.IsType<SourceFailure.Inaccessible>(why).Reason, StringComparison.Ordinal);
+    }
+
+    [PosixFact]
+    public void WhySourceDoesNotRead_ForAPluginSourceThatCannotBeListed_SaysWhyTheSystemGave()
+    {
+        var sources = Path.Combine(_modFolder, "plugin-source");
+        FileModes.Set(sources, "000");
+        try
+        {
+            Assert.IsType<SourceFailure.Inaccessible>(SourceRepository.WhySourceDoesNotRead(Registered(AsTreeNamesIt)));
+        }
+        finally
+        {
+            FileModes.Set(sources, "700");
+        }
+    }
+
+    [Fact]
+    public void WhySourceDoesNotRead_ForATreeThatReads_IsNull()
+    {
+        Assert.Null(SourceRepository.WhySourceDoesNotRead(Registered(Recased)));
+    }
+
+    [PosixFact]
+    public void ReplaceSourceFrom_ForTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_AnswersAmbiguousNamingBoth_AndWritesNoThirdFolder()
+    {
+        MakeTwinOfTheTreeIn(Recased.Name);
+        var lowered = new PluginAddress("fixture.esp", TestMod.Name);
+
+        var failure = Repository.ReplaceSourceFrom(lowered, [new TreeFile("RecordData.json", Encoding.UTF8.GetBytes("{}"))], "ABCDEF0123");
+
+        var ambiguous = Assert.IsType<SourceFailure.Ambiguous>(failure);
+        Assert.Contains(TreeName, ambiguous.Reason, StringComparison.Ordinal);
+        Assert.Contains(Recased.Name, ambiguous.Reason, StringComparison.Ordinal);
+        Assert.Equal(
+            [Recased.Name, TreeName],
+            Directory.GetDirectories(Path.Combine(_modFolder, "plugin-source")).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+    }
+
+    [PosixFact]
     public void RecordOfFile_ADocumentOfATwinTreeThePluginDoesNotRead_IsRefused()
     {
         MakeTwinOfTheTreeIn(Recased.Name);

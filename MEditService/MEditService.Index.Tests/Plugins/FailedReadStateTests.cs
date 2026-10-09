@@ -474,6 +474,8 @@ public sealed class FailedReadStateTests : IDisposable
 
         public bool IsTracked(RegisteredPlugin plugin) => _inner.IsTracked(plugin);
 
+        public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => _inner.WhySourceDoesNotRead(plugin);
+
         public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) =>
             _inner.Over(plugin, release) is { } reads ? new HookedRepository(reads, at) : null;
 

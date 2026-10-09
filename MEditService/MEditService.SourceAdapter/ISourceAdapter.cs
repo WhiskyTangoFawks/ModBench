@@ -12,6 +12,9 @@ public interface ISourceAdapter
 
     bool IsTracked(RegisteredPlugin plugin);
 
+    /// <summary>Why a tracked plugin's source does not read; null when it reads, or its mod is not tracked.</summary>
+    SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin);
+
     /// <summary>The reads over the folder of the mod providing <paramref name="plugin"/>, tree or not; null
     /// when no mod provides it. One serves a batch, so what it learns of the tree is learned once.</summary>
     ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release);
