@@ -34,7 +34,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { AskQuestion } from '../../ports/dialog';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { adapterOver } from '../../test/mo2/adapterOver';
+import { adapterOver, pluginsCommandsWith } from '../../test/mo2/adapterOver';
 import { present } from '../../ports/present';
 import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
 
@@ -78,7 +78,7 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
     oneAtATime: (job) => { queued(); return queue(job); },
     refreshSourceControlFor: vi.fn(),
   };
-  registerRenamePluginCommand({ client, adapter, ask, instance, reporter, source }, () => selection);
+  registerRenamePluginCommand({ client, commands: pluginsCommandsWith(adapter, client), ask, instance, reporter, source }, () => selection);
   const run = present(handlers.get('modbench.plugin.rename'), 'the rename plugin command');
   const validate = async (value: string): Promise<string | undefined> => {
     let validated: string | undefined;

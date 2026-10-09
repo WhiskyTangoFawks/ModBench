@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { vscode } from './vscode';
-import { pickFormKey, requestRecordLoad } from './nativeBridge';
+import { listen, pickFormKey, requestRecordLoad } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
 
 function postedRequestId(): string {
@@ -114,5 +114,20 @@ describe('requestRecordLoad, whose request shape and reply unwrapping are its ow
     }));
 
     expect(await resultPromise).toEqual({ ok: false, failure: { failed: 'refused', refusal: 'No such record.' } });
+  });
+});
+
+describe('the page\'s one receive loop', () => {
+  it('hands the host\'s messages to a listener, parsed, once each, and not after it stops', () => {
+    const heard: unknown[] = [];
+    const stop = listen((msg) => heard.push(msg));
+    const pasted = { type: EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL, text: 'x' };
+
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'somethingElse' } }));
+    window.dispatchEvent(new MessageEvent('message', { data: pasted }));
+    stop();
+    window.dispatchEvent(new MessageEvent('message', { data: pasted }));
+
+    expect(heard).toEqual([pasted]);
   });
 });

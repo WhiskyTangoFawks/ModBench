@@ -27,7 +27,7 @@ export type PutLoadOrderResult =
 
 // A game with no release is sent as the mod manager names it rather than a guess: the backend then
 // rejects it visibly instead of quietly answering about the wrong game.
-const releaseOf = (game: InstanceGame): string => game.gameRelease ?? game.gameName;
+export const releaseOf = (game: InstanceGame): string => game.gameRelease ?? game.gameName;
 
 export async function putLoadOrder(
   client: Pick<MEditClient, 'sendLoadOrder'>, instanceRoot: string, value: LoadOrderSource,
@@ -47,13 +47,3 @@ export type RefreshResult =
   | { applied: true }
   | { applied: false; heldElsewhere: true }
   | { applied: false; heldElsewhere: false; refusal: string };
-
-export async function refresh(
-  client: Pick<MEditClient, 'rebuildIndex'>, instanceRoot: string, game: InstanceGame,
-): Promise<RefreshResult> {
-  const outcome = await client.rebuildIndex(instanceRoot, releaseOf(game));
-  if (outcome.rebuilt) return { applied: true };
-  return outcome.heldElsewhere
-    ? { applied: false, heldElsewhere: true }
-    : { applied: false, heldElsewhere: false, refusal: outcome.detail };
-}

@@ -96,14 +96,29 @@ function restrictedImports({ vscode, packages, path, client = false, inAdapter =
 
 // A view fires the commands the root bound to the Instance adapter; it takes only types from the core box.
 /** @type {Record<string, string[]>} */
-const BOUND_COMMAND_BOXES = { mods: ['modlist/modlist', 'install/install'], downloads: ['downloadsCommands/downloads'], toolbox: ['instanceCommands/instanceCommands'] };
+const BOUND_COMMAND_BOXES = {
+    mods: ['modlist/modlist', 'install/install'],
+    downloads: ['downloadsCommands/downloads'],
+    toolbox: ['instanceCommands/instanceCommands'],
+    plugins: ['pluginsCommands/plugins', 'pluginsCommands/renamePlugin'],
+};
+/** The Plugins box reaches the Instance adapter for its plugin-file rule alone; no other view reaches it. */
+/** @type {Record<string, string[]>} */
+const ADAPTER_NAMES_A_VIEW_MAY_IMPORT = { plugins: ['fileExtension'] };
 /** @param {string} view */
 const boundCommandImports = (view) => ['error', {
-    patterns: BOUND_COMMAND_BOXES[view].map((core) => ({
-        group: [`**/${core}`],
-        allowTypeImports: true,
-        message: 'The root binds the core box\'s commands to the Instance adapter; the view receives them.',
-    })),
+    patterns: [
+        ...BOUND_COMMAND_BOXES[view].map((core) => ({
+            group: [`**/${core}`],
+            allowTypeImports: true,
+            message: 'The root binds the core box\'s commands to the Instance adapter; the view receives them.',
+        })),
+        {
+            group: ['**/instanceAdapter/**'],
+            ...(ADAPTER_NAMES_A_VIEW_MAY_IMPORT[view] ? { allowImportNames: ADAPTER_NAMES_A_VIEW_MAY_IMPORT[view] } : {}),
+            message: 'A view holds bound commands and reaches the Instance adapter for nothing but the plugin-file rule.',
+        },
+    ],
 }];
 
 const SYNTAX = {
@@ -116,6 +131,8 @@ const SYNTAX = {
         .map((selector) => ({ selector, message: 'A view reads no file: the host file system is the Instance adapter\'s.' })),
     editField: ['MemberExpression[object.name=\'WEBVIEW_TO_EXTENSION\'][property.name=\'EDIT_FIELD\']', 'MemberExpression[object.name=\'WEBVIEW_TO_EXTENSION\'][computed=true][property.value=\'EDIT_FIELD\']']
         .map((selector) => ({ selector, message: 'The record editor writes through one message from one module: the native bridge posts EDIT_FIELD.' })),
+    receiveLoop: ['CallExpression[callee.property.name=\'addEventListener\'][arguments.0.value=\'message\']', 'AssignmentExpression[left.property.name=\'onmessage\']']
+        .map((selector) => ({ selector, message: 'The page keeps one receive loop: the native bridge listens to the host, and a component subscribes through its listen.' })),
     activation: ACTIVATION_DECIDES_SELECTORS.map((selector) => ({ selector, message: ACTIVATION_DECIDES_MESSAGE })),
 };
 /** @type {(keyof typeof SYNTAX)[]} */
@@ -262,6 +279,10 @@ export default defineConfig(
     {
         files: ['webview/src/**/*.{ts,tsx}'],
         ignores: ['webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**', 'webview/src/nativeBridge.ts'],
+        rules: { 'no-restricted-syntax': restrictedSyntax(['message', 'editField', 'receiveLoop']) },
+    },
+    {
+        files: ['webview/src/ConflictTable.tsx'],
         rules: { 'no-restricted-syntax': restrictedSyntax(['message', 'editField']) },
     },
     {

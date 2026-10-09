@@ -4,15 +4,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 
 const pickFormKey = vi.fn<(seed: string, validTypes: string[]) => Promise<string | null>>().mockResolvedValue(null);
-vi.mock('./nativeBridge', () => ({
-  pickFormKey: (seed: string, validTypes: string[]) => pickFormKey(seed, validTypes),
-}));
+vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { DiskCell, openEditor } from './DiskCell';
 import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { cellContext } from './recordUtils';
-import { fieldMeta, parseJsonRecord } from './test/fixtures';
+import { fieldMeta, hostPicking, parseJsonRecord } from './test/fixtures';
+import { vscode } from './vscode';
+
+vi.mocked(vscode.postMessage).mockImplementation(hostPicking((seed, validTypes) => pickFormKey(seed, validTypes)));
 
 const renderCell = (props: Partial<React.ComponentProps<typeof DiskCell>> = {}, child: React.ReactNode = <span>cell</span>) =>
   render(

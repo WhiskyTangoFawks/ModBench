@@ -36,7 +36,7 @@ import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../Plugins
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
-import { adapterOver } from '../../test/mo2/adapterOver';
+import { pluginsCommandsOver } from '../../test/mo2/adapterOver';
 import { progressSteps } from '../../test/recordedProgress';
 
 const MOVE = 'modbench.plugin.move';
@@ -77,7 +77,7 @@ function registered(
     value: instanceValueFixture({ activeProfile: 'Default' }),
     refresh: () => { progressSteps.push('Instance loader: read every file again'); return refresh(); },
   };
-  registerPluginMoveCommand(adapterOver(dir), masters, instance, { selection: () => selection, movePlaces: () => PLACES }, reporter);
+  registerPluginMoveCommand(pluginsCommandsOver(dir, masters), instance, { selection: () => selection, movePlaces: () => PLACES }, reporter);
   return { reporter };
 }
 
@@ -165,7 +165,7 @@ describe('modbench.plugin.move', () => {
     const reporter = recordingReporter();
         const masters = { getPlugins: () => Promise.resolve([held('DLCRobot.esm', []), held('A.esp', []), held('X.esp', ['DLCRobot.esm'])]) };
     const value = instanceValueFixture({ activeProfile: 'Default', pluginsLoadedWithNoLine: [{ name: 'DLCRobot.esm', origin: 'Data/' }] });
-    registerPluginMoveCommand(adapterOver(dir), masters, { value, refresh: () => Promise.resolve() }, { selection: () => [], movePlaces: () => [] }, reporter);
+    registerPluginMoveCommand(pluginsCommandsOver(dir, masters), { value, refresh: () => Promise.resolve() }, { selection: () => [], movePlaces: () => [] }, reporter);
 
     await invoke([{ name: 'X.esp', origin: 'ModX' }], LOSING_END);
 

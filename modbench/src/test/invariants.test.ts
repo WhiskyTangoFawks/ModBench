@@ -9,7 +9,7 @@ const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'ut
 describe('every MO2 text-file write command has a corpus test', () => {
   const WRITERS = [
     'downloadsCommands/downloads.ts', 'install/installedMark.ts', 'modlist/modlist.ts',
-    'pluginsCommands/plugins.ts', 'instanceCommands/profile.ts',
+    'pluginsCommands/plugins.ts', 'instanceCommands/instanceCommands.ts',
   ];
   const writeVerbs = WRITERS.flatMap((file) => commandVerbs(read(file)));
   const corpus = tsFiles(SRC, { exclude: ['generated'] }).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => readFileSync(f, 'utf8')).join('\n');
@@ -20,6 +20,8 @@ describe('every MO2 text-file write command has a corpus test', () => {
       'deleteSeparators', 'uninstallMods', 'createEmptyMod', 'renameMod',
     ]) expect(writeVerbs).toContain(verb);
     expect(writeVerbs).toContain('switchProfile');
+    expect(writeVerbs).not.toContain('refresh');
+    for (const verb of ['setPluginsParticipation', 'setPluginsEnabled', 'reorderPlugins']) expect(writeVerbs).toContain(verb);
     expect(writeVerbs).toContain('excludeDownloads');
     expect(writeVerbs).toContain('includeDownloads');
     expect(writeVerbs).toContain('modSyncOver');
@@ -52,6 +54,7 @@ describe('only the Instance adapter touches a downloaded file\'s .meta', () => {
 function commandVerbs(source: string): string[] {
   const bound = new Set([...source.matchAll(/TailOf<typeof (\w+)>/g)].map((m) => m[1]));
   return [...source.matchAll(/^(export )?(?:async )?function (\w+)([\s\S]*?)\{\n/gm)]
+    .filter((m) => /InstanceAdapter/.test(present(m[3], "the signature")))
     .filter((m) => m[1] !== undefined || bound.has(m[2]))
     .filter((m) => /applied|Result[<>]|SelectionOutcome<|Run\s*$/.test(present(m[3], "the function body between signature and opening brace")))
     .map((m) => present(m[2], "the function's name"));

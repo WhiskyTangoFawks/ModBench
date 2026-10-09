@@ -14,6 +14,12 @@ describe('the focused cell message that tells the host which cell a palette fiel
     expect(() => parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: 'arrayElement', entered: true })).toThrow();
   });
 
+  it.each([
+    ['webviewSection', 7], ['canMoveUp', 'yes'], ['canMoveDown', 1], ['copyText', 7], ['editorOpen', 'true'],
+  ])('is refused when its %s is of another type', (member, value) => {
+    expect(() => parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: { [member]: value }, entered: true })).toThrow();
+  });
+
   it('is refused without saying whether the user entered the cell', () => {
     expect(() => parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null })).toThrow();
   });

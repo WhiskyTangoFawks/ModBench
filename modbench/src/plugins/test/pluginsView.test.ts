@@ -120,7 +120,7 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { adapterOver } from '../../test/mo2/adapterOver';
+import { pluginsCommandsOver } from '../../test/mo2/adapterOver';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { settled } from '../../test/settled';
@@ -167,7 +167,7 @@ function pluginsView(
   const recordBrowser = new RecordBrowser(client);
   const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
-    instance, adapter: adapterOver('/instance'), recordBrowser, client,
+    instance, commands: pluginsCommandsOver('/instance'), recordBrowser, client,
     pluginSync,
     channel: silentChannel,
     dataFolderFile: () => undefined, log: () => undefined,

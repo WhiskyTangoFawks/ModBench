@@ -1,9 +1,13 @@
 import { vscode } from './vscode';
 import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseExtensionToWebview,
-  type ArrayParentContext, type ColumnCopy, type ExtensionToWebview, type RecordEditEnvelope, type RecordLoadAnswer, type ViewState,
+  type ArrayParentContext, type ColumnCopy, type ExtensionToWebview, type FocusedCellContext, type RecordEditEnvelope, type RecordLoadAnswer, type ViewState,
   type WebviewToExtension,
 } from '../../src/wire/messages';
+import { readRecordPageGlobals, type RecordPageGlobals } from '../../src/wire/recordPage';
+
+/** What the host set on this page before its script ran. */
+export const pageGlobals = (): RecordPageGlobals => readRecordPageGlobals(window);
 
 // The webview's bridge to native VS Code surfaces: a new native-surface gesture extends the
 // request/reply mechanism below rather than reinventing it.
@@ -18,6 +22,14 @@ interface InFlight {
 
 let counter = 0;
 const inFlight = new Map<string, InFlight>();
+const listeners = new Set<(msg: ExtensionToWebview) => void>();
+
+/** The page's one receive loop hands every message from the host to `listener`, once it has
+ *  settled the request it answers. Returns what stops the listening. */
+export function listen(listener: (msg: ExtensionToWebview) => void): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
 
 window.addEventListener('message', (event: MessageEvent<unknown>) => {
   let msg: ExtensionToWebview;
@@ -26,11 +38,12 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
   } catch {
     return; // Not one of ours, or a stale/mismatched build — no in-flight request to answer.
   }
-  if (!('requestId' in msg)) return;
-  const entry = inFlight.get(msg.requestId);
-  if (!entry || msg.type !== entry.replyType) return;
-  inFlight.delete(msg.requestId);
-  entry.settle(msg);
+  const entry = 'requestId' in msg ? inFlight.get(msg.requestId) : undefined;
+  if (entry && 'requestId' in msg && msg.type === entry.replyType) {
+    inFlight.delete(msg.requestId);
+    entry.settle(msg);
+  }
+  listeners.forEach((listener) => { listener(msg); });
 });
 
 function requestReply<T>(
@@ -92,7 +105,7 @@ export function addElement(context: ArrayParentContext, value: unknown): void {
 // The palette's field gestures act on the focused cell, which only this panel knows: `context` is
 // the one its right-click would hand the command, `null` no cell. `entered` is a user's focus, not
 // a re-read.
-export function focusCell(context: Record<string, unknown> | null, entered: boolean): void {
+export function focusCell(context: FocusedCellContext | null, entered: boolean): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context, entered });
 }
 

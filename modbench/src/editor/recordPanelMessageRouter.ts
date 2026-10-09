@@ -10,7 +10,7 @@ import type { Reporter } from '../ports/reporter';
 import { pickRecord, type RecordPickerDeps } from './recordPicker';
 import type { RecordTab } from './recordTab';
 import type { RecordTabs } from './recordTabs';
-import type { FocusedCellContext } from './focusedCells';
+import type { FocusedCellContext } from '../wire/messages';
 import { errorMessage } from '../ports/errorMessage';
 import type { TitledColumn } from './recordTitle';
 import { modsByOrigin, type ModFacts } from './modsByOrigin';

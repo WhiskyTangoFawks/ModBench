@@ -11,29 +11,22 @@ import { LABEL_COLUMN } from './labelColumn';
 import { columnKey, copyColumnKey } from '../../src/wire/columnKey';
 import { pluginAddressOf } from '../../src/wire/pluginAddress';
 import type { UnreadableSource } from '../../src/wire/unreadableSource';
-import { addElement, editField, focusCell, keepViewState, openColumns } from './nativeBridge';
+import { addElement, editField, focusCell, keepViewState, listen, openColumns, pageGlobals } from './nativeBridge';
 import { openEditor } from './DiskCell';
 import { EditorMounted } from './cellEditor';
 import { pastedValue } from './modelValue';
-import { EXTENSION_TO_WEBVIEW, isViewState, parseExtensionToWebview, type ColumnCopy, type ModRepository, type ViewState } from '../../src/wire/messages';
+import { EXTENSION_TO_WEBVIEW, type ColumnCopy, type ModRepository, type ViewState } from '../../src/wire/messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
 import { RecordHeaderRow, FormIdRow } from './RecordHeaderRows';
 import { navigate, type FocusedCell } from './gridNavigation';
 import { recordRows, shownCell, visibleRows, navRows, FORM_ID_PATH, type GridCell, type RecordRow, type ValueCell } from './recordRows';
-import { failureReason, type ReadFailed } from '../../src/wire/readFailed';
-
-const mEditWindow = window as Window & typeof globalThis & {
-  mEditFormKey?: string;
-  mEditLoadError?: ReadFailed;
-  mEditViewState?: unknown;
-};
+import { failureReason } from '../../src/wire/readFailed';
 
 // The place of the tab this one stands in for, which an edit's move of the file closed.
-const placeGiven = (): ViewState => (isViewState(mEditWindow.mEditViewState)
-  ? mEditWindow.mEditViewState
-  : { collapsedRows: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } });
+const placeGiven = (): ViewState => pageGlobals().mEditViewState
+  ?? { collapsedRows: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
 
 // One sweep over the response's own overrides, keyed as the backend keys its dictionaries
 // (ADR-0012), so every whole-grid column set is minted the same way.
@@ -52,13 +45,14 @@ const messageStyle: React.CSSProperties = {
 };
 
 export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>) {
-  const [formKey, setFormKey] = useState<string>(mEditWindow.mEditFormKey ?? '');
+  const [formKey, setFormKey] = useState<string>(() => pageGlobals().mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
   const [gone, setGone] = useState<{ records: string[]; copiesLacking: string[] } | null>(null);
   const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
   // Null until /plugins answers, and null again when it fails: fail-closed, so a panel that has
   // not heard from /plugins offers no editing, compile or track (commands.md, No dead entries).
   const [trackedSet, setTrackedSet] = useState<Set<ColumnKey> | null>(null);
+  const [editableSet, setEditableSet] = useState<Set<ColumnKey> | null>(null);
   const [sourceUnreadableReasons, setSourceUnreadableReasons] = useState<Map<ColumnKey, UnreadableSource> | null>(null);
   const [modsByOrigin, setModsByOrigin] = useState<Record<string, ModRepository>>({});
   // Whether the winner sweep has run. Initial `true` only matters until the first load
@@ -68,7 +62,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [fileColumn, setFileColumn] = useState<ColumnKey | undefined>(undefined);
   const [fileCopyAlone, setFileCopyAlone] = useState(false);
   const [fileOverriddenBy, setFileOverriddenBy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(mEditWindow.mEditLoadError ? failureReason(mEditWindow.mEditLoadError) : null);
+  const [error, setError] = useState<string | null>(() => {
+    const { mEditLoadError } = pageGlobals();
+    return mEditLoadError ? failureReason(mEditLoadError) : null;
+  });
   const [given] = useState(placeGiven);
   const [collapsedRows, setCollapsedRows] = useState<Set<string>>(() => new Set(given.collapsedRows));
   const toggleRow = (rowKey: string) => setCollapsedRows(prev => {
@@ -104,13 +101,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   useEffect(tellPlace, [tellPlace]);
   const [columnWidths, setColumnWidths] = useState<ReadonlyMap<ColumnKey | typeof LABEL_COLUMN, number>>(new Map());
   const resizeColumn = (key: ColumnKey | typeof LABEL_COLUMN, width: number) => setColumnWidths(prev => new Map(prev).set(key, width));
-  // One definition of "this column can be written" (ADR-0007; editor.md, Columns, story 4), for the
-  // whole grid at once, since per cell it would lag. mEdit refuses every write to a parse-failed record.
+  // For the whole grid at once, since per cell it would lag. mEdit refuses every write to a parse-failed record.
   const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, o =>
-    copyColumnKey(o) === fileColumn && !immutableSet.has(pluginKeyOf(o)) && trackedSet?.has(pluginKeyOf(o)) === true
-      && sourceUnreadableReasons?.has(pluginKeyOf(o)) === false
-      && o.parseDiagnosis == null),
-    [result, fileColumn, immutableSet, trackedSet, sourceUnreadableReasons]);
+    copyColumnKey(o) === fileColumn && editableSet?.has(pluginKeyOf(o)) === true && o.parseDiagnosis == null),
+    [result, fileColumn, editableSet]);
 
   // editor.md, A column's header: a Partial Form or overridden column is dimmed, header and cells alike. One
   // definition of a column's look, so the header and the cells cannot disagree.
@@ -152,6 +146,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       // Unguarded, unlike the two above: a null must replace a previous record's answer, so an
       // unknown state reads as neither tracked nor untracked.
       setTrackedSet(loaded.trackedSet);
+      setEditableSet(loaded.editableSet);
       setSourceUnreadableReasons(loaded.sourceUnreadableReasons);
       setModsByOrigin(loaded.modsByOrigin);
       // No `?? true` fallback: `undefined` is falsy, so a fixture that omits `conflictsComputed`
@@ -218,13 +213,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     handleCellCommit(plugin, focused.editPath, pastedValue(text, focused.meta, focused.shown));
   }, [focusedCell, focused, handleCellCommit]);
   useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      let msg;
-      try {
-        msg = parseExtensionToWebview(event.data);
-      } catch {
-        return; // Not one of ours, or a stale/mismatched build.
-      }
+    return listen((msg) => {
       if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) void refresh(msg.formKey);
       if (msg.type === EXTENSION_TO_WEBVIEW.SHOW_COLUMNS) {
         client.showColumns(msg.columns);
@@ -236,9 +225,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         const cell = scroller.current?.querySelector<HTMLElement>('[data-focused-cell]');
         if (cell) openEditor(cell);
       }
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
+    });
   }, [refresh, pasteIntoFocused, client, formKey]);
 
   const gridShown = result !== null;
@@ -393,7 +380,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                       col.override.formKey, col.override.plugin, col.override.origin,
                       {
                         compilable: tracked && !isImmutable,
-                        editable: tracked && sourceUnreadable === undefined && !isImmutable,
+                        editable: editableSet?.has(pluginKeyOf(col.override)) === true,
                         inMod: modsByOrigin[col.override.origin] ?? 'none',
                       },
                     ))}

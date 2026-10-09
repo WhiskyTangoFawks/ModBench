@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../test/mo2/fakeVscodeWatcher';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './vscodeMock';
-import { adapterOver, STEADY_WINDOW } from './mo2/adapterOver';
+import { adapterOver, pluginsCommandsOver, STEADY_WINDOW } from './mo2/adapterOver';
 
 vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
@@ -12,7 +12,7 @@ import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import { instanceSyncs } from '../syncWiring';
 import { FakeInstance } from './mo2/fakeInstance';
 import { pastSequence, watcherFor } from './mo2/instanceLoop';
-import { pluginSyncOver, setPluginsEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
+import { pluginSyncOver, type PluginSyncResult } from '../pluginsCommands/plugins';
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
@@ -229,7 +229,7 @@ describe('a gesture writes the profile the Instance last landed', () => {
     watcherFor('ModOrganizer.ini').fireChange();
     expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
 
-    const result = await setPluginsEnabled(adapterOver(root), instance.value.activeProfile, ['Base.esp'], false);
+    const result = await pluginsCommandsOver(root).setPluginsEnabled(instance.value.activeProfile, ['Base.esp'], false);
 
     expect(result).toEqual({ applied: true, outcome: { landed: ['Base.esp'], refused: [] } });
     expect(await pluginsOf(OTHER_PROFILE)).toBe('Base.esp\r\n');
