@@ -51,7 +51,8 @@ function tellingOnce(say: (message: string, why: string) => void): (standing: To
 type OnFiles = Map<string, ProblemOnFile[]>;
 // A plugin's problems by file: the links it holds to missing records, and the files whose read stopped.
 interface Contribution { links: OnFiles; stops: OnFiles }
-interface Unplaced extends Told { plugin: string }
+// `told`: a failure mEdit does not log itself. It logs a later-read failure when it begins.
+interface Unplaced extends Told { plugin: string; told: boolean }
 interface Placed { ofPlugin: Map<string, Contribution | undefined>; unplaced: Unplaced[]; unread: Told[] }
 
 const nameOf = ({ name, origin }: { name: string; origin: string }) => `"${name}" (${origin})`;
@@ -60,11 +61,11 @@ const isLink = (problem: SourceProblem) => problem.fieldPath != null;
 async function placed(answer: PluginProblems[], { originFiles, readText }: SourceProblemsDeps): Promise<Placed> {
   const unplaced: Unplaced[] = [];
   const unread: Told[] = [];
-  const ofPlugin = new Map(await Promise.all(answer.map(async ({ plugin, problems, failure }) => {
+  const ofPlugin = new Map(await Promise.all(answer.map(async ({ plugin, problems, failure, failureKind }) => {
     const files = originFiles(plugin.origin);
     const key = pluginAddressKey(plugin);
     const why = files === undefined ? `The instance holds no folder for ${plugin.origin}.` : failure;
-    if (why != null) unplaced.push({ key, message: `The Problems panel keeps the last problems of ${nameOf(plugin)}.`, why, plugin: nameOf(plugin) });
+    if (why != null) unplaced.push({ key, message: `The Problems panel keeps the last problems of ${nameOf(plugin)}.`, why, plugin: nameOf(plugin), told: files === undefined || failureKind !== 'LaterRead' });
     if (files === undefined) return [key, undefined] as const;
     const contribution: Contribution = { links: new Map(), stops: new Map() };
     const byPath = new Map<string, SourceProblem[]>();
@@ -138,7 +139,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     publish(onEveryFile([...held.values()]));
     unplacedStatus = unplaced.length > 0 ? lastRead(unplaced.map(({ plugin, why }) => `${plugin}: ${why}`).join('; ')) : undefined;
     showStatus();
-    tellUnplaced(unplaced);
+    tellUnplaced(unplaced.filter(({ told }) => told));
     tellUnread(unread);
   };
   const keepLastAnswer = (mine: number, error: unknown) => {

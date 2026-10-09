@@ -164,4 +164,29 @@ describe('PluginFactsFeed', () => {
 
     expect(changes).not.toHaveBeenCalled();
   });
+
+  describe('a later read that failed', () => {
+    const failing = (message: string) => held({ laterReadFailure: [{ sourceRelativePath: 'A.esp/Npc.json', message }] });
+    it('logs nothing of its own across reads, as mEdit logs the failure once', async () => {
+      const { feed, client, logged } = feedOver();
+      for (const answer of [failing('Unexpected end at 1.'), failing('Unexpected end at 2.'), held(), failing('Unexpected end at 3.')]) {
+        client.setQueryAnswer('getPlugins', [answer]);
+        await feed.refresh();
+      }
+
+      expect(logged.items).toEqual([]);
+    });
+
+    it('is on the rows after a refresh and gone after the next good read, with no notification', async () => {
+      const { feed, client } = feedOver();
+      client.setQueryAnswer('getPlugins', [failing('bad')]);
+      await feed.refresh();
+      expect(feed.rows.laterReadFailureMessage()).toContain('bad');
+
+      client.setQueryAnswer('getPlugins', [held()]);
+      await feed.refresh();
+
+      expect(feed.rows.laterReadFailureMessage()).toBeUndefined();
+    });
+  });
 });
