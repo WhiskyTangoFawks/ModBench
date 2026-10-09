@@ -32,11 +32,7 @@ internal sealed class NewRecordCopy
         var (source, identity, destination, release, _) = copy;
         if (RefuseIfDisallowedForCopyAsNewRecord(identity.RecordType, RecordTypes.For(release)) is { } disallowedRefusal) return disallowedRefusal;
 
-        // A record with a group of its own is carried by no other record's document.
-        var containerRead = RecordTypes.For(release).GroupOf(identity.RecordType) is null
-            ? source.ContainerOf(identity)
-            : (DocumentContainment?)null;
-        if (!containerRead.Holds(out var container, out var why)) return WriteTargets.RefuseUnreadableSource(identity.FormKey, why);
+        if (!source.ContainerOf(identity).Holds(out var container, out var why)) return WriteTargets.RefuseUnreadableSource(identity.FormKey, why);
         if (container is { } held) return CopyEmbeddedChildAsNewRecord(copy, held, destinationPlugin);
 
         return CopyUnderNextFormKey(
