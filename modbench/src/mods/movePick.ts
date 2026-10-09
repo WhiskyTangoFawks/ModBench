@@ -11,7 +11,7 @@ export interface MovePickItem<T> {
   readonly target: T;
 }
 
-// modlist.txt runs winning first, so the view with losing at the top shows the groups reversed.
+// Mod order is winning-first, so the view with losing at the top shows the groups reversed.
 function groupsInViewOrder(entries: readonly ModlistEntry[], direction: SortDirection): ModlistGroup[] {
   const { groups } = groupModlist([...entries]);
   return direction === 'winningAtTop' ? groups : [...groups].reverse();

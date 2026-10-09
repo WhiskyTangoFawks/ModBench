@@ -1,5 +1,4 @@
-// `modlist.txt` is winning-first while the reference tool's authoring view is losing-at-top, so a
-// separator is written after the mods it heads, and wraps the entries preceding it. vscode-free, so
+// Mod order arrives winning-first, so a separator holds the mods before it. vscode-free, so
 // unit-testable.
 
 import type { Mod, ModlistEntry, Separator } from '../instanceLoader/instance';
