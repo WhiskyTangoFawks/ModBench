@@ -174,7 +174,7 @@ public sealed class RecordTypes
 
     /// <summary>The names of the members serializing their children inline, across every container
     /// of the game.</summary>
-    public IReadOnlySet<string> EmbeddedSlotNames { get; }
+    internal IReadOnlySet<string> EmbeddedSlotNames { get; }
 
     /// <summary>The class name a container's slot facts are keyed by. Null for a name no type of the
     /// game answers to.</summary>
