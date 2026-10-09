@@ -35,9 +35,8 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
   }
 
   watch(): vscode.Disposable { return new vscode.Disposable(() => undefined); }
-  // VS Code refuses a document's save when the file's mtime is newer than the one it read and its size
-  // differs. Once Modbench wrote the file, a child states the size it read, so only another program's
-  // write refuses its save.
+  // VS Code refuses a document's save when the file's mtime is newer than it read and its size differs.
+  // After Modbench's own write a child states the size it read, so only another program's write refuses.
   async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
     const file = containerFileOf(uri);
     const own = await this.ownWrites.get(file.fsPath);
