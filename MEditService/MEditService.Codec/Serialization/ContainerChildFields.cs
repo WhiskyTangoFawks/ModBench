@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using MEditService.Codec.Schema;
 using Mutagen.Bethesda.Plugins.Records;
@@ -36,22 +37,25 @@ public static class ContainerChildFields
     }
 
     /// <summary>A list slot takes the child at its end; a single-value slot (a worldspace's persistent
-    /// cell) takes it as its value.</summary>
-    internal static void AddChildToSlot(IMajorRecordGetter parent, string slotName, IMajorRecord child)
+    /// cell) takes it as its value unless it already holds <paramref name="held"/>.</summary>
+    internal static bool TryAddChildToSlot(
+        IMajorRecordGetter parent, string slotName, IMajorRecord child, [NotNullWhen(false)] out IMajorRecordGetter? held)
     {
         var property = SlotProperty(parent.GetType(), slotName, "add a child to");
+        held = null;
 
         if (typeof(System.Collections.IEnumerable).IsAssignableFrom(property.PropertyType))
         {
             var list = property.GetValue(parent)
                 ?? throw new InvalidOperationException($"Expected {parent.GetType().Name}.{slotName} to hold a collection to add a child to.");
             ((dynamic)list).Add((dynamic)child);
-            return;
+            return true;
         }
 
-        if (property.GetValue(parent) is IMajorRecordGetter held)
-            throw new ChildSlotHeldByAnotherRecordException(parent.GetType().Name, slotName, held.FormKey.ToString(), child.FormKey.ToString());
+        held = property.GetValue(parent) as IMajorRecordGetter;
+        if (held != null) return false;
         property.SetValue(parent, child);
+        return true;
     }
 
     private static PropertyInfo SlotProperty(Type recordType, string slotName, string purpose) =>

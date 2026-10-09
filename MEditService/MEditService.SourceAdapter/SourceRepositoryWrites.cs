@@ -66,15 +66,21 @@ internal sealed class SourceRepositoryWrites(
     }
 
     /// <summary>What putting a new child at the end of <paramref name="slot"/> of <paramref name="container"/>
-    /// changes: the container's own text with the child appended, rewritten as <see cref="ChangesToRewrite"/> says.</summary>
+    /// changes: the child spliced into the container's own text, rewritten as <see cref="ChangesToRewrite"/> says.</summary>
     internal SourceChanges ChangesToPutChild(PluginAddress plugin, RecordIdentity container, string slot, SourceDocument child)
     {
         var unit = HeldUnit(plugin, container, "there is no slot to put a child in");
         var containerText = DocumentText.RecordBodyFromOwnerBytes(FileBytes(unit), unit, container.FormKey, _release)
             ?? throw NoLongerCarried(unit, container.FormKey);
-        var withChild = Read(() => ContainerDocumentEdits.WithChildAppended(
-            containerText, _release, container.RecordType, slot, child.Body, child.RecordType));
-        return ChangesToHeld(unit, new SourceDocument(container.FormKey, container.RecordType, container.EditorId, withChild));
+        return Read(() => ContainerDocumentEdits.WithChildAppended(
+                containerText, _release, container.RecordType, slot, child.Body, child.RecordType)) switch
+        {
+            ChildAppend.Appended(var withChild) =>
+                ChangesToHeld(unit, new SourceDocument(container.FormKey, container.RecordType, container.EditorId, withChild)),
+            ChildAppend.SlotHeld(var held) => throw SourceStopException.Of(new SourceFailure.SlotHeld(
+                $"{container.FormKey}'s {slot} already holds {held}, so {child.FormKey} cannot take its place.")),
+            var answer => throw new InvalidOperationException($"Expected the codec to append the child or answer its slot held, not {answer}."),
+        };
     }
 
     /// <summary>What rewriting a document the tree holds changes: its text, inside its owner's when embedded, and
@@ -160,10 +166,6 @@ internal sealed class SourceRepositoryWrites(
         try
         {
             return read();
-        }
-        catch (ChildSlotHeldByAnotherRecordException ex)
-        {
-            throw SourceStopException.Of(new SourceFailure.SlotHeld(ex.Message), ex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

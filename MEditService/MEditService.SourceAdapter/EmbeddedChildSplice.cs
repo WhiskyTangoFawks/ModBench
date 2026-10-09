@@ -20,8 +20,8 @@ internal static class EmbeddedChildSplice
     /// without the discriminator a document of an unambiguous type carries none of.</summary>
     internal static string Extract(byte[] ownerBytes, EmbeddedChildSpan span, GameRelease release)
     {
-        var text = DeIndent(
-            Encoding.UTF8.GetString(ownerBytes, span.Start, span.End - span.Start), IndentAt(ownerBytes, span.Start));
+        var text = TextIndentation.Outdented(
+            Encoding.UTF8.GetString(ownerBytes, span.Start, span.End - span.Start), TextIndentation.ColumnAt(ownerBytes, span.Start));
 
         return span.Discriminator is { } named && !RecordTypes.For(release).IsPathAmbiguous(named)
             ? WithoutDiscriminator(text)
@@ -33,8 +33,8 @@ internal static class EmbeddedChildSplice
     /// replaces carried.</summary>
     internal static string Replace(byte[] ownerBytes, EmbeddedChildSpan span, string childText)
     {
-        var inline = Indent(
-            WithDiscriminator(childText, span.Discriminator), IndentAt(ownerBytes, span.Start));
+        var inline = TextIndentation.Indented(
+            WithDiscriminator(childText, span.Discriminator), TextIndentation.ColumnAt(ownerBytes, span.Start));
 
         return Encoding.UTF8.GetString(
             [.. ownerBytes[..span.Start], .. Encoding.UTF8.GetBytes(inline), .. ownerBytes[span.End..]]);
@@ -99,7 +99,7 @@ internal static class EmbeddedChildSplice
 
         var at = (int)reader.TokenStartIndex;
         var declaration = Encoding.UTF8.GetBytes(
-            $"\"{LoquiUnions.UnionTypeDiscriminator}\": \"{discriminator}\",\n{new string(' ', IndentAt(bytes, at))}");
+            $"\"{LoquiUnions.UnionTypeDiscriminator}\": \"{discriminator}\",\n{new string(' ', TextIndentation.ColumnAt(bytes, at))}");
         return Encoding.UTF8.GetString([.. bytes[..at], .. declaration, .. bytes[at..]]);
     }
 
@@ -119,34 +119,5 @@ internal static class EmbeddedChildSplice
             : valueEnd;
 
         return Encoding.UTF8.GetString([.. bytes[..from], .. bytes[to..]]);
-    }
-
-    // The column the child's whole line starts at, not the column the span starts at: a single-value
-    // slot opens its child's brace after the member name, so the two differ by the name's width.
-    private static int IndentAt(byte[] bytes, int start)
-    {
-        var lineStart = start;
-        while (lineStart > 0 && bytes[lineStart - 1] != (byte)'\n') lineStart--;
-
-        var spaces = 0;
-        while (lineStart + spaces < start && bytes[lineStart + spaces] == (byte)' ') spaces++;
-        return spaces;
-    }
-
-    private static string DeIndent(string text, int indent) =>
-        indent == 0
-            ? text
-            : string.Join('\n', text.Split('\n').Select((line, at) => at == 0 ? line : WithoutLeadingSpaces(line, indent)));
-
-    private static string Indent(string text, int indent) =>
-        indent == 0
-            ? text
-            : string.Join('\n', text.Split('\n').Select((line, at) => at == 0 || line.Length == 0 ? line : new string(' ', indent) + line));
-
-    private static string WithoutLeadingSpaces(string line, int spaces)
-    {
-        var at = 0;
-        while (at < spaces && at < line.Length && line[at] == ' ') at++;
-        return line[at..];
     }
 }

@@ -774,29 +774,36 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void ChangesToPutChild_IntoAnEmbeddedContainer_LeavesTheOwnersHandFormattedText_ByteForByte()
+    public void ChangesToPutChild_IntoAnEmbeddedContainer_OfHandFormattedText_ChangesNoByteOutsideTheChild()
     {
-        var handFormatted = File.ReadAllText(FullPath(QuestPath)).Replace("\"EditorID\": \"Quest\"", "\"EditorID\":    \"Quest\"", StringComparison.Ordinal);
-        Assert.Contains("\"EditorID\":    \"Quest\"", handFormatted, StringComparison.Ordinal);
-        File.WriteAllText(FullPath(QuestPath), handFormatted);
+        var handFormatted = HandFormatted(QuestPath);
         var added = new DialogResponses(_mod) { EditorID = "Response3" };
 
         var owner = Assert.Single(Repository.ChangesToPutChild(Plugin, Identity(_topic, "dial"), "Responses", ANewChild(added, "info")).Value().Documents);
 
-        Assert.Contains("\"EditorID\":    \"Quest\"", owner.Text, StringComparison.Ordinal);
+        OneInsertion.AssertKeepsEveryOtherByte(handFormatted, owner.Text);
+        Assert.Contains("\"Response3\"", owner.Text, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ChangesToPutChild_IntoAContainerWithADocumentOfItsOwn_RewritesThatDocument()
+    public void ChangesToPutChild_IntoAContainerWithADocumentOfItsOwn_OfHandFormattedText_ChangesNoByteOutsideTheChild()
     {
+        var handFormatted = HandFormatted(InteriorCellPath);
         var added = new PlacedObject(_mod) { EditorID = "AddedRef", Position = new P3Float(1f, 1f, 1f), Scale = 1f };
 
         var changes = Repository.ChangesToPutChild(Plugin, Identity(_interiorCell, "cell"), "Temporary", ANewChild(added, "refr")).Value();
 
         var document = Assert.Single(changes.Documents);
         Assert.Equal(FullPath(InteriorCellPath), Path.Combine(_modFolder, document.Path));
+        OneInsertion.AssertKeepsEveryOtherByte(handFormatted, document.Text);
         Assert.Contains("\"AddedRef\"", document.Text, StringComparison.Ordinal);
-        Assert.Contains("\"TempRef\"", document.Text, StringComparison.Ordinal);
+    }
+
+    private string HandFormatted(string relativePath)
+    {
+        var text = File.ReadAllText(FullPath(relativePath)).Replace("\": ", "\":   ", StringComparison.Ordinal);
+        File.WriteAllText(FullPath(relativePath), text);
+        return text;
     }
 
     [Fact]
@@ -807,6 +814,18 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var stopped = Repository.ChangesToPutChild(Plugin, Identity(_worldspace, "wrld"), "TopCell", ANewChild(other, "cell")).Stopped();
 
         Assert.IsType<SourceFailure.SlotHeld>(stopped);
+    }
+
+    [Fact]
+    public void ChangesToPutChild_IntoASlotItsContainersTextNamesTwice_IsUnreadable()
+    {
+        var text = File.ReadAllText(FullPath(InteriorCellPath));
+        File.WriteAllText(FullPath(InteriorCellPath), text.Replace("\"Temporary\": [", "\"Temporary\": [],\n  \"Temporary\": [", StringComparison.Ordinal));
+        var added = new PlacedObject(_mod) { EditorID = "AddedRef", Position = new P3Float(1f, 1f, 1f), Scale = 1f };
+
+        var stopped = Repository.ChangesToPutChild(Plugin, Identity(_interiorCell, "cell"), "Temporary", ANewChild(added, "refr")).Stopped();
+
+        Assert.IsType<SourceFailure.Unreadable>(stopped);
     }
 
     [Fact]
