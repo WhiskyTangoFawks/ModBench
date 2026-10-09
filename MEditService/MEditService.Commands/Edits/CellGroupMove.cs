@@ -45,7 +45,7 @@ internal sealed record CellGroupMove(HeldIn From, string Destination, AnotherCel
                 out var said) is { } refusal)
                 return refusal;
             if (PlacedCell.IsInterior(said)) return null;
-            grid = PlacedCell.Grid(said);
+            grid = said.Grid;
         }
         if (IntoPersistent)
         {

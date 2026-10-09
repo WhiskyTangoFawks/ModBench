@@ -1,5 +1,8 @@
 namespace MEditService.Codec.Schema;
 
+/// <summary>A member the schema reads as read-only, at the path an edit names it by.</summary>
+public sealed record ReadOnlyMember(string Path, string Member, string Reason);
+
 /// <summary>Why an edit by path cannot be made on a document, at the path it names.</summary>
 public abstract record EditFailure(string Path)
 {
@@ -22,13 +25,7 @@ public abstract record EditFailure(string Path)
     /// <summary>A value that does not lead with the discriminator naming one of its leaves.</summary>
     public sealed record NotALeaf(string Path, FieldMetadata Discriminator) : EditFailure(Path);
 
-    public sealed record KeyedMove(string Path, string Array) : EditFailure(Path);
-
-    public sealed record AlreadyThere(string Path, int Position) : EditFailure(Path);
-
     public sealed record NotABoolean(string Path) : EditFailure(Path);
-
-    public sealed record ReadOnlyMember(string Path, string Member, string Reason) : EditFailure(Path);
 
     /// <summary>A hex value of another length than the bytes the document holds there.</summary>
     public sealed record HexResize(string Path, int Held, int Given) : EditFailure(Path);

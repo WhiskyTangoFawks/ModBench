@@ -14,11 +14,21 @@ public sealed class DocumentEdit
     private readonly Cursor _cursor;
     private bool _applied;
 
-    private DocumentEdit(JsonObject record, EditOp op, string spelled, Cursor cursor) =>
-        (_record, _op, _spelled, _cursor) = (record, op, spelled, cursor);
+    private DocumentEdit(JsonObject record, EditOp op, string spelled, Cursor cursor, ReadOnlyMember? readOnlyTarget) =>
+        (_record, _op, _spelled, _cursor, ReadOnlyTarget) = (record, op, spelled, cursor, readOnlyTarget);
 
     /// <summary>The column the path starts at.</summary>
     public ColumnSpec Column => _cursor.Column;
+
+    /// <summary>The member the path lands on, where the schema reads it as read-only. A read-only member's
+    /// reason reaches every member below it (FieldMetadata.WithReadOnlyReason).</summary>
+    public ReadOnlyMember? ReadOnlyTarget { get; }
+
+    /// <summary>Whether the path lands on an element of an array whose elements are keyed.</summary>
+    public bool InKeyedArray => _cursor.OwnerArray != null && _cursor.OwnerMeta?.KeyMembers != null;
+
+    /// <summary>The element's position, where the path lands on an element.</summary>
+    public int Position => _cursor.Index;
 
     /// <summary>Where <paramref name="path"/> lands in <paramref name="record"/>. A set or an add makes
     /// the objects on the way that the document omits.</summary>
@@ -27,10 +37,33 @@ public sealed class DocumentEdit
     {
         edit = null;
         var tree = record.Tree();
-        if (Resolve(tree, schema, path, op is EditOp.Set or EditOp.Add, out var cursor) is { } unresolved) return unresolved;
-        edit = new(tree, op, DocumentHop.Spell(path), cursor ?? throw new InvalidOperationException("Expected Resolve to set a cursor when it does not refuse."));
+        if (Resolve(tree, schema, path, op is EditOp.Set or EditOp.Add, out var resolved) is { } unresolved) return unresolved;
+        var cursor = resolved ?? throw new InvalidOperationException("Expected Resolve to set a cursor when it does not refuse.");
+        var spelled = DocumentHop.Spell(path);
+        var readOnly = cursor.Field?.ReadOnlyReason is { } why ? new ReadOnlyMember(spelled, cursor.MemberName ?? cursor.Column.Name, why) : null;
+        edit = new(tree, op, spelled, cursor, readOnly);
         return null;
     }
+
+    /// <summary>The first read-only member <paramref name="value"/> spells, unless a value
+    /// <see cref="Apply"/> refuses comes before it.</summary>
+    public ReadOnlyMember? ReadOnlyReached(string? value)
+    {
+        if (_cursor.Column.Synthetic != null) return null;
+        var reached = _op switch
+        {
+            EditOp.Set when value is not null && JsonNode.Parse(value) is { } node =>
+                PreCheck(node, _cursor.Meta, _cursor.Node, _spelled, readOnlyStops: true),
+            EditOp.Add when _cursor.Meta.ElementType is { } elementMeta && _cursor.Node is null or JsonArray =>
+                PreCheck(
+                    (value is null ? null : JsonNode.Parse(value)) ?? LeafSpelling.Minted(elementMeta), elementMeta, null,
+                    $"{_spelled}[{(_cursor.Node as JsonArray)?.Count ?? 0}]", readOnlyStops: true),
+            _ => null,
+        };
+        return (reached as ReachesReadOnly)?.Member;
+    }
+
+    private sealed record ReachesReadOnly(ReadOnlyMember Member) : EditFailure(Member.Path);
 
     /// <summary>The edit made with <paramref name="value"/>, JSON text: what a set puts, what an add appends
     /// (null for the element's default), or a move's destination index.</summary>
@@ -98,15 +131,10 @@ public sealed class DocumentEdit
             return new EditFailure.NoField(spelled, recordLeaf, name);
 
         var segments = column.PropertyName.Split('.');
-        var owner = record;
-        for (var i = 0; i < segments.Length - 1; i++)
+        if (Document.OwnerAt(record, segments[..^1], creating) is not { } owner)
         {
-            if (owner[segments[i]] is not JsonObject inner)
-            {
-                if (!creating) { cursor = new Cursor { Column = column, Meta = meta }; return null; }
-                owner[segments[i]] = inner = new JsonObject();
-            }
-            owner = inner;
+            cursor = new Cursor { Column = column, Meta = meta };
+            return null;
         }
         cursor = new Cursor
         {
@@ -174,11 +202,7 @@ public sealed class DocumentEdit
             };
         }
 
-        // Asked once, of whatever the path resolved to: a read-only member's reason reaches every
-        // member below it (FieldMetadata.WithReadOnlyReason), so no path through one ends writable.
-        return cursor.Field?.ReadOnlyReason is { } why
-            ? new EditFailure.ReadOnlyMember(spelled, cursor.MemberName ?? name, why)
-            : null;
+        return null;
     }
 
     private static void Attach(Cursor cursor, JsonNode node)
@@ -206,7 +230,7 @@ public sealed class DocumentEdit
         var node = JsonNode.Parse(value);
         if (node is null && cursor.OwnerArray != null) return new EditFailure.NullElement(spelled);
 
-        if (PreCheck(node, cursor.Meta, cursor.Node, spelled) is { } refused) return refused;
+        if (PreCheck(node, cursor.Meta, cursor.Node, spelled, readOnlyStops: false) is { } refused) return refused;
         node = LeafSpelling.AsRead(node, cursor.Meta);
         Cascade(node, cursor.Meta, cursor.Node);
 
@@ -335,7 +359,7 @@ public sealed class DocumentEdit
         }
 
         var element = (value is null ? null : JsonNode.Parse(value)) ?? LeafSpelling.Minted(elementMeta);
-        if (PreCheck(element, elementMeta, null, $"{spelled}[{array.Count}]") is { } refused) return refused;
+        if (PreCheck(element, elementMeta, null, $"{spelled}[{array.Count}]", readOnlyStops: false) is { } refused) return refused;
         element = LeafSpelling.AsRead(element, elementMeta);
         Cascade(element, elementMeta, null);
         array.Add(element);
@@ -352,16 +376,13 @@ public sealed class DocumentEdit
         return null;
     }
 
-    private static EditFailure? Move(Cursor cursor, string value, string spelled, out JsonNode? edited, out FieldMetadata editedMeta)
+    private static EditFailure.NoElement? Move(Cursor cursor, string value, string spelled, out JsonNode? edited, out FieldMetadata editedMeta)
     {
         edited = null;
         editedMeta = cursor.Meta;
         var array = cursor.RequireOwnerArray();
-        // xedit.md, divergence 14.
-        if (cursor.RequireOwnerMeta().KeyMembers != null) return new EditFailure.KeyedMove(spelled, Owner(spelled));
         var destination = JsonElement.Parse(value).GetInt32();
         if (destination < 0 || destination >= array.Count) return new EditFailure.NoElement($"{Owner(spelled)}[{destination}]", array.Count);
-        if (destination == cursor.Index) return new EditFailure.AlreadyThere(spelled, destination);
         var node = array[cursor.Index];
         array.RemoveAt(cursor.Index);
         array.Insert(destination, node);
@@ -375,10 +396,9 @@ public sealed class DocumentEdit
 
     // ── the closed pre-check list ───────────────────────────────────────────
 
-    // Discriminator first on a union element, a member a known-defect row marks read-only, hex
-    // length where the document establishes one, no alpha where a colour holds none; walked over the
-    // value with the metadata beside it.
-    private static EditFailure? PreCheck(JsonNode? value, FieldMetadata meta, JsonNode? current, string path)
+    // Discriminator first on a union element, hex length where the document establishes one, no alpha
+    // where a colour holds none. A read-only member stops the walk only when asked: Commands refuses it.
+    private static EditFailure? PreCheck(JsonNode? value, FieldMetadata meta, JsonNode? current, string path, bool readOnlyStops)
     {
         switch (value)
         {
@@ -398,15 +418,19 @@ public sealed class DocumentEdit
                 {
                     if (fields.FirstOrDefault(f => f.Name == name) is not { } field) continue;
                     // A whole-subtree set reaches a read-only member the same way a path to it does.
-                    if (field.ReadOnlyReason is { } reason) return new EditFailure.ReadOnlyMember($"{path}.{name}", name, reason);
-                    if (PreCheck(child, DocumentNodes.VariantFor(field, obj), currentObj?[name], $"{path}.{name}") is { } refused) return refused;
+                    if (field.ReadOnlyReason is { } reason)
+                    {
+                        if (readOnlyStops) return new ReachesReadOnly(new ReadOnlyMember($"{path}.{name}", name, reason));
+                        continue;
+                    }
+                    if (PreCheck(child, DocumentNodes.VariantFor(field, obj), currentObj?[name], $"{path}.{name}", readOnlyStops) is { } refused) return refused;
                 }
                 return null;
             case JsonArray array when meta.ElementType is { } elementMeta:
                 var currentArray = current as JsonArray;
                 for (var i = 0; i < array.Count; i++)
                 {
-                    if (PreCheck(array[i], elementMeta, currentArray != null && i < currentArray.Count ? currentArray[i] : null, $"{path}[{i}]") is { } refused)
+                    if (PreCheck(array[i], elementMeta, currentArray != null && i < currentArray.Count ? currentArray[i] : null, $"{path}[{i}]", readOnlyStops) is { } refused)
                         return refused;
                 }
                 return null;
@@ -436,12 +460,7 @@ public sealed class DocumentEdit
         var set = given.GetBoolean();
 
         var segments = bit.BackingPath.Split('.');
-        var owner = _record;
-        foreach (var segment in segments[..^1])
-        {
-            if (owner[segment] is not JsonObject inner) owner[segment] = inner = new JsonObject();
-            owner = inner;
-        }
+        var owner = Document.OwnerOf(_record, segments[..^1]);
         var member = segments[^1];
         var names = (owner[member] as JsonArray)?
             .Select(n => (n ?? throw new InvalidOperationException("Expected every flag-array element to be a non-null string."))

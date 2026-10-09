@@ -41,8 +41,6 @@ public static class PlacedCell
     /// <summary>The cell's grid, or null when its document carries none. The codec omits a zero point.</summary>
     public static (int X, int Y)? Grid(JsonObject cell) => Document.Over(JsonSerializer.SerializeToElement(cell))?.Grid;
 
-    public static (int X, int Y)? Grid(Document cell) => cell.Grid;
-
     /// <summary>The cell at grid (<paramref name="x"/>, <paramref name="y"/>), its grid member as the codec
     /// writes it.</summary>
     public static Document WithGrid(Document cell, int x, int y) =>

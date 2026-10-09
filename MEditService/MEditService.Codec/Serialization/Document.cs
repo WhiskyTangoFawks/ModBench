@@ -71,7 +71,7 @@ public sealed class Document
     {
         var member = path[^1];
         var owner = path[..^1].ToArray();
-        return Edited(root => OwnerAt(root, owner)[member] = value);
+        return Edited(root => OwnerOf(root, owner)[member] = value);
     }
 
     /// <summary>The member at <paramref name="path"/> as <paramref name="from"/> holds it, absent where
@@ -81,7 +81,7 @@ public sealed class Document
         if (from.At(path) is not { ValueKind: not JsonValueKind.Null } copied) return Without(path);
         var member = path[^1];
         var owner = path[..^1].ToArray();
-        return Edited(root => OwnerAt(root, owner)[member] = JsonNode.Parse(copied.GetRawText()));
+        return Edited(root => OwnerOf(root, owner)[member] = JsonNode.Parse(copied.GetRawText()));
     }
 
     public Document Without(params ReadOnlySpan<string> path)
@@ -89,7 +89,7 @@ public sealed class Document
         if (At(path) is null) return this;
         var member = path[^1];
         var owner = path[..^1].ToArray();
-        return Edited(root => OwnerAt(root, owner).Remove(member));
+        return Edited(root => OwnerOf(root, owner).Remove(member));
     }
 
     /// <summary>This document without the other spellings of <paramref name="column"/>'s value, which sit beside
@@ -116,17 +116,25 @@ public sealed class Document
 
     internal static Document Of(JsonObject root) => new(JsonElement.Parse(root.ToJsonString()));
 
-    // The object at the path, made where the document omits it.
-    private static JsonObject OwnerAt(JsonObject root, string[] path)
+    /// <summary>The object at <paramref name="path"/> in <paramref name="root"/>; where the tree holds none,
+    /// made when <paramref name="creating"/>, and otherwise null.</summary>
+    internal static JsonObject? OwnerAt(JsonObject root, IEnumerable<string> path, bool creating)
     {
         var owner = root;
         foreach (var hop in path)
         {
-            if (owner[hop] is not JsonObject inner) owner[hop] = inner = new JsonObject();
+            if (owner[hop] is not JsonObject inner)
+            {
+                if (!creating) return null;
+                owner[hop] = inner = new JsonObject();
+            }
             owner = inner;
         }
         return owner;
     }
+
+    internal static JsonObject OwnerOf(JsonObject root, IEnumerable<string> path) =>
+        OwnerAt(root, path, creating: true) ?? throw new InvalidOperationException("Expected a walk that makes what it lacks to reach its owner.");
 
     internal JsonElement? At(params ReadOnlySpan<string> path)
     {
@@ -222,7 +230,7 @@ public sealed class Document
         return null;
     }
 
-    internal (int X, int Y)? Grid
+    public (int X, int Y)? Grid
     {
         get
         {

@@ -5,7 +5,6 @@ namespace MEditService.Codec.Schema;
 /// <summary>One hop of a path into a document: a member by name, or else an element by position.</summary>
 public readonly record struct DocumentHop(string? Member, int? Index)
 {
-    /// <summary>The path as an edit's answer names it: <c>Conditions[0].Data.Function</c>.</summary>
     public static string Spell(IEnumerable<DocumentHop> path)
     {
         var sb = new StringBuilder();
@@ -31,8 +30,6 @@ public readonly record struct DocumentHop(string? Member, int? Index)
         Index ?? throw new InvalidOperationException("Expected an index hop to carry a position.");
 }
 
-/// <summary>The one write shape (ADR-0005): set puts the value at the path, add appends to the array
-/// there, remove drops the element there, and move places it at another position.</summary>
 public enum EditOp
 {
     Set,

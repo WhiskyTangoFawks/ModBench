@@ -35,6 +35,7 @@ internal static class RecordTextEdit
         if (DocumentEdit.Locate(record, request.Schema, op, [.. envelope.Path.Select(hop => hop.Hop)], out var located) is { } unaddressed)
             return Refusal(unaddressed);
         var edit = located ?? throw new InvalidOperationException("Expected Locate to answer an edit when it does not refuse.");
+        if (edit.ReadOnlyTarget is { } readOnly) return ReadOnlyRefusal(readOnly.Path, readOnly.Member, readOnly.Reason);
         var column = edit.Column;
 
         if (RefuseIfPartialForm(record, request.Schema, column, spelled) is { } partialForm) return partialForm;
@@ -54,7 +55,10 @@ internal static class RecordTextEdit
         AnotherCell? into = null;
         if (groupMove?.RefuseUnknownCell(record, request.Release, request.Masters, spelled, out into) is { } unknown) return unknown;
 
-        if (edit.Apply(envelope.Value?.GetRawText(), out var applied) is { } refused) return Refusal(refused);
+        if (op == EditOp.Move && RefuseMove(edit, envelope, spelled) is { } unmoved) return unmoved;
+        var value = envelope.Value?.GetRawText();
+        if (edit.ReadOnlyReached(value) is { } reached) return ReadOnlyRefusal(reached.Path, reached.Member, reached.Reason);
+        if (edit.Apply(value, out var applied) is { } refused) return Refusal(refused);
         var patch = applied ?? throw new InvalidOperationException("Expected Apply to answer a patch when it does not refuse.");
         var patched = emptying?.Apply(patch.Document, request.Schema, request.Release, left) ?? patch.Document;
 
@@ -146,11 +150,7 @@ internal static class RecordTextEdit
             Malformed(path, inTheDocument ? $"'{subject}' is not an array in the document" : $"'{subject}' is not an array"),
         EditFailure.NoArrayToAppendTo(var path) => Malformed(path, $"'{path}' is not an array; add appends to one"),
         EditFailure.NullElement(var path) => Malformed(path, "an element is not cleared with null; remove it"),
-        EditFailure.KeyedMove(var path, var array) =>
-            Malformed(path, $"'{array}' is a keyed array, and a keyed array's elements take no move"),
-        EditFailure.AlreadyThere(var path, var position) => Malformed(path, $"the element is already at position {position}"),
         EditFailure.NotABoolean(var path) => Malformed(path, $"'{path}' takes a JSON boolean through set"),
-        EditFailure.ReadOnlyMember(var path, var member, var reason) => ReadOnlyRefusal(path, member, reason),
         EditFailure.NotALeaf(var path, var discriminator) => RecordEditResult.RefusedAt(
             RecordEditRefusal.DiscriminatorInvalid, path,
             $"'{path}' must lead with '{discriminator.Name}' naming one of: {string.Join(", ", discriminator.EnumMembers.Select(m => m.Value))}."),
@@ -162,6 +162,15 @@ internal static class RecordTextEdit
             $"'{path}' holds no alpha; '{color}' gives one that compiling would drop, so nothing was written. Give it as #RRGGBB."),
         _ => throw new InvalidOperationException($"Expected a refusal for every edit failure, not {failure.GetType().Name}."),
     };
+
+    private static RecordEditResult? RefuseMove(DocumentEdit edit, RecordEditEnvelope envelope, string spelled)
+    {
+        // xedit.md, divergence 14.
+        if (edit.InKeyedArray)
+            return Malformed(spelled, $"'{RecordEditEnvelope.Spell(envelope.Path.SkipLast(1))}' is a keyed array, and a keyed array's elements take no move");
+        var destination = (envelope.Value ?? throw new InvalidOperationException("Expected a move's destination index.")).GetInt32();
+        return destination == edit.Position ? Malformed(spelled, $"the element is already at position {destination}") : null;
+    }
 
     internal static RecordEditResult ReadOnlyRefusal(string path, string name, string reason) =>
         RecordEditResult.RefusedAt(RecordEditRefusal.FieldReadOnly, path, $"'{name}' is read-only: {reason}.");

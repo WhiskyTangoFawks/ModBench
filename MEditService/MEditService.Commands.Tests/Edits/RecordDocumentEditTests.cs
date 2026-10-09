@@ -73,6 +73,33 @@ public sealed class RecordDocumentEditTests : IDisposable
     }
 
     [Fact]
+    public void Header_Masters_AreRefusedWithTheirReason()
+    {
+        var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
+        _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, Encoding.UTF8.GetString(HeaderDocument.Write(_mod)));
+
+        var (result, _) = _fixture.Apply(headerFormKey, SetAt(Json("[]"), Member("MasterReferences")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
+        Assert.Contains("content-derived", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Move_ToThePositionTheElementHolds_IsRefusedAsMalformed_AndChangesNothing()
+    {
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
+
+        var (result, after) = _fixture.Apply(formKey, MoveTo(0, Member("Keywords"), At(0)));
+
+        Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
+        Assert.Equal("'Keywords[0]': the element is already at position 0.", result.Message);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
+    }
+
+    [Fact]
     public void Header_FormID_IsRefusedWithItsReason()
     {
         var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);

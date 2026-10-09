@@ -329,14 +329,6 @@ public sealed class DocumentEditTests
     }
 
     [Fact]
-    public void Header_Masters_FailAsReadOnly_WithTheirReason()
-    {
-        var failure = Failure(HeaderText(), PluginHeader.RecordType, EditOp.Set, "[]", Member("MasterReferences"));
-
-        Assert.Contains("content-derived", Assert.IsType<EditFailure.ReadOnlyMember>(failure).Reason, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void Header_VersionControlInfo1_IsWrittenAsAnyFieldIs()
     {
         var before = HeaderText();
@@ -420,7 +412,7 @@ public sealed class DocumentEditTests
 
         var after = Edited(before, "wthr", EditOp.Set, "\"#102030\"", Member("LightningColor"));
 
-        Assert.Empty(DocumentDiffs.Of(before, after));
+        Assert.Equal(before, after);
     }
 
     [Theory]
@@ -468,29 +460,6 @@ public sealed class DocumentEditTests
         Assert.Equal(persistent | cantWait, Node(set, "MajorRecordFlagsRaw").GetValue<int>());
         Assert.Equal(["CantWait", "Persistent"], Node(set, "MajorFlags").AsArray().Select(n => n.Require().GetValue<string>()).Order(StringComparer.Ordinal));
         AssertOnlyChanged(before, set, "MajorRecordFlagsRaw", "Fallout4MajorRecordFlags", "MajorFlags");
-    }
-
-    [Fact]
-    public void APathReachingTheGovernedMember_FailsAsReadOnlyByName()
-    {
-        var failure = Failure(SceneWithAnActionText(), "scen", EditOp.Set, "{}", Member("Actions"), At(0), Member("Type"));
-
-        Assert.Equal("Type", Assert.IsType<EditFailure.ReadOnlyMember>(failure).Member);
-    }
-
-    [Fact]
-    public void AWholeElementSpellingTheGovernedMember_FailsAsReadOnlyByName()
-    {
-        var failure = Failure(SceneWithAnActionText(), "scen", EditOp.Set, """{"Name": "Second", "Type": {}}""", Member("Actions"), At(0));
-
-        Assert.Equal("Type", Assert.IsType<EditFailure.ReadOnlyMember>(failure).Member);
-    }
-
-    private string SceneWithAnActionText()
-    {
-        var scene = new Scene(_mod) { EditorID = "DefectScene" };
-        scene.Actions.Add(new SceneAction { Name = "First" });
-        return TextOf(scene);
     }
 
     [Fact]

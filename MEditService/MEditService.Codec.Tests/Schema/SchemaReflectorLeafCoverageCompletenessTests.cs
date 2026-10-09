@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Reflection;
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -109,8 +108,10 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         }
     }
 
-    private static bool ClearsWith(ColumnSpec column, string member) =>
-        Document.Parse($$"""{"{{member}}":0}""").WithoutAliasesOf(column).IntegerAt(member) is null;
+    private static readonly string[] RecordFlagViews = ["Fallout4MajorRecordFlags", "IsCompressed", "IsDeleted", "MajorFlags"];
+
+    private static bool IsAFlagView(ColumnSpec column, string member) =>
+        column.Name == "MajorRecordFlagsRaw" && RecordFlagViews.Contains(member);
 
     [Fact]
     public void EveryDirectRecordProperty_IsRepresentedInItsSchemaOrExplicitlyExcluded_ReDerivedFromMutagensReflectionNotTheReflectorsClassificationAcceptingNoGap()
@@ -128,7 +129,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             {
                 foreach (var prop in DirectDataProperties(owner, HandKeptSkipOfEditorIdTheWritePathOwnsAndGrupTimestampsSoADriftFailsLoud))
                 {
-                    if (schema.RecordColumns.Any(c => c.PropertyName == prop.Name || ClearsWith(c, prop.Name))) continue;
+                    if (schema.RecordColumns.Any(c => c.PropertyName == prop.Name || IsAFlagView(c, prop.Name))) continue;
                     gaps.Add($"{owner.Name}.{prop.Name} (missing from '{schema.TableName}' entirely)");
                 }
             }

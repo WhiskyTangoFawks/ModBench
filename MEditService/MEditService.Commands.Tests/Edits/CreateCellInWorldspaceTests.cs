@@ -78,7 +78,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         var created = result.NewFormKey.Require();
         Assert.Equal(_edited.ModKey, FormKey.Factory(created).ModKey);
         var cell = Document.Parse(TrackedTree.Body(_plugins.FolderOf(_edited), Edited, created));
-        Assert.Equal((x, y), PlacedCell.Grid(cell));
+        Assert.Equal((x, y), cell.Grid);
         Assert.False(PlacedCell.IsInterior(cell));
         var file = TrackedTree.DocumentFile(_plugins.FolderOf(_edited), Edited, created).Require();
         Assert.Contains(
