@@ -82,6 +82,6 @@ public sealed class LeafSpellingTests
     {
         var read = LeafSpelling.AsRead(V("#112233"), Leaf("color"));
 
-        Assert.Equal(ColorReading.AsReadWithoutAlpha("#112233"), read?.GetValue<string>());
+        Assert.Equal("#00112233", read?.GetValue<string>());
     }
 }
