@@ -12,7 +12,7 @@ public sealed class JsonOffPublicSurfaceScanTests
     private static readonly string[] Boxes =
         ["MEditService.Codec", "MEditService.Commands", "MEditService.SourceAdapter"];
 
-    // The Index's conflict classification still reads values as JSON nodes (epic #1544, a later batch);
+    // The Index's conflict classification still reads values as JSON nodes;
     // each type leaves this list when the classifier reads documents.
     private static readonly string[] ReadByTheIndexsConflictClassification =
         ["MEditService.Codec.Schema.CheckErrorBuilder", "MEditService.Codec.Schema.DocumentNodes", "MEditService.Codec.Schema.ElementKey"];
