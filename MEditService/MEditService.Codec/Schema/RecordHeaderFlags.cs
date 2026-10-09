@@ -10,5 +10,5 @@ public static class RecordHeaderFlags
     public const string Member = nameof(IMajorRecordGetter.MajorRecordFlagsRaw);
 
     /// <summary>A document omits the member when no bit is set.</summary>
-    internal static bool Carry(JsonElement document, int bit) => Document.Over(document)?.CarriesHeaderFlag(bit) == true;
+    internal static bool Carry(JsonElement document, int bit) => Document.OfRecord(document).CarriesHeaderFlag(bit);
 }

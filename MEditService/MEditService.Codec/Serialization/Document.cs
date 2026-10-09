@@ -5,8 +5,8 @@ using ChildDocument = MEditService.Codec.Serialization.ContainerDocuments.ChildD
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>A record's document read from its text: the JSON document itself, addressed by path, and the
-/// only model of the record (ADR-0005).</summary>
+/// <summary>A record's document: the JSON document itself, addressed by path, and the only model of the
+/// record (ADR-0005).</summary>
 internal sealed class Document
 {
     private const string NoObjectRoot = "its root is not a JSON object.";
@@ -16,11 +16,17 @@ internal sealed class Document
     private Document(JsonElement root) => _root = root;
 
     /// <summary>False, with the reader's words, when the text is no JSON or its root is no object.</summary>
-    internal static bool TryRead(string text, [NotNullWhen(true)] out Document? document, [NotNullWhen(false)] out string? whyNot)
+    internal static bool TryRead(string text, [NotNullWhen(true)] out Document? document, [NotNullWhen(false)] out string? whyNot) =>
+        TryParse(() => JsonElement.Parse(text), out document, out whyNot);
+
+    internal static Document? Read(byte[] utf8) => TryParse(() => JsonElement.Parse(utf8), out var document, out _) ? document : null;
+
+    private static bool TryParse(
+        Func<JsonElement> parse, [NotNullWhen(true)] out Document? document, [NotNullWhen(false)] out string? whyNot)
     {
         try
         {
-            document = Over(JsonElement.Parse(text));
+            document = Over(parse());
             whyNot = document is null ? NoObjectRoot : null;
             return document is not null;
         }
@@ -32,30 +38,22 @@ internal sealed class Document
         }
     }
 
-    internal static Document? Read(byte[] utf8)
-    {
-        try
-        {
-            return Over(JsonElement.Parse(utf8));
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
     /// <summary>A node the caller already holds, read as a document; null for one that is no object.</summary>
     internal static Document? Over(JsonElement node) => node.ValueKind == JsonValueKind.Object ? new(node) : null;
 
-    /// <summary>The string at a dotted path from the root; null where the document omits it or holds no
-    /// string there.</summary>
-    internal string? StringAt(string dottedPath) =>
-        At(dottedPath) is { ValueKind: JsonValueKind.String } value ? DocumentNodes.StringValueOf(value) : null;
+    /// <summary>A node a record's own document roots, which is always an object.</summary>
+    internal static Document OfRecord(JsonElement record) =>
+        Over(record) ?? throw new InvalidOperationException($"A record's document is a JSON object, and this node is {record.ValueKind}.");
 
-    private JsonElement? At(string dottedPath)
+    /// <summary>The string at <paramref name="path"/>, one member name per hop from the root; null where the
+    /// document omits it or holds no string there.</summary>
+    internal string? StringAt(params ReadOnlySpan<string> path) =>
+        At(path) is { ValueKind: JsonValueKind.String } value ? DocumentNodes.StringValueOf(value) : null;
+
+    internal JsonElement? At(params ReadOnlySpan<string> path)
     {
         var current = _root;
-        foreach (var hop in dottedPath.Split('.'))
+        foreach (var hop in path)
         {
             if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(hop, out current)) return null;
         }
@@ -69,9 +67,6 @@ internal sealed class Document
         _ => EditorIdRead.Unreadable($"'{RecordMembers.EditorId}' is not a string"),
     };
 
-    /// <summary>The children the document carries in its owner's child slots, by the slot facts
-    /// <see cref="RecordTypes"/> holds; empty for a record type with none. A slot the document omits is a
-    /// slot with no children.</summary>
     internal IEnumerable<ChildDocument> ChildrenOf(string ownerRecordType, RecordTypes types)
     {
         if (types.ContainerTypeOf(ownerRecordType) is not { } owner) yield break;
@@ -134,8 +129,6 @@ internal sealed class Document
         }
     }
 
-    /// <summary>The direct container of <paramref name="formKey"/> inside the document, and its slot. A
-    /// worldspace's top cell holds its placed references, so the container may itself be embedded.</summary>
     internal DocumentContainment? ContainmentOf(string ownerRecordType, string formKey, RecordTypes types)
     {
         if (StringAt(RecordMembers.FormKey) is not { } ownKey) return null;
@@ -151,20 +144,17 @@ internal sealed class Document
         return null;
     }
 
-    /// <summary>The cell's grid, or null when its document carries none. The codec omits a zero point.</summary>
     internal (int X, int Y)? Grid
     {
         get
         {
             if (At(RecordTypes.CellGridMember) is not { ValueKind: JsonValueKind.Object }) return null;
-            return PlacedCell.Components(StringAt($"{RecordTypes.CellGridMember}.{PlacedCell.GridPointMember}")) is [var x, var y]
+            return PlacedCell.Components(StringAt(RecordTypes.CellGridMember, PlacedCell.GridPointMember)) is [var x, var y]
                 ? ((int)x, (int)y)
                 : (0, 0);
         }
     }
 
-    /// <summary>Whether the record header's flags carry <paramref name="bit"/>; the document omits them when
-    /// none is set.</summary>
     internal bool CarriesHeaderFlag(int bit) =>
         At(RecordHeaderFlags.Member) is { ValueKind: JsonValueKind.Number } flags && (flags.GetInt32() & bit) != 0;
 

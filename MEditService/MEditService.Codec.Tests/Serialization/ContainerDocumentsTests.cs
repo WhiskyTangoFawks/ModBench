@@ -23,7 +23,7 @@ public sealed class ContainerDocumentsTests
         """;
 
     [Fact]
-    public void EmbeddedChild_APlacedReferenceInAWorldspacesTopCell_IsFoundAtItsPlaceInTheList_TypedAsItsTextSpellsIt()
+    public void APlacedReferenceInAWorldspacesTopCell_IsFoundAtItsPlaceInTheList_TypedAsItsTextSpellsIt()
     {
         var child = Documents.EmbeddedChild("wrld", Encoding.UTF8.GetBytes(Worldspace), "000803:A.esp");
 
@@ -31,7 +31,7 @@ public sealed class ContainerDocumentsTests
     }
 
     [Fact]
-    public void ContainmentOf_APlacedReferenceInAWorldspacesTopCell_IsTheTopCellsTemporarySlot()
+    public void APlacedReferenceInAWorldspacesTopCell_IsContainedByTheTopCellsTemporarySlot()
     {
         using var document = JsonDocument.Parse(Worldspace);
 

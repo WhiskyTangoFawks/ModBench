@@ -47,6 +47,15 @@ public class PartialFormFlagTests
     }
 
     [Fact]
+    public void ACellsPartialFormBit_ReadOffANodeThatIsNoRecordDocument_IsRefusedRatherThanReadAsUnset()
+    {
+        using var notADocument = JsonDocument.Parse("[]");
+
+        Assert.Throws<InvalidOperationException>(
+            () => SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["cell"].IsPartialForm(notADocument.RootElement));
+    }
+
+    [Fact]
     public void ACell_IsPartialFormable()
     {
         Assert.True(SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["cell"].IsPartialFormable);
