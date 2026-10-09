@@ -7,9 +7,9 @@ import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { TailOf } from '../coreLib/boundCommand';
 import { releaseOf, type InstanceGame, type RefreshResult } from './loadOrder';
 
-/** Refuses a name the value's `profiles` does not hold: selecting a profile whose directory is
- *  not there points the whole instance at files that do not exist, which no later read can tell
- *  from a corrupt ini. */
+// Refuses a name the value's `profiles` does not hold: selecting a profile whose directory is
+//  not there points the whole instance at files that do not exist, which no later read can tell
+//  from a corrupt ini.
 async function switchProfile(
   adapter: InstanceAdapter, profile: string, profiles: readonly string[],
 ): Promise<CommandResult> {

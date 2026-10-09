@@ -42,8 +42,8 @@ function listing(heading: string, plugins: readonly PluginAddress[]): string[] {
   return plugins.length === 0 ? [] : [heading, ...plugins.map(named)];
 }
 
-/** What can be known before any write: the adapter's refusals, then one question when plugins list
- *  the plugin as a master or may. Writes nothing. */
+// What can be known before any write: the adapter's refusals, then one question when plugins list
+//  the plugin as a master or may. Writes nothing.
 async function confirmRename(
   access: PluginRenameAccess, ask: AskQuestion, plugin: PluginAddress, newName: string, gameRelease: string | undefined,
 ): Promise<RenameConfirmed> {

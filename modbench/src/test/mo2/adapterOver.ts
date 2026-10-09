@@ -84,7 +84,12 @@ export function pluginsCommandsWith(adapter: InstanceAdapter, client: Partial<Pl
   const unanswered = () => Promise.reject(new Error('this test fixed no answer'));
   return pluginsCommands({
     adapter,
-    client: { getPlugins: unanswered, getRenameSourceChanges: unanswered, moveLastWritten: unanswered, getPluginDependants: unanswered, ...client },
+    client: {
+      getPlugins: client.getPlugins?.bind(client) ?? unanswered,
+      getRenameSourceChanges: client.getRenameSourceChanges?.bind(client) ?? unanswered,
+      moveLastWritten: client.moveLastWritten?.bind(client) ?? unanswered,
+      getPluginDependants: client.getPluginDependants?.bind(client) ?? unanswered,
+    },
   });
 }
 

@@ -102,7 +102,7 @@ const BOUND_COMMAND_BOXES = {
     toolbox: ['instanceCommands/instanceCommands'],
     plugins: ['pluginsCommands/plugins', 'pluginsCommands/renamePlugin'],
 };
-/** The Plugins box reaches the Instance adapter for its plugin-file rule alone (#1245); no other view reaches it. */
+/** The Plugins box reaches the Instance adapter for its plugin-file rule alone; no other view reaches it. */
 /** @type {Record<string, string[]>} */
 const ADAPTER_NAMES_A_VIEW_MAY_IMPORT = { plugins: ['fileExtension', 'pluginSourceFolderOf'] };
 /** @param {string} view */

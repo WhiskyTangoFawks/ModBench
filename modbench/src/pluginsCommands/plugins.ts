@@ -35,9 +35,9 @@ export interface PluginParticipation {
   enabled: boolean;
 }
 
-/** `modbench.plugin.enable` / `modbench.plugin.disable` and the check box, over the whole
- *  selection in one write (commands.md, "A selection is one gesture") — every entry lands or is
- *  refused by name, whatever state each one asks for. */
+// `modbench.plugin.enable` / `modbench.plugin.disable` and the check box, over the whole
+//  selection in one write (commands.md, "A selection is one gesture") — every entry lands or is
+//  refused by name, whatever state each one asks for.
 async function setPluginsParticipation(
   adapter: InstanceAdapter, profile: string, entries: readonly PluginParticipation[],
 ): Promise<SelectionResult<string>> {
@@ -54,8 +54,8 @@ async function setPluginsParticipation(
   return outcome.applied ? { applied: true, outcome: { landed, refused } } : outcome;
 }
 
-/** `setPluginsParticipation`, one state for the whole selection — the menu and the key's own
- *  shape, which never mixes directions in one gesture. */
+// `setPluginsParticipation`, one state for the whole selection — the menu and the key's own
+//  shape, which never mixes directions in one gesture.
 function setPluginsEnabled(
   adapter: InstanceAdapter, profile: string, pluginNames: readonly string[], enabled: boolean,
 ): Promise<SelectionResult<string>> {
