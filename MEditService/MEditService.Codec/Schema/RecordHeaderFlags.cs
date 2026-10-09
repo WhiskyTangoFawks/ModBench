@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Schema;
@@ -9,8 +10,5 @@ public static class RecordHeaderFlags
     public const string Member = nameof(IMajorRecordGetter.MajorRecordFlagsRaw);
 
     /// <summary>A document omits the member when no bit is set.</summary>
-    internal static bool Carry(JsonElement document, int bit) =>
-        document.TryGetProperty(Member, out var flags)
-        && flags.ValueKind == JsonValueKind.Number
-        && (flags.GetInt32() & bit) != 0;
+    internal static bool Carry(JsonElement document, int bit) => Document.Over(document)?.CarriesHeaderFlag(bit) == true;
 }

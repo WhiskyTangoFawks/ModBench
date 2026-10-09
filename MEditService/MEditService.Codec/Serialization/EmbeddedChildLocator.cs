@@ -45,24 +45,7 @@ public static class EmbeddedChildLocator
     /// <summary>The class name the owner's slots are keyed by: its record type's, or its document's own
     /// discriminator where the record type names none.</summary>
     internal static string? OwnerTypeOf(string? ownerRecordType, byte[] ownerBytes, RecordTypes types) =>
-        types.ContainerTypeOf(ownerRecordType) ?? RootDiscriminator(ownerBytes);
-
-    private static string? RootDiscriminator(byte[] ownerBytes)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(ownerBytes);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var value)
-                   && value.ValueKind == JsonValueKind.String
-                ? value.GetString()
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
+        types.ContainerTypeOf(ownerRecordType) ?? Document.Read(ownerBytes)?.StringAt(LoquiUnions.UnionTypeDiscriminator);
 
     private readonly record struct ObjectScan(string? FormKey, string? Discriminator, EmbeddedChildSpan? Deeper);
 

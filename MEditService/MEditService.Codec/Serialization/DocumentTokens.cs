@@ -129,52 +129,17 @@ public static class DocumentTokens
     private static readonly byte[] EditorIdPropertyName = Encoding.UTF8.GetBytes(RecordMembers.EditorId);
 
     /// <summary>The EditorID at the document's own root. Malformed text names none.</summary>
-    public static EditorIdRead EditorIdIn(string text)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(text);
-            return DocumentNodes.EditorIdOf(document.RootElement);
-        }
-        catch (JsonException)
-        {
-            return EditorIdRead.None;
-        }
-    }
+    public static EditorIdRead EditorIdIn(string text) =>
+        Document.TryRead(text, out var document, out _) ? document.EditorId : EditorIdRead.None;
 
     /// <summary>A member of the document's own root object, as a string. Malformed text declares
     /// nothing.</summary>
-    public static string? RootStringIn(string text, string member)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(text);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty(member, out var value)
-                   && value.ValueKind == JsonValueKind.String
-                ? value.GetString()
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
+    public static string? RootStringIn(string text, string member) =>
+        Document.TryRead(text, out var document, out _) ? document.StringAt(member) : null;
 
     /// <summary>Why <paramref name="text"/> is no document, in the reader's words; null when its root is a
     /// JSON object, which a member can be read from.</summary>
-    public static string? WhyNotADocument(string text)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(text);
-            return document.RootElement.ValueKind == JsonValueKind.Object ? null : "its root is not a JSON object.";
-        }
-        catch (JsonException ex)
-        {
-            return ex.Message;
-        }
-    }
+    public static string? WhyNotADocument(string text) => Document.TryRead(text, out _, out var whyNot) ? null : whyNot;
 
     /// <summary>False only when the bytes certainly do not spell <paramref name="formKeyUtf8"/>: JSON spells
     /// it other than literally only through a \u escape, since no plugin file name holds a quote,

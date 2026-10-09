@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -19,12 +18,4 @@ public static class PartialFormFlag
     /// <summary>The plugin that alone defines a cell a Partial Form copy can override, or null where any can.</summary>
     public static ModKey? CellsDefinedIn(GameRelease release) =>
         SchemaAnnotations.For(release.ToCategory()).PartialFormCellsDefinedIn is { } plugin ? ModKey.FromFileName(plugin) : (ModKey?)null;
-
-    /// <summary>The same bit read off a stored document, whose header flags travel as
-    /// <c>MajorRecordFlagsRaw</c> (omitted when zero).</summary>
-    internal static bool IsSet(JsonElement document, Type recordType) =>
-        IsPartialFormable(recordType)
-        && document.TryGetProperty(RecordHeaderFlags.Member, out var flags)
-        && flags.ValueKind == JsonValueKind.Number
-        && (flags.GetInt32() & Bit) != 0;
 }

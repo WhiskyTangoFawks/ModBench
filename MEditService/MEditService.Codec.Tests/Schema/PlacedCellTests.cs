@@ -7,6 +7,23 @@ namespace MEditService.Codec.Tests.Schema;
 
 public sealed class PlacedCellTests
 {
+    [Theory]
+    [InlineData("""{ "Grid": { "Point": "3, -2" } }""", 3, -2)]
+    [InlineData("""{ "Grid": {} }""", 0, 0)]
+    public void ACellsGrid_IsThePointItsTextSpells_AndTheOriginWhereItsGridOmitsThePoint(string text, int x, int y)
+    {
+        Assert.Equal((x, y), PlacedCell.Grid(Cell(text)));
+    }
+
+    [Fact]
+    public void ACellWhoseTextCarriesNoGrid_HasNone()
+    {
+        Assert.Null(PlacedCell.Grid(Cell("""{ "FormKey": "000801:Holds.esm" }""")));
+    }
+
+    private static JsonObject Cell(string text) =>
+        JsonNode.Parse(text) as JsonObject ?? throw new InvalidOperationException("Expected the cell's text to be a JSON object.");
+
     [Fact]
     public void APlacedRecordCreatedInAGridCell_OfAGameWithNoKnownCellWidth_IsRefusedNamingTheCell_AndKeepsTheBareDocument()
     {

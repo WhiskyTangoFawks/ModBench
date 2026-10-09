@@ -122,16 +122,7 @@ public static class DocumentNodes
         leaf != null && member.Variants is { } variants && variants.TryGetValue(leaf, out var variant) ? variant : member;
 
     /// <summary>The EditorID a record's own node names.</summary>
-    public static EditorIdRead EditorIdOf(JsonElement record)
-    {
-        if (record.ValueKind != JsonValueKind.Object
-            || !record.TryGetProperty(RecordMembers.EditorId, out var editorId)
-            || editorId.ValueKind == JsonValueKind.Null)
-            return EditorIdRead.None;
-        return editorId.ValueKind == JsonValueKind.String
-            ? EditorIdRead.Of(StringValueOf(editorId))
-            : EditorIdRead.Unreadable($"'{RecordMembers.EditorId}' is not a string");
-    }
+    public static EditorIdRead EditorIdOf(JsonElement record) => Document.Over(record)?.EditorId ?? EditorIdRead.None;
 
     /// <summary>The string value of a node the caller has already checked is a JSON string.</summary>
     public static string StringValueOf(JsonElement element) =>
