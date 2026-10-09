@@ -52,7 +52,6 @@ internal sealed record RecordEditRequest(
     IReadOnlyList<PathHop> Path,
     [property: JsonConverter(typeof(KeepsJsonNullConverter))] JsonElement? Value = null);
 
-/// <summary>An edit asked for the changes it makes.</summary>
 internal sealed record RecordEditChangesRequest(RecordEditRequest Edit);
 
 /// <summary>The changes an edit makes to plugin source, written nowhere: each move, then each deletion,
@@ -137,7 +136,6 @@ internal sealed record CopyMissing(string FormKey, PluginAddress Plugin, CopyMis
 /// when Missing is not empty.</summary>
 internal sealed record CompareRecordsResponse(CompareResult? Compare, IReadOnlyList<CopyMissing> Missing);
 
-/// <summary>Records to delete.</summary>
 internal sealed record RecordDeleteChangesRequest(IReadOnlyList<RecordAddress> Records);
 
 /// <summary>The changes deleting one record makes to plugin source, written nowhere, as an edit's are.</summary>

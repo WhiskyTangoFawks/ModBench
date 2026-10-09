@@ -52,7 +52,6 @@ async function editDocuments(
 ): Promise<string | undefined> {
   const carrying = await deps.documentOf(address);
   if ('refused' in carrying) throw new Error(carrying.refused);
-  const document = await vscode.workspace.openTextDocument(carrying.uri);
   const outcome = await deps.meditClient.getEditChanges(address.formKey, address.plugin, envelope);
   if (!outcome.applied) {
     deps.reporter.report('warning', `${field}: ${outcome.message}`);
@@ -62,7 +61,7 @@ async function editDocuments(
 
   const applying = {
     applyWorkspaceChanges: (items: readonly WorkspaceChanges[]) => applyWorkspaceChanges(items, {
-      read: document.uri,
+      read: carrying.uri,
       moving: (moves) => deps.moving(moves, address, outcome.newFormKey),
     }),
     refreshSourceControlFor: deps.refreshSourceControlFor,

@@ -148,7 +148,7 @@ internal static class RecordEndpoints
         .WithName("EditRecordChanges")
         .WithSummary("The changes an edit of a record makes to plugin source, writing nothing.")
         .WithDescription(
-            "Given the edit and the current text of the document carrying the record, the text each document the edit " +
+            "Over the unsaved documents mEdit holds, the text each document the edit " +
             "changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each " +
             "against the tree the one before it left, and each document's " +
             "path is where it stands once moved. Every path is absolute. Any other document the edit reads is read from " +
@@ -166,7 +166,7 @@ internal static class RecordEndpoints
         .WithName("DeleteRecordChanges")
         .WithSummary("The changes deleting records makes to plugin source, writing nothing, each record on its own.")
         .WithDescription(
-            "Given the current text of any unsaved document, each record's deletion as the files and folders it " +
+            "Over the unsaved documents mEdit holds, each record's deletion as the files and folders it " +
             "deletes and the text each document it changes holds afterwards, as an edit's are. Each item answers on " +
             "the ones before it, and applying them in order leaves the records deleted. A record is changed or " +
             "refused on its own, and the answer names both. No reference cascade — a FormLink elsewhere pointing at " +
@@ -182,7 +182,7 @@ internal static class RecordEndpoints
         .WithName("CopyRecordChanges")
         .WithSummary("The changes copying records into destination plugins makes to plugin source, writing nothing, each record into each destination on its own.")
         .WithDescription(
-            "Given the current text of any unsaved document, each copy as the files and folders it deletes and the " +
+            "Over the unsaved documents mEdit holds, each copy as the files and folders it deletes and the " +
             "text each document it changes or creates holds afterwards, as an edit's are. Each item answers on the ones " +
             "before it, and applying them in order leaves the records copied. " +
             "Override: the source record's own text lands verbatim in the destination under the same " +

@@ -38,10 +38,10 @@ public sealed class EditRecordChangesHandler
     private SourceAnswer<RecordEditChanges> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
-        var unsaved = _unsaved.Current;
-        if (!_targets.TryResolveEditTarget(plugin, formKey, unsaved, out var target, out var blocked)) return blocked;
-        var batch = SourceBatch.Over(target.Repository, unsaved);
-        return Edit(plugin, formKey, envelope, target with { Repository = batch.Repository }, new UnsavedBatches(unsaved))
+        var batches = new UnsavedBatches(_unsaved.Current);
+        if (_targets.ResolveEditTarget(plugin, formKey, batches, out var target) is { } blocked) return blocked;
+        var batch = _targets.BatchOf(plugin, batches);
+        return Edit(plugin, formKey, envelope, target, batches)
             .Then(outcome => SourceAnswer.Of(new RecordEditChanges(outcome, batch.Changes)));
     }
 

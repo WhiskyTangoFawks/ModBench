@@ -169,7 +169,7 @@ internal static class PluginEndpoints
             .WithName("RenameSourceChanges")
             .WithSummary("The changes renaming a tracked plugin's source makes, writing nothing.")
             .WithDescription(
-                "Given the current text of any unsaved document, the files and folders renaming the plugin's source " +
+                "Over the unsaved documents mEdit holds, the files and folders renaming the plugin's source " +
                 "moves and the text each document it changes holds afterwards: every FormKey of the plugin follows. " +
                 "Moves come first, then deletions, then documents, and every path is absolute. The plugin file, its " +
                 "plugins.txt lines and what Modbench last wrote stay as they are.")
@@ -209,7 +209,7 @@ internal static class PluginEndpoints
             .WithName("CreateRecordChanges")
             .WithSummary("The changes creating a record makes to plugin source, writing nothing.")
             .WithDescription(
-                "Given the current text of any unsaved document, the files and folders creating a new record deletes and " +
+                "Over the unsaved documents mEdit holds, the files and folders creating a new record deletes and " +
                 "moves and the text each document it changes or creates holds afterwards: a new source file of its own, or, " +
                 "for a record created in a container, an entry in the container's document. Moves come first, then " +
                 "deletions, then documents, and every path is absolute. The answer names the new FormKey. " +

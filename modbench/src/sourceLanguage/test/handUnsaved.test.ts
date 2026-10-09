@@ -1,0 +1,81 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+interface FakeUri { scheme: string; fsPath: string; toString(): string }
+interface FakeDocument { uri: FakeUri; isDirty: boolean; getText(): string }
+
+const h = vi.hoisted(() => {
+  const handlers = { change: [] as ((e: { document: unknown }) => void)[], open: [] as ((d: unknown) => void)[], close: [] as ((d: unknown) => void)[] };
+  const workspace = { textDocuments: [] as unknown[] };
+  const subscribe = <T>(list: ((e: T) => void)[]) => (listener: (e: T) => void) => { list.push(listener); return { dispose: () => undefined }; };
+  return { handlers, workspace, subscribe };
+});
+
+vi.mock('vscode', () => ({
+  workspace: {
+    get textDocuments() { return h.workspace.textDocuments; },
+    onDidChangeTextDocument: h.subscribe(h.handlers.change),
+    onDidOpenTextDocument: h.subscribe(h.handlers.open),
+    onDidCloseTextDocument: h.subscribe(h.handlers.close),
+  },
+  Disposable: { from: (...all: { dispose(): void }[]) => ({ dispose: () => { for (const each of all) each.dispose(); } }) },
+}));
+
+import { handUnsavedPluginSource } from '../handUnsaved';
+
+const FILE = '/mods/ModA/plugin-source/A.esp/Cells/Cell.json';
+const MOVED = '/mods/ModA/plugin-source/A.esp/Cells/Moved.json';
+
+const document = (scheme: string, fsPath: string, text: string, isDirty = true): FakeDocument =>
+  ({ uri: { scheme, fsPath, toString: () => `${scheme}:${fsPath}` }, isDirty, getText: () => text });
+
+function handing() {
+  const handed: { path: string; text: string }[][] = [];
+  handUnsavedPluginSource({ handUnsavedDocuments: (documents) => { handed.push([...documents]); } });
+  handed.length = 0;
+  return handed;
+}
+const changed = (doc: FakeDocument) => { for (const listener of h.handlers.change) listener({ document: doc }); };
+
+beforeEach(() => {
+  h.workspace.textDocuments = [];
+  for (const list of Object.values(h.handlers)) list.length = 0;
+});
+
+describe('handing mEdit the unsaved plugin source', () => {
+  it('hands a dirty child-record document as its container file\'s text', () => {
+    const child = document('modbench-child-record', FILE, 'child text');
+    h.workspace.textDocuments = [child];
+    const handed = handing();
+
+    changed(child);
+
+    expect(handed.at(-1)).toEqual([{ path: FILE, text: 'child text' }]);
+  });
+
+  it('hands the text of whichever document over the container file changed last', () => {
+    const file = document('file', FILE, 'typed in the file');
+    const child = document('modbench-child-record', FILE, 'applied to the child');
+    h.workspace.textDocuments = [file, child];
+    const handed = handing();
+
+    changed(file);
+    changed(child);
+    expect(handed.at(-1)).toEqual([{ path: FILE, text: 'applied to the child' }]);
+
+    changed(file);
+    expect(handed.at(-1)).toEqual([{ path: FILE, text: 'typed in the file' }]);
+  });
+
+  it('hands over again when a dirty document is moved, which closes it at one path and opens it at another', () => {
+    const before = document('file', FILE, 'moved text');
+    h.workspace.textDocuments = [before];
+    const handed = handing();
+
+    const after = document('file', MOVED, 'moved text');
+    h.workspace.textDocuments = [after];
+    for (const listener of h.handlers.close) listener(before);
+    for (const listener of h.handlers.open) listener(after);
+
+    expect(handed.at(-1)).toEqual([{ path: MOVED, text: 'moved text' }]);
+  });
+});

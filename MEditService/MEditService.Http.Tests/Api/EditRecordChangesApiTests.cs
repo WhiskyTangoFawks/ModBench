@@ -84,7 +84,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
     [Fact]
     public async Task AnEditNamingAFieldTheRecordHasNot_Is404_WithItsOwnRefusal()
     {
-        var (fx, formKey) = await Loaded(tracked: true);
+        var (_, formKey) = await Loaded(tracked: true);
 
         var response = await Client.EditChanges(formKey, Plugin, Origin, "no_such_field", 1);
 
@@ -115,7 +115,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
     [Fact]
     public async Task AFormIdThatIsNoFormKey_Is422_WithItsOwnRefusal()
     {
-        var (fx, formKey) = await Loaded(tracked: true);
+        var (_, formKey) = await Loaded(tracked: true);
 
         var response = await Client.EditChanges(formKey, Plugin, Origin, "FormKey", "not a FormKey");
 

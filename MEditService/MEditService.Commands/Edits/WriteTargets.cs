@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
@@ -14,29 +13,11 @@ internal sealed class WriteTargets(
 {
     internal readonly record struct EditTarget(GameRelease Release, RecordIdentity Identity, SourceRepository Repository);
 
-    // The working tree is the only thing asked (ADR-0015), so a second edit builds on
-    // the first. The copy gestures read the source instead.
     internal RecordEditResult? ResolveEditTarget(PluginAddress plugin, string formKey, UnsavedBatches batches, out EditTarget target)
     {
         target = default;
         if (RefuseUnlessEditable(plugin, out _) is { } blocked) return blocked;
         return ResolveInTheTree(plugin, formKey, BatchOf(plugin, batches).Repository, loadOrder.Current.GameRelease, out target, out _);
-    }
-
-    /// <summary>The edit target over <paramref name="unsaved"/>, which stand in for their files.</summary>
-    internal bool TryResolveEditTarget(
-        PluginAddress plugin, string formKey, IReadOnlyList<DocumentChange> unsaved, out EditTarget target,
-        [NotNullWhen(false)] out RecordEditResult? refused)
-    {
-        target = default;
-        refused = RefuseUnlessEditable(plugin, out var openedRepository);
-        if (refused is not null) return false;
-        var repository = openedRepository
-            ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
-
-        refused = ResolveInTheTree(
-            plugin, formKey, SourceBatch.Over(repository, unsaved).Repository, loadOrder.Current.GameRelease, out target, out _);
-        return refused is null;
     }
 
     private static RecordEditResult RefuseUnresolved(string formKey, SourceFailure failure) =>
