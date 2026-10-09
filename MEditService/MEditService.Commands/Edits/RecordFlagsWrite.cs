@@ -9,7 +9,7 @@ internal readonly record struct RecordFlagsWrite(long Held, long Next)
     /// <summary>The flags <paramref name="value"/> writes to <paramref name="column"/>, or null when it writes
     /// another column.</summary>
     internal static long? Requested(RecordTableSchema schema, ColumnSpec column, EditValue? value) =>
-        schema.IsHeader || column.Name != RecordHeaderFlags.Member || value is not { Kind: EditValueKind.Number } requested
+        schema.IsHeader || column.Name != RecordHeaderFlags.Member || value is not { Kind: EditValueKind.WholeNumber } requested
             ? null
             : requested.Integer;
 

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins;
 
@@ -29,14 +28,9 @@ internal static class PluginSourceRename
     {
         var text = DocumentText.StripUtf8Bom(bytes);
         var bom = bytes[..^text.Length];
-        try
-        {
-            return [.. bom, .. RecordDocumentEdits.WithPluginRenamed(text, new LayoutPath(relativePath).IsHeaderDocument, from, to)];
-        }
-        catch (JsonException ex)
-        {
-            throw SourceStopException.Unreadable(new UnreadableFile(
-                relativePath, $"'{relativePath}' in this plugin's source tree is no JSON document: {ex.Message.TrimEnd('.')}."));
-        }
+        return RecordDocumentEdits.TryWithPluginRenamed(text, new LayoutPath(relativePath).IsHeaderDocument, from, to, out var renamed, out var whyNot)
+            ? [.. bom, .. renamed]
+            : throw SourceStopException.Unreadable(new UnreadableFile(
+                relativePath, $"'{relativePath}' in this plugin's source tree is no JSON document: {whyNot.TrimEnd('.')}."));
     }
 }

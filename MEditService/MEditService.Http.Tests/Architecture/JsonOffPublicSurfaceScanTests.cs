@@ -12,29 +12,51 @@ public sealed class JsonOffPublicSurfaceScanTests
     private static readonly string[] Boxes =
         ["MEditService.Codec", "MEditService.Commands", "MEditService.SourceAdapter"];
 
-    private static readonly string[] ReadByTheIndexsConflictClassification =
-        ["MEditService.Codec.Schema.CheckErrorBuilder", "MEditService.Codec.Schema.DocumentNodes", "MEditService.Codec.Schema.ElementKey"];
+    private static readonly string[] ReadByTheIndexsOwnJsonReads =
+    [
+        "MEditService.Codec.Schema.CheckErrorBuilder.Build",
+        "MEditService.Codec.Schema.DocumentNodes.ComparedText",
+        "MEditService.Codec.Schema.DocumentNodes.VariantFor",
+        "MEditService.Codec.Schema.ElementKey.Of",
+        "MEditService.Codec.Schema.ElementKey.SortKeyOf",
+    ];
 
     [Fact]
-    public void CodecCommandsAndSourceAdapter_ShowSystemTextJsonOnNoPublicSurface()
+    public void CodecCommandsAndSourceAdapter_ShowSystemTextJsonOnNoPublicSurface_ButTheIndexsOwnJsonReads()
     {
-        var types = Boxes.Select(Assembly.Load).SelectMany(a => a.GetTypes()).ToList();
-        var leaks = types
-            .Where(type => IsVisible(type) && !ReadByTheIndexsConflictClassification.Contains(type.FullName))
-            .SelectMany(type => Surface(type).Where(IsJson).Select(json => $"{type.FullName} exposes {json.FullName}"))
-            .Distinct()
-            .Order(StringComparer.Ordinal)
-            .ToList();
+        var leaks = Leaks(Boxes.Select(Assembly.Load).SelectMany(a => a.GetTypes()));
 
-        Assert.True(types.Count > 100, "The scan read too few types; it would pass by finding nothing.");
-        Assert.True(leaks.Count == 0, "System.Text.Json types on a public surface:\n" + string.Join("\n", leaks));
+        Assert.Equal(ReadByTheIndexsOwnJsonReads, leaks.Intersect(ReadByTheIndexsOwnJsonReads).Order(StringComparer.Ordinal));
+        var unexpected = leaks.Except(ReadByTheIndexsOwnJsonReads).ToList();
+        Assert.True(unexpected.Count == 0, "System.Text.Json types on a public surface:\n" + string.Join("\n", unexpected));
     }
 
-    private static IEnumerable<Type> Surface(Type type)
+    [Fact]
+    public void TheScan_NamesAPublicMemberThatExposesJson()
+    {
+        Assert.Equal([$"{typeof(PlantedLeak).FullName}.Probe"], Leaks([typeof(PlantedLeak)]));
+    }
+
+    public sealed class PlantedLeak
+    {
+        public static System.Text.Json.JsonElement? Probe() => null;
+    }
+
+    private static List<string> Leaks(IEnumerable<Type> types) =>
+        [.. types
+            .Where(IsVisible)
+            .SelectMany(type => Surface(type))
+            .Distinct()
+            .Order(StringComparer.Ordinal)];
+
+    private static IEnumerable<string> Surface(Type type)
     {
         var inherited = type.GetInterfaces().Concat(type.BaseType is { } baseType ? new[] { baseType } : []);
-        var members = type.GetMembers(Declared).Where(IsVisible).SelectMany(Exposed);
-        return inherited.Concat(members).SelectMany(Parts);
+        if (inherited.SelectMany(Parts).Any(IsJson)) yield return type.FullName ?? type.Name;
+        foreach (var member in type.GetMembers(Declared).Where(IsVisible))
+        {
+            if (Exposed(member).SelectMany(Parts).Any(IsJson)) yield return $"{type.FullName}.{member.Name}";
+        }
     }
 
     private static IEnumerable<Type> Exposed(MemberInfo member) => member switch

@@ -55,7 +55,7 @@ internal sealed record RecordEditRequest(
     internal EditValue? EditedValue => Value switch
     {
         null => null,
-        { ValueKind: JsonValueKind.Number } number => new(EditValueKind.Number, number.GetRawText()),
+        { ValueKind: JsonValueKind.Number } number when number.TryGetInt64(out _) => new(EditValueKind.WholeNumber, number.GetRawText()),
         { ValueKind: JsonValueKind.String } text => new(EditValueKind.Text, text.GetRawText(), text.GetString()),
         { } other => new(EditValueKind.Other, other.GetRawText()),
     };

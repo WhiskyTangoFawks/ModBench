@@ -16,7 +16,6 @@ public sealed class Document
 
     private Document(JsonElement root) => _root = root;
 
-    /// <summary>A document with no member.</summary>
     public static Document Empty { get; } = new(JsonElement.Parse("{}"));
 
     internal JsonElement Element => _root;
@@ -72,14 +71,11 @@ public sealed class Document
     /// <summary>The document's text, written compact.</summary>
     public string Text => JsonSerializer.Serialize(_root);
 
-    public Document With(long value, params ReadOnlySpan<string> path)
-    {
-        var member = path[^1];
-        var owner = path[..^1].ToArray();
-        return Edited(root => OwnerOf(root, owner)[member] = value);
-    }
+    public Document With(long value, params ReadOnlySpan<string> path) => With(JsonValue.Create(value), path);
 
-    public Document With(string value, params ReadOnlySpan<string> path)
+    public Document With(string value, params ReadOnlySpan<string> path) => With(JsonValue.Create(value), path);
+
+    private Document With(JsonNode value, ReadOnlySpan<string> path)
     {
         var member = path[^1];
         var owner = path[..^1].ToArray();
@@ -243,14 +239,15 @@ public sealed class Document
         return null;
     }
 
+    /// <summary>The cell's grid point; null where the document names none or names one that is no pair of whole numbers.</summary>
     public (int X, int Y)? Grid
     {
         get
         {
             if (At(RecordTypes.CellGridMember) is not { ValueKind: JsonValueKind.Object }) return null;
-            return PlacedCell.Components(StringAt(RecordTypes.CellGridMember, PlacedCell.GridPointMember)) is [var x, var y]
-                ? ((int)x, (int)y)
-                : (0, 0);
+            var point = StringAt(RecordTypes.CellGridMember, PlacedCell.GridPointMember);
+            if (point is null) return (0, 0);
+            return PlacedCell.Components(point) is [var x, var y] && double.IsInteger(x) && double.IsInteger(y) ? ((int)x, (int)y) : null;
         }
     }
 

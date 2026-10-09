@@ -118,7 +118,7 @@ internal static class RecordTextEdit
             return Malformed(spelled, "set takes a value (JSON null clears a member)");
         if (op is EditOp.Remove or EditOp.Move && envelope.Path[^1].Kind == PathHop.MemberKind)
             return Malformed(spelled, $"{envelope.Op} addresses an element by its index");
-        if (op == EditOp.Move && envelope.Value is not { Kind: EditValueKind.Number })
+        if (op == EditOp.Move && envelope.Value is not { Kind: EditValueKind.WholeNumber })
             return Malformed(spelled, "move takes the destination index as its value");
         return null;
     }

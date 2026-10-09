@@ -27,10 +27,10 @@ public sealed record RecordEditEnvelope(string Op, IReadOnlyList<PathHop> Path, 
     public static string Spell(IEnumerable<PathHop> path) => DocumentHop.Spell(path.Select(hop => hop.Hop));
 }
 
-public enum EditValueKind { Number, Text, Other }
+public enum EditValueKind { WholeNumber, Text, Other }
 
 /// <summary>The value an edit carries: its JSON text, and what the text spells for the edits that read it
-/// as a number or a string.</summary>
+/// as an integer or a string. A number that is no integer is <see cref="EditValueKind.Other"/>.</summary>
 public sealed record EditValue(EditValueKind Kind, string RawText, string? Text = null)
 {
     internal long Integer => long.Parse(RawText, NumberStyles.Integer, CultureInfo.InvariantCulture);

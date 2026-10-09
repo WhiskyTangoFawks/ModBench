@@ -46,7 +46,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
                     $"'{_pluginFileName}' is tracked but its source tree holds no root " +
                     $"{Path.GetFileName(_headerRelativePath)}, so it describes no plugin.", path);
 
-            _ = Document.Parse(text);
+            if (DocumentTokens.WhyNotADocument(text) is { } why) throw Unreadable(path, $"it is no JSON document: {why}");
             return new PluginDocument(
                 PluginHeader.RecordType, PluginHeader.FormKeyFor(ModKey.FromFileName(_pluginFileName)), text);
         }

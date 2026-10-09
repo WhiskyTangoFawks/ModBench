@@ -14,6 +14,15 @@ public sealed class PlacedCellTests
         Assert.Equal((x, y), Cell(text).Grid);
     }
 
+    [Theory]
+    [InlineData("1.5, 2")]
+    [InlineData("x, y")]
+    [InlineData("3")]
+    public void ACellsGrid_ThatIsNoPairOfWholeNumbers_IsNone(string point)
+    {
+        Assert.Null(Cell($$"""{ "Grid": { "Point": "{{point}}" } }""").Grid);
+    }
+
     [Fact]
     public void ACellWhoseTextCarriesNoGrid_HasNone()
     {

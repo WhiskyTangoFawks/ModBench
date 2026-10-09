@@ -457,7 +457,9 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         var owner = ContainerDocument(plugin, identity)
             ?? throw SourceStopException.Unreadable($"{unit.RelativePath} could not be read.");
 
-        return new ContainerDocuments(_release).ContainmentOf(owner.RecordType, Document.Parse(owner.Body), identity.FormKey);
+        if (!Document.TryRead(owner.Body, out var document, out var why))
+            throw SourceStopException.UnreadableIn(_modFolder, unit.FullPath, $"it is no JSON document: {why}");
+        return new ContainerDocuments(_release).ContainmentOf(owner.RecordType, document, identity.FormKey);
     }
 
     /// <summary>Every document one plugin's tree holds right now, each as the record at its root. An

@@ -13,7 +13,7 @@ internal static class Envelopes
 
     internal static EditValue ValueOf(JsonElement element) => element.ValueKind switch
     {
-        JsonValueKind.Number => new(EditValueKind.Number, element.GetRawText()),
+        JsonValueKind.Number when element.TryGetInt64(out _) => new(EditValueKind.WholeNumber, element.GetRawText()),
         JsonValueKind.String => new(EditValueKind.Text, element.GetRawText(), element.GetString()),
         _ => new(EditValueKind.Other, element.GetRawText()),
     };
@@ -33,7 +33,7 @@ internal static class Envelopes
     internal static RecordEditEnvelope RemoveAt(params PathHop[] path) => new(RecordEditEnvelope.Remove, path);
 
     internal static RecordEditEnvelope MoveTo(int destination, params PathHop[] path) =>
-        new(RecordEditEnvelope.Move, path, new EditValue(EditValueKind.Number, destination.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        new(RecordEditEnvelope.Move, path, new EditValue(EditValueKind.WholeNumber, destination.ToString(System.Globalization.CultureInfo.InvariantCulture)));
 
     /// <summary>A set of one top-level member: the gesture most tests make.</summary>
     internal static RecordEditResult Set(

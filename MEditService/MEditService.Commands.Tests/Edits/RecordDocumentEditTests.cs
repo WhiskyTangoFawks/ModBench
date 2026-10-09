@@ -134,6 +134,8 @@ public sealed class RecordDocumentEditTests : IDisposable
     [InlineData("set", "HeightMax", null)]
     [InlineData("remove", "HeightMax", null)]
     [InlineData("move", "Keywords[0]", "\"up\"")]
+    [InlineData("move", "Keywords[0]", "1.5")]
+    [InlineData("move", "Keywords[0]", "99999999999999999999")]
     public void MalformedEnvelope_IsRefusedAsSuch(string op, string path, string? value)
     {
         var formKey = SeedNpc();

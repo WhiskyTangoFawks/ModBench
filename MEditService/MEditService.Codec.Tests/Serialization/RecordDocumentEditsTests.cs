@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins;
 
@@ -11,7 +10,9 @@ public sealed class RecordDocumentEditsTests
     private static readonly ModKey New = ModKey.FromFileName("New.esm");
 
     private static string Renamed(string text, bool isHeader = false) =>
-        Encoding.UTF8.GetString(RecordDocumentEdits.WithPluginRenamed(Encoding.UTF8.GetBytes(text), isHeader, Old, New));
+        RecordDocumentEdits.TryWithPluginRenamed(Encoding.UTF8.GetBytes(text), isHeader, Old, New, out var renamed, out var whyNot)
+            ? Encoding.UTF8.GetString(renamed)
+            : throw new InvalidDataException(whyNot);
 
     [Fact]
     public void WithPluginRenamed_FollowsEveryFormKeyOfThePlugin_AndLeavesEveryOtherByteAndKeyAlone()
@@ -50,8 +51,9 @@ public sealed class RecordDocumentEditsTests
     [Theory]
     [InlineData("""{ "FormKey": "000801:Old.esp", """)]
     [InlineData("""{ "FormKey": "000801:Old.esp" } // a comment no document reader takes""")]
-    public void WithPluginRenamed_TextThatIsNoJsonDocument_Throws(string text)
+    public void WithPluginRenamed_TextThatIsNoJsonDocument_AnswersWhyNot(string text)
     {
-        Assert.ThrowsAny<JsonException>(() => Renamed(text));
+        Assert.False(RecordDocumentEdits.TryWithPluginRenamed(Encoding.UTF8.GetBytes(text), false, Old, New, out _, out var whyNot));
+        Assert.NotEmpty(whyNot);
     }
 }

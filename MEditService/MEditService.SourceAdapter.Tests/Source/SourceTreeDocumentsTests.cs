@@ -90,6 +90,16 @@ public sealed class SourceTreeDocumentsTests : IDisposable
         [_persistentRef, _temporaryRef, _landscape, _topCell, _topCellRef, _topic, _response];
 
     [Fact]
+    public void AHeaderThatIsNoJsonDocument_IsAnUnreadableFile_ThatDecompileRepairs()
+    {
+        File.WriteAllText(Path.Combine(_modFolder, PluginSourceRoot.HeaderDocument(PluginName)), "{not json");
+
+        var failure = Assert.IsType<SourceFailure.Unreadable>(Repository.ReadDocuments(Plugin, tree => tree.Header).Stopped());
+
+        Assert.True(failure.DecompileRepairs);
+    }
+
+    [Fact]
     public void EveryRecordTheFixtureEmbedsInAnother_ReadsBackAsItsOwnDocument()
     {
         var documents = Documents();
