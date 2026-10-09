@@ -301,7 +301,7 @@ describe('a click on a separator, a mod, Overwrite or a folder only selects', ()
 });
 
 describe('ModListProvider', () => {
-  it('rows exactly match the fixture value rather than a read of the provider\'s own, in file order reversed for the default losing-at-top view', async () => {
+  it('rows exactly match the fixture value rather than a read of the provider\'s own, in mod order reversed for the default losing-at-top view', async () => {
     const provider = makeProvider([mod('Zed'), mod('Aardvark')]);
     const roots = await provider.getChildren();
     const labels = roots.filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label);
@@ -653,7 +653,7 @@ describe('ModListProvider', () => {
   });
 
   describe('view direction', () => {
-    it('default view renders the losing end (last file entry) at the top, the sibling list reversed from the winning-first file order', async () => {
+    it('default view renders the losing end (last in mod order) at the top, the sibling list reversed from the winning-first mod order', async () => {
       const provider = makeProvider([mod('Winning'), mod('Middle'), mod('Losing')]);
       const roots = await provider.getChildren();
       expect(roots.filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label))
@@ -675,7 +675,7 @@ describe('ModListProvider', () => {
       expect(await modLabels()).toEqual(['Winning', 'Losing']);
     });
 
-    it('toggled to winning-at-top: the mods within a separator, the entries preceding it, are in file order', async () => {
+    it('toggled to winning-at-top: the mods within a separator, the entries preceding it, are in mod order', async () => {
       const provider = makeProvider([
         mod('First'),
         mod('Second'),
