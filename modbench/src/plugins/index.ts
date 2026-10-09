@@ -65,7 +65,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
         reporterFor,
       });
       const editing = editingFlow({
-        client, instanceRoot, around: shown.around, tell: shown.tell, log: (line) => channel.error(line),
+        client, instanceRoot, around: shown.around, onPut: shown.onPut, reporterFor, log: (line) => channel.error(line),
       });
       return {
         followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, editing,

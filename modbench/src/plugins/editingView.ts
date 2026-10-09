@@ -1,6 +1,5 @@
 import type { Reporter } from '../ports/reporter';
 import type { SyncFailureReport } from '../drivingLib/syncFailureReport';
-import type { Told } from '../instanceCommands/editing';
 import type { PutLoadOrderResult } from '../instanceCommands/loadOrder';
 
 type AppliedStatus = Extract<Extract<PutLoadOrderResult, { sent: true }>['outcome'], { outcome: 'applied' }>['status'];
@@ -21,14 +20,9 @@ export interface EditingViewDeps {
   loadOrderPut: Pick<SyncFailureReport, 'run' | 'clear'>;
 }
 
-const STOPPED = 'mEdit stopped. Reload the window to start it again.';
-
 export function editingView(deps: EditingViewDeps) {
   const { narrator, progress, reporterFor, log, revealLog, loadOrderPut } = deps;
   const reportPut = (message: string) => { reporterFor('loadOrder').report('error', message); };
-  const reportEntry = (message: string) => { reporterFor('enterEditing').report('error', message); };
-  const reportExit = (message: string) => { reporterFor('mEditExit').report('error', message); };
-  const reportLaunch = (message: string, reason: string) => { reporterFor('launch').report('error', message, reason); };
 
   const around = (entry: () => Promise<void>): Promise<void> => progress.while(async () => {
     revealLog();
@@ -37,25 +31,9 @@ export function editingView(deps: EditingViewDeps) {
     await entry();
   });
 
-  const tell = async (told: Told): Promise<void> => {
-    switch (told.kind) {
-      case 'launchFailed':
-        reportLaunch(STOPPED, told.reason);
-        return;
-      case 'backendFailed':
-        reportEntry(STOPPED);
-        return;
-      case 'exited':
-        reportExit(STOPPED);
-        return;
-      case 'put':
-        await tellPut(told.put);
-    }
-  };
-
   // A game folder not found, or one whose plugins cannot be listed, is told by the views and the
   // Output already; a line per value would repeat it.
-  const tellPut = async (put: PutLoadOrderResult): Promise<void> => {
+  const onPut = async (put: PutLoadOrderResult): Promise<void> => {
     if (!put.sent) {
       const { refusal } = put;
       if (refusal !== undefined) await loadOrderPut.run(() => Promise.resolve({ applied: false as const, refusal }));
@@ -72,5 +50,5 @@ export function editingView(deps: EditingViewDeps) {
     await narrator.settled(outcome.status.version);
   };
 
-  return { around, tell };
+  return { around, onPut };
 }
