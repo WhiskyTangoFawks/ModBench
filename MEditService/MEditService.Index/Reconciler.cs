@@ -35,11 +35,14 @@ internal sealed class Reconciler(
     private int _plannedCount;
     private int _activeCount;
     private IReadOnlyList<PluginLoadFailure> _collisionFailures = [];
-    // Set only by the reconcile door's own catch, cleared at the top of every attempt: a repeated
-    // refusal re-sets it a moment later, a successful one leaves it clear.
+    // Cleared at the top of every attempt: a repeated refusal re-sets it a moment later, a successful
+    // one leaves it clear.
     private string? _heldElsewhereMessage;
     // The same lifetime as _heldElsewhereMessage, for the reconcile's other known-unknown outcome.
     private string? _failureMessage;
+    // A hand-over's validation answers for its trees alone, so a clean one clears only this, never the
+    // reconcile's whole-set failure.
+    private string? _handOverFailure;
     // The version the reconcile door last finished answering for: never a superseded attempt's,
     // since that one returns before reaching its own update.
     private long _version;
@@ -139,7 +142,7 @@ internal sealed class Reconciler(
 
                 if (_heldElsewhereMessage is { } heldElsewhere)
                     return held with { State = LoadOrderState.HeldElsewhere, Message = heldElsewhere };
-                if (_failureMessage is { } failure)
+                if ((_failureMessage ?? _handOverFailure) is { } failure)
                     return held with { State = LoadOrderState.Failed, Message = failure };
                 return held;
             }
@@ -214,9 +217,13 @@ internal sealed class Reconciler(
                 failure = ValidationFailure(() => ValidateTreesOf(paths));
             }
             finally { _exclusive.Exit(); }
-            if (failure is null) continue;
-            lock (_lock) _failureMessage = failure;
-            PublishStatus();
+            bool moved;
+            lock (_lock)
+            {
+                moved = _handOverFailure != failure;
+                _handOverFailure = failure;
+            }
+            if (moved) PublishStatus();
         }
     }
 
@@ -298,9 +305,10 @@ internal sealed class Reconciler(
             bool refusalCleared;
             lock (_lock)
             {
-                refusalCleared = _heldElsewhereMessage is not null || _failureMessage is not null;
+                refusalCleared = _heldElsewhereMessage is not null || _failureMessage is not null || _handOverFailure is not null;
                 _heldElsewhereMessage = null;
                 _failureMessage = null;
+                _handOverFailure = null;
             }
             var token = BeginReconcile();
             if (EnsureScope(snapshot, out heldElsewhere, out failure) is not { } scope)
@@ -970,6 +978,7 @@ internal sealed class Reconciler(
         _collisionFailures = [];
         _heldElsewhereMessage = null;
         _failureMessage = null;
+        _handOverFailure = null;
         return detached;
     }
 }

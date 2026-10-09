@@ -85,13 +85,51 @@ public sealed class UnsavedDocumentTests : IDisposable
         Assert.Contains(RowsChangedFaults.Reason, faulting.Status.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void AHandOverThatValidatesCleanly_ClearsTheFailureAnEarlierHandOverSet()
+    {
+        var faults = new RowsChangedFaults();
+        using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: faults);
+        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedUnsaved\""))]);
+        Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
+
+        faults.Faulting = false;
+        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedAgain\""))]);
+
+        Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready, "the ready status");
+        Assert.Equal("TypedAgain", faulting.DocumentOf(_npc, _tracked.KeyOf()).EditorId);
+    }
+
+    [Fact]
+    public void AHandOverThatValidatesCleanly_LeavesAFailureTheReconcileSet()
+    {
+        var faults = new RowsChangedFaults();
+        using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: faults);
+        _tracked.HandEdit(faulting.DocumentOf(_npc, _tracked.KeyOf()), "\"TrackedNpc\"", "\"EditedOnDisk\"");
+        faulting.Holder.Apply(faulting.Holder.Current);
+        Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the reconcile's failed status");
+
+        faults.Faulting = false;
+        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"EditedOnDisk\"", "\"TypedUnsaved\""))]);
+        Waits.Reached(() => faults.Announced(RowsChanged(_npc)), "the hand-over's rows-changed");
+
+        Assert.Equal(LoadOrderState.Failed, faulting.Status.State);
+    }
+
     private sealed class RowsChangedFaults : INotificationPublisher
     {
         public const string Reason = "the stream could not take the push";
 
+        private readonly InMemoryNotificationPublisher _published = new();
+
+        public bool Faulting { get; set; } = true;
+
+        public bool Announced(Predicate<INotification> announced) => _published.Notifications.Any(n => announced(n));
+
         public void Publish(INotification notification)
         {
-            if (notification is RowsChangedNotification) throw new InvalidOperationException(Reason);
+            if (Faulting && notification is RowsChangedNotification) throw new InvalidOperationException(Reason);
+            _published.Publish(notification);
         }
     }
 
