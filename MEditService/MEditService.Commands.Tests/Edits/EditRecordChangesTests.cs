@@ -228,6 +228,22 @@ public sealed class EditRecordChangesTests : IDisposable
     }
 
     [Fact]
+    public void AChildRecordsFormIdEdit_ChangesOnlyItsOwnTextInTheTextItIsGiven_BesideAHandFormattedSiblingTheCodecCannotRead()
+    {
+        using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
+        var leaving = Path.Combine(world.ModFolder, TrackedTree.DocumentFile(world.ModFolder, world.Plugin, keys["Mover"].ToString()).Require());
+        var given = TextOf(world, world.Plugin, keys["Mover"].ToString())
+            .Replace("\"EditorID\": \"Wanderer\"", "\"EditorID\":\"Wanderer\", \"Scale\": { \"x\": 1 }", StringComparison.Ordinal);
+
+        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Set("FormKey", "\"000F00:World.esp\""), given);
+
+        Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
+        Assert.Equal(
+            given.Replace($"\"FormKey\": \"{keys["Mover"]}\"", "\"FormKey\": \"000F00:World.esp\"", StringComparison.Ordinal),
+            Assert.Single(answer.Changes.Documents, document => document.Path == leaving).Text);
+    }
+
+    [Fact]
     public void APlacedRecordCrossingIntoAnotherCell_LeavesTheRestOfTheTextItIsGivenAsItWas()
     {
         using var world = WorldWithACellAtTheOriginHoldingAMoverAndAWandererNineCellsAway(out var keys);
