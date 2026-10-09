@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import type { MEditClient, SourceChanges } from '../client';
 import type { Instance } from '../instanceLoader/instance';
-import { confirmRename, renamePlugin, type SourceApplied, type PluginRenameAccess, type PluginRenameConfirmation } from '../pluginsCommands/renamePlugin';
+import { confirmRename, renamePlugin, type PluginRenameAccess, type PluginRenameConfirmation } from '../pluginsCommands/renamePlugin';
 import { registerGesture, singularArgument } from '../drivingLib/gestureEntry';
 import { promptRename } from '../drivingLib/promptRename';
-import { applyAndReport } from '../drivingLib/applyAnswered';
+import { applyAnswered } from '../drivingLib/applyAnswered';
 import type { SourceEditing } from '../drivingLib/sourceEditing';
 import type { Reporter } from '../ports/reporter';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
@@ -46,15 +46,9 @@ export function registerRenamePluginCommand(
 
     await vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>
       instance.quiet(() => source.oneAtATime(async () => {
-        const applyAndSave = async (changes: SourceChanges): Promise<SourceApplied> => {
-          const { applied, notSaved } = await applyAndReport(source, reporter, [changes], [plugin], {
-            notApplied: `Could not rename "${plugin.name}" (${plugin.origin}): its plugin source may be partly renamed. Reverting the source rename in git undoes it.`,
-            notSaved: `Could not save the rename of "${plugin.name}" (${plugin.origin}) in full. Reverting the source rename in git undoes it.`,
-          });
-          if (!applied) return 'notApplied';
-          return notSaved.length > 0 ? 'unsaved' : 'saved';
-        };
-        const result = await renamePlugin({ adapter, client, source: { applyAndSave } }, plugin, newName, instance.value.gameRelease);
+        const apply = (changes: SourceChanges) => applyAnswered(source, reporter, [changes], [plugin],
+          `Could not rename "${plugin.name}" (${plugin.origin}): its plugin source may be partly renamed. Reverting the source rename in git undoes it.`);
+        const result = await renamePlugin({ adapter, client, source: { apply } }, plugin, newName, instance.value.gameRelease);
         if (result.applied || 'reported' in result) return;
         if (!result.sourceRenamed) {
           reporter.report('error', result.refusal);

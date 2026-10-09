@@ -67,7 +67,7 @@ async function editDocuments(
   };
   const applied = await applyAnswered(
     applying, deps.reporter, [outcome], [address.plugin],
-    { notApplied: `Could not edit ${field}.`, notSaved: `Could not save the edit of ${field}.` });
+    `Could not edit ${field}.`);
   return applied ? outcome.newFormKey : undefined;
 }
 
