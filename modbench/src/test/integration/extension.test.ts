@@ -908,7 +908,6 @@ describe('a child record of a tracked plugin', () => {
     await waitFor('the child\'s document to show the container\'s save', () => child.getText() === fromContainer);
   });
 
-  // Each test has a cell of its own, as VS Code misses a write to a file outside the workspace while no tab shows it.
   describe('and its container\'s document', () => {
     const CELL_FORM_KEY = '000803:Tracked.esp';
     let cells = 0;
@@ -1113,7 +1112,6 @@ describe('an edit in a tracked copy\'s grid', () => {
   });
 
   it('edits a child record through its own tab\'s document, and saves its container\'s document with it', async () => {
-    // A cell of its own, as VS Code misses a write to a file outside the workspace while no tab shows it.
     const cell = path.join(path.dirname(TRACKED_FILE), 'EditedCell.json');
     writeFileSync(cell, savedText);
     carriedIn.set(CHILD_FORM_KEY, cell);
