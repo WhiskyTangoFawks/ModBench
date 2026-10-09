@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
@@ -39,7 +38,7 @@ internal static class SilentSkipGuard
             case JsonArray pa when written is JsonArray wa:
                 if (meta?.Type == "flags")
                 {
-                    if (FlagBits(wa, meta) is { } wb && FlagBits(pa, meta) is { } pb && wb == pb) return true;
+                    if (LeafSpelling.SameFlags(wa, pa, meta)) return true;
                     dropped = path;
                     return false;
                 }
@@ -54,56 +53,13 @@ internal static class SilentSkipGuard
                 }
                 return true;
             case JsonValue patchedLeaf:
-                if (written is JsonValue writtenLeaf && LeafEquivalent(writtenLeaf, patchedLeaf, meta)) return true;
+                if (written is JsonValue writtenLeaf && LeafSpelling.Same(writtenLeaf, patchedLeaf, meta)) return true;
                 dropped = path;
                 return false;
             default:
                 dropped = path;
                 return false;
         }
-    }
-
-    // What the codec may change in a leaf it kept: the spelling, never the value. Flags compare as
-    // bits, since the codec names a defined bit and spells an undefined one in hex.
-    private static bool LeafEquivalent(JsonValue written, JsonValue patched, FieldMetadata? meta)
-    {
-        var w = JsonSerializer.SerializeToElement(written);
-        var p = JsonSerializer.SerializeToElement(patched);
-        if (w.ValueKind != p.ValueKind) return false;
-        if (w.ValueKind != JsonValueKind.String) return DocumentNodes.SameValue(w, p);
-        var (ws, ps) = (DocumentNodes.StringValueOf(w), DocumentNodes.StringValueOf(p));
-        return meta?.Type switch
-        {
-            ByteSliceHex.HexApiType => string.Equals(StripHexPrefix(ws), StripHexPrefix(ps), StringComparison.OrdinalIgnoreCase),
-            ColorReading.ApiType => string.Equals(
-                ColorReading.Of(ws, meta.HoldsAlpha), ColorReading.Of(ps, meta.HoldsAlpha), StringComparison.OrdinalIgnoreCase),
-            "formKey" => Mutagen.Bethesda.Plugins.FormKey.TryFactory(ws, out var wk) && Mutagen.Bethesda.Plugins.FormKey.TryFactory(ps, out var pk) && wk == pk,
-            "vector" => Components(ws).SequenceEqual(Components(ps)),
-            _ => string.Equals(ws, ps, StringComparison.Ordinal),
-        };
-    }
-
-    private static string StripHexPrefix(string text) =>
-        text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? text[2..] : text;
-
-    private static IEnumerable<double> Components(string vector) =>
-        vector.Split(',').Select(c => double.TryParse(c.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : double.NaN);
-
-    // A flags array as the bits it names: a member by its declared bit, anything else as the
-    // number it spells (decimal or hex), which is how the codec spells a bit no member names.
-    private static long? FlagBits(JsonArray names, FieldMetadata? meta)
-    {
-        long bits = 0;
-        foreach (var name in names)
-        {
-            var text = name?.ToString() ?? "";
-            var member = meta?.EnumMembers.FirstOrDefault(m => m.Value == text);
-            if (member?.BitValue is { } declared) bits |= long.Parse(declared, CultureInfo.InvariantCulture);
-            else if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) && long.TryParse(text.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hex)) bits |= hex;
-            else if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)) bits |= number;
-            else return null;
-        }
-        return bits;
     }
 
     private static bool IsDefaultLike(JsonNode? node, FieldMetadata? meta)
@@ -118,22 +74,9 @@ internal static class SilentSkipGuard
         }
         return node switch
         {
-            JsonValue value => IsZero(value, meta),
+            JsonValue value => LeafSpelling.IsUnset(value, meta),
             JsonArray array => array.Count == 0,
             JsonObject obj => obj.All(p => IsDefaultLike(p.Value, meta?.Fields?.FirstOrDefault(f => f.Name == p.Key) is { } f ? DocumentNodes.VariantFor(f, obj) : null)),
-            _ => false,
-        };
-    }
-
-    private static bool IsZero(JsonValue value, FieldMetadata? meta)
-    {
-        var element = JsonSerializer.SerializeToElement(value);
-        return element.ValueKind switch
-        {
-            JsonValueKind.False => true,
-            JsonValueKind.Number => element.GetDouble().CompareTo(0d) == 0,
-            JsonValueKind.String => element.GetString() is { } s
-                && (s.Length == 0 || (s == "Null" && meta?.Type == "formKey") || (s == "[]" && meta?.Type == ByteSliceHex.HexApiType)),
             _ => false,
         };
     }

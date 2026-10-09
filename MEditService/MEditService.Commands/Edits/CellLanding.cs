@@ -161,7 +161,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
     }
 
     private static SourceDocument CellOf(string text, Move move) =>
-        new(GridCellHolder.FormKeyOf(JsonNode.Parse(text) as JsonObject), move.CellType, EditorIds.In(text), text);
+        new(GridCellHolder.FormKeyOf(JsonNode.Parse(text) as JsonObject), move.CellType, DocumentTokens.EditorIdIn(text).EditorId, text);
 
     private static JsonObject Parsed(string text, string formKey) =>
         JsonNode.Parse(text) as JsonObject ?? throw new InvalidOperationException($"Expected {formKey}'s document to hold a JSON object.");

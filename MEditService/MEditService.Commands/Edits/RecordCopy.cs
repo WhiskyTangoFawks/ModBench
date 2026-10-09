@@ -269,7 +269,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     {
         var visible = visibleText is null
             ? source.Document(container)
-            : new SourceDocument(container.FormKey, container.RecordType, EditorIds.In(visibleText), visibleText);
+            : new SourceDocument(container.FormKey, container.RecordType, DocumentTokens.EditorIdIn(visibleText).EditorId, visibleText);
         return visible.Then<SourceDocument>(document =>
             document with { Body = ContainerDocumentEdits.WithoutChildren(document.Body, release, document.RecordType) });
     }

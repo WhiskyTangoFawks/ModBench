@@ -44,6 +44,33 @@ public sealed class DocumentTokensTests
     }
 
     [Fact]
+    public void EditorIdIn_ReadsTheRootsOwnAndNeverAChilds()
+    {
+        var read = DocumentTokens.EditorIdIn("""{ "Temporary": [ { "EditorID": "Child" } ], "EditorID": "Owner" }""");
+
+        Assert.Equal("Owner", read.EditorId);
+    }
+
+    [Theory]
+    [InlineData("""{ "Name": "x" }""")]
+    [InlineData("""{ "EditorID": null }""")]
+    [InlineData("""{ "EditorID": "Cut""")]
+    [InlineData("[]")]
+    public void EditorIdIn_ADocumentNamingNoneOrNoDocument_ReadsNone(string text)
+    {
+        var read = DocumentTokens.EditorIdIn(text);
+
+        Assert.Null(read.WhyUnreadable);
+        Assert.Null(read.EditorId);
+    }
+
+    [Fact]
+    public void EditorIdIn_ANonStringEditorId_IsUnreadableRatherThanNone()
+    {
+        Assert.NotNull(DocumentTokens.EditorIdIn("""{ "EditorID": 7 }""").WhyUnreadable);
+    }
+
+    [Fact]
     public void RootStringIn_AnswersAStringMemberOfTheRootOnly()
     {
         const string Text = """{ "Type": "Npc", "Count": 3, "Nested": { "Other": "deep" } }""";

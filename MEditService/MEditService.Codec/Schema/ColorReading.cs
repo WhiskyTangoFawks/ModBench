@@ -20,14 +20,14 @@ public static class ColorReading
             && alpha != 0;
     }
 
-    public static string Of(string text, bool holdsAlpha)
+    internal static string Of(string text, bool holdsAlpha)
     {
         var alpha = holdsAlpha ? ColorExt.IncludeAlpha.Always : ColorExt.IncludeAlpha.Never;
         return Parsed(text) is { } color ? color.ToHexString(alpha) : text;
     }
 
     /// <summary>A colour that holds no alpha as Mutagen's binary read spells it: alpha 00.</summary>
-    public static string AsReadWithoutAlpha(string text) =>
+    internal static string AsReadWithoutAlpha(string text) =>
         Parsed(text) is { } color ? Color.FromArgb(0, color).ToHexString(ColorExt.IncludeAlpha.Always) : text;
 
     private static Color? Parsed(string text)

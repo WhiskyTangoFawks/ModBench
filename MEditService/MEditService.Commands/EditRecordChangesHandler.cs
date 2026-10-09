@@ -90,7 +90,7 @@ public sealed class EditRecordChangesHandler
             return WriteTargets.RefuseUnreadable(formKey, why, spelled);
         if (refused is { } rejected) return rejected;
 
-        var written = new SourceDocument(identity.FormKey, identity.RecordType, EditorIds.In(newText), newText);
+        var written = new SourceDocument(identity.FormKey, identity.RecordType, DocumentTokens.EditorIdIn(newText).EditorId, newText);
         if (move is { Into: { } into }) return _cellLanding.Land(plugin, editTarget, move.From, written, into, spelled, batches);
         if (move is { StaysInItsCell: true })
         {

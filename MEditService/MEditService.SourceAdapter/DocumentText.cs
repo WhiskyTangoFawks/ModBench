@@ -1,6 +1,4 @@
 using System.Text;
-using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
@@ -44,20 +42,6 @@ internal static class DocumentText
         SourceRepositoryLayout.IsHeaderDocumentPath(filePath, pluginFileName)
             ? SourceRepositoryLayout.HeaderFormKeyOf(pluginFileName)
             : DocumentTokens.RootStringIn(text, RecordMembers.FormKey);
-
-    /// <summary>The EditorID at the document's own root. Malformed text names none.</summary>
-    internal static EditorIdRead EditorIdIn(string text)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(text);
-            return DocumentNodes.EditorIdOf(document.RootElement);
-        }
-        catch (JsonException)
-        {
-            return EditorIdRead.None;
-        }
-    }
 
     /// <summary>The record's own text out of the bytes <paramref name="unit"/>'s file holds: itself for
     /// a flat record, or spliced back out of its owner's text for an embedded child.</summary>
