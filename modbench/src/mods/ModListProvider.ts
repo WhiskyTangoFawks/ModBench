@@ -97,7 +97,7 @@ export class ModNode extends vscode.TreeItem {
   }
 }
 
-/** Pinned row over the instance's `overwrite/` folder. Not a modlist.txt entry, so it has no
+/** Pinned row over the instance's `overwrite/` folder. Not an entry of mod order, so it has no
  *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
 export class OverwriteNode extends vscode.TreeItem {
   readonly kind = 'runtimeOutput';
@@ -363,7 +363,7 @@ export class ModListProvider
     return group ? this.groupRow(group)?.mods.some((m) => m.name === mod.name) === true : this.isFound(mod);
   }
 
-  // modlist.txt is winning-first. View order only.
+  // Mod order is winning-first. View order only.
   private losingFirst(mods: readonly Mod[]): Mod[] {
     return [...mods].reverse();
   }
