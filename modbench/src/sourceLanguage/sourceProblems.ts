@@ -40,13 +40,10 @@ function onText(text: string, problem: SourceProblem): ProblemOnFile {
 
 interface Told { key: string; message: string; why: string }
 
-// Tells when a failure begins; with `againOnNewReason`, when its reason changes too.
-function tellingOnce(say: (message: string, why: string) => void, againOnNewReason: boolean): (standing: Told[]) => void {
+function tellingOnce(say: (message: string, why: string) => void): (standing: Told[]) => void {
   let told = new Map<string, string>();
   return (standing) => {
-    for (const { key, message, why } of standing) {
-      if (!told.has(key) || (againOnNewReason && told.get(key) !== why)) say(message, why);
-    }
+    for (const { key, message, why } of standing) if (told.get(key) !== why) say(message, why);
     told = new Map(standing.map(({ key, why }) => [key, why]));
   };
 }
@@ -54,7 +51,8 @@ function tellingOnce(say: (message: string, why: string) => void, againOnNewReas
 type OnFiles = Map<string, ProblemOnFile[]>;
 // A plugin's problems by file: the links it holds to missing records, and the files whose read stopped.
 interface Contribution { links: OnFiles; stops: OnFiles }
-interface Unplaced extends Told { plugin: string }
+// `told`: the front end's own failure; mEdit logs the reasons it answers itself.
+interface Unplaced extends Told { plugin: string; told: boolean }
 interface Placed { ofPlugin: Map<string, Contribution | undefined>; unplaced: Unplaced[]; unread: Told[] }
 
 const nameOf = ({ name, origin }: { name: string; origin: string }) => `"${name}" (${origin})`;
@@ -67,7 +65,7 @@ async function placed(answer: PluginProblems[], { originFiles, readText }: Sourc
     const files = originFiles(plugin.origin);
     const key = pluginAddressKey(plugin);
     const why = files === undefined ? `The instance holds no folder for ${plugin.origin}.` : failure;
-    if (why != null) unplaced.push({ key, message: `The Problems panel keeps the last problems of ${nameOf(plugin)}.`, why, plugin: nameOf(plugin) });
+    if (why != null) unplaced.push({ key, message: `The Problems panel keeps the last problems of ${nameOf(plugin)}.`, why, plugin: nameOf(plugin), told: files === undefined });
     if (files === undefined) return [key, undefined] as const;
     const contribution: Contribution = { links: new Map(), stops: new Map() };
     const byPath = new Map<string, SourceProblem[]>();
@@ -109,9 +107,9 @@ function nextHeld(held: Map<string, Contribution>, answered: Map<string, Contrib
  *  language status says why. */
 export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const { client, reporter, publish, languageStatus } = deps;
-  const tellingOnSurface = (againOnNewReason: boolean) => tellingOnce((message, why) => { reporter.shownOnSurface('warning', message, why); }, againOnNewReason);
-  const tellUnplaced = tellingOnSurface(false);
-  const tellUnread = tellingOnSurface(true);
+  const tellingOnSurface = () => tellingOnce((message, why) => { reporter.shownOnSurface('warning', message, why); });
+  const tellUnplaced = tellingOnSurface();
+  const tellUnread = tellingOnSurface();
   const lastRead = (why: string) => `Showing the last good read: ${why}`;
   let held = new Map<string, Contribution>();
   let unplacedStatus: string | undefined;
@@ -141,7 +139,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     publish(onEveryFile([...held.values()]));
     unplacedStatus = unplaced.length > 0 ? lastRead(unplaced.map(({ plugin, why }) => `${plugin}: ${why}`).join('; ')) : undefined;
     showStatus();
-    tellUnplaced(unplaced);
+    tellUnplaced(unplaced.filter(({ told }) => told));
     tellUnread(unread);
   };
   const keepLastAnswer = (mine: number, error: unknown) => {

@@ -38,7 +38,6 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // `refresh`' own order, apart from `generation` so a fact re-read never discards a hand-off.
   private refreshes = 0;
-  private failing = new Set<string>();
 
   readonly rows: PluginRowFacts = this.facts;
   readonly onDidChange = this.changed.event;
@@ -86,7 +85,6 @@ export class PluginFactsFeed implements vscode.Disposable {
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation) return undefined;
     this.facts.reconciled(plugins, failures);
-    this.logBegunFailures();
     // Diagnoses stay as the last scan left them (no blink) until the scan lands a fresh answer;
     // a failed scan leaves them alone too.
     this.changed.fire();
@@ -104,16 +102,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation || refresh !== this.refreshes) return;
     this.facts.refreshed(plugins);
-    this.logBegunFailures();
     this.changed.fire();
-  }
-
-  private logBegunFailures(): void {
-    const standing = this.facts.laterReadFailures();
-    for (const [key, words] of standing) {
-      if (!this.failing.has(key)) this.deps.log('warn', `[PluginFactsFeed] showing the last good read of ${words}`);
-    }
-    this.failing = new Set(standing.keys());
   }
 
   /** The record filter changed, so the last answer belongs to another filter. */

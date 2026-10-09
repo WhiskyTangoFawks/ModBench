@@ -213,20 +213,17 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3);
   });
 
-  it('tells of a plugin whose problems mEdit could not place once per failure, however the reason changes, and again when it fails anew', async () => {
-    const { answered, reporter } = feed({});
+  it('adds no line for a failure mEdit answers, however its text changes, and keeps the language status current', async () => {
+    const { answered, reporter, status } = feed({});
     const failed = (failure: string): PluginProblems[] => [{ plugin: PLUGIN, problems: [], failure }];
 
-    await answered(failed('Refers.esp\'s source holds no file for 000800:Refers.esp.'));
-    await answered(failed('Refers.esp\'s source holds no file for 000800:Refers.esp.'));
-    await answered(failed('Refers.esp is tracked but no mod folder provides it.'));
+    await answered(failed('Unexpected end at 1.'));
+    await answered(failed('Unexpected end at 2.'));
     await answered([{ plugin: PLUGIN, problems: [] }]);
-    await answered(failed('Refers.esp is tracked but no mod folder provides it.'));
+    await answered(failed('Unexpected end at 3.'));
 
-    expect(reporter.shownOnSurface.mock.calls).toEqual([
-      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'Refers.esp\'s source holds no file for 000800:Refers.esp.'],
-      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'Refers.esp is tracked but no mod folder provides it.'],
-    ]);
+    expect(reporter.shownOnSurface).not.toHaveBeenCalled();
+    expect(status.at(-1)).toBe('Showing the last good read: "Refers.esp" (ReferringMod): Unexpected end at 3.');
   });
 
   it('shows the problems mEdit placed for a plugin whose other problems it could not place', async () => {
@@ -236,9 +233,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     const shown = await answered([{ plugin: PLUGIN, problems: [stray], failure: 'Refers.esp\'s source could not place 000800:Refers.esp.' }]);
 
     expect([...shown.keys()]).toEqual(['/mods/ReferringMod/Refers.esp/Stray.json']);
-    expect(reporter.shownOnSurface.mock.calls).toEqual([
-      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'Refers.esp\'s source could not place 000800:Refers.esp.'],
-    ]);
+    expect(reporter.shownOnSurface).not.toHaveBeenCalled();
   });
 
   it('tells of a plugin whose mod the instance holds no folder for, rather than dropping its problems', async () => {
