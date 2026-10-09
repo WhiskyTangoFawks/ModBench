@@ -38,7 +38,16 @@ internal sealed class PluginCompileService(
 
         // One repository for the whole pass, so the tree it answers from is read once.
         var repository = SourceRepository.Over(mod, loadOrder.GameRelease);
-        var sourceFiles = repository.FilesOf(plugin);
+        PluginSourceFiles sourceFiles;
+        try
+        {
+            sourceFiles = repository.TreeOf(plugin);
+        }
+        catch (AmbiguousSourceUnitException ex)
+        {
+            return CompileResult.Refused(
+                CompileRefusal.SourceDoesNotParse, $"{plugin.Name} could not be read from its source: {ex.Message}");
+        }
 
         // A document the read could not open is content this compile does not have, and compiling the
         // rest would write a binary missing that record with nothing left to notice it
@@ -59,7 +68,7 @@ internal sealed class PluginCompileService(
                 $"{plugin.Name}'s source folder holds no files, so there is nothing to compile. {RegenerateTheSource}");
         }
 
-        var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin.Name, loadOrder.GameRelease);
+        var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin, repository, loadOrder.GameRelease);
         if (deserializeRefusal != null)
             return CompileResult.Refused(CompileRefusal.SourceDoesNotParse, deserializeRefusal);
         var tree = parsedTree
@@ -164,26 +173,15 @@ internal sealed class PluginCompileService(
     }
 
     private async Task<(CompiledTree? Tree, string? RefusalReason)> DeserializeSource(
-        IReadOnlyList<TreeFile> files, string pluginName, GameRelease release)
+        IReadOnlyList<TreeFile> files, PluginAddress plugin, SourceRepository repository, GameRelease release)
     {
-        IReadOnlyList<TreeFile> doorFiles;
-        try
-        {
-            doorFiles = SourceRepository.DoorFilesOf(pluginName, files, release);
-        }
-        catch (AmbiguousSourceUnitException ex)
-        {
-            return (null, $"{pluginName} could not be read from its source: {ex.Message}");
-        }
-
-        var read = await adapter.ReadTreeAsync(doorFiles, release);
+        var read = await adapter.ReadTreeAsync(files, release);
         if (read.Tree is { } tree) return (tree, null);
 
-        logger.LogWarning(read.Error, "{Plugin} could not be read from its source", pluginName);
+        logger.LogWarning(read.Error, "{Plugin} could not be read from its source", plugin.Name);
         var diagnosis = read.Diagnosis
             ?? throw new InvalidOperationException("Expected a failed read to carry a diagnosis.");
-        var described = SourceRepository.SourceTextOf(pluginName, diagnosis.Describe(), files, release);
-        return (null, $"{pluginName} could not be read from its source: {described} {RegenerateTheSource}");
+        return (null, $"{plugin.Name} could not be read from its source: {repository.InSourceNames(plugin, diagnosis).Describe()} {RegenerateTheSource}");
     }
 
     // ADR-0006. The generated deserializer skips an unrecognized property or file without

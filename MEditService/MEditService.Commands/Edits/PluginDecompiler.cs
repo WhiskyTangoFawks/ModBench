@@ -7,7 +7,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>A plugin's bytes as the files of its plugin source, or why they cannot be: ADR-0006's
+/// <summary>A plugin's bytes as the whole-mod door's tree of its plugin source, or why they cannot be: ADR-0006's
 /// gate refused it, or it cannot be read. Writes nothing.</summary>
 internal sealed record Decompiled(IReadOnlyList<TreeFile>? Files, DecompileRefusal Refusal, string Message)
 {
@@ -55,14 +55,11 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
                 $"in {strings.Folder}. Restore the file, then try again.");
         }
 
-        // Where the door's tree lands in the mod folder is the repository's answer, and the round-trip
-        // gate below reads the same files the caller writes.
         onParsed();
-        var files = SourceRepository.PristineFilesOf(plugin.Name, tree.Files);
-        if (await VerifyRoundTrip(plugin.Name, plugin.Path, files, loadOrder.GameRelease, strings, cancel) is { } refusal)
+        if (await VerifyRoundTrip(plugin.Name, plugin.Path, tree.Files, loadOrder.GameRelease, strings, cancel) is { } refusal)
             return Decompiled.Refused(DecompileRefusal.RoundTripFailed, refusal);
 
-        return new Decompiled(files, DecompileRefusal.None, "");
+        return new Decompiled(tree.Files, DecompileRefusal.None, "");
     }
 
     // ADR-0006's gate. Reparse, not the pre-write object: only written bytes show what
@@ -70,18 +67,18 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
     private async Task<string?> VerifyRoundTrip(
         string pluginName,
         string originalPluginPath,
-        IReadOnlyList<TreeFile> pristineFilesForThisPlugin,
+        IReadOnlyList<TreeFile> tree,
         GameRelease gameRelease,
         PluginStrings strings,
         CancellationToken cancel)
     {
-        using var scratch = SourceRepository.ScratchFor(pluginName);
+        using var scratch = ScratchPlugin.For(pluginName);
         var recompiledPath = scratch.PluginPath;
         try
         {
             var originalMasters = adapter.MastersOf(pluginName, originalPluginPath, gameRelease, strings);
             await adapter.WriteFromTreeAsync(
-                SourceRepository.DoorFilesOf(pluginName, pristineFilesForThisPlugin, gameRelease), recompiledPath, originalMasters, cancel);
+                SourceRepository.ReadBackOf(pluginName, tree, gameRelease), recompiledPath, originalMasters, cancel);
         }
         catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
         {

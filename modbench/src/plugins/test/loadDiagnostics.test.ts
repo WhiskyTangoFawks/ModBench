@@ -22,13 +22,13 @@ describe('publishPluginWarnings', () => {
   it('targets the plugin binary itself (pre-Track), carries the refusal wording verbatim, and warns rather than errors since a Malformed plugin still loads and plays', () => {
     const collection = new FakeDiagnosticCollection();
 
-    publishPluginWarnings(collection, pluginFilesFrom({ 'TS Mod/TrueStorms.esp': '/instance/mods/TS Mod/TrueStorms.esp' }), [
-      report('TrueStorms.esp', 'TS Mod', 'REGN … — fixed-size-subrecord-short, repairable (lossless): …'),
+    publishPluginWarnings(collection, pluginFilesFrom({ 'TS Mod/InventedWeather.esp': '/instance/mods/TS Mod/InventedWeather.esp' }), [
+      report('InventedWeather.esp', 'TS Mod', 'REGN … — fixed-size-subrecord-short, repairable (lossless): …'),
     ]);
 
     const [path, list] = present(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection)[0], 'the sole published diagnostic-collection entry');
-    expect(path).toBe('/instance/mods/TS Mod/TrueStorms.esp');
-    const diagnostic = present(list[0], 'the sole diagnostic published for TrueStorms.esp');
+    expect(path).toBe('/instance/mods/TS Mod/InventedWeather.esp');
+    const diagnostic = present(list[0], 'the sole diagnostic published for InventedWeather.esp');
     expect(diagnostic.message).toBe('REGN … — fixed-size-subrecord-short, repairable (lossless): …');
     expect(diagnostic.severity).toBe(DiagnosticSeverity.Warning);
   });

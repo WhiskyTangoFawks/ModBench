@@ -60,7 +60,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         // Only a directory-per-record type (Cell, Worldspace) can have a directory of its own; a type
         // with no group of its own is always embedded, so nothing is scanned for it.
         var sourceRoot = Path.Combine(_modFolder, SourceRepositoryLayout.RootFor(plugin.Name));
-        if (RecordTypes.For(_release).GroupFolderNameFor(identity.RecordType) is not null
+        if (GroupFolders.For(_release).FolderOf(identity.RecordType) is not null
             && FindOwnUnit(sourceRoot, plugin.Name, identity.FormKey, byText) is { } own)
         {
             return Unit(own, identity.FormKey, identity.RecordType, isEmbedded: false);
@@ -178,15 +178,15 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         return null;
     }
 
-    internal RecordOfFileAnswer RecordOfFile(PluginAddress plugin, string fullPath)
+    internal RecordOfFileAnswer RecordOfFile(PluginAddress plugin, string treeName, string fullPath)
     {
         var relativePath = Path.Combine(
-            SourceRepositoryLayout.RootFor(plugin.Name),
-            Path.GetRelativePath(SourceRepositoryLayout.RootIn(_modFolder, plugin.Name), fullPath));
+            SourceRepositoryLayout.RootFor(treeName),
+            Path.GetRelativePath(SourceRepositoryLayout.RootIn(_modFolder, treeName), fullPath));
         var text = DocumentText.ReadOrNull(fullPath);
         if (text is null) return new RecordOfFileAnswer.Refused($"{fullPath} could not be read.");
         if (NotADocument(text) is { } why) return new RecordOfFileAnswer.Refused($"{fullPath} is no record document: {why}");
-        return FormKey.TryFactory(DocumentText.FormKeyDeclaredIn(text, relativePath, plugin.Name), out var declared)
+        return FormKey.TryFactory(DocumentText.FormKeyDeclaredIn(text, relativePath, treeName), out var declared)
             ? new RecordOfFileAnswer.Holds(new RecordAt(plugin, declared.ToString()))
             : new RecordOfFileAnswer.Refused($"{fullPath} declares no FormKey, so it is no record's document.");
     }
@@ -331,10 +331,11 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         FormKey.TryFactory(formKey, out var parsed) ? parsed.ToString() : formKey;
 
     // Windows names a file without regard to case, and VS Code spells a drive letter in lower case.
+    internal static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
     internal static bool IsUnder(string directory, string path) =>
-        path.StartsWith(
-            directory + Path.DirectorySeparatorChar,
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        path.StartsWith(directory + Path.DirectorySeparatorChar, PathComparison);
 
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
     /// holds it. Only the repository reads block directories back (ADR-0014). A
@@ -409,7 +410,7 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
     // or inside its worldspace's.
     internal string? FindOwnUnit(string sourceRoot, string pluginFileName, string formKey, bool byText = true) =>
         OwnDocumentUnder(
-            [.. RecordTypes.For(_release).DirectoryPerRecordFolderNames
+            [.. GroupFolders.For(_release).DirectoryPerRecordFolders
                 .Select(groupFolder => Path.Combine(sourceRoot, groupFolder))],
             pluginFileName, formKey, byText);
 

@@ -16,7 +16,7 @@ public static class SourceEdits
         where T : class, IMajorRecord
     {
         var located = repository.RecordOf(plugin, identity).Require();
-        var record = (T)TreeOf(repository, plugin, release).EnumerateMajorRecords()
+        var record = (T)TreeOf(repository, plugin).EnumerateMajorRecords()
             .Single(candidate => candidate.FormKey.ToString() == located.FormKey);
         change(record);
         Write(repository, plugin, record, identity.RecordType, release);
@@ -28,9 +28,9 @@ public static class SourceEdits
             record.FormKey.ToString(), recordType, record.EditorID,
             RecordTextCodec.SerializeToText(record, release)));
 
-    private static IMod TreeOf(SourceRepository repository, PluginAddress plugin, GameRelease release)
+    private static IMod TreeOf(SourceRepository repository, PluginAddress plugin)
     {
-        var files = SourceRepository.DoorFilesOf(plugin.Name, repository.FilesOf(plugin).Files, release);
+        var files = repository.TreeOf(plugin).Files;
         using var scratch = new ScratchDirectory("medit-source-edit-");
         foreach (var file in files)
         {
@@ -40,7 +40,7 @@ public static class SourceEdits
         }
 
         return RecordTextCodecGeneratorSeed.DeserializeWholeMod(
-                PluginSourceRoot.In(scratch, plugin.Name), InlineWorkDropoff.Instance, CancellationToken.None)
+                scratch, InlineWorkDropoff.Instance, CancellationToken.None)
             .GetAwaiter().GetResult();
     }
 }

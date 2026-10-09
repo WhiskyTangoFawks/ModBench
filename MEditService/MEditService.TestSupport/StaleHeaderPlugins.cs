@@ -11,15 +11,15 @@ public sealed record StaleHeaderPlugin(string FileName, byte[] Bytes, uint Store
 public static class StaleHeaderPlugins
 {
     public const string SettingsFileName = "Pip Boy Sorting Settings.esp";
-    public const string SierraFileName = "RecruitDog.esl";
-    public const string HitechFileName = "Hitech Bins to Guild.esp";
+    public const string LightFileName = "RecruitDog.esl";
+    public const string FullFileName = "Full Bins to Guild.esp";
 
     private const CompressionLevel LevelMutagenDoesNotWrite = CompressionLevel.Fastest;
 
     private static readonly byte[] Padding = Encoding.ASCII.GetBytes(
         string.Concat(Enumerable.Range(0, 400).Select(i => (i * 7919 % 97).ToString(CultureInfo.InvariantCulture))) + "\0");
 
-    public static StaleHeaderPlugin Named(string fileName) => new[] { Settings, Sierra, Hitech }.Single(p => p.FileName == fileName);
+    public static StaleHeaderPlugin Named(string fileName) => new[] { Settings, Light, Full }.Single(p => p.FileName == fileName);
 
     public static StaleHeaderPlugin Settings
     {
@@ -31,24 +31,24 @@ public static class StaleHeaderPlugins
         }
     }
 
-    public static StaleHeaderPlugin Sierra
+    public static StaleHeaderPlugin Light
     {
         get
         {
             string[] masters = ["Fallout4.esm"];
             var deflated = DeflatedMiscs(masters, "DogRecruit");
-            return Build(SierraFileName, nextObjectId: 17098, numRecords: 148, light: true, masters, [RawPlugin.Group("MISC", deflated)]);
+            return Build(LightFileName, nextObjectId: 17098, numRecords: 148, light: true, masters, [RawPlugin.Group("MISC", deflated)]);
         }
     }
 
-    public static StaleHeaderPlugin Hitech
+    public static StaleHeaderPlugin Full
     {
         get
         {
             string[] masters = ["Fallout4.esm"];
             var deflated = DeflatedMiscs(masters, "BinSkin");
             var world = Id(masters, 0x810);
-            return Build(HitechFileName, nextObjectId: 43, numRecords: 150, light: false, masters,
+            return Build(FullFileName, nextObjectId: 43, numRecords: 150, light: false, masters,
                 [
                     RawPlugin.Group("MISC", deflated),
                     RawPlugin.Group("WRLD",

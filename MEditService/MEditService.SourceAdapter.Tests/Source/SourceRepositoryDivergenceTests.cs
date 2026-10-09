@@ -35,19 +35,18 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
 
     private static string HeaderPath => PluginSourceRoot.HeaderDocument(PluginName);
 
-    private static string ExtraPath => SourceRepository.PristineFilesOf(PluginName, [Extra]).Single().RelativePath;
+    private static string ExtraPath => Path.Combine(PluginSourceRoot.For(PluginName), Extra.RelativePath);
 
     private string NpcPath =>
         Repository.RelativePathOf(Plugin, Npc)
             ?? throw new InvalidOperationException($"Expected the tree to hold {NpcFormKey}.");
 
     private static string DoorPathOf(string modFolderPath) =>
-        Path.GetRelativePath(PluginSourceRoot.For(PluginName), modFolderPath);
+        modFolderPath == HeaderPath ? "RecordData.json" : Path.GetRelativePath(PluginSourceRoot.For(PluginName), modFolderPath);
 
     private List<TreeFile> Serialized(Func<TreeFile, TreeFile?>? change = null) =>
     [
-        .. Repository.FilesOf(Plugin).Files
-            .Select(file => new TreeFile(DoorPathOf(file.RelativePath), file.Content))
+        .. Repository.TreeOf(Plugin).Files
             .Select(change ?? (file => file))
             .OfType<TreeFile>(),
     ];

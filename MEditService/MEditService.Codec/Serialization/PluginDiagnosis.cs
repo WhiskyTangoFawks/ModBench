@@ -33,12 +33,13 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
     }
 
     /// <summary>Compile's seam: reading source JSON never throws a RecordException, so the deepest
-    /// <see cref="FilePathedException"/>'s path, relative to the folder the door read
-    /// <paramref name="readRoot"/>, is the anchor.</summary>
+    /// <see cref="FilePathedException"/>'s path is the anchor. Every path is relative to
+    /// <paramref name="readRoot"/>, the folder the door read.</summary>
     public static PluginDiagnosis FromSourceReadException(Exception ex, string readRoot)
     {
         var deepest = FindDeepest<FilePathedException>(ex);
-        var message = deepest?.InnerException?.Message ?? ex.Message;
+        var message = (deepest?.InnerException?.Message ?? ex.Message).Replace(
+            Path.TrimEndingDirectorySeparator(readRoot) + Path.DirectorySeparatorChar, "", StringComparison.Ordinal);
         var anchor = deepest == null ? null : Path.GetRelativePath(readRoot, deepest.Path);
         return new PluginDiagnosis(anchor, UnknownClass, TailFor(message), message);
     }

@@ -13,26 +13,15 @@ public sealed class RecordTypes
 {
     private static readonly ConcurrentDictionary<GameCategory, RecordTypes> Models = new();
 
-    // Named explicitly, not inferred: inference would cover a third type the day Mutagen's generator
-    // picks a directory for one. Valued by group folder because reflection cannot supply Cell's. A
-    // quest is flat: every child slot is embedded.
-    private static readonly Dictionary<string, string> DirectoryPerRecordFolders =
-        new(StringComparer.Ordinal)
-        {
-            [NestedDirectoryPerRecordType] = "Cells",
-            [WorldspaceTypeName] = "Worldspaces",
-        };
-
     private readonly GameCategory _category;
     private readonly Dictionary<string, Type?> _byName = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _recordTypeByName = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _recordTypes = [];
     private readonly HashSet<Type> _ambiguous;
-    private readonly Dictionary<Type, string> _folderByType = [];
+    private readonly Dictionary<Type, string> _groupByType = [];
     // Valued by the schema table spelling (lowercased GRUP signature), never the CLR name:
     // The store's record-type dictionary is keyed by that spelling only and throws on "Npc".
-    private readonly Dictionary<string, List<string>> _typesByFolder = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, string> _directoryPerRecordTypeByFolder = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<string>> _typesByGroup = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Type> _blockLevelByName;
     private readonly ContainerMembers _members = ContainerMembers.Derived;
 
@@ -74,19 +63,15 @@ public sealed class RecordTypes
                 _recordTypeByName[table] = table;
             }
 
-            // Every concrete type maps to its owning top-level group, unless it is directory-per-record
-            // or has no top-level group at all (a placed ref, a landscape).
-            if (DirectoryPerRecordFolders.TryGetValue(type.Name, out var ownFolder))
-            {
-                _directoryPerRecordTypeByFolder[ownFolder] = table;
-                continue;
-            }
-            var owningFolder = groupProperties.FirstOrDefault(gp => gp.ElementType.IsAssignableFrom(type)).Property?.Name;
-            if (owningFolder is null) continue;
+            // A type with no top-level group at all (a placed ref, a landscape) is held only inside another record.
+            var group = type.Name == CellTypeName
+                ? CellsGroup
+                : groupProperties.FirstOrDefault(gp => gp.ElementType.IsAssignableFrom(type)).Property?.Name;
+            if (group is null) continue;
 
-            _folderByType[type] = owningFolder;
-            if (!_typesByFolder.TryGetValue(owningFolder, out var schemaNamesHere))
-                _typesByFolder[owningFolder] = schemaNamesHere = [];
+            _groupByType[type] = group;
+            if (!_typesByGroup.TryGetValue(group, out var schemaNamesHere))
+                _typesByGroup[group] = schemaNamesHere = [];
             schemaNamesHere.Add(table);
         }
 
@@ -96,8 +81,7 @@ public sealed class RecordTypes
         _ambiguous = [.. _byName.Values.OfType<Type>().Where(t => IsAmbiguous(t, abstractElements))];
 
         var exterior = BlockLevelsUnder(_byName.GetValueOrDefault(WorldspaceTypeName), BlockNumberXMember);
-        var interior = BlockLevelsUnder(
-            modType.GetProperty(DirectoryPerRecordFolders[NestedDirectoryPerRecordType])?.PropertyType, BlockNumberMember);
+        var interior = BlockLevelsUnder(modType.GetProperty(CellsGroup)?.PropertyType, BlockNumberMember);
         ExteriorCellBlockLevels = [.. exterior.Select(level => level.Name)];
         InteriorCellBlockLevels = [.. interior.Select(level => level.Name)];
         _blockLevelByName = exterior.Concat(interior).ToDictionary(level => level.Name, StringComparer.Ordinal);
@@ -140,7 +124,7 @@ public sealed class RecordTypes
         ?? throw new InvalidOperationException($"'{recordClass.Name}' is no record class a GRUP registers, so no table holds it.");
 
     /// <summary>The game's cell and worldspace record types.</summary>
-    public string Cell => RecordTypeNamed(NestedDirectoryPerRecordType) ?? throw MissingRecordType(NestedDirectoryPerRecordType);
+    public string Cell => RecordTypeNamed(CellTypeName) ?? throw MissingRecordType(CellTypeName);
 
     public string Worldspace => RecordTypeNamed(WorldspaceTypeName) ?? throw MissingRecordType(WorldspaceTypeName);
 
@@ -149,7 +133,7 @@ public sealed class RecordTypes
 
     /// <summary>Whether this is the game's cell — the one record type whose place in the world is its
     /// directory rather than a slot.</summary>
-    public bool IsCell(string recordType) => ConcreteFor(recordType)?.Name == NestedDirectoryPerRecordType;
+    public bool IsCell(string recordType) => ConcreteFor(recordType)?.Name == CellTypeName;
 
     /// <summary>Whether this is the game's worldspace — the one record type whose cells sit under its
     /// blocks, in documents of their own.</summary>
@@ -159,45 +143,17 @@ public sealed class RecordTypes
     /// holds only inside another record has none.</summary>
     public IEnumerable<string> Creatable => _recordTypes.Where(IsCreatable);
 
-    public bool IsCreatable(string recordType) => GroupFolderNameFor(recordType) is not null;
+    public bool IsCreatable(string recordType) => GroupOf(recordType) is not null;
 
-    /// <summary>The group-property name ("Npcs") the generator writes verbatim as a flat record's
-    /// directory. Null for a type with no top-level group, a directory-per-record one, or one that
-    /// does not resolve — ask the repository.</summary>
-    public string? FolderNameFor(string recordType) =>
-        ConcreteFor(recordType) is { } concrete && _folderByType.TryGetValue(concrete, out var folder)
-            ? folder
-            : null;
+    /// <summary>The mod's top-level group holding records of this type, as Mutagen names it ("Npcs").
+    /// Null for a type held only inside another record, or one that does not resolve.</summary>
+    public string? GroupOf(string recordType) =>
+        ConcreteFor(recordType) is { } concrete && _groupByType.TryGetValue(concrete, out var group) ? group : null;
 
-    /// <summary>A search hint, never a path: which subtree a record is somewhere inside, including
-    /// the two directory-per-record types <see cref="FolderNameFor"/> refuses. A wrong answer costs
-    /// a miss, never a wrong write.</summary>
-    public string? GroupFolderNameFor(string recordType) =>
-        FolderNameFor(recordType)
-        ?? (ConcreteFor(recordType) is { } concrete
-            && DirectoryPerRecordFolders.TryGetValue(concrete.Name, out var folder) ? folder : null);
-
-    /// <summary>The group folders whose records get a directory rather than a file. Every such
-    /// record's directory sits somewhere under one of them, so a scan of all of them finds it without
-    /// being told which.</summary>
-    public IEnumerable<string> DirectoryPerRecordFolderNames => _directoryPerRecordTypeByFolder.Keys;
-
-    /// <summary>The record type of a directory in <paramref name="groupFolder"/>, and a cell when
-    /// <paramref name="nested"/>: only a cell's directory sits below block levels. Null for any other
-    /// folder.</summary>
-    public string? DirectoryPerRecordTypeIn(string groupFolder, bool nested)
-    {
-        if (!_directoryPerRecordTypeByFolder.ContainsKey(groupFolder)) return null;
-
-        var folder = nested ? DirectoryPerRecordFolders[NestedDirectoryPerRecordType] : groupFolder;
-        return _directoryPerRecordTypeByFolder.TryGetValue(folder, out var recordType) ? recordType : null;
-    }
-
-    /// <summary>Null when the folder maps to more than one concrete type (an ambiguous group such as
-    /// Globals), so the document self-describes rather than a wrong type being assumed, and for a
-    /// folder with no group.</summary>
-    public string? RecordTypeForFolder(string folderName) =>
-        _typesByFolder.TryGetValue(folderName, out var schemaNames) && schemaNames.Count == 1 ? schemaNames[0] : null;
+    /// <summary>The one record type <paramref name="group"/> holds. Null when it holds several record
+    /// classes (Globals), so a record in it names its own type, and for no group.</summary>
+    public string? OnlyRecordTypeIn(string group) =>
+        _typesByGroup.TryGetValue(group, out var schemaNames) && schemaNames.Count == 1 ? schemaNames[0] : null;
 
     /// <summary>Whether a record of <paramref name="recordType"/> holds child records: the copy
     /// gestures land one own-fields-only, and replace an existing override in place rather than
@@ -250,7 +206,10 @@ public sealed class RecordTypes
     internal Type? LoquiTypeNamed(string name) =>
         _blockLevelByName.GetValueOrDefault(name) ?? ConcreteFor(name);
 
-    private const string NestedDirectoryPerRecordType = "Cell";
+    private const string CellTypeName = "Cell";
+
+    // Spelled, not reflected: the mod holds its cells in a list of blocks, not in a group of cells.
+    private const string CellsGroup = "Cells";
 
     private const string WorldspaceTypeName = "Worldspace";
 

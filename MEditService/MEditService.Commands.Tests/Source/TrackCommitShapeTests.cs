@@ -161,8 +161,8 @@ public sealed class TrackCommitShapeTests : IDisposable
         public override Task WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
             IReadOnlyList<string> masterOrder, CancellationToken cancel = default) =>
-            plugins.FirstOrDefault(plugin => files.Any(file => file.RelativePath.StartsWith(PluginSourceRoot.For(plugin), StringComparison.Ordinal))) is { } failing
-                ? new ForgedTreeWriteAdapter(failing, DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, masterOrder, cancel)
+            plugins.Contains(Path.GetFileName(destinationPath))
+                ? new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, masterOrder, cancel)
                 : TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
 
         private static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken cancel)
@@ -187,8 +187,8 @@ public sealed class TrackCommitShapeTests : IDisposable
         public override Task WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
             IReadOnlyList<string> masterOrder, CancellationToken cancel = default) =>
-            files.Any(file => file.RelativePath.StartsWith(PluginSourceRoot.For(plugin), StringComparison.Ordinal))
-                ? new ForgedTreeWriteAdapter(plugin, DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, masterOrder, cancel)
+            Path.GetFileName(destinationPath) == plugin
+                ? new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, masterOrder, cancel)
                 : TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
 
         private static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken cancel)

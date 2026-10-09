@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -47,42 +48,88 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     internal static string RootIn(string modFolder, string pluginFileName) =>
         Path.Combine(modFolder, RootFor(pluginFileName));
 
+    /// <summary>The folder of the mod's plugin source holding <paramref name="pluginFileName"/>'s tree: the one spelled
+    /// so, else the only one spelled so without case, as a ModKey compares a name. Null for none, or for twins.</summary>
+    internal static string? TreeNameIn(string modFolder, string pluginFileName)
+    {
+        List<string> named;
+        try
+        {
+            named = [.. Directory.EnumerateDirectories(Path.Combine(modFolder, RootFolderName))
+                .Select(Path.GetFileName)
+                .OfType<string>()
+                .Where(name => name.Equals(pluginFileName, StringComparison.OrdinalIgnoreCase))];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        if (named.Contains(pluginFileName, StringComparer.Ordinal)) return pluginFileName;
+        return named is [var only] ? only : null;
+    }
+
+    /// <summary>The folder of the mod's plugin source that <paramref name="fullPath"/> sits in, as the path spells
+    /// it; null for a path outside the plugin source.</summary>
+    internal static string? TreeFolderHolding(string modFolder, string fullPath)
+    {
+        var sources = Path.GetFullPath(Path.Combine(modFolder, RootFolderName));
+        return SourceRepositoryLocator.IsUnder(sources, fullPath)
+            ? Path.GetRelativePath(sources, fullPath).Split(Path.DirectorySeparatorChar)[0]
+            : null;
+    }
+
     /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and
-    /// decompile write. The name is verbatim: that is how the load order spells the root a reader
-    /// looks under.</summary>
+    /// decompile write.</summary>
     internal static IReadOnlyList<TreeFile> PristineFilesOf(
         string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
-        [.. treeFiles.Select(file => new TreeFile(
-            file.RelativePath == DocumentFileNames.Root
-                ? HeaderDocumentFor(pluginFileName)
-                : Path.Combine(RootFor(pluginFileName), SourceNameOf(file.RelativePath)),
-            file.Content))];
+        [.. treeFiles.Select(file => PlacedFileOf(pluginFileName, file))];
 
-    /// <summary>The files of <see cref="PristineFilesOf"/> as the whole-mod door names them.</summary>
-    internal static IReadOnlyList<TreeFile> DoorFilesOf(
+    /// <summary>One file of the door's tree where the mod folder holds it.</summary>
+    internal static TreeFile PlacedFileOf(string pluginFileName, TreeFile doorFile) =>
+        new(doorFile.RelativePath == DocumentFileNames.Root
+                ? HeaderDocumentFor(pluginFileName)
+                : Path.Combine(RootFor(pluginFileName), SourceNameOf(doorFile.RelativePath)),
+            doorFile.Content);
+
+    /// <summary>Placed files of <paramref name="pluginFileName"/>'s tree as the whole-mod door names them,
+    /// relative to the tree's root.</summary>
+    internal static IReadOnlyList<TreeFile> DoorTreeOf(
         string pluginFileName, IEnumerable<TreeFile> files, GameRelease gameRelease)
     {
         var held = files.ToList();
         return [.. DoorNames(pluginFileName, held, gameRelease).Zip(held, (name, file) => new TreeFile(name.Door, file.Content))];
     }
 
-    /// <summary><paramref name="doorText"/>, the door's words about <paramref name="pluginFileName"/>'s tree,
-    /// with each of <paramref name="files"/> named as the layout names it.</summary>
-    internal static string SourceTextOf(
-        string pluginFileName, string doorText, IEnumerable<TreeFile> files, GameRelease gameRelease) =>
-        DoorNames(pluginFileName, [.. files], gameRelease)
-            .Where(name => name.Door != name.Source)
-            .Aggregate(doorText, (text, name) => text.Replace(name.Door, name.Source, StringComparison.Ordinal));
+    /// <summary><paramref name="diagnosis"/> of a read of <paramref name="files"/>' door tree, each file it
+    /// names named where <paramref name="files"/> hold it. A name inside another path is that path's.</summary>
+    internal static PluginDiagnosis InSourceNames(
+        string pluginFileName, PluginDiagnosis diagnosis, IEnumerable<TreeFile> files, GameRelease gameRelease)
+    {
+        var names = DoorNames(pluginFileName, [.. files], gameRelease).ToList();
+        string SourceOf(string door) =>
+            names.FirstOrDefault(name => name.Door == door).Source ?? Path.Combine(RootFor(pluginFileName), door);
+
+        return diagnosis with
+        {
+            Anchor = diagnosis.Anchor is { } anchor ? SourceOf(anchor) : null,
+            Message = names.Aggregate(diagnosis.Message, (text, name) =>
+                Regex.Replace(text, $@"(?<![\w/\\.-]){Regex.Escape(name.Door)}(?!\.?[\w/\\-])", _ => name.Source)),
+        };
+    }
 
     private static IEnumerable<(string Source, string Door)> DoorNames(
         string pluginFileName, IReadOnlyList<TreeFile> files, GameRelease gameRelease)
     {
+        var root = RootFor(pluginFileName);
         var sources = files.Select(file => file.RelativePath).ToList();
         var documents = ContainerDocumentsAmong(sources, gameRelease);
         string DoorName(string source)
         {
-            if (IsHeaderDocumentPath(source, pluginFileName)) return DoorHeaderDocumentFor(pluginFileName);
-            return documents.Contains(source) ? Path.Combine(PathShape.DirectoryOf(source), DocumentFileNames.Root) : source;
+            if (IsHeaderDocumentPath(source, pluginFileName)) return DocumentFileNames.Root;
+            return Path.GetRelativePath(root, documents.Contains(source)
+                ? Path.Combine(PathShape.DirectoryOf(source), DocumentFileNames.Root)
+                : source);
         }
 
         return sources.Select(source => (source, DoorName(source)));
@@ -103,7 +150,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     {
         var path = new LayoutPath(relativePath);
         return path.IsContainerDocument
-            && RecordTypes.For(gameRelease).DirectoryPerRecordFolderNames.Contains(path.GroupFolderName);
+            && GroupFolders.For(gameRelease).DirectoryPerRecordFolders.Contains(path.GroupFolderName);
     }
 
     /// <summary>Each container directory's document among <paramref name="relativePaths"/>, by the one rule of
@@ -138,9 +185,6 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
             directory,
             Directory.Exists(directory) ? Directory.EnumerateFiles(directory).Where(file => !CarriesNoRecord(file)) : []);
 
-    private static string DoorHeaderDocumentFor(string pluginFileName) =>
-        Path.Combine(RootFor(pluginFileName), DocumentFileNames.Root);
-
     /// <summary>The plugin header's own document, named for its FormKey: a header has no EditorID.</summary>
     internal static string HeaderDocumentIn(string modFolder, string pluginFileName) =>
         Path.Combine(modFolder, HeaderDocumentFor(pluginFileName));
@@ -157,7 +201,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     internal static string FlatPathFor(
         string pluginFileName, string recordType, string formKeyString, string? editorId, GameRelease gameRelease)
     {
-        var folder = RecordTypes.For(gameRelease).FolderNameFor(recordType)
+        var folder = GroupFolders.For(gameRelease).FlatFolderOf(recordType)
             ?? throw new NotSupportedException(
                 $"'{recordType}' has no flat source path under the source layout — it is a " +
                 "directory-per-record container type (Cell/Worldspace), or has no top-level " +
@@ -179,13 +223,13 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         GameRelease gameRelease,
         IReadOnlyList<string>? blockPath = null)
     {
-        var types = RecordTypes.For(gameRelease);
+        var folders = GroupFolders.For(gameRelease);
 
         // A flat record has a top-level group folder of its own and needs no directory.
-        if (types.FolderNameFor(recordType) is not null)
+        if (folders.FlatFolderOf(recordType) is not null)
             return new SourcePlacement(FlatPathFor(pluginFileName, recordType, formKeyString, editorId, gameRelease));
 
-        var groupFolder = types.GroupFolderNameFor(recordType)
+        var groupFolder = folders.FolderOf(recordType)
             ?? throw new NotSupportedException(
                 $"'{recordType}' has no group folder at all — it is an embedded child, which lands inside " +
                 "its container's document rather than at a path of its own.");
@@ -251,7 +295,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
 
         var path = new LayoutPath(relativePath);
         return path.IsContainerDocument
-            ? RecordTypes.For(gameRelease)
+            ? GroupFolders.For(gameRelease)
                 .DirectoryPerRecordTypeIn(path.GroupFolderName, nested: path.ContainerIsNested)
             : null;
     }
@@ -266,7 +310,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
             return new SourceRecordIdentity(path.PluginFileName, PluginHeader.RecordType);
 
         if (!path.IsFlatDocument) return null;
-        if (RecordTypes.For(gameRelease).RecordTypeForFolder(path.GroupFolderName) is not { } recordType)
+        if (GroupFolders.For(gameRelease).RecordTypeIn(path.GroupFolderName) is not { } recordType)
             return null;
 
         return new SourceRecordIdentity(path.PluginFileName, recordType);
@@ -309,7 +353,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         PluginAddress plugin, RecordIdentity identity, CellPlacement? placement)
     {
         var types = RecordTypes.For(_release);
-        if (types.GroupFolderNameFor(identity.RecordType) is not { } groupFolder) return null;
+        if (GroupFolders.For(_release).FolderOf(identity.RecordType) is not { } groupFolder) return null;
 
         // The one document that does not sit in a group folder at all. Only the placement it is put
         // with tells an exterior cell from an interior one, which has no worldspace above it.

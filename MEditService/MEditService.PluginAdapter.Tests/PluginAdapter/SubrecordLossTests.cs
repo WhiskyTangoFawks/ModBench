@@ -90,9 +90,9 @@ public sealed class SubrecordLossTests : IDisposable
     {
         var untouchedRecord = BuildRecordHeader("WEAP", 0x00000001, flags: 0,
             subrecordBytes: Concat(Sub("EDID", "Gun"u8.ToArray())));
-        var originalLossyRecord = BuildRecordHeader("REGN", 0x001D2AF4, flags: 0,
+        var originalLossyRecord = BuildRecordHeader("REGN", 0x00ABCDEF, flags: 0,
             subrecordBytes: Concat(Sub("EDID", "Region"u8.ToArray()), Sub("RDMP", [1]), Sub("RDMO", [2])));
-        var rewrittenLossyRecord = BuildRecordHeader("REGN", 0x001D2AF4, flags: 0,
+        var rewrittenLossyRecord = BuildRecordHeader("REGN", 0x00ABCDEF, flags: 0,
             subrecordBytes: Concat(Sub("EDID", "Region"u8.ToArray())));
 
         var original = Concat(untouchedRecord, originalLossyRecord);
@@ -102,7 +102,7 @@ public sealed class SubrecordLossTests : IDisposable
 
         Assert.NotNull(loss);
         Assert.Equal("REGN", loss.Value.RecordType);
-        Assert.Equal(0x001D2AF4u, loss.Value.FormId);
+        Assert.Equal(0x00ABCDEFu, loss.Value.FormId);
         Assert.Equal(["RDMP", "RDMO"], loss.Value.Signatures);
     }
 
@@ -111,9 +111,9 @@ public sealed class SubrecordLossTests : IDisposable
     {
         var untouchedRecord = BuildRecordHeader("WEAP", 0x00000001, flags: 0,
             subrecordBytes: Concat(Sub("EDID", "Gun"u8.ToArray())));
-        var originalLossyRecord = BuildRecordHeader("REGN", 0x001D2AF4, flags: 0,
+        var originalLossyRecord = BuildRecordHeader("REGN", 0x00ABCDEF, flags: 0,
             subrecordBytes: Concat(Sub("EDID", "Region"u8.ToArray()), Sub("RDMP", [1]), Sub("RDMO", [2])));
-        var rewrittenLossyRecord = BuildRecordHeader("REGN", 0x001D2AF4, flags: 0,
+        var rewrittenLossyRecord = BuildRecordHeader("REGN", 0x00ABCDEF, flags: 0,
             subrecordBytes: Concat(Sub("EDID", "Region"u8.ToArray())));
 
         var original = Concat(untouchedRecord, originalLossyRecord);

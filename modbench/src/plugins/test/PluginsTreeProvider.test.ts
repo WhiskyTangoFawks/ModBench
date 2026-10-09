@@ -2316,7 +2316,7 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
 });
 
 describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => {
-  const REGN = 'REGN 001D2AF4 (DowntownRegion) — fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8';
+  const REGN = 'REGN 00ABCDEF (InventedRegion) — fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8';
 
   it('decorates a plugin whose only status is malformed with the warning icon, the word malformed and the diagnosis text', async () => {
     const h = makeTree([A_ROW()]);
