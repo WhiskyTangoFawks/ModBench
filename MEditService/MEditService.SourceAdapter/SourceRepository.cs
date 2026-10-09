@@ -145,9 +145,6 @@ public sealed class SourceRepository : ISourceRepositoryReads
             documents.RefuseUnreadable(identity.RecordType, identity.FormKey, body, unit.FullPath);
         });
 
-    /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>:
-    /// the tree only says which document that is. Null when nothing holds it; text naming no record is
-    /// unreadable.</summary>
     private SourceAnswer<(RecordIdentity Record, SourceDocument Carrying)?> CarryingFromText(
         PluginAddress plugin, string formKey, string text) =>
         SourceFailure.Answer(() => Locator.CarryingFromText(Spelled(plugin), formKey, text));
