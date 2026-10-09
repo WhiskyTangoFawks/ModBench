@@ -171,7 +171,8 @@ internal sealed class RecordQueryService(
         // Two copies may come from one plugin, so a column is named by its place as well.
         var columns = records.Select((r, i) => $"{i}#{ColumnKey.Of(r.Plugin, r.Origin)}").ToList();
         var diffs = _conflictClassifier.Align(
-            records, columns, snapshot.GameRelease, reads.LinkResolver(copies[0].FormKey), LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins));
+            records, columns, snapshot.GameRelease, reads.LinkResolver(copies[0].FormKey), LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins),
+            indexed: true);
         var overrides = records.Select((r, i) => ToCompareOverride(r, state: null, columns[i], snapshot, reads)).ToList();
 
         return new CompareResult(overrides, diffs, ConflictAll.NoConflict, RequireSchemas().DisplayNameFor(documents[0].RecordType));
@@ -214,15 +215,16 @@ internal sealed class RecordQueryService(
         List<RecordDetail> outsideTheComparison)
     {
         var release = _loadOrder.Require().GameRelease;
+        var indexed = _index.Status.State == LoadOrderState.Ready;
         // With no active copy there is nothing to compare: the copy outside it stands alone.
         var classification = committedOverrides.Count > 0
             ? _conflictClassifier.Classify(
-                committedOverrides, release, resolveFormKey, loadOrderFormIds, _index.Status.State == LoadOrderState.Ready, outsideTheComparison)
+                committedOverrides, release, resolveFormKey, loadOrderFormIds, indexed, outsideTheComparison)
             : new ClassifyResult(
                 ConflictAll.NoConflict, new Dictionary<string, ConflictThis>(),
                 _conflictClassifier.Align(
                     outsideTheComparison, [.. (outsideTheComparison).Select(r => ColumnKey.Of(r.Plugin, r.Origin))],
-                    release, resolveFormKey, loadOrderFormIds));
+                    release, resolveFormKey, loadOrderFormIds, indexed));
         return (classification, classification.ConflictAll);
     }
 

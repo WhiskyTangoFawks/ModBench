@@ -10,9 +10,10 @@ public static class CheckErrorBuilder
 {
     // `resolve` is a lookup the caller already holds, never a scan started here.
     // `whyUnchecked` answers only for a caller that can lose a target's bytes: unread is not broken.
+    // `settled` is false while `resolve` sees only part of the active set: a miss is then not yet dangling.
     public static string? Build(
         FieldMetadata meta, JsonElement? value, Func<string, ResolvedFormKey?> resolve, GameRelease release,
-        Func<string, string?>? whyUnchecked = null)
+        Func<string, string?>? whyUnchecked = null, bool settled = true)
     {
         var entries = new List<string>();
         // Nothing unread, for a caller whose targets all live in one store it just read.
@@ -20,7 +21,7 @@ public static class CheckErrorBuilder
         FormReferences.Walk(meta, value, "",
             (path, raw, allowsNull, validTypes) =>
             {
-                var err = CheckScalar(raw, allowsNull, validTypes, resolve, unread, release);
+                var err = CheckScalar(raw, allowsNull, validTypes, resolve, unread, release, settled);
                 if (err != null) entries.Add(path.Length > 0 ? $"{path}: {err}" : err);
             });
         return entries.Count > 0 ? string.Join("; ", entries) : null;
@@ -28,7 +29,7 @@ public static class CheckErrorBuilder
 
     private static string? CheckScalar(
         string? value, bool allowsNull, IReadOnlyList<string> validTypes,
-        Func<string, ResolvedFormKey?> resolve, Func<string, string?> whyUnchecked, GameRelease release)
+        Func<string, ResolvedFormKey?> resolve, Func<string, string?> whyUnchecked, GameRelease release, bool settled)
     {
         if (string.IsNullOrEmpty(value) || value == "Null")
             return allowsNull ? null : $"Found a NULL reference, expected: {Signatures(validTypes)}";
@@ -38,6 +39,7 @@ public static class CheckErrorBuilder
         var resolution = FormKeyResolution.From(value, resolve(value), validTypes, release);
         return resolution.State switch
         {
+            FormKeyResolutionState.Unresolved when !settled => null,
             FormKeyResolutionState.Unresolved when whyUnchecked(value) is { } why
                 => $"[{value}] <Error: {why}>",
             FormKeyResolutionState.Unresolved => $"[{value}] <Error: Could not be resolved>",

@@ -352,11 +352,29 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     }
 
     private const string NpcWithNoWinnerYet = "000800:Base.esm";
+    private static readonly FormKey AbsentFromLater = FormKey.Factory("000FFF:Later.esp");
 
-    private async Task WhileNoCopyIsFlaggedWinner(Action<OpenedIndex> asked)
+    [Fact]
+    public async Task GetCompare_ALinkIntoAPluginNotYetIndexed_IsMarkedDanglingOnlyOnceTheIndexIsReady()
+    {
+        static IEnumerable<string>? RaceCheckErrors(OpenedIndex index) =>
+            index.Records.GetCompare(NpcWithNoWinnerYet)?.Diffs.Single(d => d.FieldName == "Race").CheckErrors?.Values;
+
+        IEnumerable<string>? whileIndexing = null;
+        await WhileNoCopyIsFlaggedWinner(
+            index => whileIndexing = RaceCheckErrors(index),
+            index =>
+            {
+                Assert.Null(whileIndexing);
+                Assert.All(RaceCheckErrors(index) ?? [], e => Assert.Contains("Could not be resolved", e, StringComparison.Ordinal));
+                Assert.NotEmpty(RaceCheckErrors(index) ?? []);
+            });
+    }
+
+    private async Task WhileNoCopyIsFlaggedWinner(Action<OpenedIndex> asked, Action<OpenedIndex>? afterwards = null)
     {
         var fixture = Built(new PluginFixtureBuilder("record-query")
-            .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("AsTheMasterHasIt"))
+            .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("AsTheMasterHasIt").Race.SetTo(AbsentFromLater))
             .WithPlugin("Winner.esp", (mod, earlier) => mod.Npcs.Add(earlier[0].Npcs.Single().DeepCopy()))
             .WithPlugin("Next.esp", (mod, earlier) => mod.Npcs.Add(earlier[0].Npcs.Single().DeepCopy()), enabled: false)
             .WithPlugin("Later.esp"));
@@ -380,6 +398,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
             gate.Release();
             await load;
         }
+        afterwards?.Invoke(index);
     }
 
     [Fact]
