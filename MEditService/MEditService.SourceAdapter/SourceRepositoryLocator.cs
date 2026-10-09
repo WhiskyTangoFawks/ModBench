@@ -1,6 +1,4 @@
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -361,10 +359,9 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         {
             if (!_files.FileExists(document)) continue;
             var text = _files.ReadAllText(document);
-            if (DocumentTokens.WhyNotADocument(text) is { } why)
+            if (!Document.TryRead(text, out var cell, out var why))
                 throw SourceStopException.UnreadableIn(_modFolder, document, $"it is no JSON document: {why}");
-            var cell = JsonNode.Parse(text);
-            if (cell is JsonObject held && PlacedCell.Grid(held) == (x, y)) return DocumentText.FormKeyDeclaredIn(text, document, plugin.Name);
+            if (cell.Grid == (x, y)) return DocumentText.FormKeyDeclaredIn(text, document, plugin.Name);
         }
         return null;
     }
@@ -460,8 +457,9 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         var owner = ContainerDocument(plugin, identity)
             ?? throw SourceStopException.Unreadable($"{unit.RelativePath} could not be read.");
 
-        using var parsed = JsonDocument.Parse(owner.Body);
-        return new ContainerDocuments(_release).ContainmentOf(owner.RecordType, parsed.RootElement, identity.FormKey);
+        if (!Document.TryRead(owner.Body, out var document, out var why))
+            throw SourceStopException.UnreadableIn(_modFolder, unit.FullPath, $"it is no JSON document: {why}");
+        return new ContainerDocuments(_release).ContainmentOf(owner.RecordType, document, identity.FormKey);
     }
 
     /// <summary>Every document one plugin's tree holds right now, each as the record at its root. An

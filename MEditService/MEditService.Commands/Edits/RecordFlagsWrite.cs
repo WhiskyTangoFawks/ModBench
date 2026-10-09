@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 
@@ -9,10 +8,10 @@ internal readonly record struct RecordFlagsWrite(long Held, long Next)
 {
     /// <summary>The flags <paramref name="value"/> writes to <paramref name="column"/>, or null when it writes
     /// another column.</summary>
-    internal static long? Requested(RecordTableSchema schema, ColumnSpec column, JsonElement? value) =>
-        schema.IsHeader || column.Name != RecordHeaderFlags.Member || value is not { ValueKind: JsonValueKind.Number } requested
+    internal static long? Requested(RecordTableSchema schema, ColumnSpec column, EditValue? value) =>
+        schema.IsHeader || column.Name != RecordHeaderFlags.Member || value is not { Kind: EditValueKind.WholeNumber } requested
             ? null
-            : requested.GetInt64();
+            : requested.Integer;
 
     internal static RecordFlagsWrite? Of(Document record, long? requested) =>
         requested is { } next ? new(HeldBy(record), next) : null;

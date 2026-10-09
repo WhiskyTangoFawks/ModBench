@@ -1,6 +1,6 @@
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
@@ -175,7 +175,7 @@ public sealed class SwaggerSchemaTests
         Assert.True(schema.TryGetProperty("required", out var required), $"{schemaName} declares no `required` at all.");
         Assert.Equal(
             expectedRequired.ToHashSet(),
-            required.EnumerateArray().Select(DocumentNodes.StringValueOf).ToHashSet());
+            required.EnumerateArray().Select(JsonStrings.Of).ToHashSet());
     }
 
     [Theory]

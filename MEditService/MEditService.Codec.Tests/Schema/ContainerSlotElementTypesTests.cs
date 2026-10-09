@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -32,8 +31,8 @@ public sealed class ContainerSlotElementTypesTests
 
     private static ContainerDocuments.ChildDocument? UnspelledChildIn(Type parent, string slot)
     {
-        using var document = JsonDocument.Parse($$$"""{"FormKey":"000800:Sweep.esp","{{{slot}}}":{"FormKey":"000801:Sweep.esp"}}""");
-        return Documents.ChildrenOf(parent.Name, document.RootElement).Cast<ContainerDocuments.ChildDocument?>().SingleOrDefault();
+        var document = Document.Parse($$$"""{"FormKey":"000800:Sweep.esp","{{{slot}}}":{"FormKey":"000801:Sweep.esp"}}""");
+        return Documents.ChildrenOf(parent.Name, document).Cast<ContainerDocuments.ChildDocument?>().SingleOrDefault();
     }
 
     private static string? DeclaredTable(Type declared) =>

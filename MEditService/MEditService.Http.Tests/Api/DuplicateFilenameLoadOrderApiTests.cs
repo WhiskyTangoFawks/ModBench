@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -52,7 +51,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         var records = await _client.GetFromJsonAsync<JsonElement>("/records?type=npc_&limit=50");
         var shared = Assert.Single(records.GetProperty("items").EnumerateArray(), r => r.GetProperty("plugin").GetString() == "Shared.esp");
 
-        Assert.Equal(winner, DocumentNodes.StringValueOf(shared.GetProperty("origin")));
+        Assert.Equal(winner, JsonStrings.Of(shared.GetProperty("origin")));
         Assert.Equal(editorId, shared.GetProperty("editorId").GetString());
     }
 
@@ -100,7 +99,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         var compare = await _client.GetFromJsonAsync<JsonElement>(
             $"/records/{Uri.EscapeDataString("000800:Shared.esp")}/compare");
         var columns = compare.GetProperty("overrides").EnumerateArray()
-            .ToDictionary(o => DocumentNodes.StringValueOf(o.GetProperty("origin")), o => o);
+            .ToDictionary(o => JsonStrings.Of(o.GetProperty("origin")), o => o);
 
         var column = Assert.Single(columns);
         Assert.Equal("ModA", column.Key);

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -183,13 +182,9 @@ internal sealed class WorkingTreeOverlay
 
         List<FormReferenceRow> refs;
         List<ContainerDocuments.ChildDocument> children;
-        using (var document = JsonDocument.Parse(body))
-        {
-            var root = document.RootElement;
-            refs = PluginIngest.Rows(
-                _containers, root, schema, formKey, DocumentNodes.EditorIdOf(root).EditorId, recordType);
-            children = [.. _containers.ChildrenOf(recordType, root)];
-        }
+        var root = Document.Parse(body);
+        refs = PluginIngest.Rows(_containers, root, schema, formKey, root.EditorId.EditorId, recordType);
+        children = [.. _containers.ChildrenOf(recordType, root)];
 
         DeleteFormReferencesForRecord(key, formKey);
         if (refs.Count > 0)
@@ -311,7 +306,7 @@ internal sealed class WorkingTreeOverlay
                     // No block/sub and never interior, by construction — a worldspace's top cell is
                     // not part of any exterior grid.
                     topCellRow = PlacementWalker.CellLocation(
-                        child.FormKey, child.Node,
+                        child.FormKey, child.Document,
                         new CellStructure(formKey, null, null, null, null, IsInterior: false));
                     break;
                 case ParentageTable.Placement:

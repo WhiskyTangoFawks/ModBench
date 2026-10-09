@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 
@@ -29,40 +27,16 @@ internal static class PlacementWalker
     /// <summary>The <c>placement_group</c> a placement slot's children land in.</summary>
     internal static string PlacementGroupOf(string slotName) => slotName.ToLowerInvariant();
 
-    private static readonly string GridPointPath = $"{RecordTypes.CellGridMember}.Point";
-
     /// <summary>A null document is a cell whose text the codec could not produce: its place in the
     /// world is still known, its grid is not.</summary>
     internal static CellLocationRow CellLocation(
-        string cellFormKey, JsonElement? cellDocument, CellStructure structure)
+        string cellFormKey, Document? cellDocument, CellStructure structure)
     {
-        var (gridX, gridY) = cellDocument is { } document ? Grid(document) : (null, null);
+        var grid = cellDocument?.Grid;
 
         return new CellLocationRow(
             cellFormKey, structure.ParentWorldspace,
             structure.BlockX, structure.BlockY, structure.SubX, structure.SubY,
-            gridX, gridY, structure.IsInterior);
+            grid?.X, grid?.Y, structure.IsInterior);
     }
-
-    // A cell's grid is a member that may be unset, so its absence is an absence; the point inside a
-    // grid the document does carry is the origin the codec omits.
-    private static (int? X, int? Y) Grid(JsonElement cellDocument)
-    {
-        if (DocumentNodes.At(cellDocument, RecordTypes.CellGridMember) is null) return (null, null);
-
-        return Components(cellDocument, GridPointPath) is { Length: >= 2 } point
-            ? (Int(point[0]), Int(point[1]))
-            : (0, 0);
-    }
-
-    // The codec writes a vector as its components in English, comma-separated (ReflectedTypes.VectorText).
-    private static string[]? Components(JsonElement document, string path) =>
-        DocumentNodes.At(document, path) is { ValueKind: JsonValueKind.String } vector
-            ? DocumentNodes.StringValueOf(vector).Split(',')
-            : null;
-
-    private static int? Int(string component) =>
-        int.TryParse(component.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : null;
 }

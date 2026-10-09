@@ -50,8 +50,22 @@ public static class RecordDocumentEdits
         new() { [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey) };
 
     /// <summary>The document with every FormKey of <paramref name="from"/> (and the header's
-    /// ModKey) under <paramref name="to"/>, every other byte as it was. Throws <see cref="System.Text.Json.JsonException"/>
-    /// for text that is no JSON.</summary>
-    public static byte[] WithPluginRenamed(byte[] text, bool isHeader, ModKey from, ModKey to) =>
-        PluginRenameSplice.Apply(text, isHeader, from, to);
+    /// ModKey) under <paramref name="to"/>, every other byte as it was. False, with the reader's words, for
+    /// text that is no JSON.</summary>
+    public static bool TryWithPluginRenamed(
+        byte[] text, bool isHeader, ModKey from, ModKey to,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out byte[]? renamed,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(false)] out string? whyNot)
+    {
+        try
+        {
+            (renamed, whyNot) = (PluginRenameSplice.Apply(text, isHeader, from, to), null);
+            return true;
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            (renamed, whyNot) = (null, ex.Message);
+            return false;
+        }
+    }
 }

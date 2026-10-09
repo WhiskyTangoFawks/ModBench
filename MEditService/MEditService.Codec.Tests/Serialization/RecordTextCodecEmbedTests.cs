@@ -1,7 +1,7 @@
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -38,13 +38,13 @@ public sealed class RecordTextCodecEmbedTests
 
         Assert.Equal(
             ["PersistentRef"],
-            root.GetProperty("Persistent").EnumerateArray().Select(e => DocumentNodes.StringValueOf(e.GetProperty("EditorID"))).ToArray());
+            root.GetProperty("Persistent").EnumerateArray().Select(e => JsonStrings.Of(e.GetProperty("EditorID"))).ToArray());
         Assert.Equal(
             ["TemporaryRef"],
-            root.GetProperty("Temporary").EnumerateArray().Select(e => DocumentNodes.StringValueOf(e.GetProperty("EditorID"))).ToArray());
+            root.GetProperty("Temporary").EnumerateArray().Select(e => JsonStrings.Of(e.GetProperty("EditorID"))).ToArray());
         Assert.Equal(
             ["CellNavmesh"],
-            root.GetProperty("NavigationMeshes").EnumerateArray().Select(e => DocumentNodes.StringValueOf(e.GetProperty("EditorID"))).ToArray());
+            root.GetProperty("NavigationMeshes").EnumerateArray().Select(e => JsonStrings.Of(e.GetProperty("EditorID"))).ToArray());
         Assert.Equal("CellLandscape", root.GetProperty("Landscape").GetProperty("EditorID").GetString());
     }
 

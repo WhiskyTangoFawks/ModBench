@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -62,7 +61,7 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
         var encodedFk = Uri.EscapeDataString(questFk);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/records/{encodedFk}/children?origin=ModB");
-        var namesB = modB.EnumerateArray().Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId"))).ToArray();
+        var namesB = modB.EnumerateArray().Select(c => JsonStrings.Of(c.GetProperty("editorId"))).ToArray();
         Assert.Equal(["TopicModB", "BranchModB"], namesB);
         var modA = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/records/{encodedFk}/children?origin=ModA");
         Assert.Empty(modA.EnumerateArray());

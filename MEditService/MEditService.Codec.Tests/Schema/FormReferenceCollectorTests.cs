@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 
 namespace MEditService.Codec.Tests.Schema;
 
@@ -27,8 +28,8 @@ public class FormReferenceCollectorTests
             _ when value.StartsWith('[') || value.StartsWith('{') => value,
             _ => JsonSerializer.Serialize(value),
         };
-        using var root = JsonDocument.Parse($"{{\"{col.PropertyName}\": {member}}}");
-        results.AddRange(FormReferences.Collect(root.RootElement, [col]).Select(r => (r.FieldPath, r.TargetFormKey)));
+        var root = Document.Parse($"{{\"{col.PropertyName}\": {member}}}");
+        results.AddRange(FormReferences.Collect(root, [col]).Select(r => (r.FieldPath, r.TargetFormKey)));
         return results;
     }
 
@@ -191,7 +192,7 @@ public class FormReferenceCollectorTests
                 Fields: [new FieldMetadata("Text", "string", false, [], [])]),
         }));
 
-        using var document = JsonDocument.Parse($$"""
+        var document = Document.Parse($$"""
             {
               "{{LoquiUnions.UnionTypeDiscriminator}}": "ObjectValue",
               "Ownership": { "Owner": { "Faction": "000001:A.esp" } },
@@ -200,7 +201,7 @@ public class FormReferenceCollectorTests
             }
             """);
 
-        var refs = FormReferences.Collect(document.RootElement, [nested, list, union]);
+        var refs = FormReferences.Collect(document, [nested, list, union]);
 
         Assert.Equal(
             [("Ownership.Owner.Faction", "000001:A.esp"),

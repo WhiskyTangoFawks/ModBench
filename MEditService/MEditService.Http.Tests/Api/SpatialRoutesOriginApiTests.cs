@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -81,7 +80,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         await PutBothPlugins(fx, winner: "ModB");
 
         var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces?origin=ModB");
-        Assert.Equal(["WorldModB"], modB.EnumerateArray().Select(w => DocumentNodes.StringValueOf(w.GetProperty("editorId"))).ToArray());
+        Assert.Equal(["WorldModB"], modB.EnumerateArray().Select(w => JsonStrings.Of(w.GetProperty("editorId"))).ToArray());
         Assert.Empty((await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces?origin=ModA")).EnumerateArray());
     }
 
@@ -184,5 +183,5 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         blocks.EnumerateArray()
             .SelectMany(b => b.GetProperty("subBlocks").EnumerateArray())
             .SelectMany(s => s.GetProperty("cells").EnumerateArray())
-            .Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId")));
+            .Select(c => JsonStrings.Of(c.GetProperty("editorId")));
 }

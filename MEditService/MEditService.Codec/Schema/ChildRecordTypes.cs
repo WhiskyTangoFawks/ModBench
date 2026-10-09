@@ -98,7 +98,7 @@ public static class ChildRecordTypes
         if (RecordTypes.For(release).ConcreteFor(containerType) is not { } container) return [];
         if (DeletedFlag.IsSet(root)) return [];
 
-        var held = new ContainerDocuments(release).ChildrenOf(containerType, root)
+        var held = (Document.Over(root) is { } owner ? new ContainerDocuments(release).ChildrenOf(containerType, owner) : [])
             .GroupBy(child => child.SlotName, StringComparer.Ordinal)
             .ToDictionary(slot => slot.Key, slot => slot.First().FormKey, StringComparer.Ordinal);
         var category = release.ToCategory();
