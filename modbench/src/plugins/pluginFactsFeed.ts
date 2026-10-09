@@ -3,6 +3,7 @@ import type { LoadOrderRefusal, MEditClient, PluginAddress, PluginDiagnosisRepor
 import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { PluginFacts, type PluginWarning } from './pluginFacts';
+import { answerOf } from '../wire/readFailed';
 
 /** The mEdit reads every plugin-keyed fact comes from, and the notification that names a plugin
  *  changed outside Modbench. */
@@ -114,7 +115,7 @@ export class PluginFactsFeed implements vscode.Disposable {
   private async readPlugins(): Promise<PluginMetadata[] | undefined> {
     try {
       const shown = new Set(this.deps.shownPlugins().map(pluginAddressKey));
-      return (await this.deps.client.getPlugins()).filter((p) => shown.has(pluginAddressKey(p)));
+      return answerOf(await this.deps.client.getPlugins()).filter((p) => shown.has(pluginAddressKey(p)));
     } catch (err) {
       const message = errorMessage(err);
       this.deps.log('error', `[PluginFactsFeed] reading the backend's plugin list failed: ${message}`);
@@ -126,7 +127,7 @@ export class PluginFactsFeed implements vscode.Disposable {
 
   private async scanDiagnoses(generation: number): Promise<void> {
     try {
-      const reports = await this.deps.client.getDiagnoses();
+      const reports = answerOf(await this.deps.client.getDiagnoses());
       if (generation !== this.generation) return;
       // One derivation, two surfaces — the tree badge and the Problems panel cannot disagree.
       this.facts.diagnosed(reports);

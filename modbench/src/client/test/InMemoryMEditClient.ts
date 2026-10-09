@@ -52,8 +52,8 @@ type ScriptedResults = { [K in CommandMethod]: Scripted<Answer<K>>[] };
 /** The in-memory adapter (target-architecture.d2, mEdit client): a test scripts each answer by
  *  method name, drives notifications with `emit`, and reads every recorded call back. An
  *  unscripted query rejects, so a forgotten script fails loudly, not silently empty. */
-function failed<A>(failure: Error | ReadFailed): Promise<A> {
-  return isReadFailed(failure) ? Promise.resolve(failure as A) : Promise.reject(failure);
+function failed(failure: Error | ReadFailed): Promise<never> {
+  return isReadFailed(failure) ? Promise.resolve(failure as never) : Promise.reject(failure);
 }
 
 export class InMemoryMEditClient implements MEditClient {
@@ -253,14 +253,15 @@ export class InMemoryMEditClient implements MEditClient {
   private query<K extends QueryMethod>(method: K, args: unknown[]): Promise<Answer<K>> {
     this.record(method, args);
     const step = this.queryQueues[method]?.shift();
-    if (step) return step.kind === 'answer' ? Promise.resolve(step.value) : failed(step.error);
+    if (step?.kind === 'failure') return failed(step.error);
+    if (step) return Promise.resolve(step.value as never);
     const failure = this.queryFailures.get(method);
     if (failure) return failed(failure);
     const scripted = this.queryAnswers[method]?.[0];
     if (!scripted) {
       return Promise.reject(new Error(`InMemoryMEditClient: no scripted answer for query "${method}"`));
     }
-    return Promise.resolve(scripted.value);
+    return Promise.resolve(scripted.value as never);
   }
 
   private command<K extends CommandMethod>(

@@ -211,7 +211,7 @@ describe('the states beneath a row', () => {
 
   it('log a failed first read and say so on the message line, as the error row would, without asking again until a refresh', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryFailure('getWorkingTreeStatesBeneath', new Error('boom'));
+    client.setQueryFailure('getWorkingTreeStatesBeneath', { failed: 'refused', refusal: 'boom' });
     const log = vi.fn();
     const browser = new RecordBrowser(client, log);
     const said = vi.fn();
@@ -236,7 +236,7 @@ describe('the states beneath a row', () => {
     const row = rowResourceUri(PLUGIN);
     await askedTwice(browser, row);
 
-    client.setQueryFailureOnce('getWorkingTreeStatesBeneath', new Error('boom'));
+    client.setQueryFailureOnce('getWorkingTreeStatesBeneath', { failed: 'refused', refusal: 'boom' });
     browser.refresh();
     browser.statesBeneathOf(row);
     await settled();
@@ -253,7 +253,7 @@ describe('the states beneath a row', () => {
 
   it('forget a failure at each refresh, so a plugin that left the tree leaves the message line', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryFailure('getWorkingTreeStatesBeneath', new Error('boom'));
+    client.setQueryFailure('getWorkingTreeStatesBeneath', { failed: 'refused', refusal: 'boom' });
     const browser = new RecordBrowser(client);
     await askedTwice(browser, rowResourceUri(PLUGIN));
     const said = vi.fn();

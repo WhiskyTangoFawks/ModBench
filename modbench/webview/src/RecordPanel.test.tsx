@@ -1223,7 +1223,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
 
   it('clears error and shows data after a successful refresh following a load failure', async () => {
     const load = vi.fn()
-      .mockResolvedValueOnce({ ok: false, error: 'mEdit could not read the record.' })
+      .mockResolvedValueOnce({ ok: false, failure: { failed: 'refused', refusal: 'mEdit could not read the record.' } })
       .mockResolvedValue({
         ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
         modsByOrigin: {}, immutableSet: new Set(['Fallout4.esm']), conflictsComputed: true, loadFailures: [],
@@ -1243,11 +1243,22 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
 
   it('shows "Failed to load:" and the reason the page was given when no record could be read for its tab, and reads nothing', () => {
     vi.stubGlobal('mEditFormKey', undefined);
-    vi.stubGlobal('mEditLoadError', 'Gun.json declares no FormKey.');
+    vi.stubGlobal('mEditLoadError', { failed: 'refused', refusal: 'Gun.json declares no FormKey.' });
     const { client } = renderPanel(compareResult);
 
     expect(screen.getByText('Failed to load: Gun.json declares no FormKey.')).toBeInTheDocument();
     expect(client.load).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ failed: 'no-answer' }, 'mEdit gave no answer.'],
+    [{ failed: 'timed-out' }, 'mEdit did not answer in time.'],
+    [{ failed: 'unreachable' }, 'mEdit could not be reached.'],
+  ])('says %j in the page\'s own words, with no verb, path or status', async (failure, words) => {
+    const load = vi.fn().mockResolvedValue({ ok: false, failure });
+    renderPanel(compareResult, { load });
+
+    await waitFor(() => expect(screen.getByText(`Failed to load: ${words}`)).toBeInTheDocument());
   });
 });
 
@@ -1357,7 +1368,7 @@ describe('RecordPanel — states', () => {
   it('says the last read failed, beside the gone record, until a good read replaces it', async () => {
     const load = vi.fn()
       .mockResolvedValueOnce(loaded(null))
-      .mockResolvedValueOnce({ ok: false, error: 'mEdit could not read the record.' })
+      .mockResolvedValueOnce({ ok: false, failure: { failed: 'refused', refusal: 'mEdit could not read the record.' } })
       .mockResolvedValue(loaded(compareResult));
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText('000001:Fallout4.esm is gone.'));
@@ -1385,7 +1396,7 @@ describe('RecordPanel — states', () => {
   it('keeps the rows and says "Showing the last good read:" when a later read fails, until the next good one', async () => {
     const load = vi.fn()
       .mockResolvedValueOnce(loaded(compareResult))
-      .mockResolvedValueOnce({ ok: false, error: 'mEdit could not read the record.' })
+      .mockResolvedValueOnce({ ok: false, failure: { failed: 'refused', refusal: 'mEdit could not read the record.' } })
       .mockResolvedValue(loaded(compareResult));
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText('Override Name'));

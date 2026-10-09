@@ -154,7 +154,7 @@ describe('registerCreatePluginCommand', () => {
 
   it('reports why, and opens no prompt, when mEdit cannot say which extensions a plugin may take', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryFailure('getCreatablePluginExtensions', new Error('No load order has been loaded.'));
+    client.setQueryFailure('getCreatablePluginExtensions', { failed: 'refused', refusal: 'No load order has been loaded.' });
 
     const { run, reporter } = invoke(client, makeMo2());
     await run();

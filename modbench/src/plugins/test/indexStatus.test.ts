@@ -230,7 +230,7 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
 
   it('logs and warns a filter read failure, keeps showing the last known filter, and still applies the reconcile, since a failed read says nothing about whether mEdit still filters', async () => {
     const { client, deps } = followed();
-    client.setQueryFailure('getActiveFilter', new Error('boom'));
+    client.setQueryFailure('getActiveFilter', { failed: 'refused', refusal: 'boom' });
 
     client.emit(statusEvent());
     await flushed();

@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import type { BackendStatus, UnsavedDocument } from '../MEditClient';
 import { createUnsavedHandOver, type UnsavedDocumentsWire } from '../unsavedHandOver';
+import type { ReadFailed } from '../../wire/readFailed';
 
 function fakeWire(status: BackendStatus) {
   const statusListeners = new Set<(status: BackendStatus) => void>();
   const reopenListeners = new Set<() => void>();
   const put: string[] = [];
-  let answer: () => Promise<void> = () => Promise.resolve();
+  let answer: () => Promise<ReadFailed | undefined> = () => Promise.resolve(undefined);
   const wire: UnsavedDocumentsWire = {
     status: () => status,
     onStatusChanged: (listener) => { statusListeners.add(listener); return () => statusListeners.delete(listener); },
@@ -16,7 +17,7 @@ function fakeWire(status: BackendStatus) {
   return {
     wire,
     put,
-    answerWith: (next: () => Promise<void>) => { answer = next; },
+    answerWith: (next: () => Promise<ReadFailed | undefined>) => { answer = next; },
     becomes: (next: BackendStatus) => { status = next; for (const listener of statusListeners) listener(next); },
     reopens: () => { for (const listener of reopenListeners) listener(); },
   };
@@ -30,7 +31,7 @@ describe('handing mEdit the unsaved documents', () => {
   it('puts each hand-over at once while mEdit runs, the next only once the one before has answered', async () => {
     const mEdit = fakeWire('running');
     let answerFirst!: () => void;
-    mEdit.answerWith(() => new Promise((resolve) => { answerFirst = resolve; }));
+    mEdit.answerWith(() => new Promise((resolve) => { answerFirst = () => { resolve(undefined); }; }));
     const hand = createUnsavedHandOver(mEdit.wire).hand;
 
     hand(typed('first'));
@@ -70,18 +71,18 @@ describe('handing mEdit the unsaved documents', () => {
 
   it('answers each put, why not when it failed, and still puts the next', async () => {
     const mEdit = fakeWire('running');
-    const answers: (string | undefined)[] = [];
-    mEdit.answerWith(() => Promise.reject(new Error('connection reset')));
+    const answers: (ReadFailed | undefined)[] = [];
+    mEdit.answerWith(() => Promise.resolve({ failed: 'unreachable' }));
     const handOver = createUnsavedHandOver(mEdit.wire);
     handOver.onSettled((failure) => { answers.push(failure); });
 
     handOver.hand(typed('first'));
     await settled();
-    mEdit.answerWith(() => Promise.resolve());
+    mEdit.answerWith(() => Promise.resolve(undefined));
     handOver.hand(typed('second'));
     await settled();
 
     expect(mEdit.put).toEqual(['first', 'second']);
-    expect(answers).toEqual(['connection reset', undefined]);
+    expect(answers).toEqual([{ failed: 'unreachable' }, undefined]);
   });
 });

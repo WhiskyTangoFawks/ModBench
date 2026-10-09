@@ -15,6 +15,7 @@ import {
 } from '../drivingLib/recordDocument';
 import { errorMessage } from '../ports/errorMessage';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension, type ViewState } from '../wire/messages';
+import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 
 export const RECORD_VIEW_TYPE = 'modbench.record';
 
@@ -173,9 +174,20 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     const { fsPath } = document.uri;
     let shownReason: string | undefined;
     const read = async (): Promise<void> => {
+      const fail = (failure: ReadFailed): void => {
+        const reason = failureReason(failure);
+        if (reason === shownReason || !tab.awaitsRecord) return;
+        shownReason = reason;
+        this.deps.channel.warn(`Failed to read ${fsPath}: ${reason}`);
+        showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: 'main.js', globals: { mEditLoadError: failure } });
+      };
       try {
         const record = await this.deps.client.getRecordOfFile(fsPath);
         if (!tab.awaitsRecord) return;
+        if (isReadFailed(record)) {
+          fail(record);
+          return;
+        }
         if (record === null) {
           await this.reopenAsText(tab);
           return;
@@ -183,11 +195,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
         const { formKey, ...copy } = record;
         this.showFile(panel, tab, document, { formKey, plugin: pluginAddressOf(copy) }, { columns, place }, () => undefined);
       } catch (err) {
-        const reason = errorMessage(err);
-        if (reason === shownReason || !tab.awaitsRecord) return;
-        shownReason = reason;
-        this.deps.channel.warn(`Failed to read ${fsPath}: ${reason}`);
-        showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: 'main.js', globals: { mEditLoadError: reason } });
+        fail({ failed: 'refused', refusal: errorMessage(err) });
       }
     };
     await tab.askWhichRecord(read);

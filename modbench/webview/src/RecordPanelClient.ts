@@ -5,13 +5,14 @@ import { pluginAddressOf, samePluginAddress } from '../../src/wire/pluginAddress
 import { requestRecordLoad } from './nativeBridge';
 import { tabState } from './vscode';
 import { isColumnCopies, type ColumnCopy, type ModRepository } from '../../src/wire/messages';
+import type { ReadFailed } from '../../src/wire/readFailed';
 
 // `load` asks the host for compare, plugins and status in one round trip: a compare failure fails
 // the whole load, while a plugins/status failure comes back as `null` so the panel leaves that
 // slice of state untouched.
 type LoadResult =
   | (LoadedPanel & PanelRead)
-  | { ok: false; error: string };
+  | { ok: false; failure: ReadFailed };
 
 // Null is records held by no plugin at all, which `gone` names (editor.md, States, story 4).
 type PanelRead =
@@ -65,7 +66,7 @@ export function createRecordPanelClient(): RecordPanelClient {
     showColumns: keepColumns,
     async load(formKey) {
       const answer = await requestRecordLoad(formKey, keptColumns() ?? []);
-      if (!answer.ok) return { ok: false, error: answer.error };
+      if (!answer.ok) return { ok: false, failure: answer.failure };
       // Keyed by compound identity (ADR-0012), so one origin's mutability never wins for another
       // origin's plugin of the same filename.
       const pluginList = answer.plugins;

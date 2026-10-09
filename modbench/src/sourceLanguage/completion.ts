@@ -3,6 +3,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { metadataAt } from './fieldMetadata';
 import { fieldAt, type FieldAtOffset } from './sourceText';
+import { answerOf } from '../wire/readFailed';
 
 interface SourceCompletion {
   label: string;
@@ -31,7 +32,7 @@ const enumCompletions = (field: FieldMetadata, range: Range): SourceCompletions 
 
 async function referenceCompletions(client: Client, field: FieldMetadata, typed: string, range: Range): Promise<SourceCompletions | undefined> {
   if (!typed) return undefined;
-  const { items } = await client.searchRecords(typed, field.validFormKeyTypes);
+  const { items } = answerOf(await client.searchRecords(typed, field.validFormKeyTypes));
   const records = [...new Map(items.map((record) => [record.formKey, record])).values()];
   return {
     ...range,
@@ -42,7 +43,7 @@ async function referenceCompletions(client: Client, field: FieldMetadata, typed:
 }
 
 async function fieldOfRecord(client: Client, found: FieldAtOffset): Promise<FieldMetadata | undefined> {
-  const comparison = await client.getComparison(found.recordFormKey);
+  const comparison = answerOf(await client.getComparison(found.recordFormKey));
   const copy = comparison?.overrides.find((candidate) => candidate.isWinner);
   return copy && metadataAt(copy.fields, found.record, found.path);
 }

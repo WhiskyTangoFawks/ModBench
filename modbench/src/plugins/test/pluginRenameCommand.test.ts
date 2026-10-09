@@ -151,7 +151,7 @@ describe('modbench.plugin.rename', () => {
   it('tells a refusal that came before any write, such as an index still reading', async () => {
     showInputBox.mockResolvedValueOnce('Renamed.esp');
     const { client, renameFiles, reporter, run } = setup();
-    client.setQueryFailure('getPluginDependants', new Error('mEdit has not finished indexing the plugins.'));
+    client.setQueryFailure('getPluginDependants', { failed: 'refused', refusal: 'mEdit has not finished indexing the plugins.' });
 
     await run(row());
 

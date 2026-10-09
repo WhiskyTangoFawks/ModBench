@@ -539,7 +539,7 @@ describe('the record filter, from the commands that set and clear it', () => {
     it('reports a read of what mEdit holds that fails after a set that succeeded, and keeps the view', async () => {
       h.document = { uri: untitled, fileName: 'Untitled-1', getText: () => ARMOR_SQL };
       const view = filtering();
-      view.client.setQueryFailure('getActiveFilter', new Error('boom'));
+      view.client.setQueryFailure('getActiveFilter', { failed: 'refused', refusal: 'boom' });
 
       await view.filter(untitled);
 
@@ -1034,7 +1034,7 @@ describe('a collapsed row\'s badge, from the states beneath it', () => {
       plugins: [{ name: 'A.esp', path: '/fixture/A.esp', origin: 'SomeMod', line: 0, enabled: true, winning: true }],
       gameFolder: FOUND,
     }));
-    client.setQueryFailure('getWorkingTreeStatesBeneath', new Error('boom'));
+    client.setQueryFailure('getWorkingTreeStatesBeneath', { failed: 'refused', refusal: 'boom' });
     const row = expectInstanceOf((await rows())[0], PluginNode);
     const badges = present(h.decorations.find((provider) => 'onDidChangeFileDecorations' in provider), 'the record badge provider');
 

@@ -653,7 +653,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
 
   it('says why a destination lookup failed, and copies nothing', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryFailure('getPlugins', new Error('No load order has been received.'));
+    client.setQueryFailure('getPlugins', { failed: 'refused', refusal: 'No load order has been received.' });
     showQuickPick.mockImplementationOnce((items) =>
       Promise.resolve(items.find((item) => item.mode === 'New')));
     const { reporter } = invoke(client);
@@ -671,7 +671,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   it('says why it could not check which destinations hold the records, and copies nothing', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
-    client.setQueryFailure('getRecordHolders', new Error('mEdit is stopped.'));
+    client.setQueryFailure('getRecordHolders', { failed: 'refused', refusal: 'mEdit is stopped.' });
     pick('Override', [PATCH]);
     const { reporter } = invoke(client);
 

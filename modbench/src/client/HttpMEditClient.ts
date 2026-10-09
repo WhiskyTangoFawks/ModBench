@@ -22,7 +22,7 @@ import {
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
-import { isReadFailed, type ReadFailed } from '../wire/readFailed';
+import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 // 30s is an ordinary HTTP-client default. A slow call and a hung one look the same to the tree,
@@ -55,13 +55,13 @@ function selectionOutcome<L, R>(
 // The backend's typed discriminator, off the ProblemDetails extension rather than re-derived from the
 // status: only it tells "not tracked" from "no folder", whose ways out differ.
 function editRefused(
-  error: { refusal?: unknown; detail?: string | null } | undefined, status: number,
+  error: { refusal?: unknown; detail?: string | null } | undefined,
 ): { applied: false; refusal: string; message: string } {
   const refusal = error?.refusal;
   return {
     applied: false,
     refusal: typeof refusal === 'string' ? refusal : 'Unknown',
-    message: error?.detail ?? (errorText(error) || `Edit failed (${status}).`),
+    message: error?.detail ?? (errorText(error) || 'mEdit refused the edit.'),
   };
 }
 
@@ -190,9 +190,8 @@ class HttpMEditClient implements MEditClient {
       }
       return data ?? spec.noContent ?? { refused: true, message: `${spec.failMsg} — no answer` };
     } catch (e) {
-      const message = errorMessage(e);
-      this.log(`[HttpMEditClient] ${spec.op} threw: ${message}`);
-      return { refused: true, message: `${spec.failMsg} — ${message}` };
+      this.log(`[HttpMEditClient] ${spec.op} threw: ${errorMessage(e)}`);
+      return { refused: true, message: `${spec.failMsg} — ${failureReason(UNREACHABLE)}` };
     }
   }
 
@@ -240,9 +239,8 @@ class HttpMEditClient implements MEditClient {
       }
       return { rebuilt: true };
     } catch (e) {
-      const message = errorMessage(e);
-      this.log(`[HttpMEditClient] rebuildIndex threw: ${message}`);
-      return { rebuilt: false, heldElsewhere: false, detail: message };
+      this.log(`[HttpMEditClient] rebuildIndex threw: ${errorMessage(e)}`);
+      return { rebuilt: false, heldElsewhere: false, detail: failureReason(UNREACHABLE) };
     }
   }
 
@@ -464,7 +462,7 @@ class HttpMEditClient implements MEditClient {
       return newFormKey ? { applied: true, moves, deletions, documents, newFormKey } : { applied: true, moves, deletions, documents };
     }
 
-    const outcome = editRefused(error, response.status);
+    const outcome = editRefused(error);
     this.log(`[HttpMEditClient] getEditChanges(${formKey} ${envelope.op} ${JSON.stringify(envelope.path)}) refused: ${outcome.refusal} — ${outcome.message}`);
     return outcome;
   }
@@ -636,7 +634,7 @@ class HttpMEditClient implements MEditClient {
       return null;
     } catch (e) {
       this.log(`[HttpMEditClient] setFilter failed: ${errorMessage(e)}`);
-      return errorMessage(e);
+      return failureReason(UNREACHABLE);
     }
   }
 
@@ -651,7 +649,7 @@ class HttpMEditClient implements MEditClient {
       return null;
     } catch (e) {
       this.log(`[HttpMEditClient] clearFilter failed: ${errorMessage(e)}`);
-      return errorMessage(e);
+      return failureReason(UNREACHABLE);
     }
   }
 

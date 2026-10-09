@@ -14,6 +14,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { SyncMessage } from '../drivingLib/nameFilter';
 import { blankIcon } from '../drivingLib/blankIcon';
 import { UNLIMITED_RECORDS } from '../client';
+import { answerOf } from '../wire/readFailed';
 
 // "Could not be read into its document" rather than "Mutagen could not parse it": ingest's one
 // catch spans the read, the reference walk and the codec write, and only the diagnosis knows which.
@@ -388,7 +389,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
     if (this.beneathLoading.has(key)) return;
     this.beneathLoading.add(key);
     const generation = this.generation;
-    this.repository.getWorkingTreeStatesBeneath(plugin).then((answer) => {
+    this.repository.getWorkingTreeStatesBeneath(plugin).then(answerOf).then((answer) => {
       if (generation !== this.generation) return;
       this.beneath.set(key, { generation, answer });
       this._onDidReadBeneath.fire();
@@ -529,7 +530,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
    *  conditions that row states. */
   async getPluginChildren(plugin: PluginAddress, conditions: PluginConditions = NOT_EDITABLE): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(`getPluginChildren(${plugin.name})`, async () => {
-      const types = await this.repository.getRecordTypes(plugin);
+      const types = answerOf(await this.repository.getRecordTypes(plugin));
       return types.map(t => new RecordTypeNode(plugin.name, t, plugin.origin, conditions));
     });
   }
@@ -543,7 +544,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   private fetchWorldspaces(node: RecordTypeNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(`fetchWorldspaces(${node.plugin})`, async () => {
       const generation = this.generation;
-      const worldspaces = await this.repository.getWorldspaces(pluginAddressOf(node));
+      const worldspaces = answerOf(await this.repository.getWorldspaces(pluginAddressOf(node)));
       this.readRows(generation, worldspaces.map(w => ({ ...w, plugin: pluginAddressOf(node) })));
       return worldspaces.map(w => new WorldspaceNode(node.plugin, w, node.origin, node.conditions));
     });
@@ -552,7 +553,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   private fetchWorldspaceChildren(node: WorldspaceNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(`fetchWorldspaceChildren(${node.worldspace.formKey})`, async () => {
       const generation = this.generation;
-      const data = await this.repository.getWorldspaceBlocks(pluginAddressOf(node), node.worldspace.formKey);
+      const data = answerOf(await this.repository.getWorldspaceBlocks(pluginAddressOf(node), node.worldspace.formKey));
       const cells = [...data.topCells, ...data.blocks.flatMap(b => b.subBlocks.flatMap(s => s.cells))];
       this.readRows(generation, cells.map(c => ({ ...c, plugin: pluginAddressOf(node) })));
       const nodes: RecordBrowserNode[] = data.topCells.map(c => new CellNode(node.plugin, c, node.origin, node.conditions));
@@ -566,7 +567,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
     return this.orErrorNode(`fetchCellGroups(${node.cell.formKey})`, async () => {
       const generation = this.generation;
       const refs = await this.getOrLoad('cellRefs', pluginAddressOf(node), node.cell.formKey,
-        () => this.repository.getCellChildRecords(pluginAddressOf(node), node.cell.formKey));
+        async () => answerOf(await this.repository.getCellChildRecords(pluginAddressOf(node), node.cell.formKey)));
       this.readRows(generation, [...refs.persistent, ...refs.temporary].map(r => ({ ...r, plugin: pluginAddressOf(node) })));
       const groups: ChildRecordGroupNode[] = [];
       if (refs.persistent.length) groups.push(this.folded(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent, node.origin, node.conditions), refs.persistent));
@@ -580,7 +581,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
       const owner = { name: node.record.plugin, origin: node.origin };
       const generation = this.generation;
       const children = await this.getOrLoad('containerChildren', owner, node.record.formKey, async () => {
-        const loaded = await this.repository.getContainerChildren(owner, node.record.formKey);
+        const loaded = answerOf(await this.repository.getContainerChildren(owner, node.record.formKey));
         this.readRecords(generation, node.origin, loaded);
         return loaded;
       });
@@ -593,7 +594,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
     return this.orErrorNode(`fetchInteriorCells(${node.plugin})`, async () => {
       const generation = this.generation;
       const blocks = await this.getOrLoad('interior', pluginAddressOf(node), '',
-        () => this.repository.getInteriorCells(pluginAddressOf(node)));
+        async () => answerOf(await this.repository.getInteriorCells(pluginAddressOf(node))));
       this.readRows(generation, blocks.flatMap(b => b.subBlocks.flatMap(s => s.cells)).map(c => ({ ...c, plugin: pluginAddressOf(node) })));
       return blocks.map(b => this.folded(
         new InteriorBlockNode(node.plugin, b, node.origin, node.conditions, [node.recordType, String(b.number)]), b.subBlocks.flatMap(s => s.cells)));
@@ -604,7 +605,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
     return this.orErrorNode(`fetchRecords(${node.plugin}, ${node.recordType})`, async () => {
       const generation = this.generation;
       const page = await this.getOrLoad('records', pluginAddressOf(node), node.recordType, async () => {
-        const loaded = await this.repository.getRecords(pluginAddressOf(node), node.recordType, 0, UNLIMITED_RECORDS);
+        const loaded = answerOf(await this.repository.getRecords(pluginAddressOf(node), node.recordType, 0, UNLIMITED_RECORDS));
         this.readRecords(generation, node.origin, loaded.items);
         return loaded;
       });
