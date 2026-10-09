@@ -60,6 +60,17 @@ public static class RawPlugin
         return RecordAroundPayload(type, formId, (uint)CompressedFlag.Bit, Fallout4FormVersion, payload.ToArray());
     }
 
+    public static byte[] FirstRecordZlibHeader(byte[] plugin)
+    {
+        var group = HeaderLength + (int)BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(4));
+        Assert.Equal("GRUP"u8.ToArray(), plugin[group..(group + 4)]);
+        Assert.Equal("MISC"u8.ToArray(), plugin[(group + 8)..(group + 12)]);
+        var record = group + HeaderLength;
+        var flags = BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(record + 8));
+        Assert.NotEqual(0u, flags & (uint)CompressedFlag.Bit);
+        return plugin[(record + HeaderLength + sizeof(uint))..(record + HeaderLength + sizeof(uint) + 2)];
+    }
+
     public static byte[] Group(string recordType, params byte[][] contents) =>
         Group(Encoding.ASCII.GetBytes(recordType), 0, contents);
 

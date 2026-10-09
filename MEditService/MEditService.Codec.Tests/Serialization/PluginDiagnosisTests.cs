@@ -112,9 +112,9 @@ public sealed class PluginDiagnosisTests
     [Fact]
     public void FromWriteException_NamesTheRecordAndThePrunedMasterFromTwoDifferentExceptionTypes()
     {
-        var questFormKey = FormKey.Factory("0000DD:SpaDia_AMR.esp");
+        var questFormKey = FormKey.Factory("0000DD:Invented_Quest.esp");
         var nukaWorldFormKey = FormKey.Factory("03F98D:DLCNukaWorld.esm");
-        var modKey = ModKey.FromFileName("SpaDia_AMR.esp");
+        var modKey = ModKey.FromFileName("Invented_Quest.esp");
 
         var unmappable = new UnmappableFormIDException(
             new FormLinkInformation(nukaWorldFormKey, typeof(IFallout4MajorRecordGetter)), new StubMasterPackageWhoseEveryMemberThrowsBecauseNothingUnderTestReadsThePackageOnlyUnmappableFormKey());
@@ -128,7 +128,7 @@ public sealed class PluginDiagnosisTests
 
         Assert.NotNull(diagnosis.Anchor);
         Assert.Contains("Quest", diagnosis.Anchor);
-        Assert.Contains("0000DD:SpaDia_AMR.esp", diagnosis.Anchor);
+        Assert.Contains("0000DD:Invented_Quest.esp", diagnosis.Anchor);
         Assert.Contains("DiaQ_LLInjector_SpadeyAMR", diagnosis.Anchor);
         Assert.Contains("DLCNukaWorld.esm", diagnosis.Message);
         Assert.Equal("likely blocked upstream: Mutagen #688 (FormLinks inside a VMAD struct-list " +
