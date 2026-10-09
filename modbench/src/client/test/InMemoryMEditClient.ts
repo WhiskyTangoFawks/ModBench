@@ -4,6 +4,7 @@ import type {
 import type { LoadOrderStatus, NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
 import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
+import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
 type QueryMethod =
@@ -36,7 +37,7 @@ export interface RecordedCall {
 
 // One scripted step, queued per method: resolves an answer or rejects with an error. An answer
 // may be a pending `PromiseLike`, held in flight on a test's own schedule.
-type ScriptedStep<T> = { kind: 'answer'; value: T | PromiseLike<T> } | { kind: 'failure'; error: Error };
+type ScriptedStep<T> = { kind: 'answer'; value: T | PromiseLike<T> } | { kind: 'failure'; error: Error | ReadFailed };
 
 // Homomorphic over `QueryMethod`, for the same reason `Answers` is: `QueryQueues[K]` (not
 // `ScriptedStep<Answer<K>>[]` inline) is what keeps a generic-keyed write sound.
@@ -51,13 +52,17 @@ type ScriptedResults = { [K in CommandMethod]: Scripted<Answer<K>>[] };
 /** The in-memory adapter (target-architecture.d2, mEdit client): a test scripts each answer by
  *  method name, drives notifications with `emit`, and reads every recorded call back. An
  *  unscripted query rejects, so a forgotten script fails loudly, not silently empty. */
+function failed<A>(failure: Error | ReadFailed): Promise<A> {
+  return isReadFailed(failure) ? Promise.resolve(failure as A) : Promise.reject(failure);
+}
+
 export class InMemoryMEditClient implements MEditClient {
   readonly calls: RecordedCall[] = [];
 
   // Not readonly: `disconnected()` clears both wholesale by reassignment — the one mutation the
   // rest of this class does through `set`/`get`-shaped access instead.
   private queryAnswers: { [K in QueryMethod]?: ScriptedAnswers[K] } = {};
-  private readonly queryFailures = new Map<QueryMethod, Error>();
+  private readonly queryFailures = new Map<QueryMethod, Error | ReadFailed>();
   private queryQueues: { [K in QueryMethod]?: QueryQueues[K] } = {};
   private readonly commandResults: { [K in CommandMethod]?: ScriptedResults[K] } = {};
   private readonly commandFailures = new Map<CommandMethod, Error>();
@@ -65,7 +70,7 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly notifications = new SseNotificationSubscriber({ openStream: () => Promise.reject(new Error('never started')) });
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private readonly reconnectListeners = new Set<() => void>();
-  private readonly handOverListeners = new Set<(failure: string | undefined) => void>();
+  private readonly handOverListeners = new Set<(failure: ReadFailed | undefined) => void>();
   private _status: BackendStatus = 'starting';
   private putAnswer: LoadOrderWire['put'] = () => Promise.reject(new Error('InMemoryMEditClient: no scripted answer for a put'));
   private startAnswer: () => Promise<void> = () => { this.setStatus('running'); return Promise.resolve(); };
@@ -120,10 +125,10 @@ export class InMemoryMEditClient implements MEditClient {
     this.queryAnswers[method] = boxed;
   }
 
-  /** Every call to `method` rejects with `error` until re-scripted — the failure-shaped sibling
+  /** Every call to `method` fails with `failure` until re-scripted: a read answers a ReadFailed, anything else rejects — the failure-shaped sibling
    *  of {@link setQueryAnswer}. */
-  setQueryFailure(method: QueryMethod, error: Error): void {
-    this.queryFailures.set(method, error);
+  setQueryFailure(method: QueryMethod, failure: Error | ReadFailed): void {
+    this.queryFailures.set(method, failure);
   }
 
   /** Queues one answer, consumed by the next call to `method` and then discarded — for a test
@@ -133,8 +138,8 @@ export class InMemoryMEditClient implements MEditClient {
   }
 
   /** {@link setQueryAnswerOnce}'s failure-shaped sibling — queues one rejection. */
-  setQueryFailureOnce(method: QueryMethod, error: Error): void {
-    this.pushQueryStep(method, { kind: 'failure', error });
+  setQueryFailureOnce(method: QueryMethod, failure: Error | ReadFailed): void {
+    this.pushQueryStep(method, { kind: 'failure', error: failure });
   }
 
   private pushQueryStep<K extends QueryMethod>(method: K, step: ScriptedStep<Answer<K>>): void {
@@ -149,7 +154,7 @@ export class InMemoryMEditClient implements MEditClient {
     this.commandResults[method] = boxed;
   }
 
-  /** Every call to `method` rejects with `error` until re-scripted — the failure-shaped sibling
+  /** Every call to `method` fails with `failure` until re-scripted: a read answers a ReadFailed, anything else rejects — the failure-shaped sibling
    *  of {@link setCommandResult}. */
   setCommandFailure(method: CommandMethod, error: Error): void {
     this.commandFailures.set(method, error);
@@ -222,13 +227,13 @@ export class InMemoryMEditClient implements MEditClient {
 
   handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.record('handUnsavedDocuments', [documents]); }
 
-  onUnsavedHandOver(listener: (failure: string | undefined) => void): () => void {
+  onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void {
     this.handOverListeners.add(listener);
     return () => { this.handOverListeners.delete(listener); };
   }
 
   /** A put of the unsaved documents answers: undefined when mEdit took them, else why not. */
-  settleHandOver(failure: string | undefined): void {
+  settleHandOver(failure: ReadFailed | undefined): void {
     for (const listener of this.handOverListeners) listener(failure);
   }
 
@@ -248,9 +253,9 @@ export class InMemoryMEditClient implements MEditClient {
   private query<K extends QueryMethod>(method: K, args: unknown[]): Promise<Answer<K>> {
     this.record(method, args);
     const step = this.queryQueues[method]?.shift();
-    if (step) return step.kind === 'answer' ? Promise.resolve(step.value) : Promise.reject(step.error);
+    if (step) return step.kind === 'answer' ? Promise.resolve(step.value) : failed(step.error);
     const failure = this.queryFailures.get(method);
-    if (failure) return Promise.reject(failure);
+    if (failure) return failed(failure);
     const scripted = this.queryAnswers[method]?.[0];
     if (!scripted) {
       return Promise.reject(new Error(`InMemoryMEditClient: no scripted answer for query "${method}"`));

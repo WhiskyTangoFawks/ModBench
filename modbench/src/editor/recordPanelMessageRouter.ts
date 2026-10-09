@@ -14,6 +14,7 @@ import type { FocusedCellContext } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
 import type { TitledColumn } from './recordTitle';
 import { modsByOrigin, type ModFacts } from './modsByOrigin';
+import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 
 type TitleFromRead = (formKey: string, columns: readonly TitledColumn[] | undefined) => void;
 
@@ -170,28 +171,27 @@ async function answerRecordLoad(
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD }>,
 ): Promise<void> {
   const [plugins] = await Promise.allSettled([deps.meditClient.getPlugins()]);
-  const listed = plugins.status === 'fulfilled' ? plugins.value : null;
+  const listed = plugins.status === 'fulfilled' && !isReadFailed(plugins.value) ? plugins.value : null;
   const pluginActive = listed?.some((p) => p.inLoadOrder && samePluginAddress(p, deps.plugin)) ?? false;
-  const [read] = await Promise.allSettled([(async (): Promise<RecordRead & { fileCopyAlone: boolean }> => {
+  const [settled] = await Promise.allSettled([(async (): Promise<(RecordRead & { fileCopyAlone: boolean }) | ReadFailed> => {
     const documentText = await deps.documentText(pluginActive);
     const own = { formKey: m.formKey, plugin: deps.plugin, documentText };
-    if (m.columns.length > 0) return { ...readOf(await deps.meditClient.getRecordsComparison([own, ...m.columns])), fileCopyAlone: false };
+    if (m.columns.length > 0) return withFileCopy(readOf(await deps.meditClient.getRecordsComparison([own, ...m.columns])), false);
     const text = documentText === undefined ? undefined
       : { plugin: deps.plugin, documentText, alone: !pluginActive && deps.modFacts.standingOf(deps.plugin).kind === 'disabled' };
     const compare = await deps.meditClient.getComparison(m.formKey, text);
+    if (isReadFailed(compare)) return compare;
     if (compare) return { compare, fileCopyAlone: text?.alone ?? false };
     // Only the typed answer tells a record held by no plugin from one a disabled plugin holds.
-    return { ...readOf(await deps.meditClient.getRecordsComparison([own])), fileCopyAlone: false };
+    return withFileCopy(readOf(await deps.meditClient.getRecordsComparison([own])), false);
   })()]);
-  if (read.status === 'rejected') {
-    deps.channel.warn(`Failed to read ${m.formKey}: ${errorMessage(read.reason)}`);
-    deps.reply({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId,
-      ok: false, error: errorMessage(read.reason),
-    });
+  const read = settled.status === 'rejected' ? { failed: 'refused', refusal: errorMessage(settled.reason) } as const : settled.value;
+  if (isReadFailed(read)) {
+    deps.channel.warn(`Failed to read ${m.formKey}: ${failureReason(read)}`);
+    deps.reply({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: false, failure: read });
     return;
   }
-  const answered = read.value;
+  const answered = read;
   if (answered.compare === null) deps.channel.warn([`Held by no plugin: ${answered.gone.join(', ')}.`, ...answered.copiesLacking].join(' '));
   const overrides = answered.compare?.overrides;
   const origins = (overrides ?? []).map((o) => o.origin);
@@ -209,10 +209,16 @@ async function answerRecordLoad(
 }
 
 // Only a record no plugin holds is gone; a copy its plugin alone lacks refuses the read (editor.md, States, stories 2 and 4).
-function readOf({ compare, missing }: CompareRecordsResponse): RecordRead {
+function readOf(answer: CompareRecordsResponse | ReadFailed): RecordRead | ReadFailed {
+  if (isReadFailed(answer)) return answer;
+  const { compare, missing } = answer;
   if (compare) return { compare };
   const gone = [...new Set(missing.filter((c) => c.reason === 'RecordGone').map((c) => c.formKey))];
   const copiesLacking = missing.filter((c) => c.reason === 'NotInPlugin').map((c) => c.message);
-  if (gone.length === 0) throw new Error(copiesLacking.join(' '));
+  if (gone.length === 0) return { failed: 'refused', refusal: copiesLacking.join(' ') };
   return { compare: null, gone, copiesLacking };
+}
+
+function withFileCopy(read: RecordRead | ReadFailed, fileCopyAlone: boolean): (RecordRead & { fileCopyAlone: boolean }) | ReadFailed {
+  return isReadFailed(read) ? read : { ...read, fileCopyAlone };
 }

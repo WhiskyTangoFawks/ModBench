@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { RecordSummary, MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
+import { answerOf } from '../wire/readFailed';
 
 export interface RecordPickerDeps {
   meditClient: Pick<MEditClient, 'searchRecords'>;
@@ -46,7 +47,7 @@ export async function pickRecord(
     if (!query.trim()) { show([]); return; }
     quickPick.busy = true;
     try {
-      const { items } = await deps.meditClient.searchRecords(normalizeFormKeyQuery(query), validTypes);
+      const { items } = answerOf(await deps.meditClient.searchRecords(normalizeFormKeyQuery(query), validTypes));
       if (mySeq !== seq) return;
       const qpItems = items.map(toPickItem);
       show(qpItems);
