@@ -13,7 +13,7 @@ namespace MEditService.Commands.Resolution;
 /// not thread-safe.</summary>
 internal sealed class CopySource(
     PluginAddress plugin, LoadOrderSnapshot loadOrder, IPluginAdapter adapter, SchemaReflector schemaReflector,
-    UnsavedBatches batches)
+    WriteSessions sessions)
     : IDisposable
 {
     private readonly GameRelease _release = loadOrder.GameRelease;
@@ -23,7 +23,7 @@ internal sealed class CopySource(
 
     private readonly SourceRepository? _tree = loadOrder.Plugin(plugin) is { Provider: PluginProvider.FromMod mod } registered
         && SourceRepository.SourceReads(registered)
-        ? batches.Over(mod, loadOrder.GameRelease).Repository
+        ? sessions.Over(mod, loadOrder.GameRelease).Repository
         : null;
 
     private IPluginRecords? _records;
@@ -34,7 +34,7 @@ internal sealed class CopySource(
 
     internal LoadOrderSnapshot Snapshot => loadOrder;
 
-    internal UnsavedBatches Batches => batches;
+    internal WriteSessions Sessions => sessions;
 
     /// <summary>The record type and EditorID this plugin's copy names <paramref name="formKey"/>, or
     /// null when it holds nothing under that key. A tracked document that is no record document is

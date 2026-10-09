@@ -14,9 +14,12 @@ namespace MEditService.Commands.Edits;
 /// container copied in when absent, as a Partial Form where the game allows (ADR-0007).</summary>
 internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger)
 {
-    /// <summary>The tracked plugin a copy lands in: its repository and its key. No folder — every
+    /// <summary>The tracked plugin a copy lands in: its session and its key. No folder — every
     /// write here is a put, and the repository decides where a document goes.</summary>
-    internal readonly record struct Destination(SourceRepository Repository, PluginAddress Plugin);
+    internal readonly record struct Destination(WriteSession Session, PluginAddress Plugin)
+    {
+        internal SourceRepository Repository => Session.Repository;
+    }
 
     /// <summary>A copy of a child the destination lacks, as every Copy as Override: own fields only, so a copied
     /// topic lands with no responses.</summary>
@@ -26,8 +29,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     {
         var landing = child with { Body = ContainerDocumentEdits.WithoutChildren(child.Body, release, child.RecordType) };
 
-        if (!SourceTransaction.Atomically(
-                destination.Repository, transaction => PutChildInContainer(transaction, source, container, landing, destination, release))
+        if (!destination.Session.Atomically(() => PutChildInContainer(source, container, landing, destination, release))
             .Holds(out var appended, out var unread))
         {
             return unread is SourceFailure.SlotHeld held ? RefuseSlotHeldByAnotherRecord(destination.Plugin, held) : unread;
@@ -44,11 +46,11 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         return appended;
     }
 
-    /// <summary>What a copy made over <paramref name="batch"/> since <paramref name="before"/>, once it applied.</summary>
+    /// <summary>What a copy made in <paramref name="session"/> since <paramref name="before"/>, once it applied.</summary>
     internal static Answer<RecordEditChanges, SourceFailure> ChangesSince(
-        SourceBatch batch, SourceChanges before, Answer<RecordEditResult, SourceFailure> copied) =>
+        WriteSession session, SourceChanges before, Answer<RecordEditResult, SourceFailure> copied) =>
         copied.Then(result => SourceAnswer.Of(
-            result.Applied ? new RecordEditChanges(result, batch.ChangesAddedSince(before)) : result));
+            result.Applied ? new RecordEditChanges(result, session.ChangesAddedSince(before)) : result));
 
     private static RecordEditResult RefuseSlotHeldByAnotherRecord(PluginAddress destinationPlugin, SourceFailure.SlotHeld held) =>
         RecordEditResult.Refused(
@@ -58,17 +60,17 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     /// <summary>The container rule: the child lands at the end of its slot in the destination's copy
     /// of its container, which is copied in with its own fields when absent, transitively.</summary>
     internal Answer<RecordEditResult, SourceFailure> PutChildInContainer(
-        SourceTransaction transaction, CopySource source, DocumentContainment container, SourceDocument child,
+        CopySource source, DocumentContainment container, SourceDocument child,
         Destination destination, GameRelease release)
     {
         var containerFormKey = container.ParentFormKey;
         if (!destination.Repository.Get(destination.Plugin, containerFormKey).Holds(out var held, out var unread)) return unread;
         if (held is not { } containerDocument)
         {
-            return CopyContainerInAround(transaction, source, container, child, destination, release);
+            return CopyContainerInAround(source, container, child, destination, release);
         }
 
-        transaction.Apply(destination.Repository.ChangesToPutChild(
+        destination.Session.Apply(destination.Repository.ChangesToPutChild(
             destination.Plugin, containerDocument.Identity, container.SlotName, child));
         return RecordEditResult.Success();
     }
@@ -76,7 +78,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     // A container the destination lacks is copied in around the child: itself a child lands in its
     // own container's slot by the same rule, a top-level one at a placement.
     private Answer<RecordEditResult, SourceFailure> CopyContainerInAround(
-        SourceTransaction transaction, CopySource source, DocumentContainment container, SourceDocument child,
+        CopySource source, DocumentContainment container, SourceDocument child,
         Destination destination, GameRelease release)
     {
         var containerFormKey = container.ParentFormKey;
@@ -86,14 +88,14 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         if (!source.ContainerOf(sourceContainer).Holds(out var parentOfContainer, out why))
             return WriteTargets.RefuseUnreadableSource(containerFormKey, why);
         if (!(parentOfContainer is { } ownParent
-                ? PutChildInContainer(transaction, source, ownParent, ownFields, destination, release)
-                : PlaceContainer(transaction, source, ownFields, destination, release)).Holds(out var landed, out var unread))
+                ? PutChildInContainer(source, ownParent, ownFields, destination, release)
+                : PlaceContainer(source, ownFields, destination, release)).Holds(out var landed, out var unread))
         {
             return unread;
         }
         if (!landed.Applied) return landed;
 
-        transaction.Apply(destination.Repository.ChangesToPutChild(destination.Plugin, ownFields.Identity, container.SlotName, child));
+        destination.Session.Apply(destination.Repository.ChangesToPutChild(destination.Plugin, ownFields.Identity, container.SlotName, child));
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -108,7 +110,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     // A top-level container the destination lacks: an exterior cell lands through the spatial mint
     // with its worldspace; everything else is a put, which places it.
     private Answer<RecordEditResult, SourceFailure> PlaceContainer(
-        SourceTransaction transaction, CopySource source, SourceDocument container, Destination destination, GameRelease release)
+        CopySource source, SourceDocument container, Destination destination, GameRelease release)
     {
         var formKey = container.FormKey;
         CopyRead<string?> worldspaceRead = (string?)null;
@@ -117,10 +119,10 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         if (!worldspaceRead.Holds(out var worldspace, out var why)) return WriteTargets.RefuseUnreadableSource(formKey, why);
         if (worldspace is not null)
         {
-            return PlaceExteriorCell(transaction, source, worldspace, container, destination, release);
+            return PlaceExteriorCell(source, worldspace, container, destination, release);
         }
 
-        transaction.Apply(destination.Repository.ChangesToPut(destination.Plugin, container));
+        destination.Session.Apply(destination.Repository.ChangesToPut(destination.Plugin, container));
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -136,7 +138,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     /// its own fields first when the destination has none: the put of a cell whose worldspace is
     /// absent refuses.</summary>
     internal Answer<RecordEditResult, SourceFailure> PlaceExteriorCell(
-        SourceTransaction transaction, CopySource source, string worldspaceFormKey, SourceDocument cell,
+        CopySource source, string worldspaceFormKey, SourceDocument cell,
         Destination destination, GameRelease release)
     {
         var cellFormKey = cell.FormKey;
@@ -159,9 +161,9 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
                 $"{source.Plugin.Name} does not hold {cellFormKey} — its own worldspace named it.");
         if (!source.Body(sourceCell).Holds(out var sourceCellText, out why)) return WriteTargets.RefuseUnreadableSource(cellFormKey, why);
         var landing = WithGridFrom(sourceCellText, cell with { RecordType = sourceCell.RecordType }, release);
-        var (repository, plugin) = destination;
-        if (worldspaceCopy is not null) transaction.Apply(repository.ChangesToPut(plugin, worldspaceCopy));
-        transaction.Apply(repository.ChangesToPutInWorldspace(plugin, landing, worldspaceFormKey));
+        var (session, plugin) = destination;
+        if (worldspaceCopy is not null) session.Apply(session.Repository.ChangesToPut(plugin, worldspaceCopy));
+        session.Apply(session.Repository.ChangesToPutInWorldspace(plugin, landing, worldspaceFormKey));
         return RecordEditResult.Success();
     }
 

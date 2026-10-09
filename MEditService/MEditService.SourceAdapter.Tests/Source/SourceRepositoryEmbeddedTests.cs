@@ -522,64 +522,47 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         IReadOnlyList<string> before, IReadOnlyList<string> after) =>
         ([.. before.Except(after)], [.. after.Except(before)]);
 
+    private void Rekey(RecordIdentity identity) =>
+        Repository.SaveChanges(Repository.ChangesToRekey(Plugin, identity, FreeFormKey)).Wrote();
+
     [Fact]
-    public void Rekey_AnEmbeddedChild_RewritesOnlyTheOwnersDocument_AndRollbackPutsItBack()
+    public void Rekey_AnEmbeddedChild_RewritesOnlyTheOwnersDocument()
     {
         var before = TreeSnapshot.Of(_modFolder);
 
-        var left = TransactionRollback.After(Repository, transaction =>
-        {
-            transaction.Rekey(Repository, Plugin, Identity(_temporaryRef, "refr"), FreeFormKey);
+        Rekey(Identity(_temporaryRef, "refr"));
 
-            var (gone, appeared) = Difference(before, TreeSnapshot.Of(_modFolder));
-            Assert.Single(gone);
-            Assert.Single(appeared);
-            Assert.StartsWith($"file {InteriorCellPath.Replace('\\', '/')} ", gone[0], StringComparison.Ordinal);
-            Assert.StartsWith($"file {InteriorCellPath.Replace('\\', '/')} ", appeared[0], StringComparison.Ordinal);
-            Assert.NotNull(Repository.Get(Plugin, FreeFormKey).Value());
-            Assert.Null(Repository.Get(Plugin, _temporaryRef.FormKey.ToString()).Value());
-        });
-
-        Assert.Null(left);
-        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+        var (gone, appeared) = Difference(before, TreeSnapshot.Of(_modFolder));
+        Assert.Single(gone);
+        Assert.Single(appeared);
+        Assert.StartsWith($"file {InteriorCellPath.Replace('\\', '/')} ", gone[0], StringComparison.Ordinal);
+        Assert.StartsWith($"file {InteriorCellPath.Replace('\\', '/')} ", appeared[0], StringComparison.Ordinal);
+        Assert.NotNull(Repository.Get(Plugin, FreeFormKey).Value());
+        Assert.Null(Repository.Get(Plugin, _temporaryRef.FormKey.ToString()).Value());
     }
 
     [Fact]
-    public void Rekey_AContainer_MovesItsChildRecordsFilesUnderTheNewKey_AndRollbackMovesThemBack()
+    public void Rekey_AContainer_MovesItsChildRecordsFilesUnderTheNewKey()
     {
-        var before = TreeSnapshot.Of(_modFolder);
+        Rekey(Identity(_worldspace, "wrld"));
 
-        var left = TransactionRollback.After(Repository, transaction =>
-        {
-            transaction.Rekey(Repository, Plugin, Identity(_worldspace, "wrld"), FreeFormKey);
-
-            var child = Repository.RelativePathOf(Plugin, Identity(_exteriorCell, "cell")).Value();
-            Assert.Contains("000F00_Embedded.esp", child, StringComparison.Ordinal);
-            Assert.Null(Repository.RelativePathOf(Plugin, Identity(_worldspace, "wrld")).Value());
-        });
-
-        Assert.Null(left);
-        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+        var child = Repository.RelativePathOf(Plugin, Identity(_exteriorCell, "cell")).Value();
+        Assert.Contains("000F00_Embedded.esp", child, StringComparison.Ordinal);
+        Assert.Null(Repository.RelativePathOf(Plugin, Identity(_worldspace, "wrld")).Value());
     }
 
     [Fact]
-    public void Rekey_ARecordWithAFileOfItsOwn_ReplacesThatFileUnderTheNewKey_AndRollbackPutsItBack()
+    public void Rekey_ARecordWithAFileOfItsOwn_ReplacesThatFileUnderTheNewKey()
     {
         var before = TreeSnapshot.Of(_modFolder);
 
-        var left = TransactionRollback.After(Repository, transaction =>
-        {
-            transaction.Rekey(Repository, Plugin, Identity(_quest, "qust"), FreeFormKey);
+        Rekey(Identity(_quest, "qust"));
 
-            var (gone, appeared) = Difference(before, TreeSnapshot.Of(_modFolder));
-            Assert.Single(gone);
-            Assert.Single(appeared);
-            Assert.Contains("Quests/", gone[0], StringComparison.Ordinal);
-            Assert.Contains("000F00_Embedded.esp.json", appeared[0], StringComparison.Ordinal);
-        });
-
-        Assert.Null(left);
-        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+        var (gone, appeared) = Difference(before, TreeSnapshot.Of(_modFolder));
+        Assert.Single(gone);
+        Assert.Single(appeared);
+        Assert.Contains("Quests/", gone[0], StringComparison.Ordinal);
+        Assert.Contains("000F00_Embedded.esp.json", appeared[0], StringComparison.Ordinal);
     }
 
     [Fact]

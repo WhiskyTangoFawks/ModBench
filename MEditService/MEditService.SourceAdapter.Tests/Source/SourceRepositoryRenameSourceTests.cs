@@ -132,9 +132,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     [Fact]
     public void ChangesToRenameSource_AnswerADocumentOnlyWhenItsTextChanges()
     {
-        var batch = SourceBatch.Over(Repository, []);
-
-        var changes = batch.Repository.ChangesToRenameSource(Old, "New.esp").Value().Require();
+        var changes = Session().Repository.ChangesToRenameSource(Old, "New.esp").Value().Require();
 
         Assert.Equal(
             ["000000_New.esp.json", "Cells/0/0/EmbedCell - 000804_New.esp/EmbedCell - 000804_New.esp.json", "Npcs/MasterNpc - 000800_DLC.esm.json", "Npcs/SelfNpc - 000801_New.esp.json"],
@@ -171,9 +169,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     public void ChangesToRenameSource_AnswerAnUnsavedTextTheRenameLeavesAsItIs_SoItIsSavedAtItsNewPath()
     {
         var metadata = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "Cells", "0", "0", "GroupRecordData.json");
-        var batch = SourceBatch.Over(Repository, [new DocumentChange(metadata, """{"unsaved":true}""")]);
-
-        var changes = batch.Repository.ChangesToRenameSource(Old, "New.esp").Value().Require();
+        var changes = Session(new DocumentChange(metadata, """{"unsaved":true}""")).Repository.ChangesToRenameSource(Old, "New.esp").Value().Require();
 
         var document = Assert.Single(changes.Documents, document => document.Path.EndsWith("GroupRecordData.json", StringComparison.Ordinal));
         Assert.Equal("""{"unsaved":true}""", document.Text);
@@ -242,16 +238,18 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
 
     private bool Rename(string newName, IReadOnlyList<DocumentChange>? unsaved = null)
     {
-        var batch = SourceBatch.Over(Repository, unsaved ?? []);
-        if (batch.Repository.ChangesToRenameSource(Old, newName).Value() is not { } changes) return false;
-        Assert.Null(SourceTransaction.Atomically(batch.Repository, transaction => transaction.Apply(SourceAnswer.Of(changes))));
+        var session = Session([.. unsaved ?? []]);
+        if (session.Repository.ChangesToRenameSource(Old, newName).Value() is not { } changes) return false;
+        Assert.Null(session.Atomically(() => session.Apply(SourceAnswer.Of(changes))));
         EditSaving.Save(
-            batch.Changes.Moves.Select(move => (move.From, move.To)), batch.Changes.Deletions,
-            batch.Changes.Documents.Select(document => (document.Path, document.Text)));
+            session.Changes.Moves.Select(move => (move.From, move.To)), session.Changes.Deletions,
+            session.Changes.Documents.Select(document => (document.Path, document.Text)));
         return true;
     }
 
     private SourceRepository Repository => SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require();
+
+    private WriteSession Session(params DocumentChange[] held) => WriteSession.Over(TestMod.In(_modFolder), GameRelease.Fallout4, held);
 
     private static List<TreeFile> Files(IEnumerable<(string Path, string Text)> tree) =>
         [.. tree.Select(file => new TreeFile(file.Path, Encoding.UTF8.GetBytes(file.Text)))];

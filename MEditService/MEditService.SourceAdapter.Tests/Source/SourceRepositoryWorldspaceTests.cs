@@ -1,4 +1,3 @@
-using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -69,57 +68,6 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
 
         Assert.Contains(ExteriorCell, refused.Message, StringComparison.Ordinal);
         Assert.Equal(before, Documents());
-    }
-
-    [PosixFact]
-    public void Remove_OfAContainerWhoseDirectoryCannotAllBeDeleted_PutsBackWhatWent_AndAnswersTheRefusal()
-    {
-        InTheTree(Worldspace, "wrld");
-        Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
-        var block = Path.Combine(_modFolder, "plugin-source", PluginName, "Worldspaces", "000800_Vendor.esp", "0, -1", "1, -2");
-        var before = TreeSnapshot.Of(_modFolder);
-        FileModes.Set(block, "555");
-        try
-        {
-            Assert.IsType<SourceFailure.Inaccessible>(Repository.Remove(Plugin, new RecordIdentity(Worldspace, "wrld", null)).Failed());
-        }
-        finally
-        {
-            FileModes.Set(block, "755");
-        }
-
-        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
-    }
-
-    [Fact]
-    public void PutInWorldspace_ThatFailsOnTheCellsDocument_TakesBackTheBlockLevelsItWrote()
-    {
-        InTheTree(Worldspace, "wrld");
-        var cellDocument = PluginSourceRoot.ContainerDocument(Path.Combine(
-            "plugin-source", PluginName, "Worldspaces", "000800_Vendor.esp", "0, -1", "1, -2", "000801_Vendor.esp"));
-        Directory.CreateDirectory(Path.Combine(_modFolder, cellDocument));
-        var before = TreeSnapshot.Of(_modFolder);
-
-        Assert.IsType<SourceFailure.Inaccessible>(SourceTransaction.Atomically(
-            Repository, transaction => transaction.PutInWorldspace(Repository, Plugin, ACellAt("9, -9"), Worldspace)));
-
-        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
-    }
-
-    [Fact]
-    public void PutInWorldspace_ThroughATransaction_IsTakenBackByItsRollback()
-    {
-        InTheTree(Worldspace, "wrld");
-        var before = TreeSnapshot.Of(_modFolder);
-
-        var left = TransactionRollback.After(Repository, transaction =>
-        {
-            transaction.PutInWorldspace(Repository, Plugin, ACellAt("9, -9"), Worldspace);
-            Assert.NotEqual(before, TreeSnapshot.Of(_modFolder));
-        });
-
-        Assert.Null(left);
-        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
     [Fact]
