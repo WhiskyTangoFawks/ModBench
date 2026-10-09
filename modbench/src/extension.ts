@@ -3,7 +3,6 @@
 
 import * as vscode from 'vscode';
 import { createMEditClient, stopMEditClient, type MEditClient } from './client';
-import { RecordBrowser } from './plugins/RecordBrowser';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
@@ -14,7 +13,6 @@ import { createSourceLanguage } from './sourceLanguage';
 import { savePluginSource } from './sourceLanguage/dirtyPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
-import type { RecordWrite } from './drivingLib/writingGesture';
 import type { SourceEditing } from './drivingLib/sourceEditing';
 import { applyWorkspaceChanges } from './drivingLib/applyWorkspaceChanges';
 import { oneAtATime } from './drivingLib/oneAtATime';
@@ -24,12 +22,8 @@ import { originFiles, NO_ORIGIN_FILES, type OriginFilesOf } from './instanceLoad
 import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import type { InstanceAdapter } from './instanceAdapter/instanceAdapter';
-import { createStatusBar, type StatusBar } from './plugins/statusBar';
 import { meditConfig, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
-import { noticeExternalChanges } from './plugins/externalChangeNotice';
-import { recordWriteOver } from './plugins/recordWrite';
-import { createPluginsView, type PluginsViewDeps } from './plugins/pluginsView';
-import { editingView } from './plugins/editingView';
+import { createPlugins, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
 import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
@@ -45,7 +39,6 @@ import { warnIfFomod } from './install/fomodWarning';
 import { installCommands } from './install/install';
 import { downloadsCommands } from './downloadsCommands/downloads';
 import { instanceCommands } from './instanceCommands/instanceCommands';
-import { editingFlow } from './instanceCommands/editing';
 import { instanceSyncs, loadOrderPutHandler, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
@@ -62,12 +55,7 @@ type ViewsClient = Pick<MEditClient,
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
   client: ViewsClient;
-  recordBrowser: RecordBrowser;
-  pluginFacts: PluginsViewDeps['client'];
-  statusBar: StatusBar;
-  registerRepositories: () => Promise<void>;
-  recordWrite: RecordWrite;
-  sourceEditing: SourceEditing;
+  plugins: Plugins;
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
   trash: MoveToTrash;
@@ -125,10 +113,7 @@ function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened 
 }
 
 function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: OpenedInstance, deps: ViewsDeps): InstanceSide {
-  const {
-    outputChannel, client, recordBrowser, pluginFacts,
-    statusBar, registerRepositories, recordWrite, reporterFor, ask, trash, extensionId,
-  } = deps;
+  const { outputChannel, client, plugins: pluginsBox, reporterFor, ask, trash, extensionId } = deps;
   const install = installCommands({ instanceRoot, adapter });
   own(markFirstReadLanded(instance));
   const commands = instanceCommands({ adapter, client, instanceRoot });
@@ -137,11 +122,10 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   const trackSelection = selectionInFocusedView(
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
-  const plugins = own(createPluginsView({
-    instance, commands: pluginsCommands({ adapter, client }), recordBrowser, client: pluginFacts, pluginSync, channel: outputChannel, statusBar, registerRepositories, reporterFor,
-    ask, recordWrite, sourceEditing: deps.sourceEditing, saveUnsavedPluginSource: (plugin) => savePluginSource((origin) => originFiles(instance.value, origin), plugin), trackSelection, modsView: MODS_KEY_ARGS.view,
+  const plugins = own(pluginsBox.onInstance({
+    instance, instanceRoot, commands: pluginsCommands({ adapter, client }), pluginSync, trackSelection, modsView: MODS_KEY_ARGS.view,
+    saveUnsavedPluginSource: (plugin) => savePluginSource((origin) => originFiles(instance.value, origin), plugin),
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
-    log: (level, msg) => outputChannel[level](msg),
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
   const { view: downloadsView, nameFilter: downloadsFilter } = own(createDownloadsView({
@@ -158,16 +142,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     },
     nexusRow: nexusRowInFocusedView(own, deps.focusedView, ['modbench.modList', 'modbench.downloads'], 'modbench.mod.nexusRowIn'),
   }));
-  const view = editingView({
-    narrator: plugins.narrator, progress: plugins.progress, log: outputChannel, revealLog: () => outputChannel.show(true), loadOrderPut: plugins.loadOrderPut,
-    reportPut: (message) => reporterFor('loadOrder').report('error', message),
-    reportEntry: (message) => reporterFor('enterEditing').report('error', message),
-    reportExit: (message) => reporterFor('mEditExit').report('error', message),
-    reportLaunch: (message, reason) => reporterFor('launch').report('error', message, reason),
-  });
-  const editing = own(editingFlow({
-    client, instanceRoot, around: view.around, tell: view.tell, log: (line) => outputChannel.error(line),
-  }));
+  const { editing } = plugins;
   void editing.enter(instance.landed());
   void client.start();
   const putLoadOrder = loadOrderPutHandler(editing);
@@ -186,7 +161,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     ]),
     () => vscode.window.setStatusBarMessage('Focus a list to filter it.', 5000)));
   own(registerRefreshCommand({
-    commands, nextRefill: () => plugins.narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
+    commands, nextRefill: plugins.nextRefill, instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
     instance, toolboxProvider,
@@ -240,41 +215,37 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ADR-0002.
   const meditClient = createMEditClient({ backend: { attachPort }, backendLog: outputChannel, log });
-  const statusBar = createStatusBar(meditClient);
-  context.subscriptions.push(statusBar);
-  const treeProvider = new RecordBrowser(meditClient, log);
   const focusedView = createFocusedView();
 
   const ownedByViews = ownership();
   const opened = openInstance(outputChannel, ownedByViews.own);
   const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...opened.facts });
-  const recordWrite = recordWriteOver(opened.facts, meditClient);
   const sourceEditing: SourceEditing = {
     applyWorkspaceChanges: (items) => applyWorkspaceChanges(items),
     oneAtATime: oneAtATime(),
     refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
   };
+  const reporterFor = (tag: string) => makeReporter(outputChannel, tag);
+  const plugins = createPlugins({
+    client: meditClient, facts: opened.facts, channel: outputChannel, reporterFor,
+    registerRepositories: trackedRepositories.registerRepositories, ask: askQuestion, sourceEditing,
+  });
   const editor = createEditor({
     context, meditClient, outputChannel,
-    reporterFor: (tag) => makeReporter(outputChannel, tag),
+    reporterFor,
     ask: askQuestion,
     focusedView,
     recordViewIds: ['modbench.pluginListTree'],
-    recordWrite,
+    recordWrite: plugins.recordWrite,
     sourceEditing,
     modFacts: opened.facts,
   });
   const views = buildViews(opened, ownedByViews, {
     outputChannel, client: meditClient,
-    reporterFor: (tag) => makeReporter(outputChannel, tag),
+    reporterFor,
     ask: askQuestion,
     trash: moveToTrash,
-    recordBrowser: treeProvider,
-    pluginFacts: meditClient,
-    statusBar,
-    registerRepositories: trackedRepositories.registerRepositories,
-    recordWrite,
-    sourceEditing,
+    plugins,
     extensionId: context.extension.id,
     extensionUri: context.extensionUri,
     focusedView,
@@ -282,7 +253,7 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   context.subscriptions.push(
     views,
-    { dispose: noticeExternalChanges(makeReporter(outputChannel, 'externalChange'), meditClient) },
+    plugins,
     editor,
     createSourceLanguage({
       client: meditClient, originFiles: (origin) => views.originFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),

@@ -11,7 +11,7 @@ import type { Reporter } from '../ports/reporter';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
 import { creatablePluginExtensionsOf, pluginNameRefusal } from './pluginName';
 import { holdsPlugin } from './pluginPlaces';
-import type { PluginsTreeNode } from './PluginsTreeProvider';
+import type { PluginsTreeNode } from './pluginRows';
 
 export interface RenamePluginDeps {
   commands: Pick<PluginsCommands, 'confirmRename' | 'renamePlugin'>;

@@ -49,7 +49,7 @@ import { pluginSourceFolderOf } from '../../instanceAdapter/instanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type PluginAddress } from '../../client';
-import { PluginNode } from '../PluginsTreeProvider';
+import { PluginNode } from '../pluginRows';
 import { assertAskedOnce, recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
 import { pluginMetadataFixture, compiledPluginFixture } from '../../client/test/fixtures';

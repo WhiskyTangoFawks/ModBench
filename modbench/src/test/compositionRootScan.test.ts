@@ -85,6 +85,11 @@ describe('the composition root builds each box, registers it with VS Code and de
     expect(text).not.toMatch(/webview/i);
   });
 
+  it.each(rootFiles().map((path) => basename(path)))('%s reaches Plugins only through its index', (file) => {
+    const text = readFileSync(join(SRC, file), 'utf8');
+    expect(importSpecifiers(text, file).filter((specifier) => specifier.startsWith('./plugins/'))).toEqual([]);
+  });
+
   it('exports nothing from the activation file but what VS Code takes', () => {
     expect(exportedNames(parse(join(SRC, ACTIVATION)))).toEqual(ACTIVATION_EXPORTS);
   });

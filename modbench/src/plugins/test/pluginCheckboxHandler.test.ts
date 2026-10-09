@@ -18,7 +18,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/p
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { onPluginCheckboxChanged } from '../pluginCheckboxHandler';
-import { PluginNode } from '../PluginsTreeProvider';
+import { PluginNode } from '../pluginRows';
 import { recordRow } from './browserRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { recordSummaryFixture } from '../../client/test/fixtures';

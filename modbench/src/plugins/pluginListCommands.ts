@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
-import {
-  PluginsTreeProvider, type PluginListNode, type PluginsTreeNode,
-} from './PluginsTreeProvider';
+import { PluginsTreeProvider } from './PluginsTreeProvider';
+import { type PluginListNode, type PluginsTreeNode } from './pluginRows';
 import {
   PLUGIN_ROW_KINDS, RECORD_ROW_KINDS, PLUGINS_KEY_ARGS, onlySelected,
 } from './gestureEntry';

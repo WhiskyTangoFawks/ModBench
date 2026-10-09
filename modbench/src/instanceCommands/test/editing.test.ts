@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { LoadOrderOutcome, LoadOrderProgress } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { editingFlow, type Told } from '../editing';
+import { editingFlow } from '../editing';
+import type { PutLoadOrderResult } from '../loadOrder';
+import type { Reporter } from '../../ports/reporter';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import type { LoadOrderSource } from '../loadOrder';
 
 const STATUS: LoadOrderProgress = {
@@ -20,6 +23,12 @@ function valueWith(name: string): LoadOrderSource {
   };
 }
 
+type Told =
+  | { kind: 'put'; put: PutLoadOrderResult }
+  | { kind: 'report'; tag: string; severity: string; message: string; detail: string | undefined };
+
+const STOPPED = 'mEdit stopped. Reload the window to start it again.';
+
 function wired(status: 'running' | 'stopped' = 'running') {
   const client = new InMemoryMEditClient();
   client.answerPuts(() => Promise.resolve(APPLIED));
@@ -27,13 +36,17 @@ function wired(status: 'running' | 'stopped' = 'running') {
   const told: Told[] = [];
   const tellListeners: (() => void)[] = [];
   let tellFailure: Error | undefined;
-  const tell = (what: Told): Promise<void> => {
+  const tell = (what: Told): void => {
     told.push(what);
     for (const listener of tellListeners.splice(0)) listener();
     const failure = tellFailure;
     tellFailure = undefined;
-    return failure ? Promise.reject(failure) : Promise.resolve();
+    if (failure) throw failure;
   };
+  const reporterFor = (tag: string): Reporter => ({
+    ...recordingReporter(),
+    report: (severity, message, detail) => { tell({ kind: 'report', tag, severity, message, detail }); },
+  });
   const logged: string[] = [];
   const toldCount = (count: number): Promise<void> => new Promise((resolve) => {
     const check = (): void => { if (told.length >= count) resolve(); else tellListeners.push(check); };
@@ -41,7 +54,7 @@ function wired(status: 'running' | 'stopped' = 'running') {
   });
   const around: { entered: number; settled: boolean; told: number[] } = { entered: 0, settled: false, told: [] };
   const flow = editingFlow({
-    client, instanceRoot: '/instance', tell, log: (line) => { logged.push(line); },
+    client, instanceRoot: '/instance', reporterFor, onPut: (put) => { tell({ kind: 'put', put }); return Promise.resolve(); }, log: (line) => { logged.push(line); },
     around: async (entry) => { around.entered++; await entry(); around.settled = true; around.told.push(told.length); },
   });
   const putPluginNames = (): string[] => client.puts().map((put) => put.plugins.map((p) => p.name).join());
@@ -83,7 +96,7 @@ describe('the load order is put at every recompute', () => {
     expect(putPluginNames()).toEqual([]);
   });
 
-  it('tells mEdit not coming up to take the snapshot as the backend failing, once', async () => {
+  it('reports mEdit not coming up to take the snapshot as stopped under the entry report, once', async () => {
     const { client, told, land } = wired('stopped');
     client.answerStart(() => Promise.resolve());
 
@@ -92,10 +105,10 @@ describe('the load order is put at every recompute', () => {
     await client.latestLoadOrder();
     await settle();
 
-    expect(told).toEqual([{ kind: 'backendFailed' }]);
+    expect(told).toEqual([{ kind: 'report', tag: 'enterEditing', severity: 'error', message: STOPPED, detail: undefined }]);
   });
 
-  it('tells a launch that threw as a failed launch with its reason, once', async () => {
+  it('reports a launch that threw as stopped under the launch report with its reason, once', async () => {
     const { client, told, land } = wired('stopped');
     client.answerStart(() => Promise.reject(new Error('no port')));
 
@@ -104,7 +117,7 @@ describe('the load order is put at every recompute', () => {
     await client.latestLoadOrder();
     await settle();
 
-    expect(told).toEqual([{ kind: 'launchFailed', reason: 'no port' }]);
+    expect(told).toEqual([{ kind: 'report', tag: 'launch', severity: 'error', message: STOPPED, detail: 'no port' }]);
   });
 });
 
@@ -183,7 +196,7 @@ const until = async (check: () => boolean): Promise<void> => {
 };
 
 describe('mEdit exiting', () => {
-  it('is told as exited, once, and shows nothing', async () => {
+  it('is reported as stopped under its own report, once, and shows nothing', async () => {
     const { client, around, told, toldCount, land } = wired();
     land(valueWith('A.esp'));
     await toldCount(1);
@@ -192,7 +205,7 @@ describe('mEdit exiting', () => {
     await toldCount(2);
     await settle();
 
-    expect(told.slice(1)).toEqual([{ kind: 'exited' }]);
+    expect(told.slice(1)).toEqual([{ kind: 'report', tag: 'mEditExit', severity: 'error', message: STOPPED, detail: undefined }]);
     expect(around.entered).toBe(0);
   });
 
@@ -203,7 +216,7 @@ describe('mEdit exiting', () => {
     await client.start();
     await settle();
 
-    expect(told).toEqual([{ kind: 'launchFailed', reason: 'no port' }]);
+    expect(told).toEqual([{ kind: 'report', tag: 'launch', severity: 'error', message: STOPPED, detail: 'no port' }]);
   });
 });
 

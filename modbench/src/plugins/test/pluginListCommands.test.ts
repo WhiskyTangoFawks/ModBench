@@ -33,7 +33,7 @@ import { PLUGINS_KEY_ARGS } from '../gestureEntry';
 import type { RecordBrowserNode } from '../RecordBrowser';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 import { cellRow, placedRow, recordGroupRow, recordRow, worldspaceRow } from './browserRows';
-import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
+import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
 import { pluginsTreeOver } from './pluginsTreeOver';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';

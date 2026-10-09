@@ -1,5 +1,5 @@
 import { kindGuard } from '../drivingLib/gestureEntry';
-import type { PluginsTreeNode } from './PluginsTreeProvider';
+import type { PluginsTreeNode } from './pluginRows';
 
 /** The `args` a Plugins key passes, so a command other surfaces share knows the key is the
  *  Plugins view's. */

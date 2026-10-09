@@ -8,10 +8,10 @@ import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { SourceEditing } from '../drivingLib/sourceEditing';
 import { originFiles } from '../instanceLoader/loadOrderSnapshot';
-import type { Instance, InstanceValue } from '../instanceLoader/instance';
-import { reportSyncFailures, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
-import type { PluginSync } from './pluginSync';
-import { PluginsTreeProvider, type PluginsInstance, type PluginsTreeNode } from './PluginsTreeProvider';
+import type { Instance, InstanceValue, PluginSyncArguments } from '../instanceLoader/instance';
+import { reportSyncFailures, type Sync, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
+import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider';
+import { type PluginsTreeNode } from './pluginRows';
 import type { PluginFactsClient } from './pluginFactsFeed';
 import type { RecordBrowser } from './RecordBrowser';
 import { publishPluginWarnings } from './loadDiagnostics';
@@ -64,7 +64,7 @@ export interface PluginsViewDeps {
   /** The Mods view's id, whose bar a track from a Mods row runs under. */
   modsView: string;
   /** Plugin sync, whose failure the view's message line says. */
-  pluginSync: PluginSync;
+  pluginSync: Sync<PluginSyncArguments>;
   channel: SyncChannel;
   /** The path of a file at the root of the Data folder, answered by a box this view does not
    *  reference. */

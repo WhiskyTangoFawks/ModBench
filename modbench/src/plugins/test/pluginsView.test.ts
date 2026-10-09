@@ -108,8 +108,11 @@ vi.mock('vscode', () => {
 
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { createPluginsView } from '../pluginsView';
-import { createPluginSync, type PluginSync } from '../pluginSync';
-import { NO_PLUGINS_MESSAGE, PluginNode } from '../PluginsTreeProvider';
+import { createSync, type Sync } from '../../drivingLib/syncFailureReport';
+import type { PluginSyncArguments } from '../../instanceLoader/instance';
+import type { PluginSyncResult } from '../../pluginsCommands/plugins';
+import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
+import { PluginNode } from '../pluginRows';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import type { PluginMetadata, RecordSummary } from '../../client';
@@ -144,6 +147,11 @@ const tick = (over: Partial<NonNullable<NotificationEvent['loadOrderStatus']>> =
 
 const silentChannel = { error: vi.fn(), info: vi.fn() };
 
+const createPluginSync = (sync: (args: PluginSyncArguments) => Promise<PluginSyncResult>, channel: typeof silentChannel) =>
+  createSync(sync, channel, {
+    command: 'plugin sync', prefix: '[pluginsCommands]', unsynced: 'plugins.txt is not synced', added: 'plugins.txt lines added', dropped: 'plugins.txt lines dropped',
+  });
+
 function syncRefusing() {
   let refusal: string | undefined;
   const pluginSync = createPluginSync(
@@ -162,7 +170,7 @@ function syncRefusing() {
 function pluginsView(
   value = instanceValueFixture(),
   { instance = new FakeInstance(value), client = new InMemoryMEditClient(), pluginSync = syncRefusing().pluginSync }:
-    { instance?: FakeInstance; client?: InMemoryMEditClient; pluginSync?: PluginSync } = {},
+    { instance?: FakeInstance; client?: InMemoryMEditClient; pluginSync?: Sync<PluginSyncArguments> } = {},
 ) {
   const recordBrowser = new RecordBrowser(client);
   const reporters = new Map<string, RecordingReporter>();

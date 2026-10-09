@@ -10,7 +10,7 @@ import { recordArgumentOf } from '../drivingLib/recordArgument';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { trackProgressMessage } from './trackProgress';
-import type { PluginsTreeNode } from './PluginsTreeProvider';
+import type { PluginsTreeNode } from './pluginRows';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { compilableSelected, PLUGINS_KEY_ARGS } from './gestureEntry';
 import { gestureEntry, isClickedRow, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';

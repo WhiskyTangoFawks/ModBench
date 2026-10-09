@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
-import type { PluginNode, PluginsTreeNode } from './PluginsTreeProvider';
+import type { PluginNode, PluginsTreeNode } from './pluginRows';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
 import { reportPluginsParticipation } from './pluginParticipationCommands';
 import { runWritingGesture } from '../drivingLib/writingGesture';

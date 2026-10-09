@@ -7,7 +7,8 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { isPluginAddress } from '../wire/messages';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
-import { PluginNode, type PluginsTreeNode, type PluginsTreeProvider } from './PluginsTreeProvider';
+import { type PluginsTreeProvider } from './PluginsTreeProvider';
+import { PluginNode, type PluginsTreeNode } from './pluginRows';
 
 const isAddresses = (value: unknown): value is PluginAddress[] => Array.isArray(value) && value.every(isPluginAddress);
 
