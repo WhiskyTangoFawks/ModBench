@@ -215,7 +215,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
 
   it('adds no line for a failure mEdit answers, however its text changes, and keeps the language status current', async () => {
     const { answered, reporter, status } = feed({});
-    const failed = (failure: string): PluginProblems[] => [{ plugin: PLUGIN, problems: [], failure }];
+    const failed = (failure: string): PluginProblems[] => [{ plugin: PLUGIN, problems: [], failure, failureKind: 'LaterRead' }];
 
     await answered(failed('Unexpected end at 1.'));
     await answered(failed('Unexpected end at 2.'));
@@ -226,14 +226,28 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     expect(status.at(-1)).toBe('Showing the last good read: "Refers.esp" (ReferringMod): Unexpected end at 3.');
   });
 
+  it('tells of a placement failure once while its reason stands and again when it changes', async () => {
+    const { answered, reporter } = feed({});
+    const failed = (failure: string): PluginProblems[] => [{ plugin: PLUGIN, problems: [], failure, failureKind: 'Placement' }];
+
+    await answered(failed('Refers.esp\'s source holds no file for 000800:Refers.esp.'));
+    await answered(failed('Refers.esp\'s source holds no file for 000800:Refers.esp.'));
+    await answered(failed('Refers.esp is tracked but no mod folder provides it.'));
+
+    expect(reporter.shownOnSurface.mock.calls).toEqual([
+      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'Refers.esp\'s source holds no file for 000800:Refers.esp.'],
+      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'Refers.esp is tracked but no mod folder provides it.'],
+    ]);
+  });
+
   it('shows the problems mEdit placed for a plugin whose other problems it could not place', async () => {
     const { answered, reporter } = feed({ '/mods/ReferringMod/Refers.esp/Stray.json': '{' });
     const stray = problem({ formKey: null, targetFormKey: null, fieldPath: null, sourceRelativePath: 'Refers.esp/Stray.json', message: 'unreadable' });
 
-    const shown = await answered([{ plugin: PLUGIN, problems: [stray], failure: 'Refers.esp\'s source could not place 000800:Refers.esp.' }]);
+    const shown = await answered([{ plugin: PLUGIN, problems: [stray], failure: 'Refers.esp\'s source could not place 000800:Refers.esp.', failureKind: 'Placement' }]);
 
     expect([...shown.keys()]).toEqual(['/mods/ReferringMod/Refers.esp/Stray.json']);
-    expect(reporter.shownOnSurface).not.toHaveBeenCalled();
+    expect(reporter.shownOnSurface).toHaveBeenCalledTimes(1);
   });
 
   it('tells of a plugin whose mod the instance holds no folder for, rather than dropping its problems', async () => {

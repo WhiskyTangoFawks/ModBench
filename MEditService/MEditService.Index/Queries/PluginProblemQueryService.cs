@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
@@ -15,9 +16,21 @@ public sealed record SourceProblem(
         new(failure.FormKey, null, null, failure.SourceRelativePath, failure.Message);
 }
 
-/// <summary><paramref name="Failure"/> is set when the plugin's links could not be placed on files, or its
-/// rows are the last good read's, so its <paramref name="Problems"/> are not a clean bill (ADR-0019).</summary>
-public sealed record PluginProblems(PluginAddress Plugin, IReadOnlyList<SourceProblem> Problems, string? Failure = null);
+/// <summary>Why a plugin's <see cref="PluginProblems.Problems"/> are not a clean bill (ADR-0019).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ProblemsFailureKind
+{
+    /// <summary>Its links could not be placed on files; mEdit does not log this.</summary>
+    Placement,
+    /// <summary>Its rows are the last good read's; mEdit logs this once when it begins.</summary>
+    LaterRead,
+}
+
+/// <summary><paramref name="Failure"/> is set, with its <paramref name="FailureKind"/>, when the plugin's links
+/// could not be placed on files, or its rows are the last good read's, so its <paramref name="Problems"/> are
+/// not a clean bill (ADR-0019).</summary>
+public sealed record PluginProblems(
+    PluginAddress Plugin, IReadOnlyList<SourceProblem> Problems, string? Failure = null, ProblemsFailureKind? FailureKind = null);
 
 /// <summary>The Problems panel's source, per tracked plugin, active or not. A plugin whose read
 /// failed is answered with the files that stopped it, and the links of rows its tree gave.</summary>
@@ -62,8 +75,8 @@ public sealed class PluginProblemQueryService
     private static PluginProblems ProblemsOf(
         PluginAddress plugin, GameRelease release, IReadOnlyList<SourceFileFailure>? laterReadFailure, List<SourceProblem> stoppedAt,
         List<MissingReferenceOnFile> rows) =>
-        FailureOf(laterReadFailure, rows) is { } failure
-            ? new(plugin, stoppedAt, failure)
+        FailureOf(laterReadFailure, rows) is var (failure, kind) && failure is not null
+            ? new(plugin, stoppedAt, failure, kind)
             : new(plugin, [.. stoppedAt, .. rows.Select(row => Problem(row, release))]);
 
     private static SourceProblem Problem(MissingReferenceOnFile row, GameRelease release) =>
@@ -73,10 +86,12 @@ public sealed class PluginProblemQueryService
             row.SourceRelativePath ?? throw new InvalidOperationException($"Expected {row.Reference.FormKey} to be placed."),
             $"{row.Reference.FieldPath}: {Unresolved(row.Reference.TargetFormKey, release)}");
 
-    private static string? FailureOf(IReadOnlyList<SourceFileFailure>? laterReadFailure, List<MissingReferenceOnFile> rows) =>
-        laterReadFailure is { } files
-            ? string.Join(" ", files.Select(file => file.Message))
-            : rows.FirstOrDefault(row => row.Failure is not null)?.Failure;
+    private static (string? Failure, ProblemsFailureKind? Kind) FailureOf(IReadOnlyList<SourceFileFailure>? laterReadFailure, List<MissingReferenceOnFile> rows)
+    {
+        if (laterReadFailure is { } files) return (string.Join(" ", files.Select(file => file.Message)), ProblemsFailureKind.LaterRead);
+        var placement = rows.FirstOrDefault(row => row.Failure is not null)?.Failure;
+        return (placement, placement is null ? null : ProblemsFailureKind.Placement);
+    }
 
     // The grid's and compile's own wording for a link no record answers, from the same builder.
     private static string Unresolved(string target, GameRelease release)

@@ -144,6 +144,7 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
         var answer = Assert.Single(Ready(index));
         Assert.Equivalent(new[] { document, backup }, answer.Problems.Select(p => p.SourceRelativePath), strict: true);
         Assert.Contains(Broken.Referrer, answer.Failure, StringComparison.Ordinal);
+        Assert.Equal(ProblemsFailureKind.Placement, answer.FailureKind);
     }
 
     [Fact]
@@ -207,6 +208,7 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
         var failed = Assert.Single(answer, p => p.Plugin == Entry(gone).KeyOf());
         Assert.Empty(failed.Problems);
         Assert.Contains(gone.Referrer, failed.Failure, StringComparison.Ordinal);
+        Assert.Equal(ProblemsFailureKind.Placement, failed.FailureKind);
         Assert.Single(Assert.Single(answer, p => p.Plugin == Entry(intact).KeyOf()).Problems);
     }
 
@@ -234,6 +236,7 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
         var unprovided = Assert.Single(answered);
         Assert.Empty(unprovided.Problems);
         Assert.Contains("no mod folder provides it", unprovided.Failure, StringComparison.Ordinal);
+        Assert.Equal(ProblemsFailureKind.Placement, unprovided.FailureKind);
     }
 
     [Fact]

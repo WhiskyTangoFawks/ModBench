@@ -101,6 +101,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         Assert.Contains("is no record document", stop.Message, StringComparison.Ordinal);
         var problems = ProblemsOfTracked();
         Assert.Contains(stop.Message, problems.Failure, StringComparison.Ordinal);
+        Assert.Equal(ProblemsFailureKind.LaterRead, problems.FailureKind);
         Assert.Contains(problems.Problems, problem => problem.SourceRelativePath == stop.SourceRelativePath && problem.Message == stop.Message);
     }
 
