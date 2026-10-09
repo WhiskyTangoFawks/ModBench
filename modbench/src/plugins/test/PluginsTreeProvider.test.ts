@@ -7,9 +7,9 @@ import type { InstanceValue } from '../../instanceLoader/instance';
 import {
   type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,
   type WorldspaceSummary, type InteriorCellBlock, type RecordSummary, type CellChildRecords,
-  type ContainerChildSummary, type CellSummary, type ChildRecordSummary,
+  type ContainerChildSummary, type CellSummary, type ChildRecordSummary, type MEditClient,
 } from '../../client';
-import type { WorldspaceBlocks } from '../../client/apiClient';
+import type { ReadFailed } from '../../wire/readFailed';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
@@ -117,6 +117,8 @@ function recordSummary(overrides: Partial<RecordSummary> = {}): RecordSummary {
 function diagnosis(pluginName: string, text: string, origin = 'SomeMod'): PluginDiagnosisReport {
   return { plugin: pluginName, origin, defectClass: 'fixed-size-subrecord-short', message: text, text };
 }
+
+type WorldspaceBlocks = Exclude<Awaited<ReturnType<MEditClient['getWorldspaceBlocks']>>, ReadFailed>;
 
 function makeClient(overrides: Partial<{
   plugins: PluginMetadata[];
