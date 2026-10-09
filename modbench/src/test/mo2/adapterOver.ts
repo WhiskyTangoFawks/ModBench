@@ -4,6 +4,7 @@ import type {
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
 import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
 import { providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
+import { pluginsCommands, type PluginsCommands } from '../../pluginsCommands/plugins';
 import type { Instance } from '../../instanceLoader/instance';
 
 /** The adapter's answers a test fixes in place of asking the machine it runs on. */
@@ -74,4 +75,25 @@ export async function providedPluginsIn(root: string, profile = 'Default'): Prom
   const [entries, runtimeOutput] = await Promise.all([adapter.modOrder(profile), adapter.originFiles({ kind: 'runtimeOutput' })]);
   const index = await buildFileConflictIndex(entries, runtimeOutput.files, adapter, () => {});
   return providedPluginsOf(index.files);
+}
+
+type PluginsCommandsClient = Parameters<typeof pluginsCommands>[0]['client'];
+
+/** The Plugins commands bound to `adapter` and a client that answers only what a test fixes. */
+export function pluginsCommandsWith(adapter: InstanceAdapter, client: Partial<PluginsCommandsClient> = {}): PluginsCommands {
+  const unanswered = () => Promise.reject(new Error('this test fixed no answer'));
+  return pluginsCommands({
+    adapter,
+    client: {
+      getPlugins: client.getPlugins?.bind(client) ?? unanswered,
+      getRenameSourceChanges: client.getRenameSourceChanges?.bind(client) ?? unanswered,
+      moveLastWritten: client.moveLastWritten?.bind(client) ?? unanswered,
+      getPluginDependants: client.getPluginDependants?.bind(client) ?? unanswered,
+    },
+  });
+}
+
+/** `pluginsCommandsWith` over MO2's adapter on `root`. */
+export function pluginsCommandsOver(root: string, client: Partial<PluginsCommandsClient> = {}): PluginsCommands {
+  return pluginsCommandsWith(adapterOver(root), client);
 }

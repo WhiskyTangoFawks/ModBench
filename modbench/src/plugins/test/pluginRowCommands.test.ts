@@ -45,6 +45,7 @@ import {
   registerTrackCommand, registerCompileCommand, registerDecompileCommand, CompileProblems,
 } from '../pluginRowCommands';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
+import { pluginSourceFolderOf } from '../../instanceAdapter/instanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type PluginAddress } from '../../client';
@@ -333,7 +334,10 @@ describe('modbench.plugin.compile', () => {
       instance: instanceThatReads,
       reporter, problems: new CompileProblems(diagnostics),
       originFiles: (origin) => (origin === 'ModA' || origin === 'ModB' ? originFiles(FILES, origin) : undefined),
-      saveUnsaved: (folder) => {
+      saveUnsaved: ({ name, origin }) => {
+        const files = origin === 'ModA' || origin === 'ModB' ? originFiles(FILES, origin) : undefined;
+        if (files === undefined) return Promise.resolve(undefined);
+        const folder = files.file(pluginSourceFolderOf(name));
         progressSteps.push(`save ${folder}`);
         return Promise.resolve(options.unsaved?.[folder] ?? []);
       },

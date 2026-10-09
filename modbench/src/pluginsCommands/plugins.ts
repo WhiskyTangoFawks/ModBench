@@ -6,6 +6,8 @@ import type { CommandResult, SelectionResult } from '../coreLib/commandResult';
 export type { SelectionResult };
 import { refuse } from '../ports/refuse';
 import type { MEditClient, PluginAddress } from '../client';
+import type { TailOf } from '../coreLib/boundCommand';
+import { pluginRenameCommands, type PluginRenameClient } from './renamePlugin';
 import { moveOrderRefusal, type PluginOrderFactsOf } from './pluginOrder';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type {
@@ -33,10 +35,10 @@ export interface PluginParticipation {
   enabled: boolean;
 }
 
-/** `modbench.plugin.enable` / `modbench.plugin.disable` and the check box, over the whole
- *  selection in one write (commands.md, "A selection is one gesture") — every entry lands or is
- *  refused by name, whatever state each one asks for. */
-export async function setPluginsParticipation(
+// `modbench.plugin.enable` / `modbench.plugin.disable` and the check box, over the whole
+//  selection in one write (commands.md, "A selection is one gesture") — every entry lands or is
+//  refused by name, whatever state each one asks for.
+async function setPluginsParticipation(
   adapter: InstanceAdapter, profile: string, entries: readonly PluginParticipation[],
 ): Promise<SelectionResult<string>> {
   let landed: string[] = [];
@@ -52,9 +54,9 @@ export async function setPluginsParticipation(
   return outcome.applied ? { applied: true, outcome: { landed, refused } } : outcome;
 }
 
-/** `setPluginsParticipation`, one state for the whole selection — the menu and the key's own
- *  shape, which never mixes directions in one gesture. */
-export function setPluginsEnabled(
+// `setPluginsParticipation`, one state for the whole selection — the menu and the key's own
+//  shape, which never mixes directions in one gesture.
+function setPluginsEnabled(
   adapter: InstanceAdapter, profile: string, pluginNames: readonly string[], enabled: boolean,
 ): Promise<SelectionResult<string>> {
   return setPluginsParticipation(adapter, profile, pluginNames.map((name) => ({ name, enabled })));
@@ -63,7 +65,7 @@ export function setPluginsEnabled(
 /** Where a drag landed in the Plugins tree. */
 export type { Drop as PluginsDrop } from './dropIndex';
 
-export type PluginMasters = Pick<MEditClient, 'getPlugins'>;
+type PluginMasters = Pick<MEditClient, 'getPlugins'>;
 
 // The game loads one copy of a name: the one in the load order (ADR-0012). Several copies with
 // none in it name no one copy, so none is judged; nor is anything while mEdit cannot answer.
@@ -78,8 +80,8 @@ async function orderFactsFrom(masters: PluginMasters): Promise<PluginOrderFactsO
   };
 }
 
-export async function reorderPlugins(
-  adapter: InstanceAdapter, masters: PluginMasters, profile: string, plugins: readonly PluginAddress[], drop: Drop,
+async function reorderPlugins(
+  { adapter, client: masters }: { adapter: InstanceAdapter; client: PluginMasters }, profile: string, plugins: readonly PluginAddress[], drop: Drop,
   loadedWithNoLine: readonly string[],
 ): Promise<CommandResult> {
   const pluginNames = plugins.map((plugin) => plugin.name);
@@ -168,3 +170,15 @@ export type PluginSyncRun = (inputs: PluginSyncInputs) => Promise<PluginSyncResu
 export function pluginSyncOver(adapter: InstanceAdapter): PluginSyncRun {
   return (inputs) => syncPlugins(adapter, inputs);
 }
+
+/** The Plugins commands, bound to one instance and one mEdit client: each takes the gesture's arguments only. */
+export function pluginsCommands({ adapter, client }: { adapter: InstanceAdapter; client: PluginMasters & PluginRenameClient }) {
+  return {
+    setPluginsParticipation: (...args: TailOf<typeof setPluginsParticipation>) => setPluginsParticipation(adapter, ...args),
+    setPluginsEnabled: (...args: TailOf<typeof setPluginsEnabled>) => setPluginsEnabled(adapter, ...args),
+    reorderPlugins: (...args: TailOf<typeof reorderPlugins>) => reorderPlugins({ adapter, client }, ...args),
+    ...pluginRenameCommands({ adapter, client }),
+  };
+}
+
+export type PluginsCommands = ReturnType<typeof pluginsCommands>;

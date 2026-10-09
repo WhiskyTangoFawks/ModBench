@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { LoadOrderOutcome, LoadOrderProgress } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { putLoadOrder, refresh, type LoadOrderSource } from '../loadOrder';
+import { putLoadOrder, type LoadOrderSource } from '../loadOrder';
 
 const READY_STATUS: LoadOrderProgress = {
   totalPlugins: 1, activePlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
@@ -84,37 +84,5 @@ describe('put load order, refused by the loader', () => {
 
     expect(client.calls).toEqual([]);
     expect(result).toEqual({ sent: false, refusal: 'a.esp has no mod folder' });
-  });
-});
-
-describe('refresh', () => {
-  it('rebuilds the index for the instance, so mEdit reads every plugin again against the load order it holds, and sends nothing', async () => {
-    const client = attachedClient();
-    client.setCommandResult('rebuildIndex', { rebuilt: true });
-
-    const result = await refresh(client, '/instance', VALUE);
-
-    expect(client.calls.map((c) => [c.method, ...c.args])).toEqual([['rebuildIndex', '/instance', 'Fallout4']]);
-    expect(result).toEqual({ applied: true });
-  });
-
-  it('sends nothing and reports held-elsewhere by name, apart from the generic refusal every other failure gets', async () => {
-    const client = attachedClient();
-    client.setCommandResult('rebuildIndex', { rebuilt: false, heldElsewhere: true });
-
-    const result = await refresh(client, '/instance', VALUE);
-
-    expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
-    expect(result).toEqual({ applied: false, heldElsewhere: true });
-  });
-
-  it('sends nothing and returns the reason for every other refused rebuild', async () => {
-    const client = attachedClient();
-    client.setCommandResult('rebuildIndex', { rebuilt: false, heldElsewhere: false, detail: 'Failed to rebuild the store.' });
-
-    const result = await refresh(client, '/instance', VALUE);
-
-    expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
-    expect(result).toEqual({ applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' });
   });
 });

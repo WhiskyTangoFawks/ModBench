@@ -8,9 +8,11 @@ const h = vi.hoisted(() => ({ textDocuments: [] as unknown[] }));
 
 vi.mock('vscode', () => ({ workspace: { get textDocuments() { return h.textDocuments; } } }));
 
-import { saveDirtyPluginSource } from '../dirtyPluginSource';
+import { savePluginSource } from '../dirtyPluginSource';
 
 const FOLDER = '/mods/ModA/plugin-source/A.esp';
+const PLUGIN = { name: 'A.esp', origin: 'ModA' };
+const ORIGIN_FILES = (origin: string) => (origin === 'ModA' ? { file: (relative: string) => `/mods/ModA/${relative}` } : undefined);
 const CELL = `${FOLDER}/Cells/Cell.json`;
 
 function document(scheme: string, fsPath: string, options: { saves?: boolean } = {}): FakeDocument {
@@ -28,7 +30,7 @@ describe('saving the unsaved plugin source of a plugin\'s folder', () => {
     const cell = document('file', CELL);
     h.textDocuments = [cell];
 
-    expect(await saveDirtyPluginSource(FOLDER)).toEqual([]);
+    expect(await savePluginSource(ORIGIN_FILES, PLUGIN)).toEqual([]);
     expect(cell.save).toHaveBeenCalledOnce();
   });
 
@@ -39,7 +41,7 @@ describe('saving the unsaved plugin source of a plugin\'s folder', () => {
     clean.isDirty = false;
     h.textDocuments = [other, prefixed, clean];
 
-    expect(await saveDirtyPluginSource(FOLDER)).toEqual([]);
+    expect(await savePluginSource(ORIGIN_FILES, PLUGIN)).toEqual([]);
     for (const untouched of [other, prefixed, clean]) expect(untouched.save).not.toHaveBeenCalled();
   });
 
@@ -47,7 +49,7 @@ describe('saving the unsaved plugin source of a plugin\'s folder', () => {
     const cell = document('file', '/Mods/ModA/Plugin-Source/a.esp/Cells/Cell.json');
     h.textDocuments = [cell];
 
-    await saveDirtyPluginSource(FOLDER);
+    await savePluginSource(ORIGIN_FILES, PLUGIN);
 
     expect(cell.save).toHaveBeenCalledOnce();
   });
@@ -58,7 +60,7 @@ describe('saving the unsaved plugin source of a plugin\'s folder', () => {
     file.save.mockImplementation(() => { file.isDirty = false; child.isDirty = false; return Promise.resolve(true); });
     h.textDocuments = [file, child];
 
-    expect(await saveDirtyPluginSource(FOLDER)).toEqual([]);
+    expect(await savePluginSource(ORIGIN_FILES, PLUGIN)).toEqual([]);
     expect(file.save).toHaveBeenCalledOnce();
     expect(child.save).not.toHaveBeenCalled();
   });
@@ -66,6 +68,6 @@ describe('saving the unsaved plugin source of a plugin\'s folder', () => {
   it('answers the path of a document VS Code did not save, once', async () => {
     h.textDocuments = [document('file', CELL, { saves: false }), document('modbench-child-record', CELL, { saves: false })];
 
-    expect(await saveDirtyPluginSource(FOLDER)).toEqual([CELL]);
+    expect(await savePluginSource(ORIGIN_FILES, PLUGIN)).toEqual([CELL]);
   });
 });

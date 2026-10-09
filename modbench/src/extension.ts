@@ -11,7 +11,7 @@ import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFo
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage } from './sourceLanguage';
-import { saveDirtyPluginSource } from './sourceLanguage/dirtyPluginSource';
+import { savePluginSource } from './sourceLanguage/dirtyPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
 import type { RecordWrite } from './drivingLib/writingGesture';
@@ -39,7 +39,7 @@ import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import { openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
-import { pluginSyncOver } from './pluginsCommands/plugins';
+import { pluginsCommands, pluginSyncOver } from './pluginsCommands/plugins';
 import { modSyncOver, modlistCommands } from './modlist/modlist';
 import { warnIfFomod } from './install/fomodWarning';
 import { installCommands } from './install/install';
@@ -56,7 +56,8 @@ import type { MoveToTrash } from './ports/trash';
 type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
-  'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'>;
+  'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
+  | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -137,8 +138,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const trackSelection = selectionInFocusedView(
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
   const plugins = own(createPluginsView({
-    instance, adapter, recordBrowser, client: pluginFacts, pluginSync, channel: outputChannel, statusBar, registerRepositories, reporterFor,
-    ask, recordWrite, sourceEditing: deps.sourceEditing, saveUnsavedPluginSource: saveDirtyPluginSource, trackSelection, modsView: MODS_KEY_ARGS.view,
+    instance, commands: pluginsCommands({ adapter, client }), recordBrowser, client: pluginFacts, pluginSync, channel: outputChannel, statusBar, registerRepositories, reporterFor,
+    ask, recordWrite, sourceEditing: deps.sourceEditing, saveUnsavedPluginSource: (plugin) => savePluginSource((origin) => originFiles(instance.value, origin), plugin), trackSelection, modsView: MODS_KEY_ARGS.view,
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     log: (level, msg) => outputChannel[level](msg),
   }));

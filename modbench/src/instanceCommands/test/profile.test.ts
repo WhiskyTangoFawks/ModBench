@@ -5,13 +5,17 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { switchProfile } from '../profile';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { instanceCommands } from '../instanceCommands';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 import { adapterOver } from '../../test/mo2/adapterOver';
 
 const INI = 'ModOrganizer.ini';
 
 const CORPUS_FIXTURE_PROFILE_DIRECTORIES = ['Default', 'Secondary'];
+
+const switchProfileOver = (root: string) =>
+  instanceCommands({ adapter: adapterOver(root), client: new InMemoryMEditClient(), instanceRoot: root }).switchProfile;
 
 const iniText = (root: string): Promise<string> => readFile(join(root, INI), 'utf8');
 
@@ -24,7 +28,7 @@ describe('switchProfile', () => {
   it('repoints ModOrganizer.ini and nothing else', async () => {
     const before = await snapshotTree(root);
 
-    const outcome = await switchProfile(adapterOver(root), 'Secondary', CORPUS_FIXTURE_PROFILE_DIRECTORIES);
+    const outcome = await switchProfileOver(root)('Secondary', CORPUS_FIXTURE_PROFILE_DIRECTORIES);
 
     expect(outcome).toEqual({ applied: true, wrote: true });
     expect(await iniText(root)).toContain('Secondary');
@@ -34,7 +38,7 @@ describe('switchProfile', () => {
   it('writes nothing when the profile is already the selected one, so the ModOrganizer.ini watcher does not fire on a gesture that changed no byte', async () => {
     const before = await snapshotTree(root);
 
-    const outcome = await switchProfile(adapterOver(root), 'Default', CORPUS_FIXTURE_PROFILE_DIRECTORIES);
+    const outcome = await switchProfileOver(root)('Default', CORPUS_FIXTURE_PROFILE_DIRECTORIES);
 
     expect(outcome).toEqual({ applied: true, wrote: false });
     assertOnlyChanged(before, await snapshotTree(root), new Set());
@@ -43,7 +47,7 @@ describe('switchProfile', () => {
   it('refuses a name the value does not list, leaving the selection where it was, as a later read under a missing directory looks like a corrupt ini', async () => {
     const before = await iniText(root);
 
-    const outcome = await switchProfile(adapterOver(root), 'No Such Profile', CORPUS_FIXTURE_PROFILE_DIRECTORIES);
+    const outcome = await switchProfileOver(root)('No Such Profile', CORPUS_FIXTURE_PROFILE_DIRECTORIES);
 
     expect(outcome).toEqual({ applied: false, refusal: 'No such profile: No Such Profile' });
     expect(await iniText(root)).toBe(before);
@@ -52,7 +56,7 @@ describe('switchProfile', () => {
   it('refuses on the list it is handed, never on what it finds under profiles/, where "Secondary" is a real directory in the fixture', async () => {
     const before = await iniText(root);
 
-    const outcome = await switchProfile(adapterOver(root), 'Secondary', ['Default']);
+    const outcome = await switchProfileOver(root)('Secondary', ['Default']);
 
     expect(outcome).toEqual({ applied: false, refusal: 'No such profile: Secondary' });
     expect(await iniText(root)).toBe(before);
@@ -61,7 +65,7 @@ describe('switchProfile', () => {
   it('refuses rather than throwing when ModOrganizer.ini cannot be read', async () => {
     await rm(join(root, INI));
 
-    const outcome = await switchProfile(adapterOver(root), 'Secondary', CORPUS_FIXTURE_PROFILE_DIRECTORIES);
+    const outcome = await switchProfileOver(root)('Secondary', CORPUS_FIXTURE_PROFILE_DIRECTORIES);
 
     expect(outcome).toMatchObject({ applied: false });
     expect(!outcome.applied && outcome.refusal).toMatch(/ENOENT/);
@@ -69,8 +73,8 @@ describe('switchProfile', () => {
 
   it('serializes concurrent switches — the last one issued is the selected one', async () => {
     const [first, second] = await Promise.all([
-      switchProfile(adapterOver(root), 'Secondary', CORPUS_FIXTURE_PROFILE_DIRECTORIES),
-      switchProfile(adapterOver(root), 'Default', CORPUS_FIXTURE_PROFILE_DIRECTORIES),
+      switchProfileOver(root)('Secondary', CORPUS_FIXTURE_PROFILE_DIRECTORIES),
+      switchProfileOver(root)('Default', CORPUS_FIXTURE_PROFILE_DIRECTORIES),
     ]);
 
     expect(first).toEqual({ applied: true, wrote: true });
