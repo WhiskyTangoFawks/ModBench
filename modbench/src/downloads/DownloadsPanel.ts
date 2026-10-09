@@ -1,12 +1,9 @@
 import * as vscode from 'vscode';
 import type { DownloadSortColumn } from './downloadRows';
-import {
-  deleteDownloads, excludeDownloads, includeDownloads, type DeletedDownload,
-} from '../downloadsCommands/downloads';
+import type { DeletedDownload, DownloadsCommands } from '../downloadsCommands/downloads';
 import type { DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS } from './keyContext';
 import { pluralArgument, registerGesture, singularArgument, type GestureEntry } from '../drivingLib/gestureEntry';
-import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { runWritingGesture } from '../drivingLib/writingGesture';
@@ -33,11 +30,11 @@ const NOTHING_CHANGED: SelectionOutcome<string> = { landed: [], refused: [] };
 // Metadata left behind is not a failure (downloads.md, Reporting story 2): the delete already
 // applied, so this is an Output-only line, never a notification.
 async function deleteSelection(
-  adapter: InstanceAdapter, instance: Pick<Instance, 'value' | 'refresh'>, rows: readonly DownloadFile[], reporter: Reporter,
+  commands: DownloadsCommands, instance: Pick<Instance, 'value' | 'refresh'>, rows: readonly DownloadFile[], reporter: Reporter,
   ask: AskQuestion, trash: MoveToTrash, log: (line: string) => void,
 ): Promise<SelectionOutcome<DeletedDownload>> {
   if (rows.length === 0 || !(await confirmDelete(rows.map((row) => row.name), ask))) return { landed: [], refused: [] };
-  const outcome = await runDownloadsWriting(instance, () => deleteDownloads(adapter, rows, trash));
+  const outcome = await runDownloadsWriting(instance, () => commands.deleteDownloads(rows, trash));
   reporter.selectionOutcome(
     `Could not delete ${outcome.refused.length} of ${rows.length} downloaded files.`, outcome, (item) => item.name);
   for (const item of outcome.landed) {
@@ -49,13 +46,13 @@ async function deleteSelection(
 }
 
 async function changeExcluded(
-  adapter: InstanceAdapter, instance: Pick<Instance, 'refresh'>, rows: readonly DownloadFile[], excluded: boolean,
+  commands: DownloadsCommands, instance: Pick<Instance, 'refresh'>, rows: readonly DownloadFile[], excluded: boolean,
   reporter: Reporter,
 ): Promise<SelectionOutcome<string>> {
   if (rows.length === 0) return NOTHING_CHANGED;
   const names = rows.map((row) => row.name);
   const outcome = await runDownloadsWriting(instance, () =>
-    excluded ? excludeDownloads(adapter, names) : includeDownloads(adapter, names));
+    excluded ? commands.excludeDownloads(names) : commands.includeDownloads(names));
   reporter.selectionOutcome(
     `Could not ${excluded ? 'exclude' : 'include'} ${outcome.refused.length} of ${rows.length} downloaded files.`,
     outcome, (name) => name);
@@ -89,17 +86,17 @@ export function registerDownloadsSingleRowCommands(
  *  tool's Hide All). `viewSelection` backs the Delete key and the palette, which get no row
  *  argument. */
 export function registerDownloadsMultiRowCommands(
-  adapter: InstanceAdapter, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  commands: DownloadsCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
   const rows = (entry: GestureEntry<DownloadsTreeNode>) => pluralArgument(entry, 'download').map((node) => node.argument.row);
   return [
     registerGesture('modbench.downloadedFile.delete', viewSelection, (entry) =>
-      deleteSelection(adapter, instance, rows(entry), reporter, ask, trash, log)),
+      deleteSelection(commands, instance, rows(entry), reporter, ask, trash, log)),
     registerGesture('modbench.downloadedFile.exclude', viewSelection, (entry) =>
-      changeExcluded(adapter, instance, rows(entry), true, reporter)),
+      changeExcluded(commands, instance, rows(entry), true, reporter)),
     registerGesture('modbench.downloadedFile.include', viewSelection, (entry) =>
-      changeExcluded(adapter, instance, rows(entry), false, reporter)),
+      changeExcluded(commands, instance, rows(entry), false, reporter)),
   ];
 }
 

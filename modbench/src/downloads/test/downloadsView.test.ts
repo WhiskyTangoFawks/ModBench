@@ -61,11 +61,12 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { adapterOver } from '../../test/mo2/adapterOver';
+import { downloadsCommands } from '../../downloadsCommands/downloads';
 
 type DownloadsViewDeps = Parameters<typeof createDownloadsView>[0];
 
 const downloadsViewDeps = (instanceRoot: string, instance: InstanceView & Pick<Instance, 'refresh'>): DownloadsViewDeps => ({
-  adapter: adapterOver(instanceRoot), instance, reporter: recordingReporter(),
+  commands: downloadsCommands(adapterOver(instanceRoot)), instance, reporter: recordingReporter(),
   ask: () => Promise.resolve(undefined), trash: () => Promise.resolve(),
   log: () => undefined,
   logUnresolved: () => undefined,
