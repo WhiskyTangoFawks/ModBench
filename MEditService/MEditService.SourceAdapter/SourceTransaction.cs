@@ -60,7 +60,7 @@ public sealed class SourceTransaction
         return _journal.Report(stop, _journal.UndoSince(0)) ?? stop;
     }
 
-    /// <summary>Makes each move of <paramref name="changes"/>, then writes each document, holding what each
+    /// <summary>Makes each move of <paramref name="changes"/>, then each deletion, then writes each document, holding what each
     /// replaced. Changes that failed stop the transaction, and nothing after them applies.</summary>
     public void Apply(SourceAnswer<SourceChanges> changes)
     {
@@ -71,11 +71,12 @@ public sealed class SourceTransaction
             return;
         }
 
-        var (moves, documents) = made.Under(_repository);
+        var absolute = made.Under(_repository);
         try
         {
-            foreach (var (from, to) in moves) _journal.Move(from, to);
-            foreach (var (path, text) in documents) _journal.WriteText(path, text);
+            foreach (var (from, to) in absolute.Moves) _journal.Move(from, to);
+            foreach (var path in absolute.Deletions) _journal.DeletePath(path);
+            foreach (var (path, text) in absolute.Documents) _journal.WriteText(path, text);
         }
         catch (Exception ex) when (SourceFailure.Of(ex) is { } stopped)
         {

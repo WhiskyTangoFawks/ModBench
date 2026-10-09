@@ -1,12 +1,16 @@
 namespace MEditService.SourceAdapter;
 
-/// <summary>What a write changes in one mod folder's plugin source, written nowhere: each move, then
-/// each document's new text at its path once moved. Paths are relative to the mod folder.</summary>
+/// <summary>What a write changes in one mod folder's plugin source, written nowhere: each move, then each
+/// deletion of a file or a folder with all it holds, then each document's new text at its path once moved.
+/// Paths are relative to the mod folder.</summary>
 public sealed record SourceChanges(IReadOnlyList<SourceMove> Moves, IReadOnlyList<DocumentChange> Documents)
 {
+    public IReadOnlyList<string> Deletions { get; init; } = [];
+
     public static SourceChanges None { get; } = new([], []);
 
-    internal SourceChanges Then(SourceChanges next) => new([.. Moves, .. next.Moves], [.. Documents, .. next.Documents]);
+    internal SourceChanges Then(SourceChanges next) =>
+        new([.. Moves, .. next.Moves], [.. Documents, .. next.Documents]) { Deletions = [.. Deletions, .. next.Deletions] };
 
     /// <summary>These changes with every path made absolute under <paramref name="repository"/>'s mod folder.</summary>
     public SourceChanges Under(SourceRepository repository)
@@ -14,7 +18,10 @@ public sealed record SourceChanges(IReadOnlyList<SourceMove> Moves, IReadOnlyLis
         var modFolder = repository.ModFolder;
         return new(
             [.. Moves.Select(move => new SourceMove(Path.Combine(modFolder, move.From), Path.Combine(modFolder, move.To)))],
-            [.. Documents.Select(document => document with { Path = Path.Combine(modFolder, document.Path) })]);
+            [.. Documents.Select(document => document with { Path = Path.Combine(modFolder, document.Path) })])
+        {
+            Deletions = [.. Deletions.Select(deletion => Path.Combine(modFolder, deletion))],
+        };
     }
 }
 

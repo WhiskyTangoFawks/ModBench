@@ -726,6 +726,40 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
+    public void ChangesToRemove_OfAnEmbeddedChild_RewritesItsOwnersDocument_AndWritesNothing()
+    {
+        var before = File.ReadAllText(FullPath(QuestPath));
+
+        var changes = Repository.ChangesToRemove(Plugin, Identity(_response, "info")).Value();
+
+        var owner = Assert.Single(changes.Documents);
+        Assert.Equal(FullPath(QuestPath), Path.Combine(_modFolder, owner.Path));
+        Assert.DoesNotContain("\"Response\"", owner.Text, StringComparison.Ordinal);
+        Assert.Contains("\"Response2\"", owner.Text, StringComparison.Ordinal);
+        Assert.Empty(changes.Deletions);
+        Assert.Equal(before, File.ReadAllText(FullPath(QuestPath)));
+    }
+
+    [Fact]
+    public void ChangesToRemove_OfAContainerWithADirectoryOfItsOwn_DeletesTheWholeDirectory_AndRemovesNothing()
+    {
+        var directory = Path.GetDirectoryName(FullPath(ExteriorCellPath)).Require();
+
+        var changes = Repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")).Value();
+
+        Assert.Equal([Path.GetRelativePath(_modFolder, directory)], changes.Deletions);
+        Assert.True(Directory.Exists(directory));
+    }
+
+    [Fact]
+    public void ChangesToRemove_OfARecordNoDocumentHolds_IsNotCarried_AndAnswersNoChanges()
+    {
+        var stopped = Repository.ChangesToRemove(Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent")).Stopped();
+
+        Assert.IsType<SourceFailure.NotCarried>(stopped);
+    }
+
+    [Fact]
     public void Remove_OfARecordNoDocumentHolds_SaysNoDocumentHoldsIt()
     {
         var refused = Assert.IsType<SourceFailure.NotCarried>(
