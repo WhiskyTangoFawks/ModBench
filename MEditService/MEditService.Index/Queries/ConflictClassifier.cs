@@ -16,13 +16,13 @@ internal sealed class ConflictClassifier(ILogger logger)
         GameRelease release,
         Func<string, RecordLookupEntry?> resolveFormKey,
         Func<string, uint?> loadOrderFormIds,
-        bool winnersFinal,
+        bool indexed,
         IReadOnlyList<RecordDetail>? outsideTheComparison = null)
     {
         // The fallback for a field no column carries; a lone override is its own winner. Until the
         // sweep has run none is flagged, so the last in load order stands in.
         var winner = conflictingRecords.Count == 1 ? 0 : conflictingRecords.ToList().FindIndex(o => o.IsWinner);
-        if (winner < 0 && !winnersFinal) winner = conflictingRecords.Count - 1;
+        if (winner < 0 && !indexed) winner = conflictingRecords.Count - 1;
         if (winner < 0)
             throw new InvalidOperationException(
                 $"No winner in {conflictingRecords.Count} overrides for FormKey '{conflictingRecords[0].FormKey}'");
@@ -31,7 +31,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         var shown = conflictingRecords.Concat(outsideTheComparison ?? []).ToList();
         var shownColumns = shown.Select(Column).ToList();
         var ctx = ContextOf(
-            shown, shownColumns, winner, release, resolveFormKey, loadOrderFormIds,
+            shown, shownColumns, winner, release, resolveFormKey, loadOrderFormIds, indexed,
             shadowed: shown.Where(r => r.IsPartialForm).Select(Column).ToHashSet(StringComparer.Ordinal),
             cellStates: (values, same) => ConflictRules.ComputeCellStates(values, columns[0], OrderOf(conflictingRecords, columns), same),
             comparedCount: conflictingRecords.Count);
@@ -64,9 +64,10 @@ internal sealed class ConflictClassifier(ILogger logger)
         IReadOnlyList<string> columns,
         GameRelease release,
         Func<string, RecordLookupEntry?> resolveFormKey,
-        Func<string, uint?> loadOrderFormIds) =>
+        Func<string, uint?> loadOrderFormIds,
+        bool indexed) =>
         RecordChildren(copies, ContextOf(
-            copies, columns, 0, release, resolveFormKey, loadOrderFormIds,
+            copies, columns, 0, release, resolveFormKey, loadOrderFormIds, indexed,
             shadowed: new HashSet<string>(), cellStates: (_, _) => new Dictionary<string, ConflictThis>()));
 
     private static IReadOnlyList<(string Column, int LoadOrderIndex)> OrderOf(
@@ -75,7 +76,7 @@ internal sealed class ConflictClassifier(ILogger logger)
 
     private DiffContext ContextOf(
         IReadOnlyList<RecordDetail> records, IReadOnlyList<string> columns, int winner, GameRelease release,
-        Func<string, RecordLookupEntry?> resolveFormKey, Func<string, uint?> loadOrderFormIds,
+        Func<string, RecordLookupEntry?> resolveFormKey, Func<string, uint?> loadOrderFormIds, bool indexed,
         IReadOnlySet<string> shadowed, CellStatesOf cellStates, int? comparedCount = null) =>
         new(
             MasterColumn: columns[0],
@@ -90,7 +91,8 @@ internal sealed class ConflictClassifier(ILogger logger)
             Logger: logger,
             ResolveFormKey: resolveFormKey,
             LoadOrderFormIds: loadOrderFormIds,
-            Release: release);
+            Release: release,
+            Indexed: indexed);
 
     private static string Column(RecordDetail record) => ColumnKey.Of(record.Plugin, record.Origin);
 
@@ -111,7 +113,8 @@ internal sealed class ConflictClassifier(ILogger logger)
         ILogger Logger,
         Func<string, RecordLookupEntry?> ResolveFormKey,
         Func<string, uint?> LoadOrderFormIds,
-        GameRelease Release);
+        GameRelease Release,
+        bool Indexed);
 
     // How a node's cells take their conflict state: ComputeCellStates, or none for copies that are
     // no conflict of one another.
@@ -308,7 +311,7 @@ internal sealed class ConflictClassifier(ILogger logger)
             // absent value is not an unset link to report.
             if (ctx.PartialFormColumns.Contains(column)) continue;
             var meta = shapes[column];
-            if (CheckErrorBuilder.Build(meta, value as JsonElement?, resolve, ctx.Release) is { } error)
+            if (CheckErrorBuilder.Build(meta, value as JsonElement?, resolve, ctx.Release, ctx.Indexed) is { } error)
                 checkErrors[column] = error;
             if (meta.Type != "formKey") continue;
             var fk = FormReferences.ExtractString(value);

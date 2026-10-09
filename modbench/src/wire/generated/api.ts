@@ -726,7 +726,7 @@ export interface components {
             isPartialForm: boolean;
             parseDiagnosis?: string | null;
             conflictThis?: components["schemas"]["ConflictThis"] | null;
-            loadIndex: string;
+            loadIndex?: string | null;
             isInOverwrite: boolean;
             column?: string | null;
         };

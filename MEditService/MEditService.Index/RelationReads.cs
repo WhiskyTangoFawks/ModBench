@@ -11,7 +11,7 @@ namespace MEditService.Index;
 
 /// <summary>Every read the index answers, over the Store's relations (ADR-0010).</summary>
 internal sealed class RelationReads(
-    Store store, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins) : IRecordReads
+    Store store, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed) : IRecordReads
 {
     public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => openedPlugins();
 
@@ -766,7 +766,7 @@ internal sealed class RelationReads(
         using var parsed = JsonDocument.Parse(body);
         var root = parsed.RootElement;
         var address = new PluginAddress(plugin, origin);
-        var fields = schema.FieldsOf(root, RecordLookupEntry.Resolver(resolveFormKey), store.Release);
+        var fields = schema.FieldsOf(root, RecordLookupEntry.Resolver(resolveFormKey), store.Release, indexed());
 
         return new RecordDocument(
             formKey, address, loadOrderIndex, isWinner, editorId, schema.TableName,

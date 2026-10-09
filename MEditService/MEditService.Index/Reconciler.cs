@@ -332,7 +332,8 @@ internal sealed class Reconciler(
         try
         {
             fresh = indexFactory.Create(
-                snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins, out heldElsewhere);
+                snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
+                () => Status.State == LoadOrderState.Ready, out heldElsewhere);
             if (fresh is null) return null;
             scope = new OpenScope(held, fresh, new Projector(fresh, held.Find, source, logger), new FailedReads(fresh, source));
             fresh = null;

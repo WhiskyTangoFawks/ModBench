@@ -76,7 +76,7 @@ public sealed class PluginProblemQueryService
     {
         var link = new FieldMetadata("", "formKey", IsArray: false, [], []);
         using var value = JsonDocument.Parse(JsonSerializer.Serialize(target));
-        return CheckErrorBuilder.Build(link, value.RootElement, _ => null, release)
+        return CheckErrorBuilder.Build(link, value.RootElement, _ => null, release, indexed: true)
             ?? throw new InvalidOperationException($"Expected {target}, which no record answers, to be an error.");
     }
 }

@@ -77,7 +77,7 @@ export function PluginHeader({
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span onClick={e => e.stopPropagation()}><ExpandArrow expanded={!collapsed} onToggle={onToggleCollapse} /></span>
         {isFile && <span className="codicon codicon-edit" aria-hidden />}
-        <div>[{o.loadIndex}] <span>{o.plugin}</span></div>
+        <div>{o.loadIndex != null && `[${o.loadIndex}] `}<span>{o.plugin}</span></div>
       </div>
       {!collapsed && (
         <>

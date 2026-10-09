@@ -109,7 +109,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
 
             var checkError = CheckErrorBuilder.Build(
                 DocumentNodes.VariantFor(meta, root), DocumentNodes.At(root, column.PropertyName), resolve, release,
-                whyUnchecked);
+                indexed: true, whyUnchecked);
             if (checkError != null) errors.Add($"{meta.Name}: {checkError}");
         }
         return errors;
