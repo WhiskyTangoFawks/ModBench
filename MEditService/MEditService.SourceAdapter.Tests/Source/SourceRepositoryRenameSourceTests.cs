@@ -182,7 +182,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     [Fact]
     public void MoveLastWrittenTo_MovesWhatModbenchLastWroteToTheNewName()
     {
-        Assert.Null(Repository.MoveLastWrittenTo(Old, "New.esp"));
+        Assert.Null(Repository.MoveLastWrittenTo(Old.Name, "New.esp"));
 
         Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }).Value());
         Assert.Empty(Repository.LastWrittenBinarySha256s(Old).Value());
@@ -193,7 +193,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     {
         Rename("New.esp");
 
-        Assert.Null(Repository.MoveLastWrittenTo(Old, "New.esp"));
+        Assert.Null(Repository.MoveLastWrittenTo(Old.Name, "New.esp"));
 
         Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }).Value());
     }
@@ -236,7 +236,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     {
         LastWriteRecord.RefuseRecordingUnder(_modFolder, "New.esp");
 
-        Assert.IsType<SourceFailure.GitFailed>(Repository.MoveLastWrittenTo(Old, "New.esp"));
+        Assert.IsType<SourceFailure.GitFailed>(Repository.MoveLastWrittenTo(Old.Name, "New.esp"));
 
         Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old).Value());
     }

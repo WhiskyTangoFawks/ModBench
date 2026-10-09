@@ -261,28 +261,30 @@ internal static class PluginEndpoints
         var result = rename.RenameSource(
             plugin, req.NewName ?? string.Empty,
             [.. (req.Documents ?? []).Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))]);
-        return result.Changes is { } changes
-            ? Results.Ok(RenameSourceChangesResponse.Of(changes))
-            : Refused(loggerFactory, "Rename source", result, plugin);
+        return result.Match(
+            (changes, treeName) => Results.Ok(RenameSourceChangesResponse.Of(treeName, changes)),
+            (refusal, message) => Refused(loggerFactory, "Rename source", refusal, message, plugin));
     }
 
     internal static IResult MoveLastWritten(
-        RenameSourceRequest req, MoveLastWrittenHandler move, ILoggerFactory loggerFactory)
+        MoveLastWrittenRequest req, MoveLastWrittenHandler move, ILoggerFactory loggerFactory)
     {
-        if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return Results.Problem("Plugin name and origin are required.", statusCode: 400);
+        if (RenamedPlugin(req.Name, req.Origin) is not { } plugin || string.IsNullOrWhiteSpace(req.TreeName))
+            return Results.Problem("Plugin name, origin and tree name are required.", statusCode: 400);
 
-        var result = move.MoveLastWritten(plugin, req.NewName ?? string.Empty);
-        return result.Refusal is null ? Results.NoContent() : Refused(loggerFactory, "Move last written", result, plugin);
+        var result = move.MoveLastWritten(plugin, req.TreeName, req.NewName ?? string.Empty);
+        return result.Refusal is { } refusal
+            ? Refused(loggerFactory, "Move last written", refusal, result.Message, plugin)
+            : Results.NoContent();
     }
 
     private static PluginAddress? RenamedPlugin(string? name, string? origin) =>
         string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(origin) ? null : new PluginAddress(name, origin);
 
-    private static IResult Refused(ILoggerFactory loggerFactory, string gesture, RenameSourceResult result, PluginAddress plugin)
+    private static IResult Refused(ILoggerFactory loggerFactory, string gesture, RenameSourceRefusal refusal, string? message, PluginAddress plugin)
     {
-        var refusal = result.Refusal ?? throw new InvalidOperationException("Expected a result without changes to carry a refusal.");
-        WriteEndpointMapping.LogRefusal(loggerFactory.CreateLogger(nameof(PluginEndpoints)), gesture, refusal, result.Message, plugin);
-        return WriteEndpointMapping.Refusal(refusal, result.Message);
+        WriteEndpointMapping.LogRefusal(loggerFactory.CreateLogger(nameof(PluginEndpoints)), gesture, refusal, message, plugin);
+        return WriteEndpointMapping.Refusal(refusal, message);
     }
 
     // Track (ADR-0007) over a selection of mods (commands.md, A selection is one gesture); the
@@ -399,11 +401,12 @@ internal sealed record PluginDependantsResponse(IReadOnlyList<PluginAddress> Dep
 /// it, and nothing registers it.</summary>
 internal sealed record PluginCreatedResponse(string Name, string Origin);
 
-/// <summary>The plugin by its origin and file name (ADR-0012), and the file name its source takes.</summary>
-internal sealed record RenameSourceRequest(string Origin, string Name, string NewName);
-
-/// <summary><see cref="RenameSourceRequest"/>, and the unsaved texts that stand in for their files.</summary>
+/// <summary>The plugin by its origin and file name (ADR-0012), the file name its source takes, and the unsaved texts
+/// that stand in for their files.</summary>
 internal sealed record RenameSourceChangesRequest(string Origin, string Name, string NewName, IReadOnlyList<DocumentChange>? Documents = null);
+
+/// <summary>The plugin, the name its tree was filed under before the rename, and the file name its source took.</summary>
+internal sealed record MoveLastWrittenRequest(string Origin, string Name, string TreeName, string NewName);
 
 /// <summary>The mods by name; the load order says each one's plugins and folder.</summary>
 internal sealed record TrackRequest(IReadOnlyList<string> Mods);

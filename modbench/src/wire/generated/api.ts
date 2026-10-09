@@ -975,6 +975,12 @@ export interface components {
             refusal: components["schemas"]["TrackRefusal"];
             message: string;
         };
+        MoveLastWrittenRequest: {
+            origin: string;
+            name: string;
+            treeName: string;
+            newName: string;
+        };
         NotificationEvent: {
             kind: string;
             plugin: string;
@@ -1230,14 +1236,10 @@ export interface components {
             documents?: components["schemas"]["DocumentChange"][] | null;
         };
         RenameSourceChangesResponse: {
+            treeName: string;
             moves: components["schemas"]["SourceMove"][];
             deletions: string[];
             documents: components["schemas"]["DocumentChange"][];
-        };
-        RenameSourceRequest: {
-            origin: string;
-            name: string;
-            newName: string;
         };
         RenderedDocument: {
             fileName: string;
@@ -2346,7 +2348,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RenameSourceRequest"];
+                "application/json": components["schemas"]["MoveLastWrittenRequest"];
             };
         };
         responses: {

@@ -96,7 +96,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         var holder = new LoadOrderHolder();
         holder.Apply(SnapshotPlugins.Snapshot(_game, _root, release, []));
 
-        var result = TestEditService.Over(holder).GetRequiredService<RenameSourceChangesHandler>().RenameSource(Old, "New.txt", []);
+        var result = new Read(TestEditService.Over(holder).GetRequiredService<RenameSourceChangesHandler>().RenameSource(Old, "New.txt", []));
 
         Assert.EndsWith(expected, result.Message, StringComparison.Ordinal);
     }
@@ -156,7 +156,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         var npc = TrackedTree.DocumentCarrying(_trackedMod, Old, "SelfNpc");
         var path = Path.Combine(_trackedMod, TrackedTree.DocumentFile(_trackedMod, Old, npc.FormKey).Require());
 
-        var result = Changes.RenameSource(Old, "New.esp", [new DocumentChange(path, npc.Body.Replace("SelfNpc", "Unsaved", StringComparison.Ordinal))]);
+        var result = new Read(Changes.RenameSource(Old, "New.esp", [new DocumentChange(path, npc.Body.Replace("SelfNpc", "Unsaved", StringComparison.Ordinal))]));
 
         Assert.Null(result.Refusal);
         Assert.Contains(result.Changes.Require().Documents, document => document.Text.Contains("Unsaved", StringComparison.Ordinal));
@@ -169,7 +169,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
     {
         LastWriteRecord.RefuseRefUpdates(_trackedMod);
 
-        var result = Moving.MoveLastWritten(Old, "New.esp");
+        var result = Moving.MoveLastWritten(Old, Old.Name, "New.esp");
 
         Assert.Equal(RenameSourceRefusal.WriteFailed, result.Refusal);
         Assert.Contains(Old.Name, result.Message, StringComparison.Ordinal);
@@ -179,16 +179,24 @@ public sealed class RenameSourceHandlerTests : IDisposable
 
     private MoveLastWrittenHandler Moving => TestEditService.Over(_holder).GetRequiredService<MoveLastWrittenHandler>();
 
-    private RenameSourceResult RenameSource(PluginAddress plugin, string newName)
+    private sealed record Read(RenameSourceRefusal? Refusal, string? Message, SourceChanges? Changes, string? TreeName)
     {
-        var answered = Changes.RenameSource(plugin, newName, []);
+        internal Read(RenameSourceResult result)
+            : this(result.Match<Read>((changes, tree) => new(null, null, changes, tree), (refusal, message) => new(refusal, message, null, null)))
+        {
+        }
+    }
+
+    private Read RenameSource(PluginAddress plugin, string newName)
+    {
+        var answered = new Read(Changes.RenameSource(plugin, newName, []));
         if (answered.Changes is not { } changes) return answered;
 
         EditSaving.Save(
             changes.Moves.Select(move => (move.From, move.To)), changes.Deletions,
             changes.Documents.Select(document => (document.Path, document.Text)));
-        var moved = Moving.MoveLastWritten(plugin, newName);
-        return moved.Refusal is null ? answered : moved;
+        var moved = Moving.MoveLastWritten(plugin, answered.TreeName.Require(), newName);
+        return moved.Refusal is null ? answered : new Read(moved.Refusal, moved.Message, null, null);
     }
 
     private async Task<byte[]> CompiledBytes(PluginAddress plugin)

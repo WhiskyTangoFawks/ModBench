@@ -33,7 +33,7 @@ public sealed class RenameSourceApiTests : HostedTests
         Client.PostAsJsonAsync("/plugins/rename-source-changes", new { origin, name, newName, documents = Array.Empty<object>() });
 
     private Task<HttpResponseMessage> MoveLastWritten(string name, string origin, string newName) =>
-        Client.PostAsJsonAsync("/plugins/move-last-written", new { origin, name, newName });
+        Client.PostAsJsonAsync("/plugins/move-last-written", new { origin, name, treeName = name, newName });
 
     private static async Task<string?> RefusalOf(HttpResponseMessage response, HttpStatusCode status) =>
         (await response.AssertIsProblem(status)).GetProperty("refusal").GetString();

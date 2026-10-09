@@ -416,7 +416,7 @@ public sealed class SourceBatchTests : IDisposable
         Assert.Throws<InvalidOperationException>(() => verb switch
         {
             "replace" => batch.Repository.ReplaceSourceFrom(Plugin, [], "ABCDEF0123"),
-            "moveLast" => batch.Repository.MoveLastWrittenTo(Plugin, "Renamed.esp"),
+            "moveLast" => batch.Repository.MoveLastWrittenTo(Plugin.Name, "Renamed.esp"),
             _ => batch.Repository.WriteBinary(Plugin, "ABCDEF0123", () => wrote = true).Holds(out _, out var failure) ? null : failure,
         });
 

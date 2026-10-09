@@ -17,10 +17,11 @@ public sealed class RenameSourceChangesHandler
     public RenameSourceResult RenameSource(PluginAddress plugin, string newName, IReadOnlyList<DocumentChange> unsaved)
     {
         var loadOrder = _loadOrder.Require();
-        if (!RenameSourceTarget.Of(loadOrder, plugin, newName, out var target, out var refused)) return refused;
+        if (!RenameSourceTarget.Of(loadOrder, plugin, newName, out var target, out var refused))
+            return RenameSourceResult.Refused(refused.Value.Refusal, refused.Value.Message);
         var (loaded, mod) = target;
         if (!SourceRepository.SourceReads(loaded))
-            return RenameSourceTarget.Refused(RenameSourceRefusal.NotTracked, $"{plugin.Name} has no plugin source, so there is none to rename.");
+            return RenameSourceResult.Refused(RenameSourceRefusal.NotTracked, RenameSourceTarget.NotTrackedMessage(plugin));
 
         var batch = SourceBatch.Over(SourceRepository.Over(mod, loadOrder.GameRelease), unsaved);
         if (!batch.Repository.ChangesToRenameSource(plugin, newName).Holds(out var changes, out var failure))
@@ -38,8 +39,8 @@ public sealed class RenameSourceChangesHandler
                 $"{mod.Name} already holds a plugin source named {newName}, so {plugin.Name}'s source was not renamed.");
         }
 
-        return new RenameSourceResult(Changes: changes.Under(batch.Repository));
+        return RenameSourceResult.Landed(changes.Under(batch.Repository), batch.Repository.TreeNameOf(plugin));
     }
 
-    private static RenameSourceResult Refused(RenameSourceRefusal refusal, string message) => RenameSourceTarget.Refused(refusal, message);
+    private static RenameSourceResult Refused(RenameSourceRefusal refusal, string message) => RenameSourceResult.Refused(refusal, message);
 }

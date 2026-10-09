@@ -39,6 +39,7 @@ public sealed class CommandHandlerConventionTests
         typeof(PluginCreateResult),
         typeof(PutLoadOrderRefusal),
         typeof(PutLoadOrderResult),
+        typeof(MoveLastWrittenResult),
         typeof(RenameSourceRefusal),
         typeof(RenameSourceResult),
         typeof(TrackRefusal),

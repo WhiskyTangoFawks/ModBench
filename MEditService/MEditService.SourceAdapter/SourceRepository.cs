@@ -370,12 +370,16 @@ public sealed class SourceRepository : ISourceRepositoryReads
                 : Writes.ChangesToRenameSource(name, newName);
         });
 
-    /// <summary>What Modbench last wrote for the plugin becomes <paramref name="newName"/>'s. A failure leaves it
-    /// where it was.</summary>
-    public SourceFailure? MoveLastWrittenTo(PluginAddress plugin, string newName)
+    /// <summary>The name the plugin's tree folder is spelled with, which is what Modbench's last write of the
+    /// plugin is filed under.</summary>
+    public string TreeNameOf(PluginAddress plugin) => Spelled(plugin).Name;
+
+    /// <summary>What Modbench last wrote for the plugin, filed under <paramref name="treeName"/>, becomes
+    /// <paramref name="newName"/>'s. A failure leaves it where it was.</summary>
+    public SourceFailure? MoveLastWrittenTo(string treeName, string newName)
     {
         RefuseInABatch();
-        return SourceFailure.Answer(() => Writes.MoveLastWritten(plugin.Name, newName));
+        return SourceFailure.Answer(() => Writes.MoveLastWritten(treeName, newName));
     }
 
     /// <summary>Runs <paramref name="write"/>, recording <paramref name="binarySha256"/> as the one last
