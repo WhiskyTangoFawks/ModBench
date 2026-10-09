@@ -45,7 +45,7 @@ internal sealed class RecordQueryService(
                 parseFailures.Contains(plugin.Key),
                 IsTracked: derivedFrom?.IsTracked() ?? false,
                 PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource ? WhyUnreadable(plugin) : null,
-                _index.LaterReadFailure(plugin.Key));
+                _index.LaterReadFailure(plugin.Key)?.Select(SourceProblem.StoppedAt).ToList());
         }
 
         if (_index.ActiveFilter is null)

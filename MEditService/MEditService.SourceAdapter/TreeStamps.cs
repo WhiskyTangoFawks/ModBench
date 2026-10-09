@@ -8,8 +8,8 @@ using MEditService.RepositoriesLib;
 namespace MEditService.SourceAdapter;
 
 /// <summary>A file of a plugin's tree, as the mod folder spells it, that could not be read as a
-/// document, the FormKey it was read for when known, and whether its text was unsaved.</summary>
-public sealed record UnreadableFile(string SourceRelativePath, string Message, string? FormKey = null, bool Unsaved = false);
+/// document, and the FormKey it was read for when one is known.</summary>
+public sealed record UnreadableFile(string SourceRelativePath, string Message, string? FormKey = null);
 
 /// <summary>A FormKey a plugin's tree holds more than once, with the documents holding it as the mod
 /// folder spells them: one document when that document holds it twice.</summary>
@@ -30,19 +30,28 @@ public sealed record ClaimedFormKey(string FormKey, IReadOnlyList<string> Docume
 }
 
 /// <summary>Every document of a plugin's tree by the FormKey it declares, each with its content stamp,
-/// each file that could not be read as one, and each FormKey more than one document declares.</summary>
+/// each file that could not be read as one, each FormKey more than one document declares, and each
+/// file read as unsaved text, as the mod folder spells them.</summary>
 public sealed record RecordStamps(
     IReadOnlyDictionary<string, string> ByFormKey, IReadOnlyList<UnreadableFile> Unreadable,
-    IReadOnlyList<ClaimedFormKey> Claimed)
+    IReadOnlyList<ClaimedFormKey> Claimed, IReadOnlySet<string> Unsaved)
 {
     /// <summary>Equal when the same documents carry the same stamps, and the same files could not be
-    /// read or claim one FormKey.</summary>
+    /// read, claim one FormKey or were read unsaved.</summary>
     public bool Equals(RecordStamps? other) =>
         other is not null
         && ByFormKey.Count == other.ByFormKey.Count
         && ByFormKey.All(stamp => other.ByFormKey.TryGetValue(stamp.Key, out var theirs) && theirs == stamp.Value)
         && Unreadable.SequenceEqual(other.Unreadable)
-        && Claimed.SequenceEqual(other.Claimed);
+        && Claimed.SequenceEqual(other.Claimed)
+        && Unsaved.SetEquals(other.Unsaved);
+
+    /// <summary>Each file that does not read was read unsaved, and so was every document but one of
+    /// each FormKey claimed more than once.</summary>
+    public bool StoppedOnlyByUnsavedText =>
+        (Unreadable.Count > 0 || Claimed.Count > 0)
+        && Unreadable.All(file => Unsaved.Contains(file.SourceRelativePath))
+        && Claimed.All(claim => claim.Documents.Count(document => !Unsaved.Contains(document)) <= 1);
 
     public override int GetHashCode() => ByFormKey.Count;
 }
@@ -63,6 +72,7 @@ internal static class TreeStamps
         var unreadable = new List<UnreadableFile>();
         var holders = new OneDocumentPerFormKey(modFolder);
         var stamps = new Dictionary<string, string>(StringComparer.Ordinal);
+        var unsaved = new HashSet<string>(StringComparer.Ordinal);
 
         var root = SourceRepositoryLayout.RootIn(modFolder, plugin.Name);
         foreach (var gone in Known.Keys.Where(tree => !Directory.Exists(tree))) Known.TryRemove(gone, out _);
@@ -79,9 +89,11 @@ internal static class TreeStamps
 
                 var relativePath = Path.GetRelativePath(modFolder, file);
                 // An unsaved text moves no file-system stamp, so it is read every time.
-                var document = files.HoldsUnsavedText(file)
-                    ? Read(files, file, relativePath, plugin.Name, unreadable, unsaved: true)
-                    : known.Of(file, () => Read(files, file, relativePath, plugin.Name, unreadable, unsaved: false));
+                var readUnsaved = files.HoldsUnsavedText(file);
+                if (readUnsaved) unsaved.Add(relativePath);
+                var document = readUnsaved
+                    ? Read(files, file, relativePath, plugin.Name, unreadable)
+                    : known.Of(file, () => Read(files, file, relativePath, plugin.Name, unreadable));
                 if (document is null) continue;
                 holders.Hold(document.FormKey, file);
                 stamps[document.FormKey] = document.Content;
@@ -89,11 +101,11 @@ internal static class TreeStamps
         }
 
         known.Retain(listed);
-        return new RecordStamps(stamps, unreadable, holders.Claimed);
+        return new RecordStamps(stamps, unreadable, holders.Claimed, unsaved);
     }
 
     private static KnownDocument? Read(
-        ISourceFiles files, string file, string relativePath, string pluginName, List<UnreadableFile> unreadable, bool unsaved)
+        ISourceFiles files, string file, string relativePath, string pluginName, List<UnreadableFile> unreadable)
     {
         byte[] bytes;
         try
@@ -115,8 +127,7 @@ internal static class TreeStamps
                 relativePath,
                 DocumentTokens.WhyNotADocument(text) is { } error
                     ? $"'{relativePath}' is no record document: {error}"
-                    : $"'{relativePath}' declares no FormKey, so the records it holds could not be validated.",
-                Unsaved: unsaved));
+                    : $"'{relativePath}' declares no FormKey, so the records it holds could not be validated."));
             return null;
         }
 

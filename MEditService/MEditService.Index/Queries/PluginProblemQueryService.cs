@@ -9,7 +9,11 @@ namespace MEditService.Index.Queries;
 /// <summary>What is wrong in a plugin's source, on its file: a link at <paramref name="FieldPath"/> to
 /// <paramref name="TargetFormKey"/>, which neither it nor an active plugin holds, or a file the read stopped at.</summary>
 public sealed record SourceProblem(
-    string? FormKey, string? TargetFormKey, string? FieldPath, string SourceRelativePath, string Message);
+    string? FormKey, string? TargetFormKey, string? FieldPath, string SourceRelativePath, string Message)
+{
+    internal static SourceProblem StoppedAt(SourceFileFailure failure) =>
+        new(failure.FormKey, null, null, failure.SourceRelativePath, failure.Message);
+}
 
 /// <summary><paramref name="Failure"/> is set when the plugin's links could not be placed on files, or its
 /// rows are the last good read's, so its <paramref name="Problems"/> are not a clean bill (ADR-0019).</summary>
@@ -49,20 +53,18 @@ public sealed class PluginProblemQueryService
             .. snapshot.Plugins
                 .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsTracked() || stopped.Contains(plugin.Key))
                 .Select(plugin => ProblemsOf(
-                    plugin.Key, snapshot.GameRelease, _index.LaterReadFailure(plugin.Key), [.. stopped[plugin.Key].Select(Problem)],
+                    plugin.Key, snapshot.GameRelease, _index.LaterReadFailure(plugin.Key), [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt)],
                     // A binary's links are not its tree's, whose files the panel shows them on.
                     derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom == DerivedFrom.SourceTree ? [.. missing[plugin.Key]] : [])),
         ];
     }
 
     private static PluginProblems ProblemsOf(
-        PluginAddress plugin, GameRelease release, string? laterReadFailure, List<SourceProblem> stoppedAt, List<MissingReferenceOnFile> rows) =>
-        (laterReadFailure ?? rows.FirstOrDefault(row => row.Failure is not null)?.Failure) is { } failure
+        PluginAddress plugin, GameRelease release, IReadOnlyList<SourceFileFailure>? laterReadFailure, List<SourceProblem> stoppedAt,
+        List<MissingReferenceOnFile> rows) =>
+        FailureOf(laterReadFailure, rows) is { } failure
             ? new(plugin, stoppedAt, failure)
             : new(plugin, [.. stoppedAt, .. rows.Select(row => Problem(row, release))]);
-
-    private static SourceProblem Problem(SourceFileFailure failure) =>
-        new(failure.FormKey, null, null, failure.SourceRelativePath, failure.Message);
 
     private static SourceProblem Problem(MissingReferenceOnFile row, GameRelease release) =>
         new(row.Reference.FormKey,
@@ -70,6 +72,11 @@ public sealed class PluginProblemQueryService
             row.Reference.FieldPath,
             row.SourceRelativePath ?? throw new InvalidOperationException($"Expected {row.Reference.FormKey} to be placed."),
             $"{row.Reference.FieldPath}: {Unresolved(row.Reference.TargetFormKey, release)}");
+
+    private static string? FailureOf(IReadOnlyList<SourceFileFailure>? laterReadFailure, List<MissingReferenceOnFile> rows) =>
+        laterReadFailure is { } files
+            ? string.Join(" ", files.Select(file => file.Message))
+            : rows.FirstOrDefault(row => row.Failure is not null)?.Failure;
 
     // The grid's and compile's own wording for a link no record answers, from the same builder.
     private static string Unresolved(string target, GameRelease release)

@@ -61,7 +61,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
 
     public UnreadableSource? WhyTreeStopped(PluginAddress key) => _reconciler.WhyTreeStopped(key);
 
-    public string? LaterReadFailure(PluginAddress key) => _reconciler.LaterReadFailure(key);
+    public IReadOnlyList<SourceFileFailure>? LaterReadFailure(PluginAddress key) => _reconciler.LaterReadFailure(key);
 
     /// <summary>The filter in force and the source its SQL came from, read together so a
     /// concurrent set never pairs one filter's SQL with another's source.</summary>

@@ -36,8 +36,8 @@ internal sealed record PluginResponse(
     // plugins.md, A row, Plugin: tracked, and its records are its plugin file's because its plugin
     // source is missing or cannot be read. Null when the plugin source reads.
     UnreadableSource? PluginSourceUnreadable = null,
-    // common.md, States, story 6: why its last read failed while its rows are the last good read's.
-    string? LaterReadFailure = null)
+    // common.md, States, story 6: the files that stopped its last read, while its rows are the last good read's.
+    IReadOnlyList<SourceProblem>? LaterReadFailure = null)
 {
     /// <summary>One row on the wire: the read side's answer, flattened.</summary>
     public static PluginResponse Of(PluginRow row)

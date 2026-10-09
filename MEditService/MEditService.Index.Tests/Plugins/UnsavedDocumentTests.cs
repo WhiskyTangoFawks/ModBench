@@ -4,6 +4,7 @@ using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using static MEditService.Index.Tests.TestSupport.Announcements;
@@ -63,6 +64,11 @@ public sealed class UnsavedDocumentTests : IDisposable
 
     private PluginProblems ProblemsOfTracked() => _index.Problems.GetProblems().Single(p => p.Plugin.Name == Tracked);
 
+    private IReadOnlyList<SourceProblem>? LaterReadFailureOfTracked() => LaterReadFailureOf(_index);
+
+    private IReadOnlyList<SourceProblem>? LaterReadFailureOf(OpenedIndex index) =>
+        (index.PluginRowOf(_tracked.KeyOf()) ?? throw new InvalidOperationException($"Expected a row for {Tracked}.")).LaterReadFailure;
+
     [Fact]
     public void AHandedDocument_IsReadInPlaceOfItsFile()
     {
@@ -90,10 +96,30 @@ public sealed class UnsavedDocumentTests : IDisposable
 
         Assert.Equal("TypedUnsaved", _index.DocumentOf(_npc, _tracked.KeyOf()).EditorId);
         Assert.True(_index.ReadFromItsPluginSource(_tracked.KeyOf()));
+        var stop = Assert.Single(LaterReadFailureOfTracked() ?? []);
+        Assert.Equal(Relative(_file), stop.SourceRelativePath);
+        Assert.Contains("is no record document", stop.Message, StringComparison.Ordinal);
         var problems = ProblemsOfTracked();
-        Assert.Contains($"'{Relative(_file)}' is no record document", problems.Failure, StringComparison.Ordinal);
-        Assert.DoesNotContain(problems.Problems, problem => problem.SourceRelativePath == Relative(_file));
-        Assert.Equal(problems.Failure, _index.PluginRowOf(_tracked.KeyOf())?.LaterReadFailure);
+        Assert.Contains(stop.Message, problems.Failure, StringComparison.Ordinal);
+        Assert.Contains(problems.Problems, problem => problem.SourceRelativePath == stop.SourceRelativePath && problem.Message == stop.Message);
+    }
+
+    [Fact]
+    public void AFailedReadWhoseReasonChangesAsITypeOn_IsOneLineInTheLog()
+    {
+        var log = new List<LogEntry>();
+        using var loggers = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(log)));
+        var notifications = new InMemoryNotificationPublisher();
+        using var logged = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "logged"), loggerFactory: loggers, notifications: notifications);
+
+        foreach (var typed in new[] { Typed("\"TrackedNpc\"", "\"TypedUnsaved"), Typed("\"TrackedNpc\"", "\"TrackedNpc\",,") })
+        {
+            var before = notifications.Notifications.Count;
+            logged.Unsaved.Apply([new DocumentChange(_file, typed)]);
+            Waits.Reached(() => notifications.Since(before).Any(n => PluginChanged(_tracked)(n)), "the failed read announced");
+        }
+
+        lock (log) Assert.Single(log, entry => entry.Level == LogLevel.Warning && entry.Message.Contains(Relative(_file), StringComparison.Ordinal));
     }
 
     [Fact]
@@ -105,7 +131,7 @@ public sealed class UnsavedDocumentTests : IDisposable
 
         Assert.Equal("TypedAgain", _index.DocumentOf(_npc, _tracked.KeyOf()).EditorId);
         Assert.Null(ProblemsOfTracked().Failure);
-        Assert.Null(_index.PluginRowOf(_tracked.KeyOf())?.LaterReadFailure);
+        Assert.Null(LaterReadFailureOfTracked());
     }
 
     [Fact]
@@ -119,7 +145,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         reopened.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
         Assert.True(reopened.ReadFromItsPluginSource(_tracked.KeyOf()));
-        Assert.Contains($"'{Relative(_file)}' is no record document", reopened.PluginRowOf(_tracked.KeyOf())?.LaterReadFailure, StringComparison.Ordinal);
+        Assert.Equal(Relative(_file), Assert.Single(LaterReadFailureOf(reopened) ?? []).SourceRelativePath);
     }
 
     [Fact]
@@ -129,7 +155,29 @@ public sealed class UnsavedDocumentTests : IDisposable
 
         _index.NextSnapshotUntil(() => _index.ReadFromItsPluginFileForItsUnreadableSource(_tracked.KeyOf()), "the binary read in the tree's place");
 
-        Assert.Null(_index.PluginRowOf(_tracked.KeyOf())?.LaterReadFailure);
+        Assert.Null(LaterReadFailureOfTracked());
+    }
+
+    [Fact]
+    public void AHandedDocumentClaimingAnotherRecordsFormKey_LeavesTheLastGoodRows_AndSaysWhy()
+    {
+        Hand(new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedUnsaved\"")));
+
+        HandUntil(PluginChanged(_tracked), new DocumentChange(_file, Typed("\"TrackedNpc\"", "\"TypedUnsaved\"").Replace(_npc, _race, StringComparison.Ordinal)));
+
+        Assert.Equal("TypedUnsaved", _index.DocumentOf(_npc, _tracked.KeyOf()).EditorId);
+        Assert.True(_index.ReadFromItsPluginSource(_tracked.KeyOf()));
+        Assert.Contains(LaterReadFailureOfTracked() ?? [], stop => stop.SourceRelativePath == Relative(_file) && stop.FormKey == _race);
+    }
+
+    [Fact]
+    public void TheSameClaimOnDisk_ReadsItsPluginFile()
+    {
+        File.WriteAllText(_file, Typed(_npc, _race));
+
+        _index.NextSnapshotUntil(() => _index.ReadFromItsPluginFileForItsUnreadableSource(_tracked.KeyOf()), "the binary read in the tree's place");
+
+        Assert.Null(LaterReadFailureOfTracked());
     }
 
     [Fact]

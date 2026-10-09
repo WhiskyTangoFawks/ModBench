@@ -105,9 +105,7 @@ internal sealed class DuckDbRecordIndex : IDisposable
             Announce(sequence => new PluginChangedNotification(key, sequence));
         }
 
-        /// <summary>A plugin whose read failed or recovered while its rows stood: no row moved, but what
-        /// the plugin says of them did.</summary>
-        public void ReadChanged(PluginAddress key) => Announce(sequence => new PluginChangedNotification(key, sequence));
+        public void ReadFailedOrRecovered(PluginAddress key) => Announce(sequence => new PluginChangedNotification(key, sequence));
     }
 
     public GameRelease Release => _store.Release;

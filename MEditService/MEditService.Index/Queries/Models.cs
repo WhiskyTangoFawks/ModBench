@@ -41,8 +41,8 @@ public sealed record PluginRow(
     // plugins.md, A row, Plugin: tracked, and its rows read from its plugin file because its plugin
     // source is missing or cannot be read. Null when the plugin source reads.
     UnreadableSource? PluginSourceUnreadable,
-    // common.md, States, story 6: why its last read failed while its rows are the last good read's.
-    string? LaterReadFailure);
+    // common.md, States, story 6: the files that stopped its last read, while its rows are the last good read's.
+    IReadOnlyList<SourceProblem>? LaterReadFailure);
 
 public record RecordDetail(
     string FormKey,
