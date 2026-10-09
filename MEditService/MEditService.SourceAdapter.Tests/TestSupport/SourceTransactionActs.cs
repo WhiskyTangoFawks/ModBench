@@ -19,14 +19,5 @@ internal static class SourceTransactionActs
 
     internal static void Rekey(
         this SourceTransaction transaction, SourceRepository repository, PluginAddress plugin, RecordIdentity identity, string newFormKey) =>
-        transaction.Apply(repository.ChangesToRekey(plugin, OwnerDocument(repository, plugin, identity), identity, newFormKey));
-
-    private static SourceDocument OwnerDocument(
-        SourceRepository repository, PluginAddress plugin, RecordIdentity identity)
-    {
-        var owner = identity;
-        while (repository.ContainerOf(plugin, owner).Value() is { } container)
-            owner = repository.Get(plugin, container.ParentFormKey).Value().Require().Identity;
-        return repository.RecordOf(plugin, owner).Value().Require();
-    }
+        transaction.Apply(repository.ChangesToRekey(plugin, identity, newFormKey));
 }

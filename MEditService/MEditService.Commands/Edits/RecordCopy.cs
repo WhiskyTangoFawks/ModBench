@@ -10,7 +10,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The container half of both copy modes: a child lands inside its container's document, the
+/// <summary>The container half of both copy modes: a child lands in its container, the
 /// container copied in when absent, as a Partial Form where the game allows (ADR-0007).</summary>
 internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger)
 {
@@ -20,14 +20,14 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
 
     /// <summary>A copy of a child the destination lacks, as every Copy as Override: own fields only, so a copied
     /// topic lands with no responses.</summary>
-    internal SourceAnswer<RecordEditResult> CopyNewEmbeddedChildAsOverride(
+    internal SourceAnswer<RecordEditResult> CopyNewChildAsOverride(
         CopySource source, SourceDocument child, DocumentContainment container,
         Destination destination, GameRelease release)
     {
         var landing = child with { Body = ContainerDocumentEdits.WithoutChildren(child.Body, release, child.RecordType) };
 
         if (!SourceTransaction.Atomically(
-                destination.Repository, transaction => AppendEmbeddedChild(transaction, source, container, landing, destination, release))
+                destination.Repository, transaction => PutChildInContainer(transaction, source, container, landing, destination, release))
             .Holds(out var appended, out var unread))
         {
             return unread is SourceFailure.SlotHeld held ? RefuseSlotHeldByAnotherRecord(destination.Plugin, held) : unread;
@@ -51,7 +51,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
 
     /// <summary>The container rule: the child lands at the end of its slot in the destination's copy
     /// of its container, which is copied in with its own fields when absent, transitively.</summary>
-    internal SourceAnswer<RecordEditResult> AppendEmbeddedChild(
+    internal SourceAnswer<RecordEditResult> PutChildInContainer(
         SourceTransaction transaction, CopySource source, DocumentContainment container, SourceDocument child,
         Destination destination, GameRelease release)
     {
@@ -80,7 +80,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         if (!source.ContainerOf(sourceContainer).Holds(out var parentOfContainer, out why))
             return WriteTargets.RefuseUnreadableSource(containerFormKey, why);
         if (!(parentOfContainer is { } ownParent
-                ? AppendEmbeddedChild(transaction, source, ownParent, ownFields, destination, release)
+                ? PutChildInContainer(transaction, source, ownParent, ownFields, destination, release)
                 : PlaceContainer(transaction, source, ownFields, destination, release)).Holds(out var landed, out var unread))
         {
             return unread;

@@ -95,9 +95,8 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         var current = fixture.Index.DocumentOf(fixture.Worldspace, fixture.Plugin);
         var repository = TrackedMods.RepositoryOf(fixture.Entry);
         var identity = new RecordIdentity(fixture.Worldspace, current.RecordType, current.EditorId);
-        var carrying = repository.RecordOf(fixture.Plugin, identity).Value().Require();
         SourceTransaction.Atomically(repository, transaction => transaction.Apply(
-            repository.ChangesToRekey(fixture.Plugin, carrying, identity, newWorldspaceKey))).Wrote();
+            repository.ChangesToRekey(fixture.Plugin, identity, newWorldspaceKey))).Wrote();
     }
 
     private static void RederiveTheWholePluginBecauseParentWorldspaceIsDerivedByWalkingTheWholeBlockTree(OneExteriorCellWorldspaceFixture fixture)

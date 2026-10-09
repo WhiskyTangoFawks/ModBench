@@ -35,29 +35,28 @@ internal sealed class WriteTargets(
         return refused is null && document is not null;
     }
 
-    /// <summary>The edit target with <paramref name="text"/> standing in for the file of the document carrying
+    /// <summary>The edit target with <paramref name="text"/> standing in for the file of the document holding
     /// the record: the tree only says which document that is.</summary>
     internal bool TryResolveEditTarget(
-        PluginAddress plugin, string formKey, string text, out EditTarget target,
-        [NotNullWhen(true)] out SourceDocument? carrying, [NotNullWhen(false)] out RecordEditResult? refused)
+        PluginAddress plugin, string formKey, string text, out EditTarget target, [NotNullWhen(false)] out RecordEditResult? refused)
     {
-        (target, carrying) = (default, null);
+        target = default;
         refused = RefuseUnlessEditable(plugin, out var openedRepository);
         if (refused is not null) return false;
         var repository = openedRepository
             ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
 
-        if (!repository.CarryingFromText(plugin, formKey, text).Holds(out var found, out var failure))
+        if (!repository.RecordFromText(plugin, formKey, text).Holds(out var found, out var failure))
         {
             refused = RefuseUnresolved(formKey, failure);
             return false;
         }
-        if (found is not var (record, document))
+        if (found is not { } record)
         {
             refused = RecordNotFound(plugin, formKey);
             return false;
         }
-        (target, carrying) = (new EditTarget(loadOrder.Current.GameRelease, record, repository), document);
+        target = new EditTarget(loadOrder.Current.GameRelease, record.Identity, repository);
         return true;
     }
 

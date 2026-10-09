@@ -328,7 +328,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         var handName = Path.Combine(NpcGroupFolder, "HandName.json");
         var layoutName = Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json");
         File.Move(layoutName, handName);
-        Assert.NotNull(repository.CarryingFromText(Plugin, NpcFormKey, NpcBody).Value());
+        Assert.NotNull(repository.RecordFromText(Plugin, NpcFormKey, NpcBody).Value());
 
         var changes = repository.ChangesToRewrite(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody)).Value();
 

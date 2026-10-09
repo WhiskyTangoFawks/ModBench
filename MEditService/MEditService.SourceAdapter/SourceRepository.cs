@@ -145,15 +145,12 @@ public sealed class SourceRepository : ISourceRepositoryReads
             documents.RefuseUnreadable(identity.RecordType, identity.FormKey, body, unit.FullPath);
         });
 
-    /// <summary>The record at <paramref name="formKey"/> and the document carrying it, read from <paramref name="text"/>:
-    /// the tree only says which document that is. Null when nothing holds it; text naming no record is
-    /// unreadable.</summary>
-    public SourceAnswer<(RecordIdentity Record, SourceDocument Carrying)?> CarryingFromText(
+    private SourceAnswer<(RecordIdentity Record, SourceDocument Carrying)?> CarryingFromText(
         PluginAddress plugin, string formKey, string text) =>
         SourceFailure.Answer(() => Locator.CarryingFromText(Spelled(plugin), formKey, text));
 
     /// <summary>The record at <paramref name="formKey"/> with its own text read out of <paramref name="text"/>, the
-    /// document carrying it by <see cref="CarryingFromText"/>'s rule, and answering as that does.</summary>
+    /// document holding it by the rule of that document, and answering as that does.</summary>
     public SourceAnswer<SourceDocument?> RecordFromText(PluginAddress plugin, string formKey, string text) =>
         CarryingFromText(plugin, formKey, text).Then(found =>
             SourceAnswer.Of(found is var (record, carrying) ? OwnTextIn(text, record, carrying) : null));
@@ -336,11 +333,10 @@ public sealed class SourceRepository : ISourceRepositoryReads
         PluginAddress plugin, RecordIdentity container, string slot, SourceDocument child) =>
         SourceFailure.Answer(() => Writes.ChangesToPutChild(Spelled(plugin), container, slot, child));
 
-    /// <summary>What changing the FormKey of <paramref name="identity"/> changes, from the text of the document
-    /// <paramref name="carrying"/> it, written nowhere. Text the codec cannot give the new key is unreadable.</summary>
-    public SourceAnswer<SourceChanges> ChangesToRekey(
-        PluginAddress plugin, SourceDocument carrying, RecordIdentity identity, string newFormKey) =>
-        SourceFailure.Answer(() => Writes.ChangesToRekey(Spelled(plugin), carrying, identity, newFormKey));
+    /// <summary>What changing the FormKey of <paramref name="identity"/> changes, written nowhere. Text the codec
+    /// cannot give the new key is unreadable.</summary>
+    public SourceAnswer<SourceChanges> ChangesToRekey(PluginAddress plugin, RecordIdentity identity, string newFormKey) =>
+        SourceFailure.Answer(() => Writes.ChangesToRekey(Spelled(plugin), identity, newFormKey));
 
     /// <summary>What taking the record out of the tree changes, written nowhere: its file, its directory, or its
     /// element of another record's document. A record no document holds, or whose document lacks it, is not
