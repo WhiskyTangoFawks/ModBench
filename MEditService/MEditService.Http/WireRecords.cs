@@ -56,14 +56,16 @@ internal sealed record RecordEditRequest(
 /// document carrying the record.</summary>
 internal sealed record RecordEditChangesRequest(RecordEditRequest Edit, string Text);
 
-/// <summary>The changes an edit makes to plugin source, written nowhere: each move, then each document's
-/// new text at its absolute path once moved. A refusal is ProblemDetails, as the edit's is.</summary>
+/// <summary>The changes an edit makes to plugin source, written nowhere: each move, then each deletion,
+/// then each document's new text at its absolute path once moved. A refusal is ProblemDetails, as the edit's is.</summary>
 internal sealed record RecordEditChangesResponse(
-    string FormKey, string Path, IReadOnlyList<SourceMove> Moves, IReadOnlyList<DocumentChange> Documents, string? NewFormKey = null)
+    string FormKey, string Path, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents,
+    string? NewFormKey = null)
 {
     internal static RecordEditChangesResponse Of(string formKey, string path, RecordEditChanges answer) =>
         new(formKey, path,
             [.. answer.Changes.Moves.Select(move => new SourceMove(move.From, move.To))],
+            answer.Changes.Deletions,
             [.. answer.Changes.Documents.Select(document => new DocumentChange(document.Path, document.Text))],
             answer.Outcome.NewFormKey);
 }

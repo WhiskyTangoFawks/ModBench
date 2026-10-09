@@ -1140,6 +1140,7 @@ export interface components {
             formKey: string;
             path: string;
             moves: components["schemas"]["SourceMove"][];
+            deletions: string[];
             documents: components["schemas"]["DocumentChange"][];
             newFormKey?: string | null;
         };

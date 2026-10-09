@@ -736,6 +736,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Equal(FullPath(QuestPath), Path.Combine(_modFolder, owner.Path));
         Assert.DoesNotContain("\"Response\"", owner.Text, StringComparison.Ordinal);
         Assert.Contains("\"Response2\"", owner.Text, StringComparison.Ordinal);
+        Assert.Empty(changes.Deletions);
         Assert.Equal(before, File.ReadAllText(FullPath(QuestPath)));
     }
 
@@ -746,12 +747,13 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         var changes = Repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")).Value();
 
+        Assert.Equal([Path.GetRelativePath(_modFolder, directory)], changes.Deletions);
         Assert.Empty(changes.Documents);
         Assert.True(Directory.Exists(directory));
     }
 
     [Fact]
-    public void ChangesToRemove_OfARecordNoDocumentHolds_IsNotCarried_AndAnswersNoChanges()
+    public void ChangesToRemove_OfARecordNoDocumentHolds_IsNotCarried()
     {
         var stopped = Repository.ChangesToRemove(Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent")).Stopped();
 

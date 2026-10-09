@@ -49,7 +49,7 @@ public sealed class DeleteRecordHandler
         // Read before the removal, so what the log names is the document it took from.
         if (!repository.RelativePathOf(plugin, identity).Holds(out var relativePath, out var unread)) return unread;
 
-        // One changed document either way: the owner without the child, or the record's own gone.
+        // One change either way: the owner's document without the child, or the record's own file or folder gone.
         // Every descendant's row follows from that once it is re-indexed.
         if (SourceTransaction.Atomically(repository, transaction => transaction.Apply(repository.ChangesToRemove(plugin, identity)))
             is { } unremoved)

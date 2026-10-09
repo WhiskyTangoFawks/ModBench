@@ -161,6 +161,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
         var changes = repository.ChangesToRemove(Plugin, Npc).Value();
 
+        Assert.Equal([Path.GetRelativePath(_modFolder, file)], changes.Deletions);
         Assert.Empty(changes.Moves);
         Assert.Empty(changes.Documents);
         Assert.True(File.Exists(file));
