@@ -20,16 +20,16 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
     private string GameDirectory => Directory.CreateDirectory(Path.Combine(_instance, "GameDir")).FullName;
 
     private LoadOrderEntry Plugin(
-        string name, string origin = "SomeMod", int? slot = 0, bool enabled = true, bool winning = true,
+        string name, string origin = "SomeMod", int? line = 0, bool enabled = true, bool winning = true,
         bool malformed = true)
     {
         var path = Path.Combine(Directory.CreateDirectory(Path.Combine(_instance, "mods", origin)).FullName, name);
         if (malformed) File.WriteAllBytes(path, ShortRdatRegionPlugin.Plugin.Bytes);
         else new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4).WriteToBinary(path);
-        return new LoadOrderEntry(name, path, origin, slot, enabled, winning);
+        return new LoadOrderEntry(name, path, origin, line, enabled, winning);
     }
 
-    private LoadOrderEntry Clean(string name, int slot = 0) => Plugin(name, slot: slot, malformed: false);
+    private LoadOrderEntry Clean(string name, int line = 0) => Plugin(name, line: line, malformed: false);
 
     private PluginDiagnosisReport[] Diagnose(params LoadOrderEntry[] plugins)
     {
@@ -85,9 +85,9 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
     [Theory]
     [InlineData(null, true)]
     [InlineData(0, false)]
-    public void GetLoadOrderDiagnoses_APluginThatIsNotActive_IsReported_ForMalformedMeansBytesDepartingFromWhatTheCreationKitWritesActiveOrNot(int? slot, bool enabled)
+    public void GetLoadOrderDiagnoses_APluginThatIsNotActive_IsReported_ForMalformedMeansBytesDepartingFromWhatTheCreationKitWritesActiveOrNot(int? line, bool enabled)
     {
-        var inactive = Plugin(Malformed, slot: slot, enabled: enabled);
+        var inactive = Plugin(Malformed, line: line, enabled: enabled);
 
         Assert.Equal("SomeMod", Assert.Single(Diagnose(inactive)).Origin);
     }
@@ -125,9 +125,9 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
     [Fact]
     public void GetLoadOrderDiagnoses_AreOrderedByTheLoadOrder_InactiveAfterEveryActiveOne_ThenByTheRecordOrderTheBinaryProvedThem()
     {
-        var disabled = Plugin("Disabled.esp", origin: "DisabledMod", slot: 0, enabled: false);
-        var second = Plugin("Second.esp", origin: "SecondMod", slot: 2);
-        var first = Plugin("First.esp", origin: "FirstMod", slot: 1, malformed: false);
+        var disabled = Plugin("Disabled.esp", origin: "DisabledMod", line: 0, enabled: false);
+        var second = Plugin("Second.esp", origin: "SecondMod", line: 2);
+        var first = Plugin("First.esp", origin: "FirstMod", line: 1, malformed: false);
         var mod = new Fallout4Mod(ModKey.FromFileName(first.Name), Fallout4Release.Fallout4);
         MisshapedPerks.Add(mod, "FirstPerk");
         MisshapedPerks.Add(mod, "SecondPerk");
@@ -145,7 +145,7 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
     [Fact]
     public async Task GetLoadOrderDiagnoses_WhileReconciling_IsNotReady_ForAPluginTheProjectionHasNotReachedHasNoRowsYetAndWouldReadClean()
     {
-        LoadOrderEntry[] plugins = [Plugin(Malformed), Clean("Later.esp", slot: 1)];
+        LoadOrderEntry[] plugins = [Plugin(Malformed), Clean("Later.esp", line: 1)];
         var holder = new LoadOrderHolder();
         using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
         using var index = Indexes.Open(holder, gate);

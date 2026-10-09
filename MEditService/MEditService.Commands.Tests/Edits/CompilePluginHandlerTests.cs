@@ -121,7 +121,7 @@ public sealed class CompilePluginHandlerTests : IDisposable
             mod.Npcs.Add(new Npc(mod, "PatchNpc") { Keywords = [new FormLink<IKeywordGetter>(master.Keywords.First().FormKey)] });
         });
         plugins.Load((Plugin("Fallout4.esm", _ => { }), false), (master, false), (patch, true));
-        plugins.Relist(Address(master), entry => entry with { Slot = null });
+        plugins.Relist(Address(master), entry => entry with { Line = null });
         plugins.Relist(Address(patch), entry => entry with { Enabled = false });
 
         var result = await plugins.CompileHandler.CompileAsync([Address(patch)]);

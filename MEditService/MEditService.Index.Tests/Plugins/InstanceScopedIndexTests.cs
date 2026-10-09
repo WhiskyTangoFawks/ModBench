@@ -34,7 +34,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
     }
 
     private static IReadOnlyList<LoadOrderEntry> OrderIn(string instanceRoot) =>
-        [new(Plugin, Path.Combine(instanceRoot, "mods", Origin, Plugin), Origin, Slot: 0, Enabled: true, Winning: true)];
+        [new(Plugin, Path.Combine(instanceRoot, "mods", Origin, Plugin), Origin, Line: 0, Enabled: true, Winning: true)];
 
     private static IReadOnlyList<string?> EditorIdsIn(OpenedIndex index) =>
         [.. index.ListedIn(Key).Select(row => row.EditorId)];

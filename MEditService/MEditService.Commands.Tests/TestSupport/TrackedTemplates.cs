@@ -57,7 +57,7 @@ internal static class TrackedTemplates
         const string origin = "TemplateMod";
         using var gameDirectory = new ScratchDirectory("medit-tracked-template-game-");
         var loadOrder = SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            [new LoadOrderEntry(pluginName, Path.Combine(modFolder, pluginName), origin, Slot: 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry(pluginName, Path.Combine(modFolder, pluginName), origin, Line: 0, Enabled: true, Winning: true)]);
         var result = TrackEveryPluginOf.ModAsync(loadOrder, origin)
             .GetAwaiter().GetResult();
         if (result.Landed.Sum(l => l.Outcome.Tracked.Count) != 1)

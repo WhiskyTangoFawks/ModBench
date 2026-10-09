@@ -40,7 +40,7 @@ public sealed class SourceParityFixture : IDisposable
     private OpenedIndex NewIndex(string pluginPath, string instanceRoot) =>
         Indexes.Reconciled(
             _gameDirectory,
-            [new LoadOrderEntry(RealDataPlugin.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
+            [new LoadOrderEntry(RealDataPlugin.PluginFileName, pluginPath, Origin, Line: 0, Enabled: true, Winning: true)],
             instanceRoot);
 
     public void Dispose()

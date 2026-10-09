@@ -41,7 +41,7 @@ public sealed class HeldPluginsTests
             .Build();
         var entries = data.Plugins.Append(new LoadOrderEntry(
             "NonExistent.esp", Path.Combine(data.DataFolder, "NonExistent.esp"),
-            PluginOrigin.DataDirectory, Slot: 1, Enabled: true, Winning: true)).ToList();
+            PluginOrigin.DataDirectory, Line: 1, Enabled: true, Winning: true)).ToList();
 
         using var held = Open(data, entries);
 
@@ -60,7 +60,7 @@ public sealed class HeldPluginsTests
         var badPath = Path.Combine(data.DataFolder, "Bad.esp");
         File.WriteAllBytes(badPath, [0xDE, 0xAD, 0xBE, 0xEF]);
         var entries = data.Plugins.Append(new LoadOrderEntry(
-            "Bad.esp", badPath, PluginOrigin.DataDirectory, Slot: 1, Enabled: true, Winning: true)).ToList();
+            "Bad.esp", badPath, PluginOrigin.DataDirectory, Line: 1, Enabled: true, Winning: true)).ToList();
 
         using var held = Open(data, entries);
 

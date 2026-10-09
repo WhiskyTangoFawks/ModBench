@@ -79,7 +79,7 @@ public sealed class RenderedDocumentQueryTests : IDisposable
         DeletedNpcPlugin.WriteHoldingFields(path, FormKey.Factory(unreadable));
         var plugin = new PluginAddress("DeletedNpc.esp", PluginOrigin.DataDirectory);
         using var index = Indexes.Reconciled(
-            gameDirectory, [new LoadOrderEntry(plugin.Name, path, plugin.Origin, Slot: 0, Enabled: true, Winning: true)]);
+            gameDirectory, [new LoadOrderEntry(plugin.Name, path, plugin.Origin, Line: 0, Enabled: true, Winning: true)]);
         Assert.NotNull(index.RowOf(unreadable, plugin)?.ParseDiagnosis);
 
         var text = index.Records.GetRenderedDocument(plugin, unreadable)?.Text;

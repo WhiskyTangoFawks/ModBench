@@ -78,8 +78,8 @@ public sealed class InjectedChildTests : IDisposable
         _loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, _instanceRoot, GameRelease.Fallout4,
 
             [
-                new LoadOrderEntry(BasePluginName, basePath, BaseOrigin, Slot: 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(InjectorPluginName, injectorPath, InjectorOrigin, Slot: 1, Enabled: true, Winning: true),
+                new LoadOrderEntry(BasePluginName, basePath, BaseOrigin, Line: 0, Enabled: true, Winning: true),
+                new LoadOrderEntry(InjectorPluginName, injectorPath, InjectorOrigin, Line: 1, Enabled: true, Winning: true),
             ]);
         foreach (var origin in new[] { BaseOrigin, InjectorOrigin })
             TrackEveryPluginOf.ModAsync(_loadOrder, origin).GetAwaiter().GetResult();

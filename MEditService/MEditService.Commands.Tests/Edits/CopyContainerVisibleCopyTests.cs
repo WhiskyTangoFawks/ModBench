@@ -113,7 +113,7 @@ public sealed class CopyContainerVisibleCopyTests : IDisposable
         var source = SourceWithARefInTheCell("Source.esm", BaseWaterHeight, 0);
         var destination = MasteringThrough("Dest.esp", LaterStatic);
         _plugins.Load((source, false), (master, false), (destination, true));
-        _plugins.Relist(Address(destination), entry => entry with { Slot = null });
+        _plugins.Relist(Address(destination), entry => entry with { Line = null });
 
         CopyRefIntoDestination(source, destination);
 

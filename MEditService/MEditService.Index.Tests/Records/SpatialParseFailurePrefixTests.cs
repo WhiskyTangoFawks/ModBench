@@ -172,7 +172,7 @@ public sealed class SpatialParseFailurePrefixTests
 
             Index = Indexes.Reconciled(
                 _dataFolder,
-                [new LoadOrderEntry(PluginName, _path, Origin, Slot: 0, Enabled: true, Winning: true)],
+                [new LoadOrderEntry(PluginName, _path, Origin, Line: 0, Enabled: true, Winning: true)],
                 adapter: _adapter);
         }
 

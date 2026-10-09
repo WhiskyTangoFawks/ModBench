@@ -20,10 +20,10 @@ internal static class EmptyMasterStubs
             {
                 var emptyMasterStubPath = Path.Combine(gameDirectory, master.Master.FileName);
                 new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(emptyMasterStubPath);
-                inputs.Add(new LoadOrderEntry(master.Master.FileName, emptyMasterStubPath, "Stubs", Slot: inputs.Count, Enabled: true, Winning: true));
+                inputs.Add(new LoadOrderEntry(master.Master.FileName, emptyMasterStubPath, "Stubs", Line: inputs.Count, Enabled: true, Winning: true));
             }
         }
-        inputs.Add(new LoadOrderEntry(pluginName, pluginPath, origin, Slot: inputs.Count, Enabled: true, Winning: true));
+        inputs.Add(new LoadOrderEntry(pluginName, pluginPath, origin, Line: inputs.Count, Enabled: true, Winning: true));
 
         return SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, GameRelease.Fallout4, inputs);
     }

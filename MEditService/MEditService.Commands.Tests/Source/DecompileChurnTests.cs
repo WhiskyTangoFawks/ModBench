@@ -22,7 +22,7 @@ public sealed class DecompileChurnTests : IDisposable
     {
         TrackedTemplates.WriteTracked(_modFolder, SmallMod());
         _holder.Apply(SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            [new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
+            [new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, Line: 0, Enabled: true, Winning: true)]));
     }
 
     private static Fallout4Mod SmallMod()

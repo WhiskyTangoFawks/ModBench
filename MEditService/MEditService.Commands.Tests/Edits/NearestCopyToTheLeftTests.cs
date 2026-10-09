@@ -241,7 +241,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
             (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
             (Plugin("Middle.esp", NpcCopy(0, "Guy", 0.9f)), false),
             (unlisted, true));
-        _plugins.Relist(Address(unlisted), entry => entry with { Slot = null });
+        _plugins.Relist(Address(unlisted), entry => entry with { Line = null });
         _edited = unlisted;
 
         var undeleted = Written(TheNpc, 0);

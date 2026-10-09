@@ -108,7 +108,7 @@ public sealed class CompilePluginTraceTests : HostedTests
 
         (await client.PutLoadOrder(
             elsewhere,
-            [new LoadOrderEntry(plugin, copied, "ReadingMod", Slot: 0, Enabled: true, Winning: true)]))
+            [new LoadOrderEntry(plugin, copied, "ReadingMod", Line: 0, Enabled: true, Winning: true)]))
             .EnsureSuccessStatusCode();
 
         return await client.Record(formKey);

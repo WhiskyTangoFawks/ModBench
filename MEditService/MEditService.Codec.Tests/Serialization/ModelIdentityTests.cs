@@ -11,16 +11,27 @@ namespace MEditService.Codec.Tests.Serialization;
 public sealed class ModelIdentityTests
 {
     [Fact]
-    public async Task FindFirst_OfAPluginThatOnlyChangesBytesOnRewrite_ReturnsNull()
+    public async Task FindFirst_OfAPluginWhoseRecordsAreRedeflatedAndHoldANegativeZero_ReturnsNull()
     {
-        var (original, recompiled, originalBytes, rewrittenBytes) = await ParseWriteAndReparse(StaleHeaderPlugins.Sierra);
+        var (original, recompiled, originalBytes, rewrittenBytes) = await ParseWriteAndReparse(NegativeZeroPlugin.Plugin);
 
-        Assert.False(originalBytes.AsSpan().SequenceEqual(rewrittenBytes),
-            "The generated plugin's rewrite does not change bytes — this test does not exercise the byte-changing rewrite it depends on.");
+        Assert.False(FirstRecordZlibHeader(originalBytes).SequenceEqual(FirstRecordZlibHeader(rewrittenBytes)),
+            "The rewrite does not re-deflate the generated plugin's records — this test does not exercise the re-deflate it depends on.");
 
         var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
 
         Assert.Null(divergence);
+    }
+
+    private const int RecordHeaderLength = 24;
+    private const int GroupHeaderLength = 24;
+    private const int InflatedLengthSize = 4;
+    private const int ZlibHeaderLength = 2;
+
+    private static ReadOnlySpan<byte> FirstRecordZlibHeader(byte[] plugin)
+    {
+        var firstRecordOffset = RecordHeaderLength + (int)BitConverter.ToUInt32(plugin, 4) + GroupHeaderLength;
+        return plugin.AsSpan(firstRecordOffset + RecordHeaderLength + InflatedLengthSize, ZlibHeaderLength);
     }
 
     [Fact]

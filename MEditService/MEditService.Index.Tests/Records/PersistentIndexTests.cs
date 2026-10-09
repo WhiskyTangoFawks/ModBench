@@ -22,7 +22,7 @@ public sealed class PersistentIndexTests : IDisposable
 
     public void Dispose() => _root.Dispose();
 
-    private LoadOrderEntry WriteARealPluginHoldingOneNpcIntoItsOwnModFolder(string name, string editorId, int slot)
+    private LoadOrderEntry WriteARealPluginHoldingOneNpcIntoItsOwnModFolder(string name, string editorId, int line)
     {
         var origin = Path.GetFileNameWithoutExtension(name) + "Mod";
         var folder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", origin)).FullName;
@@ -30,7 +30,7 @@ public sealed class PersistentIndexTests : IDisposable
         var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
         mod.Npcs.AddNew(editorId);
         mod.WriteToBinary(path);
-        return new LoadOrderEntry(name, path, origin, slot, Enabled: true, Winning: true);
+        return new LoadOrderEntry(name, path, origin, line, Enabled: true, Winning: true);
     }
 
     private sealed class Launch : IDisposable

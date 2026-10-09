@@ -18,7 +18,7 @@ public class CompoundPluginIdentityTests
     private static readonly PluginAddress ModA = new("Shared.esp", "ModA");
     private static readonly PluginAddress ModB = new("Shared.esp", "ModB");
 
-    private static ScatteredFixtureData SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey(string prefix, out FormKey npcKey, bool modBEnabled = true, int modBSlot = 1)
+    private static ScatteredFixtureData SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey(string prefix, out FormKey npcKey, bool modBEnabled = true, int modBLine = 1)
     {
         FormKey key = default;
         var fixture = new PluginFixtureBuilder(prefix)
@@ -26,7 +26,7 @@ public class CompoundPluginIdentityTests
             .WithPlugin("Shared.esp", mod => key = mod.Npcs.AddNew("FromModA").FormKey, origin: "ModA")
             .BuildScattered();
         npcKey = key;
-        fixture.Plugins = [.. fixture.Plugins.Select(p => p.Origin == "ModB" ? p with { Slot = modBSlot } : p)];
+        fixture.Plugins = [.. fixture.Plugins.Select(p => p.Origin == "ModB" ? p with { Line = modBLine } : p)];
         return fixture;
     }
 
@@ -83,9 +83,9 @@ public class CompoundPluginIdentityTests
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_NonParticipatingOriginNeverWinsViaOtherOriginsParticipation()
     {
-        const int modBSlotLaterThanModAWhereAFilenameOnlyJoinWouldPickIt = 5;
+        const int modBLineLaterThanModAWhereAFilenameOnlyJoinWouldPickIt = 5;
         using var fixture = SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey(
-            "identity-winner", out var npcKey, modBEnabled: false, modBSlot: modBSlotLaterThanModAWhereAFilenameOnlyJoinWouldPickIt);
+            "identity-winner", out var npcKey, modBEnabled: false, modBLine: modBLineLaterThanModAWhereAFilenameOnlyJoinWouldPickIt);
         using var index = Indexes.Reconciled(fixture);
 
         var only = Assert.Single(index.StackOf(npcKey.ToString()));
