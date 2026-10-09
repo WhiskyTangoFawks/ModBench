@@ -150,7 +150,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
         SourceFailure.Answer(() => Locator.CarryingFromText(Spelled(plugin), formKey, text));
 
     /// <summary>The record at <paramref name="formKey"/> with its own text read out of <paramref name="text"/>, the
-    /// document carrying it by <see cref="CarryingFromText"/>'s rule, and answering as that does.</summary>
+    /// document holding it by the rule of that document, and answering as that does.</summary>
     public SourceAnswer<SourceDocument?> RecordFromText(PluginAddress plugin, string formKey, string text) =>
         CarryingFromText(plugin, formKey, text).Then(found =>
             SourceAnswer.Of(found is var (record, carrying) ? OwnTextIn(text, record, carrying) : null));

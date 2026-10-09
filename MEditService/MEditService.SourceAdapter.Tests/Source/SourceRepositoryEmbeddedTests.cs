@@ -587,14 +587,43 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     {
         var absent = new SourceDocument("00FFFF:Embedded.esp", "refr", "Absent", "{}");
 
-        var refused = Assert.Throws<InvalidOperationException>(() => Repository.ChangesToRekey(
-            Plugin, absent.Identity, FreeFormKey).Value());
+        var refused = Assert.IsType<SourceFailure.NotCarried>(Repository.ChangesToRekey(Plugin, absent.Identity, FreeFormKey).Stopped());
 
-        Assert.Contains("00FFFF:Embedded.esp", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("00FFFF:Embedded.esp", refused.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
     public void ChangesToRewrite_OfAChildItsOwnersTextNamesWhereItsTypeHoldsNone_RefusesAsNoDocumentHoldingIt()
+    {
+        var child = WriteAChildInASlotItsOwnerTypeHoldsNone();
+
+        var refused = Assert.IsType<SourceFailure.NotCarried>(Repository.ChangesToRewrite(Plugin, child).Stopped());
+
+        AssertRefusedAsAChildItsOwnersTextDoesNotCarry(refused);
+    }
+
+    [Fact]
+    public void ChangesToRekey_OfAChildItsOwnersTextNamesWhereItsTypeHoldsNone_RefusesAsNoDocumentHoldingIt()
+    {
+        var child = WriteAChildInASlotItsOwnerTypeHoldsNone();
+
+        var refused = Assert.IsType<SourceFailure.NotCarried>(Repository.ChangesToRekey(Plugin, child.Identity, FreeFormKey).Stopped());
+
+        AssertRefusedAsAChildItsOwnersTextDoesNotCarry(refused);
+    }
+
+    [Fact]
+    public void ChangesToRekey_OfARecordWhoseFileWentAfterItWasLocated_RefusesAsNoDocumentHoldingIt()
+    {
+        var quest = Identity(_quest, "qust");
+        File.Delete(FullPath(Repository.RelativePathOf(Plugin, quest).Value().Require()));
+
+        var refused = Assert.IsType<SourceFailure.NotCarried>(Repository.ChangesToRekey(Plugin, quest, FreeFormKey).Stopped());
+
+        Assert.Contains(_quest.FormKey.ToString(), refused.Reason, StringComparison.Ordinal);
+    }
+
+    private SourceDocument WriteAChildInASlotItsOwnerTypeHoldsNone()
     {
         var folder = RecordTypes.For(Release).GroupOf("globalfloat").Require();
         var carrier = Path.Combine(_modFolder, Root, folder, $"Carrier - 00A000_{PluginName}.json");
@@ -603,10 +632,11 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
             carrier,
             "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Embedded.esp\",\n" +
             "  \"Temporary\": [ { \"FormKey\": \"00A001:Embedded.esp\" } ]\n}");
-        var child = new SourceDocument("00A001:Embedded.esp", "refr", null, "{\n  \"FormKey\": \"00A001:Embedded.esp\"\n}");
+        return new SourceDocument("00A001:Embedded.esp", "refr", null, "{\n  \"FormKey\": \"00A001:Embedded.esp\"\n}");
+    }
 
-        var refused = Assert.IsType<SourceFailure.NotCarried>(Repository.ChangesToRewrite(Plugin, child).Stopped());
-
+    private static void AssertRefusedAsAChildItsOwnersTextDoesNotCarry(SourceFailure.NotCarried refused)
+    {
         Assert.Contains("its own text does not carry it", refused.Reason, StringComparison.Ordinal);
         Assert.EndsWith(
             "If nothing outside Modbench changed that file, this is a defect — please report it; otherwise relaunch mEdit so the index re-reads the tree.",

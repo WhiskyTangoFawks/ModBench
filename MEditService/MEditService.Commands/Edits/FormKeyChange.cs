@@ -19,7 +19,7 @@ internal sealed class FormKeyChange(ILogger logger)
     internal static bool IsFormIdEdit(RecordEditEnvelope envelope) =>
         envelope is { Op: RecordEditEnvelope.Set, Path: [{ Kind: PathHop.MemberKind, Name: Member }] };
 
-    /// <summary>The record's file or folder moved to its new key.</summary>
+    /// <summary>The record under its new key.</summary>
     internal SourceAnswer<RecordEditResult> Change(
         PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, JsonElement? value)
     {
