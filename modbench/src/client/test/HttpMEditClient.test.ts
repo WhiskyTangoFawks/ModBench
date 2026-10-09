@@ -18,7 +18,7 @@ const fakeLogChannel = () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), er
 
 function makeClient(
   fetch: (input: Request) => Promise<Response>,
-  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs'> = {},
+  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs' | 'log'> = {},
 ) {
   return createMEditClient({
     backend: {
@@ -408,11 +408,13 @@ describe('HttpMEditClient — getComparison', () => {
     expect(await client.getComparison('000801:Gone.esp')).toBeNull();
   });
 
-  it('rejects on any other non-OK answer', async () => {
+  it('rejects on any other non-OK answer with mEdit\'s reason alone, and files the verb and status in the log', async () => {
+    const log = vi.fn();
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(500, { detail: 'boom' })));
-    const client = makeClient(fetch);
+    const client = makeClient(fetch, { log });
 
-    await expect(client.getComparison('000801:Broken.esp')).rejects.toThrow(/getComparison.*failed \(500\)/);
+    await expect(client.getComparison('000801:Broken.esp')).rejects.toThrow(new Error('boom'));
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/getComparison.*failed \(500\): boom/));
   });
 });
 
@@ -447,7 +449,7 @@ describe('HttpMEditClient — getRecordsComparison', () => {
   it('rejects on any other non-OK answer', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(400, { detail: 'No records.' })));
 
-    await expect(makeClient(fetch).getRecordsComparison([])).rejects.toThrow(/getRecordsComparison.*failed \(400\)/);
+    await expect(makeClient(fetch).getRecordsComparison([])).rejects.toThrow(new Error('No records.'));
   });
 });
 
@@ -1156,7 +1158,7 @@ describe('HttpMEditClient — read timeout, checked through getRecordTypes, stan
     });
     const client = makeClient(fetch, { timeoutMs: 20 });
 
-    await expect(client.getRecordTypes({ name: 'MyPatch.esp', origin: 'ModA' })).rejects.toThrow(/timed out after 20ms/);
+    await expect(client.getRecordTypes({ name: 'MyPatch.esp', origin: 'ModA' })).rejects.toThrow(new Error('mEdit did not answer in time.'));
     expect(sawSignal?.aborted).toBe(true);
   });
 
@@ -1276,6 +1278,21 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     answerHandOver();
     await gesturing;
     expect(requests).toHaveLength(1);
+  });
+
+  it('fails a refused hand-over with mEdit\'s reason alone', async () => {
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', () => Promise.resolve(jsonResponse(400, { detail: 'Not plugin source.' }))],
+    ]);
+    const client = makeClient(fetch);
+    const settled = vi.fn();
+    client.onUnsavedHandOver(settled);
+    await client.start();
+
+    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+
+    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith('Not plugin source.'));
   });
 
   it('carries no documents of its own: an edit sends its envelope alone', async () => {

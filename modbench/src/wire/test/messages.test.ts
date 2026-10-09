@@ -70,8 +70,8 @@ describe('the record load request the webview asks of the host, because nothing 
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [], documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: { ModA: 'tracked' }, fileCopyAlone: false, fileOverriddenBy: null,
     });
 
-    expect(parseExtensionToWebview({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: false, error: 'HTTP 404' }))
-      .toEqual({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: false, error: 'HTTP 404' });
+    expect(parseExtensionToWebview({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: false, error: 'No such record.' }))
+      .toEqual({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: false, error: 'No such record.' });
   });
 
   it('rejects an answer that does not say whether the file\'s copy is read alone', () => {

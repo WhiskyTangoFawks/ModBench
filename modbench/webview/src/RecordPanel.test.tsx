@@ -585,7 +585,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     expect(client.load).toHaveBeenCalledTimes(1);
   });
 
-  it('offers no compile on a column whose tracked state is unknown, as when /plugins fails a column is neither tracked nor untracked', async () => {
+  it('offers no compile on a column whose tracked state is unknown, when the page is given no plugin facts a column is neither tracked nor untracked', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',
@@ -1223,13 +1223,13 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
 
   it('clears error and shows data after a successful refresh following a load failure', async () => {
     const load = vi.fn()
-      .mockResolvedValueOnce({ ok: false, error: 'HTTP 500' })
+      .mockResolvedValueOnce({ ok: false, error: 'mEdit could not read the record.' })
       .mockResolvedValue({
         ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
         modsByOrigin: {}, immutableSet: new Set(['Fallout4.esm']), conflictsComputed: true, loadFailures: [],
       });
     renderPanel(compareResult, { load });
-    await waitFor(() => expect(screen.getByText('Failed to load: HTTP 500')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Failed to load: mEdit could not read the record.')).toBeInTheDocument());
 
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
@@ -1357,13 +1357,13 @@ describe('RecordPanel — states', () => {
   it('says the last read failed, beside the gone record, until a good read replaces it', async () => {
     const load = vi.fn()
       .mockResolvedValueOnce(loaded(null))
-      .mockResolvedValueOnce({ ok: false, error: 'HTTP 500' })
+      .mockResolvedValueOnce({ ok: false, error: 'mEdit could not read the record.' })
       .mockResolvedValue(loaded(compareResult));
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText('000001:Fallout4.esm is gone.'));
 
     loadRecord();
-    await waitFor(() => screen.getByText('000001:Fallout4.esm is gone. The last read failed: HTTP 500'));
+    await waitFor(() => screen.getByText('000001:Fallout4.esm is gone. The last read failed: mEdit could not read the record.'));
 
     loadRecord();
     await waitFor(() => screen.getByText('Override Name'));
@@ -1385,13 +1385,13 @@ describe('RecordPanel — states', () => {
   it('keeps the rows and says "Showing the last good read:" when a later read fails, until the next good one', async () => {
     const load = vi.fn()
       .mockResolvedValueOnce(loaded(compareResult))
-      .mockResolvedValueOnce({ ok: false, error: 'HTTP 500' })
+      .mockResolvedValueOnce({ ok: false, error: 'mEdit could not read the record.' })
       .mockResolvedValue(loaded(compareResult));
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText('Override Name'));
 
     loadRecord();
-    await waitFor(() => screen.getByText('Showing the last good read: HTTP 500'));
+    await waitFor(() => screen.getByText('Showing the last good read: mEdit could not read the record.'));
     expect(screen.getByText('Override Name')).toBeInTheDocument();
     expect(screen.queryByText(/Failed to load/)).not.toBeInTheDocument();
 

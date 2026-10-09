@@ -64,6 +64,12 @@ function editRefused(
   };
 }
 
+// What a failed read says to the front end: mEdit's own sentence, never the verb, path or status
+// the client logs.
+function refusalReason(error: unknown): string {
+  return errorText(error) || 'mEdit could not answer.';
+}
+
 function backendOptions(deps: HttpMEditClientDeps): BackendLifecycleOptions {
   return {
     executablePath: bundledBackendPath(process.platform, __dirname),
@@ -159,7 +165,9 @@ class HttpMEditClient implements MEditClient {
 
   private async putUnsavedDocuments(documents: readonly UnsavedDocument[]): Promise<void> {
     const { error, response } = await this.apiClient.PUT('/unsaved-documents', { body: { documents: [...documents] } });
-    if (!response.ok) throw new Error(`mEdit answered ${response.status}: ${errorText(error)}`);
+    if (response.ok) return;
+    this.log(`[HttpMEditClient] putUnsavedDocuments failed (${response.status}): ${errorText(error)}`);
+    throw new Error(refusalReason(error));
   }
 
   // ── notifications ────────────────────────────────────────────────────────
@@ -477,9 +485,13 @@ class HttpMEditClient implements MEditClient {
     if (response.ok) return;
     const text = errorText(error);
     const detail = text ? `: ${text}` : '';
-    const msg = `${what} failed (${response.status})${detail}`;
-    this.log(`[HttpMEditClient] ${msg}`);
-    throw new Error(msg);
+    this.log(`[HttpMEditClient] ${what} failed (${response.status})${detail}`);
+    throw new Error(refusalReason(error));
+  }
+
+  private unanswered(what: string): never {
+    this.log(`[HttpMEditClient] ${what}: mEdit answered with no body`);
+    throw new Error('mEdit gave no answer.');
   }
 
   // Races rather than trusting the fetch to honor the signal: a hung backend and an
@@ -491,7 +503,8 @@ class HttpMEditClient implements MEditClient {
     const deadline = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
         controller.abort();
-        reject(new Error(`${what} timed out after ${this.timeoutMs}ms`));
+        this.log(`[HttpMEditClient] ${what} timed out after ${this.timeoutMs}ms`);
+        reject(new Error('mEdit did not answer in time.'));
       }, this.timeoutMs);
     });
     try {
@@ -520,7 +533,7 @@ class HttpMEditClient implements MEditClient {
         signal,
       });
       this.ensureOk(`getPluginDependants(${plugin})`, response, error);
-      if (data === undefined) throw new Error(`mEdit gave no answer for getPluginDependants(${plugin})`);
+      if (data === undefined) this.unanswered(`getPluginDependants(${plugin})`);
       return data;
     });
   }
@@ -529,7 +542,7 @@ class HttpMEditClient implements MEditClient {
     return this.withTimeout('getPluginProblems', async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/problems', { signal });
       this.ensureOk('getPluginProblems', response, error);
-      if (data === undefined) throw new Error('mEdit gave no answer for getPluginProblems');
+      if (data === undefined) this.unanswered('getPluginProblems');
       return data;
     });
   }
@@ -552,7 +565,7 @@ class HttpMEditClient implements MEditClient {
         signal,
       });
       this.ensureOk(`getWorkingTreeStatesBeneath(${plugin})`, response, error);
-      if (data === undefined) throw new Error(`mEdit gave no answer for getWorkingTreeStatesBeneath(${plugin})`);
+      if (data === undefined) this.unanswered(`getWorkingTreeStatesBeneath(${plugin})`);
       return data;
     });
   }
@@ -628,14 +641,14 @@ class HttpMEditClient implements MEditClient {
       : await this.apiClient.GET('/records/{formKey}/compare', params);
     if (response.status === 404) return null;
     this.ensureOk(`getComparison(${formKey})`, response, error);
-    if (!data) throw new Error(`getComparison(${formKey}): ok response carried no body`);
+    if (!data) this.unanswered(`getComparison(${formKey})`);
     return data;
   }
 
   async getRecordsComparison(copies: RecordCopy[]): Promise<CompareRecordsResponse> {
     const { data, error, response } = await this.apiClient.POST('/records/compare', { body: { copies } });
     this.ensureOk('getRecordsComparison', response, error);
-    if (!data) throw new Error('getRecordsComparison: ok response carried no body');
+    if (!data) this.unanswered('getRecordsComparison');
     return data;
   }
 
@@ -659,7 +672,7 @@ class HttpMEditClient implements MEditClient {
       });
       if (response.status === 404) return null;
       this.ensureOk(`getRenderedDocument(${plugin}, ${formKey})`, response, error);
-      if (!data) throw new Error(`getRenderedDocument(${plugin}, ${formKey}): ok response carried no body`);
+      if (!data) this.unanswered(`getRenderedDocument(${plugin}, ${formKey})`);
       return data;
     });
   }
@@ -672,7 +685,7 @@ class HttpMEditClient implements MEditClient {
       });
       if (response.status === 404) return null;
       this.ensureOk(`getCopyDocument(${plugin}, ${formKey})`, response, error);
-      if (!data) throw new Error(`getCopyDocument(${plugin}, ${formKey}): ok response carried no body`);
+      if (!data) this.unanswered(`getCopyDocument(${plugin}, ${formKey})`);
       return data;
     });
   }
@@ -682,7 +695,7 @@ class HttpMEditClient implements MEditClient {
       const { data, error, response } = await this.apiClient.GET('/plugin-source/record', { params: { query: { path } }, signal });
       if (response.status === 204) return null;
       this.ensureOk(`getRecordOfFile(${path})`, response, error);
-      if (!data) throw new Error(`getRecordOfFile(${path}): ok response carried no body`);
+      if (!data) this.unanswered(`getRecordOfFile(${path})`);
       return data;
     });
   }

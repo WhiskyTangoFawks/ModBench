@@ -1135,7 +1135,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
-    h.client.setQueryFailure('getPlugins', new Error('GET /plugins failed (500)'));
+    h.client.setQueryFailure('getPlugins', new Error('No load order has been received.'));
     await h.tree.facts.reconciled([]);
 
     expect(h.tree.getTreeItem(present(row, 'the A.esp row')).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
@@ -1584,7 +1584,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
       const h = makeTree([A_ROW(), B_ROW()]);
       h.tree.setRecordFilterSource('a.sql');
       await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
-      h.client.setQueryFailure('getPlugins', new Error('GET /plugins failed (503)'));
+      h.client.setQueryFailure('getPlugins', new Error('No load order has been received.'));
       return h;
     };
     const labels = async (h: Harness) => (await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label);
@@ -2353,7 +2353,7 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
     await reconcile(h, [held('A.esp')]);
     expect((await rowItem(h)).description).toBe('malformed');
 
-    h.client.setQueryFailure('getDiagnoses', new Error('GET /plugins/diagnoses failed (503)'));
+    h.client.setQueryFailure('getDiagnoses', new Error('mEdit could not answer.'));
     await reconcile(h, [held('A.esp')]);
 
     expect((await rowItem(h)).description).toBe('malformed');
@@ -2595,19 +2595,19 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
 
   it('reports a failed plugin read at error, naming the reason once', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.setQueryFailure('getPlugins', new Error('GET /plugins failed (503)'));
+    h.client.setQueryFailure('getPlugins', new Error('No load order has been received.'));
 
     await h.tree.facts.reconciled([]);
 
     const failures = h.logged.filter((l) => l.msg.includes('plugin list failed'));
     expect(failures).toHaveLength(1);
     expect(present(failures[0], 'the sole logged failure').level).toBe('error');
-    expect(present(failures[0], 'the sole logged failure').msg).toContain('GET /plugins failed (503)');
+    expect(present(failures[0], 'the sole logged failure').msg).toContain('No load order has been received.');
   });
 
   it('reports a failed malformed-plugin scan at warn, below the read that succeeded', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.setQueryFailure('getDiagnoses', new Error('GET /plugins/diagnoses failed (503)'));
+    h.client.setQueryFailure('getDiagnoses', new Error('mEdit could not answer.'));
 
     await reconcile(h, [held('A.esp')]);
 

@@ -653,7 +653,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
 
   it('says why a destination lookup failed, and copies nothing', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryFailure('getPlugins', new Error('GET /plugins failed (503): No load order has been received.'));
+    client.setQueryFailure('getPlugins', new Error('No load order has been received.'));
     showQuickPick.mockImplementationOnce((items) =>
       Promise.resolve(items.find((item) => item.mode === 'New')));
     const { reporter } = invoke(client);
@@ -663,7 +663,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     expect(reporter.reports).toEqual([{
       severity: 'error',
       message: 'Could not look up the plugins to copy into.',
-      detail: 'GET /plugins failed (503): No load order has been received.',
+      detail: 'No load order has been received.',
     }]);
     expect(copyCalls(client)).toEqual([]);
   });
