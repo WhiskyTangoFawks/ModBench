@@ -10,6 +10,9 @@ import { goneFromDisk, newModNameRefusal } from '../coreLib/commandRefusals';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 export type { SelectionResult };
 
+type TailOf<F extends (adapter: InstanceAdapter, ...args: never[]) => unknown> =
+  F extends (adapter: InstanceAdapter, ...args: infer A) => unknown ? A : never;
+
 async function changeModOrder(adapter: InstanceAdapter, profile: string, decide: DecideModOrder): Promise<CommandResult> {
   try {
     const { wrote } = await adapter.changeModOrder(profile, decide);
@@ -42,7 +45,7 @@ async function changeSelection(
 }
 
 /** `modbench.mod.enable` / `modbench.mod.disable`, over the whole selection in one write. */
-export function setModsEnabled(
+function setModsEnabled(
   adapter: InstanceAdapter, profile: string, modNames: readonly string[], enabled: boolean,
 ): Promise<SelectionResult<string>> {
   return changeSelection(adapter, profile, 'mod', modNames, (found) =>
@@ -53,7 +56,7 @@ export type { MovePlace, OrderEnd, OriginFileMark, SeparatorsPlace } from '../in
 
 /** `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
  *  order, at the `end` of the place. A separator or mod that has gone refuses the whole move. */
-export function moveMods(
+function moveMods(
   adapter: InstanceAdapter, profile: string, modNames: readonly string[], place: MovePlace, end: OrderEnd,
 ): Promise<SelectionResult<string>> {
   return changeSelection(adapter, profile, 'mod', modNames, (found) => [{ kind: 'moveMods', mods: found, place, end }]);
@@ -61,7 +64,7 @@ export function moveMods(
 
 /** `modbench.mod.move` over separators (mods.md, Pickers, Move): each brings every mod it holds,
  *  and they land on the `end` side of the place. A target that has gone refuses the whole move. */
-export function moveSeparators(
+function moveSeparators(
   adapter: InstanceAdapter, profile: string, separatorNames: readonly string[], place: SeparatorsPlace, end: OrderEnd,
 ): Promise<SelectionResult<string>> {
   return changeSelection(adapter, profile, 'separator', separatorNames, (found) =>
@@ -75,7 +78,7 @@ export interface OriginFileRef {
 }
 
 /** `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own. */
-export async function markFiles(
+async function markFiles(
   adapter: InstanceAdapter, files: readonly OriginFileRef[], mark: OriginFileMark,
 ): Promise<SelectionOutcome<OriginFileRef>> {
   return selectionOutcomeOf(files, async (file): Promise<CommandResult> => {
@@ -108,13 +111,13 @@ async function entryNameRefusal(
 /** Why `requested` cannot name a separator, or `undefined` when it can: the profile's mod order
  *  lists one of that name, or a folder holds one, matched as the instance matches names. `own`, the
  *  separator being renamed, is no clash. */
-export const separatorNameRefusal = (
+const separatorNameRefusal = (
   adapter: InstanceAdapter, profile: string, requested: string, own?: string,
 ): Promise<string | undefined> => entryNameRefusal(adapter, profile, 'separator', requested, SEPARATOR_NAME_CLASH, own);
 
 /** Why `requested` cannot rename mod `own`, or `undefined` when it can: it holds a path separator, or
  *  another mod of that name is listed or has a folder, matched as the instance matches names. */
-export const renameModNameRefusal = (
+const renameModNameRefusal = (
   adapter: InstanceAdapter, profile: string, requested: string, own: string,
 ): Promise<string | undefined> =>
   (/[\\/]/.test(requested)
@@ -130,7 +133,7 @@ function groupStartOf(order: readonly ModlistEntry[], at: number): number {
 
 /** Insert a new enabled separator next to the anchor (mods.md, Add separator): on a mod, directly
  *  after it; on a separator, before its own group's winning-most member. */
-export function insertSeparator(
+function insertSeparator(
   adapter: InstanceAdapter, profile: string, requested: string, anchor: EntryRef,
 ): Promise<CommandResult> {
   return changeModOrder(adapter, profile, (order) => {
@@ -142,7 +145,7 @@ export function insertSeparator(
 }
 
 /** Rename a separator in place, and its folder with it. */
-export function renameSeparator(
+function renameSeparator(
   adapter: InstanceAdapter, profile: string, oldName: string, requested: string,
 ): Promise<CommandResult> {
   return changeModOrder(adapter, profile, () => [{ kind: 'renameSeparator', from: oldName, to: requested }]);
@@ -197,7 +200,7 @@ async function trashThenUnlist(
 /** `modbench.separator.delete` over the selection. The trash cannot be undone, so each folder goes
  *  before its line: a refused trash writes nothing for that separator (commands.md, *A failed
  *  gesture writes nothing*). */
-export function deleteSeparators(
+function deleteSeparators(
   adapter: InstanceAdapter, profile: string, names: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionResult<TrashedEntry>> {
   return trashThenUnlist(adapter, profile, 'separator', names, trash);
@@ -205,7 +208,7 @@ export function deleteSeparators(
 
 /** A mod handed to `uninstallMods`: its own name, and the downloaded file it was installed from,
  *  when known. With none, no download is marked. */
-export interface ModToUninstall {
+interface ModToUninstall {
   name: string;
   archiveFilename?: string;
 }
@@ -218,7 +221,7 @@ interface UninstalledMod extends TrashedEntry {
 
 /** `modbench.mod.uninstall` over the selection: each mod's folder to the trash, then its line,
  *  then its downloaded file marked unless that file is gone (mods.md, Reporting, story 4). */
-export async function uninstallMods(
+async function uninstallMods(
   adapter: InstanceAdapter, profile: string, mods: readonly ModToUninstall[], trash: MoveToTrash,
 ): Promise<SelectionResult<UninstalledMod>> {
   const archiveOf = new Map(mods.map((m) => [m.name, m.archiveFilename] as const));
@@ -249,7 +252,7 @@ export type CreateEmptyModResult =
 
 /** A mod's folder plus a disabled line at the winning end of mod order — nothing else. A name a
  *  folder already holds is refused. */
-export async function createEmptyMod(adapter: InstanceAdapter, profile: string, name: string): Promise<CreateEmptyModResult> {
+async function createEmptyMod(adapter: InstanceAdapter, profile: string, name: string): Promise<CreateEmptyModResult> {
   try {
     const refusal = await newModNameRefusal(adapter, name);
     if (refusal !== undefined) return { applied: false, refusal };
@@ -270,7 +273,7 @@ export type RenameModResult =
 
 /** The folder first, then the line in each of `profiles`, the active one first. A mod a profile
  *  does not list leaves that profile as it was. */
-export async function renameMod(
+async function renameMod(
   adapter: InstanceAdapter, activeProfile: string, profiles: readonly string[], from: string, to: string,
 ): Promise<RenameModResult> {
   try {
@@ -324,3 +327,24 @@ export type ModSyncRun = (inputs: { readonly profile: string; readonly modFolder
 export function modSyncOver(adapter: InstanceAdapter): ModSyncRun {
   return ({ profile, modFolders }) => syncMods(adapter, profile, modFolders ?? []);
 }
+
+/** The modlist's commands, bound to one instance: each takes the gesture's arguments only. */
+export function modlistCommands(adapter: InstanceAdapter) {
+  return {
+    setModsEnabled: (...args: TailOf<typeof setModsEnabled>) => setModsEnabled(adapter, ...args),
+    moveMods: (...args: TailOf<typeof moveMods>) => moveMods(adapter, ...args),
+    moveSeparators: (...args: TailOf<typeof moveSeparators>) => moveSeparators(adapter, ...args),
+    markFiles: (...args: TailOf<typeof markFiles>) => markFiles(adapter, ...args),
+    insertSeparator: (...args: TailOf<typeof insertSeparator>) => insertSeparator(adapter, ...args),
+    renameSeparator: (...args: TailOf<typeof renameSeparator>) => renameSeparator(adapter, ...args),
+    deleteSeparators: (...args: TailOf<typeof deleteSeparators>) => deleteSeparators(adapter, ...args),
+    uninstallMods: (...args: TailOf<typeof uninstallMods>) => uninstallMods(adapter, ...args),
+    createEmptyMod: (...args: TailOf<typeof createEmptyMod>) => createEmptyMod(adapter, ...args),
+    renameMod: (...args: TailOf<typeof renameMod>) => renameMod(adapter, ...args),
+    separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(adapter, ...args),
+    renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(adapter, ...args),
+    newModNameRefusal: (name: string) => newModNameRefusal(adapter, name),
+  };
+}
+
+export type ModlistCommands = ReturnType<typeof modlistCommands>;

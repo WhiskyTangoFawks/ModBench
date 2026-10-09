@@ -198,7 +198,6 @@ export default defineConfig(
         files: ['src/**/*.test.ts', 'src/test/**/*.ts', 'src/*/test/**/*.ts'],
         rules: { 'no-restricted-imports': ['error', { paths: BYTE_READ_PATHS }] },
     },
-    // The wire's type-only readers of the generated schema.
     ...['messages', 'pluginAddress', 'wireContractChecks'].map((name) => ({
         files: [`src/wire/${name}.ts`],
         rules: { 'no-restricted-imports': restrictedImports({ vscode: true, packages: true, path: false, clientSeam: false }) },
@@ -243,7 +242,6 @@ export default defineConfig(
         },
     },
 
-    // The reporter and the dialog own a message API; tests swap it out to observe a toast.
     {
         files: ['webview/src/**/*.{ts,tsx}'],
         ignores: ['webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**', 'webview/src/nativeBridge.ts'],
