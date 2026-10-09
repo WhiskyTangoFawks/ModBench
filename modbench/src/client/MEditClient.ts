@@ -105,11 +105,27 @@ export type LoadOrderOutcome =
  *  own error when it threw. */
 export type LaunchOutcome = { outcome: 'running' } | { outcome: 'stopped' } | { outcome: 'failed'; error?: string };
 
+/** A document with changes VS Code holds unsaved, by absolute path. */
+export interface UnsavedDocument { path: string; text: string }
+
+/** What a gesture changes in plugin source, by absolute path: each move, then each deletion of a file or folder, then
+ *  each document's text once moved. */
+export type SourceChanges = Pick<components['schemas']['RecordEditChangesResponse'], 'moves' | 'deletions' | 'documents'>;
+
+// What deleting one record changes in plugin source.
+type RecordDeleteChanges = SourceChanges & { record: RecordAddress };
+
+/** A delete's changes per record, in the order to make them, and the records mEdit refused. */
+export interface DeleteChangesOutcome {
+  applied: readonly RecordDeleteChanges[];
+  refused: readonly ItemRefusal<RecordAddress>[];
+}
+
 /** An edit's changes to plugin source, each move and then each document's text at its absolute path,
  *  or its refusal: `refusal` is the backend's name, `'Unknown'` this side's. An edit of the FormID
  *  sets `newFormKey`. */
 export type RecordEditChangesOutcome =
-  | ({ applied: true; newFormKey?: string } & Pick<components['schemas']['RecordEditChangesResponse'], 'moves' | 'documents'>)
+  | ({ applied: true; newFormKey?: string } & SourceChanges)
   | { applied: false; refusal: string; message: string };
 
 /** `rebuildIndex`'s own outcome (ADR-0010). */
@@ -186,9 +202,11 @@ export interface MEditClient {
   createRecord(
     plugin: PluginAddress, recordType: string, into?: { container?: string; position?: GridPosition },
   ): Promise<RecordCreateResponse | WriteRefused>;
-  // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
-  // call itself failing, with nothing deleted.
-  deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused>;
+  // commands.md, A selection is one gesture, and each item lands on its own. `unsaved` stands in for the files
+  // it names. A WriteRefused is the call itself failing. Nothing is written.
+  getDeleteChanges(
+    records: readonly RecordAddress[], unsaved: readonly UnsavedDocument[],
+  ): Promise<DeleteChangesOutcome | WriteRefused>;
   // Each record into each destination is one item, landed or refused on its own. `replace` lets an
   // override copy over the one a destination already holds.
   copyRecords(

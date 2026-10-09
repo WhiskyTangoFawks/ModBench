@@ -17,7 +17,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
 
     private string WorldspaceText() => _fixture.DocumentCarrying(ContainerModPlugin.WorldspaceEditorId).Body;
 
-    private DeleteRecordHandler DeleteHandler() => _fixture.DeleteHandler;
+    private DeleteRecordChangesHandler DeleteHandler() => _fixture.DeleteHandler;
 
     [Fact]
     public void DeletingAContainersOwnRecord_RemovesEveryEmbeddedDescendantWithIt()

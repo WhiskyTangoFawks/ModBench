@@ -51,19 +51,19 @@ internal static class ItemWrite
             ? RecordEditResult.Refused(RecordEditRefusal.GitUnavailable, gitMissing.Reason)
             : null;
 
-    /// <summary>A tree another tool changed, or a file system that refused the write, is that item's
-    /// answer. <paramref name="failure"/> names what could not be written; the file system's words
-    /// follow it.</summary>
-    internal static Task<SelectionResult<TItem, RecordEditRefusal, string?>> Over<TItem>(
+    /// <summary>A tree another tool changed, or a file system that refused the write, is that item's answer;
+    /// <paramref name="failure"/> names what could not be written. <paramref name="landed"/> makes a landed item's outcome.</summary>
+    internal static Task<SelectionResult<TItem, RecordEditRefusal, TOutcome>> Over<TItem, TOutcome>(
         IEnumerable<TItem> items, IEqualityComparer<TItem> sameItem,
-        Func<TItem, SourceAnswer<RecordEditResult>> write, Func<TItem, string> failure, ILogger logger) =>
+        Func<TItem, SourceAnswer<RecordEditChanges>> write, Func<RecordEditChanges, TOutcome> landed,
+        Func<TItem, string> failure, ILogger logger) =>
         OverAsync(
             items, sameItem, RecordEditRefusal.GitUnavailable,
             item =>
             {
                 var result = WriteFailure.Refused(write(item), refused => refused, failure(item), logger);
-                return Task.FromResult(result.Applied
-                    ? ItemAnswer<RecordEditRefusal, string?>.Landed(result.NewFormKey)
-                    : ItemAnswer<RecordEditRefusal, string?>.Refused(result.Refusal, result.Message));
+                return Task.FromResult(result.Outcome.Applied
+                    ? ItemAnswer<RecordEditRefusal, TOutcome>.Landed(landed(result))
+                    : ItemAnswer<RecordEditRefusal, TOutcome>.Refused(result.Outcome.Refusal, result.Outcome.Message));
             });
 }

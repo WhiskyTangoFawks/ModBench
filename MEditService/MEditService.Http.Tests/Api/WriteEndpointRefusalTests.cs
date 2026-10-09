@@ -65,7 +65,7 @@ public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture
     [Fact]
     public async Task DeletingNoRecordsIsABadRequest()
     {
-        var response = await _client.PostAsJsonAsync("/records/delete", new { records = Array.Empty<object>() });
+        var response = await _client.PostAsJsonAsync("/records/delete-changes", new { records = Array.Empty<object>() });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -73,7 +73,7 @@ public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture
     [Fact]
     public async Task DeletingARecordWithNoOriginIsABadRequest()
     {
-        var response = await _client.PostAsJsonAsync("/records/delete", new
+        var response = await _client.PostAsJsonAsync("/records/delete-changes", new
         {
             records = new[] { new { formKey = "000800:Editable.esp", plugin = Plugin, origin = "" } },
         });

@@ -83,7 +83,32 @@ internal static class Wire
         static string Text(JsonElement element, string name) => element.GetProperty(name).GetString().Require();
         EditSaving.Save(
             changes.GetProperty("moves").EnumerateArray().Select(move => (Text(move, "from"), Text(move, "to"))),
+            changes.GetProperty("deletions").EnumerateArray().Select(deletion => deletion.GetString().Require()),
             changes.GetProperty("documents").EnumerateArray().Select(document => (Text(document, "path"), Text(document, "text"))));
+        return response;
+    }
+
+    /// <summary>A delete as Modbench makes one: mEdit answers the changes each record's deletion makes, and each
+    /// landed item's are saved in the order answered. The answer is mEdit's.</summary>
+    internal static async Task<HttpResponseMessage> DeleteRecords(
+        this HttpClient client, IEnumerable<(string FormKey, string Plugin, string Origin)> records)
+    {
+        var response = await client.PostAsJsonAsync("/records/delete-changes", new
+        {
+            records = records.Select(r => new { formKey = r.FormKey, plugin = r.Plugin, origin = r.Origin }),
+            documents = Array.Empty<object>(),
+        });
+        if (!response.IsSuccessStatusCode) return response;
+
+        var answer = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        static string Text(JsonElement element, string name) => element.GetProperty(name).GetString().Require();
+        foreach (var changes in answer.GetProperty("applied").EnumerateArray())
+        {
+            EditSaving.Save(
+                changes.GetProperty("moves").EnumerateArray().Select(move => (Text(move, "from"), Text(move, "to"))),
+                changes.GetProperty("deletions").EnumerateArray().Select(deletion => deletion.GetString().Require()),
+                changes.GetProperty("documents").EnumerateArray().Select(document => (Text(document, "path"), Text(document, "text"))));
+        }
         return response;
     }
 

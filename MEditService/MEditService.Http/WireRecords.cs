@@ -103,11 +103,16 @@ internal sealed record CopyMissing(string FormKey, PluginAddress Plugin, CopyMis
 /// when Missing is not empty.</summary>
 internal sealed record CompareRecordsResponse(CompareResult? Compare, IReadOnlyList<CopyMissing> Missing);
 
-internal sealed record RecordDeleteRequest(IReadOnlyList<RecordAddress> Records);
+/// <summary>Records to delete, and the unsaved text of the documents that stand in for their files.</summary>
+internal sealed record RecordDeleteChangesRequest(IReadOnlyList<RecordAddress> Records, IReadOnlyList<DocumentChange> Documents);
 
-/// <summary>Applied or refusal, per record (ADR-0019): a refusal is an item of the
-/// answer, never the status of the call.</summary>
-internal sealed record RecordDeleteResponse(IReadOnlyList<RecordAddress> Applied, IReadOnlyList<RecordAddressRefusal> Refused);
+/// <summary>The changes deleting one record makes to plugin source, written nowhere, as an edit's are.</summary>
+internal sealed record RecordDeleteChanges(
+    RecordAddress Record, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents);
+
+/// <summary>Changes or refusal, per record (ADR-0019): a refusal is an item of the answer, never the status of the call.
+/// Made in the order answered, the items leave the records deleted one after another.</summary>
+internal sealed record RecordDeleteChangesResponse(IReadOnlyList<RecordDeleteChanges> Applied, IReadOnlyList<RecordAddressRefusal> Refused);
 
 /// <summary>Copy's Argument and Options (commands.md, Record, `copy`). <see cref="Replace"/> lets an
 /// override copy over the one a destination holds; the surface supplies it once the user confirms.</summary>

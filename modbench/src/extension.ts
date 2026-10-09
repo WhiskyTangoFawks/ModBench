@@ -11,7 +11,7 @@ import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFo
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
 import type { PluginAddress } from './wire/pluginAddress';
-import { createSourceLanguage } from './sourceLanguage';
+import { createSourceLanguage, dirtyPluginSource } from './sourceLanguage';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
 import type { RecordWrite } from './drivingLib/writingGesture';
@@ -239,6 +239,7 @@ export function activate(context: vscode.ExtensionContext): void {
     recordViewIds: ['modbench.pluginListTree'],
     recordWrite,
     refreshSourceControlFor: trackedRepositories.refreshSourceControlFor,
+    dirtyPluginSource,
     modFacts,
   });
   const views = buildViews({

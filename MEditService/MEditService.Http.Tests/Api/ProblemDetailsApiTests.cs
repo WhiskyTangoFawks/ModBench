@@ -97,7 +97,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [InlineData("createPlugin", 503)]
     [InlineData("getFilter", 503)]
     [InlineData("track", 503)]
-    [InlineData("deleteRecord", 503)]
+    [InlineData("deleteRecordChanges", 503)]
     [InlineData("setFilter", 503)]
     [InlineData("getReferences", 503)]
     [InlineData("getPluginDiagnoses", 503)]
@@ -141,7 +141,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             "getCellChildRecords" => await client.GetAsync("/plugins/New.esp/cells/000800%3ANew.esp/children?origin=NoLoadOrderMod"),
             "getInteriorCells" => await client.GetAsync("/plugins/New.esp/interior-cells?origin=NoLoadOrderMod"),
             "track" => await client.PostAsJsonAsync("/plugins/track", new { mods = new[] { "NoLoadOrderMod" } }),
-            "deleteRecord" => await client.PostAsJsonAsync("/records/delete", new
+            "deleteRecordChanges" => await client.PostAsJsonAsync("/records/delete-changes", new
             {
                 records = new[] { new { formKey = "000800:New.esp", plugin = "New.esp", origin = "NoLoadOrderMod" } },
             }),

@@ -8,6 +8,6 @@ export type {
   ChildRecordSummary, ContainerChildSummary, CompileDiagnostic, CompileOutcome,
   LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsResponse, RecordTypeChoice, GridPosition, WorkingTreeStatesBeneath,
 } from './MEditClient';
-export type { RecordEditEnvelope } from './MEditClient';
+export type { RecordEditEnvelope, SourceChanges, UnsavedDocument } from './MEditClient';
 export { isMEditGone, isRefused, UNLIMITED_RECORDS } from './MEditClient';
 export { createMEditClient, stopMEditClient } from './HttpMEditClient';

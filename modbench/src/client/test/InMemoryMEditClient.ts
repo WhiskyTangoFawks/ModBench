@@ -16,7 +16,7 @@ type QueryMethod =
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
-  | 'createPlugin' | 'renameSource' | 'rebuildIndex' | 'track' | 'createRecord' | 'deleteRecords'
+  | 'createPlugin' | 'renameSource' | 'rebuildIndex' | 'track' | 'createRecord' | 'getDeleteChanges'
   | 'copyRecords' | 'decompile' | 'compile';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
@@ -275,8 +275,8 @@ export class InMemoryMEditClient implements MEditClient {
   createRecord(...args: Parameters<MEditClient['createRecord']>): ReturnType<MEditClient['createRecord']> {
     return this.command('createRecord', args);
   }
-  deleteRecords(...args: Parameters<MEditClient['deleteRecords']>): ReturnType<MEditClient['deleteRecords']> {
-    return this.command('deleteRecords', args);
+  getDeleteChanges(...args: Parameters<MEditClient['getDeleteChanges']>): ReturnType<MEditClient['getDeleteChanges']> {
+    return this.command('getDeleteChanges', args);
   }
   copyRecords(...args: Parameters<MEditClient['copyRecords']>): ReturnType<MEditClient['copyRecords']> {
     return this.command('copyRecords', args);
