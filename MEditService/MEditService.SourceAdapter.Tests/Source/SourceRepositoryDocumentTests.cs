@@ -153,6 +153,20 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         Assert.Empty(Directory.EnumerateFiles(NpcGroupFolder));
     }
 
+    [Fact]
+    public void ChangesToRemove_OfARecordTheTreeHolds_DeletesItsFile_AndRemovesNothing()
+    {
+        var repository = Opened();
+        var file = Directory.EnumerateFiles(NpcGroupFolder).Single();
+
+        var changes = repository.ChangesToRemove(Plugin, Npc).Value();
+
+        Assert.Equal([Path.GetRelativePath(_modFolder, file)], changes.Deletions);
+        Assert.Empty(changes.Moves);
+        Assert.Empty(changes.Documents);
+        Assert.True(File.Exists(file));
+    }
+
     [PosixFact]
     public void Remove_OfAFlatRecordWhoseFileCannotBeRead_StillDeletesIt()
     {

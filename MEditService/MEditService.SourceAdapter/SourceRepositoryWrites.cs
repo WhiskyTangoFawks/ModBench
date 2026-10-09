@@ -7,8 +7,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>The changes a transaction is made of, put and rekey, each by identity; and the writes made
-/// directly, remove and the whole-plugin replacement. Every write forgets what the locator remembered of the tree.</summary>
+/// <summary>The changes a transaction is made of, put, remove and rekey, each by identity; and the
+/// write made directly, the whole-plugin replacement. Every write forgets what the locator remembered of the tree.</summary>
 internal sealed class SourceRepositoryWrites(
     string modFolder, GameRelease release, SourceRepositoryLocator locator, SourceRepositoryLayout layout, SourceRepositoryGit git)
 {
@@ -21,7 +21,9 @@ internal sealed class SourceRepositoryWrites(
             : throw new InvalidOperationException(
                 $"{cell.FormKey}'s document carries no grid, so it has no place in worldspace {worldspace}.");
 
-    internal void Remove(PluginAddress plugin, RecordIdentity identity)
+    /// <summary>What removing a record changes: its embedded child cut from its owner's document, its
+    /// directory-per-record container's folder, or its file.</summary>
+    internal SourceChanges ChangesToRemove(PluginAddress plugin, RecordIdentity identity)
     {
         if (locator.Locate(plugin, identity) is not { } unit)
         {
@@ -29,36 +31,16 @@ internal sealed class SourceRepositoryWrites(
                 $"No document in {plugin.Name}'s tree holds {identity.FormKey}. {SourceFailure.NotCarried.DefectOrOutsideChange}");
         }
 
-        var journal = new WriteJournal(_modFolder);
-        try
+        if (unit.IsEmbedded)
         {
-            if (unit.IsEmbedded)
-            {
-                var ownerBytes = OwnerBytes(unit);
-                if (DocumentText.EmbeddedChildIn(ownerBytes, unit, identity.FormKey, _release) is not { } span)
-                    throw NoLongerCarried(unit, identity.FormKey);
+            var ownerBytes = OwnerBytes(unit);
+            return DocumentText.EmbeddedChildIn(ownerBytes, unit, identity.FormKey, _release) is { } span
+                ? Written(unit.FullPath, EmbeddedChildSplice.Cut(ownerBytes, span))
+                : throw NoLongerCarried(unit, identity.FormKey);
+        }
 
-                journal.WriteText(unit.FullPath, EmbeddedChildSplice.Cut(ownerBytes, span));
-            }
-            else if (unit.IsDirectoryPerRecord)
-            {
-                var directory = PathShape.DirectoryOf(unit.FullPath);
-                if (Directory.Exists(directory)) journal.DeleteTree(directory);
-            }
-            else
-            {
-                journal.Delete(unit.FullPath);
-            }
-        }
-        catch (Exception cause) when (cause is not OutOfMemoryException)
-        {
-            if (journal.Report(cause, journal.UndoSince(0)) is { } report) throw report;
-            throw;
-        }
-        finally
-        {
-            locator.Forget();
-        }
+        var path = unit.IsDirectoryPerRecord ? PathShape.DirectoryOf(unit.FullPath) : unit.FullPath;
+        return new SourceChanges([], [Path.GetRelativePath(_modFolder, path)], []);
     }
 
     /// <summary>What putting a document changes: a held one's as <see cref="ChangesToRewrite"/> says, a new one's
@@ -94,7 +76,7 @@ internal sealed class SourceRepositoryWrites(
     {
         var (levels, placed) = layout.PlaceNewDocument(plugin, document.Identity, placement)
             ?? throw NoPlaceInTheTree(plugin, document.Identity);
-        return new SourceChanges([], [.. levels, Document(placed.FullPath, document.Body)]);
+        return new SourceChanges([], [], [.. levels, Document(placed.FullPath, document.Body)]);
     }
 
     private SourceChanges ChangesToHeld(SourceUnit unit, SourceDocument document)
@@ -151,7 +133,7 @@ internal sealed class SourceRepositoryWrites(
 
         var placed = layout.PlaceNewDocument(plugin, identity with { FormKey = newFormKey }, placement: null)?.Unit
             ?? throw NoPlaceInTheTree(plugin, identity);
-        return new SourceChanges([Moved(unit.FullPath, placed.FullPath)], [Document(placed.FullPath, text)]);
+        return new SourceChanges([Moved(unit.FullPath, placed.FullPath)], [], [Document(placed.FullPath, text)]);
     }
 
     // The codec is the one reader that sees why a text it is given is no record, and it says so by throwing
@@ -169,9 +151,9 @@ internal sealed class SourceRepositoryWrites(
     }
 
     private SourceChanges Planned(LeafMoves plan, string text) =>
-        new([.. plan.Moves.Select(move => Moved(move.From, move.To))], [Document(plan.Written, text)]);
+        new([.. plan.Moves.Select(move => Moved(move.From, move.To))], [], [Document(plan.Written, text)]);
 
-    private SourceChanges Written(string fullPath, string text) => new([], [Document(fullPath, text)]);
+    private SourceChanges Written(string fullPath, string text) => new([], [], [Document(fullPath, text)]);
 
     private SourceMove Moved(string from, string to) =>
         new(Path.GetRelativePath(_modFolder, from), Path.GetRelativePath(_modFolder, to));

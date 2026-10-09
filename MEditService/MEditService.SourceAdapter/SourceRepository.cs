@@ -321,10 +321,11 @@ public sealed class SourceRepository : ISourceRepositoryReads
         PluginAddress plugin, SourceDocument carrying, RecordIdentity identity, string newFormKey) =>
         SourceFailure.Answer(() => Writes.ChangesToRekey(Spelled(plugin), carrying, identity, newFormKey));
 
-    /// <summary>Takes the record out of the tree: its file, its directory, or its element of another
-    /// record's document. A record no document holds, or whose document lacks it, is not carried.</summary>
-    public SourceFailure? Remove(PluginAddress plugin, RecordIdentity identity) =>
-        SourceFailure.Answer(() => Writes.Remove(Spelled(plugin), identity));
+    /// <summary>What taking the record out of the tree changes, written nowhere: its file, its directory, or its
+    /// element of another record's document. A record no document holds, or whose document lacks it, is not
+    /// carried.</summary>
+    public SourceAnswer<SourceChanges> ChangesToRemove(PluginAddress plugin, RecordIdentity identity) =>
+        SourceFailure.Answer(() => Writes.ChangesToRemove(Spelled(plugin), identity));
 
     /// <summary>The plugin's source in the working tree becomes <paramref name="tree"/>, the whole-mod door's,
     /// and the last-compile ref names only the binary it was read from. A failure leaves both as they

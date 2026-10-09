@@ -369,7 +369,7 @@ public sealed class SourceTransactionTests : IDisposable
 
         var left = RolledBack(transaction =>
         {
-            transaction.Apply(new SourceChanges([new SourceMove(from, to)], []));
+            transaction.Apply(new SourceChanges([new SourceMove(from, to)], [], []));
             Directory.Delete(Path.GetDirectoryName(Path.Combine(_root, from)).Require());
         });
 

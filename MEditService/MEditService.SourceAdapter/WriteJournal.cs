@@ -106,6 +106,12 @@ internal sealed class WriteJournal(string modFolder)
         File.Delete(path);
     }
 
+    internal void DeletePath(string path)
+    {
+        if (Directory.Exists(path)) DeleteTree(path);
+        else Delete(path);
+    }
+
     internal void DeleteIfHolds(string path, byte[] expected)
     {
         if (!SameBytes(Snapshot(path), expected)) throw new IOException($"{path} was changed by another program, so it was not removed.");
