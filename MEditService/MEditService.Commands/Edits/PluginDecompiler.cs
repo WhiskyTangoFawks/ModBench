@@ -72,7 +72,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
         PluginStrings strings,
         CancellationToken cancel)
     {
-        using var scratch = SourceRepository.ScratchFor(pluginName);
+        using var scratch = ScratchPlugin.For(pluginName);
         var recompiledPath = scratch.PluginPath;
         try
         {

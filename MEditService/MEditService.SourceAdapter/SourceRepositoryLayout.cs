@@ -84,7 +84,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         {
             Anchor = diagnosis.Anchor is { } anchor ? SourceOf(anchor) : null,
             Message = names.Aggregate(diagnosis.Message, (text, name) =>
-                Regex.Replace(text, $@"(?<![\w/\\.-]){Regex.Escape(name.Door)}(?![\w/\\.-])", _ => name.Source)),
+                Regex.Replace(text, $@"(?<![\w/\\.-]){Regex.Escape(name.Door)}(?!\.?[\w/\\-])", _ => name.Source)),
         };
     }
 

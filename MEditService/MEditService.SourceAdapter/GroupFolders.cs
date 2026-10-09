@@ -32,7 +32,7 @@ internal sealed class GroupFolders
     /// <summary>The folder a record's own file sits in. Null for a cell or worldspace, which has a
     /// directory, and for a type with no group of its own.</summary>
     internal string? FlatFolderOf(string recordType) =>
-        _types.IsCell(recordType) || _types.IsWorldspace(recordType) ? null : _types.GroupOf(recordType);
+        _types.GroupOf(recordType) is { } group && !_directoryPerRecord.Contains(group) ? group : null;
 
     /// <summary>A search hint, never a path: which folder a record is somewhere inside. A wrong answer
     /// costs a miss, never a wrong write.</summary>

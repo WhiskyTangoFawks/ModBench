@@ -163,6 +163,22 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     [Fact]
+    public void InSourceNames_NamesAFileThatEndsASentence_LeavingThePeriodOutOfThePath()
+    {
+        using var modFolder = new ScratchDirectory("medit-layout-tree-");
+        var container = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP");
+        TrackMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(Path.Combine(container, "RecordData.json"), [1]));
+        var read = new PluginDiagnosis(
+            null, PluginDiagnosis.UnknownClass, null, $"Could not read {Path.Combine(container, "RecordData.json")}.");
+
+        var named = RepositoryOver(modFolder).InSourceNames(Mixed, read);
+
+        Assert.Equal(
+            $"Could not read {Path.Combine("plugin-source", "Mixed.ESP", container, "W - 000800_Mixed.ESP.json")}.",
+            named.Message);
+    }
+
+    [Fact]
     public void TreeOf_RefusesADirectoryHoldingTwoDocumentsAndNoneNamedForIt()
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");

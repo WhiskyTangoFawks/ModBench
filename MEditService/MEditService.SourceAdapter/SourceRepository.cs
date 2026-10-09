@@ -80,10 +80,6 @@ public sealed class SourceRepository : ISourceRepositoryReads
         string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins) =>
         GitTracking.Track(modFolder, plugins);
 
-    /// <summary>A scratch folder for <paramref name="pluginFileName"/>, outside every mod folder so
-    /// a half-written plugin is never mistaken for a tracked one.</summary>
-    public static ScratchPlugin ScratchFor(string pluginFileName) => ScratchPlugin.For(pluginFileName);
-
     /// <summary>The stamp of one document's text, as the UTF-8 the index stores it in: every side hashes
     /// through here, so a file that is not valid UTF-8 stamps alike on disk and in the index.</summary>
     public static string ContentStamp(string text) => TreeStamps.ContentStamp(text);
