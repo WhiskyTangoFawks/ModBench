@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -76,8 +77,7 @@ internal sealed class SourceRepositoryWrites(
         var containerText = DocumentText.RecordBodyFromOwnerBytes(OwnerBytes(unit), unit, container.FormKey, _release)
             ?? throw NoLongerCarried(unit, container.FormKey);
         var withChild = Read(() => ContainerDocumentEdits.WithChildAppended(
-                containerText, _release, container.RecordType, container.FormKey, slot, child.Body, child.RecordType))
-            ?? throw NoLongerCarried(unit, container.FormKey);
+            containerText, _release, container.RecordType, slot, child.Body, child.RecordType));
         return ChangesToHeld(unit, new SourceDocument(container.FormKey, container.RecordType, container.EditorId, withChild));
     }
 
@@ -128,10 +128,11 @@ internal sealed class SourceRepositoryWrites(
 
         if (!carrying.FormKey.Equals(identity.FormKey, StringComparison.Ordinal))
         {
-            var ownerText = Read(() => RecordDocumentEdits.WithEmbeddedChildFormKey(
-                    carrying.Body, _release, carrying.RecordType, identity.FormKey, newFormKey))
-                ?? throw NoLongerCarried(unit, identity.FormKey);
-            return Written(unit.FullPath, ownerText);
+            var ownerBytes = Encoding.UTF8.GetBytes(carrying.Body);
+            var span = DocumentText.EmbeddedChildIn(ownerBytes, unit, identity.FormKey, _release) ?? throw NoLongerCarried(unit, identity.FormKey);
+            var rekeyed = Read(() => RecordDocumentEdits.WithFormKey(
+                EmbeddedChildSplice.Extract(ownerBytes, span, _release), _release, identity.RecordType, newFormKey));
+            return Written(unit.FullPath, EmbeddedChildSplice.Replace(ownerBytes, span, rekeyed));
         }
 
         var text = Read(() => RecordDocumentEdits.WithFormKey(carrying.Body, _release, carrying.RecordType, newFormKey));

@@ -1,5 +1,4 @@
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Serialization;
 
@@ -17,19 +16,16 @@ public static class ContainerDocumentEdits
         return RecordTextCodec.SerializeToText(record, release);
     }
 
-    /// <summary>The owner's text with <paramref name="childText"/> appended to
-    /// <paramref name="slotName"/> of <paramref name="containerFormKey"/> — the owner, or a
-    /// container its document carries inline. Null when the text carries neither.</summary>
-    public static string? WithChildAppended(
-        string ownerText, GameRelease release, string? ownerRecordType,
-        string containerFormKey, string slotName, string childText, string? childRecordType)
+    /// <summary>The container's own text with <paramref name="childText"/> appended to
+    /// <paramref name="slotName"/>.</summary>
+    public static string WithChildAppended(
+        string containerText, GameRelease release, string? containerRecordType,
+        string slotName, string childText, string? childRecordType)
     {
-        var owner = RecordTextCodec.Deserialize(ownerText, release, ownerRecordType);
-        if (ContainerIn(owner, containerFormKey) is not { } container) return null;
-
+        var container = RecordTextCodec.Deserialize(containerText, release, containerRecordType);
         ContainerChildFields.AddChildToSlot(
             container, slotName, RecordTextCodec.Deserialize(childText, release, childRecordType));
-        return RecordTextCodec.SerializeToText(owner, release);
+        return RecordTextCodec.SerializeToText(container, release);
     }
 
     /// <summary><paramref name="destinationText"/> with its own fields replaced by
@@ -47,9 +43,4 @@ public static class ContainerDocumentEdits
 
         return new NamedDocument(RecordTextCodec.SerializeToText(replacement, release), replacement.EditorID);
     }
-
-    private static IMajorRecordGetter? ContainerIn(IMajorRecord owner, string containerFormKey) =>
-        owner.FormKey.ToString().Equals(containerFormKey, StringComparison.Ordinal)
-            ? owner
-            : ContainerChildFields.FindEmbeddedChild(owner, containerFormKey)?.Child;
 }

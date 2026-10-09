@@ -7,36 +7,35 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>Everything a document edit needs and nothing it may touch, with the walk to the left that a
-/// cell's place and a refill read.</summary>
-internal sealed record DocumentEditRequest(
+/// <summary>Everything a record's edit needs and nothing it may touch: its own text, the container record that
+/// holds it if any, and the walk to the left that a cell's place and a refill read.</summary>
+internal sealed record RecordTextEditRequest(
     string Text,
-    IReadOnlyList<PathHop> Prefix,
+    HeldIn? Held,
     RecordTableSchema Schema,
     RecordEditEnvelope Envelope,
     GameRelease Release,
     Func<string, string> RoundTrip,
     LoadOrderResolution.MastersWalk Masters);
 
-/// <summary>A write is a patch on the document (ADR-0005). Pure: text and metadata in,
+/// <summary>A write is a patch on the record's own document (ADR-0005). Pure: text and metadata in,
 /// text or one refusal out.</summary>
-internal static class DocumentEdit
+internal static class RecordTextEdit
 {
     private const string FormKeyMember = RecordMembers.FormKey;
 
-    /// <summary>The new document text in <paramref name="text"/> on success (a null return), and the cell
-    /// the record leaves this document's for; a refusal otherwise, with nothing written anywhere.</summary>
-    internal static RecordEditResult? Patch(DocumentEditRequest request, out string text, out CellCrossing? crossing)
+    /// <summary>The record's new text in <paramref name="text"/> on success (a null return), and the group it
+    /// moves into; a refusal otherwise, with nothing written anywhere.</summary>
+    internal static RecordEditResult? Patch(RecordTextEditRequest request, out string text, out CellGroupMove? move)
     {
         text = request.Text;
-        crossing = null;
+        move = null;
         var envelope = request.Envelope;
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
         if (ValidateEnvelope(envelope, spelled) is { } malformed) return malformed;
 
-        if (JsonNode.Parse(request.Text) is not JsonObject root) return Malformed(spelled, "the document is not a JSON object");
-        var record = WalkPrefix(root, request.Prefix);
-        var before = WalkPrefix((JsonObject)root.DeepClone(), request.Prefix);
+        if (JsonNode.Parse(request.Text) is not JsonObject record) return Malformed(spelled, "the record's text is not a JSON object");
+        var before = record.DeepClone();
 
         var creating = envelope.Op is RecordEditEnvelope.Set or RecordEditEnvelope.Add;
         if (Resolve(record, request.Schema, envelope.Path, creating, out var resolvedCursor) is { } unresolved) return unresolved;
@@ -45,7 +44,7 @@ internal static class DocumentEdit
         if (RefuseIfPartialForm(record, request.Schema, cursor, spelled) is { } partialForm) return partialForm;
 
         var emptying = RecordEmptying.Of(record, request.Schema, cursor.Column, envelope.Value);
-        if (emptying?.RefuseCell(record, request.Prefix, request.Schema, request.Release, request.Masters, spelled) is { } cannot)
+        if (emptying?.RefuseCell(record, request.Held, request.Schema, request.Release, request.Masters, spelled) is { } cannot)
             return cannot;
         var formKey = record[FormKeyMember]?.GetValue<string>();
         var refill = emptying?.RefillFrom(request.Masters, request.Schema, formKey);
@@ -54,9 +53,9 @@ internal static class DocumentEdit
         var left = RecordEmptying.LeftOf(refill);
         if (emptying != null) envelope = envelope with { Value = emptying.FlagsWith(left) };
         if (RefusePersistentOnDeleted(record, request, cursor.Column, envelope.Value, spelled) is { } deleted) return deleted;
-        var move = CellGroupMove.Of(record, request.Prefix, request.Schema, cursor.Column, envelope.Value);
+        var groupMove = CellGroupMove.Of(record, request.Held, request.Schema, cursor.Column, envelope.Value);
         AnotherCell? into = null;
-        if (move?.RefuseUnknownCell(root, request.Release, request.Masters, spelled, out into) is { } unknown) return unknown;
+        if (groupMove?.RefuseUnknownCell(record, request.Release, request.Masters, spelled, out into) is { } unknown) return unknown;
 
         JsonNode? edited;
         FieldMetadata editedMeta;
@@ -74,13 +73,12 @@ internal static class DocumentEdit
         if (patched is { } refused) return refused;
         RecordEmptying.ClearAliases(record, cursor.Column);
         emptying?.Apply(record, request.Schema, request.Release, left);
-        var prefix = into == null ? move?.Apply(root) ?? request.Prefix : request.Prefix;
 
         var chain = IndexChain(edited ?? throw new InvalidOperationException("Expected the edit to set which node changed."));
         string written;
         try
         {
-            written = request.RoundTrip(root.ToJsonString());
+            written = request.RoundTrip(record.ToJsonString());
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -97,7 +95,7 @@ internal static class DocumentEdit
                 $"'{dropped}' was not kept by the codec: the record's own class has no member the document can carry it in, so nothing was written.");
         }
 
-        var after = JsonSerializer.SerializeToElement(WalkPrefix(writtenRoot, prefix));
+        var after = JsonSerializer.SerializeToElement(writtenRoot);
         var was = JsonSerializer.SerializeToElement(before);
         foreach (var column in request.Schema.RecordColumns)
         {
@@ -112,7 +110,7 @@ internal static class DocumentEdit
         }
 
         text = written;
-        if (into != null) crossing = new CellCrossing(prefix, into);
+        move = groupMove is null ? null : groupMove with { Into = into };
         return null;
     }
 
@@ -322,11 +320,11 @@ internal static class DocumentEdit
     // xEdit applies a write's Deleted before its Persistent, and reverts Persistent on a record that
     // then reads Deleted (xedit.md, divergence 24).
     private static RecordEditResult? RefusePersistentOnDeleted(
-        JsonObject record, DocumentEditRequest request, ColumnSpec column, JsonElement? value, string spelled)
+        JsonObject record, RecordTextEditRequest request, ColumnSpec column, JsonElement? value, string spelled)
     {
         if (RecordFlagsWrite.Of(record, request.Schema, column, value) is not { } write
             || (write.Next & DeletedFlag.Bit) == 0 || !write.Changes(PersistentFlag.Bit)
-            || !(CellGroupMove.IsPlaced(request.Prefix) || column.Field.EnumMembers.Any(NamesPersistent)))
+            || !(request.Held is { IsPlaced: true } || column.Field.EnumMembers.Any(NamesPersistent)))
             return null;
         return RecordEditResult.RefusedAt(
             RecordEditRefusal.PersistentOnDeletedRecord, spelled,
@@ -652,10 +650,6 @@ internal static class DocumentEdit
     }
 
     // ── walking ─────────────────────────────────────────────────────────────
-
-    private static JsonObject WalkPrefix(JsonObject root, IReadOnlyList<PathHop> prefix) =>
-        EmbeddedChildPath.Walk(root, prefix) as JsonObject
-            ?? throw new InvalidOperationException($"The document has no object at {RecordEditEnvelope.Spell(prefix)}.");
 
     // The node's place from the root, by member name and by position, so the same chain addresses
     // it in what the codec wrote back.

@@ -94,7 +94,7 @@ public abstract record SourceFailure
         }
 
         /// <summary>The words for a document found holding a record whose own text does not carry it.</summary>
-        public static string FoundButNotCarried(string relativePath, string formKey) =>
+        internal static string FoundButNotCarried(string relativePath, string formKey) =>
             $"{relativePath} was found holding {formKey}, but its own text does not carry it. {DefectOrOutsideChange}";
     }
 

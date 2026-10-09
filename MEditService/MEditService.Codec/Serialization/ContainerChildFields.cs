@@ -17,34 +17,6 @@ public static class ContainerChildFields
             ? fields
             : null;
 
-    private static bool IsEmbeddedSlot(Type parent, string slot) =>
-        ContainerMembers.CategoryOf(parent.Assembly) is { } category
-        && ContainerMembers.Derived.EmbeddedSlots.Contains((category, RecordTypes.ClassNameOf(parent), slot));
-
-    /// <summary><see cref="Child"/> is the real object hanging off Parent, not a copy: mutating it and
-    /// reserializing the document's root is how an embedded child is written.</summary>
-    internal readonly record struct EmbeddedChild(IMajorRecordGetter Parent, string SlotName, int SlotIndex, IMajorRecord Child);
-
-    /// <summary>The child through Mutagen's own object model, not a JSON pointer, so existing writers
-    /// apply unchanged. Descends only through an embedded slot: a worldspace's
-    /// blocks have directories.</summary>
-    internal static EmbeddedChild? FindEmbeddedChild(IMajorRecordGetter parent, string formKey)
-    {
-        foreach (var (slotName, slotIndex, child) in EnumerateChildren(parent))
-        {
-            if (child.FormKey.ToString().Equals(formKey, StringComparison.Ordinal))
-            {
-                // Guarded rather than cast so a read-only graph (a binary overlay) declines instead of throwing.
-                return child is IMajorRecord settable ? new EmbeddedChild(parent, slotName, slotIndex, settable) : null;
-            }
-
-            if (!IsEmbeddedSlot(parent.GetType(), slotName)) continue;
-            if (FindEmbeddedChild(child, formKey) is { } deeper) return deeper;
-        }
-
-        return null;
-    }
-
     /// <summary>The own-fields-only half of Copy as Override: xEdit's lands own-fields-only, containers
     /// included. Built over <see cref="EnumerateChildren"/>, so a record with no child slot is a
     /// no-op.</summary>

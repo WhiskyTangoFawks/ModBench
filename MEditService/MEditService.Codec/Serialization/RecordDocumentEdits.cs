@@ -36,20 +36,6 @@ public static class RecordDocumentEdits
         return RecordTextCodec.SerializeToText(record, release);
     }
 
-    /// <summary>The owner's text with the embedded child <paramref name="oldFormKey"/> under
-    /// <paramref name="newFormKey"/>, and nothing else changed. Null when the text carries no such
-    /// child.</summary>
-    public static string? WithEmbeddedChildFormKey(
-        string ownerText, GameRelease release, string? ownerRecordType,
-        string oldFormKey, string newFormKey)
-    {
-        var owner = RecordTextCodec.Deserialize(ownerText, release, ownerRecordType);
-        if (ContainerChildFields.FindEmbeddedChild(owner, oldFormKey) is not { } found) return null;
-
-        ((IMajorRecordInternal)found.Child).FormKey = FormKey.Factory(newFormKey);
-        return RecordTextCodec.SerializeToText(owner, release);
-    }
-
     private static NamedDocument Named(IMajorRecordGetter record, GameRelease release) =>
         new(RecordTextCodec.SerializeToText(record, release), record.EditorID);
 
