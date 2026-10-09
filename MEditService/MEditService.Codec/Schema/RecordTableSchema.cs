@@ -75,7 +75,7 @@ public sealed class RecordTableSchema
             .Where(record => RecordType.IsInstanceOfType(record) || RecordTypes.For(mod.GameRelease).RecordTypeOf(record) == TableName);
 
     // A ModHeader cannot carry the Partial Form flag.
-    public bool IsPartialForm(JsonElement document) => !IsHeader && PartialFormFlag.IsSet(document, RecordType);
+    public bool IsPartialForm(JsonElement document) => !IsHeader && Document.OfRecord(document).IsPartialForm(RecordType);
 
     /// <summary>Whether a record of this table can carry the Partial Form flag at all.</summary>
     public bool IsPartialFormable => PartialFormFlag.IsPartialFormable(RecordType);
