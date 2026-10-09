@@ -27,7 +27,7 @@ As a user, I want:
 7. A tab I leave and come back to to be as I left it: the rows I expanded, the columns I collapsed, the focused cell and the scroll. Source: VS Code keeps a tab's place
 8. A record given without a plugin, from the palette, Referenced By or Go to record, to open the winning copy's file. Source: xEdit lands on the winning copy
 9. An untracked plugin's copy, or the copy of a plugin whose plugin source is unreadable, to open as a document mEdit renders from the plugin, read-only. It is not a file, so the file features above do not reach it. Source: ADR-0007; ADR-0001
-10. A child record, such as a placed reference, to open in a tab of its own, though it shares its cell's file. A change saved in either tab shows in both. Source: plugin-source.md, The tree, story 3
+10. A child record, such as a placed reference, to open in a tab of its own, though it shares its cell's file. A change in either tab shows in both. Source: plugin-source.md, The tree, story 3
 11. A group's metadata file in plugin source to open in the text editor, as any JSON file does. Source: ADR-0001; Existing tools
 
 ## The header

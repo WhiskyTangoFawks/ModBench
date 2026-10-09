@@ -19,4 +19,4 @@ The cost is accepted: it is less user-friendly than a purpose-built application.
 ## Alternatives rejected
 
 - A standalone desktop application: every item above is rebuilt from scratch. People have tried to replace the ten-year-old tooling before and failed on exactly that.
-- An index over the files alone, with each gesture saving what it changed. The editor shows a document the index cannot see, so it and every other view disagree until the save lands; the grid saved on every edit to hide that; and the save is Modbench's, not the user's or VS Code's.
+- An index over the files alone, with each gesture on plugin source saving what it changed. The editor shows a document the index cannot see, so it and every other view disagree until the save lands, and the save is Modbench's, not the user's or VS Code's.
