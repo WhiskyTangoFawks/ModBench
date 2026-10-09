@@ -19,7 +19,7 @@ internal sealed class TreeScan
     private readonly string _sourceRoot;
     private readonly GameRelease _release;
     private readonly ISourceFiles _files;
-    private readonly byte[]? _onlyKey;
+    private readonly string? _onlyKey;
     private Dictionary<string, List<OwnerDocument>> _byChild = new(StringComparer.Ordinal);
     private Dictionary<string, List<string>> _byRoot = new(StringComparer.Ordinal);
     private bool _rescanned;
@@ -28,7 +28,7 @@ internal sealed class TreeScan
     internal TreeScan(string sourceRoot, GameRelease release, string? onlyKey, IEnumerable<string> listed, ISourceFiles files)
     {
         (_sourceRoot, _release, _files) = (sourceRoot, release, files);
-        _onlyKey = onlyKey is null ? null : System.Text.Encoding.UTF8.GetBytes(onlyKey);
+        _onlyKey = onlyKey;
         Scan(listed);
     }
 
@@ -70,8 +70,8 @@ internal sealed class TreeScan
         var keys = DocumentTokens.FormKeysIn(bytes, _release);
         return _keysByDocument[documentPath] = new DocumentKeys(
             bytes,
-            [.. keys.Where(k => k.AtRoot).Select(k => k.FormKey)],
-            [.. keys.Where(k => k.InAnEmbedSlot).Select(k => k.FormKey)]);
+            [.. keys.Where(k => k.Position == FormKeyPosition.Root).Select(k => k.FormKey)],
+            [.. keys.Where(k => k.Position == FormKeyPosition.Embedded).Select(k => k.FormKey)]);
     }
 
     private void Scan(IEnumerable<string> listed)
@@ -82,10 +82,10 @@ internal sealed class TreeScan
         {
             if (SourceRepositoryLayout.CarriesNoRecord(documentPath)) continue;
             if (DocumentText.BytesOrNull(_files, documentPath) is not { } bytes) continue;
-            if (_onlyKey is { } key && !MaySpell(bytes, key)) continue;
+            if (_onlyKey is { } key && !DocumentTokens.MayCarry(bytes, key)) continue;
 
             var keys = DocumentTokens.FormKeysIn(bytes, _release);
-            if (keys.FirstOrDefault(k => k.AtRoot).FormKey is not { } root) continue;
+            if (keys.FirstOrDefault(k => k.Position == FormKeyPosition.Root).FormKey is not { } root) continue;
 
             if (!byRoot.TryGetValue(root, out var declaring)) byRoot[root] = declaring = [];
             declaring.Add(documentPath);
@@ -95,18 +95,13 @@ internal sealed class TreeScan
             var recordType = SourceRepositoryLayout.RecordTypeOf(Path.GetRelativePath(ModFolder, documentPath), _release);
 
             var owner = new OwnerDocument(documentPath, root, recordType);
-            foreach (var (childFormKey, _, inAnEmbedSlot) in keys)
+            foreach (var (childFormKey, position) in keys)
             {
-                if (!inAnEmbedSlot) continue;
+                if (position != FormKeyPosition.Embedded) continue;
                 if (!byChild.TryGetValue(childFormKey, out var owners)) byChild[childFormKey] = owners = [];
                 owners.Add(owner);
             }
         }
         (_byChild, _byRoot) = (byChild, byRoot);
     }
-
-    // JSON spells a FormKey other than literally only through a \u escape: no plugin's file name
-    // holds a quote, a backslash, a slash or a control character, the only others it escapes.
-    private static bool MaySpell(byte[] document, byte[] formKey) =>
-        document.AsSpan().IndexOf(formKey) >= 0 || document.AsSpan().IndexOf(@"\u"u8) >= 0;
 }

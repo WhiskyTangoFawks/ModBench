@@ -4,11 +4,20 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>A FormKey a document's bytes carry, and where: at the document's own root, or inside the
-/// slot of an embedded child.</summary>
-public readonly record struct DocumentFormKey(string FormKey, bool AtRoot, bool InAnEmbedSlot);
+/// <summary>Where a FormKey sits in a document: the record's own at the root, an embedded child's in
+/// the slot its container embeds it in, or any other FormKey member.</summary>
+public enum FormKeyPosition
+{
+    Root,
+    Embedded,
+    Other,
+}
 
-/// <summary>The FormKeys and EditorIDs a document's bytes carry, from one token pass.</summary>
+/// <summary>A FormKey a document's bytes carry, and where.</summary>
+public readonly record struct DocumentFormKey(string FormKey, FormKeyPosition Position);
+
+/// <summary>What a document's text carries and declares: the FormKeys and EditorIDs its bytes hold, its
+/// root's strings, whether it is a document at all, and whether it may spell a given FormKey.</summary>
 public static class DocumentTokens
 {
     // The codec writes a link as a bare string and a child as an object with a FormKey of its
@@ -42,7 +51,7 @@ public static class DocumentTokens
                     case JsonTokenType.String when atFormKey:
                         var formKey = reader.GetString()
                             ?? throw new InvalidOperationException("Expected a JSON string value to read a non-null string.");
-                        found.Add(new DocumentFormKey(formKey, keyDepth == 1, UnderAnEmbedSlot(openedBy, keyDepth, embeddedSlotNames)));
+                        found.Add(new DocumentFormKey(formKey, PositionOf(openedBy, keyDepth, embeddedSlotNames)));
                         break;
                 }
                 atFormKey = false;
@@ -60,6 +69,12 @@ public static class DocumentTokens
     {
         while (openedBy.Count <= depth) openedBy.Add(null);
         openedBy[depth] = member;
+    }
+
+    private static FormKeyPosition PositionOf(List<string?> openedBy, int keyDepth, IReadOnlySet<string> embeddedSlotNames)
+    {
+        if (keyDepth == 1) return FormKeyPosition.Root;
+        return UnderAnEmbedSlot(openedBy, keyDepth, embeddedSlotNames) ? FormKeyPosition.Embedded : FormKeyPosition.Other;
     }
 
     // A child record's own FormKey sits inside the slot its container embeds it in, at any depth: a
@@ -111,4 +126,45 @@ public static class DocumentTokens
     }
 
     private static readonly byte[] EditorIdPropertyName = Encoding.UTF8.GetBytes(RecordMembers.EditorId);
+
+    /// <summary>A member of the document's own root object, as a string. Malformed text declares
+    /// nothing.</summary>
+    public static string? RootStringIn(string text, string member)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty(member, out var value)
+                   && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Why <paramref name="text"/> is no document, in the reader's words; null when its root is a
+    /// JSON object, which a member can be read from.</summary>
+    public static string? WhyNotADocument(string text)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement.ValueKind == JsonValueKind.Object ? null : "its root is not a JSON object.";
+        }
+        catch (JsonException ex)
+        {
+            return ex.Message;
+        }
+    }
+
+    // JSON spells a FormKey other than literally only through a \u escape: no plugin's file name
+    // holds a quote, a backslash, a slash or a control character, the only others it escapes.
+    /// <summary>Whether the document's bytes may spell <paramref name="formKey"/>: false only when
+    /// they certainly do not.</summary>
+    public static bool MayCarry(byte[] document, string formKey) =>
+        document.AsSpan().IndexOf(Encoding.UTF8.GetBytes(formKey)) >= 0 || document.AsSpan().IndexOf(@"\u"u8) >= 0;
 }

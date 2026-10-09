@@ -8,6 +8,8 @@ public static class RecordMembers
 {
     public const string FormKey = "FormKey";
 
+    public const string ModKey = "ModKey";
+
     public const string EditorId = nameof(IMajorRecordGetter.EditorID);
 
     public const string FormVersion = nameof(IMajorRecordGetter.FormVersion);

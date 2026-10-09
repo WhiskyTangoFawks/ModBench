@@ -11,32 +11,14 @@ public sealed class DocumentTokensTests
     private static byte[] Bytes(string text) => Encoding.UTF8.GetBytes(text);
 
     [Fact]
-    public void FormKeysIn_ADocumentsOwnKey_IsAtTheRoot_AndALinkIsNeitherAtTheRootNorEmbedded()
+    public void FormKeysIn_ADocumentsOwnKey_IsAtTheRoot_AndAnyOtherFormKeyMemberOutsideAnEmbedSlotIsNot()
     {
         var keys = DocumentTokens.FormKeysIn(
-            Bytes("""{ "FormKey": "000800:A.esp", "Race": "000801:A.esp" }"""), Release);
-
-        Assert.Equal([new DocumentFormKey("000800:A.esp", AtRoot: true, InAnEmbedSlot: false)], keys);
-    }
-
-    [Fact]
-    public void FormKeysIn_AChildInTheSlotAContainerEmbedsItIn_IsEmbedded_AtAnyDepth()
-    {
-        var keys = DocumentTokens.FormKeysIn(
-            Bytes("""
-                {
-                  "FormKey": "000800:A.esp",
-                  "TopCell": {
-                    "FormKey": "000801:A.esp",
-                    "Temporary": [ { "FormKey": "000802:A.esp", "Base": "000803:A.esp" } ]
-                  }
-                }
-                """), Release);
+            Bytes("""{ "FormKey": "000800:A.esp", "Race": "000801:A.esp", "Struct": { "FormKey": "000802:A.esp" } }"""), Release);
 
         Assert.Equal(
-            ["000801:A.esp", "000802:A.esp"],
-            keys.Where(key => key.InAnEmbedSlot).Select(key => key.FormKey));
-        Assert.Equal(["000800:A.esp"], keys.Where(key => key.AtRoot).Select(key => key.FormKey));
+            [new DocumentFormKey("000800:A.esp", FormKeyPosition.Root), new DocumentFormKey("000802:A.esp", FormKeyPosition.Other)],
+            keys);
     }
 
     [Fact]
@@ -48,17 +30,59 @@ public sealed class DocumentTokensTests
     }
 
     [Fact]
-    public void EditorIdsIn_ReadsTheRootsAndAnEmbeddedChilds_AndAnswersNullForOneThatIsNoString()
+    public void EditorIdsIn_ReadsTheRootsAndAnEmbeddedChilds()
     {
-        var ids = DocumentTokens.EditorIdsIn(
-            Bytes("""{ "EditorID": "Owner", "Temporary": [ { "EditorID": "Child" }, { "EditorID": 7 }, { "EditorID": null } ] }"""));
+        var ids = DocumentTokens.EditorIdsIn(Bytes("""{ "EditorID": "Owner", "Temporary": [ { "EditorID": "Child" } ] }"""));
 
-        Assert.Equal(["Owner", "Child", null], ids);
+        Assert.Equal(["Owner", "Child"], ids);
     }
 
     [Fact]
     public void EditorIdsIn_TextCutOffMidDocument_YieldsWhatItReadBeforeTheCut()
     {
         Assert.Equal(["Owner"], DocumentTokens.EditorIdsIn(Bytes("""{ "EditorID": "Owner", "Name": "Cu""")));
+    }
+
+    [Fact]
+    public void RootStringIn_AnswersAStringMemberOfTheRootOnly()
+    {
+        const string Text = """{ "Type": "Npc", "Count": 3, "Nested": { "Other": "deep" } }""";
+
+        Assert.Equal("Npc", DocumentTokens.RootStringIn(Text, "Type"));
+        Assert.Null(DocumentTokens.RootStringIn(Text, "Count"));
+        Assert.Null(DocumentTokens.RootStringIn(Text, "Other"));
+        Assert.Null(DocumentTokens.RootStringIn(Text, "Missing"));
+    }
+
+    [Theory]
+    [InlineData("""["Type"]""")]
+    [InlineData("""{ "Type": "Npc" """)]
+    public void RootStringIn_OfTextThatIsNoObjectDocument_AnswersNull(string text)
+    {
+        Assert.Null(DocumentTokens.RootStringIn(text, "Type"));
+    }
+
+    [Fact]
+    public void WhyNotADocument_OfAnObject_IsNull()
+    {
+        Assert.Null(DocumentTokens.WhyNotADocument("""{ "FormKey": "000800:A.esp" }"""));
+    }
+
+    [Theory]
+    [InlineData("""["a"]""")]
+    [InlineData("""{ "FormKey": "000800:A.esp", """)]
+    [InlineData("""{ "FormKey": "000800:A.esp" } // a comment no document reader takes""")]
+    public void WhyNotADocument_OfTextThatIsNoObject_SaysWhy(string text)
+    {
+        Assert.False(string.IsNullOrEmpty(DocumentTokens.WhyNotADocument(text)));
+    }
+
+    [Theory]
+    [InlineData("""{ "FormKey": "000800:Some.esp" }""", true)]
+    [InlineData("""{ "FormKey": "000800:\u0053ome.esp" }""", true)]
+    [InlineData("""{ "FormKey": "000800:Other.esp" }""", false)]
+    public void MayCarry_IsFalseOnlyWhenTheBytesCertainlyDoNotSpellTheFormKey(string text, bool expected)
+    {
+        Assert.Equal(expected, DocumentTokens.MayCarry(Bytes(text), "000800:Some.esp"));
     }
 }

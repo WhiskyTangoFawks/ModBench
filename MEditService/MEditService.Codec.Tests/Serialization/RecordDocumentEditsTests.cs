@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-public sealed class PluginRenameDocumentTests
+public sealed class RecordDocumentEditsTests
 {
     private static readonly ModKey Old = ModKey.FromFileName("Old.esp");
     private static readonly ModKey New = ModKey.FromFileName("New.esm");
@@ -47,9 +47,11 @@ public sealed class PluginRenameDocumentTests
         Assert.Equal(Text, Renamed(Text, isHeader: true));
     }
 
-    [Fact]
-    public void WithPluginRenamed_TextThatIsNoJsonDocument_Throws()
+    [Theory]
+    [InlineData("""{ "FormKey": "000801:Old.esp", """)]
+    [InlineData("""{ "FormKey": "000801:Old.esp" } // a comment no document reader takes""")]
+    public void WithPluginRenamed_TextThatIsNoJsonDocument_Throws(string text)
     {
-        Assert.ThrowsAny<JsonException>(() => Renamed("""{ "FormKey": "000801:Old.esp", """));
+        Assert.ThrowsAny<JsonException>(() => Renamed(text));
     }
 }

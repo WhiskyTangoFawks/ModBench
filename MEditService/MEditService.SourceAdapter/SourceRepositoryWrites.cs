@@ -119,7 +119,7 @@ internal sealed class SourceRepositoryWrites(
             || locator.LocateToPlace(plugin, document.Identity) is not { IsEmbedded: false } unit
             || !files.FileExists(unit.FullPath))
             return;
-        if (SourceRepositoryLocator.NotADocument(files.ReadAllText(unit.FullPath)) is { } why)
+        if (DocumentTokens.WhyNotADocument(files.ReadAllText(unit.FullPath)) is { } why)
             throw SourceStopException.Unreadable($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
     }
 

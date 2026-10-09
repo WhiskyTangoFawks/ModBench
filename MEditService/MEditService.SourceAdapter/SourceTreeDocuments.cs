@@ -161,7 +161,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         }
 
         var recordType = SourceRepositoryLayout.RecordTypeOf(relativePath, _release)
-            ?? _types.RecordTypeNamed(DocumentText.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator))
+            ?? _types.RecordTypeNamed(DocumentTokens.RootStringIn(text, LoquiUnions.UnionTypeDiscriminator))
             ?? throw Unreadable(file, "neither its path nor its text names a record type", declared);
         var formKey = declared ?? throw Unreadable(file, "it declares no FormKey");
 

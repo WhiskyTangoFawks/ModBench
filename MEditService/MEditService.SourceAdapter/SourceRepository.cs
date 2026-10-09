@@ -135,7 +135,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
         SourceFailure.Answer(() =>
         {
             var spelled = Spelled(plugin);
-            if (SourceRepositoryLocator.NotADocument(body) is not null)
+            if (DocumentTokens.WhyNotADocument(body) is not null)
             {
                 throw SourceStopException.Unreadable(
                     $"The source of {identity.FormKey} in {plugin.Name} ({plugin.Origin}) is not a readable document.");
@@ -256,9 +256,9 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
             // A child inlined in this document is a record of its own with a FormKey of its own, so its
             // ID is as taken as any other.
-            foreach (var (formKey, _, inAnEmbedSlot) in DocumentTokens.FormKeysIn(Encoding.UTF8.GetBytes(document.Body), _release))
+            foreach (var (formKey, position) in DocumentTokens.FormKeysIn(Encoding.UTF8.GetBytes(document.Body), _release))
             {
-                if (inAnEmbedSlot) keys.Add(formKey);
+                if (position == FormKeyPosition.Embedded) keys.Add(formKey);
             }
         }
         return keys;
