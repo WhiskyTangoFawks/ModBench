@@ -8,38 +8,34 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands.Edits;
 
 /// <summary>A Record Flags write that changes Persistent on a placed record moves it into the group
-/// the new bit names, of its own cell or of another, as xEdit's TwbMainRecord.UpdateCellChildGroup does.</summary>
-internal sealed record CellGroupMove(IReadOnlyList<PathHop> Prefix, string Destination)
+/// the new bit names, of its own cell or of <see cref="Into"/> another, as xEdit's TwbMainRecord.UpdateCellChildGroup does.</summary>
+internal sealed record CellGroupMove(HeldIn From, string Destination, AnotherCell? Into = null)
 {
-    /// <summary>The move a write of <paramref name="value"/> makes on the record at
-    /// <paramref name="prefix"/>, or null when it leaves Persistent as it was.</summary>
+    /// <summary>The move a write of <paramref name="value"/> makes on the record <paramref name="held"/>
+    /// holds, or null when it leaves Persistent as it was.</summary>
     internal static CellGroupMove? Of(
-        JsonObject record, IReadOnlyList<PathHop> prefix, RecordTableSchema schema, ColumnSpec column, JsonElement? value)
+        JsonObject record, HeldIn? held, RecordTableSchema schema, ColumnSpec column, JsonElement? value)
     {
-        if (!IsPlaced(prefix)) return null;
+        if (held is not { IsPlaced: true } placed) return null;
         if (RecordFlagsWrite.Of(record, schema, column, value) is not { } write || !write.Changes(PersistentFlag.Bit)) return null;
-        return new(prefix, (write.Next & PersistentFlag.Bit) != 0 ? PersistentFlag.PersistentGroup : PersistentFlag.TemporaryGroup);
+        return new(placed, (write.Next & PersistentFlag.Bit) != 0 ? PersistentFlag.PersistentGroup : PersistentFlag.TemporaryGroup);
     }
 
-    /// <summary>Whether the record at <paramref name="prefix"/> sits in one of its cell's groups.</summary>
-    internal static bool IsPlaced(IReadOnlyList<PathHop> prefix) =>
-        prefix is [.., { Kind: PathHop.MemberKind, Name: PersistentFlag.PersistentGroup or PersistentFlag.TemporaryGroup }, _];
-
-    private IReadOnlyList<PathHop> CellPrefix => [.. Prefix.Take(Prefix.Count - 2)];
+    /// <summary>Whether the record moves into another group of its own cell.</summary>
+    internal bool StaysInItsCell => Into is null && Destination != From.Slot;
 
     private bool IntoPersistent => Destination == PersistentFlag.PersistentGroup;
 
-    /// <summary>The cell the record leaves its own for, in <paramref name="into"/>. Its own keeps it when
+    /// <summary>The cell <paramref name="record"/> leaves its own for, in <paramref name="into"/>. Its own keeps it when
     /// interior, when it is the persistent cell taking it in, or when its grid holds the record's position.</summary>
     internal RecordEditResult? RefuseUnknownCell(
-        JsonObject root, GameRelease release, LoadOrderResolution.MastersWalk masters, string spelled, out AnotherCell? into)
+        JsonObject record, GameRelease release, LoadOrderResolution.MastersWalk masters, string spelled, out AnotherCell? into)
     {
         into = null;
-        var cell = Cell(root);
-        var record = EmbeddedChildPath.Walk(root, Prefix) as JsonObject
-            ?? throw new InvalidOperationException($"The document has no record at {RecordEditEnvelope.Spell(Prefix)}.");
+        var cell = JsonNode.Parse(From.Container.Body) as JsonObject
+            ?? throw new InvalidOperationException($"Expected the own text of {From.Container.FormKey} to hold a JSON object.");
         var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
-        var inThePersistentCell = CellPrefix is [.., { Name: PlacedCell.WorldspacePersistentCellMember }];
+        var inThePersistentCell = From.ContainerHeldIn is { IsThePersistentCell: true };
         (int X, int Y)? grid = null;
         if (!inThePersistentCell)
         {
@@ -70,24 +66,6 @@ internal sealed record CellGroupMove(IReadOnlyList<PathHop> Prefix, string Desti
         RecordEditResult.RefusedAt(
             RecordEditRefusal.PersistentMoveDestinationUnknown, spelled,
             $"Which cell xEdit would move {formKey} into is unknown: {why}. Nothing was written.");
-
-    /// <summary>Moves the record to the end of its cell's destination group; returns its new prefix.</summary>
-    internal IReadOnlyList<PathHop> Apply(JsonObject root)
-    {
-        if (Prefix[^2].Name == Destination) return Prefix;
-        var cell = Cell(root);
-        var source = cell[Prefix[^2].RequireName()] as JsonArray
-            ?? throw new InvalidOperationException($"The document has no group at {RecordEditEnvelope.Spell(Prefix.Take(Prefix.Count - 1))}.");
-        var record = source[Prefix[^1].RequireIndex()];
-        source.RemoveAt(Prefix[^1].RequireIndex());
-        if (cell[Destination] is not JsonArray destination) cell[Destination] = destination = [];
-        destination.Add(record);
-        return [.. CellPrefix, PathHop.Member(Destination), PathHop.At(destination.Count - 1)];
-    }
-
-    private JsonObject Cell(JsonObject root) =>
-        EmbeddedChildPath.Walk(root, CellPrefix) as JsonObject
-            ?? throw new InvalidOperationException($"The document has no cell at {RecordEditEnvelope.Spell(CellPrefix)}.");
 }
 
 /// <summary>A cell other than the placed record's own that a change to Persistent moves it into.</summary>
@@ -104,7 +82,3 @@ internal abstract record AnotherCell
     /// <summary>The exterior cell whose grid holds the record's position, on clear.</summary>
     internal sealed record GridCell(int X, int Y) : AnotherCell(PersistentFlag.TemporaryGroup);
 }
-
-/// <summary>A placed record a write moves out of its document's cell, at <see cref="Prefix"/> there,
-/// and the cell it lands in.</summary>
-internal sealed record CellCrossing(IReadOnlyList<PathHop> Prefix, AnotherCell Into);

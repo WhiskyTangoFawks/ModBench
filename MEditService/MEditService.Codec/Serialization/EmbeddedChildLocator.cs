@@ -4,21 +4,15 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>One step down an owner's document: a slot member, and the element's position when the
-/// slot is a list.</summary>
-public readonly record struct ChildStep(string Slot, int? Index);
-
 /// <summary>Where an embedded child's text sits inside its owner's document: the child's own span,
-/// the slot member carrying it, what the text says the child is, and the steps from the owner
-/// down to it.</summary>
+/// the slot member carrying it, and what the text says the child is.</summary>
 public readonly record struct EmbeddedChildSpan(
     int Start,
     int End,
     int SlotNameStart,
     int SlotValueEnd,
     bool SlotIsList,
-    string? Discriminator,
-    IReadOnlyList<ChildStep> Path);
+    string? Discriminator);
 
 /// <summary>The byte span a child occupies in its owner's document, keyed on the schema's slot
 /// facts and reading nothing back as a live object. The splice and the document reads ask
@@ -106,8 +100,8 @@ public static class EmbeddedChildLocator
 
             found = reader.TokenType switch
             {
-                JsonTokenType.StartObject => InSingleSlot(ref reader, formKey, member, memberStart, slots),
-                JsonTokenType.StartArray => InListSlot(ref reader, formKey, member, memberStart, slots),
+                JsonTokenType.StartObject => InSingleSlot(ref reader, formKey, memberStart, slots),
+                JsonTokenType.StartArray => InListSlot(ref reader, formKey, memberStart, slots),
                 _ => null,
             };
         }
@@ -117,35 +111,29 @@ public static class EmbeddedChildLocator
 
     // Enters on the slot value's '{' and leaves on its '}'.
     private static EmbeddedChildSpan? InSingleSlot(
-        ref Utf8JsonReader reader, string formKey, string slot, int memberStart, RecordTypes slots)
+        ref Utf8JsonReader reader, string formKey, int memberStart, RecordTypes slots)
     {
         var start = (int)reader.TokenStartIndex;
         var scan = ScanObject(ref reader, null, formKey, slots);
         var end = (int)reader.BytesConsumed;
 
-        var step = new ChildStep(slot, null);
-        if (scan.Deeper is { } deeper) return Below(deeper, step);
+        if (scan.Deeper is { } deeper) return deeper;
 
         return string.Equals(scan.FormKey, formKey, StringComparison.Ordinal)
-            ? new EmbeddedChildSpan(start, end, memberStart, end, SlotIsList: false, scan.Discriminator, [step])
+            ? new EmbeddedChildSpan(start, end, memberStart, end, SlotIsList: false, scan.Discriminator)
             : null;
     }
-
-    private static EmbeddedChildSpan Below(EmbeddedChildSpan span, ChildStep step) =>
-        span with { Path = [step, .. span.Path] };
 
     private const int PendingSlotEnd = -1;
 
     // Every element is walked even after a hit, so the reader leaves this slot on its ']'.
     private static EmbeddedChildSpan? InListSlot(
-        ref Utf8JsonReader reader, string formKey, string slot, int memberStart, RecordTypes slots)
+        ref Utf8JsonReader reader, string formKey, int memberStart, RecordTypes slots)
     {
         EmbeddedChildSpan? found = null;
-        var index = -1;
 
         while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
         {
-            index++;
             if (reader.TokenType != JsonTokenType.StartObject)
             {
                 reader.Skip();
@@ -157,11 +145,10 @@ public static class EmbeddedChildLocator
             var end = (int)reader.BytesConsumed;
             if (found != null) continue;
 
-            var step = new ChildStep(slot, index);
             if (scan.Deeper is { } deeper)
-                found = Below(deeper, step);
+                found = deeper;
             else if (string.Equals(scan.FormKey, formKey, StringComparison.Ordinal))
-                found = new EmbeddedChildSpan(start, end, memberStart, PendingSlotEnd, SlotIsList: true, scan.Discriminator, [step]);
+                found = new EmbeddedChildSpan(start, end, memberStart, PendingSlotEnd, SlotIsList: true, scan.Discriminator);
         }
 
         // A hit from further down already names its own slot; only an element of this list waits for
