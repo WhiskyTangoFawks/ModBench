@@ -1,8 +1,7 @@
 type ReadFailedKind = 'refused' | 'no-answer' | 'timed-out' | 'unreachable' | 'unreadable' | 'local';
 
-/** A read that did not land, as data (ADR-0019). `refusal` is mEdit's own sentence, on `refused` alone;
- *  `cause` says what failed on `unreadable` (mEdit answered in a shape this side cannot use) and on
- *  `local` (this side failed before or after asking). The transport's verb, path and status are in neither. */
+/** A read that did not land, as data (ADR-0019). `refusal` is mEdit's own sentence, on `refused`;
+ *  `cause` is this side's, on `unreadable` and `local`. Neither carries the transport's verb, path or status. */
 export interface ReadFailed {
   readonly failed: ReadFailedKind;
   readonly refusal?: string;

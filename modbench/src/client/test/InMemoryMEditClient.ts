@@ -137,7 +137,7 @@ export class InMemoryMEditClient implements MEditClient {
     this.pushQueryStep(method, { kind: 'answer', value: answer });
   }
 
-  /** {@link setQueryAnswerOnce}'s failure-shaped sibling — queues one failure, answered or rejected as {@link setQueryFailure} does. */
+  /** {@link setQueryAnswerOnce}'s failure-shaped sibling — queues one failure, answered or rejected as setQueryFailure does. */
   setQueryFailureOnce(method: QueryMethod, failure: Error | ReadFailed): void {
     this.pushQueryStep(method, { kind: 'failure', error: failure });
   }
