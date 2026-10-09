@@ -167,8 +167,6 @@ export type CopyMode = components['schemas']['CopyMode'];
 /** One record into one destination: the unit a copy lands or is refused by. A new record's copy
  *  that landed names the FormKey mEdit minted for it. */
 export type CopyItem = Pick<components['schemas']['RecordCopyLanded'], 'record' | 'destination' | 'newFormKey'>;
-/** A record and the destinations that hold any of its child records, at any depth. */
-export type RecordChildHolders = components['schemas']['RecordChildHolders'];
 export type ReferenceResult = components['schemas']['ReferenceResult'];
 /** The record filter mEdit holds: its SQL and the name of the source it came from
  *  (plugins.md, Record filter). */
@@ -223,12 +221,6 @@ export interface MEditClient {
   getRecordOwner(formKey: string): Promise<PluginAddress | undefined>;
   /** Every plugin that holds a copy of the record, its own included. */
   getRecordHolders(formKey: string): Promise<PluginAddress[]>;
-  /** Which of the records have child records in their own plugin. */
-  getRecordsWithChildren(records: readonly RecordAddress[]): Promise<RecordAddress[]>;
-  /** For each record, the destinations that hold any of its child records. */
-  getChildrenInDestinations(
-    records: readonly RecordAddress[], destinations: readonly PluginAddress[],
-  ): Promise<RecordChildHolders[]>;
   /** One record as every active plugin has it, untransformed (target-architecture.d2 `modbench_driving.editor`).
    *  Null: no active plugin holds it and no `text` gives it. With `text`, that plugin's column reads
    *  from it, outside the conflict states if inactive. */
