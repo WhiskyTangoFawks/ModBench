@@ -81,7 +81,7 @@ public sealed class ReconcileDiffTests
         var bKey = Key(fx, "B.esp");
         var bodiesBefore = (A: Bodies(index, aKey), B: Bodies(index, bKey));
 
-        var swapped = fx.Plugins.Select(p => p with { Slot = p.Name == "A.esm" ? 1 : 0 }).ToList();
+        var swapped = fx.Plugins.Select(p => p with { Line = p.Name == "A.esm" ? 1 : 0 }).ToList();
         index.Reconcile(holder, fx.GameDirectory, swapped, GameRelease.Fallout4);
 
         Assert.Equal(opened, opens.OpenedTotal);

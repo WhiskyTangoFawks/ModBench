@@ -42,7 +42,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         // in it and `Enabled` is the `*` prefix.
         var explicitPlugins = _plugins
             .Where(p => p.Listed)
-            .Select((p, slot) => new LoadOrderEntry(p.Name, Path.Combine(dataFolder, p.Name), p.Origin, slot, p.Enabled, Winning: true))
+            .Select((p, line) => new LoadOrderEntry(p.Name, Path.Combine(dataFolder, p.Name), p.Origin, line, p.Enabled, Winning: true))
             .ToList();
 
         data.Plugins = OneWinnerPerFilename(explicitPlugins);
@@ -89,15 +89,15 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
             i++;
         }
 
-        List<LoadOrderEntry> forced = [.. loadedWithNoLine.Select((name, slot) => new LoadOrderEntry(
-            name, Path.Combine(gameDir, name), PluginOrigin.DataDirectory, slot, Enabled: true, Winning: true,
+        List<LoadOrderEntry> forced = [.. loadedWithNoLine.Select((name, line) => new LoadOrderEntry(
+            name, Path.Combine(gameDir, name), PluginOrigin.DataDirectory, line, Enabled: true, Winning: true,
             LoadedWithNoLine: true))];
         data.Plugins = [.. forced, .. OneWinnerPerFilename(explicitPlugins)];
         return data;
     }
 
     // The mod declared later overrides an earlier mod's file of the same name, and the overridden copy
-    // loads in the winner's slot, as the instance's snapshot sends it (ADR-0012).
+    // loads in the winner's line, as the instance's snapshot sends it (ADR-0012).
     private static List<LoadOrderEntry> OneWinnerPerFilename(List<LoadOrderEntry> plugins)
     {
         var winners = plugins
@@ -106,7 +106,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         return [.. plugins.Select(p =>
         {
             var winner = winners[p.Name];
-            return ReferenceEquals(winner, p) ? p : p with { Slot = winner.Slot, Winning = false };
+            return ReferenceEquals(winner, p) ? p : p with { Line = winner.Line, Winning = false };
         })];
     }
 }

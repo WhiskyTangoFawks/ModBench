@@ -26,7 +26,7 @@ public sealed class InstallModTraceTests : HostedTests
         var mod = new Fallout4Mod(ModKey.FromFileName(Installed), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("InstalledNpc");
         mod.WriteToBinary(path);
-        return new LoadOrderEntry(Installed, path, InstalledMod, Slot: 1, Enabled: true, Winning: true);
+        return new LoadOrderEntry(Installed, path, InstalledMod, Line: 1, Enabled: true, Winning: true);
     }
 
     [Fact]

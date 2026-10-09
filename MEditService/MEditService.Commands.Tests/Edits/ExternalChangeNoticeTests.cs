@@ -35,8 +35,8 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     {
         foreach (var (name, bytes) in plugins) File.WriteAllBytes(Path.Combine(ModFolder, name), bytes);
         return SnapshotPlugins.Snapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
-            [.. plugins.Select((plugin, slot) => new LoadOrderEntry(
-                plugin.Name, Path.Combine(ModFolder, plugin.Name), Origin, slot, Enabled: true, Winning: true))]);
+            [.. plugins.Select((plugin, line) => new LoadOrderEntry(
+                plugin.Name, Path.Combine(ModFolder, plugin.Name), Origin, line, Enabled: true, Winning: true))]);
     }
 
     private static string Sha256(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));

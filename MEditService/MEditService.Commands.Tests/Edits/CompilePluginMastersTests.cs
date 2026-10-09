@@ -61,10 +61,10 @@ public sealed class CompilePluginMastersTests : IDisposable
         _loadOrder = SnapshotPlugins.Snapshot(
             _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             [
-                new LoadOrderEntry(CharlieName, charliePath, PluginOrigin.DataDirectory, Slot: 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(BravoName, bravoPath, PluginOrigin.DataDirectory, Slot: 1, Enabled: true, Winning: true),
-                new LoadOrderEntry(DeltaName, deltaPath, PluginOrigin.DataDirectory, Slot: 2, Enabled: true, Winning: true),
-                new LoadOrderEntry(PluginName, pluginPath, _plugin.Origin, Slot: 3, Enabled: true, Winning: true),
+                new LoadOrderEntry(CharlieName, charliePath, PluginOrigin.DataDirectory, Line: 0, Enabled: true, Winning: true),
+                new LoadOrderEntry(BravoName, bravoPath, PluginOrigin.DataDirectory, Line: 1, Enabled: true, Winning: true),
+                new LoadOrderEntry(DeltaName, deltaPath, PluginOrigin.DataDirectory, Line: 2, Enabled: true, Winning: true),
+                new LoadOrderEntry(PluginName, pluginPath, _plugin.Origin, Line: 3, Enabled: true, Winning: true),
             ]);
 
         TrackEveryPluginOf.ModAsync(_loadOrder, _plugin.Origin)

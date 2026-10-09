@@ -219,7 +219,7 @@ public sealed class TrackCommitShapeTests : IDisposable
     {
         var entries = Directory.GetFiles(_modFolder, "*.esp")
             .Order(StringComparer.Ordinal)
-            .Select((path, slot) => new LoadOrderEntry(Path.GetFileName(path), path, ModName, slot, Enabled: true, Winning: true))
+            .Select((path, line) => new LoadOrderEntry(Path.GetFileName(path), path, ModName, line, Enabled: true, Winning: true))
             .ToList();
         return SnapshotPlugins.Snapshot(_gameDir, _gameDir, GameRelease.Fallout4, entries);
     }

@@ -55,7 +55,7 @@ public sealed class RegisteredPluginSpellingTests
 
             LoadOrder = SnapshotPlugins.Snapshot(
                 _gameDirectory, _instanceRoot, Release,
-                [new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
+                [new LoadOrderEntry(PluginName, PluginPath, Origin, Line: 0, Enabled: true, Winning: true)]);
         }
 
         private string PluginPath => Path.Combine(ModFolder, PluginName);

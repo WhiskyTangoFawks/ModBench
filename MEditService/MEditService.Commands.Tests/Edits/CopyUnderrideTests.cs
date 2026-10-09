@@ -53,7 +53,7 @@ public sealed class CopyUnderrideTests : IDisposable
     [Fact]
     public void APluginHoldingARecordTheCopyReferences_WithNoLine_IsNotJudged()
     {
-        _plugins.Relist(Address(_referenced), entry => entry with { Slot = null });
+        _plugins.Relist(Address(_referenced), entry => entry with { Line = null });
 
         CopyThePatchsNpcIntoTheDestination().OnlyLanded();
     }

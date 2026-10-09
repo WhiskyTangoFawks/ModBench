@@ -34,7 +34,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
         _plugin = new PluginAddress(CutDownPluginFixture.PluginFileName, "DocEditRealMod");
 
         var loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName), _plugin.Origin, Slot: 0, Enabled: true, Winning: true)]);
+            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName), _plugin.Origin, Line: 0, Enabled: true, Winning: true)]);
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
         _editHandler = TestEditService.EditHandler(holder);

@@ -54,8 +54,8 @@ public sealed class CompilePluginLinkTests : IDisposable
         _loadOrder = SnapshotPlugins.Snapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4,
             [
-                new LoadOrderEntry(TargetName, targetPath, TargetOrigin, Slot: 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(HostName, hostPath, HostOrigin, Slot: 1, Enabled: true, Winning: true),
+                new LoadOrderEntry(TargetName, targetPath, TargetOrigin, Line: 0, Enabled: true, Winning: true),
+                new LoadOrderEntry(HostName, hostPath, HostOrigin, Line: 1, Enabled: true, Winning: true),
             ]);
         TrackEveryPluginOf.ModAsync(_loadOrder, TargetOrigin).GetAwaiter().GetResult();
         TrackEveryPluginOf.ModAsync(_loadOrder, HostOrigin).GetAwaiter().GetResult();

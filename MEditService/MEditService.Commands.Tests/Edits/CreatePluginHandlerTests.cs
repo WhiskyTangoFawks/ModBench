@@ -67,7 +67,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         _holder.Apply(SnapshotPlugins.Snapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4,
         [
             .. _data.Plugins,
-            new LoadOrderEntry(existing, Path.Combine(folder, existing), name, Slot: 1, Enabled: true, Winning: true),
+            new LoadOrderEntry(existing, Path.Combine(folder, existing), name, Line: 1, Enabled: true, Winning: true),
         ]));
         var tracked = await TestEditService.TrackHandler(_holder).TrackAsync([name]);
         Assert.Single(tracked.Landed);

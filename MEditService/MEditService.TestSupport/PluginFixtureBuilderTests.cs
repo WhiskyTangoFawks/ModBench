@@ -42,7 +42,7 @@ public class PluginFixtureBuilderTests
     }
 
     [Fact]
-    public void BuildScattered_TwoCopiesOfAFilename_TheLaterModWins_AndTheOtherLoadsInItsSlot()
+    public void BuildScattered_TwoCopiesOfAFilename_TheLaterModWins_AndTheOtherLoadsInItsLine()
     {
         using var data = new PluginFixtureBuilder()
             .WithPlugin("Shared.esp", origin: "ModA")
@@ -54,7 +54,7 @@ public class PluginFixtureBuilderTests
         var winner = data.Plugins.Single(p => p.Origin == "ModB");
         Assert.True(winner.Winning);
         Assert.False(overridden.Winning);
-        Assert.Equal(winner.Slot, overridden.Slot);
+        Assert.Equal(winner.Line, overridden.Line);
         Assert.True(data.Plugins.Single(p => p.Origin == "OtherMod").Winning);
     }
 

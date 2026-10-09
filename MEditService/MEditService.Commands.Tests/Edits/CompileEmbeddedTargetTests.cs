@@ -65,10 +65,10 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     }
 
     private LoadOrderEntry Target(bool enabled) =>
-        new(TargetName, _targetPath, TargetOrigin, Slot: 0, Enabled: enabled, Winning: true);
+        new(TargetName, _targetPath, TargetOrigin, Line: 0, Enabled: enabled, Winning: true);
 
     private LoadOrderEntry Referrer =>
-        new(ReferrerName, _referrerPath, ReferrerOrigin, Slot: 1, Enabled: true, Winning: true);
+        new(ReferrerName, _referrerPath, ReferrerOrigin, Line: 1, Enabled: true, Winning: true);
 
     private static void AddCell(Fallout4Mod mod, Cell cell)
     {

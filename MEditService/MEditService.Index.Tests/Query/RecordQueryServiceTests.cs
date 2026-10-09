@@ -75,7 +75,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         DeletedNpcPlugin.WriteHoldingFields(path, FormKey.Factory(unreadable));
         var index = Indexes.Reconciled(
             gameDirectory,
-            [new LoadOrderEntry(Path.GetFileName(path), path, PluginOrigin.DataDirectory, Slot: 0, Enabled: true, Winning: true), .. besides]);
+            [new LoadOrderEntry(Path.GetFileName(path), path, PluginOrigin.DataDirectory, Line: 0, Enabled: true, Winning: true), .. besides]);
         _built.Add(index);
         return index;
     }
@@ -94,7 +94,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     {
         var readable = Built(new PluginFixtureBuilder("record-query").WithPlugin("Readable.esp", mod => mod.Npcs.AddNew("Readable")))
             .Plugins.Single();
-        var index = WithAnUnreadableNpc("000800:Unreadable.esp", readable with { Slot = 1 });
+        var index = WithAnUnreadableNpc("000800:Unreadable.esp", readable with { Line = 1 });
 
         var plugins = index.Records.GetPlugins();
 
