@@ -193,7 +193,7 @@ internal static class PluginEndpoints
         // The plugin hosts the new group, so it owns the route the way Compile does; the FormKey doesn't
         // exist yet, which is exactly why this isn't under /records/{formKey}.
         app.MapPost("/plugins/{plugin}/create-record-changes", CreateRecordChanges)
-            .WithName("CreateRecordChanges")
+            .WithName("CreateRecord")
             .WithSummary("The changes creating a record makes to plugin source, writing nothing.")
             .WithDescription(
                 "Given the current text of any unsaved document, the files and folders creating a new record deletes and " +

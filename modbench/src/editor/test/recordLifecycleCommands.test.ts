@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RecordAddress } from '../../client';
-import type { DeleteDeps } from '../recordLifecycleCommands';
+import type { SourceEditing } from '../../drivingLib/sourceEditing';
 
 interface PickItem { label: string; description?: string; mode?: string; plugin?: { name: string } }
 type ShowQuickPick = (items: readonly PickItem[], options?: { canPickMany?: boolean }) => Promise<unknown>;
@@ -76,7 +76,7 @@ describe('registerRecordLifecycleCommands', () => {
     const ask = scriptedDialog(...answers);
     const { write, writing, viewsAskedFor } = recordingWrite();
     const serially = vi.fn();
-    const source = { unsaved: () => [UNSAVED], apply: vi.fn<DeleteDeps['apply']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
+    const source = { unsaved: () => [UNSAVED], apply: vi.fn<SourceEditing['apply']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
     registerRecordLifecycleCommands(client, reporter, ask, selections, write, source);
     return { reporter, ask, writing, viewsAskedFor, source };
   }
@@ -340,12 +340,12 @@ describe('registerRecordLifecycleCommands', () => {
       const refusal = { item: UNTRACKED, reason: 'Other.esp is not tracked, so it is read-only.' };
       client.setCommandResult('getDeleteChanges', { applied: [changes(FIRST)], refused: [refusal] });
       const { reporter, source } = invoke(client, 'Delete');
-      source.apply.mockRejectedValue(new Error('VS Code did not apply the changes mEdit answered.'));
+      source.apply.mockRejectedValue(new Error('VS Code did not apply the changes.'));
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, UNTRACKED_NODE]);
 
       expect(reporter.reports[0]).toEqual(
-        { severity: 'error', message: 'Could not delete the records.', detail: 'VS Code did not apply the changes mEdit answered.' });
+        { severity: 'error', message: 'Could not delete the records.', detail: 'VS Code did not apply the changes.' });
       expect(reporter.selectionOutcomeCalls).toEqual([
         { message: 'Could not delete 1 of 2 records.', outcome: { landed: [], refused: [refusal] } },
       ]);

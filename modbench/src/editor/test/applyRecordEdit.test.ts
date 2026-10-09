@@ -27,7 +27,8 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { applyRecordEdit, applySourceChanges, oneAtATime, type RecordWriteDeps } from '../applyRecordEdit';
+import { applyRecordEdit, type RecordWriteDeps } from '../applyRecordEdit';
+import { oneAtATime } from '../../drivingLib/oneAtATime';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { RecordEditEnvelope } from '../../wire/messages';
@@ -131,74 +132,5 @@ describe('an edit of a record', () => {
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not save the edit of Height.', detail: `VS Code did not save ${FILE}.` }]);
     expect(refreshSourceControlFor).toHaveBeenCalledWith(plugin);
-  });
-});
-
-describe('the changes of several records, made as one workspace edit', () => {
-  const OWNER = '/mods/ModA/plugin-source/A.esp/Cells/Cell.json';
-  const FOLDER = '/mods/ModA/plugin-source/A.esp/Npcs/Npc';
-  const none = { moves: [], deletions: [], documents: [] };
-
-  it('deletes a file or folder recursively, in the order answered, and keeps only the last text of a document', async () => {
-    await applySourceChanges([
-      { ...none, documents: [{ path: OWNER, text: 'without the first' }] },
-      { ...none, deletions: [FOLDER] },
-      { ...none, documents: [{ path: OWNER, text: 'without both' }] },
-    ]);
-
-    expect(h.applied).toEqual([[
-      ['delete', FOLDER, { recursive: true, ignoreIfNotExists: true }],
-      ['create', OWNER],
-      ['replace', OWNER, 'without both'],
-    ]]);
-    expect(h.saved).toEqual([OWNER]);
-  });
-
-  it('writes no document a later item deletes, and saves only the documents that stay', async () => {
-    await applySourceChanges([
-      { ...none, documents: [{ path: `${FOLDER}/Child.json`, text: 'cut' }, { path: OWNER, text: 'cut' }] },
-      { ...none, deletions: [FOLDER] },
-    ]);
-
-    expect(h.applied).toEqual([[
-      ['create', OWNER],
-      ['replace', OWNER, 'cut'],
-      ['delete', FOLDER, { recursive: true, ignoreIfNotExists: true }],
-    ]]);
-    expect(h.saved).toEqual([OWNER]);
-  });
-
-  it('says VS Code did not apply them, and saves nothing', async () => {
-    h.applyLands = false;
-
-    await expect(applySourceChanges([{ ...none, documents: [{ path: OWNER, text: 'x' }] }])).rejects.toThrow('VS Code did not apply');
-    expect(h.saved).toEqual([]);
-  });
-
-  it('resolves the files VS Code did not save', async () => {
-    h.savesLand = false;
-
-    expect(await applySourceChanges([{ ...none, documents: [{ path: OWNER, text: 'x' }] }])).toEqual([OWNER]);
-  });
-
-  it('writes a document beside a deleted folder whose name only begins the same, on either separator', async () => {
-    const sibling = `${FOLDER}2/Child.json`;
-    const backslashed = 'C:\\mods\\Npc\\Child.json';
-
-    await applySourceChanges([
-      { ...none, documents: [{ path: sibling, text: 'stays' }, { path: backslashed, text: 'goes' }] },
-      { ...none, deletions: [FOLDER, 'C:\\mods\\Npc'] },
-    ]);
-
-    expect(h.applied[0]?.filter((op) => Array.isArray(op) && op[0] === 'replace')).toEqual([['replace', sibling, 'stays']]);
-  });
-
-  it('writes a document under a folder an earlier item deleted', async () => {
-    await applySourceChanges([
-      { ...none, deletions: [FOLDER] },
-      { ...none, documents: [{ path: `${FOLDER}/Child.json`, text: 'recreated' }] },
-    ]);
-
-    expect(h.applied[0]?.filter((op) => Array.isArray(op) && op[0] === 'replace')).toEqual([['replace', `${FOLDER}/Child.json`, 'recreated']]);
   });
 });

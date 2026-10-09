@@ -6,15 +6,17 @@ import { registerGesture, singularArgument, type RowOf } from '../drivingLib/ges
 import type { PluginsTreeNode } from './PluginsTreeProvider';
 import type { CreatedRecordWatch, RecordPlace } from './createdRecordSelection';
 import type { RecordWrite } from '../drivingLib/writingGesture';
+import type { SourceEditing } from '../drivingLib/sourceEditing';
 import { CREATE_ROW_KINDS, isContainerRow } from './gestureEntry';
 import { CELL_RECORD_TYPE } from './RecordBrowser';
 import { pluginAddressOf } from '../wire/pluginAddress';
 
 export interface RecordCreateDeps {
-  client: Pick<MEditClient, 'createRecord' | 'getCreatableRecordTypes' | 'getChildRecordTypes'>;
+  client: Pick<MEditClient, 'getCreateChanges' | 'getCreatableRecordTypes' | 'getChildRecordTypes'>;
   reporter: Reporter;
   createdRecords: { watch(plugin: PluginAddress): CreatedRecordWatch<PluginsTreeNode> };
   write: RecordWrite;
+  source: SourceEditing;
 }
 
 type CreateRow = RowOf<PluginsTreeNode, typeof CREATE_ROW_KINDS[number]>;
@@ -111,15 +113,25 @@ export function registerRecordCreateCommand(
     const created = deps.createdRecords.watch(plugin);
     const answer: { formKey?: string } = {};
     try {
-      await deps.write(async () => {
-        const result = await deps.client.createRecord(plugin, recordType, container === undefined ? undefined : { container, position });
-        if (isRefused(result)) {
-          deps.reporter.report('error', result.message);
+      await deps.write(() => deps.source.oneAtATime(async () => {
+        const into = container === undefined ? undefined : { container, position };
+        const changes = await deps.client.getCreateChanges(plugin, recordType, deps.source.unsaved(), into);
+        if (isRefused(changes)) {
+          deps.reporter.report('error', changes.message);
           return;
         }
-        answer.formKey = result.formKey;
-        deps.reporter.landed(`Created ${result.formKey}.`);
-      });
+        let notSaved: readonly string[];
+        try {
+          notSaved = await deps.source.apply([changes]);
+        } catch (error) {
+          deps.reporter.report('error', `Could not create the ${recordType} record.`, errorMessage(error));
+          return;
+        }
+        answer.formKey = changes.formKey;
+        deps.source.refreshSourceControlFor(plugin);
+        if (notSaved.length > 0) deps.reporter.report('error', `Could not save ${changes.formKey}.`, `VS Code did not save ${notSaved.join(', ')}.`);
+        deps.reporter.landed(`Created ${changes.formKey}.`);
+      }));
     } finally {
       if (answer.formKey === undefined) created.forget();
       else created.select(place, answer.formKey);

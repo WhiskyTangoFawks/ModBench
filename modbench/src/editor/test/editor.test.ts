@@ -185,8 +185,7 @@ function makeEditor(
     focusedView,
     recordViewIds,
     recordWrite: (command) => command(),
-    refreshSourceControlFor: () => undefined,
-    dirtyPluginSource: () => [],
+    sourceEditing: { unsaved: () => [], apply: () => Promise.resolve([]), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     modFacts,
   });
   const provider = h.editorProviders.get('modbench.record');

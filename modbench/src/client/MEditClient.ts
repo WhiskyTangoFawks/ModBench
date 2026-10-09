@@ -121,6 +121,9 @@ export interface DeleteChangesOutcome {
   refused: readonly ItemRefusal<RecordAddress>[];
 }
 
+/** The changes creating a record makes to plugin source, and the new record's FormKey. */
+export type CreateChangesOutcome = SourceChanges & { formKey: string };
+
 /** An edit's changes to plugin source, each move and then each document's text at its absolute path,
  *  or its refusal: `refusal` is the backend's name, `'Unknown'` this side's. An edit of the FormID
  *  sets `newFormKey`. */
@@ -175,7 +178,6 @@ export interface CompileOutcome {
   refused: readonly ItemRefusal<PluginAddress>[];
 }
 
-export type RecordCreateResponse = components['schemas']['RecordCreateResponse'];
 export type GridPosition = components['schemas']['GridPosition'];
 /** A record and the plugin holding it (ADR-0012). */
 export type RecordAddress = components['schemas']['RecordAddress'];
@@ -199,9 +201,11 @@ export interface MEditClient {
   renameSource(plugin: PluginAddress, newName: string): Promise<{ renamed: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   track(mods: readonly string[], options?: { onProgress?: (status: TrackStatus) => void }): Promise<TrackOutcome | WriteRefused>;
-  createRecord(
-    plugin: PluginAddress, recordType: string, into?: { container?: string; position?: GridPosition },
-  ): Promise<RecordCreateResponse | WriteRefused>;
+  // `unsaved` stands in for the files it names. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
+  getCreateChanges(
+    plugin: PluginAddress, recordType: string, unsaved: readonly UnsavedDocument[],
+    into?: { container?: string; position?: GridPosition },
+  ): Promise<CreateChangesOutcome | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. `unsaved` stands in for the files
   // it names. A WriteRefused is the call itself failing. Nothing is written.
   getDeleteChanges(

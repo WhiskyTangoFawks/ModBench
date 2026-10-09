@@ -50,7 +50,7 @@ describe('applying workspace changes', () => {
 
   it('tells the caller the moves before VS Code applies, and does not undo when VS Code applies', async () => {
     const undo = vi.fn();
-    const moving = vi.fn(() => undo);
+    const moving = vi.fn<(moves: readonly { from: { path: string }; to: { path: string } }[]) => () => void>(() => undo);
 
     await applyWorkspaceChanges([{ ...none, moves: [{ from: '/a/Npc.json', to: '/a/Renamed.json' }] }], { moving });
 

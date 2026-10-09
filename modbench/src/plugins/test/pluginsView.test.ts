@@ -173,7 +173,9 @@ function pluginsView(
     dataFolderFile: () => undefined, log: () => undefined,
     reporterFor: (tag) => { const reporter = recordingReporter(); reporters.set(tag, reporter); return reporter; },
     statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, registerRepositories: () => Promise.resolve(),
-    ask: scriptedDialog(), recordWrite: (command) => command(), trackSelection: () => [], modsView: 'modbench.modList',
+    ask: scriptedDialog(), recordWrite: (command) => command(),
+    sourceEditing: { unsaved: () => [], apply: () => Promise.resolve([]), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
+    trackSelection: () => [], modsView: 'modbench.modList',
   });
   const provider = () => present(h.providers[0], 'the Plugins tree data provider');
   const rows = async () => (await provider().getChildren()) ?? [];

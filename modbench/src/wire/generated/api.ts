@@ -397,7 +397,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/{plugin}/records": {
+    "/plugins/{plugin}/create-record-changes": {
         parameters: {
             query?: never;
             header?: never;
@@ -407,8 +407,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create a new record as a working-tree change.
-         * @description Mints a new record in the plugin's working tree: a new source file of its own, or, for a record created in a container, an entry in the container's document. A git-native create, answering at Effective only until committed and compiled.
+         * The changes creating a record makes to plugin source, writing nothing.
+         * @description Given the current text of any unsaved document, the files and folders creating a new record deletes and moves and the text each document it changes or creates holds afterwards: a new source file of its own, or, for a record created in a container, an entry in the container's document. Moves come first, then deletions, then documents, and every path is absolute. The answer names the new FormKey. Git-native: the record answers at Effective only until committed and compiled.
          */
         post: operations["CreateRecord"];
         delete?: never;
@@ -1108,16 +1108,18 @@ export interface components {
             applied: components["schemas"]["RecordCopyLanded"][];
             refused: components["schemas"]["RecordCopyRefusal"][];
         };
-        RecordCreateRequest: {
+        RecordCreateChangesRequest: {
             origin: string;
             recordType: string;
             container?: string | null;
             position?: components["schemas"]["GridPosition"] | null;
+            documents?: components["schemas"]["DocumentChange"][] | null;
         };
-        RecordCreateResponse: {
-            applied: boolean;
+        RecordCreateChangesResponse: {
             formKey: string;
-            recordType: string;
+            moves: components["schemas"]["SourceMove"][];
+            deletions: string[];
+            documents: components["schemas"]["DocumentChange"][];
         };
         RecordDeleteChanges: {
             record: components["schemas"]["RecordAddress"];
@@ -2364,7 +2366,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RecordCreateRequest"];
+                "application/json": components["schemas"]["RecordCreateChangesRequest"];
             };
         };
         responses: {
@@ -2374,7 +2376,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordCreateResponse"];
+                    "application/json": components["schemas"]["RecordCreateChangesResponse"];
                 };
             };
             /** @description Bad Request */
