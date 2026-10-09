@@ -29,22 +29,24 @@ public sealed class EditRecordChangesHandler
         _cellLanding = new(resolution, schemaReflector, logger);
     }
 
-    /// <summary><paramref name="given"/> stands in for the file of the document holding the record, and
-    /// <paramref name="unsaved"/> for the files of the other documents.</summary>
+    /// <summary>Over <paramref name="unsaved"/>, which stand in for their files, and <paramref name="given"/>,
+    /// which stands in for the file of the document holding the record, whatever <paramref name="unsaved"/> holds of it.</summary>
     public RecordEditChanges Changes(
         PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given, IReadOnlyList<DocumentChange> unsaved) =>
         WriteFailure.Refused(
-            EditSource(plugin, formKey, envelope, given, new UnsavedBatches(unsaved)), refused => refused, $"Could not read the source of {formKey}", _logger);
+            EditSource(plugin, formKey, envelope, given, unsaved), refused => refused, $"Could not read the source of {formKey}", _logger);
 
-    private SourceAnswer<RecordEditChanges> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given, UnsavedBatches batches)
+    private SourceAnswer<RecordEditChanges> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given,
+        IReadOnlyList<DocumentChange> unsaved)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
         if (!_targets.TryResolveEditTarget(plugin, formKey, given, out var onDisk, out var blocked)) return blocked;
         if (!onDisk.Repository.DocumentOf(plugin, onDisk.Identity).Holds(out var file, out var unread)) return unread;
         var documentFile = file ?? throw new InvalidOperationException($"Expected the document holding {formKey} to have been located.");
 
-        var batch = SourceBatch.Over(onDisk.Repository, [new DocumentChange(documentFile.Path, given)]);
-        return Edit(plugin, formKey, envelope, onDisk with { Repository = batch.Repository }, batches)
+        var texts = unsaved.Where(change => change.Path != documentFile.Path).Append(new DocumentChange(documentFile.Path, given));
+        var batch = SourceBatch.Over(onDisk.Repository, [.. texts]);
+        return Edit(plugin, formKey, envelope, onDisk with { Repository = batch.Repository }, new UnsavedBatches(unsaved))
             .Then(outcome => SourceAnswer.Of(new RecordEditChanges(outcome, batch.Changes)));
     }
 

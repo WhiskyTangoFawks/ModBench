@@ -227,7 +227,7 @@ internal static class RecordEndpoints
             execute: () => edits.Changes(
                 new PluginAddress(request.Edit.Plugin, request.Edit.Origin), decoded,
                 new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.Value), request.Text,
-                [.. (request.Documents ?? []).Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))]),
+                WriteEndpointMapping.Unsaved(request.Documents)),
             outcome: answer => answer.Outcome,
             onApplied: answer => Results.Ok(RecordEditChangesResponse.Of(decoded, spelled, answer)));
     }
@@ -245,7 +245,7 @@ internal static class RecordEndpoints
     internal static Task<IResult> DeleteRecordChanges(RecordDeleteChangesRequest request, DeleteRecordChangesHandler edits, ILogger logger)
     {
         var records = request.Records ?? [];
-        var unsaved = request.Documents ?? [];
+        var unsaved = WriteEndpointMapping.Unsaved(request.Documents);
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Received DeleteRecordChanges for {Count} records", records.Count);
@@ -254,7 +254,7 @@ internal static class RecordEndpoints
         {
             return WriteEndpointMapping.Answered(
                 "Delete", logger,
-                edits.DeleteRecords(addressed, [.. unsaved.Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))]),
+                edits.DeleteRecords(addressed, unsaved),
                 WriteEndpointMapping.Refusal,
                 landed => new RecordDeleteChanges(
                     Addressed(landed.Item),
@@ -270,7 +270,7 @@ internal static class RecordEndpoints
     {
         var records = request.Records ?? [];
         var destinations = request.Destinations ?? [];
-        var unsaved = request.Documents ?? [];
+        var unsaved = WriteEndpointMapping.Unsaved(request.Documents);
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
@@ -290,7 +290,7 @@ internal static class RecordEndpoints
                 "Copy", logger,
                 edits.CopyRecords(
                     addressed, request.Mode, destinations, request.Replace,
-                    [.. unsaved.Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))]),
+                    unsaved),
                 WriteEndpointMapping.Refusal,
                 landed => new RecordCopyChanges(
                     Addressed(landed.Item.Record), landed.Item.Destination,

@@ -31,6 +31,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
     private readonly LoadOrderOfPlugins _plugins = new();
     private readonly Dictionary<string, FormKey> _keys = [];
+    private Fallout4Mod? _master;
     private Fallout4Mod? _edited;
 
     public void Dispose() => _plugins.Dispose();
@@ -100,8 +101,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         _master = Master(masterHasPersistentCell);
         _plugins.Load([(_master, masterTracked), .. middle is null ? [] : new[] { (middle, false) }, (_edited, true)]);
     }
-
-    private Fallout4Mod? _master;
 
     private Fallout4Mod Override => _edited ?? throw new InvalidOperationException("Load the plugins first.");
 
@@ -173,8 +172,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
     private DocumentChange MastersUnsaved(FormKey formKey, string respelled, string with)
     {
-        var folder = _plugins.FolderOf(_master.Require());
-        var file = Path.Combine(folder, TrackedTree.DocumentFile(folder, Address(_master.Require()), formKey.ToString()).Require());
+        var file = _plugins.DocumentFileOf(_master.Require(), formKey);
         return new DocumentChange(file, File.ReadAllText(file).Replace(respelled, with, StringComparison.Ordinal));
     }
 
@@ -186,6 +184,18 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         SetFlags("Mover", Persistent, [MastersUnsaved(World, "MasterPersistentCell", "UnsavedPersistent")]);
 
         Assert.Equal("UnsavedPersistent", Document(World)["TopCell"].Require()["EditorID"].Require().GetValue<string>());
+    }
+
+    [Fact]
+    public void SettingPersistent_KeepsTheUnsavedTextOfThePluginsOwnWorldspaceDocument_ItLandsIn()
+    {
+        Load(masterTracked: false);
+        var file = _plugins.DocumentFileOf(Override, World);
+        var dirty = new DocumentChange(file, File.ReadAllText(file).Replace("\"World\"", "\"DirtyWorld\"", StringComparison.Ordinal));
+
+        SetFlags("Mover", Persistent, [dirty]);
+
+        Assert.Equal("DirtyWorld", Document(World)["EditorID"].Require().GetValue<string>());
     }
 
     [Fact]

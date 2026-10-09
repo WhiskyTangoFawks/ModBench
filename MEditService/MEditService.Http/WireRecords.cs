@@ -53,8 +53,8 @@ internal sealed record RecordEditRequest(
     [property: JsonConverter(typeof(KeepsJsonNullConverter))] JsonElement? Value = null);
 
 /// <summary>An edit asked for the changes it makes, given <see cref="Text"/>, the current text of the
-/// document carrying the record, and Documents the unsaved texts of the other documents.</summary>
-internal sealed record RecordEditChangesRequest(RecordEditRequest Edit, string Text, IReadOnlyList<DocumentChange>? Documents = null);
+/// document carrying the record, and Documents the unsaved texts of every dirty document.</summary>
+internal sealed record RecordEditChangesRequest(RecordEditRequest Edit, string Text, IReadOnlyList<DocumentChange> Documents);
 
 /// <summary>The changes an edit makes to plugin source, written nowhere: each move, then each deletion,
 /// then each document's new text at its absolute path once moved. A refusal is ProblemDetails, as the edit's is.</summary>
@@ -83,7 +83,7 @@ internal sealed record DocumentChange(string Path, string Text);
 /// <summary>Container is the FormKey, in the plugin the request names, of the record the new one goes into;
 /// Position is an exterior cell's grid position, and only a worldspace takes one. Documents are unsaved texts.</summary>
 internal sealed record RecordCreateChangesRequest(
-    string Origin, string RecordType, string? Container = null, GridPosition? Position = null, IReadOnlyList<DocumentChange>? Documents = null);
+    string Origin, string RecordType, IReadOnlyList<DocumentChange> Documents, string? Container = null, GridPosition? Position = null);
 
 /// <summary>Changes to plugin source as the wire carries them: moves, then deletions, then each document's text, by absolute path.</summary>
 internal sealed record SourceChangesResponse(
@@ -149,8 +149,7 @@ internal sealed record RecordDeleteChangesResponse(IReadOnlyList<RecordDeleteCha
 /// <summary>Copy's Argument and Options (commands.md, Record, `copy`), and the unsaved texts that stand in for
 /// their files. <see cref="Replace"/> lets an override copy over the one a destination holds.</summary>
 internal sealed record RecordCopyRequest(
-    IReadOnlyList<RecordAddress> Records, CopyMode Mode, IReadOnlyList<PluginAddress> Destinations, bool Replace = false,
-    IReadOnlyList<DocumentChange>? Documents = null);
+    IReadOnlyList<RecordAddress> Records, CopyMode Mode, IReadOnlyList<PluginAddress> Destinations, IReadOnlyList<DocumentChange> Documents, bool Replace = false);
 
 /// <summary>The changes copying one record into one destination makes to plugin source, written nowhere, as an
 /// edit's are.</summary>

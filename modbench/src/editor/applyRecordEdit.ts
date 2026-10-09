@@ -16,7 +16,6 @@ import type { EditAddress } from './recordTab';
  *  command they invoke. */
 export interface RecordWriteDeps {
   meditClient: Pick<MEditClient, 'getEditChanges'>;
-  // The dirty documents the backend reads in place of their files.
   unsaved: SourceEditing['unsaved'];
   // The document carrying the record: an open tab's, or the one the record opens as.
   documentOf: (address: EditAddress) => Promise<RecordDocument>;

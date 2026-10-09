@@ -260,7 +260,7 @@ internal static class PluginEndpoints
 
         var result = rename.RenameSource(
             plugin, req.NewName ?? string.Empty,
-            [.. (req.Documents ?? []).Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))]);
+            WriteEndpointMapping.Unsaved(req.Documents));
         return result.Match(
             (changes, treeName) => Results.Ok(RenameSourceChangesResponse.Of(treeName, changes)),
             (refusal, message) => Refused(loggerFactory, "Rename source", refusal, message, plugin));
@@ -369,7 +369,7 @@ internal static class PluginEndpoints
             },
             execute: () => edits.CreateRecord(
                 WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType,
-                [.. (req.Documents ?? []).Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))],
+                WriteEndpointMapping.Unsaved(req.Documents),
                 req.Container, req.Position),
             outcome: answer => answer.Outcome,
             onApplied: answer => Results.Ok(RecordCreateChangesResponse.Of(WriteEndpointMapping.RequireNewFormKey(answer.Outcome), answer)));
@@ -403,7 +403,7 @@ internal sealed record PluginCreatedResponse(string Name, string Origin);
 
 /// <summary>The plugin by its origin and file name (ADR-0012), the file name its source takes, and the unsaved texts
 /// that stand in for their files.</summary>
-internal sealed record RenameSourceChangesRequest(string Origin, string Name, string NewName, IReadOnlyList<DocumentChange>? Documents = null);
+internal sealed record RenameSourceChangesRequest(string Origin, string Name, string NewName, IReadOnlyList<DocumentChange> Documents);
 
 /// <summary>The plugin, the name its tree was filed under before the rename, and the file name its source took.</summary>
 internal sealed record MoveLastWrittenRequest(string Origin, string Name, string TreeName, string NewName);

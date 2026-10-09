@@ -5,6 +5,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -64,6 +65,20 @@ public sealed class EditRecordChangesTests : IDisposable
         var document = Assert.Single(answer.Changes.Documents);
         Assert.Contains("TypedButUnsaved", document.Text, StringComparison.Ordinal);
         Assert.Contains("0.75", document.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFieldEdit_BuildsOnTheTextItIsGiven_NotOnTheDirtyEntryOfItsOwnDocument()
+    {
+        var given = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString());
+        var file = Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require());
+        var stale = new DocumentChange(file, given.Replace($"\"{SourceEditFixture.NpcEditorId}\"", "\"Stale\"", StringComparison.Ordinal));
+
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"), given, [stale]);
+
+        var document = Assert.Single(answer.Changes.Documents);
+        Assert.DoesNotContain("Stale", document.Text, StringComparison.Ordinal);
+        Assert.Contains(SourceEditFixture.NpcEditorId, document.Text, StringComparison.Ordinal);
     }
 
     [Fact]

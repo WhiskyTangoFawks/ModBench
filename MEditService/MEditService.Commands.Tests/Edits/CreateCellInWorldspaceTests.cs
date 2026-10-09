@@ -55,7 +55,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         _ownCell = _edited.Worldspaces[World].SubCells
             .SelectMany(block => block.Items).SelectMany(subBlock => subBlock.Items).Single(cell => cell.EditorID == "OwnCell").FormKey;
         _deletedWorld = _edited.Worldspaces.Single(world => world.EditorID == "DeletedWorld").FormKey;
-        _plugins.Load((_master, true), (_edited, true));
+        _plugins.Load((_master, false), (_edited, true));
     }
 
     public void Dispose() => _plugins.Dispose();
@@ -103,8 +103,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     public void ACellCreatedWhereTheUnsavedTextOfThePluginsCellNoLongerSits_LandsThere_AndWritesNothing()
     {
         var before = Tree;
-        var folder = _plugins.FolderOf(_edited);
-        var file = Path.Combine(folder, TrackedTree.DocumentFile(folder, Edited, _ownCell.ToString()).Require());
+        var file = _plugins.DocumentFileOf(_edited, _ownCell);
         var moved = JsonNode.Parse(File.ReadAllText(file)).Require().AsObject();
         moved[RecordTypes.CellGridMember] = PlacedCell.GridAt(20, 21);
 
@@ -119,13 +118,13 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     [Fact]
     public void ACellCreatedWhereTheUnsavedTextOfAMastersCellNoLongerSits_LandsThere()
     {
-        var master = _master;
-        var folder = _plugins.FolderOf(master);
-        var file = Path.Combine(folder, TrackedTree.DocumentFile(folder, Address(master), MasterCell.ToString()).Require());
+        using var trackedMaster = new LoadOrderOfPlugins();
+        trackedMaster.Load((_master, true), (_edited, true));
+        var file = trackedMaster.DocumentFileOf(_master, MasterCell);
         var moved = JsonNode.Parse(File.ReadAllText(file)).Require().AsObject();
         moved[RecordTypes.CellGridMember] = PlacedCell.GridAt(20, 21);
 
-        var (outcome, _) = _plugins.CreateHandler.CreateRecord(
+        var (outcome, _) = trackedMaster.CreateHandler.CreateRecord(
             Edited, "cell", [new DocumentChange(file, moved.ToJsonString())], World.ToString(), new GridPosition(3, 3));
 
         Assert.True(outcome.Applied, outcome.Message);

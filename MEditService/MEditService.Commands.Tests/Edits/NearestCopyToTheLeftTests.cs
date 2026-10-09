@@ -213,8 +213,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
             (Plugin("Fallout4.esm", NpcCopy(0, "Guy")), false),
             (middle, true),
             (Plugin("Override.esp", Mastering("Middle.esp", NpcCopy(Deleted))), true));
-        var folder = _plugins.FolderOf(middle);
-        var file = Path.Combine(folder, TrackedTree.DocumentFile(folder, Address(middle), TheNpc.ToString()).Require());
+        var file = _plugins.DocumentFileOf(middle, TheNpc);
         var unsaved = new DocumentChange(file, File.ReadAllText(file).Replace("Saved", "Unsaved", StringComparison.Ordinal));
 
         var undeleted = Written(TheNpc, 0, [unsaved]);
