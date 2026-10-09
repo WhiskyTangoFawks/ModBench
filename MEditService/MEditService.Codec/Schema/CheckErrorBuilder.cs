@@ -10,7 +10,7 @@ public static class CheckErrorBuilder
 {
     // `resolve` is a lookup the caller already holds, never a scan started here.
     // `whyUnchecked` answers only for a caller that can lose a target's bytes: unread is not broken.
-    // `settled` is false while `resolve` sees only part of the active set: a miss is then not yet dangling.
+    // `settled` is false while `resolve` sees part of the set: a miss is not yet dangling.
     public static string? Build(
         FieldMetadata meta, JsonElement? value, Func<string, ResolvedFormKey?> resolve, GameRelease release,
         Func<string, string?>? whyUnchecked = null, bool settled = true)
