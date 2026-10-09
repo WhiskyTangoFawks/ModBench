@@ -6,7 +6,7 @@ interface TestUri {
   with(change: Partial<Pick<TestUri, 'scheme' | 'query'>>): TestUri;
   toString(): string;
 }
-interface TestDocument { uri: TestUri }
+interface TestDocument { uri: TestUri; getText?(): string }
 interface Replacement { uri: TestUri; range: { start: number; end: number }; text: string }
 
 const h = vi.hoisted(() => {
@@ -23,6 +23,7 @@ const h = vi.hoisted(() => {
     applyEdit: (_edit: { replacements: Replacement[] }) => Promise.resolve(true),
     disk: { mtime: 2, size: 3 },
     saved: [] as ((document: TestDocument) => void)[],
+    closed: [] as ((document: TestDocument) => void)[],
   };
 });
 
@@ -45,7 +46,7 @@ vi.mock('vscode', () => ({
     get textDocuments() { return h.textDocuments; },
     applyEdit: (edit: { replacements: Replacement[] }) => h.applyEdit(edit),
     onDidSaveTextDocument: (listener: (document: TestDocument) => void) => { h.saved.push(listener); return { dispose: () => undefined }; },
-    onDidCloseTextDocument: () => ({ dispose: () => undefined }),
+    onDidCloseTextDocument: (listener: (document: TestDocument) => void) => { h.closed.push(listener); return { dispose: () => undefined }; },
     fs: {
       stat: () => Promise.resolve({ type: 1, ctime: 1, ...h.disk }),
       readFile: (uri: TestUri) => Promise.resolve(h.files.get(`${uri.scheme}:${uri.path}?${uri.query}`)),
@@ -92,6 +93,7 @@ beforeEach(() => {
   h.applyEdit = () => Promise.resolve(true);
   h.disk = { mtime: 2, size: 3 };
   h.saved.length = 0;
+  h.closed.length = 0;
 });
 
 describe('a child record\'s document', () => {
@@ -145,21 +147,53 @@ describe('a child record\'s document', () => {
     expect([text, save.mock.calls.length, h.files.size]).toEqual(['{ "EditorID": "Saved" }', 1, 0]);
   });
 
+  const WRITTEN = new TextEncoder().encode('written');
+  const opened = (files: FileSystem) => {
+    h.textDocuments.push({ uri: PLACED_URI });
+    return async () => (await files.stat(PLACED_URI)).size;
+  };
+
   it('states the file\'s stat, and the size it read once Modbench wrote the file, as it does on a save', async () => {
     const { files } = childDocuments();
-    h.textDocuments.push({ uri: PLACED_URI });
-    const sizeStated = async () => (await files.stat(PLACED_URI)).size;
+    const sizeStated = opened(files);
     expect(await sizeStated()).toBe(3);
 
-    h.disk = { mtime: 5, size: 9 };
-    await files.writeFile(PLACED_URI, new TextEncoder().encode('written'), { create: true, overwrite: true });
+    h.disk = { mtime: 5, size: WRITTEN.byteLength };
+    await files.writeFile(PLACED_URI, WRITTEN, { create: true, overwrite: true });
     const afterOwnWrite = await sizeStated();
     h.disk = { mtime: 6, size: 12 };
-    for (const listener of h.saved) listener({ uri: h.uri('file', CELL_FILE) });
+    for (const listener of h.saved) listener({ uri: h.uri('file', CELL_FILE), getText: () => 'x'.repeat(12) });
     const afterOwnSave = await sizeStated();
     h.disk = { mtime: 7, size: 20 };
 
     expect([afterOwnWrite, afterOwnSave, await sizeStated()]).toEqual([3, 3, 20]);
+  });
+
+  it('takes the file for another program\'s once its size is not what Modbench wrote or saved', async () => {
+    const { files } = childDocuments();
+    const sizeStated = opened(files);
+    await sizeStated();
+
+    h.disk = { mtime: 5, size: 9 };
+    await files.writeFile(PLACED_URI, WRITTEN, { create: true, overwrite: true });
+    const afterWrite = await sizeStated();
+    h.disk = { mtime: 6, size: 13 };
+    for (const listener of h.saved) listener({ uri: h.uri('file', CELL_FILE), getText: () => 'x'.repeat(12) });
+
+    expect([afterWrite, await sizeStated()]).toEqual([9, 13]);
+  });
+
+  it('forgets what its document read once it closes, so one opened again reads the file afresh', async () => {
+    const { files } = childDocuments();
+    const sizeStated = opened(files);
+    await sizeStated();
+    h.disk = { mtime: 5, size: WRITTEN.byteLength };
+    await files.writeFile(PLACED_URI, WRITTEN, { create: true, overwrite: true });
+
+    h.textDocuments.length = 0;
+    for (const listener of h.closed) listener({ uri: PLACED_URI });
+
+    expect(await opened(files)()).toBe(WRITTEN.byteLength);
   });
 });
 

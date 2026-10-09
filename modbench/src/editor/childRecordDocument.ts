@@ -14,10 +14,8 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
   private readonly changes = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
   readonly onDidChangeFile = this.changes.event;
   private readonly registrations: vscode.Disposable[];
-  // The mtime each file took from Modbench's last write to it.
-  private readonly ownWrites = new Map<string, Promise<number | undefined>>();
-  // The size each child's document last read.
-  private readonly sizesRead = new Map<string, number>();
+  // What each child's document last read of the file: its size, and the mtime Modbench's last write gave it.
+  private readonly reads = new Map<string, { size: number; ownWrite?: Promise<number | undefined> }>();
 
   constructor(client: Pick<MEditClient, 'onNotification' | 'onReconnected'>) {
     this.registrations = [
@@ -25,11 +23,10 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
       // A report names the records that changed, and a change to any of them can be in the file.
       followReportedCopies(client, (affects) => { this.changedWhere(affects); },
         ({ plugin }) => (copy) => samePluginAddress(copy.plugin, plugin)),
-      vscode.workspace.onDidSaveTextDocument(({ uri }) => {
-        const file = vscode.Uri.file(uri.fsPath);
-        if (CONTAINER_SCHEMES.has(uri.scheme) && this.childrenOver(file)) this.wrote(file);
+      vscode.workspace.onDidSaveTextDocument((document) => {
+        if (CONTAINER_SCHEMES.has(document.uri.scheme)) this.wrote(vscode.Uri.file(document.uri.fsPath), () => new TextEncoder().encode(document.getText()).byteLength);
       }),
-      vscode.workspace.onDidCloseTextDocument(({ uri }) => { this.sizesRead.delete(uri.toString()); }),
+      vscode.workspace.onDidCloseTextDocument(({ uri }) => { this.reads.delete(uri.toString()); }),
       this.changes,
     ];
   }
@@ -38,12 +35,12 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
   // VS Code refuses a document's save when the file's mtime is newer than it read and its size differs.
   // After Modbench's own write a child states the size it read, so only another program's write refuses.
   async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
-    const file = containerFileOf(uri);
-    const own = await this.ownWrites.get(file.fsPath);
-    const stat = await vscode.workspace.fs.stat(file);
     const key = uri.toString();
-    const size = stat.mtime === own ? this.sizesRead.get(key) ?? stat.size : stat.size;
-    this.sizesRead.set(key, size);
+    const read = this.reads.get(key);
+    const own = await read?.ownWrite;
+    const stat = await vscode.workspace.fs.stat(containerFileOf(uri));
+    const size = read && stat.mtime === own ? read.size : stat.size;
+    this.reads.set(key, { ...read, size });
     return { ...stat, size };
   }
   // A save writes back what it read.
@@ -57,7 +54,7 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
     const container = vscode.workspace.textDocuments.find((document) => document.uri.toString() === file.toString());
     if (!container) {
       await vscode.workspace.fs.writeFile(file, content);
-      this.wrote(file);
+      this.wrote(file, () => content.byteLength);
       return;
     }
     await takeText(container, new TextDecoder().decode(content));
@@ -72,12 +69,14 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
     for (const registration of this.registrations) registration.dispose();
   }
 
-  private wrote(file: vscode.Uri): void {
-    this.ownWrites.set(file.fsPath, Promise.resolve(vscode.workspace.fs.stat(file)).then(({ mtime }) => mtime, () => undefined));
-  }
-
-  private childrenOver({ fsPath }: vscode.Uri): boolean {
-    return vscode.workspace.textDocuments.some(({ uri }) => uri.scheme === CHILD_RECORD_SCHEME && uri.fsPath === fsPath);
+  // A file whose size is not what Modbench wrote took another program's write after it.
+  private wrote(file: vscode.Uri, byteLength: () => number): void {
+    const reads = vscode.workspace.textDocuments.flatMap(({ uri }) =>
+      uri.scheme === CHILD_RECORD_SCHEME && uri.fsPath === file.fsPath ? this.reads.get(uri.toString()) ?? [] : []);
+    if (reads.length === 0) return;
+    const written = byteLength();
+    const ownWrite = Promise.resolve(vscode.workspace.fs.stat(file)).then(({ mtime, size }) => size === written ? mtime : undefined, () => undefined);
+    for (const read of reads) read.ownWrite = ownWrite;
   }
 
   private changedWhere(affects: CopyChanged): void {
