@@ -65,9 +65,8 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// writes to (ADR-0003).</summary>
     public static bool HoldsAnotherRepository(string modFolder) => SourceRepositoryGit.HoldsAnotherRepository(modFolder);
 
-    /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="TreeOf"/> answers it once
-    /// <see cref="Track"/> or <see cref="ReplaceSourceFrom"/> has written it: what a round-trip gate compiles,
-    /// so that it compiles what is written.</summary>
+    /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="TreeOf"/> answers it once written:
+    /// what a round-trip gate compiles, so that it compiles what is written.</summary>
     public static IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
         SourceRepositoryLayout.DoorTreeOf(pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, tree), gameRelease);
 
@@ -75,9 +74,9 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// can be made or written here.</summary>
     public static void EnsureTrackable() => GitCli.EnsureOnPath();
 
-    /// <summary>A repository for a mod that has none: one commit, <c>Track &lt;mod&gt;</c>, holding every plugin that
-    /// tracked, each from the tree the whole-mod door wrote for it, on <c>main</c>, which stays checked out. Answers
-    /// each plugin whose files could not be written.</summary>
+    /// <summary>A repository for a mod that has none: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>, holding
+    /// each plugin that tracked from the tree the whole-mod door wrote for it. Answers each plugin whose files
+    /// could not be written.</summary>
     public static IReadOnlyList<(string Plugin, string Reason)> Track(
         string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins) =>
         GitTracking.Track(modFolder, plugins);
@@ -220,9 +219,9 @@ public sealed class SourceRepository : ISourceRepositoryReads
         PluginAddress plugin) =>
         new SourceTreeDocuments(_modFolder, plugin.Name, _release);
 
-    /// <summary>The plugin's source in the working tree as the whole-mod door reads it — the tree Track is
-    /// handed, handed back out. Empty when there is no source there. A directory holding several documents,
-    /// none named for it, throws <see cref="AmbiguousSourceUnitException"/>.</summary>
+    /// <summary>The plugin's source in the working tree as the whole-mod door reads it, empty when there is
+    /// none. A directory holding several documents, none named for it, throws
+    /// <see cref="AmbiguousSourceUnitException"/>.</summary>
     public PluginSourceFiles TreeOf(PluginAddress plugin)
     {
         var held = Locator.FilesOf(plugin);
