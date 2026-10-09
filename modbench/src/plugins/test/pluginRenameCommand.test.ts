@@ -26,6 +26,7 @@ vi.mock('vscode', async () => {
 });
 
 import { oneAtATime } from '../../drivingLib/oneAtATime';
+import type { SourceEditing } from '../../drivingLib/sourceEditing';
 import { progressSteps } from '../../test/recordedProgress';
 import { registerRenamePluginCommand } from '../pluginRenameCommand';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
@@ -69,10 +70,12 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
     },
   };
   const reporter = recordingReporter();
-  const source = {
+  const queue = oneAtATime();
+  const queued = vi.fn();
+  const source: SourceEditing = {
     unsaved: () => [{ path: '/instance/mods/ModA/plugin-source/Patch.esp/h.json', text: '{}' }],
     applyWorkspaceChanges: vi.fn().mockResolvedValue([]),
-    oneAtATime: vi.fn(oneAtATime()),
+    oneAtATime: (job) => { queued(); return queue(job); },
     refreshSourceControlFor: vi.fn(),
   };
   registerRenamePluginCommand({ client, adapter, ask, instance, reporter, source }, () => selection);
@@ -86,7 +89,7 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
     await run(new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin));
     return validated;
   };
-  return { client, ask, stepsWhenAsked, renameFiles, reporter, source, run, validate };
+  return { client, ask, stepsWhenAsked, renameFiles, reporter, source, queued, run, validate };
 }
 
 const row = () => new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin);
@@ -204,11 +207,11 @@ describe('modbench.plugin.rename', () => {
 
   it('applies the changes as one workspace edit one at a time, and refreshes Source Control for the plugin', async () => {
     showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { source, run } = setup();
+    const { source, queued, run } = setup();
 
     await run(row());
 
-    expect(source.oneAtATime).toHaveBeenCalledOnce();
+    expect(queued).toHaveBeenCalledOnce();
     expect(source.applyWorkspaceChanges).toHaveBeenCalledWith([CHANGES]);
     expect(source.refreshSourceControlFor).toHaveBeenCalledWith(PLUGIN);
   });
