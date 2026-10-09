@@ -4,7 +4,7 @@
 import { exec } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
-import { readGameName, readGamePath } from './codecs/modOrganizerIni';
+import { readGameName, readGamePath, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { gamePathInfoForRelease, gameReleaseForGame } from '../tables/gamePaths';
 import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths } from './gamePathDetector';
 import { factsOf } from './files';
@@ -101,7 +101,7 @@ function set(value: string | undefined): string | undefined {
 }
 
 const SETTING_PLACE = `the game folder setting, ${GAME_FOLDER_SETTING}`;
-const GAME_PATH_PLACE = "ModOrganizer.ini's gamePath";
+const GAME_PATH_PLACE = `${SETTINGS_FILE_NAME}'s gamePath`;
 const STEAM_PLACE = 'the Steam install';
 const NOT_SET = 'not set';
 
