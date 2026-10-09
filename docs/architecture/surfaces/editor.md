@@ -27,7 +27,7 @@ As a user, I want:
 7. A tab I leave and come back to to be as I left it: the rows I expanded, the columns I collapsed, the focused cell and the scroll. Source: VS Code keeps a tab's place
 8. A record given without a plugin, from the palette, Referenced By or Go to record, to open the winning copy's file. Source: xEdit lands on the winning copy
 9. An untracked plugin's copy, or the copy of a plugin whose plugin source is unreadable, to open as a document mEdit renders from the plugin, read-only. It is not a file, so the file features above do not reach it. Source: ADR-0007; ADR-0001
-10. A child record, such as a placed reference, to open in a tab of its own, though it shares its cell's file. A change saved in either tab shows in both. Source: plugin-source.md, The tree, story 3
+10. A child record, such as a placed reference, to open in a tab of its own, though it shares its cell's file. A change in either tab shows in both. Source: plugin-source.md, The tree, story 3
 11. A group's metadata file in plugin source to open in the text editor, as any JSON file does. Source: ADR-0001; Existing tools
 
 ## The header
@@ -94,7 +94,7 @@ As a user, I want:
 
 1. A click on a cell to focus it and do nothing else: its row highlights and the cell is outlined. Source: xEdit
 2. A second click on the focused cell, F2, or a double click to open the cell's editor, in place. Each opens the same editor, at once. Source: xEdit; xedit.md, divergence 6
-3. The editor to take the whole value, so typing or pasting replaces it. Enter, or moving the focus away, writes it and saves the file, so the tab never shows unsaved; Esc closes it and writes nothing. Source: VS Code's inline rename; commands.md, A gesture on an open document
+3. The editor to take the whole value, so typing or pasting replaces it. Enter, or moving the focus away, writes it to the document, which shows unsaved until I save it, as any file does; Esc closes it and writes nothing. Source: VS Code's inline rename; commands.md, A gesture on plugin source
 4. The keys that move through a VS Code tree to move through the rows: Up, Down, Home, End, Page Up and Page Down. On the label column, Right expands a row or steps into it, and Left collapses it or steps out to its parent, as in a tree. On a value column, Left and Right move the focus a column, since a tree has no columns. Source: VS Code's trees; common, A view, story 5
 5. Ctrl+C to copy the focused cell's value in any column; Ctrl+X to copy it and then delete it, as Delete does, and Ctrl+V to paste over it, in a column that can be edited. Source: xEdit; [editor-fields.md](editor-fields.md)
 6. Delete to remove the focused element, and Alt+Up or Alt+Down to move it one step, as VS Code moves a line. Delete on a field that is not an element clears it, as xEdit's Clear does. Add has no key, since VS Code has none for it. Source: VS Code; catalog `remove element`, `move element`, `edit field`
