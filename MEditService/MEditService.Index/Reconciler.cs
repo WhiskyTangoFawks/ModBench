@@ -366,7 +366,7 @@ internal sealed class Reconciler(
             .ToList();
         var moved = resolved
             .Select(r => r.Key)
-            .Where(key => open.TryGetValue(key, out var h) && h.Registration != Registration.In(snapshot, key))
+            .Where(key => open.TryGetValue(key, out var h) && (h.Key != key || h.Registration != Registration.In(snapshot, key)))
             .ToList();
         // A plugin in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
@@ -406,7 +406,19 @@ internal sealed class Reconciler(
         if (leaving.Count > 0) PublishStatus();
 
         // ADR-0012.
-        if (moved.Count > 0) index.Commit(_ => moved.ForEach(key => index.Register(held.Update(open[key], Registration.In(snapshot, key)))));
+        if (moved.Count > 0) index.Commit(_ => moved.ForEach(key => index.Register(held.Update(open[key], key, Registration.In(snapshot, key)))));
+        if (moved.Count > 0)
+        {
+            lock (_lock)
+            {
+                foreach (var key in moved)
+                {
+                    var at = _indexed.FindIndex(i => PluginAddress.Comparer.Equals(i, key));
+                    if (at >= 0) _indexed[at] = key;
+                }
+            }
+            PublishStatus();
+        }
 
         ReDeriveMovedTruths(scope, reDerived, token);
 

@@ -158,9 +158,9 @@ internal sealed class HeldPlugins
 
     /// <summary>Nothing here opens or re-reads the file: the load index is no property of its
     /// content, and re-deriving anything else would let a reconcile silently re-read.</summary>
-    public PluginMetadata Update(PluginMetadata previous, Registration registration)
+    public PluginMetadata Update(PluginMetadata previous, PluginAddress now, Registration registration)
     {
-        var metadata = previous with { LoadOrderIndex = registration.LoadOrderIndex };
+        var metadata = previous with { Name = now.Name, Origin = now.Origin, LoadOrderIndex = registration.LoadOrderIndex };
 
         lock (_mutation)
         {
