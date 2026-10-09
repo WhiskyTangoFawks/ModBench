@@ -1,8 +1,8 @@
 using System.Net;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
-using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
