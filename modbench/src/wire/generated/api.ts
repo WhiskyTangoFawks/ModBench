@@ -1093,6 +1093,7 @@ export interface components {
             isTracked: boolean;
             hasParseFailure: boolean;
             pluginSourceUnreadable?: components["schemas"]["UnreadableSource"] | null;
+            laterReadFailure?: string | null;
         };
         PluginWithUnreadableSource: {
             name: string;
