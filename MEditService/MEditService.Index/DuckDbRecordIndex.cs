@@ -236,8 +236,7 @@ internal sealed class DuckDbRecordIndex : IDisposable
                 WHERE {pluginColumn} = $1 AND {originColumn} = $2
                 """, now.Name, now.Origin);
         }
-        DuckDbSql.ExecuteFor(Connection, $"UPDATE {Store.FilesRelation} SET file_path = $3 WHERE plugin = $1 AND origin = $2",
-            now.Name, now.Origin, Path.GetFullPath(path));
+        _store.PointFileClaimAt(now, path);
     }
 
     /// <summary>Removes <paramref name="key"/>'s <c>registrations</c> row and nothing else: its rows
