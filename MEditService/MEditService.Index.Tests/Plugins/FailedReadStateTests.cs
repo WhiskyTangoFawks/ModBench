@@ -416,6 +416,46 @@ public sealed class FailedReadStateTests : IDisposable
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
     }
 
+    [Theory]
+    [InlineData("the codec broke", "the codec broke")]
+    [InlineData("", "could not be read")]
+    public void ATreeWhoseReadThrows_SaysWhy_NeverBlank_AndDecompileRepairsIt(string message, string expected)
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        void Throw()
+        {
+            Arm(TreeMoment.ReadBegins, Throw);
+            throw new InvalidOperationException(message);
+        }
+        Arm(TreeMoment.ReadBegins, Throw);
+
+        using var index = Reconciled();
+
+        var unreadable = index.PluginRowOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
+        Assert.Contains(expected, unreadable?.Reason, StringComparison.Ordinal);
+        Assert.True(unreadable?.DecompileRepairs);
+    }
+
+    [PosixFact]
+    public void ATreeWhoseDocumentCannotBeOpened_SaysWhy_AndDecompileDoesNotRepairIt()
+    {
+        TrackedMods.Track(Plugin, _fixture.GameDirectory);
+        var document = NpcDocument;
+        FileModes.Set(document, "000");
+        try
+        {
+            using var index = Reconciled();
+
+            var unreadable = index.PluginRowOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
+            Assert.False(string.IsNullOrWhiteSpace(unreadable?.Reason));
+            Assert.False(unreadable?.DecompileRepairs);
+        }
+        finally
+        {
+            FileModes.Set(document, "600");
+        }
+    }
+
     [Fact]
     public void AWarmValidationThatThrows_ReadsThePluginWhole()
     {

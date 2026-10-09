@@ -505,7 +505,7 @@ describe('RecordPanel — column header native right-click menu', () => {
   it.each([
     ['a tracked, editable', { isTracked: true, isImmutable: false }, true, true],
     ['an untracked', { isTracked: false, isImmutable: false }, false, false],
-    ['a tracked, plugin-source-unreadable', { isTracked: true, pluginSourceUnreadableReason: 'Its folder is gone.' }, true, false],
+    ['a tracked, plugin-source-unreadable', { isTracked: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, true, false],
     ['a read-only', { isTracked: true, isImmutable: true }, false, false],
     ['an untracked read-only', { isTracked: false, isImmutable: true }, false, false],
   ])('the header of %s plugin says whether compile and delete apply to it, compile on a tracked column, delete only where the plugin source reads too', async (_what, facts, compilable, editable) => {
@@ -688,7 +688,7 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 
   it('opens no input on a cell of a tracked column whose plugin source is unreadable', async () => {
     renderPanel(flagsCompareResult, {
-      plugins: trackedMyModPluginsForTheRealEditableColumnsGate.map(p => ({ ...p, pluginSourceUnreadableReason: 'Its folder is gone.' })),
+      plugins: trackedMyModPluginsForTheRealEditableColumnsGate.map(p => ({ ...p, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })),
     });
     await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
 

@@ -159,7 +159,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     {
         MakeTwinOfTheTreeIn(Recased.Name);
 
-        var why = Assert.IsType<SourceFailure.Ambiguous>(
+        var why = Assert.IsType<SourceFailure.TwinFolders>(
             new GitSourceAdapter().WhySourceDoesNotRead(Registered(new PluginAddress("fixture.esp", TestMod.Name))));
 
         Assert.Contains(TreeName, why.Reason, StringComparison.Ordinal);
@@ -171,7 +171,9 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     {
         var why = new GitSourceAdapter().WhySourceDoesNotRead(Registered(new PluginAddress("Other.esp", TestMod.Name)));
 
-        Assert.Contains("Other.esp", Assert.IsType<SourceFailure.Inaccessible>(why).Reason, StringComparison.Ordinal);
+        var missing = Assert.IsType<SourceFailure.NotCarried>(why);
+        Assert.Contains("Other.esp", missing.Reason, StringComparison.Ordinal);
+        Assert.True(missing.DecompileRepairs);
     }
 
     [PosixFact]
@@ -181,7 +183,9 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         FileModes.Set(sources, "000");
         try
         {
-            Assert.IsType<SourceFailure.Inaccessible>(new GitSourceAdapter().WhySourceDoesNotRead(Registered(AsTreeNamesIt)));
+            var why = Assert.IsType<SourceFailure.Inaccessible>(new GitSourceAdapter().WhySourceDoesNotRead(Registered(AsTreeNamesIt)));
+            Assert.Contains("plugin-source", why.Reason, StringComparison.Ordinal);
+            Assert.False(why.DecompileRepairs);
         }
         finally
         {
@@ -203,7 +207,8 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
 
         var failure = Repository.ReplaceSourceFrom(lowered, [new TreeFile("RecordData.json", Encoding.UTF8.GetBytes("{}"))], "ABCDEF0123");
 
-        var ambiguous = Assert.IsType<SourceFailure.Ambiguous>(failure);
+        var ambiguous = Assert.IsType<SourceFailure.TwinFolders>(failure);
+        Assert.False(ambiguous.DecompileRepairs);
         Assert.Contains(TreeName, ambiguous.Reason, StringComparison.Ordinal);
         Assert.Contains(Recased.Name, ambiguous.Reason, StringComparison.Ordinal);
         Assert.Equal(

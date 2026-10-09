@@ -33,8 +33,8 @@ internal sealed record PluginResponse(
     // load failure (LoadOrderResponse.Failures) stays its own channel for a file that never indexed.
     bool HasParseFailure = false,
     // plugins.md, A row, Plugin: tracked, and its records are its plugin file's because its plugin
-    // source is missing or cannot be read. Null when the plugin source reads; else why it does not.
-    string? PluginSourceUnreadableReason = null)
+    // source is missing or cannot be read. Null when the plugin source reads.
+    UnreadableSource? PluginSourceUnreadable = null)
 {
     /// <summary>One row on the wire: the read side's answer, flattened.</summary>
     public static PluginResponse Of(PluginRow row)
@@ -44,6 +44,6 @@ internal sealed record PluginResponse(
             row.Content.IsBlueprint, row.Content.Masters, row.Content.RecordCount, row.IsImmutable,
             plugin.Origin, row.MasterIssues, row.LoadOrderIndex is not null,
             row.HasMatchingRecords, row.IsTracked,
-            row.HasParseFailure, row.PluginSourceUnreadableReason);
+            row.HasParseFailure, row.PluginSourceUnreadable);
     }
 }

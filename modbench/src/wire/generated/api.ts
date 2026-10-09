@@ -809,7 +809,7 @@ export interface components {
             folder: string;
         };
         /** @enum {string} */
-        DecompileRefusal: "None" | "PluginNotLoaded" | "NotInTrackedMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "WriteFailed" | "GitUnavailable";
+        DecompileRefusal: "None" | "PluginNotLoaded" | "NotInTrackedMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "GitUnavailable";
         DecompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
         };
@@ -965,6 +965,7 @@ export interface components {
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
             trackProgress?: components["schemas"]["TrackProgress"] | null;
             changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
+            pluginWithUnreadableSources?: components["schemas"]["PluginWithUnreadableSource"][] | null;
             recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
         };
         PathHop: {
@@ -1048,7 +1049,12 @@ export interface components {
             hasMatchingRecords: boolean;
             isTracked: boolean;
             hasParseFailure: boolean;
-            pluginSourceUnreadableReason?: string | null;
+            pluginSourceUnreadable?: components["schemas"]["UnreadableSource"] | null;
+        };
+        PluginWithUnreadableSource: {
+            name: string;
+            reason: string;
+            decompileRepairs: boolean;
         };
         ProblemDetails: {
             type?: string | null;
@@ -1236,6 +1242,10 @@ export interface components {
         TrackedModResponse: {
             mod: string;
             tracked: components["schemas"]["PluginAddress"][];
+        };
+        UnreadableSource: {
+            reason: string;
+            decompileRepairs: boolean;
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";

@@ -43,7 +43,7 @@ internal sealed class RecordQueryService(
                 masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
                 parseFailures.Contains(plugin.Key),
                 IsTracked: derivedFrom?.IsTracked() ?? false,
-                PluginSourceUnreadableReason: derivedFrom == DerivedFrom.BinaryForUnreadableSource ? WhyUnreadable(plugin) : null);
+                PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource ? WhyUnreadable(plugin) : null);
         }
 
         if (_index.ActiveFilter is null)
@@ -56,10 +56,9 @@ internal sealed class RecordQueryService(
         return [.. rows.Select(c => ToRow(c, matchingPlugins.Contains(c.Key)))];
     }
 
-    // The folder's own answer when the tree is not there to read, else the files the read stopped at.
-    private string WhyUnreadable(RegisteredPlugin plugin) =>
-        source.WhySourceDoesNotRead(plugin)?.Reason
-        ?? string.Join(" ", _index.SourceFileFailures.Where(failure => PluginAddress.Comparer.Equals(failure.Plugin, plugin.Key)).Select(failure => failure.Message));
+    private UnreadableSource WhyUnreadable(RegisteredPlugin plugin) =>
+        source.WhySourceDoesNotRead(plugin) is { } failure ? UnreadableSource.Of(failure)
+        : _index.WhyTreeStopped(plugin.Key) ?? UnreadableSource.Unknown;
 
     // The header is not a browsable record type: it stays a schemas.Keys entry so GetRecord/
     // GetCompare resolve it by FormKey, but both browse paths below exclude it.

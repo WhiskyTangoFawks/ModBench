@@ -278,7 +278,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
 
     private Task ItsPluginSourceReadsAs(bool unreadable) =>
         Wire.Eventually(
-            async () => (await Client.Plugin(Plugin)).GetProperty("pluginSourceUnreadableReason").ValueKind != JsonValueKind.Null == unreadable,
+            async () => (await Client.Plugin(Plugin)).GetProperty("pluginSourceUnreadable").ValueKind != JsonValueKind.Null == unreadable,
             $"{Plugin} reported with its plugin source {(unreadable ? "unreadable" : "read")}");
 
     private async Task<IReadOnlyList<string>> TheFilesItsReadStoppedAt()

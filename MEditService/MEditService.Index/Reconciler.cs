@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using System.Diagnostics;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -87,6 +88,11 @@ internal sealed class Reconciler(
     public IReadOnlyList<SourceFileFailure> SourceFileFailures
     {
         get { lock (_lock) return _scope?.Failed.SourceFileFailures ?? []; }
+    }
+
+    public UnreadableSource? WhyTreeStopped(PluginAddress key)
+    {
+        lock (_lock) return _scope?.Failed.WhyTreeStopped(key);
     }
 
     private OpenScope RequireScope()

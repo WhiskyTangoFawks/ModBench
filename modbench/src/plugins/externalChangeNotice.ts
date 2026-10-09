@@ -25,7 +25,9 @@ export function noticeExternalChanges(
       const key = pluginAddressKey(plugin);
       if (toldUnreadable.has(key)) continue;
       toldUnreadable.add(key);
-      reporter.report('warning', `${plugin.name} in ${plugin.origin}: plugin source unreadable`, 'decompile writes it from the plugin file');
+      reporter.report(
+        'warning', `${plugin.name} in ${plugin.origin}: plugin source unreadable: ${plugin.reason}`,
+        plugin.decompileRepairs ? 'decompile writes it from the plugin file' : undefined);
     }
   });
 

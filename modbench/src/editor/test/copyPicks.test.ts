@@ -23,7 +23,7 @@ describe('the destination pick', () => {
     plugin('Patch.esp', 'PatchMod', 5),
     plugin('Untracked.esp', 'UntrackedMod', 6, { isTracked: false }),
     plugin('ReadOnly.esp', 'ReadOnlyMod', 7, { isImmutable: true }),
-    plugin('Unreadable.esp', 'UnreadableMod', 8, { pluginSourceUnreadableReason: 'Its folder is gone.' }),
+    plugin('Unreadable.esp', 'UnreadableMod', 8, { pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }),
     plugin('Other.esp', 'OtherMod', 9),
   ];
 

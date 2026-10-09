@@ -63,7 +63,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary>Why the plugin's source does not read though its mod is tracked: no folder, twin folders, or a plugin
     /// source that cannot be listed. Null when it reads, and when its mod is not tracked.</summary>
-    internal static SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) =>
+    public static SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) =>
         plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.Folder)
         && !SourceRepositoryLayout.TreeNameIn(mod.Folder, plugin.Name).Holds(out _, out var why)
             ? why
@@ -349,9 +349,8 @@ public sealed class SourceRepository : ISourceRepositoryReads
     public SourceFailure? ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256) =>
         SourceFailure.Answer(() =>
         {
-            if (!SourceRepositoryLayout.TreeNameIn(_modFolder, plugin.Name).Holds(out _, out var twins) && twins is SourceFailure.Ambiguous)
-                throw SourceStopException.Of(twins);
-            var name = Spelled(plugin).Name;
+            if (!TreeNameFor(plugin).Holds(out var folder, out var why) && why is SourceFailure.TwinFolders) throw SourceStopException.Of(why);
+            var name = folder ?? plugin.Name;
             Writes.ReplaceSourceFrom(name, SourceRepositoryLayout.PristineFilesOf(name, tree), binarySha256);
         });
 
@@ -390,17 +389,18 @@ public sealed class SourceRepository : ISourceRepositoryReads
         return SourceFailure.Answer(() => _git.LastWrittenBinarySha256s(name));
     }
 
-    // A plugin's tree is read and written as its folder spells it. With no tree to say, or twins spelled
-    // otherwise, the name stays as given: SourceReads refuses the twins.
-    private PluginAddress Spelled(PluginAddress plugin)
+    // A plugin's tree is read and written as its folder spells it; with no single tree, as the load order names it.
+    private PluginAddress Spelled(PluginAddress plugin) =>
+        new(TreeNameFor(plugin).Holds(out var tree, out _) ? tree : plugin.Name, _modName);
+
+    private SourceAnswer<string> TreeNameFor(PluginAddress plugin)
     {
         if (!string.Equals(plugin.Origin, _modName, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
                 $"{plugin.Name} is provided by '{plugin.Origin}', and this repository holds '{_modName}'.", nameof(plugin));
         }
-        return new PluginAddress(
-            SourceRepositoryLayout.TreeNameIn(_modFolder, plugin.Name).Holds(out var tree, out _) ? tree : plugin.Name, _modName);
+        return SourceRepositoryLayout.TreeNameIn(_modFolder, plugin.Name);
     }
 }
 

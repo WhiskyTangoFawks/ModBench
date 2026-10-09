@@ -125,7 +125,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var result = await Decompile(Tracked("First.esp"));
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(DecompileRefusal.WriteFailed, refused.Refusal);
+        Assert.Equal(DecompileRefusal.AmbiguousSource, refused.Refusal);
         Assert.Contains("FIRST.ESP", refused.Message, StringComparison.Ordinal);
         Assert.Contains("first.esp", refused.Message, StringComparison.Ordinal);
         Assert.Equal(["FIRST.ESP", "first.esp"], Directory.GetDirectories(sources).Select(Path.GetFileName).Order(StringComparer.Ordinal));

@@ -154,10 +154,26 @@ public sealed class CompilePluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal(CompileRefusal.PluginSourceUnreadable, refused.Refusal);
         Assert.Equal(
-            $"{CompileFixture.PluginName}'s plugin source is unreadable, so it cannot be compiled. " +
-            "Decompile the plugin to regenerate the source.",
+            $"{CompileFixture.PluginName}'s plugin source is unreadable, so it cannot be compiled: " +
+            $"plugin-source holds no folder for {CompileFixture.PluginName}. Decompile the plugin to regenerate the source.",
             refused.Message);
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
+    }
+
+    [PosixFact]
+    public async Task APluginWhoseSourceHasTwinFolders_IsRefusedNamingThem_AndNotPointedAtDecompile()
+    {
+        var sources = Path.GetDirectoryName(PluginSourceRoot.In(_mod.ModFolder, CompileFixture.PluginName)).Require();
+        Directory.Move(Path.Combine(sources, CompileFixture.PluginName), Path.Combine(sources, CompileFixture.PluginName.ToUpperInvariant()));
+        Directory.CreateDirectory(Path.Combine(sources, CompileFixture.PluginName.ToLowerInvariant()));
+
+        var result = await _mod.CompileHandler.CompileAsync([_mod.Plugin]);
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(CompileRefusal.PluginSourceUnreadable, refused.Refusal);
+        Assert.Contains(CompileFixture.PluginName.ToUpperInvariant(), refused.Message, StringComparison.Ordinal);
+        Assert.Contains(CompileFixture.PluginName.ToLowerInvariant(), refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Decompile", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

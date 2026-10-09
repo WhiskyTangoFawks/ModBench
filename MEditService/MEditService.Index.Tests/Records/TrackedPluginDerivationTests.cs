@@ -38,7 +38,7 @@ public sealed class TrackedPluginDerivationTests : IDisposable
     private void ReconcileTheSnapshotAlreadyHeldSinceOnlyThePluginsFolderMoved() =>
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
 
-    private bool ReadsAsTracked() => _index.PluginRowOf(_mod.KeyOf()) is { IsTracked: true, PluginSourceUnreadableReason: null };
+    private bool ReadsAsTracked() => _index.PluginRowOf(_mod.KeyOf()) is { IsTracked: true, PluginSourceUnreadable: null };
 
     [Fact]
     public void APluginTrackedAfterItWasIndexed_ReadsAsTracked_AfterTheNextSnapshot()

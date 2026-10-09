@@ -14,8 +14,11 @@ function settled(origin: string, ...changed: [name: string, bytesSha256: string 
   };
 }
 
-function unreadable(origin: string, ...plugins: string[]): NotificationEvent {
-  return { kind: 'plugin-source-unreadable', plugin: '', origin, keys: plugins, sequence: 0 };
+function unreadable(origin: string, ...plugins: [name: string, reason: string, decompileRepairs: boolean][]): NotificationEvent {
+  return {
+    kind: 'plugin-source-unreadable', plugin: '', origin, keys: [], sequence: 0,
+    pluginWithUnreadableSources: plugins.map(([name, reason, decompileRepairs]) => ({ name, reason, decompileRepairs })),
+  };
 }
 
 function noticing() {
@@ -92,12 +95,12 @@ describe('noticeExternalChanges — a plugin whose plugin source is unreadable',
   it('warns once for each, naming it and pointing at decompile', () => {
     const { client, reporter } = noticing();
 
-    client.emit(unreadable('ModA', 'C.esp', 'D.esp'));
-    client.emit(unreadable('ModA', 'C.esp'));
+    client.emit(unreadable('ModA', ['C.esp', 'It is gone.', true], ['D.esp', 'Twins.', false]));
+    client.emit(unreadable('ModA', ['C.esp', 'It is gone.', true]));
 
     expect(reporter.reports).toEqual([
-      { severity: 'warning', message: 'C.esp in ModA: plugin source unreadable', detail: 'decompile writes it from the plugin file' },
-      { severity: 'warning', message: 'D.esp in ModA: plugin source unreadable', detail: 'decompile writes it from the plugin file' },
+      { severity: 'warning', message: 'C.esp in ModA: plugin source unreadable: It is gone.', detail: 'decompile writes it from the plugin file' },
+      { severity: 'warning', message: 'D.esp in ModA: plugin source unreadable: Twins.', detail: undefined },
     ]);
   });
 });
@@ -108,7 +111,7 @@ describe('noticeExternalChanges — unsubscribed', () => {
     unsubscribe();
 
     client.emit(settled('ModA', ['A.esp', 'aa']));
-    client.emit(unreadable('ModA', 'C.esp'));
+    client.emit(unreadable('ModA', ['C.esp', 'It is gone.', true]));
 
     expect(reporter.reports).toEqual([]);
   });

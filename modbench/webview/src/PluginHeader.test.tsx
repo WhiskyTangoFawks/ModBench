@@ -6,12 +6,14 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { PluginHeader } from './PluginHeader';
 import { headerCellContext } from './recordUtils';
 import type { CompareOverride } from './types';
+import type { UnreadableSource } from '../../src/wire/unreadableSource';
 import { compareOverride, required } from './test/fixtures';
 
-const WHY = 'plugin-source holds FIXTURE.ESP and fixture.esp, which differ only in case.';
+const WHY = { reason: 'plugin-source holds no folder for MyMod.esp.', decompileRepairs: true };
+const TWINS = { reason: 'plugin-source holds FIXTURE.ESP and fixture.esp, which differ only in case.', decompileRepairs: false };
 const DIAGNOSIS = 'the PERK entry point did not have expected parameter type flag';
 
-type Facts = { override?: Partial<CompareOverride>; overriddenBy?: string | null; notActive?: boolean; isImmutable?: boolean; isTracked?: boolean; sourceUnreadable?: string };
+type Facts = { override?: Partial<CompareOverride>; overriddenBy?: string | null; notActive?: boolean; isImmutable?: boolean; isTracked?: boolean; sourceUnreadable?: UnreadableSource };
 
 function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typeof PluginHeader>> = {}) {
   const onToggleCollapse = vi.fn();
@@ -67,7 +69,9 @@ describe('PluginHeader', () => {
     ['a plugin that is not tracked', { isTracked: false }, '(untracked)',
       '“Track Mod…”, or “Decompile Plugin” in a tracked mod, in this header’s menu, makes it editable.'],
     ['a tracked plugin whose plugin source is unreadable', { sourceUnreadable: WHY }, '(plugin source unreadable)',
-      `${WHY} Its records are its plugin file’s. “Decompile Plugin”, in this header’s menu, makes it editable.`],
+      `${WHY.reason} Its records are its plugin file’s. “Decompile Plugin”, in this header’s menu, makes it editable.`],
+    ['a tracked plugin whose plugin source decompile does not repair', { sourceUnreadable: TWINS }, '(plugin source unreadable)',
+      `${TWINS.reason} Its records are its plugin file’s.`],
     ['a Partial Form copy', { override: { isPartialForm: true } }, '(Partial Form)',
       'The game ignores this copy’s own fields.'],
     ['a tracked plugin', {}, '(tracked)',

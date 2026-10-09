@@ -61,7 +61,7 @@ public sealed class ValidateByStampsTests : IDisposable
     private void ValidateUntilSourceUnreadable() =>
         _index.NextSnapshotUntil(() => SourceUnreadable, "the plugin file read in place of its source");
 
-    private bool SourceUnreadable => _index.PluginRowOf(_mod.KeyOf()) is { IsTracked: true, PluginSourceUnreadableReason: not null };
+    private bool SourceUnreadable => _index.PluginRowOf(_mod.KeyOf()) is { IsTracked: true, PluginSourceUnreadable: not null };
 
     private string NpcFile => _mod.SourceFileOf(Npc);
 
@@ -236,7 +236,7 @@ public sealed class ValidateByStampsTests : IDisposable
         sound.HandEdit(index.DocumentOf(other.ToString(), sound.KeyOf()), "\"SoundNpc\"", "\"EditedSoundNpc\"");
 
         index.NextSnapshotUntil(
-            () => index.PluginRowOf(broken.KeyOf()) is { IsTracked: true, PluginSourceUnreadableReason: not null },
+            () => index.PluginRowOf(broken.KeyOf()) is { IsTracked: true, PluginSourceUnreadable: not null },
             "the broken plugin's file read in place of its source");
 
         Assert.Equal("EditedSoundNpc", index.DocumentOf(other.ToString(), sound.KeyOf()).EditorId);

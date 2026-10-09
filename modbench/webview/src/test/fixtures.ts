@@ -4,6 +4,7 @@ import { WEBVIEW_TO_EXTENSION, hasSection, type ExtensionToWebview, type ModRepo
 import type { RecordPanelClient } from '../RecordPanelClient';
 import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
 import { columnKey, copyColumnKey } from '../../../src/wire/columnKey';
+import { unreadableSources, type UnreadableSource } from '../../../src/wire/unreadableSource';
 
 // Nothing here imports a component: `vscode.ts` calls acquireVsCodeApi() at module load, so a
 // module that reached it would throw in every test file that does not mock it.
@@ -47,7 +48,7 @@ export interface FixturePlugin {
   origin?: string | null;
   isImmutable?: boolean;
   isTracked?: boolean;
-  pluginSourceUnreadableReason?: string | null;
+  pluginSourceUnreadable?: UnreadableSource | null;
 }
 
 export interface PanelOpts {
@@ -86,7 +87,7 @@ export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}):
       immutableSet: columnsWhere(p => p.isImmutable === true),
       // ADR-0007: an unstated plugin is untracked.
       trackedSet: columnsWhere(p => p.isTracked === true),
-      sourceUnreadableReasons: new Map(plugins.flatMap(p => p.pluginSourceUnreadableReason == null ? [] : [[columnKey({ name: p.name, origin: p.origin ?? 'Data/' }), p.pluginSourceUnreadableReason] as const])),
+      sourceUnreadableReasons: unreadableSources(plugins.map(p => ({ ...p, origin: p.origin ?? 'Data/' }))),
       modsByOrigin: opts.modsByOrigin ?? {},
       conflictsComputed: opts.conflictsComputed ?? true,
       loadFailures: opts.loadFailures ?? [],

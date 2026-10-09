@@ -21,7 +21,7 @@ export function pluginMetadataFixture(overrides: Partial<PluginMetadata> & { nam
     hasMatchingRecords: true,
     isTracked: false,
     hasParseFailure: false,
-    pluginSourceUnreadableReason: null,
+    pluginSourceUnreadable: null,
     ...overrides,
   };
 }

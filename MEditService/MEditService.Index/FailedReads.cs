@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
@@ -8,7 +9,7 @@ namespace MEditService.Index;
 /// from changes, which the state taken before the read detects.</summary>
 internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source)
 {
-    private sealed record Failure(ReadState? ReadFrom, bool Stands, IReadOnlyList<SourceFileFailure> Files);
+    private sealed record Failure(ReadState? ReadFrom, bool Stands, IReadOnlyList<SourceFileFailure> Files, UnreadableSource? Why);
 
     private readonly Lock _lock = new();
     private readonly Dictionary<PluginAddress, Failure> _failed = new(PluginAddress.Comparer);
@@ -21,6 +22,12 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
     public IReadOnlyList<SourceFileFailure> SourceFileFailures
     {
         get { lock (_lock) return [.. _failed.Values.SelectMany(failure => failure.Files)]; }
+    }
+
+    /// <summary>What stopped the plugin's tree in its last failed read, while it fails.</summary>
+    public UnreadableSource? WhyTreeStopped(PluginAddress key)
+    {
+        lock (_lock) return _failed.TryGetValue(key, out var failure) ? failure.Why : null;
     }
 
     public bool Holds(PluginAddress key)
@@ -51,14 +58,14 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
             state = ReadStateOf(plugin);
             var outcome = read(state);
             if (outcome.Served) Forget(plugin.Key);
-            else Remember(plugin.Key, state, state.Vouches && StateObserves(outcome), outcome.TreeStopped);
+            else Remember(plugin.Key, state, state.Vouches && StateObserves(outcome), outcome.TreeStopped, WhyStopped(outcome));
             return outcome;
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
             // A plugin file's own failure is an answer, so a throw is the store's or the tree's, and
             // nothing the state holds observes it.
-            Remember(plugin.Key, state, stands: false, treeStopped: null);
+            Remember(plugin.Key, state, stands: false, treeStopped: null, why: null);
             throw;
         }
     }
@@ -69,19 +76,25 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
     private static bool StateObserves(ReadOutcome outcome) =>
         outcome is { Failure: not PluginFailure.Inaccessible, StoppedBy: null, TreeStopped: null or SourceFailure.Unreadable or SourceFailure.Ambiguous };
 
+    private static UnreadableSource? WhyStopped(ReadOutcome outcome)
+    {
+        if (outcome.TreeStopped is { } failure) return UnreadableSource.Of(failure);
+        return outcome.StoppedBy is { } error ? UnreadableSource.Of(error) : null;
+    }
+
     public void Forget(PluginAddress key)
     {
         lock (_lock) _failed.Remove(key);
     }
 
-    private void Remember(PluginAddress key, ReadState? state, bool stands, SourceFailure? treeStopped)
+    private void Remember(PluginAddress key, ReadState? state, bool stands, SourceFailure? treeStopped, UnreadableSource? why)
     {
         IReadOnlyList<SourceFileFailure> files =
         [
             .. (state?.FileFailuresOf(key) ?? []).Concat(SourceFileFailure.Of(key, treeStopped))
                 .DistinctBy(file => (file.SourceRelativePath, file.FormKey)),
         ];
-        lock (_lock) _failed[key] = new Failure(state, stands, files);
+        lock (_lock) _failed[key] = new Failure(state, stands, files, why);
     }
 
     private ReadState ReadStateOf(RegisteredPlugin plugin)

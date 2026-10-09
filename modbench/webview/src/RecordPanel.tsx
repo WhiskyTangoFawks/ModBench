@@ -10,6 +10,7 @@ import type {
 import { LABEL_COLUMN } from './labelColumn';
 import { columnKey, copyColumnKey } from '../../src/wire/columnKey';
 import { pluginAddressOf } from '../../src/wire/pluginAddress';
+import type { UnreadableSource } from '../../src/wire/unreadableSource';
 import { addElement, editField, focusCell, keepViewState, openColumns } from './nativeBridge';
 import { openEditor } from './DiskCell';
 import { EditorMounted } from './cellEditor';
@@ -57,7 +58,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // Null until /plugins answers, and null again when it fails: fail-closed, so a panel that has
   // not heard from /plugins offers no editing, compile or track (commands.md, No dead entries).
   const [trackedSet, setTrackedSet] = useState<Set<ColumnKey> | null>(null);
-  const [sourceUnreadableReasons, setSourceUnreadableReasons] = useState<Map<ColumnKey, string> | null>(null);
+  const [sourceUnreadableReasons, setSourceUnreadableReasons] = useState<Map<ColumnKey, UnreadableSource> | null>(null);
   const [modsByOrigin, setModsByOrigin] = useState<Record<string, ModRepository>>({});
   // Whether the winner sweep has run. Initial `true` only matters until the first load
   // lands, so it can never read as a false "settled".
