@@ -29,9 +29,8 @@ public sealed record ClaimedFormKey(string FormKey, IReadOnlyList<string> Docume
     public override int GetHashCode() => FormKey.GetHashCode(StringComparison.Ordinal);
 }
 
-/// <summary>Every document of a plugin's tree by the FormKey it declares, each with its content stamp,
-/// each file that could not be read as one, each FormKey more than one document declares, and each
-/// file read as unsaved text, as the mod folder spells them.</summary>
+/// <summary>Every document of a plugin's tree by the FormKey it declares, with its content stamp; each
+/// file that is no document; each FormKey declared twice; each file read as unsaved text.</summary>
 public sealed record RecordStamps(
     IReadOnlyDictionary<string, string> ByFormKey, IReadOnlyList<UnreadableFile> Unreadable,
     IReadOnlyList<ClaimedFormKey> Claimed, IReadOnlySet<string> Unsaved)

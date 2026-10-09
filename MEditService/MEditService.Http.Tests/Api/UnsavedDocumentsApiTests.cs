@@ -56,7 +56,7 @@ public sealed class UnsavedDocumentsApiTests : HostedTests
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         await stream.EventsUntil("plugin-changed", e => e.GetProperty("plugin").GetString() == Plugin);
-        Assert.Contains((await Client.Plugin(Plugin)).GetProperty("laterReadFailure").EnumerateArray(), stop => stop.GetProperty("message").GetString()!.Contains("is no record document", StringComparison.Ordinal));
+        Assert.Contains((await Client.Plugin(Plugin)).GetProperty("laterReadFailure").EnumerateArray(), stop => stop.GetProperty("message").GetString() is { } message && message.Contains("is no record document", StringComparison.Ordinal));
     }
 
     [Fact]
