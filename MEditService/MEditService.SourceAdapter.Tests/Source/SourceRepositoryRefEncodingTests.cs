@@ -12,7 +12,7 @@ public sealed class SourceRepositoryRefEncodingTests
     public void Track_Succeeds_ForAPluginNameWithSpacesWhichGitRefNamesForbid()
     {
         using var modFolder = new ScratchDirectory("medit-refencoding-");
-        const string plugin = "LitR - Settings Holotapes Sorting.esp";
+        const string plugin = "Invented Plugin With Spaces.esp";
         PluginBaselines.Track(
             modFolder, [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
 
@@ -20,7 +20,7 @@ public sealed class SourceRepositoryRefEncodingTests
     }
 
     [Theory]
-    [InlineData("LitR - Settings Holotapes Sorting.esp")]
+    [InlineData("Invented Plugin With Spaces.esp")]
     [InlineData("[ARRETH] FGEP-DE.esp")]
     [InlineData("SomePlugin.lock")]
     [InlineData(".hidden..esp")]
