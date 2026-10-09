@@ -65,7 +65,8 @@ const HTTP_PACKAGES = [
     { name: 'openapi-fetch', message: 'Only the mEdit client box speaks HTTP to the backend.' },
     { name: 'undici', message: 'Only the mEdit client box speaks HTTP to the backend.' },
 ];
-const BYTE_READS = ['open', 'openSync', 'openAsBlob', 'createReadStream', 'read', 'readSync', 'readv', 'readvSync'];
+// `default` and `promises` are the whole module under another name.
+const BYTE_READS = ['default', 'promises', 'open', 'openSync', 'openAsBlob', 'createReadStream', 'read', 'readSync', 'readv', 'readvSync'];
 const BYTE_READ_PATHS = ['node:fs', 'node:fs/promises', 'fs', 'fs/promises'].map((name) => ({
     name,
     importNames: BYTE_READS,
@@ -192,6 +193,11 @@ export default defineConfig(
             }),
         },
     })),
+    // No test reads a plugin's bytes either (ADR-0004).
+    {
+        files: ['src/**/*.test.ts', 'src/test/**/*.ts', 'src/*/test/**/*.ts'],
+        rules: { 'no-restricted-imports': ['error', { paths: BYTE_READ_PATHS }] },
+    },
     // The wire's type-only readers of the generated schema.
     ...['messages', 'pluginAddress', 'wireContractChecks'].map((name) => ({
         files: [`src/wire/${name}.ts`],

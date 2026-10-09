@@ -41,7 +41,7 @@ const THIS_FILE_HOLDING_EVERY_TOKEN_AS_DATA_NOT_READING_ANY_INSTANCE_FILE = 'for
 
 interface LayoutName {
   readonly owners: readonly string[];
-  readonly inMessages?: true;
+  readonly matchedWithinLiterals?: true;
 }
 
 const LAYOUT: Record<string, LayoutName> = {
@@ -49,21 +49,25 @@ const LAYOUT: Record<string, LayoutName> = {
   mods: { owners: [join('instanceAdapter', 'layout.ts')] },
   downloads: { owners: [join('instanceAdapter', 'layout.ts')] },
   overwrite: { owners: [join(ADAPTER_CODECS, 'modlistText.ts')] },
-  'modlist.txt': { owners: [join(ADAPTER_CODECS, 'modlistText.ts')], inMessages: true },
-  'ModOrganizer.ini': { owners: [join(ADAPTER_CODECS, 'modOrganizerIni.ts')], inMessages: true },
-  'meta.ini': { owners: [join(ADAPTER_CODECS, 'metaIni.ts')], inMessages: true },
-  '.meta': { owners: [join(ADAPTER_CODECS, 'downloads.ts')], inMessages: true },
-  '.mohidden': { owners: [join('instanceAdapter', 'layout.ts')], inMessages: true },
+  'modlist.txt': { owners: [join(ADAPTER_CODECS, 'modlistText.ts')], matchedWithinLiterals: true },
+  'ModOrganizer.ini': { owners: [join(ADAPTER_CODECS, 'modOrganizerIni.ts')], matchedWithinLiterals: true },
+  'meta.ini': { owners: [join(ADAPTER_CODECS, 'metaIni.ts')], matchedWithinLiterals: true },
+  '.meta': { owners: [join(ADAPTER_CODECS, 'downloads.ts')], matchedWithinLiterals: true },
+  '.mohidden': { owners: [join('instanceAdapter', 'layout.ts')], matchedWithinLiterals: true },
   'plugins.txt': { owners: [LOAD_ORDER_FILE_CODEC] },
 };
 const LAYOUT_NAMES = Object.keys(LAYOUT);
 
-function stringLiterals(sourceText: string, fileName: string): string[] {
+function stringLiterals(
+  sourceText: string,
+  fileName: string,
+  isTemplatePart: (node: ts.Node) => node is ts.TemplateLiteralToken = ts.isTemplateHead,
+): string[] {
   const scriptKind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, scriptKind);
   const found: string[] = [];
   const visit = (node: ts.Node): void => {
-    if (ts.isStringLiteralLike(node) || ts.isTemplateHead(node)) found.push(node.text);
+    if (ts.isStringLiteralLike(node) || isTemplatePart(node)) found.push(node.text);
     ts.forEachChild(node, visit);
   };
   visit(source);
@@ -201,26 +205,14 @@ describe('format literals, scanned over the extension and webview trees against 
   });
 });
 
-function everyLiteralText(sourceText: string, fileName: string): string[] {
-  const scriptKind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
-  const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, scriptKind);
-  const found: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node)) found.push(node.text);
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return found;
-}
-
 const namesFile = (literal: string, name: string): boolean =>
   literal.split(name).slice(1).some((after) => !/^\w/.test(after));
 
 function layoutLeaks(sourceText: string, fileName: string): string[] {
   const segments = pathSegments(sourceText, fileName);
-  const literals = everyLiteralText(sourceText, fileName);
+  const literals = stringLiterals(sourceText, fileName, ts.isTemplateLiteralToken);
   return LAYOUT_NAMES.filter((name) => segments.has(name)
-    || (LAYOUT[name]?.inMessages === true && literals.some((literal) => namesFile(literal, name))));
+    || (LAYOUT[name]?.matchedWithinLiterals === true && literals.some((literal) => namesFile(literal, name))));
 }
 
 function findLayoutLeaks(roots: readonly string[]): Record<string, string[]> {

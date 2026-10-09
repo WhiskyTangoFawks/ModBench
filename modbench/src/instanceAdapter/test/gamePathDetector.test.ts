@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as fs from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 
 vi.mock('node:fs/promises');
 
@@ -43,8 +43,8 @@ describe('detectGamePaths (Linux)', () => {
   });
 
   it('returns the Data folder under the library holding the app', async () => {
-    vi.mocked(fs.readFile).mockResolvedValue(VDF_WITH_FO4);
-    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(readFile).mockResolvedValue(VDF_WITH_FO4);
+    vi.mocked(access).mockResolvedValue(undefined);
 
     const result = await detectGamePaths('linux', FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK, () => Promise.reject(new Error('Linux has no registry')));
 
@@ -52,7 +52,7 @@ describe('detectGamePaths (Linux)', () => {
   });
 
   it('returns null when the VDF cannot be read', async () => {
-    vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+    vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
 
     const result = await detectGamePaths('linux', FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK, () => Promise.reject(new Error('Linux has no registry')));
     expect(result).toBeNull();
@@ -65,7 +65,7 @@ describe('detectWinePrefix, the Proton prefix root for gameDirectory.ts\'s Wine 
   });
 
   it('returns the compatdata pfx root when the library is found', async () => {
-    vi.mocked(fs.readFile).mockResolvedValue(VDF_WITH_FO4);
+    vi.mocked(readFile).mockResolvedValue(VDF_WITH_FO4);
 
     const result = await detectWinePrefix(FO4_APP_ID);
 
@@ -73,7 +73,7 @@ describe('detectWinePrefix, the Proton prefix root for gameDirectory.ts\'s Wine 
   });
 
   it('returns null when the VDF cannot be read', async () => {
-    vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+    vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
 
     const result = await detectWinePrefix(FO4_APP_ID);
 
@@ -81,7 +81,7 @@ describe('detectWinePrefix, the Proton prefix root for gameDirectory.ts\'s Wine 
   });
 
   it('returns null when the VDF has no matching library', async () => {
-    vi.mocked(fs.readFile).mockResolvedValue(VDF_WITHOUT_FO4);
+    vi.mocked(readFile).mockResolvedValue(VDF_WITHOUT_FO4);
 
     const result = await detectWinePrefix(FO4_APP_ID);
 
@@ -89,7 +89,7 @@ describe('detectWinePrefix, the Proton prefix root for gameDirectory.ts\'s Wine 
   });
 
   it('handles multiple libraries and returns the one containing the app id', async () => {
-    vi.mocked(fs.readFile).mockResolvedValue(`
+    vi.mocked(readFile).mockResolvedValue(`
 "libraryfolders"
 {
   "1"
@@ -123,7 +123,7 @@ describe('detectGamePaths (Windows)', () => {
   });
 
   it('maps a known reg query SteamPath to the Data folder under it', async () => {
-    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(access).mockResolvedValue(undefined);
     const runRegQuery = () =>
       Promise.resolve(
         'HKEY_CURRENT_USER\\Software\\Valve\\Steam\r\n' +
@@ -178,11 +178,11 @@ describe('detectGamePaths (Windows) in a second Steam library', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(access).mockResolvedValue(undefined);
   });
 
   it('finds the game in the library the steamapps vdf names', async () => {
-    vi.mocked(fs.readFile).mockImplementation((file) =>
+    vi.mocked(readFile).mockImplementation((file) =>
       typeof file === 'string' && file.endsWith('steamapps/libraryfolders.vdf')
         ? Promise.resolve(vdfNaming('D:/Games/SteamLibrary'))
         : Promise.reject(new Error('ENOENT')),
@@ -194,7 +194,7 @@ describe('detectGamePaths (Windows) in a second Steam library', () => {
   });
 
   it('finds the game through the older config vdf layout', async () => {
-    vi.mocked(fs.readFile).mockImplementation((file) =>
+    vi.mocked(readFile).mockImplementation((file) =>
       typeof file === 'string' && file.endsWith('config/libraryfolders.vdf')
         ? Promise.resolve(vdfNaming('D:/Games/SteamLibrary'))
         : Promise.reject(new Error('ENOENT')),
@@ -206,7 +206,7 @@ describe('detectGamePaths (Windows) in a second Steam library', () => {
   });
 
   it('reads a library path in the real Windows form, backslashes escaped in the vdf', async () => {
-    vi.mocked(fs.readFile).mockImplementation((file) =>
+    vi.mocked(readFile).mockImplementation((file) =>
       typeof file === 'string' && file.endsWith('steamapps/libraryfolders.vdf')
         ? Promise.resolve(vdfNaming('D:\\\\Games\\\\SteamLibrary'))
         : Promise.reject(new Error('ENOENT')),
