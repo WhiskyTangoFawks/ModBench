@@ -101,7 +101,6 @@ function documentTextOf(body: string): unknown {
   return typeof parsed === 'object' && parsed !== null && 'documentText' in parsed ? parsed.documentText : undefined;
 }
 
-/** What mEdit reads of the tracked file when asked: the text it was handed, else the file. */
 function trackedTextHeld(): string {
   const held = handedUnsaved.at(-1)?.find((each) => isRecord(each) && each.path === TRACKED_FS_PATH);
   return isRecord(held) && typeof held.text === 'string' ? held.text : readFileSync(TRACKED_FILE, 'utf8');
