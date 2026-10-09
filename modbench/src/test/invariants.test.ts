@@ -9,7 +9,7 @@ const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'ut
 describe('every MO2 text-file write command has a corpus test', () => {
   const WRITERS = [
     'downloadsCommands/downloads.ts', 'install/installedMark.ts', 'modlist/modlist.ts',
-    'pluginsCommands/plugins.ts', 'instanceCommands/profile.ts',
+    'pluginsCommands/plugins.ts', 'instanceCommands/instanceCommands.ts',
   ];
   const writeVerbs = WRITERS.flatMap((file) => commandVerbs(read(file)));
   const corpus = tsFiles(SRC, { exclude: ['generated'] }).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => readFileSync(f, 'utf8')).join('\n');
@@ -20,6 +20,7 @@ describe('every MO2 text-file write command has a corpus test', () => {
       'deleteSeparators', 'uninstallMods', 'createEmptyMod', 'renameMod',
     ]) expect(writeVerbs).toContain(verb);
     expect(writeVerbs).toContain('switchProfile');
+    for (const verb of ['setPluginsParticipation', 'setPluginsEnabled', 'reorderPlugins']) expect(writeVerbs).toContain(verb);
     expect(writeVerbs).toContain('excludeDownloads');
     expect(writeVerbs).toContain('includeDownloads');
     expect(writeVerbs).toContain('modSyncOver');

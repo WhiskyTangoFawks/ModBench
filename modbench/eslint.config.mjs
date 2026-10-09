@@ -96,14 +96,29 @@ function restrictedImports({ vscode, packages, path, client = false, inAdapter =
 
 // A view fires the commands the root bound to the Instance adapter; it takes only types from the core box.
 /** @type {Record<string, string[]>} */
-const BOUND_COMMAND_BOXES = { mods: ['modlist/modlist', 'install/install'], downloads: ['downloadsCommands/downloads'], toolbox: ['instanceCommands/instanceCommands'] };
+const BOUND_COMMAND_BOXES = {
+    mods: ['modlist/modlist', 'install/install'],
+    downloads: ['downloadsCommands/downloads'],
+    toolbox: ['instanceCommands/instanceCommands'],
+    plugins: ['pluginsCommands/plugins', 'pluginsCommands/renamePlugin'],
+};
+/** The Plugins box reaches the Instance adapter for its plugin-file rule alone (#1245); no other view reaches it. */
+/** @type {Record<string, string[]>} */
+const ADAPTER_NAMES_A_VIEW_MAY_IMPORT = { plugins: ['fileExtension', 'pluginSourceFolderOf'] };
 /** @param {string} view */
 const boundCommandImports = (view) => ['error', {
-    patterns: BOUND_COMMAND_BOXES[view].map((core) => ({
-        group: [`**/${core}`],
-        allowTypeImports: true,
-        message: 'The root binds the core box\'s commands to the Instance adapter; the view receives them.',
-    })),
+    patterns: [
+        ...BOUND_COMMAND_BOXES[view].map((core) => ({
+            group: [`**/${core}`],
+            allowTypeImports: true,
+            message: 'The root binds the core box\'s commands to the Instance adapter; the view receives them.',
+        })),
+        {
+            group: ['**/instanceAdapter/**'],
+            ...(ADAPTER_NAMES_A_VIEW_MAY_IMPORT[view] ? { allowImportNames: ADAPTER_NAMES_A_VIEW_MAY_IMPORT[view] } : {}),
+            message: 'A view holds bound commands and reaches the Instance adapter for nothing but the plugin-file rule.',
+        },
+    ],
 }];
 
 const SYNTAX = {

@@ -4,12 +4,12 @@ import { fakeVscodeModule } from './fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { rm } from 'node:fs/promises';
-import { pluginSyncOver, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../../pluginsCommands/plugins';
+import { pluginSyncOver } from '../../pluginsCommands/plugins';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, snapshotTree,
 } from './corpusFixture';
-import { adapterOver, providedPluginsIn, readPluginLines } from './adapterOver';
+import { adapterOver, pluginsCommandsOver, providedPluginsIn, readPluginLines } from './adapterOver';
 
 const NOT_INDEXED = { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) };
 const moving = (...names: string[]) => names.map((name) => ({ name, origin: 'SomeMod' }));
@@ -32,7 +32,7 @@ describe('plugins.txt corpus', () => {
   it('setPluginsEnabled(false) flips several lines in one write, touching only the active profile\'s plugins.txt', async () => {
     const before = await snapshotTree(dir);
     const orderBefore = await pluginOrder(dir);
-    const result = await setPluginsEnabled(adapterOver(dir), PROFILE, ['Tracked Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], false);
+    const result = await pluginsCommandsOver(dir).setPluginsEnabled(PROFILE, ['Tracked Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], false);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
@@ -48,7 +48,7 @@ describe('plugins.txt corpus', () => {
 
   it('setPluginsParticipation flips a mixed selection in one write, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    const result = await setPluginsParticipation(adapterOver(dir), PROFILE, [
+    const result = await pluginsCommandsOver(dir).setPluginsParticipation(PROFILE, [
       { name: 'Tracked Patch Mod.esp', enabled: false },
       { name: 'NonAsciiRetexture.esp', enabled: true },
     ]);
@@ -81,7 +81,7 @@ describe('plugins.txt corpus', () => {
 
   it('reorderPlugins moves a plugin within load order, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    await reorderPlugins(adapterOver(dir), NOT_INDEXED, PROFILE, moving('NonAsciiRetexture.esp'), { kind: 'winningEnd' }, []);
+    await pluginsCommandsOver(dir, NOT_INDEXED).reorderPlugins(PROFILE, moving('NonAsciiRetexture.esp'), { kind: 'winningEnd' }, []);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 

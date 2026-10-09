@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
-import type { MEditClient, PluginAddress } from '../client';
-import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import type { PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import { reorderPlugins, type PluginsDrop } from '../pluginsCommands/plugins';
+import type { PluginsCommands, PluginsDrop } from '../pluginsCommands/plugins';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { isPluginAddress } from '../wire/messages';
@@ -26,7 +25,7 @@ interface MoveView extends Pick<PluginsTreeProvider, 'movePlaces'> {
  *  land. Left out, the plugins are the view's selection and the drop is picked. A tree drop is
  *  one entry point into it. */
 export function registerPluginMoveCommand(
-  adapter: InstanceAdapter, masters: Pick<MEditClient, 'getPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
+  commands: Pick<PluginsCommands, 'reorderPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
   view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.plugin.move', async (plugins?: unknown, drop?: unknown) => {
@@ -40,8 +39,8 @@ export function registerPluginMoveCommand(
     if (target === undefined) return;
     try {
       const { activeProfile, pluginsLoadedWithNoLine } = instance.value;
-      const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => reorderPlugins(
-        adapter, masters, activeProfile, moving, target, (pluginsLoadedWithNoLine ?? []).map(({ name }) => name)));
+      const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(
+        activeProfile, moving, target, (pluginsLoadedWithNoLine ?? []).map(({ name }) => name)));
       if (!result.applied) reporter.report('error', 'Could not move plugins.', result.refusal);
     } catch (e) {
       reporter.report('error', 'Failed to move plugins.', errorMessage(e));

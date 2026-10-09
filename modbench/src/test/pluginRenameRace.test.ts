@@ -3,7 +3,7 @@ import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom } from './vscodeMock';
-import { adapterOver, readPluginLines, STEADY_WINDOW } from './mo2/adapterOver';
+import { adapterOver, pluginsCommandsWith, readPluginLines, STEADY_WINDOW } from './mo2/adapterOver';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
 
 const { handlers, showInputBox } = vi.hoisted(() => ({
@@ -87,7 +87,7 @@ describe('a rename while a recompute is reading', () => {
     client.setQueryAnswer('getPluginDependants', { dependants: [], unreadable: [] });
     showInputBox.mockResolvedValue(RENAMED);
     registerRenamePluginCommand({
-      client, adapter: { ...writer, renamePlugin: async (...args) => { await writer.renamePlugin(...args); release(); } },
+      client, commands: pluginsCommandsWith({ ...writer, renamePlugin: async (...args) => { await writer.renamePlugin(...args); release(); } }, client),
       ask: scriptedDialog('Rename'), instance, reporter: recordingReporter(),
       source: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     }, () => []);
