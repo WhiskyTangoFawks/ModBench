@@ -84,9 +84,8 @@ const isNoChange = ({ moves, deletions, documents }: SourceChanges) =>
 
 const within = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`) || path.startsWith(`${folder}\\`);
 
-/** Makes what mEdit answered as one workspace edit and saves each document it changed (ADR-0001). One document keeps
- *  its last text, and a document a later item deletes is not written. Throws when VS Code did not apply them;
- *  resolves the files it did not save. */
+/** Makes what mEdit answered as one workspace edit and saves what it changed (ADR-0001). A document keeps its
+ *  last text; one a later item deletes is not written. Throws unless applied; resolves the unsaved files. */
 export async function applySourceChanges(
   items: readonly SourceChanges[],
   options: { read?: vscode.Uri; moving?: (moves: readonly SourceMove[]) => () => void } = {},
