@@ -72,26 +72,8 @@ export function isNotificationKind(kind: string): kind is NotificationKind {
  *  type the caller happens to see. */
 export type LoadOrderProgress = LoadOrderStatus;
 
-// Restated rather than imported from Mod Management's own snapshot type: this module belongs
-// to Editing, which imports nothing from Mod Management.
-interface LoadOrderPluginInput {
-  name: string;
-  path: string;
-  origin: string;
-  provider: components['schemas']['PluginProviderRequest'];
-  line: number | null;
-  lineNamesIt: boolean;
-}
-
 /** ADR-0013's snapshot, with the PUT's keys. */
-export interface LoadOrderSnapshot {
-  readonly plugins: LoadOrderPluginInput[];
-  readonly active: PluginAddress[];
-  readonly loadedWithNoLine: PluginAddress[];
-  readonly gameDirectory: string;
-  readonly instanceRoot: string;
-  readonly gameRelease: string;
-}
+export type LoadOrderSnapshot = components['schemas']['LoadOrderRequest'];
 
 /** `abandoned`: a newer snapshot replaced this one before it was sent, or mEdit went away
  *  mid-flight. `backendFailed`: mEdit did not come up to take it. `applied` carries the terminal

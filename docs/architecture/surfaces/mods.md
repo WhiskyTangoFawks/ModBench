@@ -14,7 +14,7 @@ The view's description shows how many mods are enabled out of how many are liste
 
 As a user, I want:
 
-1. One row for each line of the active profile's `modlist.txt` that names a mod or a separator. A line MO2 marks unmanaged (`*`) is not a row. Source: MO2, which hides unmanaged mods by default
+1. One row for each mod or separator in the active profile's mod order. A mod the mod manager marks unmanaged is not a row. Source: MO2, which hides unmanaged mods by default
 2. Each separator to hold the mods between it and the next separator toward the winning end, whichever way the list is sorted. Source: CONTEXT.md, Mod separator; MO2
 3. The mods on the losing side of the first separator to be ungrouped: top-level rows at the losing end of the view. Source: MO2
 4. The Overwrite row pinned at the winning end, outside every separator: last when losing is at the top, first when winning is. Source: MO2: Overwrite wins over every mod
@@ -161,7 +161,7 @@ As a user, I want:
 1. A prompt filled with the current name. Esc, an empty name or the same name renames nothing. Source: MO2
 2. A name another mod has, compared without case, refused in the prompt, so Windows and Linux agree. A name with a path separator refused. Source: MO2 compares without case; Refuse, do not repair
 3. The mod to keep its place in mod order, its enabled state and its separator in every profile. Its folder keeps its repository, its plugin source and its `meta.ini`, and its plugins keep their `plugins.txt` lines. Source: MO2
-4. The folder renamed first. A rename that renamed the folder and then failed on a profile's `modlist.txt` to say so, naming the profile. That profile loses the mod's place, and `mod sync` places it as a new folder when the profile is active. This is an exception to A failed gesture writes nothing.
+4. The folder renamed first. A rename that renamed the folder and then failed on a profile's mod order to say so, naming the profile. That profile loses the mod's place, and `mod sync` places it as a new folder when the profile is active. This is an exception to A failed gesture writes nothing.
 
 ### Delete separator
 
@@ -198,7 +198,7 @@ As a user, I want a pick of the mods the file wins over, in mod order, when ther
 By [common.md](common.md#reporting). As a user, I want:
 
 1. A FOMOD installed as a plain copy to raise a notification that its files need arranging by hand, because the installer's own steps did not run. Source: ADR-0019
-2. When `mods/` cannot be listed, `modlist.txt` untouched, and the reason in the view's message line and the Output.
+2. When `mods/` cannot be listed, the mod order untouched, and the reason in the view's message line and the Output.
 3. An uninstall or a separator delete that trashed the folder, and then failed on its line, reported as done, with a line in the Output: `mod sync` drops the line. This is an exception to A failed gesture writes nothing.
 4. An uninstall that landed, and then failed to mark its downloaded file uninstalled, not reported as failed. The failed `.meta` write is a line in the Output.
 

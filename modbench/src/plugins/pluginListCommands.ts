@@ -14,6 +14,7 @@ import { creatablePluginExtensionsOf, pluginNameRefusal } from './pluginName';
 import type { Reporter } from '../ports/reporter';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { errorMessage } from '../ports/errorMessage';
+import { recordLabel } from '../wire/recordLabel';
 
 export function registerPluginSortCommands(pluginsTree: Pick<PluginsTreeProvider, 'setViewDirection'>): vscode.Disposable[] {
   return registerSortDirectionToggle('plugin', pluginsTree);
@@ -55,7 +56,7 @@ function copyValueLine(row: CopiedRow): string {
   const { formKey, editorId } = row.kind === 'record'
     ? { formKey: row.record.formKey, editorId: row.record.editorId ?? undefined }
     : row;
-  return editorId ? `${editorId} [${formKey}]` : formKey;
+  return recordLabel(editorId, formKey);
 }
 
 /** Plugins' own text for the catalog's one copy value id (plugins.md, Menus and keys, story 5).

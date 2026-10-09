@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension, parseExtensionToWebview } from '../messages';
+import { isPluginAddress, EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension, parseExtensionToWebview } from '../messages';
 
 describe('the focused cell message that tells the host which cell a palette field gesture acts on, as the context its menu would hand the command', () => {
   it('carries the focused cell\'s context, or null when no cell is focused', () => {
@@ -153,5 +153,14 @@ describe('the record load request the webview asks of the host, because nothing 
 
   it('rejects an answer whose ok is missing entirely', () => {
     expect(() => parseExtensionToWebview({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1' })).toThrow();
+  });
+});
+
+describe('isPluginAddress', () => {
+  it('holds a name and an origin, both strings', () => {
+    expect(isPluginAddress({ name: 'A.esp', origin: 'Mod' })).toBe(true);
+    expect(isPluginAddress({ name: 'A.esp' })).toBe(false);
+    expect(isPluginAddress({ name: 'A.esp', origin: 1 })).toBe(false);
+    expect(isPluginAddress(null)).toBe(false);
   });
 });
