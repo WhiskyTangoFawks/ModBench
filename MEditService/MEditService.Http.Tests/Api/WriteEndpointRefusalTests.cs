@@ -13,9 +13,6 @@ public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture
 {
     private readonly HttpClient _client = loaded.Client;
 
-    private const string ReadAndExecuteOnly = "500";
-    private const string OwnerFullAccess = "700";
-
     private const string Origin = "EditableMod";
     private const string Plugin = "Editable.esp";
     private const string DestOrigin = "DestinationMod";
@@ -79,33 +76,6 @@ public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Theory]
-    [InlineData("Override")]
-    [InlineData("New")]
-    public async Task CopyingToAnUnwritableDestinationRefusesTheItemInsteadOfFailingTheRequest(string mode)
-    {
-        using var fx = BuildSourceAndDestination();
-        await Load(fx);
-        await Track(DestOrigin);
-        var formKey = await FirstNpcFormKey(Plugin, Origin);
-        var destModFolder = ModFolderOf(fx, DestOrigin);
-
-        OtherTool.SetsThePermissions(destModFolder, ReadAndExecuteOnly);
-        try
-        {
-            var response = await _client.Copy(formKey, (Plugin, Origin), mode, (DestPlugin, DestOrigin));
-
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            var refused = Assert.Single((await response.Body()).GetProperty("refused").EnumerateArray());
-            Assert.Equal("SourceAccessFailed", refused.GetProperty("refusal").GetString());
-            Assert.False(string.IsNullOrWhiteSpace(refused.GetProperty("message").GetString()));
-        }
-        finally
-        {
-            OtherTool.SetsThePermissions(destModFolder, OwnerFullAccess);
-        }
     }
 
     [Fact]

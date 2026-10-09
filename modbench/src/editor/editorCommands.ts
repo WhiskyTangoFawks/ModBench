@@ -33,7 +33,7 @@ export interface EditorCommandDeps {
   tabs: RecordTabs;
   meditClient: Pick<MEditClient,
     | 'getEditChanges' | 'searchRecords'
-    | 'getDeleteChanges' | 'copyRecords'
+    | 'getDeleteChanges' | 'getCopyChanges'
     | 'getPlugins' | 'getRecordHolders'
     | 'getComparison' | 'getRecordsComparison' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onReconnected' | 'getRecordOwner'
     | 'getCopyDocument' | 'getRecordOfFile' | 'getRenderedDocument'>;
@@ -105,7 +105,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     ...registerRecordLifecycleCommands(
       meditClient, deps.reporterFor('recordLifecycle'), deps.ask, selections, deps.recordWrite, deps.sourceEditing),
     ...registerRecordCopyCommands(
-      meditClient, deps.reporterFor('recordCopy'), deps.ask, selections, deps.recordWrite),
+      meditClient, deps.reporterFor('recordCopy'), deps.ask, selections, deps.recordWrite, deps.sourceEditing),
     vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {
       const plan = recordOpenPlan(argument, deps.focusedViewSelection());
       const reporter = deps.reporterFor('recordOpen');

@@ -30,7 +30,7 @@ public sealed class CopyUnderrideTests : IDisposable
 
     public void Dispose() => _plugins.Dispose();
 
-    private SelectionResult<CopyItem, RecordEditRefusal, string?> CopyThePatchsNpcIntoTheDestination() =>
+    private SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges> CopyThePatchsNpcIntoTheDestination() =>
         _plugins.CopyHandler.CopySync([new RecordAt(Address(_patch), _npc.ToString())], CopyMode.Override, [Address(_destination)], replace: false);
 
     [Fact]

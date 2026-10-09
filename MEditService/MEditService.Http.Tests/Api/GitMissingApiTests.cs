@@ -71,7 +71,7 @@ public sealed class GitMissingApiTests : HostedTests
         Environment.SetEnvironmentVariable("PATH", string.Empty);
         try
         {
-            response = await Client.PostAsJsonAsync("/records/copy", new
+            response = await Client.PostAsJsonAsync("/records/copy-changes", new
             {
                 records = new[] { new { formKey = npc, plugin = Plugin, origin = Origin } },
                 mode = "New",

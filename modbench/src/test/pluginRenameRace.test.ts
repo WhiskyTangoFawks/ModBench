@@ -81,7 +81,7 @@ describe('a rename while a recompute is reading', () => {
     const overlapping = instance.refresh();
     await filesReadBeforeRename;
     const client = new InMemoryMEditClient();
-    client.setCommandResult('getRenameSourceChanges', { moves: [], deletions: [], documents: [] });
+    client.setCommandResult('getRenameSourceChanges', { treeName: PLUGIN.name, moves: [], deletions: [], documents: [] });
     client.setCommandResult('moveLastWritten', { moved: true });
     client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esl', '.esp']);
     client.setQueryAnswer('getPluginDependants', { dependants: [], unreadable: [] });

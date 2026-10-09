@@ -21,15 +21,17 @@ internal sealed class NewRecordCopy
 
     /// <summary>The fresh FormKey comes from the same allocator create draws on. A self-link is
     /// remapped onto it, as xEdit does.</summary>
-    internal SourceAnswer<RecordEditResult> Copy(CopySource source, string formKey, PluginAddress destinationPlugin)
+    internal SourceAnswer<RecordEditChanges> Copy(
+        CopySource source, string formKey, PluginAddress destinationPlugin, UnsavedBatches batches)
     {
-        if (_targets.ResolveCopySource(destinationPlugin, source, formKey, out var copy) is { } blocked) return blocked;
-        return CopyAsNewRecord(copy, destinationPlugin);
+        if (_targets.ResolveCopySource(destinationPlugin, source, formKey, batches, out var copy) is { } blocked) return blocked;
+        var before = copy.Batch.Changes;
+        return RecordCopy.ChangesSince(copy.Batch, before, CopyAsNewRecord(copy, destinationPlugin));
     }
 
     private SourceAnswer<RecordEditResult> CopyAsNewRecord(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin)
     {
-        var (source, identity, destination, release, _) = copy;
+        var (source, identity, destination, _, release, _) = copy;
         if (RefuseIfDisallowedForCopyAsNewRecord(identity.RecordType, RecordTypes.For(release)) is { } disallowedRefusal) return disallowedRefusal;
 
         if (!source.ContainerOf(identity).Holds(out var container, out var why)) return WriteTargets.RefuseUnreadableSource(identity.FormKey, why);
@@ -57,7 +59,7 @@ internal sealed class NewRecordCopy
         WriteTargets.CopyTarget copy, PluginAddress destinationPlugin,
         Func<SourceTransaction, SourceDocument, SourceAnswer<RecordEditResult>> land, string landedAt)
     {
-        var (source, identity, destination, release, body) = copy;
+        var (source, identity, destination, _, release, body) = copy;
         if (!FormKeyAllocator.Over(destination.Repository, destinationPlugin, release).Holds(out var allocator, out var unread)) return unread;
         if (allocator.Next(out var targetFormKey) is { } refusedTarget) return refusedTarget;
         if (!destination.Repository.EditorIdsHeld(destinationPlugin).Holds(out var editorIdsHeld, out unread)) return unread;

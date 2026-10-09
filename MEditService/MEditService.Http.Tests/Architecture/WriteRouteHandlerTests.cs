@@ -13,7 +13,7 @@ public sealed class WriteRouteHandlerTests
     [
         ("POST", "/records/{formKey}/edit-changes", typeof(EditRecordChangesHandler)),
         ("POST", "/records/delete-changes", typeof(DeleteRecordChangesHandler)),
-        ("POST", "/records/copy", typeof(CopyRecordHandler)),
+        ("POST", "/records/copy-changes", typeof(CopyRecordChangesHandler)),
         ("POST", "/plugins/create", typeof(CreatePluginHandler)),
         ("POST", "/plugins/track", typeof(TrackHandler)),
         ("POST", "/plugins/decompile", typeof(DecompilePluginHandler)),
@@ -84,7 +84,7 @@ public sealed class WriteRouteHandlerTests
         string method, string pattern, bool takesAHandler, bool takesAQueriesService, bool write)
     {
         List<Type> parameters = [];
-        if (takesAHandler) parameters.Add(typeof(CopyRecordHandler));
+        if (takesAHandler) parameters.Add(typeof(CopyRecordChangesHandler));
         if (takesAQueriesService) parameters.Add(typeof(ContainerChildQueryService));
 
         Assert.Equal(write, IsWrite(method, pattern, parameters));

@@ -157,9 +157,9 @@ describe('HttpMEditClient — a 503 from a write', () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
     const client = makeClient(fetch);
 
-    const result = await client.copyRecords(
+    const result = await client.getCopyChanges(
       [{ formKey: '000800:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' }], 'Override',
-      [{ name: 'Other.esp', origin: 'ModB' }], false);
+      [{ name: 'Other.esp', origin: 'ModB' }], false, []);
 
     expect(result).toEqual({ refused: true, message: 'Could not copy 1 record — No load order has been received.' });
   });
@@ -254,7 +254,7 @@ describe('HttpMEditClient — deleting records answers the changes per record', 
     const answers = [
       await client.getDeleteChanges([kept], []),
       await thrown.getCreateChanges({ name: 'MyPatch.esp', origin: 'ModA' }, 'npc_', []),
-      await thrown.copyRecords([kept], 'New', [{ name: 'Patch.esp', origin: 'PatchMod' }], false),
+      await thrown.getCopyChanges([kept], 'New', [{ name: 'Patch.esp', origin: 'PatchMod' }], false, []),
     ];
 
     for (const answer of answers) expect(answer).toMatchObject({ refused: true });
@@ -295,7 +295,7 @@ describe('HttpMEditClient — creating a plugin', () => {
 
 describe('HttpMEditClient — renaming a plugin source answers the changes', () => {
   const plugin = { name: 'Old.esp', origin: 'ModA' };
-  const changes = { moves: [{ from: '/m/plugin-source/Old.esp', to: '/m/plugin-source/New.esp' }], deletions: [], documents: [{ path: '/m/plugin-source/New.esp/h.json', text: '{}' }] };
+  const changes = { treeName: 'Old.esp', moves: [{ from: '/m/plugin-source/Old.esp', to: '/m/plugin-source/New.esp' }], deletions: [], documents: [{ path: '/m/plugin-source/New.esp/h.json', text: '{}' }] };
 
   it('sends the plugin, the new name and the unsaved documents, and reads the changes', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, changes)));
@@ -320,46 +320,41 @@ describe('HttpMEditClient — renaming a plugin source answers the changes', () 
   it('moves what was last written, answering moved on a 204', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 204 })));
 
-    const result = await makeClient(fetch).moveLastWritten(plugin, 'New.esp');
+    const result = await makeClient(fetch).moveLastWritten(plugin, 'OLD.esp', 'New.esp');
 
     expect(result).toEqual({ moved: true });
     const request = fetch.mock.calls[0]?.[0];
     expect(request?.url).toMatch(/\/plugins\/move-last-written$/);
-    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'Old.esp', newName: 'New.esp' });
+    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'Old.esp', treeName: 'OLD.esp', newName: 'New.esp' });
   });
 });
 
-describe('HttpMEditClient — copying records answers per record and destination', () => {
+describe('HttpMEditClient — copying records answers the changes per record and destination', () => {
   const npc = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const patch = { name: 'Patch.esp', origin: 'PatchMod' };
   const other = { name: 'Other.esp', origin: 'OtherMod' };
 
-  it('sends the records, the mode, the destinations and the replace Option as one call, and reads each item', async () => {
+  const unsaved = [{ path: '/mods/PatchMod/plugin-source/Patch.esp/Header.json', text: '{"h":1}' }];
+
+  it('sends the records, the mode, the destinations, the replace Option and the unsaved documents as one call, and reads each item', async () => {
+    const copied = { record: npc, destination: patch, moves: [], deletions: [], documents: unsaved };
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
-      applied: [{ record: npc, destination: patch, newFormKey: null }],
+      applied: [copied],
       refused: [{ item: { record: npc, destination: other }, refusal: 'DestinationHoldsRecord', message: 'Other.esp already holds it.' }],
     })));
     const client = makeClient(fetch);
 
-    const outcome = await client.copyRecords([npc], 'Override', [patch, other], true);
+    const outcome = await client.getCopyChanges([npc], 'Override', [patch, other], true, unsaved);
 
     expect(outcome).toEqual({
-      landed: [{ record: npc, destination: patch, newFormKey: null }],
+      applied: [copied],
       refused: [{ item: { record: npc, destination: other }, reason: 'Other.esp already holds it.' }],
     });
     const request = fetch.mock.calls[0]?.[0];
-    expect(request?.url).toMatch(/\/records\/copy$/);
-    expect(await request?.json()).toEqual({ records: [npc], mode: 'Override', destinations: [patch, other], replace: true });
-  });
-
-  it('names the FormKey mEdit minted for a new record\'s copy', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
-      applied: [{ record: npc, destination: patch, newFormKey: '000900:Patch.esp' }], refused: [],
-    })));
-
-    const outcome = await makeClient(fetch).copyRecords([npc], 'New', [patch], false);
-
-    expect(outcome).toEqual({ landed: [{ record: npc, destination: patch, newFormKey: '000900:Patch.esp' }], refused: [] });
+    expect(request?.url).toMatch(/\/records\/copy-changes$/);
+    expect(await request?.json()).toEqual({
+      records: [npc], mode: 'Override', destinations: [patch, other], replace: true, documents: unsaved,
+    });
   });
 
   it('asks the record\'s holders by plugin and origin', async () => {

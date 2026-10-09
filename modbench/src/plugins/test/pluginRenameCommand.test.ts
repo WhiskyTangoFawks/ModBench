@@ -42,7 +42,7 @@ const held = (name: string, origin: string): LoadOrderPlugin =>
   ({ name, origin, path: `/instance/mods/${origin}/${name}`, line: null, enabled: true, winning: true });
 
 const PLUGIN = { name: 'Patch.esp', origin: 'ModA' };
-const CHANGES = { moves: [], deletions: [], documents: [] };
+const CHANGES = { treeName: 'Patch.esp', moves: [], deletions: [], documents: [] };
 
 function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string | undefined)[]) {
   const client = new InMemoryMEditClient();
@@ -70,11 +70,12 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
     },
   };
   const reporter = recordingReporter();
+  const apply = vi.fn<SourceEditing['applyWorkspaceChanges']>().mockResolvedValue([]);
   const queue = oneAtATime();
   const queued = vi.fn();
   const source: SourceEditing = {
     unsaved: () => [{ path: '/instance/mods/ModA/plugin-source/Patch.esp/h.json', text: '{}' }],
-    applyWorkspaceChanges: vi.fn().mockResolvedValue([]),
+    applyWorkspaceChanges: apply,
     oneAtATime: (job) => { queued(); return queue(job); },
     refreshSourceControlFor: vi.fn(),
   };
@@ -89,7 +90,7 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
     await run(new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin));
     return validated;
   };
-  return { client, ask, stepsWhenAsked, renameFiles, reporter, source, queued, run, validate };
+  return { client, ask, stepsWhenAsked, renameFiles, reporter, source, apply, queued, run, validate };
 }
 
 const row = () => new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin);
@@ -207,13 +208,46 @@ describe('modbench.plugin.rename', () => {
 
   it('applies the changes as one workspace edit one at a time, and refreshes Source Control for the plugin', async () => {
     showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { source, queued, run } = setup();
+    const { source, apply, queued, run } = setup();
 
     await run(row());
 
     expect(queued).toHaveBeenCalledOnce();
-    expect(source.applyWorkspaceChanges).toHaveBeenCalledWith([CHANGES]);
+    expect(apply).toHaveBeenCalledWith([CHANGES]);
     expect(source.refreshSourceControlFor).toHaveBeenCalledWith(PLUGIN);
+  });
+
+  it('names the rename and the plugin, and points to git, when VS Code cannot apply the changes', async () => {
+    showInputBox.mockResolvedValueOnce('Renamed.esp');
+    const { client, renameFiles, reporter, source, apply, run } = setup();
+    apply.mockRejectedValueOnce(new Error('EEXIST'));
+
+    await run(row());
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error',
+      message: 'Could not rename "Patch.esp" (ModA): its plugin source may be partly renamed. Reverting the source rename in git undoes it.',
+      detail: 'EEXIST VS Code stops at the first change it cannot make, so some changes may have landed.',
+    }]);
+    expect(source.refreshSourceControlFor).toHaveBeenCalledWith(PLUGIN);
+    expect(client.calls.filter((c) => c.method === 'moveLastWritten')).toEqual([]);
+    expect(renameFiles).not.toHaveBeenCalled();
+  });
+
+  it('names the files left unsaved, moves nothing and renames no file', async () => {
+    showInputBox.mockResolvedValueOnce('Renamed.esp');
+    const { client, renameFiles, reporter, apply, run } = setup();
+    apply.mockResolvedValueOnce(['/m/plugin-source/Renamed.esp/h.json']);
+
+    await run(row());
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error',
+      message: 'Could not save the rename of "Patch.esp" (ModA) in full. Reverting the source rename in git undoes it.',
+      detail: 'VS Code did not save /m/plugin-source/Renamed.esp/h.json.',
+    }]);
+    expect(client.calls.filter((c) => c.method === 'moveLastWritten')).toEqual([]);
+    expect(renameFiles).not.toHaveBeenCalled();
   });
 
   it('tells a refused source, writing no file', async () => {

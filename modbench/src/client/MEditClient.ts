@@ -121,6 +121,9 @@ export interface DeleteChangesOutcome {
   refused: readonly ItemRefusal<RecordAddress>[];
 }
 
+/** The changes renaming a plugin's source makes, and the name its tree was filed under. */
+export type RenameSourceChangesOutcome = SourceChanges & { treeName: string };
+
 /** The changes creating a record makes to plugin source, and the new record's FormKey. */
 export type CreateChangesOutcome = SourceChanges & { formKey: string };
 
@@ -183,9 +186,15 @@ export type GridPosition = components['schemas']['GridPosition'];
 export type RecordAddress = components['schemas']['RecordAddress'];
 /** Copy's mode Option (commands.md, Record, `copy`). */
 export type CopyMode = components['schemas']['CopyMode'];
-/** One record into one destination: the unit a copy lands or is refused by. A new record's copy
- *  that landed names the FormKey mEdit minted for it. */
-export type CopyItem = Pick<components['schemas']['RecordCopyLanded'], 'record' | 'destination' | 'newFormKey'>;
+type CopyChanges = components['schemas']['RecordCopyChanges'];
+/** One record into one destination: the unit a copy lands or is refused by. */
+export type CopyItem = Pick<CopyChanges, 'record' | 'destination'>;
+
+/** A copy's changes per record and destination, in the order to make them, and the items mEdit refused. */
+export interface CopyChangesOutcome {
+  applied: readonly CopyChanges[];
+  refused: readonly ItemRefusal<CopyItem>[];
+}
 export type ReferenceResult = components['schemas']['ReferenceResult'];
 /** The record filter mEdit holds: its SQL and the name of the source it came from
  *  (plugins.md, Record filter). */
@@ -196,11 +205,11 @@ export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
   createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
-  // The changes renaming the plugin source makes, as working-tree changes with no commit. `unsaved` stands in for
-  // the files it names. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
-  getRenameSourceChanges(plugin: PluginAddress, newName: string, unsaved: readonly UnsavedDocument[]): Promise<SourceChanges | WriteRefused>;
-  // Moves what Modbench last wrote for the plugin to its new name, once the source rename is applied and saved.
-  moveLastWritten(plugin: PluginAddress, newName: string): Promise<{ moved: true } | WriteRefused>;
+  // The changes renaming the plugin source makes, which mEdit answers over `unsaved` in place of the files it names, and
+  // the name the source's tree is filed under. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
+  getRenameSourceChanges(plugin: PluginAddress, newName: string, unsaved: readonly UnsavedDocument[]): Promise<RenameSourceChangesOutcome | WriteRefused>;
+  // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
+  moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   track(mods: readonly string[], options?: { onProgress?: (status: TrackStatus) => void }): Promise<TrackOutcome | WriteRefused>;
   // `unsaved` stands in for the files it names. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
@@ -213,11 +222,12 @@ export interface MEditClient {
   getDeleteChanges(
     records: readonly RecordAddress[], unsaved: readonly UnsavedDocument[],
   ): Promise<DeleteChangesOutcome | WriteRefused>;
-  // Each record into each destination is one item, landed or refused on its own. `replace` lets an
-  // override copy over the one a destination already holds.
-  copyRecords(
+  // Each record into each destination is one item, changed or refused on its own. `replace` lets an override
+  // copy over a held one. `unsaved` stands in for its files. A WriteRefused is the call failing. Nothing is written.
+  getCopyChanges(
     records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
-  ): Promise<SelectionOutcome<CopyItem> | WriteRefused>;
+    unsaved: readonly UnsavedDocument[],
+  ): Promise<CopyChangesOutcome | WriteRefused>;
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
   decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;

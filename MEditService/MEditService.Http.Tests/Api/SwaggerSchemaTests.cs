@@ -67,7 +67,7 @@ public sealed class SwaggerSchemaTests
     public async Task CopyRoute_DeclaresOnlyTheCallLevelStatuses_ElseSwashbuckleEmitsContentNeverForAnUndeclaredOne()
     {
         var root = await GetSchemaAsync();
-        var responses = root.GetProperty("paths").GetProperty("/records/copy").GetProperty("post").GetProperty("responses");
+        var responses = root.GetProperty("paths").GetProperty("/records/copy-changes").GetProperty("post").GetProperty("responses");
 
         var declared = responses.EnumerateObject().Select(p => p.Name).ToHashSet();
         Assert.Equal(new HashSet<string> { "200", "400", "500", "503" }, declared);

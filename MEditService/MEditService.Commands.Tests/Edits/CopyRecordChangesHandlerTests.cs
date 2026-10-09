@@ -1,11 +1,12 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class CopyRecordHandlerTests
+public sealed class CopyRecordChangesHandlerTests
 {
     [Theory]
     [InlineData(CopyMode.New)]
@@ -94,5 +95,50 @@ public sealed class CopyRecordHandlerTests
         Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.SelectionRefusal?.Refusal);
         Assert.Empty(result.Landed);
         Assert.Equal(before, TrackedTree.Records(mod.DestinationModFolder, mod.DestinationPlugin));
+    }
+
+    [Theory]
+    [InlineData(CopyMode.New)]
+    [InlineData(CopyMode.Override)]
+    public void CopyChanges_AnswerTheDestinationsDocuments_AndWriteNothing(CopyMode mode)
+    {
+        using var mod = CopyFixture.Create();
+        var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
+        var before = TrackedTree.Records(mod.DestinationModFolder, mod.DestinationPlugin);
+
+        var result = mod.CopyHandler.CopyChangesSync([npc], mode, [mod.DestinationPlugin], replace: false);
+
+        var changes = Assert.Single(result.Landed).Outcome.Changes;
+        Assert.NotEmpty(changes.Documents);
+        Assert.All(changes.Documents, document => Assert.StartsWith(mod.DestinationModFolder, document.Path, StringComparison.Ordinal));
+        Assert.Equal(before, TrackedTree.Records(mod.DestinationModFolder, mod.DestinationPlugin));
+    }
+
+    [Fact]
+    public void CopyChanges_OfATrackedSourcesRecord_CarryTheSourcesUnsavedText()
+    {
+        using var mod = CopyFixture.Create(trackSource: true);
+        var npc = mod.Document(mod.SourcePlugin, mod.SourceNpc.ToString()).Require();
+        var unsaved = new DocumentChange(
+            TreeTampering.FileOf(mod.SourceModFolder, mod.SourcePlugin, npc.Identity),
+            npc.Body.Replace(CopyFixture.SourceNpcEditorId, "UnsavedNpc", StringComparison.Ordinal));
+
+        var result = mod.CopyHandler.CopyChangesSync(
+            [new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false, [unsaved]);
+
+        var changes = Assert.Single(result.Landed).Outcome.Changes;
+        Assert.Contains(changes.Documents, document => document.Text.Contains("UnsavedNpc", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CopyingTwoRecordsAsNewIntoOneDestination_DrawsEachItsOwnFormKey_FromTheOnesBeforeIt()
+    {
+        using var mod = CopyFixture.Create();
+        var records = new[] { mod.SourceNpc, mod.SelfLinkingFaction }.Select(key => new RecordAt(mod.SourcePlugin, key.ToString())).ToList();
+
+        var result = mod.CopyHandler.CopyChangesSync(records, CopyMode.New, [mod.DestinationPlugin], replace: false);
+
+        var drawn = result.Landed.Select(landed => landed.Outcome.Outcome.NewFormKey).ToList();
+        Assert.Equal(2, drawn.Distinct().Count());
     }
 }

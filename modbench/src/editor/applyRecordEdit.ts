@@ -4,7 +4,8 @@ import type { MEditClient, RecordEditEnvelope, SourceChanges } from '../client';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { PathHop } from '../wire/messages';
 import type { RecordDocument } from '../drivingLib/recordDocument';
-import { applyWorkspaceChanges, type FileMove } from '../drivingLib/applyWorkspaceChanges';
+import { applyWorkspaceChanges, type FileMove, type WorkspaceChanges } from '../drivingLib/applyWorkspaceChanges';
+import { applyAnswered } from '../drivingLib/applyAnswered';
 import type { OneAtATime } from '../drivingLib/oneAtATime';
 import { errorMessage } from '../ports/errorMessage';
 import type { EditAddress } from './recordTab';
@@ -59,13 +60,17 @@ async function editDocuments(
   }
   if (isNoChange(outcome)) return outcome.newFormKey;
 
-  const unsaved = await applyWorkspaceChanges([outcome], {
-    read: document.uri,
-    moving: (moves) => deps.moving(moves, address, outcome.newFormKey),
-  });
-  deps.refreshSourceControlFor(address.plugin);
-  if (unsaved.length > 0) deps.reporter.report('error', `Could not save the edit of ${field}.`, `VS Code did not save ${unsaved.join(', ')}.`);
-  return outcome.newFormKey;
+  const applying = {
+    applyWorkspaceChanges: (items: readonly WorkspaceChanges[]) => applyWorkspaceChanges(items, {
+      read: document.uri,
+      moving: (moves) => deps.moving(moves, address, outcome.newFormKey),
+    }),
+    refreshSourceControlFor: deps.refreshSourceControlFor,
+  };
+  const applied = await applyAnswered(
+    applying, deps.reporter, [outcome], [address.plugin],
+    { notApplied: `Could not edit ${field}.`, notSaved: `Could not save the edit of ${field}.` });
+  return applied ? outcome.newFormKey : undefined;
 }
 
 const isNoChange = ({ moves, deletions, documents }: SourceChanges) =>

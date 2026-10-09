@@ -49,7 +49,7 @@ public static class CommandHandlers
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(RecordCopy))));
 
-        services.AddSingleton(sp => new CopyRecordHandler(
+        services.AddSingleton(sp => new CopyRecordChangesHandler(
             new OverrideCopy(
                 sp.GetRequiredService<WriteTargets>(),
                 sp.GetRequiredService<RecordCopy>(),
@@ -61,7 +61,7 @@ public static class CommandHandlers
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(NewRecordCopy))),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<LoadOrderResolution>(),
-            sp.GetRequiredService<ILogger<CopyRecordHandler>>()));
+            sp.GetRequiredService<ILogger<CopyRecordChangesHandler>>()));
 
         services.AddSingleton(sp => new TrackHandler(
             sp.GetRequiredService<LoadOrderHolder>(),

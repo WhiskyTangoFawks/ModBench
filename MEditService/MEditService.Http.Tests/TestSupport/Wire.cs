@@ -150,16 +150,34 @@ internal static class Wire
             $"/records/{Uri.EscapeDataString(formKey)}/edit-changes",
             new { edit = new { plugin, origin, op, path = new[] { new { kind = "member", name = member } }, value }, text });
 
-    internal static Task<HttpResponseMessage> Copy(
+    /// <summary>A copy as Modbench makes one: mEdit answers the changes each copy makes, and each landed item's are
+    /// saved in the order answered. The answer is mEdit's.</summary>
+    internal static async Task<HttpResponseMessage> Copy(
         this HttpClient client, IEnumerable<(string FormKey, string Plugin, string Origin)> records, string mode,
-        IEnumerable<(string Plugin, string Origin)> destinations, bool replace = false) =>
-        client.PostAsJsonAsync("/records/copy", new
+        IEnumerable<(string Plugin, string Origin)> destinations, bool replace = false,
+        IEnumerable<(string Path, string Text)>? unsaved = null)
+    {
+        var response = await client.PostAsJsonAsync("/records/copy-changes", new
         {
             records = records.Select(r => new { formKey = r.FormKey, plugin = r.Plugin, origin = r.Origin }),
             mode,
             destinations = destinations.Select(d => new { name = d.Plugin, origin = d.Origin }),
             replace,
+            documents = (unsaved ?? []).Select(d => new { path = d.Path, text = d.Text }),
         });
+        if (!response.IsSuccessStatusCode) return response;
+
+        var answer = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        static string Text(JsonElement element, string name) => element.GetProperty(name).GetString().Require();
+        foreach (var changes in answer.GetProperty("applied").EnumerateArray())
+        {
+            EditSaving.Save(
+                changes.GetProperty("moves").EnumerateArray().Select(move => (Text(move, "from"), Text(move, "to"))),
+                changes.GetProperty("deletions").EnumerateArray().Select(deletion => deletion.GetString().Require()),
+                changes.GetProperty("documents").EnumerateArray().Select(document => (Text(document, "path"), Text(document, "text"))));
+        }
+        return response;
+    }
 
     internal static Task<HttpResponseMessage> Copy(
         this HttpClient client, string formKey, (string Plugin, string Origin) source, string mode,

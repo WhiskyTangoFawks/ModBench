@@ -146,17 +146,22 @@ internal sealed record RecordDeleteChanges(
 /// Made in the order answered, the items leave the records deleted one after another.</summary>
 internal sealed record RecordDeleteChangesResponse(IReadOnlyList<RecordDeleteChanges> Applied, IReadOnlyList<RecordAddressRefusal> Refused);
 
-/// <summary>Copy's Argument and Options (commands.md, Record, `copy`). <see cref="Replace"/> lets an
-/// override copy over the one a destination holds; the surface supplies it once the user confirms.</summary>
+/// <summary>Copy's Argument and Options (commands.md, Record, `copy`), and the unsaved texts that stand in for
+/// their files. <see cref="Replace"/> lets an override copy over the one a destination holds.</summary>
 internal sealed record RecordCopyRequest(
-    IReadOnlyList<RecordAddress> Records, CopyMode Mode, IReadOnlyList<PluginAddress> Destinations, bool Replace = false);
+    IReadOnlyList<RecordAddress> Records, CopyMode Mode, IReadOnlyList<PluginAddress> Destinations, bool Replace = false,
+    IReadOnlyList<DocumentChange>? Documents = null);
 
-/// <summary><see cref="NewFormKey"/> is the duplicate's, and null for an override.</summary>
-internal sealed record RecordCopyLanded(RecordAddress Record, PluginAddress Destination, string? NewFormKey);
+/// <summary>The changes copying one record into one destination makes to plugin source, written nowhere, as an
+/// edit's are.</summary>
+internal sealed record RecordCopyChanges(
+    RecordAddress Record, PluginAddress Destination, IReadOnlyList<SourceMove> Moves,
+    IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents);
 
 internal sealed record RecordCopyItem(RecordAddress Record, PluginAddress Destination);
 
 internal sealed record RecordCopyRefusal(RecordCopyItem Item, RecordEditRefusal Refusal, string Message);
 
-/// <summary>Applied or refusal, per record and destination (ADR-0019).</summary>
-internal sealed record RecordCopyResponse(IReadOnlyList<RecordCopyLanded> Applied, IReadOnlyList<RecordCopyRefusal> Refused);
+/// <summary>Changes or refusal, per record and destination (ADR-0019). Made in the order answered, the items leave
+/// the records copied one after another.</summary>
+internal sealed record RecordCopyChangesResponse(IReadOnlyList<RecordCopyChanges> Applied, IReadOnlyList<RecordCopyRefusal> Refused);
