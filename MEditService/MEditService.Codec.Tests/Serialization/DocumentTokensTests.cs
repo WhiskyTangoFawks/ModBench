@@ -83,6 +83,6 @@ public sealed class DocumentTokensTests
     [InlineData("""{ "FormKey": "000800:Other.esp" }""", false)]
     public void MayCarry_IsFalseOnlyWhenTheBytesCertainlyDoNotSpellTheFormKey(string text, bool expected)
     {
-        Assert.Equal(expected, DocumentTokens.MayCarry(Bytes(text), "000800:Some.esp"));
+        Assert.Equal(expected, DocumentTokens.MayCarry(Bytes(text), Bytes("000800:Some.esp")));
     }
 }

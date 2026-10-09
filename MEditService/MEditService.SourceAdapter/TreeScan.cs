@@ -19,7 +19,7 @@ internal sealed class TreeScan
     private readonly string _sourceRoot;
     private readonly GameRelease _release;
     private readonly ISourceFiles _files;
-    private readonly string? _onlyKey;
+    private readonly byte[]? _onlyKey;
     private Dictionary<string, List<OwnerDocument>> _byChild = new(StringComparer.Ordinal);
     private Dictionary<string, List<string>> _byRoot = new(StringComparer.Ordinal);
     private bool _rescanned;
@@ -28,7 +28,7 @@ internal sealed class TreeScan
     internal TreeScan(string sourceRoot, GameRelease release, string? onlyKey, IEnumerable<string> listed, ISourceFiles files)
     {
         (_sourceRoot, _release, _files) = (sourceRoot, release, files);
-        _onlyKey = onlyKey;
+        _onlyKey = onlyKey is null ? null : System.Text.Encoding.UTF8.GetBytes(onlyKey);
         Scan(listed);
     }
 

@@ -109,7 +109,7 @@ internal static class TreeStamps
             unreadable.Add(new UnreadableFile(
                 relativePath,
                 DocumentTokens.WhyNotADocument(text) is { } error
-                    ? $"'{relativePath}' is not valid JSON: {error}"
+                    ? $"'{relativePath}' is no record document: {error}"
                     : $"'{relativePath}' declares no FormKey, so the records it holds could not be validated."));
             return null;
         }
