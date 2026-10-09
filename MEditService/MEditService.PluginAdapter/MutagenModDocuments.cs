@@ -14,8 +14,7 @@ namespace MEditService.PluginAdapter;
 /// <summary>A cell the mod holds, where its GRUP hierarchy puts it.</summary>
 internal readonly record struct HeldCell(CellStructure Structure, object Cell);
 
-/// <summary>A live mod read as the documents its source tree would hold (ADR-0007). The
-/// one place a getter becomes text, so every caller downstream of it holds documents. The open is
+/// <summary>A live mod read as the documents its source tree would hold (ADR-0007). The open is
 /// disposed with the result, so a caller that opened the plugin hands ownership over.</summary>
 internal sealed class MutagenModDocuments(
     IModGetter mod, PluginRecordBytes file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open) : IPluginDocuments

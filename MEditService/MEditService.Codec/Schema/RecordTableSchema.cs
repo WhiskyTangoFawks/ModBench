@@ -68,8 +68,8 @@ public sealed class RecordTableSchema
     }
 
     /// <summary>The records of this table the mod holds. Mutagen's enumeration by one placed-trap variant
-    /// (a placed arrow, hazard, missile...) yields every variant a cell holds, so the table is checked per record.
-    /// Enumerated lazily: Mutagen's group enumerator throws out of MoveNext and cannot be resumed.</summary>
+    /// yields every variant a cell holds, so the table is checked per record. Lazy: Mutagen's group
+    /// enumerator throws out of MoveNext and cannot be resumed.</summary>
     public IEnumerable<IMajorRecordGetter> RecordsIn(IModGetter mod) =>
         mod.EnumerateMajorRecords(RecordType, throwIfUnknown: false)
             .Where(record => RecordType.IsInstanceOfType(record) || RecordTypes.For(mod.GameRelease).RecordTypeOf(record) == TableName);
