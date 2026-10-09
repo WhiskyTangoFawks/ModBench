@@ -48,7 +48,7 @@ internal sealed class Store : IDisposable
     /// plugins the Indexer holds open.</summary>
     public Store(
         ILogger logger, string? databasePath, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder, IPluginAdapter plugins,
-        TimeProvider? timeProvider, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins)
+        TimeProvider? timeProvider, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed)
     {
         _logger = logger;
         _databasePath = databasePath;
@@ -56,7 +56,7 @@ internal sealed class Store : IDisposable
         _ddlBuilder = ddlBuilder;
         _plugins = plugins;
         _timeProvider = timeProvider ?? TimeProvider.System;
-        Reads = new RelationReads(this, openedPlugins);
+        Reads = new RelationReads(this, openedPlugins, indexed);
         Filter = new RecordFilter(this);
     }
 

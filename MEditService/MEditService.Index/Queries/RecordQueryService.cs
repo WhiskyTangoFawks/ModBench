@@ -31,7 +31,7 @@ internal sealed class RecordQueryService(
         // Index's. A plugin the Index has not opened has none of the latter and is not a row.
         var snapshot = _loadOrder.Require();
         var rows = snapshot.Plugins.Where(c => opened.ContainsKey(c.Key)).ToList();
-        var masterIssues = _index.Status.State == LoadOrderState.Ready
+        var masterIssues = Indexed
             ? MasterResolution.Classify(snapshot, opened)
             : null;
         var parseFailures = reads.GetPluginsWithParseFailures();
@@ -215,16 +215,15 @@ internal sealed class RecordQueryService(
         List<RecordDetail> outsideTheComparison)
     {
         var release = _loadOrder.Require().GameRelease;
-        var indexed = _index.Status.State == LoadOrderState.Ready;
-        // With no active copy there is nothing to compare: the copy outside it stands alone.
+                // With no active copy there is nothing to compare: the copy outside it stands alone.
         var classification = committedOverrides.Count > 0
             ? _conflictClassifier.Classify(
-                committedOverrides, release, resolveFormKey, loadOrderFormIds, indexed, outsideTheComparison)
+                committedOverrides, release, resolveFormKey, loadOrderFormIds, Indexed, outsideTheComparison)
             : new ClassifyResult(
                 ConflictAll.NoConflict, new Dictionary<string, ConflictThis>(),
                 _conflictClassifier.Align(
                     outsideTheComparison, [.. (outsideTheComparison).Select(r => ColumnKey.Of(r.Plugin, r.Origin))],
-                    release, resolveFormKey, loadOrderFormIds, indexed));
+                    release, resolveFormKey, loadOrderFormIds, Indexed));
         return (classification, classification.ConflictAll);
     }
 
@@ -362,6 +361,8 @@ internal sealed class RecordQueryService(
             document.Fields, Origin: document.Plugin.Origin, RecordType: document.RecordType,
             IsPartialForm: document.IsPartialForm,
             ParseDiagnosis: document.ParseDiagnosis);
+
+    private bool Indexed => _index.Status.State == LoadOrderState.Ready;
 
     private IRecordReads RequireReads() => _index.RequireReads();
 

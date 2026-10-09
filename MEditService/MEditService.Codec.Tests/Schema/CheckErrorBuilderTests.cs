@@ -16,14 +16,14 @@ public class CheckErrorBuilderTests
     [Fact]
     public void Build_CleanScalarReference_ReturnsNull()
     {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000001:Test.esp\""), _ => Entry("race"), GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000001:Test.esp\""), _ => Entry("race"), GameRelease.Fallout4, indexed: true);
         Assert.Null(err);
     }
 
     [Fact]
     public void Build_NullScalarReference_NonNullableField_ReturnsNullNotAllowedMessage()
     {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, null, _ => Entry("race"), GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(FormKeyMeta, null, _ => Entry("race"), GameRelease.Fallout4, indexed: true);
         Assert.Equal("Found a NULL reference, expected: RACE", err);
     }
 
@@ -31,14 +31,14 @@ public class CheckErrorBuilderTests
     public void Build_NullScalarReference_NullableField_ReturnsNull()
     {
         var meta = FormKeyMeta with { AllowsNull = true };
-        var err = CheckErrorBuilder.Build(meta, null, _ => Entry("race"), GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(meta, null, _ => Entry("race"), GameRelease.Fallout4, indexed: true);
         Assert.Null(err);
     }
 
     [Fact]
     public void Build_DanglingScalarReference_ReturnsUnresolvedMessage()
     {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000FFF:Test.esp\""), _ => null, GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000FFF:Test.esp\""), _ => null, GameRelease.Fallout4, indexed: true);
         Assert.Equal("[000FFF:Test.esp] <Error: Could not be resolved>", err);
     }
 
@@ -46,14 +46,14 @@ public class CheckErrorBuilderTests
     public void Build_TypeMismatchedReference_NamesTheAllowedSignaturesInOrder()
     {
         var meta = FormKeyMeta with { ValidFormKeyTypes = ["npc_", "lvln", "kywd"] };
-        var err = CheckErrorBuilder.Build(meta, J("\"000001:Test.esp\""), _ => Entry("race"), GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(meta, J("\"000001:Test.esp\""), _ => Entry("race"), GameRelease.Fallout4, indexed: true);
         Assert.Equal("Found a RACE reference, expected: KYWD, LVLN, NPC_", err);
     }
 
     [Fact]
     public void Build_TypeMismatchedScalarReference_ReturnsMismatchMessage()
     {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000001:Test.esp\""), _ => Entry("npc_"), GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000001:Test.esp\""), _ => Entry("npc_"), GameRelease.Fallout4, indexed: true);
         Assert.Equal("Found a NPC_ reference, expected: RACE", err);
     }
 
@@ -64,7 +64,7 @@ public class CheckErrorBuilderTests
         var meta = new FieldMetadata("Keywords", "array", true, [], [], ElementType: elemMeta);
         var value = J("""["000001:Test.esp", null, "000FFF:Test.esp"]""");
 
-        var err = CheckErrorBuilder.Build(meta, value, fk => fk == "000001:Test.esp" ? Entry("kywd") : null, GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(meta, value, fk => fk == "000001:Test.esp" ? Entry("kywd") : null, GameRelease.Fallout4, indexed: true);
 
         Assert.Equal("[2]: [000FFF:Test.esp] <Error: Could not be resolved>", err);
     }
@@ -77,7 +77,7 @@ public class CheckErrorBuilderTests
         var meta = new FieldMetadata("Factions", "array", true, [], [], ElementType: elemMeta);
         var value = J("""[{"Faction": null, "Rank": 0}]""");
 
-        var err = CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4, indexed: true);
 
         Assert.Equal("[0].Faction: Found a NULL reference, expected: FACT", err);
     }
@@ -91,7 +91,7 @@ public class CheckErrorBuilderTests
         var value = J("""[{"Rank": 0}]""");
 
         Assert.Equal("[0].Faction: Found a NULL reference, expected: FACT",
-            CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4));
+            CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4, indexed: true));
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public class CheckErrorBuilderTests
         var meta = new FieldMetadata("Owner", "struct", false, [], [], Fields: [link]);
         var asked = new List<string>();
 
-        CheckErrorBuilder.Build(meta, J("{}"), key => { asked.Add(key); return Entry("npc_"); }, GameRelease.Fallout4);
+        CheckErrorBuilder.Build(meta, J("{}"), key => { asked.Add(key); return Entry("npc_"); }, GameRelease.Fallout4, indexed: true);
 
         Assert.Equal(["000001:Test.esp"], asked);
     }
@@ -110,7 +110,7 @@ public class CheckErrorBuilderTests
     public void Build_EmptyValidTypes_AnyResolvedTypeAccepted()
     {
         var meta = new FieldMetadata("Link", "formKey", false, [], [], AllowsNull: false);
-        var err = CheckErrorBuilder.Build(meta, J("\"000001:Test.esp\""), _ => Entry("npc_"), GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(meta, J("\"000001:Test.esp\""), _ => Entry("npc_"), GameRelease.Fallout4, indexed: true);
         Assert.Null(err);
     }
 
@@ -118,7 +118,7 @@ public class CheckErrorBuilderTests
     public void Build_NonFormKeyField_ReturnsNull()
     {
         var meta = new FieldMetadata("Height", "float", false, [], []);
-        var err = CheckErrorBuilder.Build(meta, J("1.5"), _ => null, GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(meta, J("1.5"), _ => null, GameRelease.Fallout4, indexed: true);
         Assert.Null(err);
     }
 
@@ -131,7 +131,7 @@ public class CheckErrorBuilderTests
         var meta = new FieldMetadata("links", "array", true, [], [], ElementType: elemMeta);
         var value = J("""[{"inner":{"Target":null}}]""");
 
-        var err = CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4, indexed: true);
 
         Assert.Equal("[0].inner.Target: Found a NULL reference, expected: KYWD", err);
     }
@@ -139,7 +139,7 @@ public class CheckErrorBuilderTests
     [Fact]
     public void Build_HardcodedFormKeyMissingFromLookup_ReturnsNull_ForTheImplicitlyAlwaysLoadedMastersRecordsWereNeverInFormLookup()
     {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000007:Fallout4.esm\""), _ => null, GameRelease.Fallout4);
+        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000007:Fallout4.esm\""), _ => null, GameRelease.Fallout4, indexed: true);
         Assert.Null(err);
     }
 }

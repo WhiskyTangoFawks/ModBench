@@ -10,7 +10,7 @@ internal sealed class ConflictClassifier(ILogger logger)
 
     // resolveFormKey (ADR-0005), batched once per Classify so every formKey leaf's
     // Resolutions fills in this pass. loadOrderFormIds orders a keyed array's FormKeys.
-    // outsideTheComparison: columns shown that win no cell. indexed: the whole set is read.
+    // outsideTheComparison: columns shown that win no cell and carry no state.
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         GameRelease release,
@@ -311,7 +311,7 @@ internal sealed class ConflictClassifier(ILogger logger)
             // absent value is not an unset link to report.
             if (ctx.PartialFormColumns.Contains(column)) continue;
             var meta = shapes[column];
-            if (CheckErrorBuilder.Build(meta, value as JsonElement?, resolve, ctx.Release, settled: ctx.Indexed) is { } error)
+            if (CheckErrorBuilder.Build(meta, value as JsonElement?, resolve, ctx.Release, ctx.Indexed) is { } error)
                 checkErrors[column] = error;
             if (meta.Type != "formKey") continue;
             var fk = FormReferences.ExtractString(value);

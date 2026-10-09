@@ -355,26 +355,34 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     private static readonly FormKey AbsentFromLater = FormKey.Factory("000FFF:Later.esp");
 
     [Fact]
-    public async Task GetCompare_ALinkIntoAPluginNotYetIndexed_IsMarkedDanglingOnlyOnceTheIndexIsReady()
+    public async Task ALinkIntoAPluginNotYetIndexed_IsMarkedDanglingOnlyOnceTheIndexIsReady()
     {
-        static IEnumerable<string>? RaceCheckErrors(OpenedIndex index) =>
-            index.Records.GetCompare(NpcWithNoWinnerYet)?.Diffs.Single(d => d.FieldName == "Race").CheckErrors?.Values;
+        static List<string?> DanglingMarks(OpenedIndex index)
+        {
+            var compare = index.Records.GetCompare(NpcWithNoWinnerYet) ?? throw new InvalidOperationException("Expected the record to compare.");
+            return [
+                .. compare.Overrides.SelectMany(o => o.Fields).Where(f => f.Metadata.Name == "Race").Select(f => f.CheckError),
+                .. compare.Diffs.Single(d => d.FieldName == "Race").CheckErrors?.Values ?? []];
+        }
 
-        IEnumerable<string>? whileIndexing = null;
+        List<string?> whileIndexing = [];
         await WhileNoCopyIsFlaggedWinner(
-            index => whileIndexing = RaceCheckErrors(index),
-            index =>
-            {
-                Assert.Null(whileIndexing);
-                Assert.All(RaceCheckErrors(index) ?? [], e => Assert.Contains("Could not be resolved", e, StringComparison.Ordinal));
-                Assert.NotEmpty(RaceCheckErrors(index) ?? []);
-            });
+            index => whileIndexing = DanglingMarks(index),
+            index => Assert.All(DanglingMarks(index), mark => Assert.Contains("Could not be resolved", mark, StringComparison.Ordinal)),
+            raceOfBase: AbsentFromLater);
+
+        Assert.All(whileIndexing, Assert.Null);
+        Assert.NotEmpty(whileIndexing);
     }
 
-    private async Task WhileNoCopyIsFlaggedWinner(Action<OpenedIndex> asked, Action<OpenedIndex>? afterwards = null)
+    private async Task WhileNoCopyIsFlaggedWinner(Action<OpenedIndex> asked, Action<OpenedIndex>? afterwards = null, FormKey? raceOfBase = null)
     {
         var fixture = Built(new PluginFixtureBuilder("record-query")
-            .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("AsTheMasterHasIt").Race.SetTo(AbsentFromLater))
+            .WithPlugin("Base.esm", mod =>
+            {
+                var npc = mod.Npcs.AddNew("AsTheMasterHasIt");
+                if (raceOfBase is { } race) npc.Race.SetTo(race);
+            })
             .WithPlugin("Winner.esp", (mod, earlier) => mod.Npcs.Add(earlier[0].Npcs.Single().DeepCopy()))
             .WithPlugin("Next.esp", (mod, earlier) => mod.Npcs.Add(earlier[0].Npcs.Single().DeepCopy()), enabled: false)
             .WithPlugin("Later.esp"));
@@ -460,7 +468,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
 
         var compare = index.Records.GetCompare("000800:Base.esm");
 
-        Assert.Equal(["00", "FE 000", "01"], compare?.Overrides.Select(o => o.LoadIndex) ?? []);
+        Assert.Equal(["00", "FE:000", "01"], compare?.Overrides.Select(o => o.LoadIndex) ?? []);
     }
 
     [Fact]

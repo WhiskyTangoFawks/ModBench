@@ -89,6 +89,6 @@ public sealed class LoadOrderFormIdKeyOrderTests
     {
         var compare = CompareOf(new Placed(BasePlugin), new Placed(LightPlugin), new Placed(TopPlugin));
 
-        Assert.Equal(["00", "FE 000", "01"], compare.Overrides.Select(o => o.LoadIndex));
+        Assert.Equal(["00", "FE:000", "01"], compare.Overrides.Select(o => o.LoadIndex));
     }
 }

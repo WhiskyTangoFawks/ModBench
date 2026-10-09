@@ -50,7 +50,7 @@ public sealed class RecordTableSchema
     /// <summary>Every column's node in <paramref name="document"/>, null where the document omits it,
     /// checked against what <paramref name="resolve"/> answers. No document holds a header's masters
     /// (ADR-0008), so their column reads null here.</summary>
-    public List<FieldValue> FieldsOf(JsonElement document, Func<string, ResolvedFormKey?> resolve, GameRelease release)
+    public List<FieldValue> FieldsOf(JsonElement document, Func<string, ResolvedFormKey?> resolve, GameRelease release, bool indexed)
     {
         var fields = new List<FieldValue>(RecordColumns.Count);
         foreach (var col in RecordColumns)
@@ -62,7 +62,7 @@ public sealed class RecordTableSchema
             var meta = col.Field;
             // The check reads the shape this record's own class gives the column; the wire keeps the
             // column's whole metadata, variants included, so the editor can pick the same.
-            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, document), value, resolve, release)));
+            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, document), value, resolve, release, indexed)));
         }
         return fields;
     }

@@ -111,6 +111,14 @@ public sealed class CompareFromTextTests : IDisposable
     }
 
     [Fact]
+    public void AnOverriddenCopy_HasNoLoadIndex_ThePluginThatOverridesItKeepsItsOwn()
+    {
+        var compare = Compare(new PluginAddress(ModPlugin.Name, "OtherMod"), OtherChestText);
+
+        Assert.Equal(["00", null, "02"], compare.Overrides.Select(o => o.LoadIndex));
+    }
+
+    [Fact]
     public void AnOverriddenCopy_WhoseOverriderHoldsNoCopy_IsAColumnWhereTheOverriderWouldBe()
     {
         var overridden = new PluginAddress(GapPlugin.Name, "OtherMod");

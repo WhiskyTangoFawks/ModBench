@@ -25,12 +25,13 @@ internal sealed class DuckDbRecordIndexFactory(
 
     /// <summary>A null <paramref name="instanceRoot"/> means an in-memory index that dies with this
     /// object. <paramref name="openedPlugins"/> is what the index's reads answer
-    /// <see cref="IRecordReads.OpenedPlugins"/> with.</summary>
+    /// <see cref="IRecordReads.OpenedPlugins"/> with. <paramref name="indexed"/> says whether the
+    /// whole set is read, which a record's link checks need.</summary>
     public DuckDbRecordIndex? Create(
         GameRelease gameRelease, string? instanceRoot,
-        Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, out string? refusal)
+        Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed, out string? refusal)
     {
-        var store = Open(gameRelease, instanceRoot, openedPlugins, atLeastSequence: null, out refusal);
+        var store = Open(gameRelease, instanceRoot, openedPlugins, indexed, atLeastSequence: null, out refusal);
         try
         {
             if (store is null) return null;
@@ -50,18 +51,18 @@ internal sealed class DuckDbRecordIndexFactory(
     public string? Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence)
     {
         using var store = Open(
-            gameRelease, instanceRoot, () => new Dictionary<PluginAddress, PluginContent>(), atLeastSequence, out var refusal);
+            gameRelease, instanceRoot, () => new Dictionary<PluginAddress, PluginContent>(), () => false, atLeastSequence, out var refusal);
         return refusal;
     }
 
     private Store? Open(
         GameRelease gameRelease, string? instanceRoot,
-        Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins,
+        Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed,
         long? atLeastSequence, out string? refusal)
     {
         var store = new Store(
             _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), schemaReflector, ddlBuilder, plugins,
-            timeProvider, openedPlugins);
+            timeProvider, openedPlugins, indexed);
         refusal = store.Open();
         if (refusal is not null)
         {
