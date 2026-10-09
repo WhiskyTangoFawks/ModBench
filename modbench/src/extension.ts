@@ -2,7 +2,7 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { createMEditClient, stopMEditClient, type MEditClient, type PluginAddress } from './client';
+import { createMEditClient, stopMEditClient, type MEditClient } from './client';
 import { RecordBrowser } from './plugins/RecordBrowser';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
@@ -11,19 +11,19 @@ import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFo
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage } from './sourceLanguage';
-import { saveDirtyPluginSource } from './sourceLanguage/dirtyPluginSource';
+import { savePluginSource } from './sourceLanguage/dirtyPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
 import type { RecordWrite } from './drivingLib/writingGesture';
 import type { SourceEditing } from './drivingLib/sourceEditing';
 import { applyWorkspaceChanges } from './drivingLib/applyWorkspaceChanges';
 import { oneAtATime } from './drivingLib/oneAtATime';
-import { Instance, type InstanceValue } from './instanceLoader/instance';
+import { Instance } from './instanceLoader/instance';
 import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
 import { originFiles, NO_ORIGIN_FILES, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
-import { pluginSourceFolderOf, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
+import type { InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { createStatusBar, type StatusBar } from './plugins/statusBar';
 import { meditConfig, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
@@ -124,11 +124,6 @@ function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened 
   });
 }
 
-async function savePluginSource(value: InstanceValue, { name, origin }: PluginAddress): Promise<string[] | undefined> {
-  const files = originFiles(value, origin);
-  return files && saveDirtyPluginSource(files.file(pluginSourceFolderOf(name)));
-}
-
 function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: OpenedInstance, deps: ViewsDeps): InstanceSide {
   const {
     outputChannel, client, recordBrowser, pluginFacts,
@@ -144,7 +139,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.trackRowsIn');
   const plugins = own(createPluginsView({
     instance, commands: pluginsCommands({ adapter, client }), recordBrowser, client: pluginFacts, pluginSync, channel: outputChannel, statusBar, registerRepositories, reporterFor,
-    ask, recordWrite, sourceEditing: deps.sourceEditing, saveUnsavedPluginSource: (plugin) => savePluginSource(instance.value, plugin), trackSelection, modsView: MODS_KEY_ARGS.view,
+    ask, recordWrite, sourceEditing: deps.sourceEditing, saveUnsavedPluginSource: (plugin) => savePluginSource((origin) => originFiles(instance.value, origin), plugin), trackSelection, modsView: MODS_KEY_ARGS.view,
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     log: (level, msg) => outputChannel[level](msg),
   }));
