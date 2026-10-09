@@ -315,6 +315,13 @@ public sealed class SourceRepository : ISourceRepositoryReads
     public SourceAnswer<SourceChanges> ChangesToPutInWorldspace(PluginAddress plugin, SourceDocument cell, string worldspace) =>
         SourceFailure.Answer(() => Writes.ChangesToPutInWorldspace(Spelled(plugin), cell, worldspace));
 
+    /// <summary>What putting <paramref name="child"/> at the end of <paramref name="slot"/> of
+    /// <paramref name="container"/> changes, written nowhere, inside whichever document carries the container.
+    /// A single-value slot that holds a record is held.</summary>
+    public SourceAnswer<SourceChanges> ChangesToPutChild(
+        PluginAddress plugin, RecordIdentity container, string slot, SourceDocument child) =>
+        SourceFailure.Answer(() => Writes.ChangesToPutChild(Spelled(plugin), container, slot, child));
+
     /// <summary>What changing the FormKey of <paramref name="identity"/> changes, from the text of the document
     /// <paramref name="carrying"/> it, written nowhere. Text the codec cannot give the new key is unreadable.</summary>
     public SourceAnswer<SourceChanges> ChangesToRekey(

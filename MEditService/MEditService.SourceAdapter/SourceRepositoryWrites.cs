@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -61,6 +62,22 @@ internal sealed class SourceRepositoryWrites(
         return locator.LocateToPlace(plugin, cell.Identity) is { } unit
             ? ChangesToHeld(unit, cell)
             : ChangesToPlace(plugin, cell, PlacementIn(worldspace, cell));
+    }
+
+    /// <summary>What putting a new child at the end of <paramref name="slot"/> of <paramref name="container"/>
+    /// changes: the text of the document carrying the container, which is its owner's when it is embedded.</summary>
+    internal SourceChanges ChangesToPutChild(PluginAddress plugin, RecordIdentity container, string slot, SourceDocument child)
+    {
+        var unit = locator.Locate(plugin, container) is { } held && (held.IsEmbedded || File.Exists(held.FullPath))
+            ? held
+            : throw SourceStopException.NotCarried(
+                $"No document in {plugin.Name}'s tree holds {container.FormKey}, so there is no slot to put a child in. " +
+                SourceFailure.NotCarried.MovedOrRemovedOutside);
+        var ownerText = Encoding.UTF8.GetString(OwnerBytes(unit));
+        var withChild = Read(() => ContainerDocumentEdits.WithChildAppended(
+                ownerText, _release, unit.OwnerRecordType, container.FormKey, slot, child.Body, child.RecordType))
+            ?? throw NoLongerCarried(unit, container.FormKey);
+        return Written(unit.FullPath, withChild);
     }
 
     /// <summary>What rewriting a document the tree holds changes: its text, inside its owner's when embedded, and
@@ -143,6 +160,10 @@ internal sealed class SourceRepositoryWrites(
         try
         {
             return read();
+        }
+        catch (ChildSlotHeldByAnotherRecordException ex)
+        {
+            throw SourceStopException.Of(new SourceFailure.SlotHeld(ex.Message), ex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
