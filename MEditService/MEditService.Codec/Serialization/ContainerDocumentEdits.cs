@@ -3,7 +3,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Codec.Serialization;
 
 /// <summary>A container's child slots changed as documents: the codec reads the text, edits the
-/// graph it built, and writes the text back (ADR-0005).</summary>
+/// graph it built, and writes the text back, or splices in only what an append adds (ADR-0005).</summary>
 public static class ContainerDocumentEdits
 {
     /// <summary>The record's own fields alone, every child slot cleared — what an own-fields copy
@@ -17,15 +17,16 @@ public static class ContainerDocumentEdits
     }
 
     /// <summary>The container's own text with <paramref name="childText"/> appended to
-    /// <paramref name="slotName"/>.</summary>
-    public static string WithChildAppended(
+    /// <paramref name="slotName"/>, and its other bytes as they were.</summary>
+    public static ChildAppend WithChildAppended(
         string containerText, GameRelease release, string? containerRecordType,
         string slotName, string childText, string? childRecordType)
     {
         var container = RecordTextCodec.Deserialize(containerText, release, containerRecordType);
-        ContainerChildFields.AddChildToSlot(
-            container, slotName, RecordTextCodec.Deserialize(childText, release, childRecordType));
-        return RecordTextCodec.SerializeToText(container, release);
+        var child = RecordTextCodec.Deserialize(childText, release, childRecordType);
+        return ContainerChildFields.TryAddChildToSlot(container, slotName, child, out var held)
+            ? new ChildAppend.Appended(ChildTextInsertion.Inserted(containerText, RecordTextCodec.SerializeToBytes(container, release), slotName))
+            : new ChildAppend.SlotHeld(slotName, held.FormKey.ToString());
     }
 
     /// <summary><paramref name="destinationText"/> with its own fields replaced by
