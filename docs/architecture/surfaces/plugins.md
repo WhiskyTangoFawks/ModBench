@@ -55,7 +55,7 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 - A plugin that failed to read stays failed until its bytes change or I refresh.
 - A malformed plugin's reasons are also in the Problems panel, on the plugin file. Source: commands.md, Surfaces and their templates
 - A plugin that changed outside Modbench is also a warning in the Problems panel, on the plugin file, while its bytes differ from what Modbench last wrote. Source: ADR-0003
-- A plugin whose plugin source is unreadable shows the records of its plugin file, read-only, until decompile writes its source. Source: ruling
+- A plugin whose plugin source is unreadable on disk shows the records of its plugin file, read-only, until decompile writes its source. An unsaved document that does not read is a failed later read, as [common.md](common.md), States, story 6 says. Source: ruling
 
 ### A plugin the game loads with no line
 
