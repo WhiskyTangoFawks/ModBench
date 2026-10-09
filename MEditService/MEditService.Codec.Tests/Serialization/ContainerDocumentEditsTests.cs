@@ -1,6 +1,5 @@
 using System.Text.Json;
 using MEditService.Codec.Serialization;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -25,10 +24,10 @@ public sealed class ContainerDocumentEditsTests
     private static string[] EditorIdsIn(JsonElement owner, string slot) =>
         owner.TryGetProperty(slot, out var held) ? [.. held.EnumerateArray().Select(EditorIdOf)] : [];
 
-    private static string? Appended(Worldspace worldspace, Cell cell) =>
+    private static string Appended(Worldspace worldspace, Cell cell) =>
         ContainerDocumentEdits.WithChildAppended(
             Text(worldspace), GameRelease.Fallout4, RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(worldspace),
-            worldspace.FormKey.ToString(), "TopCell", Text(cell), RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(cell));
+            "TopCell", Text(cell), RecordTypes.For(GameRelease.Fallout4).RecordTypeOf(cell));
 
     [Fact]
     public void AppendingToAWorldspacesPersistentCell_WhenItHoldsNone_SetsIt()
@@ -37,7 +36,7 @@ public sealed class ContainerDocumentEditsTests
         var worldspace = new Worldspace(mod) { EditorID = "World" };
         var cell = new Cell(mod) { EditorID = "Persistent" };
 
-        Assert.Contains(cell.FormKey.ToString(), Appended(worldspace, cell).Require(), StringComparison.Ordinal);
+        Assert.Contains(cell.FormKey.ToString(), Appended(worldspace, cell), StringComparison.Ordinal);
     }
 
     [Fact]

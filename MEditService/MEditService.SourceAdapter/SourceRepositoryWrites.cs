@@ -77,8 +77,7 @@ internal sealed class SourceRepositoryWrites(
         var containerText = DocumentText.RecordBodyFromOwnerBytes(OwnerBytes(unit), unit, container.FormKey, _release)
             ?? throw NoLongerCarried(unit, container.FormKey);
         var withChild = Read(() => ContainerDocumentEdits.WithChildAppended(
-                containerText, _release, container.RecordType, container.FormKey, slot, child.Body, child.RecordType))
-            ?? throw NoLongerCarried(unit, container.FormKey);
+            containerText, _release, container.RecordType, slot, child.Body, child.RecordType));
         return ChangesToHeld(unit, new SourceDocument(container.FormKey, container.RecordType, container.EditorId, withChild));
     }
 
