@@ -1,3 +1,4 @@
+import type { Reporter } from '../ports/reporter';
 import type { SyncFailureReport } from '../drivingLib/syncFailureReport';
 import type { Told } from '../instanceCommands/editing';
 import type { PutLoadOrderResult } from '../instanceCommands/loadOrder';
@@ -13,10 +14,7 @@ export interface EditingViewDeps {
     while(work: () => Promise<void>): Promise<void>;
     say(message: string): void;
   };
-  reportPut: (message: string) => void;
-  reportEntry: (message: string) => void;
-  reportExit: (message: string) => void;
-  reportLaunch: (message: string, reason: string) => void;
+  reporterFor: (tag: string) => Reporter;
   log: { info(message: string): void; error(message: string): void };
   revealLog: () => void;
   /** The load order the loader refused to build, the Plugins view's message line and the Output. */
@@ -26,7 +24,11 @@ export interface EditingViewDeps {
 const STOPPED = 'mEdit stopped. Reload the window to start it again.';
 
 export function editingView(deps: EditingViewDeps) {
-  const { narrator, progress, reportPut, reportEntry, reportExit, reportLaunch, log, revealLog, loadOrderPut } = deps;
+  const { narrator, progress, reporterFor, log, revealLog, loadOrderPut } = deps;
+  const reportPut = (message: string) => { reporterFor('loadOrder').report('error', message); };
+  const reportEntry = (message: string) => { reporterFor('enterEditing').report('error', message); };
+  const reportExit = (message: string) => { reporterFor('mEditExit').report('error', message); };
+  const reportLaunch = (message: string, reason: string) => { reporterFor('launch').report('error', message, reason); };
 
   const around = (entry: () => Promise<void>): Promise<void> => progress.while(async () => {
     revealLog();

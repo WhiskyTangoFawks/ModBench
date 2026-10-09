@@ -8,7 +8,7 @@ vi.mock('vscode', () => ({
 
 import { compilableSelected, pluginsKeyContext } from '../gestureEntry';
 import { pluralArgument, selectionArgument, singularArgument } from '../../drivingLib/gestureEntry';
-import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
+import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
 import type { RecordBrowserNode } from '../RecordBrowser';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 import { cellRow, recordGroupRow, recordRow } from './browserRows';

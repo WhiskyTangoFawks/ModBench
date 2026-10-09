@@ -3,6 +3,7 @@ import type { PutLoadOrderResult } from '../../instanceCommands/loadOrder';
 import { reportSyncFailures } from '../../drivingLib/syncFailureReport';
 import { createReconcileNarrator } from '../reconcileNarrator';
 import { editingView } from '../editingView';
+import { recordingReporter } from '../../test/surfacingDoubles';
 
 type Sent = Extract<PutLoadOrderResult, { sent: true }>;
 type Outcome = Sent['outcome'];
@@ -37,10 +38,15 @@ function wired() {
   const loadOrderPut = reportSyncFailures('put load order', 'The load order is not sent', (line) => lines.push(line));
   const view = editingView({
     narrator, progress, log, loadOrderPut,
-    reportPut: (message) => { putReports.push(message); },
-    reportEntry: (message) => { entryReports.push(message); },
-    reportExit: (message) => { exitReports.push(message); },
-    reportLaunch: (message, reason) => { launchReports.push([message, reason]); },
+    reporterFor: (tag) => ({
+      ...recordingReporter(),
+      report: (_severity, message, reason) => {
+        if (tag === 'loadOrder') putReports.push(message);
+        if (tag === 'enterEditing') entryReports.push(message);
+        if (tag === 'mEditExit') exitReports.push(message);
+        if (tag === 'launch') launchReports.push([message, reason ?? '']);
+      },
+    }),
     revealLog: () => { revealed.count++; },
   });
   return { view, handed, said, putReports, entryReports, exitReports, launchReports, logged, revealed, loadOrderPut, lines };

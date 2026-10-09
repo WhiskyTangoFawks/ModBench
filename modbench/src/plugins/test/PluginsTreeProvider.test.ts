@@ -36,10 +36,8 @@ vi.mock('vscode', async () => {
 });
 
 import * as vscode from 'vscode';
-import {
-  PluginsTreeProvider, PluginNode, ImplicitMasterNode, NO_PLUGINS_MESSAGE,
-  type PluginsTreeNode,
-} from '../PluginsTreeProvider';
+import { PluginsTreeProvider, NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
+import { PluginNode, ImplicitMasterNode, type PluginsTreeNode } from '../pluginRows';
 import { RecordBrowser } from '../RecordBrowser';
 import { pluginsTreeOver } from './pluginsTreeOver';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';

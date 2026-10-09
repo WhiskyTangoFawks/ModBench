@@ -25,7 +25,7 @@ import { instanceSyncs } from '../syncWiring';
 import { pluginSyncOver } from '../pluginsCommands/plugins';
 import { modSyncOver } from '../modlist/modlist';
 import { registerRenamePluginCommand } from '../plugins/pluginRenameCommand';
-import { PluginNode } from '../plugins/PluginsTreeProvider';
+import { PluginNode } from '../plugins/pluginRows';
 import { recordingReporter, scriptedDialog } from './surfacingDoubles';
 import { present } from '../ports/present';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';

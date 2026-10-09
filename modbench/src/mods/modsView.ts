@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { Instance, InstanceValue, InstanceView } from '../instanceLoader/instance';
+import type { Instance, InstanceValue, InstanceView, ModSyncArguments } from '../instanceLoader/instance';
 import type { InstallCommands } from '../install/install';
 import type { ModlistCommands } from '../modlist/modlist';
 import type { Reporter } from '../ports/reporter';
@@ -10,7 +10,7 @@ import type { NexusModRow } from '../drivingLib/inFocusedView';
 import { errorMessage } from '../ports/errorMessage';
 import { messageLine, registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
-import type { ModSync } from './modSync';
+import type { Sync } from '../drivingLib/syncFailureReport';
 import { modsKeyContext } from './gestureEntry';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
@@ -38,7 +38,7 @@ interface ModsViewDeps {
   /** The one selected mod row with a Nexus id in the focused Mods or Downloads view, for the palette. */
   nexusRow: () => NexusModRow | undefined;
   /** Mod sync, whose failure the view's message line says. */
-  modSync: ModSync;
+  modSync: Sync<ModSyncArguments>;
 }
 
 interface ModsView extends vscode.Disposable {

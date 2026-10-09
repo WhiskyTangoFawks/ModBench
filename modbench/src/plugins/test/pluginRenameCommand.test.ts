@@ -29,7 +29,7 @@ import { oneAtATime } from '../../drivingLib/oneAtATime';
 import type { SourceEditing } from '../../drivingLib/sourceEditing';
 import { progressSteps } from '../../test/recordedProgress';
 import { registerRenamePluginCommand } from '../pluginRenameCommand';
-import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
+import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { AskQuestion } from '../../ports/dialog';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';

@@ -3,7 +3,7 @@ import { isRefused, type GridPosition, type MEditClient, type PluginAddress, typ
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import { registerGesture, singularArgument, type RowOf } from '../drivingLib/gestureEntry';
-import type { PluginsTreeNode } from './PluginsTreeProvider';
+import type { PluginsTreeNode } from './pluginRows';
 import type { CreatedRecordWatch, RecordPlace } from './createdRecordSelection';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { SourceEditing } from '../drivingLib/sourceEditing';
