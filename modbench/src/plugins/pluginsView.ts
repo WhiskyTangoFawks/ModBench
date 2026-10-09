@@ -57,6 +57,8 @@ export interface PluginsViewDeps {
   ask: AskQuestion;
   recordWrite: RecordWrite;
   sourceEditing: SourceEditing;
+  /** Saves the unsaved plugin source under a folder; answers the paths VS Code left unsaved. */
+  saveUnsavedPluginSource: (folder: string) => Promise<string[]>;
   /** The rows of the focused Mods or Plugins view, which the palette's track acts on. */
   trackSelection: () => readonly unknown[];
   /** The Mods view's id, whose bar a track from a Mods row runs under. */
@@ -168,7 +170,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
 }
 
 function registerPluginGestures(
-  { instance, adapter, client, ask, registerRepositories, pluginSync, reporterFor, recordWrite, sourceEditing, trackSelection, modsView }: PluginsViewDeps,
+  { instance, adapter, client, ask, registerRepositories, pluginSync, reporterFor, recordWrite, sourceEditing, saveUnsavedPluginSource, trackSelection, modsView }: PluginsViewDeps,
   { tree, view, progress, selection, compileProblems }: {
     tree: PluginsTreeProvider; view: vscode.TreeView<PluginsTreeNode>; progress: PluginsViewProgress;
     selection: () => readonly PluginsTreeNode[]; compileProblems: CompileProblems;
@@ -182,7 +184,7 @@ function registerPluginGestures(
     registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
     registerCompileCommand({
       client, instance, reporter: reporterFor('plugin.compile'), problems: compileProblems,
-      originFiles: (origin) => originFiles(instance.value, origin),
+      originFiles: (origin) => originFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
     }, selection),
     registerRecordCreateCommand({
       client, reporter: reporterFor('record.create'), write: recordWrite, source: sourceEditing,

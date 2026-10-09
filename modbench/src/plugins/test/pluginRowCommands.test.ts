@@ -305,7 +305,7 @@ const valueWithFolders = (folders: { overwriteDir?: string; modDirs?: ReadonlyMa
 describe('modbench.plugin.compile', () => {
   const PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
-  const PATCH_FILES = originFiles(valueWithFolders({ modDirs: new Map([['ModA', '/instance/mods/ModA']]) }), 'ModA');
+  const FILES = valueWithFolders({ modDirs: new Map([['ModA', '/instance/mods/ModA'], ['ModB', '/instance/mods/ModB']]) });
 
   function row(plugin: { name: string; origin: string }, contextValue = 'plugin enabled inTrackedMod tracked editable'): PluginNode {
     const node = new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
@@ -313,7 +313,7 @@ describe('modbench.plugin.compile', () => {
     return node;
   }
 
-  function registered(client: InMemoryMEditClient, options: { viewSelection?: readonly PluginNode[] } = {}) {
+  function registered(client: InMemoryMEditClient, options: { viewSelection?: readonly PluginNode[]; unsaved?: Record<string, string[]> } = {}) {
     const reporter = recordingReporter();
     const diagnostics = new FakeDiagnosticCollection();
     client.setQueryAnswer('getPlugins', [
@@ -332,7 +332,11 @@ describe('modbench.plugin.compile', () => {
       },
       instance: instanceThatReads,
       reporter, problems: new CompileProblems(diagnostics),
-      originFiles: (origin) => (origin === 'ModA' ? PATCH_FILES : undefined),
+      originFiles: (origin) => (origin === 'ModA' || origin === 'ModB' ? originFiles(FILES, origin) : undefined),
+      saveUnsaved: (folder) => {
+        progressSteps.push(`save ${folder}`);
+        return Promise.resolve(options.unsaved?.[folder] ?? []);
+      },
     }, () => options.viewSelection ?? []);
     return {
       handler: present(handlers.get('modbench.plugin.compile'), 'the compile command registerCompileCommand registers'),
@@ -351,10 +355,66 @@ describe('modbench.plugin.compile', () => {
 
     expect(compileCalls(client)).toEqual([[[PATCH]]]);
     expect(progressSteps).toEqual([
-      'progress opens on modbench.pluginListTree', 'compile', 'Instance loader: read every file again', 'progress closes',
+      'save /instance/mods/ModA/plugin-source/MyPatch.esp', 'progress opens on modbench.pluginListTree', 'compile', 'Instance loader: read every file again', 'progress closes',
     ]);
     expect(reporter.landings).toEqual(['Compiled "MyPatch.esp".']);
     expect(reporter.reports).toEqual([]);
+  });
+
+  it('saves the plugin\'s plugin source folder first, before the compile writes', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('compile', { landed: [compiledPluginFixture({ plugin: PATCH })], refused: [] });
+    const { handler } = registered(client);
+
+    await handler(row(PATCH));
+
+    expect(progressSteps.filter((step) => step.startsWith('save') || step === 'compile')).toEqual([
+      'save /instance/mods/ModA/plugin-source/MyPatch.esp', 'compile',
+    ]);
+  });
+
+  it('refuses the compile, naming each document VS Code did not save, and calls mEdit not at all', async () => {
+    const client = new InMemoryMEditClient();
+    const { handler, reporter } = registered(client, { unsaved: { '/instance/mods/ModA/plugin-source/MyPatch.esp': ['/instance/mods/ModA/plugin-source/MyPatch.esp/A.json'] } });
+
+    await handler(row(PATCH));
+
+    expect(compileCalls(client)).toEqual([]);
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not compile: VS Code did not save its plugin source.',
+      detail: '/instance/mods/ModA/plugin-source/MyPatch.esp/A.json',
+    }]);
+    expect(reporter.landings).toEqual([]);
+  });
+
+  it('saves every selected plugin, refuses when one of them has a document left unsaved, and compiles none', async () => {
+    const client = new InMemoryMEditClient();
+    const { handler, reporter } = registered(client, {
+      unsaved: { '/instance/mods/ModB/plugin-source/Other.esp': ['/instance/mods/ModB/plugin-source/Other.esp/B.json'] },
+    });
+    const rows = [row(PATCH), row(OTHER)];
+
+    await handler(rows[0], rows);
+
+    expect(progressSteps).toEqual([
+      'save /instance/mods/ModA/plugin-source/MyPatch.esp', 'save /instance/mods/ModB/plugin-source/Other.esp',
+    ]);
+    expect(compileCalls(client)).toEqual([]);
+    expect(reporter.reports.map((r) => r.detail)).toEqual(['/instance/mods/ModB/plugin-source/Other.esp/B.json']);
+  });
+
+  it('refuses, naming the plugin, when its origin has no folder to hold plugin source', async () => {
+    const client = new InMemoryMEditClient();
+    const { handler, reporter } = registered(client);
+    const stray = { name: 'Stray.esp', origin: 'ModZ' };
+
+    await handler(row(stray));
+
+    expect(compileCalls(client)).toEqual([]);
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not compile: no folder for the plugin source of these plugins.',
+      detail: 'Stray.esp (ModZ)',
+    }]);
   });
 
   it('compiles the whole selection in one call, and one notification names each refused plugin and why', async () => {

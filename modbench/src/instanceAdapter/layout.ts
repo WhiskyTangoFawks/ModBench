@@ -129,6 +129,9 @@ export const modGitDir = (modFolder: string): string => join(modFolder, GIT_DIR)
 // Names in a mod folder match without case, as Windows matches them, on every platform alike.
 const nameKey = (name: string): string => name.toLowerCase();
 
+/** A plugin's plugin source folder, relative to its mod folder. */
+export const pluginSourceFolderOf = (pluginName: string): string => join(PLUGIN_SOURCE_FOLDER, pluginName);
+
 /** Whether an entry at a mod folder's root is its plugin source. */
 export const isPluginSourceFolder = (name: string): boolean => nameKey(name) === PLUGIN_SOURCE_FOLDER;
 
