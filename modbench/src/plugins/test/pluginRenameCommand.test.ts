@@ -25,7 +25,7 @@ vi.mock('vscode', async () => {
   };
 });
 
-import type { OneAtATime } from '../../drivingLib/oneAtATime';
+import { oneAtATime } from '../../drivingLib/oneAtATime';
 import { progressSteps } from '../../test/recordedProgress';
 import { registerRenamePluginCommand } from '../pluginRenameCommand';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
@@ -72,7 +72,7 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
   const source = {
     unsaved: () => [{ path: '/instance/mods/ModA/plugin-source/Patch.esp/h.json', text: '{}' }],
     applyWorkspaceChanges: vi.fn().mockResolvedValue([]),
-    oneAtATime: vi.fn(((job: () => Promise<unknown>) => job()) as OneAtATime),
+    oneAtATime: vi.fn(oneAtATime()),
     refreshSourceControlFor: vi.fn(),
   };
   registerRenamePluginCommand({ client, adapter, ask, instance, reporter, source }, () => selection);
