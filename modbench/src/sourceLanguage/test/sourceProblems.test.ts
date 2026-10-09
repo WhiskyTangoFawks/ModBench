@@ -252,8 +252,8 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   it('keeps the last answer when mEdit cannot answer, saying so in the Output once for each reason', async () => {
     const { client, answered, published, reporter } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
-    client.setQueryFailureOnce('getPluginProblems', new Error('getPluginProblems timed out after 30000ms'));
-    client.setQueryFailureOnce('getPluginProblems', new Error('getPluginProblems timed out after 30000ms'));
+    client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
+    client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
 
     reconciledAgain(client);
     reconciledAgain(client);
@@ -262,7 +262,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
 
     expect(published).toHaveLength(2);
     expect(reporter.shownOnSurface.mock.calls).toEqual([
-      ['warning', 'The Problems panel shows mEdit\'s last answer.', 'getPluginProblems timed out after 30000ms'],
+      ['warning', 'The Problems panel shows mEdit\'s last answer.', 'mEdit did not answer in time.'],
     ]);
   });
 
@@ -286,7 +286,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     reconciledAgain(client);
 
     await answered([]);
-    overtaken(new Error('getPluginProblems timed out after 30000ms'));
+    overtaken(new Error('mEdit did not answer in time.'));
     await answered([]);
 
     expect(reporter.shownOnSurface).not.toHaveBeenCalled();
@@ -296,7 +296,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     const { client, published } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
     let older!: (answer: PluginProblems[]) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { older = resolve; }));
-    client.setQueryFailureOnce('getPluginProblems', new Error('getPluginProblems timed out after 30000ms'));
+    client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
     reconciledAgain(client);
     reconciledAgain(client);
     await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3); });
@@ -309,9 +309,9 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   it('says in the language status that it shows the last good read, and why, until the next good answer clears it', async () => {
     const { client, answered, status } = feed({ '/mods/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
-    client.setQueryFailureOnce('getPluginProblems', new Error('getPluginProblems timed out after 30000ms'));
+    client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
     reconciledAgain(client);
-    await vi.waitFor(() => { expect(status.at(-1)).toBe('Showing the last good read: getPluginProblems timed out after 30000ms'); });
+    await vi.waitFor(() => { expect(status.at(-1)).toBe('Showing the last good read: mEdit did not answer in time.'); });
 
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
@@ -383,7 +383,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     const { client, answered, status } = feed({});
     let older!: (answer: PluginProblems[]) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { older = resolve; }));
-    client.setQueryFailureOnce('getPluginProblems', new Error('timed out'));
+    client.setQueryFailureOnce('getPluginProblems', { failed: 'refused', refusal: 'timed out' });
     reconciledAgain(client);
     reconciledAgain(client);
     await vi.waitFor(() => { expect(status.at(-1)).toBe('Showing the last good read: timed out'); });
@@ -404,8 +404,8 @@ describe('feedSourceProblems, when mEdit cannot take the unsaved plugin source',
   it('says so in the language status, with one line in the Output for a reason told again', () => {
     const { client, reporter, status } = feed({});
 
-    client.settleHandOver('connection reset');
-    client.settleHandOver('connection reset');
+    client.settleHandOver({ failed: 'refused', refusal: 'connection reset' });
+    client.settleHandOver({ failed: 'refused', refusal: 'connection reset' });
 
     expect(status.at(-1)).toBe(lastRead('connection reset'));
     expect(reporter.shownOnSurface.mock.calls).toEqual([
@@ -415,7 +415,7 @@ describe('feedSourceProblems, when mEdit cannot take the unsaved plugin source',
 
   it('clears the language status once the next hand-over lands', () => {
     const { client, status } = feed({});
-    client.settleHandOver('connection reset');
+    client.settleHandOver({ failed: 'refused', refusal: 'connection reset' });
 
     client.settleHandOver(undefined);
 

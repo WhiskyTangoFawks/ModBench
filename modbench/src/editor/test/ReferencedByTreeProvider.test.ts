@@ -82,7 +82,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
   it('shows one error row naming the reason, with no count, when the first read fails, and logs it once', async () => {
     const log = vi.fn();
     const client = makeClient();
-    client.setQueryFailure('getReferences', new Error('boom'));
+    client.setQueryFailure('getReferences', { failed: 'refused', refusal: 'boom' });
     const provider = new ReferencedByTreeProvider(client, log);
     provider.showFor('000001:Fallout4.esm');
     const [error, ...rest] = await provider.getChildren();
@@ -99,7 +99,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     client.emit(loadOrderStatus(true));
     provider.showFor('000001:Fallout4.esm');
     await provider.getChildren();
-    client.setQueryFailure('getReferences', new Error('boom'));
+    client.setQueryFailure('getReferences', { failed: 'refused', refusal: 'boom' });
     client.emit(rowsChanged());
     expect(await provider.getChildren()).toHaveLength(1);
     expect(provider.viewMessage()).toBe('Showing the last good read: boom');

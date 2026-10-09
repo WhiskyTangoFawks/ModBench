@@ -4,6 +4,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { problemSpan } from './sourceText';
+import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
 
@@ -118,11 +119,12 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     else if (handOverFailed !== undefined) languageStatus(lastRead(`mEdit could not take the unsaved plugin source: ${handOverFailed}`));
     else languageStatus(unplacedStatus);
   };
-  const handedOver = (failure: string | undefined) => {
-    if (failure !== undefined && failure !== handOverFailed) {
-      reporter.shownOnSurface('warning', 'The Problems panel shows what mEdit last took of the unsaved plugin source.', failure);
+  const handedOver = (failure: ReadFailed | undefined) => {
+    const why = failure && failureReason(failure);
+    if (why !== undefined && why !== handOverFailed) {
+      reporter.shownOnSurface('warning', 'The Problems panel shows what mEdit last took of the unsaved plugin source.', why);
     }
-    handOverFailed = failure;
+    handOverFailed = why;
     showStatus();
   };
   let answeredAtSubscribe = false;
@@ -148,7 +150,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const ask = async (atSubscribe = false) => {
     const mine = ++latest;
     try {
-      const answer = await placed(await client.getPluginProblems(), deps);
+      const answer = await placed(answerOf(await client.getPluginProblems()), deps);
       if (atSubscribe) answeredAtSubscribe = true;
       settle(mine, answer);
     } catch (error) {

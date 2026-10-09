@@ -152,7 +152,7 @@ describe('modbench.record.create', () => {
 
   it('says why when mEdit cannot name the types, and creates nothing', async () => {
     const { client, steps, reporter, create } = harness();
-    client.setQueryFailure('getCreatableRecordTypes', new Error('mEdit is not running'));
+    client.setQueryFailure('getCreatableRecordTypes', { failed: 'refused', refusal: 'mEdit is not running' });
 
     await create(PLUGIN_ROW);
 
@@ -334,7 +334,7 @@ describe('modbench.record.create on a container', () => {
 
   it('says why when mEdit cannot name the types the container holds, and creates nothing', async () => {
     const { client, steps, reporter, create } = harness();
-    client.setQueryFailure('getChildRecordTypes', new Error('mEdit is not running'));
+    client.setQueryFailure('getChildRecordTypes', { failed: 'refused', refusal: 'mEdit is not running' });
 
     await create(QUEST_ROW);
 

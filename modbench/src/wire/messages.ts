@@ -2,6 +2,7 @@ import type { components } from './generated/api';
 import type { PluginAddress } from './pluginAddress';
 import type { ArgumentOf } from './argument';
 import type { ColumnKey } from './columnKey';
+import { isReadFailed, type ReadFailed } from './readFailed';
 
 export const EXTENSION_TO_WEBVIEW = {
   LOAD_RECORD: 'loadRecord',
@@ -241,7 +242,7 @@ export type RecordLoadAnswer =
       // The origin of the mod whose file overrides the tab's plugin; null when none does.
       fileOverriddenBy: string | null;
     } & RecordRead)
-  | { ok: false; error: string };
+  | { ok: false; failure: ReadFailed };
 
 /** What the read gave: the comparison, or the records held by no plugin at all (editor.md, States, story 4)
  *  with mEdit's word on each copy only the plugin it names lacks (story 2). */
@@ -388,13 +389,13 @@ function parseFormKeyPicked(w: { requestId?: unknown; formKey?: unknown }): Exte
 }
 
 function parseRecordLoadAnswer(w: {
-  requestId?: unknown; ok?: unknown; compare?: unknown; gone?: unknown; copiesLacking?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
+  requestId?: unknown; ok?: unknown; compare?: unknown; gone?: unknown; copiesLacking?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; failure?: unknown;
   documentPlugin?: unknown; modsByOrigin?: unknown;
 }): { requestId: string } & RecordLoadAnswer {
   if (!isString(w.requestId)) throw new Error('Expected "recordLoadAnswered" to carry a string requestId.');
   if (w.ok === false) {
-    if (!isString(w.error)) throw new Error('Expected a refused "recordLoadAnswered" to carry a string error.');
-    return { requestId: w.requestId, ok: false, error: w.error };
+    if (!isReadFailed(w.failure)) throw new Error('Expected a failed "recordLoadAnswered" to carry a read failure.');
+    return { requestId: w.requestId, ok: false, failure: w.failure };
   }
   if (w.ok !== true) throw new Error('Expected "recordLoadAnswered" to carry a boolean ok.');
   return { requestId: w.requestId, ...parseAnswered(w) };

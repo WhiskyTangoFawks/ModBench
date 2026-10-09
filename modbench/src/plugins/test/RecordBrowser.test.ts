@@ -672,7 +672,7 @@ describe('RecordBrowser fetch failures', () => {
 
   it('getPluginChildren: renders an error node when getRecordTypes fails', async () => {
     const repo = makeClient();
-    repo.setQueryFailure('getRecordTypes', new Error('boom'));
+    repo.setQueryFailure('getRecordTypes', { failed: 'refused', refusal: 'boom' });
     const provider = new RecordBrowser(repo);
 
     const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
@@ -682,7 +682,7 @@ describe('RecordBrowser fetch failures', () => {
 
   it('fetchRecords: renders an error node when getRecords fails', async () => {
     const repo = makeClient();
-    repo.setQueryFailure('getRecords', new Error('boom'));
+    repo.setQueryFailure('getRecords', { failed: 'refused', refusal: 'boom' });
     const provider = new RecordBrowser(repo);
     const node = await soleGroup(provider, PLUGIN0);
 
@@ -693,7 +693,7 @@ describe('RecordBrowser fetch failures', () => {
 
   it('fetchWorldspaces: renders an error node when getWorldspaces fails', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryFailure('getWorldspaces', new Error('boom'));
+    repo.setQueryFailure('getWorldspaces', { failed: 'refused', refusal: 'boom' });
     const provider = new RecordBrowser(repo);
     const node = await soleGroup(provider, PLUGIN0);
 
@@ -705,7 +705,7 @@ describe('RecordBrowser fetch failures', () => {
   it('fetchWorldspaceChildren: renders an error node when getWorldspaceBlocks fails', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
     repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
-    repo.setQueryFailure('getWorldspaceBlocks', new Error('boom'));
+    repo.setQueryFailure('getWorldspaceBlocks', { failed: 'refused', refusal: 'boom' });
     const provider = new RecordBrowser(repo);
     const node = await soleChild(provider, await soleGroup(provider, PLUGIN0), 'the worldspace group');
 
@@ -716,7 +716,7 @@ describe('RecordBrowser fetch failures', () => {
 
   it('fetchCellGroups: renders an error node when getCellChildRecords fails', async () => {
     const repo = makeClient();
-    repo.setQueryFailure('getCellChildRecords', new Error('boom'));
+    repo.setQueryFailure('getCellChildRecords', { failed: 'refused', refusal: 'boom' });
     const provider = new RecordBrowser(repo);
     const node = await interiorCellRow(repo, provider, interiorCell('c:M.esp', 'TheCell'));
 
@@ -727,7 +727,7 @@ describe('RecordBrowser fetch failures', () => {
 
   it('fetchInteriorCells: renders an error node when getInteriorCells fails', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'cell', count: 1 }] });
-    repo.setQueryFailure('getInteriorCells', new Error('boom'));
+    repo.setQueryFailure('getInteriorCells', { failed: 'refused', refusal: 'boom' });
     const provider = new RecordBrowser(repo);
     const node = await soleGroup(provider, PLUGIN0);
 

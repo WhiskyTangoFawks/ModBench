@@ -2,6 +2,7 @@ import type { NotificationEvent } from '../apiClient';
 import type { PluginAddress, PluginMetadata, PluginRecordTypeCount, RecordSummary } from '../index';
 import type { CompiledPlugin } from '../apiClient';
 import type { InMemoryMEditClient } from './InMemoryMEditClient';
+import { isReadFailed } from '../../wire/readFailed';
 
 /** A `PluginMetadata` with every required wire member at its neutral value — a test naming only
  *  the fields it cares about needs no cast to reach the wire type. */
@@ -64,6 +65,7 @@ export function listsForThePluginAsked(client: InMemoryMEditClient): InMemoryMEd
   client.getRecords = async (...asked) => {
     const [{ name: plugin, origin }] = asked;
     const page = await scripted(...asked);
+    if (isReadFailed(page)) return page;
     return { ...page, items: page.items.map((record) => ({ ...record, plugin, origin })) };
   };
   return client;

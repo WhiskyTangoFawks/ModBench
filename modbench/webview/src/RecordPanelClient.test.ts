@@ -107,9 +107,9 @@ describe('RecordPanelClient.load', () => {
 
   it('fails the whole load when the host answers refused', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
-    answer(lastRequestId(), { ok: false, error: 'HTTP 404' });
+    answer(lastRequestId(), { ok: false, failure: { failed: 'refused', refusal: 'No such record.' } });
 
-    expect(await promise).toEqual({ ok: false, error: 'HTTP 404' });
+    expect(await promise).toEqual({ ok: false, failure: { failed: 'refused', refusal: 'No such record.' } });
   });
 
   it('leaves plugins null when the host answers with a null plugin list', async () => {

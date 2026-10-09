@@ -3,6 +3,7 @@ import type { MEditClient, RecordFilter } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import type { RecordBrowser } from './RecordBrowser';
+import { answerOf } from '../wire/readFailed';
 
 export interface FilterCommandDeps {
   client: Pick<MEditClient, 'setFilter' | 'clearFilter' | 'getActiveFilter' | 'onNotification'>;
@@ -59,7 +60,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
   const showHeld = async (): Promise<void> => {
     const read = ++reads;
     try {
-      const held = await client.getActiveFilter();
+      const held = answerOf(await client.getActiveFilter());
       if (read === reads) show(held);
     } catch (e) {
       reporter.report('error', 'Could not read the record filter', errorMessage(e));

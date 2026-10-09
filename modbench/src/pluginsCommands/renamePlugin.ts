@@ -6,6 +6,7 @@ import { isRefused, type MEditClient, type SourceChanges } from '../client';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
+import { answerOf } from '../wire/readFailed';
 
 interface RenameSourceEditing {
   /** Resolves whether the changes were applied; a failure has been reported by whoever applied them. */
@@ -55,7 +56,7 @@ export async function confirmRename(
 
   let dependants;
   try {
-    dependants = await access.client.getPluginDependants(plugin);
+    dependants = answerOf(await access.client.getPluginDependants(plugin));
   } catch (err) {
     return { confirmed: false, refusal: errorMessage(err) };
   }

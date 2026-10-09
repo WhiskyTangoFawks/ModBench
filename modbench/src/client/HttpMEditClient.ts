@@ -22,6 +22,7 @@ import {
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
+import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 // 30s is an ordinary HTTP-client default. A slow call and a hung one look the same to the tree,
@@ -54,13 +55,13 @@ function selectionOutcome<L, R>(
 // The backend's typed discriminator, off the ProblemDetails extension rather than re-derived from the
 // status: only it tells "not tracked" from "no folder", whose ways out differ.
 function editRefused(
-  error: { refusal?: unknown; detail?: string | null } | undefined, status: number,
+  error: { refusal?: unknown; detail?: string | null } | undefined,
 ): { applied: false; refusal: string; message: string } {
   const refusal = error?.refusal;
   return {
     applied: false,
     refusal: typeof refusal === 'string' ? refusal : 'Unknown',
-    message: error?.detail ?? (errorText(error) || `Edit failed (${status}).`),
+    message: error?.detail ?? (errorText(error) || 'mEdit refused the edit.'),
   };
 }
 
@@ -155,11 +156,10 @@ class HttpMEditClient implements MEditClient {
   }
 
   handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.handOver.hand(documents); }
-  onUnsavedHandOver(listener: (failure: string | undefined) => void): () => void { return this.handOver.onSettled(listener); }
+  onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void { return this.handOver.onSettled(listener); }
 
-  private async putUnsavedDocuments(documents: readonly UnsavedDocument[]): Promise<void> {
-    const { error, response } = await this.apiClient.PUT('/unsaved-documents', { body: { documents: [...documents] } });
-    if (!response.ok) throw new Error(`mEdit answered ${response.status}: ${errorText(error)}`);
+  private putUnsavedDocuments(documents: readonly UnsavedDocument[]): Promise<ReadFailed | undefined> {
+    return this.read('putUnsavedDocuments', (signal) => this.apiClient.PUT('/unsaved-documents', { body: { documents: [...documents] }, signal }), () => undefined);
   }
 
   // ── notifications ────────────────────────────────────────────────────────
@@ -190,9 +190,8 @@ class HttpMEditClient implements MEditClient {
       }
       return data ?? spec.noContent ?? { refused: true, message: `${spec.failMsg} — no answer` };
     } catch (e) {
-      const message = errorMessage(e);
-      this.log(`[HttpMEditClient] ${spec.op} threw: ${message}`);
-      return { refused: true, message: `${spec.failMsg} — ${message}` };
+      this.log(`[HttpMEditClient] ${spec.op} threw: ${errorMessage(e)}`);
+      return { refused: true, message: `${spec.failMsg} — ${failureReason(UNREACHABLE)}` };
     }
   }
 
@@ -240,9 +239,8 @@ class HttpMEditClient implements MEditClient {
       }
       return { rebuilt: true };
     } catch (e) {
-      const message = errorMessage(e);
-      this.log(`[HttpMEditClient] rebuildIndex threw: ${message}`);
-      return { rebuilt: false, heldElsewhere: false, detail: message };
+      this.log(`[HttpMEditClient] rebuildIndex threw: ${errorMessage(e)}`);
+      return { rebuilt: false, heldElsewhere: false, detail: failureReason(UNREACHABLE) };
     }
   }
 
@@ -455,236 +453,180 @@ class HttpMEditClient implements MEditClient {
     formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope,
   ): Promise<RecordEditChangesOutcome> {
     await this.handOver.sent();
-    const { data, error, response } = await this.apiClient.POST('/records/{formKey}/edit-changes', {
-      params: { path: { formKey } },
-      body: { edit: { plugin, origin, ...envelope } },
-    });
+    let result;
+    try {
+      result = await this.apiClient.POST('/records/{formKey}/edit-changes', {
+        params: { path: { formKey } },
+        body: { edit: { plugin, origin, ...envelope } },
+      });
+    } catch (e) {
+      this.log(`[HttpMEditClient] getEditChanges(${formKey}) threw: ${errorMessage(e)}`);
+      throw new Error(failureReason(UNREACHABLE));
+    }
+    const { data, error, response } = result;
     if (response.ok && data) {
       const { moves, deletions, documents, newFormKey } = data;
       return newFormKey ? { applied: true, moves, deletions, documents, newFormKey } : { applied: true, moves, deletions, documents };
     }
 
-    const outcome = editRefused(error, response.status);
+    const outcome = editRefused(error);
     this.log(`[HttpMEditClient] getEditChanges(${formKey} ${envelope.op} ${JSON.stringify(envelope.path)}) refused: ${outcome.refusal} — ${outcome.message}`);
     return outcome;
   }
 
   // ── reads ────────────────────────────────────────────────────────────────
 
-  // A read failure throws, never an empty list, so the tree renders its error row (common.md,
-  // States, story 2). A 200 with an absent body is a legitimate empty result.
-  private ensureOk(what: string, response: Response, error?: unknown): void {
-    if (response.ok) return;
-    const text = errorText(error);
-    const detail = text ? `: ${text}` : '';
-    const msg = `${what} failed (${response.status})${detail}`;
-    this.log(`[HttpMEditClient] ${msg}`);
-    throw new Error(msg);
-  }
-
-  // Races rather than trusting the fetch to honor the signal: a hung backend and an
-  // uncooperative test double both still settle the promise. The signal is aborted anyway, so a
-  // fetch that honors it cancels for real.
-  private async withTimeout<T>(what: string, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  // A read that does not land answers a ReadFailed, never an empty list (common.md, States, story 2).
+  // The transport's verb, path and status go to the log alone (ADR-0019).
+  private async read<D, A>(
+    what: string,
+    call: (signal: AbortSignal) => Promise<{ data?: D; error?: unknown; response: Response }>,
+    answer: (data: D | undefined) => A | ReadFailed,
+    { timed = false, absent }: { timed?: boolean; absent?: { status: number; answers: A } } = {},
+  ): Promise<A | ReadFailed> {
     const controller = new AbortController();
-    let timer!: ReturnType<typeof setTimeout>;
-    const deadline = new Promise<never>((_, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settled = call(controller.signal).then(({ data, error, response }): A | ReadFailed => {
+      if (absent && response.status === absent.status) return absent.answers;
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[HttpMEditClient] ${what} failed (${response.status})${text ? `: ${text}` : ''}`);
+        return text ? { failed: 'refused', refusal: text } : NO_ANSWER;
+      }
+      const answered = answer(data);
+      if (isReadFailed(answered)) this.log(`[HttpMEditClient] ${what}: mEdit answered with no body`);
+      return answered;
+    }, (e: unknown): ReadFailed => {
+      this.log(`[HttpMEditClient] ${what} threw: ${errorMessage(e)}`);
+      return UNREACHABLE;
+    });
+    if (!timed) return settled;
+    // Races rather than trusting the fetch to honor the signal: a hung backend and an
+    // uncooperative test double both still settle. The signal is aborted anyway, so a fetch that
+    // honors it cancels for real.
+    const deadline = new Promise<ReadFailed>((resolve) => {
       timer = setTimeout(() => {
         controller.abort();
-        reject(new Error(`${what} timed out after ${this.timeoutMs}ms`));
+        this.log(`[HttpMEditClient] ${what} timed out after ${this.timeoutMs}ms`);
+        resolve({ failed: 'timed-out' });
       }, this.timeoutMs);
     });
     try {
-      return await Promise.race([fn(controller.signal), deadline]);
+      return await Promise.race([settled, deadline]);
     } finally {
       clearTimeout(timer);
     }
   }
 
-  async getPlugins(): Promise<PluginMetadata[]> {
-    const { data, error, response } = await this.apiClient.GET('/plugins', {});
-    this.ensureOk('GET /plugins', response, error);
-    return data ?? [];
+  getPlugins(): Promise<PluginMetadata[] | ReadFailed> {
+    return this.read('GET /plugins', (signal) => this.apiClient.GET('/plugins', { signal }), (data) => data ?? []);
   }
 
-  async getDiagnoses(): Promise<PluginDiagnosisReport[]> {
-    const { data, error, response } = await this.apiClient.GET('/plugins/diagnoses', {});
-    this.ensureOk('GET /plugins/diagnoses', response, error);
-    return data ?? [];
+  getDiagnoses(): Promise<PluginDiagnosisReport[] | ReadFailed> {
+    return this.read('GET /plugins/diagnoses', (signal) => this.apiClient.GET('/plugins/diagnoses', { signal }), (data) => data ?? []);
   }
 
-  async getPluginDependants({ name: plugin, origin }: PluginAddress): Promise<PluginDependants> {
-    return this.withTimeout(`getPluginDependants(${plugin})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/dependants', {
-        params: { path: { plugin }, query: { origin } },
-        signal,
-      });
-      this.ensureOk(`getPluginDependants(${plugin})`, response, error);
-      if (data === undefined) throw new Error(`mEdit gave no answer for getPluginDependants(${plugin})`);
-      return data;
-    });
+  getPluginDependants({ name: plugin, origin }: PluginAddress): Promise<PluginDependants | ReadFailed> {
+    return this.read(`getPluginDependants(${plugin})`, (signal) => this.apiClient.GET('/plugins/{plugin}/dependants', {
+      params: { path: { plugin }, query: { origin } }, signal,
+    }), noBodyFails, { timed: true });
   }
 
-  async getPluginProblems(): Promise<PluginProblems[]> {
-    return this.withTimeout('getPluginProblems', async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/problems', { signal });
-      this.ensureOk('getPluginProblems', response, error);
-      if (data === undefined) throw new Error('mEdit gave no answer for getPluginProblems');
-      return data;
-    });
+  getPluginProblems(): Promise<PluginProblems[] | ReadFailed> {
+    return this.read('getPluginProblems', (signal) => this.apiClient.GET('/plugins/problems', { signal }), noBodyFails, { timed: true });
   }
 
-  async getRecordTypes({ name: plugin, origin }: PluginAddress): Promise<PluginRecordTypeCount[]> {
-    return this.withTimeout(`getRecordTypes(${plugin})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/record-types', {
-        params: { path: { plugin }, query: { origin } },
-        signal,
-      });
-      this.ensureOk(`getRecordTypes(${plugin})`, response, error);
-      return data ?? [];
-    });
+  getRecordTypes({ name: plugin, origin }: PluginAddress): Promise<PluginRecordTypeCount[] | ReadFailed> {
+    return this.read(`getRecordTypes(${plugin})`, (signal) => this.apiClient.GET('/plugins/{plugin}/record-types', {
+      params: { path: { plugin }, query: { origin } }, signal,
+    }), (data) => data ?? [], { timed: true });
   }
 
-  async getWorkingTreeStatesBeneath({ name: plugin, origin }: PluginAddress): Promise<WorkingTreeStatesBeneath> {
-    return this.withTimeout(`getWorkingTreeStatesBeneath(${plugin})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/working-tree-states-beneath', {
-        params: { path: { plugin }, query: { origin } },
-        signal,
-      });
-      this.ensureOk(`getWorkingTreeStatesBeneath(${plugin})`, response, error);
-      if (data === undefined) throw new Error(`mEdit gave no answer for getWorkingTreeStatesBeneath(${plugin})`);
-      return data;
-    });
+  getWorkingTreeStatesBeneath({ name: plugin, origin }: PluginAddress): Promise<WorkingTreeStatesBeneath | ReadFailed> {
+    return this.read(`getWorkingTreeStatesBeneath(${plugin})`, (signal) => this.apiClient.GET('/plugins/{plugin}/working-tree-states-beneath', {
+      params: { path: { plugin }, query: { origin } }, signal,
+    }), noBodyFails, { timed: true });
   }
 
-  async getCreatableRecordTypes(): Promise<RecordTypeChoice[]> {
-    return this.withTimeout('getCreatableRecordTypes', async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/record-types/creatable', { signal });
-      this.ensureOk('getCreatableRecordTypes', response, error);
-      return data ?? [];
-    });
+  getCreatableRecordTypes(): Promise<RecordTypeChoice[] | ReadFailed> {
+    return this.read('getCreatableRecordTypes', (signal) => this.apiClient.GET('/record-types/creatable', { signal }), (data) => data ?? [], { timed: true });
   }
 
-  async getChildRecordTypes({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RecordTypeChoice[]> {
-    return this.withTimeout(`getChildRecordTypes(${plugin}, ${formKey})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/child-record-types', {
-        params: { path: { plugin, formKey }, query: { origin } },
-        signal,
-      });
-      this.ensureOk(`getChildRecordTypes(${plugin}, ${formKey})`, response, error);
-      return data ?? [];
-    });
+  getChildRecordTypes({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RecordTypeChoice[] | ReadFailed> {
+    return this.read(`getChildRecordTypes(${plugin}, ${formKey})`, (signal) => this.apiClient.GET('/plugins/{plugin}/records/{formKey}/child-record-types', {
+      params: { path: { plugin, formKey }, query: { origin } }, signal,
+    }), (data) => data ?? [], { timed: true });
   }
 
-  async getCreatablePluginExtensions(): Promise<string[]> {
-    return this.withTimeout('getCreatablePluginExtensions', async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/creatable-extensions', { signal });
-      this.ensureOk('getCreatablePluginExtensions', response, error);
-      return data ?? [];
-    });
+  getCreatablePluginExtensions(): Promise<string[] | ReadFailed> {
+    return this.read('getCreatablePluginExtensions', (signal) => this.apiClient.GET('/plugins/creatable-extensions', { signal }), (data) => data ?? [], { timed: true });
   }
 
-  async getRecords({ name: plugin, origin }: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage> {
-    return this.withTimeout(`getRecords(${plugin}, ${type})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/records', {
-        params: { query: { plugin, type: [type], offset, limit, origin } },
-        signal,
-      });
-      this.ensureOk(`getRecords(${plugin}, ${type})`, response, error);
-      return data ?? { items: [], total: 0 };
-    });
+  getRecords({ name: plugin, origin }: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed> {
+    return this.read(`getRecords(${plugin}, ${type})`, (signal) => this.apiClient.GET('/records', {
+      params: { query: { plugin, type: [type], offset, limit, origin } }, signal,
+    }), (data) => data ?? { items: [], total: 0 }, { timed: true });
   }
 
-  async searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage> {
-    const { data, error, response } = await this.apiClient.GET('/records', {
+  searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage | ReadFailed> {
+    return this.read(`searchRecords(${query})`, (signal) => this.apiClient.GET('/records', {
       params: { query: {
         search: query, ...(validTypes.length > 0 ? { type: validTypes } : {}), limit: 20,
         ...(plugin && { plugin: plugin.name, origin: plugin.origin }),
       } },
-    });
-    this.ensureOk(`searchRecords(${query})`, response, error);
-    return data ?? { items: [], total: 0 };
+      signal,
+    }), (data) => data ?? { items: [], total: 0 });
   }
 
-  async getRecordOwner(formKey: string): Promise<PluginAddress | undefined> {
-    const { data, error, response } = await this.apiClient.GET('/records/{formKey}', { params: { path: { formKey } } });
-    if (response.status === 404) return undefined;
-    this.ensureOk(`getRecordOwner(${formKey})`, response, error);
-    return data ? { name: data.plugin, origin: data.origin } : undefined;
+  getRecordOwner(formKey: string): Promise<PluginAddress | undefined | ReadFailed> {
+    return this.read(`getRecordOwner(${formKey})`, (signal) => this.apiClient.GET('/records/{formKey}', { params: { path: { formKey } }, signal }),
+      (data) => (data ? { name: data.plugin, origin: data.origin } : undefined), { absent: { status: 404, answers: undefined } });
   }
 
   // A 404 (unknown FormKey) is "nothing holds it yet", not a fault, as getRecordOwner's own 404 is.
-  async getRecordHolders(formKey: string): Promise<PluginAddress[]> {
-    const { data, error, response } = await this.apiClient.GET('/records/{formKey}/compare', { params: { path: { formKey } } });
-    if (response.status === 404) return [];
-    this.ensureOk(`getRecordHolders(${formKey})`, response, error);
-    return (data?.overrides ?? []).map((o) => ({ name: o.plugin, origin: o.origin }));
+  getRecordHolders(formKey: string): Promise<PluginAddress[] | ReadFailed> {
+    return this.read(`getRecordHolders(${formKey})`, (signal) => this.apiClient.GET('/records/{formKey}/compare', { params: { path: { formKey } }, signal }),
+      (data) => (data?.overrides ?? []).map((o) => ({ name: o.plugin, origin: o.origin })), { absent: { status: 404, answers: [] } });
   }
 
-  async getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null> {
+  getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null | ReadFailed> {
     const params = { params: { path: { formKey } } };
-    const { data, error, response } = text
-      ? await this.apiClient.POST('/records/{formKey}/compare', { ...params, body: text })
-      : await this.apiClient.GET('/records/{formKey}/compare', params);
-    if (response.status === 404) return null;
-    this.ensureOk(`getComparison(${formKey})`, response, error);
-    if (!data) throw new Error(`getComparison(${formKey}): ok response carried no body`);
-    return data;
+    return this.read(`getComparison(${formKey})`, (signal) => (text
+      ? this.apiClient.POST('/records/{formKey}/compare', { ...params, body: text, signal })
+      : this.apiClient.GET('/records/{formKey}/compare', { ...params, signal })),
+    noBodyFails, { absent: { status: 404, answers: null } });
   }
 
-  async getRecordsComparison(copies: RecordCopy[]): Promise<CompareRecordsResponse> {
-    const { data, error, response } = await this.apiClient.POST('/records/compare', { body: { copies } });
-    this.ensureOk('getRecordsComparison', response, error);
-    if (!data) throw new Error('getRecordsComparison: ok response carried no body');
-    return data;
+  getRecordsComparison(copies: RecordCopy[]): Promise<CompareRecordsResponse | ReadFailed> {
+    return this.read('getRecordsComparison', (signal) => this.apiClient.POST('/records/compare', { body: { copies }, signal }), noBodyFails);
   }
 
-  async getReferences(formKey: string): Promise<ReferenceResult[]> {
-    const { data, error, response } = await this.apiClient.GET('/records/{formKey}/references', { params: { path: { formKey } } });
-    this.ensureOk(`getReferences(${formKey})`, response, error);
-    return data ?? [];
+  getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed> {
+    return this.read(`getReferences(${formKey})`, (signal) => this.apiClient.GET('/records/{formKey}/references', { params: { path: { formKey } }, signal }),
+      (data) => data ?? []);
   }
 
-  async getReferencesInActiveOrTrackedPlugins(formKey: string): Promise<ReferenceResult[]> {
-    const { data, error, response } = await this.apiClient.GET('/records/{formKey}/references-in-active-or-tracked-plugins', { params: { path: { formKey } } });
-    this.ensureOk(`getReferencesInActiveOrTrackedPlugins(${formKey})`, response, error);
-    return data ?? [];
+  getReferencesInActiveOrTrackedPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed> {
+    return this.read(`getReferencesInActiveOrTrackedPlugins(${formKey})`,
+      (signal) => this.apiClient.GET('/records/{formKey}/references-in-active-or-tracked-plugins', { params: { path: { formKey } }, signal }),
+      (data) => data ?? []);
   }
 
-  async getRenderedDocument({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RenderedDocument | null> {
-    return this.withTimeout(`getRenderedDocument(${plugin}, ${formKey})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/rendered-document', {
-        params: { path: { plugin, formKey }, query: { origin } },
-        signal,
-      });
-      if (response.status === 404) return null;
-      this.ensureOk(`getRenderedDocument(${plugin}, ${formKey})`, response, error);
-      if (!data) throw new Error(`getRenderedDocument(${plugin}, ${formKey}): ok response carried no body`);
-      return data;
-    });
+  getRenderedDocument({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed> {
+    return this.read(`getRenderedDocument(${plugin}, ${formKey})`, (signal) => this.apiClient.GET('/plugins/{plugin}/records/{formKey}/rendered-document', {
+      params: { path: { plugin, formKey }, query: { origin } }, signal,
+    }), noBodyFails, { timed: true, absent: { status: 404, answers: null } });
   }
 
-  async getCopyDocument({ name: plugin, origin }: PluginAddress, formKey: string): Promise<CopyDocument | null> {
-    return this.withTimeout(`getCopyDocument(${plugin}, ${formKey})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/document', {
-        params: { path: { plugin, formKey }, query: { origin } },
-        signal,
-      });
-      if (response.status === 404) return null;
-      this.ensureOk(`getCopyDocument(${plugin}, ${formKey})`, response, error);
-      if (!data) throw new Error(`getCopyDocument(${plugin}, ${formKey}): ok response carried no body`);
-      return data;
-    });
+  getCopyDocument({ name: plugin, origin }: PluginAddress, formKey: string): Promise<CopyDocument | null | ReadFailed> {
+    return this.read(`getCopyDocument(${plugin}, ${formKey})`, (signal) => this.apiClient.GET('/plugins/{plugin}/records/{formKey}/document', {
+      params: { path: { plugin, formKey }, query: { origin } }, signal,
+    }), noBodyFails, { timed: true, absent: { status: 404, answers: null } });
   }
 
-  async getRecordOfFile(path: string): Promise<RecordAddress | null> {
-    return this.withTimeout(`getRecordOfFile(${path})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugin-source/record', { params: { query: { path } }, signal });
-      if (response.status === 204) return null;
-      this.ensureOk(`getRecordOfFile(${path})`, response, error);
-      if (!data) throw new Error(`getRecordOfFile(${path}): ok response carried no body`);
-      return data;
-    });
+  getRecordOfFile(path: string): Promise<RecordAddress | null | ReadFailed> {
+    return this.read(`getRecordOfFile(${path})`, (signal) => this.apiClient.GET('/plugin-source/record', { params: { query: { path } }, signal }),
+      noBodyFails, { timed: true, absent: { status: 204, answers: null } });
   }
 
   async setFilter(filter: RecordFilter): Promise<string | null> {
@@ -698,7 +640,7 @@ class HttpMEditClient implements MEditClient {
       return null;
     } catch (e) {
       this.log(`[HttpMEditClient] setFilter failed: ${errorMessage(e)}`);
-      return errorMessage(e);
+      return failureReason(UNREACHABLE);
     }
   }
 
@@ -713,72 +655,53 @@ class HttpMEditClient implements MEditClient {
       return null;
     } catch (e) {
       this.log(`[HttpMEditClient] clearFilter failed: ${errorMessage(e)}`);
-      return errorMessage(e);
+      return failureReason(UNREACHABLE);
     }
   }
 
-  async getActiveFilter(): Promise<RecordFilter | null> {
-    const { data, error, response } = await this.apiClient.GET('/load-order/filter', {});
-    this.ensureOk('getActiveFilter', response, error);
-    if (data?.sql == null) return null;
-    if (data.source == null) throw new Error('mEdit answered a record filter with no source.');
-    return { sql: data.sql, source: data.source };
-  }
-
-  async getWorldspaces({ name: plugin, origin }: PluginAddress): Promise<WorldspaceSummary[]> {
-    return this.withTimeout(`getWorldspaces(${plugin})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/worldspaces', {
-        params: { path: { plugin }, query: { origin } },
-        signal,
-      });
-      this.ensureOk(`getWorldspaces(${plugin})`, response, error);
-      return data ?? [];
+  getActiveFilter(): Promise<RecordFilter | null | ReadFailed> {
+    return this.read('getActiveFilter', (signal) => this.apiClient.GET('/load-order/filter', { signal }), (data) => {
+      if (data?.sql == null) return null;
+      return data.source == null ? { failed: 'unreadable', cause: 'mEdit answered a record filter with no source.' } : { sql: data.sql, source: data.source };
     });
   }
 
-  async getWorldspaceBlocks({ name: plugin, origin }: PluginAddress, worldspaceFormKey: string): Promise<WorldspaceBlocks> {
-    return this.withTimeout(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
-        params: { path: { plugin, formKey: worldspaceFormKey }, query: { origin } },
-        signal,
-      });
-      this.ensureOk(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, response, error);
-      return data ?? { topCells: [], blocks: [] };
-    });
+  getWorldspaces({ name: plugin, origin }: PluginAddress): Promise<WorldspaceSummary[] | ReadFailed> {
+    return this.read(`getWorldspaces(${plugin})`, (signal) => this.apiClient.GET('/plugins/{plugin}/worldspaces', {
+      params: { path: { plugin }, query: { origin } }, signal,
+    }), (data) => data ?? [], { timed: true });
   }
 
-  async getCellChildRecords({ name: plugin, origin }: PluginAddress, cellFormKey: string): Promise<CellChildRecords> {
-    return this.withTimeout(`getCellChildRecords(${plugin}, ${cellFormKey})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/cells/{formKey}/children', {
-        params: { path: { plugin, formKey: cellFormKey }, query: { origin } },
-        signal,
-      });
-      this.ensureOk(`getCellChildRecords(${plugin}, ${cellFormKey})`, response, error);
-      return data ?? { persistent: [], temporary: [] };
-    });
+  getWorldspaceBlocks({ name: plugin, origin }: PluginAddress, worldspaceFormKey: string): Promise<WorldspaceBlocks | ReadFailed> {
+    return this.read(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, (signal) => this.apiClient.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
+      params: { path: { plugin, formKey: worldspaceFormKey }, query: { origin } }, signal,
+    }), (data) => data ?? { topCells: [], blocks: [] }, { timed: true });
   }
 
-  async getInteriorCells({ name: plugin, origin }: PluginAddress): Promise<InteriorCellBlock[]> {
-    return this.withTimeout(`getInteriorCells(${plugin})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/interior-cells', {
-        params: { path: { plugin }, query: { origin } },
-        signal,
-      });
-      this.ensureOk(`getInteriorCells(${plugin})`, response, error);
-      return data ?? [];
-    });
+  getCellChildRecords({ name: plugin, origin }: PluginAddress, cellFormKey: string): Promise<CellChildRecords | ReadFailed> {
+    return this.read(`getCellChildRecords(${plugin}, ${cellFormKey})`, (signal) => this.apiClient.GET('/plugins/{plugin}/cells/{formKey}/children', {
+      params: { path: { plugin, formKey: cellFormKey }, query: { origin } }, signal,
+    }), (data) => data ?? { persistent: [], temporary: [] }, { timed: true });
   }
 
-  async getContainerChildren({ name: plugin, origin }: PluginAddress, parentFormKey: string): Promise<ContainerChildSummary[]> {
-    return this.withTimeout(`getContainerChildren(${plugin}, ${parentFormKey})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/children', {
-        params: { path: { plugin, formKey: parentFormKey }, query: { origin } },
-        signal,
-      });
-      this.ensureOk(`getContainerChildren(${plugin}, ${parentFormKey})`, response, error);
-      return data ?? [];
-    });
+  getInteriorCells({ name: plugin, origin }: PluginAddress): Promise<InteriorCellBlock[] | ReadFailed> {
+    return this.read(`getInteriorCells(${plugin})`, (signal) => this.apiClient.GET('/plugins/{plugin}/interior-cells', {
+      params: { path: { plugin }, query: { origin } }, signal,
+    }), (data) => data ?? [], { timed: true });
   }
+
+  getContainerChildren({ name: plugin, origin }: PluginAddress, parentFormKey: string): Promise<ContainerChildSummary[] | ReadFailed> {
+    return this.read(`getContainerChildren(${plugin}, ${parentFormKey})`, (signal) => this.apiClient.GET('/plugins/{plugin}/records/{formKey}/children', {
+      params: { path: { plugin, formKey: parentFormKey }, query: { origin } }, signal,
+    }), (data) => data ?? [], { timed: true });
+  }
+}
+
+const NO_ANSWER: ReadFailed = { failed: 'no-answer' };
+const UNREACHABLE: ReadFailed = { failed: 'unreachable' };
+
+function noBodyFails<D>(data: D | undefined): D | ReadFailed {
+  return data === undefined ? NO_ANSWER : data;
 }
 
 let latest: Pick<MEditClient, 'stop'> = { stop: () => Promise.resolve() };

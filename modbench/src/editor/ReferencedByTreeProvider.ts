@@ -5,6 +5,7 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import type { RecordArgument } from '../drivingLib/recordArgument';
 import { isKeyArgs } from '../drivingLib/copyValue';
 import { recordTitle } from './recordTitle';
+import { failureReason, isReadFailed, localFailure } from '../wire/readFailed';
 
 /** One plugin's copy of a referrer, with the fields that hold the reference. */
 export class ReferencedByHolderNode extends vscode.TreeItem {
@@ -248,12 +249,13 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
     const mine = this.generation;
     const [references, comparison] = await Promise.allSettled([this.client.getReferences(target), this.client.getComparison(target)]);
     if (mine !== this.generation) return;
-    this.name = recordTitle(target, comparison.status === 'fulfilled' ? comparison.value?.overrides : undefined);
-    if (references.status === 'fulfilled') {
-      this.referrers = groupBy(references.value, r => r.formKey).flatMap(copies => referrerNode(target, copies) ?? []);
+    this.name = recordTitle(target, comparison.status === 'fulfilled' && !isReadFailed(comparison.value) ? comparison.value?.overrides : undefined);
+    const read = references.status === 'rejected' ? localFailure(errorMessage(references.reason)) : references.value;
+    if (!isReadFailed(read)) {
+      this.referrers = groupBy(read, r => r.formKey).flatMap(copies => referrerNode(target, copies) ?? []);
       this.failure = undefined;
     } else {
-      this.failure = errorMessage(references.reason);
+      this.failure = failureReason(read);
       this.log(`[ReferencedByTreeProvider] getReferences(${target}) failed: ${this.failure}`);
     }
     this._onDidChangeView.fire();
