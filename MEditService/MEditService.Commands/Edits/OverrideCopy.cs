@@ -33,37 +33,13 @@ internal sealed class OverrideCopy
         if (_targets.ResolveCopySource(destinationPlugin, source, formKey, out var copy) is { } blocked) return blocked;
         // commands.md, Doing nothing is not an error: the record's own plugin already is this copy.
         if (PluginAddress.Comparer.Equals(source.Plugin, destinationPlugin)) return RecordEditResult.Success();
-        try
-        {
-            return CopyAsOverride(copy, destinationPlugin, replace);
-        }
-        catch (ChildSlotHeldByAnotherRecordException ex)
-        {
-            return RefuseSlotHeldByAnotherRecord(destinationPlugin, ex);
-        }
+        return CopyAsOverride(copy, destinationPlugin, replace);
     }
-
-    private static RecordEditResult RefuseSlotHeldByAnotherRecord(PluginAddress destinationPlugin, ChildSlotHeldByAnotherRecordException ex) =>
-        RecordEditResult.Refused(
-            RecordEditRefusal.ChildSlotHeldByAnotherRecord,
-            $"{destinationPlugin.Name} ({destinationPlugin.Origin}) holds another record where the copy puts one: {ex.Message}");
 
     private SourceAnswer<RecordEditResult> CopyAsOverride(
         WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, bool replace)
     {
-        var (source, identity, destination, release, body) = copy;
-        var formKey = identity.FormKey;
-        if (RefuseIfUnderride(identity, body, destinationPlugin) is { } underrideRefusal) return underrideRefusal;
-
-        // A record a container's document carries, a worldspace's persistent cell among them, lands
-        // inside the destination's copy of that document (the container rule).
-        if (!source.ContainerOf(identity).Holds(out var held, out var why)) return WriteTargets.RefuseUnreadableSource(formKey, why);
-        if (held is { } container)
-        {
-            return _recordCopy.CopyEmbeddedChildAsOverride(
-                source, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body),
-                container, destination, release, replace);
-        }
+        if (RefuseIfUnderride(copy.Identity, copy.Body, destinationPlugin) is { } underrideRefusal) return underrideRefusal;
 
         return LandRecord(copy, destinationPlugin, replace);
     }
@@ -86,7 +62,13 @@ internal sealed class OverrideCopy
             return ReplaceHeldCopy(source, identity, body, existingTarget, destination, release);
         }
 
-        return LandNewRecord(copy, body, destinationPlugin);
+        // A record a container's document carries, a worldspace's persistent cell among them, lands
+        // inside the destination's copy of that document (the container rule).
+        if (!source.ContainerOf(identity).Holds(out var container, out var why)) return WriteTargets.RefuseUnreadableSource(formKey, why);
+        return container is { } carrier
+            ? _recordCopy.CopyNewEmbeddedChildAsOverride(
+                source, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body), carrier, destination, release)
+            : LandNewRecord(copy, body, destinationPlugin);
     }
 
     private SourceAnswer<RecordEditResult> LandNewRecord(
@@ -138,16 +120,13 @@ internal sealed class OverrideCopy
         return RecordEditResult.Success();
     }
 
-    // The destination's embedded children are transplanted onto the replacing record so the copy
-    // cannot delete them.
     private SourceAnswer<RecordEditResult> ReplaceHeldCopy(
         CopySource source, RecordIdentity identity, string body, RecordIdentity existingTarget,
         RecordCopy.Destination destination, GameRelease release)
     {
         if (!destination.Repository.RecordOf(destination.Plugin, existingTarget).Holds(out var held, out var unread)) return unread;
         var existing = held
-            ?? throw new InvalidOperationException(
-                $"{destination.Plugin.Name} holds {identity.FormKey}, but no document in its source tree carries it.");
+            ?? throw RecordCopy.NoDocumentCarries(destination.Plugin, identity.FormKey);
 
         var replacement = ContainerDocumentEdits.WithOwnFieldsReplaced(
             existing.Body, existing.RecordType, body, identity.RecordType, release);
