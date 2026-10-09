@@ -1,3 +1,4 @@
+import { recordLabel as wireRecordLabel } from '../../src/wire/recordLabel';
 import { isString } from '../../src/wire/messages';
 import { isFieldType } from '../../src/wire/fieldType';
 import type { ColumnKey, CompareOverride, FieldMetadata, FieldValue, PathHop, PathSegment } from './types';
@@ -27,7 +28,7 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
 export function recordLabel(overrides: readonly CompareOverride[], formKey: string): string {
   const copies = overrides.filter(o => o.formKey === formKey);
   const editorId = (copies.find(o => o.isWinner) ?? copies.at(0) ?? overrides.at(0))?.editorId;
-  return editorId ? `${editorId} [${formKey}]` : formKey;
+  return wireRecordLabel(editorId, formKey);
 }
 
 // ── Array child helpers ───────────────────────────────────────────────────────
