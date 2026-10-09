@@ -12,7 +12,7 @@ public sealed class CopyReplaceTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private CopyRecordHandler CopyHandler() => _fixture.CopyHandler;
+    private CopyRecordChangesHandler CopyHandler() => _fixture.CopyHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 

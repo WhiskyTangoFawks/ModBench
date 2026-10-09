@@ -21,7 +21,7 @@ public sealed class CopyAsOverrideLocalizedTests : IDisposable
     private readonly ScratchDirectory _destinationModFolder = new("medit-copy-localized-dest-");
     private readonly ScratchDirectory _gameDir = new("medit-copy-localized-game-");
     private readonly FormKey _door;
-    private readonly CopyRecordHandler _handler;
+    private readonly CopyRecordChangesHandler _handler;
 
     public CopyAsOverrideLocalizedTests()
     {

@@ -217,15 +217,15 @@ describe('modbench.record.create makes the changes mEdit answers', () => {
     expect(steps).toContain('select 000900:MyPatch.esp in npc_');
   });
 
-  it('reports a change VS Code did not apply, selects nothing, and lands nothing', async () => {
+  it('reports a change VS Code did not apply as one that may have partly landed, selects nothing, and refreshes Source Control', async () => {
     const { steps, source, reporter, create } = harness();
     source.applyWorkspaceChanges.mockRejectedValue(new Error('VS Code did not apply the changes.'));
 
     await create(NPC_GROUP);
 
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not create the Non-Player Character record.', detail: 'VS Code did not apply the changes.' }]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not create the Non-Player Character record.', detail: 'VS Code did not apply the changes. VS Code stops at the first change it cannot make, so some changes may have landed.' }]);
     expect(reporter.landings).toEqual([]);
-    expect(source.refreshSourceControlFor).not.toHaveBeenCalled();
+    expect(source.refreshSourceControlFor).toHaveBeenCalledWith(MY_PATCH);
     expect(steps).toEqual(['watch MyPatch.esp ModA', 'create MyPatch.esp ModA npc_', 'forget']);
   });
 

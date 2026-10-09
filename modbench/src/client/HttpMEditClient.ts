@@ -15,7 +15,7 @@ import {
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
-  type RebuildIndexOutcome, type CopyItem, type CopyMode,
+  type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAddress, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
@@ -381,18 +381,19 @@ class HttpMEditClient implements MEditClient {
     return isRefused(answer) ? answer : { applied: answer.applied, refused: itemRefusals(answer.refused) };
   }
 
-  async copyRecords(
+  async getCopyChanges(
     records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
-  ): Promise<SelectionOutcome<CopyItem> | WriteRefused> {
+    unsaved: readonly UnsavedDocument[],
+  ): Promise<CopyChangesOutcome | WriteRefused> {
     const counted = records.length === 1 ? '1 record' : `${records.length} records`;
     const answer = await this.mutate({
-      op: `copyRecords(${counted}, ${mode})`,
+      op: `getCopyChanges(${counted}, ${mode})`,
       failMsg: `Could not copy ${counted}`,
-      post: () => this.apiClient.POST('/records/copy', {
-        body: { records: [...records], mode, destinations: [...destinations], replace },
+      post: () => this.apiClient.POST('/records/copy-changes', {
+        body: { records: [...records], mode, destinations: [...destinations], replace, documents: [...unsaved] },
       }),
     });
-    return isRefused(answer) ? answer : selectionOutcome(answer);
+    return isRefused(answer) ? answer : { applied: answer.applied, refused: itemRefusals(answer.refused) };
   }
 
   async decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {

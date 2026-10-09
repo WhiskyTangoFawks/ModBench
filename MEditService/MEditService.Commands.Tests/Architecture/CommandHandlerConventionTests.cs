@@ -20,7 +20,7 @@ public sealed class CommandHandlerConventionTests
         typeof(TrackHandler),
         typeof(CompilePluginHandler),
         typeof(DecompilePluginHandler),
-        typeof(CopyRecordHandler),
+        typeof(CopyRecordChangesHandler),
     ];
 
     private static readonly Type[] HandlersThatWriteNothing =

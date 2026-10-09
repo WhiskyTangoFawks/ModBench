@@ -53,6 +53,10 @@ public static class RequireExtensions
     public static SourceFailure Failed(this SourceFailure? failure) =>
         failure ?? throw new InvalidOperationException("Expected the source write to answer a failure here.");
 
+    /// <summary>Applies the changes that put the document in the tree, all or none.</summary>
+    public static SourceFailure? Put(this SourceRepository repository, PluginAddress plugin, SourceDocument document) =>
+        SourceTransaction.Atomically(repository, transaction => transaction.Apply(repository.ChangesToPut(plugin, document)));
+
     /// <summary>Applies the changes that take the record out of the tree, all or none.</summary>
     public static SourceFailure? Remove(this SourceRepository repository, PluginAddress plugin, RecordIdentity identity) =>
         SourceTransaction.Atomically(repository, transaction => transaction.Apply(repository.ChangesToRemove(plugin, identity)));

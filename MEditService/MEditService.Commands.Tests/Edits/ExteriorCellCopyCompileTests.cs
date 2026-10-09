@@ -19,7 +19,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         _fixture.Dispose();
     }
 
-    private CopyRecordHandler CopyHandler() => _fixture.CopyHandler;
+    private CopyRecordChangesHandler CopyHandler() => _fixture.CopyHandler;
 
     private CompilePluginHandler CompileService() =>
         CompileServices.Over(_fixture.LoadOrder);

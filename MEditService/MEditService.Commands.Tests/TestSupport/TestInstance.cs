@@ -55,7 +55,7 @@ public abstract class TestInstance : IDisposable
     public EditRecordChangesHandler EditChangesHandler => Handler<EditRecordChangesHandler>();
     public DeleteRecordChangesHandler DeleteHandler => Handler<DeleteRecordChangesHandler>();
     public CreateRecordChangesHandler CreateHandler => Handler<CreateRecordChangesHandler>();
-    public CopyRecordHandler CopyHandler => Handler<CopyRecordHandler>();
+    public CopyRecordChangesHandler CopyHandler => Handler<CopyRecordChangesHandler>();
     public CompilePluginHandler CompileHandler => Handler<CompilePluginHandler>();
 
     /// <summary>The folder a mod's plugins sit in. The game's Data folder and Overwrite are never mod
