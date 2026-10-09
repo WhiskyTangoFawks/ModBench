@@ -1,9 +1,8 @@
-import type { components } from './generated/api';
 import { columnKey, type ColumnKey } from './columnKey';
+import type { UnreadableSource } from './messages';
 import type { PluginAddress } from './pluginAddress';
 
-/** Why a tracked plugin's source does not read, and whether decompile gets past it. */
-export type UnreadableSource = components['schemas']['UnreadableSource'];
+export type { UnreadableSource };
 
 /** The plugins whose source is unreadable, each by its column. */
 export function unreadableSources(

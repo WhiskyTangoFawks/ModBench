@@ -1,5 +1,5 @@
-using MEditService.Index.Queries;
 using System.Diagnostics;
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;

@@ -44,6 +44,8 @@ export const WEBVIEW_TO_EXTENSION = {
   VIEW_STATE: 'viewState',
 } as const;
 
+/** Why a tracked plugin's source does not read, and whether decompile gets past it. */
+export type UnreadableSource = components['schemas']['UnreadableSource'];
 export type ConflictThis = components['schemas']['ConflictThis'];
 export type ConflictAll = components['schemas']['ConflictAll'];
 
