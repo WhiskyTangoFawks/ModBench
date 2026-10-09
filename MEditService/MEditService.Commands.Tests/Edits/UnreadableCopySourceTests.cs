@@ -17,8 +17,8 @@ public sealed class UnreadableCopySourceTests : IDisposable
     private void MakeNoJsonDocument(FormKey formKey)
     {
         var document = _mod.Document(_mod.SourcePlugin, formKey.ToString()).Require();
-        SourceRepository.Open(TestMod.In(_mod.SourceModFolder), GameRelease.Fallout4).Require()
-            .Put(_mod.SourcePlugin, document with { Body = document.Body.Replace('{', '[') });
+        SourceRepository.Open(TestMod.Of(_mod.SourcePlugin, _mod.SourceModFolder), GameRelease.Fallout4).Require()
+            .Put(_mod.SourcePlugin, document with { Body = document.Body.Replace('{', '[') }).Wrote();
     }
 
     [Fact]
@@ -40,6 +40,20 @@ public sealed class UnreadableCopySourceTests : IDisposable
         var refused = result.OnlyRefused();
         Assert.Equal(RecordEditRefusal.RecordParseFailed, refused.Refusal);
         Assert.Contains($"{ContainerCopyFixture.SourcePluginName}'s document for {_mod.FlatNpc} is no record document", refused.Message, StringComparison.Ordinal);
+        Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
+    }
+
+    [Fact]
+    public void CopyAsOverride_OfARecordTwoDocumentsOfItsSourceClaim_IsRefusedAsAmbiguous_NamingTheClaim_AndWritesNothing()
+    {
+        var document = _mod.Document(_mod.SourcePlugin, _mod.FlatNpc.ToString()).Require();
+        TreeTampering.Duplicate(_mod.SourceModFolder, _mod.SourcePlugin, document.Identity);
+
+        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, _mod.FlatNpc.ToString())], CopyMode.Override, [_mod.DestinationPlugin], replace: false);
+
+        var refused = result.OnlyRefused();
+        Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
+        Assert.Contains($"More than one document in this plugin's source tree holds {_mod.FlatNpc}", refused.Message, StringComparison.Ordinal);
         Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
     }
 

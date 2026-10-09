@@ -22,13 +22,9 @@ public sealed class TestEditor(EditRecordChangesHandler edits, LoadOrderHolder l
     private string TextCarrying(PluginAddress plugin, string formKey)
     {
         if (loadOrder.Current.ProviderOf(plugin) is not PluginProvider.FromMod mod || !SourceRepository.IsTracked(mod.Folder)) return "";
-        try
-        {
-            if (TrackedTree.DocumentFile(mod.Folder, plugin, formKey) is { } file) return File.ReadAllText(Path.Combine(mod.Folder, file));
-        }
-        catch (Exception ex) when (ex is UnreadableSourceDocumentException or AmbiguousSourceUnitException)
-        {
-        }
-        return "";
+        var repository = TrackedTree.Repository(mod.Folder, plugin);
+        var file = repository.Get(plugin, formKey)
+            .Then(held => held is null ? SourceAnswer.Of<string?>(null) : repository.RelativePathOf(plugin, held.Identity));
+        return file.Holds(out var path, out _) && path is not null ? File.ReadAllText(Path.Combine(mod.Folder, path)) : "";
     }
 }

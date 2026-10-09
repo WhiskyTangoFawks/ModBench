@@ -205,17 +205,17 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     /// <summary>The EditorID of the record at a document's root, refusing as that document one that is no string.</summary>
     internal static string? RequireReadable(string modFolder, EditorIdRead editorId, string file, string? formKey) =>
         editorId.WhyUnreadable is { } why
-            ? throw UnreadableSourceDocumentException.In(modFolder, file, $"its {why}", formKey)
+            ? throw SourceStopException.UnreadableIn(modFolder, file, $"its {why}", formKey)
             : editorId.EditorId;
 
     /// <summary>The child's record type, refusing as the file holding it a child none resolves for, or
     /// one whose EditorID is no string.</summary>
     internal static string RequireReadable(string modFolder, ContainerDocuments.ChildDocument child, string ownerFile)
     {
-        var type = child.RecordType ?? throw UnreadableSourceDocumentException.In(modFolder, ownerFile, child.WhyUntyped, child.FormKey);
+        var type = child.RecordType ?? throw SourceStopException.UnreadableIn(modFolder, ownerFile, child.WhyUntyped, child.FormKey);
         if (DocumentNodes.EditorIdOf(child.Node).WhyUnreadable is { } why)
         {
-            throw UnreadableSourceDocumentException.In(
+            throw SourceStopException.UnreadableIn(
                 modFolder, ownerFile, $"its '{child.SlotName}' names '{child.FormKey}', whose {why}", child.FormKey);
         }
         return type;
@@ -290,38 +290,6 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         }
     }
 
-    private UnreadableSourceDocumentException Unreadable(string file, string because, string? formKey = null) =>
-        UnreadableSourceDocumentException.In(_modFolder, file, because, formKey);
-}
-
-/// <summary>A file of a plugin's source tree that this reader cannot turn into a document. Never
-/// swallowed: the caller degrades to the binary and records the reason.</summary>
-public sealed class UnreadableSourceDocumentException : InvalidOperationException
-{
-    internal UnreadableSourceDocumentException() : base("A source document could not be read.")
-    {
-    }
-
-    public UnreadableSourceDocumentException(string message) : base(message)
-    {
-    }
-
-    public UnreadableSourceDocumentException(string message, Exception innerException)
-        : base(message, innerException)
-    {
-    }
-
-    internal UnreadableSourceDocumentException(UnreadableFile file) : base(file.Message)
-    {
-        File = file;
-    }
-
-    /// <summary>The file that could not be read, when one is known.</summary>
-    public UnreadableFile? File { get; }
-
-    internal static UnreadableSourceDocumentException In(string modFolder, string file, string because, string? formKey = null) =>
-        new(new UnreadableFile(Path.GetRelativePath(modFolder, file), Because(file, because), formKey));
-
-    private static string Because(string filePath, string because) =>
-        $"'{filePath}' is filed as a record in this plugin's source tree, but {because}.";
+    private SourceStopException Unreadable(string file, string because, string? formKey = null) =>
+        SourceStopException.UnreadableIn(_modFolder, file, because, formKey);
 }

@@ -14,7 +14,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
     private const string ExteriorCell = "000801:Vendor.esp";
     private const string InteriorCell = "000802:Vendor.esp";
 
-    private static readonly PluginAddress Plugin = new(PluginName, "VendorMod");
+    private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
 
     private readonly ScratchDirectory _modFolder = new("medit-worldspace-");
 
@@ -30,7 +30,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
     private SourceDocument InTheTree(string formKey, string recordType, string? grid = null)
     {
         var document = new SourceDocument(formKey, recordType, EditorId: null, Body(formKey, grid));
-        Repository.Put(Plugin, document);
+        Repository.Put(Plugin, document).Wrote();
         return document;
     }
 
@@ -72,7 +72,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
     }
 
     [PosixFact]
-    public void Remove_OfAContainerWhoseDirectoryCannotAllBeDeleted_PutsBackWhatWent_AndThrows()
+    public void Remove_OfAContainerWhoseDirectoryCannotAllBeDeleted_PutsBackWhatWent_AndAnswersTheRefusal()
     {
         InTheTree(Worldspace, "wrld");
         Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
@@ -81,7 +81,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         FileModes.Set(block, "555");
         try
         {
-            Assert.ThrowsAny<IOException>(() => Repository.Remove(Plugin, new RecordIdentity(Worldspace, "wrld", null)));
+            Assert.IsType<SourceFailure.Inaccessible>(Repository.Remove(Plugin, new RecordIdentity(Worldspace, "wrld", null)).Failed());
         }
         finally
         {
@@ -100,8 +100,8 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         Directory.CreateDirectory(Path.Combine(_modFolder, cellDocument));
         var before = TreeSnapshot.Of(_modFolder);
 
-        var fault = Record.Exception(() => Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace));
-        Assert.True(fault is IOException or UnauthorizedAccessException, $"Expected a file-system fault, got {fault}");
+        Assert.IsType<SourceFailure.Inaccessible>(SourceTransaction.Atomically(
+            Repository, transaction => transaction.PutInWorldspace(Repository, Plugin, ACellAt("9, -9"), Worldspace)));
 
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
@@ -129,7 +129,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         var cell = ACellAt("9, -9");
         Repository.PutInWorldspace(Plugin, cell, Worldspace);
 
-        Assert.Equal(cell.Body, Repository.GetCellAt(Plugin, Worldspace, 9, -9)?.Body);
+        Assert.Equal(cell.Body, Repository.GetCellAt(Plugin, Worldspace, 9, -9).Value()?.Body);
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         InTheTree(Worldspace, "wrld");
         Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
 
-        Assert.Null(Repository.GetCellAt(Plugin, Worldspace, 10, -9));
+        Assert.Null(Repository.GetCellAt(Plugin, Worldspace, 10, -9).Value());
     }
 
     private static string WorldspaceDocument =>
@@ -155,7 +155,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
         File.WriteAllText(Path.Combine(_modFolder, CellDocumentAtNineMinusNine), "{");
 
-        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.GetCellAt(Plugin, Worldspace, 9, -9));
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.GetCellAt(Plugin, Worldspace, 9, -9).Stopped());
 
         Assert.Equal(CellDocumentAtNineMinusNine, refused.File?.SourceRelativePath);
     }
@@ -168,7 +168,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         Repository.PutInWorldspace(Plugin, cell, Worldspace);
         File.WriteAllText(Path.Combine(_modFolder, WorldspaceDocument), "{}");
 
-        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.WorldspaceOf(Plugin, cell.Identity));
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.WorldspaceOf(Plugin, cell.Identity).Stopped());
 
         Assert.Equal(WorldspaceDocument, refused.File?.SourceRelativePath);
     }
@@ -180,7 +180,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         var cell = ACellAt("9, -9");
         Repository.PutInWorldspace(Plugin, cell, Worldspace);
 
-        Assert.Equal(Worldspace, Repository.WorldspaceOf(Plugin, cell.Identity));
+        Assert.Equal(Worldspace, Repository.WorldspaceOf(Plugin, cell.Identity).Value());
     }
 
     [Fact]
@@ -188,7 +188,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
     {
         var cell = InTheTree(InteriorCell, "cell");
 
-        Assert.Null(Repository.WorldspaceOf(Plugin, cell.Identity));
+        Assert.Null(Repository.WorldspaceOf(Plugin, cell.Identity).Value());
     }
 
     [Fact]
@@ -198,8 +198,8 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         var cells = Path.Combine(_modFolder, "plugin-source", PluginName, "Cells");
         Directory.Move(Path.Combine(cells, "0", "5", "000802_Vendor.esp"), Path.Combine(cells, "000802_Vendor.esp"));
 
-        var refused = Assert.Throws<UnreadableSourceDocumentException>(() => Repository.WorldspaceOf(Plugin, cell.Identity));
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.WorldspaceOf(Plugin, cell.Identity).Stopped());
 
-        Assert.Contains(InteriorCell, refused.Message, StringComparison.Ordinal);
+        Assert.Contains(InteriorCell, refused.Reason, StringComparison.Ordinal);
     }
 }

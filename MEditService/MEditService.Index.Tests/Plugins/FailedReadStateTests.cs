@@ -491,49 +491,38 @@ public sealed class FailedReadStateTests : IDisposable
             return stamps;
         }
 
-        public IPluginDocuments OpenDocuments(PluginAddress plugin)
+        public SourceAnswer<T> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read)
         {
             at(TreeMoment.ReadBegins, plugin);
-            return new ReleasedDocuments(inner.OpenDocuments(plugin), () => at(TreeMoment.ReadEnds, plugin));
+            try
+            {
+                return inner.ReadDocuments(plugin, read);
+            }
+            finally
+            {
+                at(TreeMoment.ReadEnds, plugin);
+            }
         }
 
-        public SourceDocument? RecordOf(PluginAddress plugin, RecordIdentity identity)
+        public SourceAnswer<SourceDocument?> RecordOf(PluginAddress plugin, RecordIdentity identity)
         {
             at(TreeMoment.RecordRead, plugin);
             return inner.RecordOf(plugin, identity);
         }
 
-        public IReadOnlyDictionary<string, RecordChange> ChangedSinceLastCommit(
-            PluginAddress plugin) =>
+        public SourceAnswer<IReadOnlyDictionary<string, RecordChange>> ChangedSinceLastCommit(PluginAddress plugin) =>
             inner.ChangedSinceLastCommit(plugin);
 
-        public void RefuseUnreadable(
-            PluginAddress plugin, RecordIdentity identity, string body) =>
-            inner.RefuseUnreadable(plugin, identity, body);
+        public SourceFailure? WhyUnreadable(PluginAddress plugin, RecordIdentity identity, string body) =>
+            inner.WhyUnreadable(plugin, identity, body);
 
-        public SourceDocument? RecordFromText(
-            PluginAddress plugin, string formKey, string text) =>
+        public SourceAnswer<SourceDocument?> RecordFromText(PluginAddress plugin, string formKey, string text) =>
             inner.RecordFromText(plugin, formKey, text);
 
-        public DocumentFile? DocumentOf(PluginAddress plugin, RecordIdentity identity) => inner.DocumentOf(plugin, identity);
+        public SourceAnswer<DocumentFile?> DocumentOf(PluginAddress plugin, RecordIdentity identity) => inner.DocumentOf(plugin, identity);
 
-        public string? RelativePathOf(PluginAddress plugin, RecordIdentity identity) => inner.RelativePathOf(plugin, identity);
+        public SourceAnswer<string?> RelativePathOf(PluginAddress plugin, RecordIdentity identity) => inner.RelativePathOf(plugin, identity);
 
-        public string? FileNameOf(PluginAddress plugin, RecordIdentity identity) => inner.FileNameOf(plugin, identity);
-    }
-
-    private sealed class ReleasedDocuments(IPluginDocuments inner, Action released) : IPluginDocuments
-    {
-        public PluginDocument Header => inner.Header;
-
-        public IEnumerable<PluginDocument> Records => inner.Records;
-
-        public IReadOnlyList<RecordTypeFailure> Failures => inner.Failures;
-
-        public void Dispose()
-        {
-            inner.Dispose();
-            released();
-        }
+        public SourceAnswer<string?> FileNameOf(PluginAddress plugin, RecordIdentity identity) => inner.FileNameOf(plugin, identity);
     }
 }

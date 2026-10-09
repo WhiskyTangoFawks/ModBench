@@ -51,7 +51,7 @@ internal static class TrackedMods
     internal static string SourceFileOf(this LoadOrderEntry entry, RecordIdentity identity, GameRelease release = GameRelease.Fallout4)
     {
         var modFolder = entry.ModFolderOf();
-        var relativePath = RepositoryOf(entry, release).RelativePathOf(entry.KeyOf(), identity)
+        var relativePath = RepositoryOf(entry, release).RelativePathOf(entry.KeyOf(), identity).Value()
             ?? throw new InvalidOperationException($"No document in {entry.Name}'s tree under '{modFolder}' holds {identity.FormKey}.");
         return Path.Combine(modFolder, relativePath);
     }
@@ -76,7 +76,7 @@ internal static class TrackedMods
     /// <paramref name="body"/>, then the next snapshot.</summary>
     internal static void Edit(this OpenedIndex index, LoadOrderEntry entry, RecordDetail document, string body)
     {
-        RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, document.EditorId, body));
+        RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, document.EditorId, body)).Wrote();
         index.NextSnapshot();
     }
 
@@ -86,14 +86,14 @@ internal static class TrackedMods
         this OpenedIndex index, LoadOrderEntry entry, RecordDetail document, string newEditorId, string body)
     {
         RepositoryOf(entry).Put(
-            entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, newEditorId, body));
+            entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, newEditorId, body)).Wrote();
         index.NextSnapshot();
     }
 
     /// <summary>A document the working tree gains, then the next snapshot.</summary>
     internal static void Create(this OpenedIndex index, LoadOrderEntry entry, string formKey, string recordType, string? editorId, string body)
     {
-        RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(formKey, recordType, editorId, body));
+        RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(formKey, recordType, editorId, body)).Wrote();
         index.NextSnapshot();
     }
 
@@ -107,9 +107,9 @@ internal static class TrackedMods
         {
             var current = index.DocumentOf(formKey, entry.KeyOf());
             if (body is null)
-                repository.Remove(entry.KeyOf(), new RecordIdentity(formKey, current.RecordType, current.EditorId));
+                repository.Remove(entry.KeyOf(), new RecordIdentity(formKey, current.RecordType, current.EditorId)).Wrote();
             else
-                repository.Put(entry.KeyOf(), new SourceDocument(formKey, current.RecordType, current.EditorId, body));
+                repository.Put(entry.KeyOf(), new SourceDocument(formKey, current.RecordType, current.EditorId, body)).Wrote();
         }
         index.NextSnapshot();
     }
@@ -118,10 +118,7 @@ internal static class TrackedMods
     /// snapshot.</summary>
     internal static void Delete(this OpenedIndex index, LoadOrderEntry entry, RecordDetail document)
     {
-        var removed = RepositoryOf(entry).Remove(
-            entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
-        if (removed != SourceRemoval.Removed)
-            throw new InvalidOperationException($"The tree did not give up '{document.FormKey}': {removed}.");
+        RepositoryOf(entry).Remove(entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId)).Wrote();
         index.NextSnapshot();
     }
 }

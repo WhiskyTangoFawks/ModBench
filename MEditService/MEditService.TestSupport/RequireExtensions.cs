@@ -1,4 +1,5 @@
 using MEditService.PluginAdapter;
+using MEditService.SourceAdapter;
 
 namespace MEditService.TestSupport;
 
@@ -27,4 +28,26 @@ public static class RequireExtensions
         answer.Holds(out _, out var failure)
             ? throw new InvalidOperationException("Expected the plugin adapter to answer a failure here.")
             : failure;
+
+    /// <summary>The value a source read or write answered; its failure here is a broken fixture.</summary>
+    public static T Value<T>(this SourceAnswer<T> answer) =>
+        answer.Holds(out var value, out var failure)
+            ? value
+            : throw new InvalidOperationException($"Expected the source adapter to answer here: {failure.Reason}");
+
+    /// <summary>The failure a source read or write answered, which the test asked for.</summary>
+    public static SourceFailure Stopped<T>(this SourceAnswer<T> answer) =>
+        answer.Holds(out _, out var failure)
+            ? throw new InvalidOperationException("Expected the source adapter to answer a failure here.")
+            : failure;
+
+    /// <summary>A source write that answers no value went through; its failure here is a broken fixture.</summary>
+    public static void Wrote(this SourceFailure? failure)
+    {
+        if (failure is not null) throw new InvalidOperationException($"Expected the source write to go through: {failure.Reason}");
+    }
+
+    /// <summary>The failure a source write answered, which the test asked for.</summary>
+    public static SourceFailure Failed(this SourceFailure? failure) =>
+        failure ?? throw new InvalidOperationException("Expected the source write to answer a failure here.");
 }

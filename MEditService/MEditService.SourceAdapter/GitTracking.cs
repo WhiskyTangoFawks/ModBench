@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using MEditService.Codec.Serialization;
 
 namespace MEditService.SourceAdapter;
@@ -31,7 +30,7 @@ internal static class GitTracking
         {
             if (!git.Exists)
                 journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: git.GitDirectory);
-            CreateRepository(git, modFolder);
+            CreateRepository(git);
             journal.Write(gitignorePath, System.Text.Encoding.UTF8.GetBytes(GitignoreContent));
             git.Run("add", "-A");
             git.Run("commit", "-q", "-m", $"Track {SourceRepositoryLayout.ModNameIn(modFolder)}");
@@ -74,18 +73,9 @@ internal static class GitTracking
         return (written, refused);
     }
 
-    private static void CreateRepository(SourceRepositoryGit git, string modFolder)
+    private static void CreateRepository(SourceRepositoryGit git)
     {
-        // Starting git throws Win32Exception both for a git that cannot run and for a working directory
-        // that is gone; the mod folder standing leaves only git.
-        try
-        {
-            git.Run("init", "-q", "-b", "main");
-        }
-        catch (Win32Exception ex) when (Directory.Exists(modFolder))
-        {
-            throw new GitUnavailableException(ex);
-        }
+        git.Run("init", "-q", "-b", "main");
         git.Run("config", $"{SourceRepositoryGit.TrackMarkSection}.{SourceRepositoryGit.TrackMarkKey}", "true");
         git.Run("config", "core.autocrlf", "false");
         git.Run("config", "commit.gpgsign", "false");

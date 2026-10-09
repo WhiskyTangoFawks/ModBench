@@ -11,7 +11,7 @@ public sealed class SourceTransactionTests : IDisposable
     private const GameRelease Release = GameRelease.Fallout4;
     private const string PluginName = "Fixture.esp";
     private const int ActsInTheSequence = 5;
-    private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
+    private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
 
     public static TheoryData<int> EveryActPosition => [.. Enumerable.Range(0, ActsInTheSequence)];
 
@@ -24,12 +24,8 @@ public sealed class SourceTransactionTests : IDisposable
     private static string Fk(string hex) => $"{hex}:{PluginName}";
 
 
-    private static readonly DocumentRekey RewritesTheKey = new(
-        (document, newFormKey) => document.Body.Replace(document.FormKey, newFormKey, StringComparison.Ordinal),
-        (_, _, _) => null);
-
     private void Rekey(SourceTransaction transaction, string recordType, string editorId, string from, string to) =>
-        transaction.Rekey(Repo, Plugin, new RecordIdentity(Fk(from), recordType, editorId), Fk(to), RewritesTheKey);
+        transaction.Rekey(Repo, Plugin, new RecordIdentity(Fk(from), recordType, editorId), Fk(to));
 
     private string? RolledBack(Action<SourceTransaction> acts) => TransactionRollback.After(Repo, acts);
 
@@ -37,7 +33,7 @@ public sealed class SourceTransactionTests : IDisposable
         $"{{\n  \"FormKey\": \"{formKey}\",\n  \"EditorID\": \"{editorId}\"\n}}";
 
     private void Seed(string formKey, string recordType, string editorId) =>
-        Repo.Put(Plugin, new SourceDocument(formKey, recordType, editorId, Body(formKey, editorId)));
+        Repo.Put(Plugin, new SourceDocument(formKey, recordType, editorId, Body(formKey, editorId))).Wrote();
 
     private static string FlatFile(string root, string formKey, string recordType, string editorId) =>
         SourceDocumentPath.Of(root, PluginName, recordType, formKey, editorId, Release);
@@ -139,7 +135,7 @@ public sealed class SourceTransactionTests : IDisposable
         {
             const string body = "{\n  \"FormKey\": \"000910:Fixture.esp\",\n  \"EditorID\": \"Out\",\n  \"Grid\": {\n    \"Point\": \"9, -9\"\n  }\n}";
             transaction.PutInWorldspace(Repo, Plugin, new SourceDocument(Fk("000910"), "cell", "Out", body), Fk("000900"));
-            Assert.Equal(Fk("000910"), Repo.GetCellAt(Plugin, Fk("000900"), 9, -9)?.FormKey);
+            Assert.Equal(Fk("000910"), Repo.GetCellAt(Plugin, Fk("000900"), 9, -9).Value()?.FormKey);
         });
 
         Assert.Null(left);
@@ -237,10 +233,10 @@ public sealed class SourceTransactionTests : IDisposable
         BlockTheWriteWithADirectoryAtTheDocumentsPath(FlatFile(Fk("000800"), "npc_", "Fresh"));
         var before = TreeSnapshot.Of(_root);
 
-        var left = RolledBack(transaction => Assert.ThrowsAny<Exception>(() => transaction.Put(
-            Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Fresh", Body(Fk("000800"), "Rewritten")))));
+        var failure = SourceTransaction.Atomically(Repo, transaction => transaction.Put(
+            Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Fresh", Body(Fk("000800"), "Rewritten"))));
 
-        Assert.Null(left);
+        Assert.DoesNotContain(" — ", Assert.IsType<SourceFailure.Inaccessible>(failure).Reason, StringComparison.Ordinal);
         Assert.Equal(before, TreeSnapshot.Of(_root));
     }
 
@@ -263,11 +259,11 @@ public sealed class SourceTransactionTests : IDisposable
         Assert.Equal(Body(Fk("000800"), "First"), File.ReadAllText(FlatFile(Fk("000800"), "npc_", "First")));
     }
 
-    private void FailAfterAThirdPartyChangedAFile(Exception cause)
+    private SourceFailure? FailAfterAThirdPartyChangedAFile(Exception cause)
     {
         Seed(Fk("000800"), "npc_", "Contested");
         var contestedFile = FlatFile(Fk("000800"), "npc_", "Contested");
-        SourceTransaction.Atomically(Repo, transaction =>
+        return SourceTransaction.Atomically(Repo, transaction =>
         {
             transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Contested", Body(Fk("000800"), "Ours")));
             File.WriteAllText(contestedFile, "someone else's work");
@@ -276,14 +272,14 @@ public sealed class SourceTransactionTests : IDisposable
     }
 
     [Fact]
-    public void Atomically_AFailedWriteThatLeavesAPath_ThrowsAnIOExceptionNamingItWithTheCauseInside()
+    public void Atomically_AFailedWriteThatLeavesAPath_AnswersItInaccessible_NamingThePathWithTheCauseInside()
     {
         var cause = new IOException("disk gone");
 
-        var report = Assert.Throws<IOException>(() => FailAfterAThirdPartyChangedAFile(cause));
+        var report = Assert.IsType<SourceFailure.Inaccessible>(FailAfterAThirdPartyChangedAFile(cause));
 
-        Assert.Same(cause, report.InnerException);
-        Assert.Contains("Contested - 000800_Fixture.esp.json", report.Message, StringComparison.Ordinal);
+        Assert.Same(cause, report.Error?.InnerException);
+        Assert.Contains("Contested - 000800_Fixture.esp.json", report.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -295,6 +291,57 @@ public sealed class SourceTransactionTests : IDisposable
 
         Assert.Same(cause, report.InnerException);
         Assert.Contains("Contested - 000800_Fixture.esp.json", report.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Atomically_AWriteThatAnswersAFailureAfterApplyingAChange_PutsTheChangeBack_AndAnswersTheFailure()
+    {
+        Seed(Fk("000800"), "npc_", "Kept");
+        var before = TreeSnapshot.Of(_root);
+
+        var answered = SourceTransaction.Atomically(Repo, transaction =>
+        {
+            transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Kept", Body(Fk("000800"), "Ours")));
+            return Repo.Get(Plugin, Fk("000800")).Then(_ => Repo.ChangesToRewrite(
+                Plugin, new SourceDocument(Fk("000999"), "npc_", "Absent", Body(Fk("000999"), "Absent"))));
+        });
+
+        Assert.IsType<SourceFailure.NotCarried>(answered.Stopped());
+        Assert.Equal(before, TreeSnapshot.Of(_root));
+    }
+
+    [Fact]
+    public void Apply_HandedAFailedAnswerAfterAChangeApplied_PutsTheChangeBack_AndAnswersTheFailure()
+    {
+        Seed(Fk("000800"), "npc_", "Kept");
+        var before = TreeSnapshot.Of(_root);
+
+        var failure = SourceTransaction.Atomically(Repo, transaction =>
+        {
+            transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Kept", Body(Fk("000800"), "Ours")));
+            transaction.Apply(Repo.ChangesToRewrite(Plugin, new SourceDocument(Fk("000999"), "npc_", "Absent", Body(Fk("000999"), "Absent"))));
+        });
+
+        Assert.IsType<SourceFailure.NotCarried>(failure);
+        Assert.Equal(before, TreeSnapshot.Of(_root));
+    }
+
+    [Fact]
+    public void Apply_HandedAFailedAnswerWhosePutBackLeavesAPath_KeepsTheFailuresKind_AndNamesThePath()
+    {
+        Seed(Fk("000800"), "npc_", "Contested");
+        var contestedFile = FlatFile(Fk("000800"), "npc_", "Contested");
+
+        var failure = SourceTransaction.Atomically(Repo, transaction =>
+        {
+            transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Contested", Body(Fk("000800"), "Ours")));
+            File.WriteAllText(contestedFile, "someone else's work");
+            transaction.Apply(Repo.ChangesToRewrite(Plugin, new SourceDocument(Fk("000999"), "npc_", "Absent", Body(Fk("000999"), "Absent"))));
+        });
+
+        var notCarried = Assert.IsType<SourceFailure.NotCarried>(failure);
+        Assert.Contains("Contested - 000800_Fixture.esp.json — changed by something else", notCarried.Reason, StringComparison.Ordinal);
+        Assert.Equal("someone else's work", File.ReadAllText(contestedFile));
     }
 
     [Fact]
@@ -340,10 +387,9 @@ public sealed class SourceTransactionTests : IDisposable
             Path.Combine(directory, Path.GetFileName(PluginSourceRoot.ContainerDocument(movedDirectory))));
         var before = TreeSnapshot.Of(_root);
 
-        var left = RolledBack(transaction =>
-            Assert.ThrowsAny<Exception>(() => Rekey(transaction, "wrld", "Home", "000900", "000901")));
+        var failure = SourceTransaction.Atomically(Repo, transaction => Rekey(transaction, "wrld", "Home", "000900", "000901"));
 
-        Assert.Null(left);
+        Assert.IsType<SourceFailure.Inaccessible>(failure);
         Assert.Equal(before, TreeSnapshot.Of(_root));
     }
 

@@ -71,7 +71,7 @@ public sealed class DecompileChurnTests : IDisposable
     [Fact]
     public async Task DeleteRecord_Compile_Decompile_LeavesAStatusNamingOnlyTheDeletedRecordsFile()
     {
-        var victim = TreeDocuments.Of(TrackedTree.Repository(_modFolder), Plugin).First(document => document.RecordType == "npc_");
+        var victim = TreeDocuments.Of(TrackedTree.Repository(_modFolder, Plugin), Plugin).First(document => document.RecordType == "npc_");
         var victimFile = TrackedTree.DocumentFile(_modFolder, Plugin, victim.FormKey).Require();
         var deleted = TestEditService.DeleteHandler(_holder).DeleteRecordsSync([new RecordAt(Plugin, victim.FormKey)]);
         Assert.Empty(deleted.Refused);
@@ -85,7 +85,7 @@ public sealed class DecompileChurnTests : IDisposable
     [Fact]
     public async Task MovingAListElementInsideOneRecord_Compile_Decompile_ReadsAsAReorderOfThatRecordsFileAlone()
     {
-        var (document, list) = TreeDocuments.Of(TrackedTree.Repository(_modFolder), Plugin)
+        var (document, list) = TreeDocuments.Of(TrackedTree.Repository(_modFolder, Plugin), Plugin)
             .SelectMany(document => ListsOf(document).Select(list => (document, list)))
             .First();
         var file = TrackedTree.DocumentFile(_modFolder, Plugin, document.FormKey).Require();

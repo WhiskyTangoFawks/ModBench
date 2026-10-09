@@ -652,24 +652,28 @@ internal sealed class Reconciler(
         var truth = scope.Projector.TruthOf(plugin.Registered);
         if (truth != DerivedFrom.SourceTree) return IndexFromBinary(scope, plugin, truth);
 
+        ReadOutcome stoppedAt;
         try
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation("Ingesting {Plugin} from its source tree", plugin.Name);
             }
-            scope.Projector.Ingest(plugin, token);
-            return ReadOutcome.Read;
+            if (scope.Projector.Ingest(plugin, token) is not { } stopped) return ReadOutcome.Read;
+            logger.LogWarning("Could not ingest {Plugin} from its source tree; reading its binary: {Reason}", plugin.Name, stopped.Reason);
+            stoppedAt = ReadOutcome.StoppedAt(stopped);
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
             // Every exception, not a curated set: a third-party deserializer fails in open-ended ways.
             logger.LogWarning(ex, "Could not ingest {Plugin} from its source tree; reading its binary", plugin.Name);
-            var binary = BinaryStandsIn(scope.Index, plugin.Key, state)
-                ? ReadOutcome.Read
-                : IndexFromBinary(scope, plugin, DerivedFrom.BinaryForUnreadableSource);
-            return binary.Failure is null ? ReadOutcome.StoppedAt(ex) : binary;
+            stoppedAt = ReadOutcome.StoppedAt(ex);
         }
+
+        var binary = BinaryStandsIn(scope.Index, plugin.Key, state)
+            ? ReadOutcome.Read
+            : IndexFromBinary(scope, plugin, DerivedFrom.BinaryForUnreadableSource);
+        return binary.Failure is null ? stoppedAt : binary;
     }
 
     // A tree that fails at every snapshot reads its binary once per change of its bytes.
@@ -764,8 +768,9 @@ internal sealed class Reconciler(
             // Gained records are refreshed by key so the rows that moved are named (ADR-0015).
             if (report.NeedsRebuild && report.ChangedKeys.Count > 0 && plugin.Provider is PluginProvider.FromMod)
             {
-                scope.Projector.RefreshByKeys(plugin.Registered, report.ChangedKeys);
-                return false;
+                if (scope.Projector.RefreshByKeys(plugin.Registered, report.ChangedKeys) is not { } stopped) return false;
+                logger.LogWarning("Reconciling {Plugin}: {Failure}; reading it whole", key.Name, stopped.Reason);
+                return true;
             }
             // An untracked plugin's rows went with its file, and the file is back.
             return report.NeedsRebuild || (!holdsTree && scope.Index.IndexedContentHash(key) is null);

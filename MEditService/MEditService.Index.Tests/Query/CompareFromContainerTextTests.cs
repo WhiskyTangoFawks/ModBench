@@ -63,7 +63,7 @@ public sealed class CompareFromContainerTextTests : IDisposable
     private static string TextOf(IMajorRecordGetter record) => RecordTextCodec.SerializeToText(record, GameRelease.Fallout4);
 
     private string RoomDocument =>
-        _index.Records.GetCopyDocument(Plugin, _room.FormKey.ToString())?.Location
+        _index.Records.GetCopyDocument(Plugin, _room.FormKey.ToString()).Value()?.Location
             ?? throw new InvalidOperationException("Expected the room's document in the tree.");
 
     private CompareOverride ColumnReadFrom(IMajorRecordGetter record, string text) =>

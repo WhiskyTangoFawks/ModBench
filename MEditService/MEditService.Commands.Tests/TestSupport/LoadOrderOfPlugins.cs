@@ -46,7 +46,7 @@ internal sealed class LoadOrderOfPlugins : TestInstance
             throw new InvalidOperationException($"Expected {mod.ModKey}'s document for {formKey} to hold '{replaced}'.");
         var unreadable = text.Replace(replaced, with, StringComparison.Ordinal);
         RepositoryOf(Address(mod)).Require()
-            .Put(Address(mod), new SourceDocument(formKey.ToString(), recordType, null, unreadable));
+            .Put(Address(mod), new SourceDocument(formKey.ToString(), recordType, null, unreadable)).Wrote();
     }
 
     /// <summary>Writes an untracked plugin's file anew, for bytes Mutagen's writer would not produce.</summary>

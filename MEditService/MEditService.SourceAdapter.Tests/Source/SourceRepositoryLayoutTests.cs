@@ -40,8 +40,8 @@ public sealed class SourceRepositoryLayoutTests
         PluginBaselines.TrackWithNoRecords(modFolder);
         var repository = SourceRepository.Open(TestMod.In(modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
-        var plugin = new PluginAddress(pluginFileName, "LayoutMod");
-        repository.Put(plugin, new SourceDocument(formKeyString, recordType, editorId, "{}"));
+        var plugin = new PluginAddress(pluginFileName, TestMod.Name);
+        repository.Put(plugin, new SourceDocument(formKeyString, recordType, editorId, "{}")).Wrote();
 
         var path = Path.GetRelativePath(
             modFolder, Directory.EnumerateFiles(modFolder, "*.json", SearchOption.AllDirectories).Single());
@@ -50,7 +50,7 @@ public sealed class SourceRepositoryLayoutTests
         Assert.Equal("plugin-source", segmentsUnderTheOneRootTrackAndPutBothWriteTo[0]);
         Assert.Equal(pluginFileName, segmentsUnderTheOneRootTrackAndPutBothWriteTo[1]);
 
-        var document = repository.RecordOf(plugin, new RecordIdentity(formKeyString, recordType, editorId));
+        var document = repository.RecordOf(plugin, new RecordIdentity(formKeyString, recordType, editorId)).Value();
 
         Assert.NotNull(document);
         Assert.Equal(formKeyString, document.FormKey);
@@ -129,7 +129,7 @@ public sealed class SourceRepositoryLayoutTests
 
         var named = RepositoryOver(modFolder).InSourceNames(Mixed, read);
 
-        Assert.Equal(Path.Combine("plugin-source", "Mixed.ESP", "Worldspaces", "ByHand", "Hand.json"), named.Anchor);
+        Assert.Equal(Path.Combine("plugin-source", "Mixed.ESP", "Worldspaces", "ByHand", "Hand.json"), named.Value().Anchor);
     }
 
     [Fact]
@@ -142,7 +142,7 @@ public sealed class SourceRepositoryLayoutTests
 
         var named = RepositoryOver(modFolder).InSourceNames(Mixed, read);
 
-        Assert.Equal(Path.Combine("plugin-source", "Mixed.ESP", flat), named.Anchor);
+        Assert.Equal(Path.Combine("plugin-source", "Mixed.ESP", flat), named.Value().Anchor);
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public sealed class SourceRepositoryLayoutTests
         Assert.Equal(
             $"from path: {Path.Combine("plugin-source", "Mixed.ESP", "000000_Mixed.esp.json")}, " +
             $"then {Path.Combine("plugin-source", "Mixed.ESP", container, "W - 000800_Mixed.ESP.json")}",
-            named.Message);
+            named.Value().Message);
     }
 
     [Fact]
@@ -175,7 +175,7 @@ public sealed class SourceRepositoryLayoutTests
 
         Assert.Equal(
             $"Could not read {Path.Combine("plugin-source", "Mixed.ESP", container, "W - 000800_Mixed.ESP.json")}.",
-            named.Message);
+            named.Value().Message);
     }
 
     [Fact]
@@ -186,7 +186,7 @@ public sealed class SourceRepositoryLayoutTests
         WriteByHand(modFolder, Path.Combine("Worldspaces", "ByHand", "One.json"));
         WriteByHand(modFolder, Path.Combine("Worldspaces", "ByHand", "Two.json"));
 
-        Assert.Throws<AmbiguousSourceUnitException>(() => RepositoryOver(modFolder).TreeOf(Mixed));
+        Assert.IsType<SourceFailure.Ambiguous>(RepositoryOver(modFolder).TreeOf(Mixed).Stopped());
     }
 
     [Fact]
@@ -236,7 +236,7 @@ public sealed class SourceRepositoryLayoutTests
         SourceRepository.Open(TestMod.In(modFolder), Release) ?? throw new InvalidOperationException($"Expected '{modFolder}' tracked.");
 
     private static List<string> TreePathsOf(string modFolder) =>
-        [.. RepositoryOver(modFolder).TreeOf(Mixed).Files.Select(file => file.RelativePath).Order(StringComparer.Ordinal)];
+        [.. RepositoryOver(modFolder).TreeOf(Mixed).Value().Files.Select(file => file.RelativePath).Order(StringComparer.Ordinal)];
 
     private static void WriteByHand(string modFolder, string underRoot)
     {

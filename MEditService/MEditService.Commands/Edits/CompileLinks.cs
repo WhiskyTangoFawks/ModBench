@@ -71,8 +71,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
             // Only records with something to report pay for their path, which keeps a container's
             // subtree scan off the common path.
             var identity = new RecordIdentity(record.Document.FormKey, record.RecordType, record.EditorId);
-            var relativePath = repository.RelativePathOf(plugin, identity)
-                ?? throw new InvalidOperationException($"Expected a document to hold {identity.FormKey}.");
+            var relativePath = PathOf(repository, plugin, identity);
             diagnostics.AddRange(errors.Select(
                 message => new CompileDiagnostic(record.Document.FormKey, relativePath, message)));
         }
@@ -84,10 +83,14 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
     internal static CompileDiagnostic PluginDiagnostic(PluginAddress plugin, SourceRepository repository, string message)
     {
         var header = PluginHeader.IdentityOf(plugin.Name);
-        var path = repository.RelativePathOf(plugin, header)
-            ?? throw new InvalidOperationException($"Expected {plugin.Name}'s header to have a document.");
-        return new(header.FormKey, path, message);
+        return new(header.FormKey, PathOf(repository, plugin, header), message);
     }
+
+    private static string PathOf(SourceRepository repository, PluginAddress plugin, RecordIdentity identity) =>
+        repository.RelativePathOf(plugin, identity).Holds(out var path, out var failure) && path is not null
+            ? path
+            : throw new InvalidOperationException(
+                $"Expected the tree this compile read to hold {identity.FormKey}'s document: {failure?.Reason ?? "it holds none"}");
 
     // The same fields the editor shows a CheckError on, from the same builder, so compile and the
     // record panel cannot hold two definitions of what is broken.

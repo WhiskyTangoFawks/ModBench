@@ -38,16 +38,7 @@ internal sealed class PluginCompileService(
 
         // One repository for the whole pass, so the tree it answers from is read once.
         var repository = SourceRepository.Over(mod, loadOrder.GameRelease);
-        PluginSourceFiles sourceFiles;
-        try
-        {
-            sourceFiles = repository.TreeOf(plugin);
-        }
-        catch (AmbiguousSourceUnitException ex)
-        {
-            return CompileResult.Refused(
-                CompileRefusal.SourceDoesNotParse, $"{plugin.Name} could not be read from its source: {ex.Message}");
-        }
+        if (!repository.TreeOf(plugin).Holds(out var sourceFiles, out var unread)) return SourceDoesNotParse(plugin, unread);
 
         // A document the read could not open is content this compile does not have, and compiling the
         // rest would write a binary missing that record with nothing left to notice it
@@ -97,7 +88,8 @@ internal sealed class PluginCompileService(
         // Two source units claiming one FormKey can only become one binary record, so refuse rather
         // than pick a winner. Asked of the files: the reader's group cache has already resolved a
         // same-folder collision before the tree is read.
-        var collidingFormKeys = repository.CollidingFormKeys(plugin, tree.FormKeys);
+        if (!repository.CollidingFormKeys(plugin, tree.FormKeys).Holds(out var collidingFormKeys, out unread))
+            return SourceDoesNotParse(plugin, unread);
         if (collidingFormKeys.Count > 0)
         {
             return CompileResult.Refused(
@@ -106,7 +98,8 @@ internal sealed class PluginCompileService(
                 $"{string.Join(", ", collidingFormKeys)}.");
         }
 
-        var comparison = repository.Compare(plugin, await tree.SerializeTreeAsync());
+        if (!repository.Compare(plugin, await tree.SerializeTreeAsync()).Holds(out var comparison, out unread))
+            return SourceDoesNotParse(plugin, unread);
         var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(comparison.Divergence, plugin);
         if (roundTripRefusal != null)
             return CompileResult.Refused(CompileRefusal.SourceDoesNotRoundTrip, roundTripRefusal);
@@ -116,14 +109,13 @@ internal sealed class PluginCompileService(
         var loadOrderNames = loadOrder.InJudgedOrder().Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         var saved = await tree.SaveAsync(registered.Path, loadOrderNames, save => repository.WriteBinary(plugin, save.BinarySha256(), save.Commit));
-        if (!saved.Holds(out var recorded, out var failure))
+        if (!saved.Holds(out var landed, out var failure))
         {
             return failure is PluginFailure.PrunedMaster
                 ? CompileResult.Refused(CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be compiled: {failure.Reason}")
-                : CompileResult.Refused(
-                    CompileRefusal.WriteFailed,
-                    $"Could not write {plugin.Name}: {failure.Reason} Its source is untouched, so compiling again rebuilds it.");
+                : WriteFailed(plugin, failure.Reason);
         }
+        if (!landed.Holds(out var recorded, out var unwritten)) return WriteFailed(plugin, unwritten.Reason);
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -141,6 +133,13 @@ internal sealed class PluginCompileService(
         }
         return CompileResult.Success(diagnostics);
     }
+
+    private static CompileResult SourceDoesNotParse(PluginAddress plugin, SourceFailure unread) =>
+        CompileResult.Refused(CompileRefusal.SourceDoesNotParse, $"{plugin.Name} could not be read from its source: {unread.Reason}");
+
+    private static CompileResult WriteFailed(PluginAddress plugin, string reason) =>
+        CompileResult.Refused(
+            CompileRefusal.WriteFailed, $"Could not write {plugin.Name}: {reason} Its source is untouched, so compiling again rebuilds it.");
 
     private sealed record Content(IReadOnlyList<SourceRecord> Records, IReadOnlyCollection<string> Links);
 
@@ -168,7 +167,9 @@ internal sealed class PluginCompileService(
         if ((await adapter.ReadTreeAsync(files, release)).Holds(out var tree, out var failure)) return (tree, null);
 
         logger.LogWarning("{Plugin} could not be read from its source: {Reason}", plugin.Name, failure.Reason);
-        var why = failure is PluginFailure.Unparsed unparsed ? repository.InSourceNames(plugin, unparsed.Diagnosis).Describe() : failure.Reason;
+        var why = failure is PluginFailure.Unparsed unparsed && repository.InSourceNames(plugin, unparsed.Diagnosis).Holds(out var named, out _)
+            ? named.Describe()
+            : failure.Reason;
         return (null, $"{plugin.Name} could not be read from its source: {why} {RegenerateTheSource}");
     }
 

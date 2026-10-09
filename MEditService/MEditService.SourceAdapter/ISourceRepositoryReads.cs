@@ -8,22 +8,19 @@ public interface ISourceRepositoryReads
 {
     RecordStamps StampsOf(PluginAddress plugin);
 
-    IPluginDocuments OpenDocuments(PluginAddress plugin);
+    SourceAnswer<T> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read);
 
-    IReadOnlyDictionary<string, RecordChange> ChangedSinceLastCommit(
-        PluginAddress plugin);
+    SourceAnswer<IReadOnlyDictionary<string, RecordChange>> ChangedSinceLastCommit(PluginAddress plugin);
 
-    SourceDocument? RecordOf(PluginAddress plugin, RecordIdentity identity);
+    SourceAnswer<SourceDocument?> RecordOf(PluginAddress plugin, RecordIdentity identity);
 
-    void RefuseUnreadable(
-        PluginAddress plugin, RecordIdentity identity, string body);
+    SourceFailure? WhyUnreadable(PluginAddress plugin, RecordIdentity identity, string body);
 
-    SourceDocument? RecordFromText(
-        PluginAddress plugin, string formKey, string text);
+    SourceAnswer<SourceDocument?> RecordFromText(PluginAddress plugin, string formKey, string text);
 
-    DocumentFile? DocumentOf(PluginAddress plugin, RecordIdentity identity);
+    SourceAnswer<DocumentFile?> DocumentOf(PluginAddress plugin, RecordIdentity identity);
 
-    string? RelativePathOf(PluginAddress plugin, RecordIdentity identity);
+    SourceAnswer<string?> RelativePathOf(PluginAddress plugin, RecordIdentity identity);
 
-    string? FileNameOf(PluginAddress plugin, RecordIdentity identity);
+    SourceAnswer<string?> FileNameOf(PluginAddress plugin, RecordIdentity identity);
 }

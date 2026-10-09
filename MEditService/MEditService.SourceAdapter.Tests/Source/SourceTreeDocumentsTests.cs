@@ -14,7 +14,7 @@ namespace MEditService.SourceAdapter.Tests.Source;
 public sealed class SourceTreeDocumentsTests : IDisposable
 {
     private const string PluginName = "TreeDocuments.esp";
-    private static readonly PluginAddress Plugin = new(PluginName, "TreeDocumentsMod");
+    private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly ScratchDirectory _modFolder = new("medit-treedocuments-");
@@ -81,11 +81,10 @@ public sealed class SourceTreeDocumentsTests : IDisposable
         SourceRepository.Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
-    private Dictionary<string, PluginDocument> Documents()
-    {
-        using var tree = Repository.OpenDocuments(Plugin);
-        return tree.Records.ToDictionary(document => document.FormKey, document => document, StringComparer.Ordinal);
-    }
+    private Dictionary<string, PluginDocument> Documents() =>
+        Repository.ReadDocuments(
+                Plugin, tree => tree.Records.ToDictionary(document => document.FormKey, document => document, StringComparer.Ordinal))
+            .Value();
 
     private List<IMajorRecordGetter> EveryEmbeddedChild() =>
         [_persistentRef, _temporaryRef, _landscape, _topCell, _topCellRef, _topic, _response];
@@ -158,7 +157,7 @@ public sealed class SourceTreeDocumentsTests : IDisposable
     public void AChildInASingleValueSlot_IsTheSameBytesTheRepositorysGetAnswers()
     {
         var landscape = _landscape.FormKey.ToString();
-        var document = Repository.RecordOf(Plugin, new RecordIdentity(landscape, "land", _landscape.EditorID))
+        var document = Repository.RecordOf(Plugin, new RecordIdentity(landscape, "land", _landscape.EditorID)).Value()
             ?? throw new InvalidOperationException("Expected the landscape to have a source document.");
 
         Assert.Equal(document.Body, Documents()[landscape].Text);

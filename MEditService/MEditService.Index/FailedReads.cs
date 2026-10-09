@@ -51,14 +51,14 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
             state = ReadStateOf(plugin);
             var outcome = read(state);
             if (outcome.Served) Forget(plugin.Key);
-            else Remember(plugin.Key, state, state.Vouches && StateObserves(outcome), outcome.StoppedBy);
+            else Remember(plugin.Key, state, state.Vouches && StateObserves(outcome), outcome.TreeStopped);
             return outcome;
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
             // A plugin file's own failure is an answer, so a throw is the store's or the tree's, and
             // nothing the state holds observes it.
-            Remember(plugin.Key, state, stands: false, ex);
+            Remember(plugin.Key, state, stands: false, treeStopped: null);
             throw;
         }
     }
@@ -67,19 +67,18 @@ internal sealed class FailedReads(DuckDbRecordIndex index, ISourceAdapter source
     // holds nothing of git or of a file another process held, so those are read again at the next
     // reconcile.
     private static bool StateObserves(ReadOutcome outcome) =>
-        outcome.Failure is not PluginFailure.Inaccessible
-        && outcome.StoppedBy is null or UnreadableSourceDocumentException or AmbiguousSourceUnitException;
+        outcome is { Failure: not PluginFailure.Inaccessible, StoppedBy: null, TreeStopped: null or SourceFailure.Unreadable or SourceFailure.Ambiguous };
 
     public void Forget(PluginAddress key)
     {
         lock (_lock) _failed.Remove(key);
     }
 
-    private void Remember(PluginAddress key, ReadState? state, bool stands, Exception? stoppedBy)
+    private void Remember(PluginAddress key, ReadState? state, bool stands, SourceFailure? treeStopped)
     {
         IReadOnlyList<SourceFileFailure> files =
         [
-            .. (state?.FileFailuresOf(key) ?? []).Concat(SourceFileFailure.Of(key, stoppedBy))
+            .. (state?.FileFailuresOf(key) ?? []).Concat(SourceFileFailure.Of(key, treeStopped))
                 .DistinctBy(file => (file.SourceRelativePath, file.FormKey)),
         ];
         lock (_lock) _failed[key] = new Failure(state, stands, files);

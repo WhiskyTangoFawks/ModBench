@@ -15,16 +15,16 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
 {
     // The cell document that takes the record in, the worldspace a new one goes in, and the header's
     // changes that move its Next Object ID past a cell minted for it.
-    private sealed record Landed(SourceDocument Cell, string? NewInWorldspace, SourceChanges HeaderChanges);
+    private sealed record Landed(SourceDocument Cell, string? NewInWorldspace, SourceAnswer<SourceChanges> HeaderChanges);
 
     // A cell copied in or minted, and the header's changes a minted one needs.
-    private sealed record CellIn(JsonObject Cell, SourceChanges HeaderChanges);
+    private sealed record CellIn(JsonObject Cell, SourceAnswer<SourceChanges> HeaderChanges);
 
     private sealed record Move(
         PluginAddress Plugin, SourceRepository Repository, GameRelease Release, RecordIdentity Moved, string Worldspace,
         string CellType, string Spelled);
 
-    // One step of a landing: the value it yields, or the refusal that ends the landing.
+    // One step of a landing: the value it yields, or the refusal or source failure that ends the landing.
     private abstract record Step<T>
     {
         private Step()
@@ -33,20 +33,27 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
 
         internal abstract Step<TNext> Then<TNext>(Func<T, Step<TNext>> next);
 
-        internal abstract RecordEditChanges Finish(Func<T, RecordEditChanges> last);
+        internal abstract SourceAnswer<RecordEditChanges> Finish(Func<T, SourceAnswer<RecordEditChanges>> last);
 
         internal sealed record Refused(RecordEditResult Why) : Step<T>
         {
             internal override Step<TNext> Then<TNext>(Func<T, Step<TNext>> next) => new Step<TNext>.Refused(Why);
 
-            internal override RecordEditChanges Finish(Func<T, RecordEditChanges> last) => Why;
+            internal override SourceAnswer<RecordEditChanges> Finish(Func<T, SourceAnswer<RecordEditChanges>> last) => Why;
+        }
+
+        internal sealed record Stopped(SourceFailure Why) : Step<T>
+        {
+            internal override Step<TNext> Then<TNext>(Func<T, Step<TNext>> next) => new Step<TNext>.Stopped(Why);
+
+            internal override SourceAnswer<RecordEditChanges> Finish(Func<T, SourceAnswer<RecordEditChanges>> last) => Why;
         }
 
         internal sealed record Done(T Value) : Step<T>
         {
             internal override Step<TNext> Then<TNext>(Func<T, Step<TNext>> next) => next(Value);
 
-            internal override RecordEditChanges Finish(Func<T, RecordEditChanges> last) => last(Value);
+            internal override SourceAnswer<RecordEditChanges> Finish(Func<T, SourceAnswer<RecordEditChanges>> last) => last(Value);
         }
     }
 
@@ -56,11 +63,10 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
         PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder, string written, CellCrossing crossing, string spelled)
     {
         var failed = $"Moving {edit.Identity.FormKey} into another cell failed";
-        return WriteFailure.Refused<RecordEditChanges>(
-            () => Cross(plugin, edit, holder, written, crossing, spelled), refused => refused, failed, logger);
+        return WriteFailure.Refused(Cross(plugin, edit, holder, written, crossing, spelled), refused => refused, failed, logger);
     }
 
-    private RecordEditChanges Cross(
+    private SourceAnswer<RecordEditChanges> Cross(
         PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder, string written, CellCrossing crossing, string spelled)
     {
         var (release, moved, repository) = edit;
@@ -72,9 +78,12 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
         group.RemoveAt(crossing.Prefix[^1].RequireIndex());
         var given = Document(holder, RecordTextCodec.RoundTrip(root.ToJsonString(), release, holder.RecordType));
 
-        var worldspace = crossing.Prefix is [{ Name: PlacedCell.WorldspacePersistentCellMember }, ..]
-            ? holder.FormKey
-            : repository.WorldspaceOf(plugin, holder);
+        var worldspace = holder.FormKey;
+        if (crossing.Prefix is not [{ Name: PlacedCell.WorldspacePersistentCellMember }, ..]
+            && !repository.WorldspaceOf(plugin, holder).Holds(out worldspace, out var unread))
+        {
+            return unread;
+        }
         if (worldspace is null)
             return CellGroupMove.Unknown(spelled, moved.FormKey, $"{plugin.Name} holds no worldspace above its cell {holder.FormKey}");
 
@@ -82,7 +91,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
             plugin, repository, release, moved, worldspace,
             RecordTypes.For(release).Cell, spelled);
         var landing = crossing.Into is AnotherCell.GridCell grid ? IntoGridCell(move, grid, record) : IntoPersistentCell(move, record);
-        return landing.Finish(landed => new RecordEditChanges(
+        return landing.Finish(landed => RecordEditChanges.Making(
             RecordEditResult.Success(),
             repository.ChangesToRewrite(plugin, given).Then(landed.NewInWorldspace is { } into
                 ? repository.ChangesToPutInWorldspace(plugin, landed.Cell, into)
@@ -91,15 +100,16 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
 
     private Step<Landed> IntoPersistentCell(Move move, JsonNode record)
     {
-        if (move.Repository.Get(move.Plugin, move.Worldspace) is not { } document)
+        if (!move.Repository.Get(move.Plugin, move.Worldspace).Holds(out var held, out var unread)) return new Step<Landed>.Stopped(unread);
+        if (held is not { } document)
         {
             return new Step<Landed>.Refused(CellGroupMove.Unknown(
                 move.Spelled, move.Moved.FormKey, $"{move.Plugin.Name} holds no document for its worldspace {move.Worldspace}"));
         }
 
         var worldspace = Parsed(document.Body, move.Worldspace);
-        Step<CellIn> cell = worldspace[PlacedCell.WorldspacePersistentCellMember] is JsonObject held
-            ? new Step<CellIn>.Done(new(held, SourceChanges.None))
+        Step<CellIn> cell = worldspace[PlacedCell.WorldspacePersistentCellMember] is JsonObject heldCell
+            ? new Step<CellIn>.Done(new(heldCell, SourceChanges.None))
             : CopiedOrNew(
                     move,
                     MastersWalkOf(move).NearestCopy(move.Worldspace, copy => copy[PlacedCell.WorldspacePersistentCellMember] is JsonObject),
@@ -172,7 +182,8 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
                     SourceChanges.None));
         }
 
-        var allocator = FormKeyAllocator.Over(move.Repository, move.Plugin, move.Release);
+        if (!FormKeyAllocator.Over(move.Repository, move.Plugin, move.Release).Holds(out var allocator, out var unread))
+            return new Step<CellIn>.Stopped(unread);
         if (GridCells.Mint(
                 allocator, schemaReflector.GetSchemas(move.Release)[move.CellType], move.Release, grid,
                 out var cell) is { } exhausted)

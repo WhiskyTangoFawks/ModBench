@@ -21,20 +21,13 @@ internal sealed class NewRecordCopy
 
     /// <summary>The fresh FormKey comes from the same allocator create draws on. A self-link is
     /// remapped onto it, as xEdit does.</summary>
-    internal RecordEditResult Copy(CopySource source, string formKey, PluginAddress destinationPlugin)
+    internal SourceAnswer<RecordEditResult> Copy(CopySource source, string formKey, PluginAddress destinationPlugin)
     {
         if (_targets.ResolveCopySource(destinationPlugin, source, formKey, out var copy) is { } blocked) return blocked;
-        try
-        {
-            return CopyAsNewRecord(copy, destinationPlugin);
-        }
-        catch (UnreadableSourceDocumentException ex)
-        {
-            return WriteTargets.RefuseUnreadableSource(formKey, ex.Message);
-        }
+        return CopyAsNewRecord(copy, destinationPlugin);
     }
 
-    private RecordEditResult CopyAsNewRecord(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin)
+    private SourceAnswer<RecordEditResult> CopyAsNewRecord(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin)
     {
         var (source, identity, destination, release, _) = copy;
         if (RefuseIfDisallowedForCopyAsNewRecord(identity.RecordType, RecordTypes.For(release)) is { } disallowedRefusal) return disallowedRefusal;
@@ -51,12 +44,12 @@ internal sealed class NewRecordCopy
             (transaction, duplicate) =>
             {
                 transaction.Apply(destination.Repository.ChangesToPut(destinationPlugin, duplicate));
-                return RecordEditResult.Success();
+                return SourceAnswer.Of(RecordEditResult.Success());
             },
             "new working-tree source document");
     }
 
-    private RecordEditResult CopyEmbeddedChildAsNewRecord(
+    private SourceAnswer<RecordEditResult> CopyEmbeddedChildAsNewRecord(
         WriteTargets.CopyTarget copy, DocumentContainment container, PluginAddress destinationPlugin) =>
         CopyUnderNextFormKey(
             copy, destinationPlugin,
@@ -64,24 +57,27 @@ internal sealed class NewRecordCopy
                 transaction, copy.Source, container, duplicate, copy.Destination, copy.Release),
             $"inside {container.ParentFormKey}'s {container.SlotName} slot");
 
-    private RecordEditResult CopyUnderNextFormKey(
-        WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, Func<SourceTransaction, SourceDocument, RecordEditResult> land,
-        string landedAt)
+    private SourceAnswer<RecordEditResult> CopyUnderNextFormKey(
+        WriteTargets.CopyTarget copy, PluginAddress destinationPlugin,
+        Func<SourceTransaction, SourceDocument, SourceAnswer<RecordEditResult>> land, string landedAt)
     {
         var (source, identity, destination, release, body) = copy;
-        var allocator = FormKeyAllocator.Over(destination.Repository, destinationPlugin, release);
+        if (!FormKeyAllocator.Over(destination.Repository, destinationPlugin, release).Holds(out var allocator, out var unread)) return unread;
         if (allocator.Next(out var targetFormKey) is { } refusedTarget) return refusedTarget;
+        if (!destination.Repository.EditorIdsHeld(destinationPlugin).Holds(out var editorIdsHeld, out unread)) return unread;
 
         var named = RecordDocumentEdits.DuplicatedWithoutChildren(
-            body, release, identity.RecordType, targetFormKey,
-            EditorIdDeriver(destination.Repository.EditorIdsHeld(destinationPlugin)));
+            body, release, identity.RecordType, targetFormKey, EditorIdDeriver(editorIdsHeld));
         var duplicate = new SourceDocument(targetFormKey, identity.RecordType, named.EditorId, named.Text);
-        var landed = SourceTransaction.Atomically(destination.Repository, transaction =>
+        if (!SourceTransaction.Atomically(destination.Repository, transaction =>
+                land(transaction, duplicate).Then(landing =>
+                {
+                    if (landing.Applied) transaction.Apply(allocator.HeaderChanges());
+                    return SourceAnswer.Of(landing);
+                })).Holds(out var landed, out unread))
         {
-            var landing = land(transaction, duplicate);
-            if (landing.Applied) transaction.Apply(allocator.HeaderChanges());
-            return landing;
-        });
+            return unread;
+        }
         if (!landed.Applied) return landed;
 
         if (_logger.IsEnabled(LogLevel.Information))

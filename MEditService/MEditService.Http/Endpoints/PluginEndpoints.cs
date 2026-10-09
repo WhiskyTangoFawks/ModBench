@@ -338,19 +338,17 @@ internal static class PluginEndpoints
     }
 
     private static IResult PluginRecordAnswer<T>(
-        string plugin, string formKey, string? origin, Func<PluginAddress, string, T?> answer) where T : class
+        string plugin, string formKey, string? origin, Func<PluginAddress, string, T?> answer) where T : class =>
+        PluginRecordAnswer(plugin, formKey, origin, (address, key) => SourceAnswer.Of(answer(address, key)));
+
+    // A source tree that cannot say where the copy is answers why.
+    private static IResult PluginRecordAnswer<T>(
+        string plugin, string formKey, string? origin, Func<PluginAddress, string, SourceAnswer<T?>> answer) where T : class
     {
         if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-        try
-        {
-            return answer(WriteEndpointMapping.PluginAddressOf(plugin, origin), Uri.UnescapeDataString(formKey)) is { } found
-                ? Results.Ok(found)
-                : Results.Problem("The plugin holds no such record.", statusCode: 404);
-        }
-        catch (AmbiguousSourceUnitException ex)
-        {
-            return Results.Problem(ex.Message, statusCode: 422);
-        }
+        if (!answer(WriteEndpointMapping.PluginAddressOf(plugin, origin), Uri.UnescapeDataString(formKey)).Holds(out var found, out var failure))
+            return Results.Problem(failure.Reason, statusCode: 422);
+        return found is not null ? Results.Ok(found) : Results.Problem("The plugin holds no such record.", statusCode: 404);
     }
 }
 

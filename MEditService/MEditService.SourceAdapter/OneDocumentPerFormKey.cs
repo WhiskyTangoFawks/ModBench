@@ -22,7 +22,7 @@ internal sealed class OneDocumentPerFormKey(string modFolder)
     {
         Hold(formKey, document);
         if (_holdings[formKey] is { Count: > 1 } holdings)
-            throw new AmbiguousSourceUnitException(ClaimOf(formKey, holdings));
+            throw SourceStopException.Ambiguous(ClaimOf(formKey, holdings));
     }
 
     /// <summary>The one holding of <paramref name="holdings"/>, null for none, and a throw for
@@ -32,7 +32,7 @@ internal sealed class OneDocumentPerFormKey(string modFolder)
         {
             0 => null,
             1 => holdings[0],
-            _ => throw new AmbiguousSourceUnitException(
+            _ => throw SourceStopException.Ambiguous(
                 ClaimOf(formKey, [.. holdings.Select(d => Path.GetRelativePath(modFolder, d))])),
         };
 

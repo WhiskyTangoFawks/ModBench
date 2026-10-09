@@ -4,7 +4,6 @@ using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 
 namespace MEditService.Http;
 
@@ -60,7 +59,20 @@ internal sealed record RecordEditChangesRequest(RecordEditRequest Edit, string T
 /// <summary>The changes an edit makes to plugin source, written nowhere: each move, then each document's
 /// new text at its absolute path once moved. A refusal is ProblemDetails, as the edit's is.</summary>
 internal sealed record RecordEditChangesResponse(
-    string FormKey, string Path, IReadOnlyList<SourceMove> Moves, IReadOnlyList<DocumentChange> Documents, string? NewFormKey = null);
+    string FormKey, string Path, IReadOnlyList<SourceMove> Moves, IReadOnlyList<DocumentChange> Documents, string? NewFormKey = null)
+{
+    internal static RecordEditChangesResponse Of(string formKey, string path, RecordEditChanges answer) =>
+        new(formKey, path,
+            [.. answer.Changes.Moves.Select(move => new SourceMove(move.From, move.To))],
+            [.. answer.Changes.Documents.Select(document => new DocumentChange(document.Path, document.Text))],
+            answer.Outcome.NewFormKey);
+}
+
+/// <summary>A file or folder an edit moves, by absolute path.</summary>
+internal sealed record SourceMove(string From, string To);
+
+/// <summary>A document's new text at its absolute path once every move is made.</summary>
+internal sealed record DocumentChange(string Path, string Text);
 
 // The three lifecycle gestures' wire shapes, on the same door (Plugin/Origin as the compound
 // identity, refusals as ProblemDetails carrying the same `refusal` extension) Edit already

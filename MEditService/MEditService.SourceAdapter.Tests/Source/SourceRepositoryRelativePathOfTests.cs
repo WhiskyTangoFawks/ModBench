@@ -11,7 +11,7 @@ namespace MEditService.SourceAdapter.Tests.Source;
 public sealed class SourceRepositoryRelativePathOfTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
-    private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
+    private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
     private static readonly string HeaderPath = PluginSourceRoot.HeaderDocument(PluginName);
 
     private readonly ScratchDirectory _modFolder = new("medit-relative-path-of-");
@@ -35,7 +35,7 @@ public sealed class SourceRepositoryRelativePathOfTests : IDisposable
 
         Assert.Equal(
             HeaderPath,
-            repository.RelativePathOf(Plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, EditorId: null)));
+            repository.RelativePathOf(Plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, EditorId: null)).Value());
     }
 
     [Fact]
@@ -47,9 +47,8 @@ public sealed class SourceRepositoryRelativePathOfTests : IDisposable
         File.WriteAllText(neighbour, "{\"FormKey\": \"000800:Fixture.esp\", \"EditorID\": \"Neighbour\"}");
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(PluginName));
 
-        var removed = repository.Remove(Plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, EditorId: null));
+        repository.Remove(Plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, EditorId: null)).Wrote();
 
-        Assert.Equal(SourceRemoval.Removed, removed);
         Assert.False(File.Exists(Path.Combine(_modFolder, HeaderPath)));
         Assert.True(File.Exists(neighbour));
     }
@@ -59,6 +58,6 @@ public sealed class SourceRepositoryRelativePathOfTests : IDisposable
     {
         var repository = Tracked();
 
-        Assert.Null(repository.RelativePathOf(Plugin, new RecordIdentity($"FFFFFF:{PluginName}", "PlacedObject", EditorId: null)));
+        Assert.Null(repository.RelativePathOf(Plugin, new RecordIdentity($"FFFFFF:{PluginName}", "PlacedObject", EditorId: null)).Value());
     }
 }

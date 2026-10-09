@@ -14,7 +14,7 @@ public static class SourceDocumentPath
     {
         var repository = SourceRepository.Over(TestMod.In(modFolder), release);
         var relativePath = repository.RelativePathOf(
-            new PluginAddress(pluginFileName, TestMod.Name), new RecordIdentity(formKey, recordType, editorId));
+            new PluginAddress(pluginFileName, TestMod.Name), new RecordIdentity(formKey, recordType, editorId)).Value();
 
         return relativePath is null
             ? throw new InvalidOperationException(

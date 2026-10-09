@@ -15,7 +15,7 @@ public sealed class TrackedCutDownFixture : IDisposable
     public TrackedCutDownFixture()
     {
         CutDownPluginFixture.TrackedInto(ModFolder);
-        documents = TreeDocuments.Of(SourceRepository.Open(TestMod.In(ModFolder), GameRelease.Fallout4).Require(), CutDownPluginFixture.Plugin);
+        documents = TreeDocuments.Of(SourceRepository.Open(TestMod.Of(CutDownPluginFixture.Plugin, ModFolder), GameRelease.Fallout4).Require(), CutDownPluginFixture.Plugin);
     }
 
     public IReadOnlyList<SourceDocument> Documents() => documents;

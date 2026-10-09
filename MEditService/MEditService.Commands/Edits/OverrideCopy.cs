@@ -27,7 +27,7 @@ internal sealed class OverrideCopy
 
     /// <summary>An unreadable source record refuses rather than landing as a stub.
     /// <paramref name="replace"/> lets it take a held record's place.</summary>
-    internal RecordEditResult Copy(
+    internal SourceAnswer<RecordEditResult> Copy(
         CopySource source, string formKey, PluginAddress destinationPlugin, bool replace)
     {
         if (_targets.ResolveCopySource(destinationPlugin, source, formKey, out var copy) is { } blocked) return blocked;
@@ -36,10 +36,6 @@ internal sealed class OverrideCopy
         try
         {
             return CopyAsOverride(copy, destinationPlugin, replace);
-        }
-        catch (UnreadableSourceDocumentException ex)
-        {
-            return WriteTargets.RefuseUnreadableSource(formKey, ex.Message);
         }
         catch (ChildSlotHeldByAnotherRecordException ex)
         {
@@ -52,7 +48,7 @@ internal sealed class OverrideCopy
             RecordEditRefusal.ChildSlotHeldByAnotherRecord,
             $"{destinationPlugin.Name} ({destinationPlugin.Origin}) holds another record where the copy puts one: {ex.Message}");
 
-    private RecordEditResult CopyAsOverride(
+    private SourceAnswer<RecordEditResult> CopyAsOverride(
         WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, bool replace)
     {
         var (source, identity, destination, release, body) = copy;
@@ -72,16 +68,17 @@ internal sealed class OverrideCopy
         return LandRecord(copy, destinationPlugin, replace);
     }
 
-    private RecordEditResult LandRecord(
+    private SourceAnswer<RecordEditResult> LandRecord(
         WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, bool replace)
     {
         var (source, identity, destination, release, body) = copy;
         var formKey = identity.FormKey;
 
-        if (destination.Repository.FormKeysUsed(destinationPlugin).Contains(formKey))
+        if (!destination.Repository.FormKeysUsed(destinationPlugin).Holds(out var used, out var unread)) return unread;
+        if (used.Contains(formKey))
         {
-            if (RecordCopy.Identity(destination, formKey) is not { } existingTarget)
-                return RecordCopy.RefuseKeyWithNoDocument(destination, formKey);
+            if (!RecordCopy.Identity(destination, formKey).Holds(out var held, out unread)) return unread;
+            if (held is not { } existingTarget) return RecordCopy.RefuseKeyWithNoDocument(destination, formKey);
             if (!replace) return RecordCopy.RefuseHeldWithoutReplace(formKey, destinationPlugin);
 
             // Own fields only, as xEdit's copy-into does: the children the destination's copy
@@ -92,7 +89,7 @@ internal sealed class OverrideCopy
         return LandNewRecord(copy, body, destinationPlugin);
     }
 
-    private RecordEditResult LandNewRecord(
+    private SourceAnswer<RecordEditResult> LandNewRecord(
         WriteTargets.CopyTarget copy, string body, PluginAddress destinationPlugin)
     {
         var (source, identity, destination, release, _) = copy;
@@ -101,12 +98,15 @@ internal sealed class OverrideCopy
         if (!worldspaceRead.Holds(out var worldspace, out var why)) return WriteTargets.RefuseUnreadableSource(formKey, why);
         if (worldspace is not null)
         {
-            var placed = SourceTransaction.Atomically(destination.Repository, transaction => _recordCopy.PlaceExteriorCell(
-                transaction, source, worldspace,
-                new SourceDocument(
-                    formKey, identity.RecordType, identity.EditorId,
-                    StripEmbeddedChildren(body, identity.RecordType, release)),
-                destination, release));
+            if (!SourceTransaction.Atomically(destination.Repository, transaction => _recordCopy.PlaceExteriorCell(
+                    transaction, source, worldspace,
+                    new SourceDocument(
+                        formKey, identity.RecordType, identity.EditorId,
+                        StripEmbeddedChildren(body, identity.RecordType, release)),
+                    destination, release)).Holds(out var placed, out var unplaced))
+            {
+                return unplaced;
+            }
             if (placed.Applied && _logger.IsEnabled(LogLevel.Information))
             {
                 _logger.LogInformation(
@@ -121,8 +121,11 @@ internal sealed class OverrideCopy
         if (RecordTypes.For(release).HasChildSlots(identity.RecordType))
             body = StripEmbeddedChildren(body, identity.RecordType, release);
 
-        destination.Repository.Put(
-            destinationPlugin, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body));
+        if (destination.Repository.Put(
+                destinationPlugin, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body)) is { } unwritten)
+        {
+            return unwritten;
+        }
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -137,21 +140,24 @@ internal sealed class OverrideCopy
 
     // The destination's embedded children are transplanted onto the replacing record so the copy
     // cannot delete them.
-    private RecordEditResult ReplaceHeldCopy(
+    private SourceAnswer<RecordEditResult> ReplaceHeldCopy(
         CopySource source, RecordIdentity identity, string body, RecordIdentity existingTarget,
         RecordCopy.Destination destination, GameRelease release)
     {
-        var existing = destination.Repository.RecordOf(destination.Plugin, existingTarget)
+        if (!destination.Repository.RecordOf(destination.Plugin, existingTarget).Holds(out var held, out var unread)) return unread;
+        var existing = held
             ?? throw new InvalidOperationException(
                 $"{destination.Plugin.Name} holds {identity.FormKey}, but no document in its source tree carries it.");
 
         var replacement = ContainerDocumentEdits.WithOwnFieldsReplaced(
             existing.Body, existing.RecordType, body, identity.RecordType, release);
 
-        destination.Repository.Put(
-            destination.Plugin,
-            new SourceDocument(
-                identity.FormKey, existingTarget.RecordType, replacement.EditorId, replacement.Text));
+        if (destination.Repository.Put(
+                destination.Plugin,
+                new SourceDocument(identity.FormKey, existingTarget.RecordType, replacement.EditorId, replacement.Text)) is { } unwritten)
+        {
+            return unwritten;
+        }
 
         if (_logger.IsEnabled(LogLevel.Information))
         {

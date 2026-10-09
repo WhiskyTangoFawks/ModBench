@@ -14,7 +14,7 @@ namespace MEditService.SourceAdapter.Tests.Source;
 public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
 {
     private const string PluginName = "FormKeysUsed.esp";
-    private static readonly PluginAddress Plugin = new(PluginName, "HoldsMod");
+    private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly ScratchDirectory _modFolder = new("medit-holds-");
@@ -44,7 +44,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
         Git("commit", "-q", "-m", "leave the header at no ref, as a plugin minted since the last commit has it");
 
         Assert.Empty(Git("ls-tree", "-r", "--name-only", "HEAD", "--", headerPathInGitsForwardSlashes));
-        Assert.True(repository.FormKeysUsed(Plugin).Contains(headerFormKey));
+        Assert.True(repository.FormKeysUsed(Plugin).Value().Contains(headerFormKey));
     }
 
     [Theory]
@@ -57,7 +57,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
         File.WriteAllText(file, $"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": \"Hidden\"}}");
 
-        Assert.True(repository.FormKeysUsed(Plugin).Contains($"000850:{PluginName}"));
+        Assert.True(repository.FormKeysUsed(Plugin).Value().Contains($"000850:{PluginName}"));
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
         var repository = Tracked(new TreeFile(relativePath, System.Text.Encoding.UTF8.GetBytes($"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": 5}}")));
         File.WriteAllText(Path.Combine(_modFolder, relativePath), $"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": \"Fixed\"}}");
 
-        Assert.True(repository.FormKeysUsed(Plugin).Contains($"000850:{PluginName}"));
+        Assert.True(repository.FormKeysUsed(Plugin).Value().Contains($"000850:{PluginName}"));
     }
 
     [Fact]
@@ -91,8 +91,8 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
             file,
             File.ReadAllText(file).Replace(child.FormKey.ToString(), movedInTheWorkingTreeAlone, StringComparison.Ordinal));
 
-        Assert.True(repository.FormKeysUsed(Plugin).Contains(movedInTheWorkingTreeAlone));
-        Assert.True(repository.FormKeysUsed(Plugin).Contains($"00080a:{PluginName}"));
-        Assert.False(repository.FormKeysUsed(Plugin).Contains($"00099F:{PluginName}"));
+        Assert.True(repository.FormKeysUsed(Plugin).Value().Contains(movedInTheWorkingTreeAlone));
+        Assert.True(repository.FormKeysUsed(Plugin).Value().Contains($"00080a:{PluginName}"));
+        Assert.False(repository.FormKeysUsed(Plugin).Value().Contains($"00099F:{PluginName}"));
     }
 }

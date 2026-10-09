@@ -31,15 +31,7 @@ internal sealed class WriteTargets(
         var repository = openedRepository
             ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
 
-        var release = loadOrder.Current.GameRelease;
-        try
-        {
-            refused = ResolveInTheTree(plugin, formKey, repository, release, out target, out document);
-        }
-        catch (AmbiguousSourceUnitException ex)
-        {
-            refused = RecordEditResult.Refused(RecordEditRefusal.AmbiguousSourceUnit, ex.Message);
-        }
+        refused = ResolveInTheTree(plugin, formKey, repository, loadOrder.Current.GameRelease, out target, out document);
         return refused is null && document is not null;
     }
 
@@ -55,27 +47,24 @@ internal sealed class WriteTargets(
         var repository = openedRepository
             ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
 
-        var release = loadOrder.Current.GameRelease;
-        try
+        if (!repository.CarryingFromText(plugin, formKey, text).Holds(out var found, out var failure))
         {
-            if (repository.CarryingFromText(plugin, formKey, text) is not var (record, document))
-            {
-                refused = RecordNotFound(plugin, formKey);
-                return false;
-            }
-            (target, carrying) = (new EditTarget(release, record, repository), document);
-            return true;
+            refused = RefuseUnresolved(formKey, failure);
+            return false;
         }
-        catch (AmbiguousSourceUnitException ex)
+        if (found is not var (record, document))
         {
-            refused = RecordEditResult.Refused(RecordEditRefusal.AmbiguousSourceUnit, ex.Message);
+            refused = RecordNotFound(plugin, formKey);
+            return false;
         }
-        catch (UnreadableSourceDocumentException ex)
-        {
-            refused = RefuseUnreadable(formKey, ex.Message);
-        }
-        return false;
+        (target, carrying) = (new EditTarget(loadOrder.Current.GameRelease, record, repository), document);
+        return true;
     }
+
+    private static RecordEditResult RefuseUnresolved(string formKey, SourceFailure failure) =>
+        failure is SourceFailure.Unreadable
+            ? RefuseUnreadable(formKey, failure.Reason)
+            : RecordEditResult.Refused(WriteFailure.KindOf(failure), failure.Reason);
 
     private static RecordEditResult RecordNotFound(PluginAddress plugin, string formKey) =>
         RecordEditResult.Refused(
@@ -87,18 +76,7 @@ internal sealed class WriteTargets(
         out SourceDocument? found)
     {
         target = default;
-        found = null;
-        try
-        {
-            found = repository.Get(plugin, formKey);
-        }
-        catch (Exception ex) when (ex is not (OutOfMemoryException or AmbiguousSourceUnitException))
-        {
-            // Naming this record means reading the document that carries it: the reader's own words
-            // are the reason. A document named for the record whose text is not one is not absence.
-            return RefuseUnreadable(formKey, ex.Message);
-        }
-
+        if (!repository.Get(plugin, formKey).Holds(out found, out var failure)) return RefuseUnresolved(formKey, failure);
         if (found is not { } document) return RecordNotFound(plugin, formKey);
 
         target = new EditTarget(release, document.Identity, repository);
@@ -136,16 +114,18 @@ internal sealed class WriteTargets(
 
     // A record's own descendants are inside its text, so one unreadable response refuses its topic
     // here too.
-    private static RecordEditResult RefuseUnreadableCopySource(string formKey, string why) =>
-        RecordEditResult.Refused(
-            RecordEditRefusal.RecordParseFailed,
-            $"{formKey} cannot be read, so copying it would land a stub holding only its FormKey and " +
-            $"EditorID rather than the record: {why}");
+    private static RecordEditResult RefuseUnreadableCopySource(string formKey, CopyUnread unread) =>
+        unread.Kind == RecordEditRefusal.RecordParseFailed
+            ? RecordEditResult.Refused(
+                RecordEditRefusal.RecordParseFailed,
+                $"{formKey} cannot be read, so copying it would land a stub holding only its FormKey and " +
+                $"EditorID rather than the record: {unread.Why}")
+            : RefuseUnreadableSource(formKey, unread);
 
     /// <summary>A copy that reads its source beyond its own record, as an exterior cell's worldspace,
     /// refuses naming what it could not read.</summary>
-    internal static RecordEditResult RefuseUnreadableSource(string formKey, string why) =>
-        RecordEditResult.Refused(RecordEditRefusal.RecordParseFailed, $"{formKey} cannot be copied: {why} Nothing was written.");
+    internal static RecordEditResult RefuseUnreadableSource(string formKey, CopyUnread unread) =>
+        RecordEditResult.Refused(unread.Kind, $"{formKey} cannot be copied: {unread.Why} Nothing was written.");
 
     // The six record gestures enter here first.
     internal RecordEditResult? RefuseUnlessEditable(PluginAddress plugin, out SourceRepository? repository)

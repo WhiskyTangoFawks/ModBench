@@ -38,14 +38,16 @@ internal sealed class CopySource(
     /// null when it holds nothing under that key. A tracked document that is no record document is
     /// unreadable, not none.</summary>
     internal CopyRead<RecordIdentity?> Identity(string formKey) =>
-        _tree is { } tree ? FromTree(() => tree.Get(plugin, formKey)?.Identity) : FromFile(records => records.IdentityOf(formKey));
+        _tree is { } tree
+            ? CopyRead<RecordIdentity?>.Of(tree.Get(plugin, formKey).Then(held => SourceAnswer.Of(held?.Identity)))
+            : FromFile(records => records.IdentityOf(formKey));
 
     /// <summary>The record header's flags, read without the record's fields.</summary>
     internal CopyRead<long> RecordFlags(RecordIdentity identity)
     {
         if (_tree is not { } tree)
             return FromFile(records => records.RecordFlagsOf(identity.FormKey)).Then<long>(flags => flags ?? throw NoLongerHeld(identity.FormKey));
-        return FromTree(() => tree.RecordOf(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey)).Then<long>(body =>
+        return BodyInTheTree(tree, identity).Then<long>(body =>
         {
             try
             {
@@ -72,7 +74,7 @@ internal sealed class CopySource(
         if (_tree is not { } tree)
             return FromFile(records => records.TextOf(identity.FormKey)).Then<string>(text => text ?? throw NoLongerHeld(identity.FormKey));
 
-        return FromTree(() => tree.RecordOf(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey)).Then<string>(body =>
+        return BodyInTheTree(tree, identity).Then<string>(body =>
         {
             // Read through the codec even though the verbatim bytes land: a copy of text no reader can
             // make a record of would leave the destination uncompilable. The codec answers such text by
@@ -98,14 +100,14 @@ internal sealed class CopySource(
     /// worldspace's persistent cell answers its worldspace; a numbered cell has a document of its own.</summary>
     internal CopyRead<DocumentContainment?> ContainerOf(RecordIdentity identity) =>
         _tree is { } tree
-            ? FromTree(() => tree.ContainerOf(plugin, identity))
+            ? CopyRead<DocumentContainment?>.Of(tree.ContainerOf(plugin, identity))
             : FromFile(records => records.ContainmentOf(identity.FormKey));
 
     /// <summary>The worldspace the cell <paramref name="identity"/> names sits in, or null for an interior
     /// cell or a cell this plugin does not hold.</summary>
     internal CopyRead<string?> WorldspaceOf(RecordIdentity identity) =>
         _tree is { } tree
-            ? FromTree(() => tree.WorldspaceOf(plugin, identity))
+            ? CopyRead<string?>.Of(tree.WorldspaceOf(plugin, identity))
             : FromFile(records => records.CellStructureOf(identity.FormKey)).Then<string?>(cell => cell?.ParentWorldspace);
 
     /// <summary>How many records sit above this one: its containers, and a numbered cell's worldspace.
@@ -134,24 +136,15 @@ internal sealed class CopySource(
     /// of <paramref name="worldspace"/>, or null when it holds none there.</summary>
     internal CopyRead<RecordIdentity?> CellAt(string worldspace, int x, int y) =>
         _tree is { } tree
-            ? FromTree(() => tree.GetCellAt(plugin, worldspace, x, y)?.Identity)
+            ? CopyRead<RecordIdentity?>.Of(tree.GetCellAt(plugin, worldspace, x, y).Then(cell => SourceAnswer.Of(cell?.Identity)))
             : FromFile(records => records.CellAt(worldspace, x, y))
                 .Then(formKey => formKey is null ? (RecordIdentity?)null : Identity(formKey));
 
     public void Dispose() => _records?.Dispose();
 
-    // The Source adapter answers a document it cannot read by throwing.
-    private static CopyRead<T> FromTree<T>(Func<T> read)
-    {
-        try
-        {
-            return read();
-        }
-        catch (UnreadableSourceDocumentException ex)
-        {
-            return CopyRead<T>.Unreadable(ex.Message);
-        }
-    }
+    private CopyRead<string> BodyInTheTree(SourceRepository tree, RecordIdentity identity) =>
+        CopyRead<SourceDocument?>.Of(tree.RecordOf(plugin, identity))
+            .Then<string>(held => held?.Body ?? throw NoLongerHeld(identity.FormKey));
 
     // A plugin the load order does not register holds nothing, which is an answer.
     private CopyRead<T?> FromFile<T>(Func<IPluginRecords, PluginAnswer<T?>> read)

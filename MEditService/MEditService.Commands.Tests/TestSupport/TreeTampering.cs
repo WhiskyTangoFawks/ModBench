@@ -11,7 +11,7 @@ internal static class TreeTampering
 {
     internal static string FileOf(string modFolder, PluginAddress plugin, RecordIdentity identity)
     {
-        var relativePath = TrackedTree.Repository(modFolder).RelativePathOf(plugin, identity)
+        var relativePath = TrackedTree.Repository(modFolder, plugin).RelativePathOf(plugin, identity).Value()
             ?? throw new InvalidOperationException($"Expected a document in '{modFolder}' to hold {identity.FormKey}.");
         return Path.Combine(modFolder, relativePath);
     }
@@ -97,7 +97,7 @@ internal static class TreeTampering
     {
         var blocks = Path.Combine($"{blockX}, {blockY}", $"{subX}, {subY}") + Path.DirectorySeparatorChar;
         Assert.Contains(
-            blocks, TrackedTree.Repository(modFolder).RelativePathOf(plugin, cell), StringComparison.Ordinal);
+            blocks, TrackedTree.Repository(modFolder, plugin).RelativePathOf(plugin, cell).Value(), StringComparison.Ordinal);
     }
 
     /// <summary>A document that names <paramref name="formKey"/> in an embedded slot of a record that cannot

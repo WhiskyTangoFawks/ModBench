@@ -10,12 +10,12 @@ namespace MEditService.Commands.Tests.TestSupport;
 internal static class LastWriteRecord
 {
     internal static void Interrupt(string modFolder, string pluginName, string binarySha256, Action write) =>
-        Assert.Throws<IOException>(() => SourceRepository.Over(ModOf(modFolder), GameRelease.Fallout4).WriteBinary(
+        Assert.IsType<SourceFailure.Inaccessible>(SourceRepository.Over(ModOf(modFolder), GameRelease.Fallout4).WriteBinary(
             new PluginAddress(pluginName, Path.GetFileName(modFolder)), binarySha256, () =>
             {
                 write();
                 throw new IOException("interrupted");
-            }));
+            }).Stopped());
 
     internal static void Delete(string modFolder) =>
         GitProbe.Run(GitDir(modFolder), modFolder, "update-ref", "-d", RefOfTheOnlyPlugin(modFolder));

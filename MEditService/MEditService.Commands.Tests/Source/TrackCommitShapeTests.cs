@@ -50,7 +50,7 @@ public sealed class TrackCommitShapeTests : IDisposable
 
         Assert.Equal(
             ["READ-FROM"],
-            SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4).LastWrittenBinarySha256s(Key("First.esp")));
+            SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4).LastWrittenBinarySha256s(Key("First.esp")).Value());
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal((ModName, TrackRefusal.AlreadyTracked), (refused.Item, refused.Refusal));
         Assert.Contains(_modFolder, refused.Message, StringComparison.Ordinal);
-        Assert.Empty(SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4).FormKeysUsed(Key("First.esp")));
+        Assert.Empty(SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4).FormKeysUsed(Key("First.esp")).Value());
         Assert.Empty(HeldBy("First.esp"));
         Assert.Equal(gitignoreBefore, File.ReadAllBytes(Path.Combine(_modFolder, ".gitignore")));
     }

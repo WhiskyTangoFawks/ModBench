@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.TestSupport;
 
@@ -9,9 +10,11 @@ namespace MEditService.SourceAdapter.Tests.TestSupport;
 internal static class TreeDocuments
 {
 
-    internal static IReadOnlyList<SourceDocument> Of(SourceRepository repository, PluginAddress plugin)
+    internal static IReadOnlyList<SourceDocument> Of(SourceRepository repository, PluginAddress plugin) =>
+        repository.ReadDocuments(plugin, RootsOf).Value();
+
+    private static IReadOnlyList<SourceDocument> RootsOf(IPluginDocuments documents)
     {
-        using var documents = repository.OpenDocuments(plugin);
         var roots = new List<PluginDocument>();
         try
         {

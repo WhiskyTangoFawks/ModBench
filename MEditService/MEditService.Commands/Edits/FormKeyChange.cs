@@ -21,7 +21,7 @@ internal sealed class FormKeyChange(ILogger logger)
 
     /// <summary>The record's file or folder moved to its new key, or its owner's text, read from
     /// <paramref name="carrying"/>.</summary>
-    internal RecordEditChanges Change(
+    internal SourceAnswer<RecordEditChanges> Change(
         PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, SourceDocument carrying, JsonElement? value)
     {
         var (release, identity, repository) = editTarget;
@@ -53,29 +53,14 @@ internal sealed class FormKeyChange(ILogger logger)
                 $"Change its FormID in {originatingPlugin}, where the record is native.");
         }
 
-        var allocator = FormKeyAllocator.Over(repository, plugin, release);
+        if (!FormKeyAllocator.Over(repository, plugin, release).Holds(out var allocator, out var unread)) return unread;
         if (allocator.Claim(requestedFormKey, out var targetFormKey) is { } refusedTarget) return refusedTarget with { Path = Member };
 
         var failed = $"Changing the FormID of {formKey} to {targetFormKey} failed";
-        return WriteFailure.Refused<RecordEditChanges>(() => new RecordEditChanges(
-            RecordEditResult.Success(targetFormKey),
-            repository.ChangesToRekey(plugin, carrying, identity, targetFormKey, new DocumentRekey(
-                (document, newKey) => Read(() => RecordDocumentEdits.WithFormKey(document.Body, release, document.RecordType, newKey)),
-                (owner, oldKey, newKey) => Read(() => RecordDocumentEdits.WithEmbeddedChildFormKey(
-                    owner.Body, release, owner.RecordType, oldKey, newKey)))).Then(allocator.HeaderChanges())),
+        return WriteFailure.Refused(
+            RecordEditChanges.Making(
+                RecordEditResult.Success(targetFormKey),
+                repository.ChangesToRekey(plugin, carrying, identity, targetFormKey).Then(allocator.HeaderChanges())),
             refused => refused, failed, logger);
-    }
-
-    // The codec is the one reader that sees why a text it is given is no record, as it is for an edit's patch.
-    private static T Read<T>(Func<T> read)
-    {
-        try
-        {
-            return read();
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            throw new UnreadableSourceDocumentException(ex.Message, ex);
-        }
     }
 }

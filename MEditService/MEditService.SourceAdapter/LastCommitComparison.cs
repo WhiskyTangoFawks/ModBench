@@ -24,7 +24,7 @@ internal static class LastCommitComparison
             var fullPath = Path.Combine(modFolder, relativePath);
             var committedText = heldAtLastCommit
                 ? git.ReadCommittedSourceText(relativePath)
-                    ?? throw new GitCommandFailedException($"git cannot read what the last commit holds for '{fullPath}'.")
+                    ?? throw SourceStopException.GitFailed($"git cannot read what the last commit holds for '{fullPath}'.")
                 : null;
             RecordTextsIn(committed, locator, expansion, plugin, relativePath, committedText);
             RecordTextsIn(working, locator, expansion, plugin, relativePath, ReadWorkingText(fullPath));
@@ -51,7 +51,7 @@ internal static class LastCommitComparison
         }
 
         if (SourceRepositoryGit.IsTracked(modFolder))
-            throw new GitCommandFailedException($"git cannot report what changed in '{modFolder}'.");
+            throw SourceStopException.GitFailed($"git cannot report what changed in '{modFolder}'.");
 
         var root = SourceRepositoryLayout.RootIn(modFolder, plugin.Name);
         return Directory.Exists(root)

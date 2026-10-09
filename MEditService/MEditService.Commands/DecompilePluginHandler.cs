@@ -49,14 +49,12 @@ public sealed class DecompilePluginHandler
         var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, mod.Folder, onParsed: () => { }, cancel);
         if (decompiled.Source is not { } source) return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(decompiled.Refusal, decompiled.Message);
 
-        try
+        return repository.ReplaceSourceFrom(key, source.Files, source.BinarySha256) switch
         {
-            repository.ReplaceSourceFrom(key, source.Files, source.BinarySha256);
-            return ItemAnswer<DecompileRefusal, NoOutcome>.Landed(default);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.WriteFailed, $"Could not write {plugin.Name}'s source: {ex.Message}");
-        }
+            null => ItemAnswer<DecompileRefusal, NoOutcome>.Landed(default),
+            SourceFailure.GitUnavailable gitMissing => ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.GitUnavailable, gitMissing.Reason),
+            var failure => ItemAnswer<DecompileRefusal, NoOutcome>.Refused(
+                DecompileRefusal.WriteFailed, $"Could not write {plugin.Name}'s source: {failure.Reason}"),
+        };
     }
 }

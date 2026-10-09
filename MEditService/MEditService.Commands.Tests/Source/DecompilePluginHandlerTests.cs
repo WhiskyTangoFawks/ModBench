@@ -81,7 +81,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
         Assert.Equal(
             ["READ-FROM"],
-            SourceRepository.Over(new PluginProvider.FromMod(TrackedModName, _trackedMod), GameRelease.Fallout4).LastWrittenBinarySha256s(Tracked("Second.esp")));
+            SourceRepository.Over(new PluginProvider.FromMod(TrackedModName, _trackedMod), GameRelease.Fallout4).LastWrittenBinarySha256s(Tracked("Second.esp")).Value());
     }
 
     [Fact]
@@ -171,7 +171,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         mod.WriteToBinary(Path.Combine(modFolder, name));
     }
 
-    private SourceRepository Repository => SourceRepository.Open(TestMod.In(_trackedMod), GameRelease.Fallout4).Require();
+    private SourceRepository Repository => SourceRepository.Open(new PluginProvider.FromMod(TrackedModName, _trackedMod), GameRelease.Fallout4).Require();
 
     private string SourceTextOf(string plugin) => string.Concat(
         TreeDocuments.Of(Repository, Tracked(plugin)).Select(document => document.Body).Order(StringComparer.Ordinal));

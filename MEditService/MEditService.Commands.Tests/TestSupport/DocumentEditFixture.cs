@@ -2,6 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -44,7 +45,7 @@ internal sealed class DocumentEditFixture : TestInstance
     /// <summary>Seeds an exact document body, for a case whose input is a shape the codec itself
     /// would not produce.</summary>
     internal void SeedRaw(string formKey, string recordType, string? editorId, string body) =>
-        Repository.Put(Plugin, new SourceDocument(formKey, recordType, editorId, body));
+        Repository.Put(Plugin, new SourceDocument(formKey, recordType, editorId, body)).Wrote();
 
     internal string Document(string formKey) =>
         TrackedTree.Document(ModFolderOf(Plugin), Plugin, formKey)?.Body

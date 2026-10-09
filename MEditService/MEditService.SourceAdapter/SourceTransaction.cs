@@ -6,6 +6,7 @@ public sealed class SourceTransaction
 {
     private readonly SourceRepository _repository;
     private readonly WriteJournal _journal;
+    private SourceFailure? _stopped;
 
     private SourceTransaction(SourceRepository repository)
     {
@@ -13,40 +14,72 @@ public sealed class SourceTransaction
         _journal = new WriteJournal(repository.ModFolder);
     }
 
-    /// <summary>Runs <paramref name="write"/> on a new transaction. A throw puts back what it applied and is
-    /// rethrown, or becomes the rollback's report when that left a path standing.</summary>
-    public static void Atomically(SourceRepository repository, Action<SourceTransaction> write) =>
+    /// <summary>Runs <paramref name="write"/> on a new transaction. A change that failed puts back what it
+    /// applied, and the answer is why.</summary>
+    public static SourceFailure? Atomically(SourceRepository repository, Action<SourceTransaction> write) =>
         Atomically(repository, transaction =>
         {
             write(transaction);
-            return true;
-        });
+            return SourceAnswer.Of(true);
+        }).Holds(out _, out var failure)
+            ? null
+            : failure;
 
     /// <summary><see cref="Atomically(SourceRepository, Action{SourceTransaction})"/>, answering what
-    /// <paramref name="write"/> answers.</summary>
-    public static T Atomically<T>(SourceRepository repository, Func<SourceTransaction, T> write)
+    /// <paramref name="write"/> answers. A failure it answers puts back what it applied too.</summary>
+    public static SourceAnswer<T> Atomically<T>(SourceRepository repository, Func<SourceTransaction, SourceAnswer<T>> write)
     {
         var transaction = new SourceTransaction(repository);
+        return SourceFailure.Answer(() => transaction.Settled(transaction.Run(write))).Then(settled => settled);
+    }
+
+    // What the transaction answers once its writes stand, or the throw that puts them back.
+    private SourceAnswer<T> Settled<T>(SourceAnswer<T> answered)
+    {
+        if (!answered.Holds(out _, out var failure)) _stopped ??= failure;
+        return _stopped is { } stopped ? throw PutBack(stopped) : answered;
+    }
+
+    private T Run<T>(Func<SourceTransaction, T> write)
+    {
         try
         {
-            return write(transaction);
+            return write(this);
         }
         catch (Exception cause) when (cause is not OutOfMemoryException)
         {
-            if (transaction._journal.Report(cause, transaction._journal.UndoSince(0)) is { } report) throw report;
+            if (_journal.Report(cause, _journal.UndoSince(0)) is { } report) throw report;
             throw;
         }
     }
 
-    /// <summary>Makes each move of <paramref name="changes"/> and then writes each document, holding what
-    /// each act replaced so a later failure in this batch puts it back.</summary>
-    public void Apply(SourceChanges changes)
+    // The rollback's report when it left a path standing, else the stop.
+    private Exception PutBack(SourceFailure stopped)
     {
-        var (moves, documents) = changes.Under(_repository);
+        var stop = SourceStopException.Of(stopped);
+        return _journal.Report(stop, _journal.UndoSince(0)) ?? stop;
+    }
+
+    /// <summary>Makes each move of <paramref name="changes"/>, then writes each document, holding what each
+    /// replaced. Changes that failed stop the transaction, and nothing after them applies.</summary>
+    public void Apply(SourceAnswer<SourceChanges> changes)
+    {
+        if (_stopped is not null) return;
+        if (!changes.Holds(out var made, out var failure))
+        {
+            _stopped = failure;
+            return;
+        }
+
+        var (moves, documents) = made.Under(_repository);
         try
         {
             foreach (var (from, to) in moves) _journal.Move(from, to);
             foreach (var (path, text) in documents) _journal.WriteText(path, text);
+        }
+        catch (Exception ex) when (SourceFailure.Of(ex) is { } stopped)
+        {
+            _stopped = stopped;
         }
         finally
         {

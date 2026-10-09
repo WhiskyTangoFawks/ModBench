@@ -30,7 +30,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
         var repository = SourceRepository.Open(TestMod.In(modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{modFolder}' to be tracked.");
         Assert.Empty(repository.ChangedSinceLastCommit(
-            new PluginAddress(Plugin, "TestMod")));
+            new PluginAddress(Plugin, "TestMod")).Value());
 
         Assert.Equal(before, File.ReadAllBytes(IndexOf(modFolder)));
 
@@ -47,8 +47,8 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
 
         var repository = SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4);
         var address = new PluginAddress(Plugin, "TestMod");
-        repository.WriteBinary(address, "DEADBEEF", () => { });
-        Assert.Equal(["DEADBEEF"], repository.LastWrittenBinarySha256s(address));
+        repository.WriteBinary(address, "DEADBEEF", () => { }).Value();
+        Assert.Equal(["DEADBEEF"], repository.LastWrittenBinarySha256s(address).Value());
         Assert.True(File.Exists(usersLock), "the user's own lock is theirs to release");
     }
 }

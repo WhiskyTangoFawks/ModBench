@@ -80,7 +80,7 @@ public sealed class CompileFixture : TestInstance, ITrackedPlugin
     }
 
     public void Remove(FormKey formKey, string recordType, string? editorId) =>
-        Repository.Remove(Plugin, new RecordIdentity(formKey.ToString(), recordType, editorId));
+        Repository.Remove(Plugin, new RecordIdentity(formKey.ToString(), recordType, editorId)).Wrote();
 
     public RecordIdentity NpcIdentity => new(Npc.ToString(), NpcRecordType, NpcEditorId);
 }
