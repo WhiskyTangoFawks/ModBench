@@ -70,7 +70,7 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
     },
   };
   const reporter = recordingReporter();
-  const apply = vi.fn<SourceEditing['applyWorkspaceChanges']>().mockResolvedValue([]);
+  const apply = vi.fn<SourceEditing['applyWorkspaceChanges']>().mockResolvedValue();
   const queue = oneAtATime();
   const queued = vi.fn();
   const source: SourceEditing = {
@@ -229,22 +229,6 @@ describe('modbench.plugin.rename', () => {
       detail: 'EEXIST VS Code stops at the first change it cannot make, so some changes may have landed.',
     }]);
     expect(source.refreshSourceControlFor).toHaveBeenCalledWith(PLUGIN);
-    expect(client.calls.filter((c) => c.method === 'moveLastWritten')).toEqual([]);
-    expect(renameFiles).not.toHaveBeenCalled();
-  });
-
-  it('names the files left unsaved, moves nothing and renames no file', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, renameFiles, reporter, apply, run } = setup();
-    apply.mockResolvedValueOnce(['/m/plugin-source/Renamed.esp/h.json']);
-
-    await run(row());
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error',
-      message: 'Could not save the rename of "Patch.esp" (ModA) in full. Reverting the source rename in git undoes it.',
-      detail: 'VS Code did not save /m/plugin-source/Renamed.esp/h.json.',
-    }]);
     expect(client.calls.filter((c) => c.method === 'moveLastWritten')).toEqual([]);
     expect(renameFiles).not.toHaveBeenCalled();
   });

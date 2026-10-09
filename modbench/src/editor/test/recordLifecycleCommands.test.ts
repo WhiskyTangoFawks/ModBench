@@ -76,7 +76,7 @@ describe('registerRecordLifecycleCommands', () => {
     const ask = scriptedDialog(...answers);
     const { write, writing, viewsAskedFor } = recordingWrite();
     const serially = vi.fn();
-    const source = { applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
+    const source = { applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve()), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
     registerRecordLifecycleCommands(client, reporter, ask, selections, write, source);
     return { reporter, ask, writing, viewsAskedFor, source };
   }
@@ -342,21 +342,6 @@ describe('registerRecordLifecycleCommands', () => {
       expect(source.refreshSourceControlFor).toHaveBeenCalledWith({ name: 'MyPatch.esp', origin: 'ModA' });
     });
 
-    it('reports the files VS Code did not save as a part that failed, with the records landed and Source Control refreshed', async () => {
-      const client = new InMemoryMEditClient();
-      client.setCommandResult('getDeleteChanges', { applied: [changes(FIRST)], refused: [] });
-      const { reporter, source } = invoke(client, 'Delete');
-      source.applyWorkspaceChanges.mockResolvedValue(['/mods/ModA/plugin-source/MyPatch.esp/Cell.json']);
-
-      await deleteRecords(SECOND_NODE);
-
-      expect(reporter.reports).toEqual([
-        { severity: 'error', message: 'Could not save the deletions.', detail: 'VS Code did not save /mods/ModA/plugin-source/MyPatch.esp/Cell.json.' },
-      ]);
-      expect(reporter.selectionOutcomeCalls[0]?.outcome).toEqual({ landed: [FIRST], refused: [] });
-      expect(source.refreshSourceControlFor).toHaveBeenCalledWith({ name: 'MyPatch.esp', origin: 'ModA' });
-    });
-
     it('runs the whole delete after the edits in flight settle', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('getDeleteChanges', { applied: [], refused: [] });
@@ -435,7 +420,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     const ask = scriptedDialog(...answers);
     const { write, writing, viewsAskedFor } = recordingWrite();
     const serially = vi.fn();
-    const source = { applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
+    const source = { applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve()), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
     registerRecordCopyCommands(client, reporter, ask, selections, write, source);
     return { reporter, ask, writing, viewsAskedFor, source };
   }
@@ -808,23 +793,6 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
         { severity: 'error', message: 'Could not copy the records.', detail: "VS Code did not apply the changes. VS Code stops at the first change it cannot make, so some changes may have landed." });
       expect(reporter.landings).toEqual([]);
       expect(reporter.reports.map((r) => r.message)).toEqual(['Could not copy the records.', 'Could not make 1 of 2 copies.']);
-      expect(source.refreshSourceControlFor).toHaveBeenCalledWith(PATCH);
-    });
-
-    it('reports the files VS Code did not save as a part that failed, with the copies landed and Source Control refreshed', async () => {
-      const client = new InMemoryMEditClient();
-      destinations(client);
-      client.setCommandResult('getCopyChanges', { applied: [copyChanges(SOURCE, PATCH)], refused: [] });
-      pick('New', [PATCH]);
-      const { reporter, source } = invoke(client);
-      source.applyWorkspaceChanges.mockResolvedValue(['/mods/PatchMod/plugin-source/Patch.esp/Npcs/Copy.json']);
-
-      await copy(RECORD_NODE);
-
-      expect(reporter.reports).toEqual([
-        { severity: 'error', message: 'Could not save the copies.', detail: 'VS Code did not save /mods/PatchMod/plugin-source/Patch.esp/Npcs/Copy.json.' },
-      ]);
-      expect(reporter.landings).toEqual(['Copied 000801:MyPatch.esp into Patch.esp.']);
       expect(source.refreshSourceControlFor).toHaveBeenCalledWith(PATCH);
     });
   });
