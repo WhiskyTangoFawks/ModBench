@@ -9,7 +9,7 @@ namespace MEditService.Commands.Edits;
 
 /// <summary>Everything a record's edit needs and nothing it may touch: its own text, the container record that
 /// holds it if any, and the walk to the left that a cell's place and a refill read.</summary>
-internal sealed record DocumentEditRequest(
+internal sealed record RecordTextEditRequest(
     string Text,
     HeldIn? Held,
     RecordTableSchema Schema,
@@ -18,15 +18,15 @@ internal sealed record DocumentEditRequest(
     Func<string, string> RoundTrip,
     LoadOrderResolution.MastersWalk Masters);
 
-/// <summary>A write is a patch on the document (ADR-0005). Pure: text and metadata in,
+/// <summary>A write is a patch on the record's own document (ADR-0005). Pure: text and metadata in,
 /// text or one refusal out.</summary>
-internal static class DocumentEdit
+internal static class RecordTextEdit
 {
     private const string FormKeyMember = RecordMembers.FormKey;
 
     /// <summary>The record's new text in <paramref name="text"/> on success (a null return), and the group it
     /// moves into; a refusal otherwise, with nothing written anywhere.</summary>
-    internal static RecordEditResult? Patch(DocumentEditRequest request, out string text, out CellGroupMove? move)
+    internal static RecordEditResult? Patch(RecordTextEditRequest request, out string text, out CellGroupMove? move)
     {
         text = request.Text;
         move = null;
@@ -34,7 +34,7 @@ internal static class DocumentEdit
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
         if (ValidateEnvelope(envelope, spelled) is { } malformed) return malformed;
 
-        if (JsonNode.Parse(request.Text) is not JsonObject record) return Malformed(spelled, "the document is not a JSON object");
+        if (JsonNode.Parse(request.Text) is not JsonObject record) return Malformed(spelled, "the record's text is not a JSON object");
         var before = record.DeepClone();
 
         var creating = envelope.Op is RecordEditEnvelope.Set or RecordEditEnvelope.Add;
@@ -320,7 +320,7 @@ internal static class DocumentEdit
     // xEdit applies a write's Deleted before its Persistent, and reverts Persistent on a record that
     // then reads Deleted (xedit.md, divergence 24).
     private static RecordEditResult? RefusePersistentOnDeleted(
-        JsonObject record, DocumentEditRequest request, ColumnSpec column, JsonElement? value, string spelled)
+        JsonObject record, RecordTextEditRequest request, ColumnSpec column, JsonElement? value, string spelled)
     {
         if (RecordFlagsWrite.Of(record, request.Schema, column, value) is not { } write
             || (write.Next & DeletedFlag.Bit) == 0 || !write.Changes(PersistentFlag.Bit)

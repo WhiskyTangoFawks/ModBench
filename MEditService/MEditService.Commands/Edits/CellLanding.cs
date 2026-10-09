@@ -13,8 +13,6 @@ namespace MEditService.Commands.Edits;
 /// cell the plugin lacks is copied in from the nearest of its masters to hold it, or created, as xEdit's Add does.</summary>
 internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflector schemaReflector, ILogger logger)
 {
-    // The cell that takes the record in, the put of that cell when the plugin lacks it, and the header's
-    // changes that move its Next Object ID past a cell minted for it.
     private sealed record Landed(RecordIdentity Cell, Func<SourceAnswer<SourceChanges>>? PutCell, SourceAnswer<SourceChanges> HeaderChanges);
 
     // A cell copied in or minted, and the header's changes a minted one needs.
@@ -95,7 +93,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
         }
 
         if (Parsed(worldspace.Body, move.Worldspace)[PlacedCell.WorldspacePersistentCellMember] is JsonObject persistentCell)
-            return new Step<Landed>.Done(new(CellOf(persistentCell.ToJsonString(), move).Identity, null, SourceChanges.None));
+            return new Step<Landed>.Done(new(new(GridCellHolder.FormKeyOf(persistentCell), move.CellType, null), null, SourceChanges.None));
 
         return CopiedOrNew(
                 move,
@@ -161,7 +159,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
     }
 
     private static SourceDocument CellOf(string text, Move move) =>
-        new(GridCellHolder.FormKeyOf(Parsed(text, move.Worldspace)), move.CellType, EditorIds.In(text), text);
+        new(GridCellHolder.FormKeyOf(JsonNode.Parse(text) as JsonObject), move.CellType, EditorIds.In(text), text);
 
     private static JsonObject Parsed(string text, string formKey) =>
         JsonNode.Parse(text) as JsonObject ?? throw new InvalidOperationException($"Expected {formKey}'s document to hold a JSON object.");

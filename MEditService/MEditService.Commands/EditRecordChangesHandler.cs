@@ -68,7 +68,7 @@ public sealed class EditRecordChangesHandler
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
             : patched => RecordTextCodec.RoundTrip(patched, release, identity.RecordType);
 
-        var request = new DocumentEditRequest(
+        var request = new RecordTextEditRequest(
             text, held, schema, envelope, release, roundTrip, _resolution.WalkAmongMastersOf(repository, plugin, schemas));
 
         string newText;
@@ -76,7 +76,7 @@ public sealed class EditRecordChangesHandler
         RecordEditResult? refused;
         try
         {
-            refused = DocumentEdit.Patch(request, out newText, out move);
+            refused = RecordTextEdit.Patch(request, out newText, out move);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

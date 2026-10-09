@@ -27,7 +27,7 @@ internal sealed class FormKeyChange(ILogger logger)
         var (release, identity, repository) = editTarget;
         if (identity.RecordType == PluginHeader.RecordType)
         {
-            return DocumentEdit.ReadOnlyRefusal(Member, Member, PluginHeader.FormIdReadOnly);
+            return RecordTextEdit.ReadOnlyRefusal(Member, Member, PluginHeader.FormIdReadOnly);
         }
 
         if (value is not { ValueKind: JsonValueKind.String } text

@@ -35,8 +35,9 @@ internal sealed record CellGroupMove(HeldIn From, string Destination, AnotherCel
         var cell = JsonNode.Parse(From.Container.Body) as JsonObject
             ?? throw new InvalidOperationException($"Expected the own text of {From.Container.FormKey} to hold a JSON object.");
         var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
+        var inThePersistentCell = From.ContainerHeldIn is { IsThePersistentCell: true };
         (int X, int Y)? grid = null;
-        if (!From.ContainerIsThePersistentCell)
+        if (!inThePersistentCell)
         {
             if (masters.WhereItSits(
                 cell, spelled,
@@ -52,7 +53,7 @@ internal sealed record CellGroupMove(HeldIn From, string Destination, AnotherCel
         }
         if (IntoPersistent)
         {
-            if (!From.ContainerIsThePersistentCell) into = new AnotherCell.PersistentCell();
+            if (!inThePersistentCell) into = new AnotherCell.PersistentCell();
             return null;
         }
         if (PlacedCell.GridHolding(record, release) is not { } holding)

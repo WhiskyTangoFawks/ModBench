@@ -5,9 +5,9 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The container record whose <see cref="Slot"/> holds a child record, and whether that container is
-/// its worldspace's persistent cell.</summary>
-internal sealed record HeldIn(SourceDocument Container, string Slot, bool ContainerIsThePersistentCell)
+/// <summary>The container record whose <see cref="Slot"/> holds a child record, and where that container is
+/// held in turn.</summary>
+internal sealed record HeldIn(SourceDocument Container, string Slot, HeldIn? ContainerHeldIn)
 {
     /// <summary>Where <paramref name="record"/> sits as <paramref name="repository"/> reads it; null for a record
     /// no container holds.</summary>
@@ -18,8 +18,8 @@ internal sealed record HeldIn(SourceDocument Container, string Slot, bool Contai
             {
                 var container = found
                     ?? throw new InvalidOperationException($"Expected the container {slot.ParentFormKey} that holds {record.FormKey} to be held.");
-                return repository.ContainerOf(plugin, container.Identity).Then(above => SourceAnswer.Of<HeldIn?>(
-                    new HeldIn(container, slot.SlotName, above?.SlotName == PlacedCell.WorldspacePersistentCellMember)));
+                return Of(repository, plugin, container.Identity).Then(above => SourceAnswer.Of<HeldIn?>(
+                    new HeldIn(container, slot.SlotName, above)));
             }));
 
     /// <summary>Whether the record held is a cell held as its worldspace's persistent cell.</summary>

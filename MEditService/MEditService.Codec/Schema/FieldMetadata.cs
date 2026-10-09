@@ -14,7 +14,7 @@ public record FieldMetadata(
     IReadOnlyList<string> ValidFormKeyTypes,
     // For 'enum': the field's members, in the order the schema lists them. That order is a
     // contract, not a rendering detail — a discriminator's first member is the leaf a new array
-    // element is built as (DocumentEdit).
+    // element is built as (RecordTextEdit).
     IReadOnlyList<EnumMember> EnumMembers,
     // For 'array': the element's schema. For 'struct': the sub-field schemas.
     FieldMetadata? ElementType = null,
