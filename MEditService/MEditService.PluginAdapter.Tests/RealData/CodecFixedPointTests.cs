@@ -4,10 +4,9 @@ using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 using Xunit.Abstractions;
 
-namespace MEditService.Codec.Tests.RealData;
+namespace MEditService.PluginAdapter.Tests.RealData;
 
 public sealed class CodecFixedPointTests(ITestOutputHelper output)
 {
@@ -30,9 +29,9 @@ public sealed class CodecFixedPointTests(ITestOutputHelper output)
     private static List<PluginDocument> DocumentsOfCutDownPlugin()
     {
         var modPath = new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath);
-        var mod = ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
-        using var documents = ModDocuments.Of(
-            mod, new NoRecordHoldsOnlyItsEditorId(), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), mod);
+        using var documents = TestAdapters.Mutagen()
+            .OpenDocuments(modPath, GameRelease.Fallout4, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4))
+            .Answered();
         var all = new List<PluginDocument> { documents.Header };
         all.AddRange(documents.Records);
         Assert.Empty(documents.Failures);
@@ -80,10 +79,5 @@ public sealed class CodecFixedPointTests(ITestOutputHelper output)
                 return $"line {i + 1}: stored '{left}' vs reserialized '{right}'";
         }
         return "no line differs";
-    }
-
-    private sealed class NoRecordHoldsOnlyItsEditorId : IRecordFieldProbe
-    {
-        public bool HoldsNoFields(FormKey formKey) => false;
     }
 }

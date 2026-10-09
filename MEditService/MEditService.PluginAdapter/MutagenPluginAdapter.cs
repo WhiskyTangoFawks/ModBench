@@ -37,7 +37,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         PluginStrings? strings = null) =>
         Opened<IPluginDocuments>(modPath, gameRelease, strings, loaded =>
         {
-            var documents = ModDocuments.Of(loaded.Getter, new PluginRecordBytes(modPath, gameRelease), schemas, loaded);
+            var documents = new MutagenModDocuments(loaded.Getter, new PluginRecordBytes(modPath, gameRelease), schemas, loaded);
             _ = documents.Header;
             return documents;
         });
@@ -48,8 +48,8 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var modPath = new ModPath(plugin.Path);
-        return Opened<IPluginRecords>(modPath, gameRelease, strings: null, loaded => new AnsweredRecords(
-            ModDocuments.LookupOf(loaded.Getter, new PluginRecordBytes(modPath, gameRelease), schemas, loaded)));
+        return Opened<IPluginRecords>(modPath, gameRelease, strings: null, loaded =>
+            new ModRecordLookup(loaded.Getter, new PluginRecordBytes(modPath, gameRelease), schemas, loaded));
     }
 
     // The open passes to what its result holds; until it has, a failure disposes it here.

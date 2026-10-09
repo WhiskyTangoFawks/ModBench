@@ -216,9 +216,9 @@ public sealed class RecordTypes
     // The member names below are static because every Bethesda game spells them the same. This one is
     // the one placement key not simply the folder it sits in: a block level's directory is named after
     // coordinates.
-    internal static string SubBlockChildMember => "Cells";
+    public static string SubBlockChildMember => "Cells";
 
-    internal static string BlockChildMember => "SubBlocks";
+    public static string BlockChildMember => "SubBlocks";
 
     public static string BlockNumberXMember => "BlockNumberX";
 

@@ -1,4 +1,3 @@
-using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -6,25 +5,24 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Codec.Tests.Serialization;
+namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
 public sealed class ModelIdentityTests
 {
+    private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
+
     [Fact]
-    public async Task FindFirst_OfAPluginWhoseRecordsAreRedeflatedAndHoldANegativeZero_ReturnsNull()
+    public async Task DivergenceFrom_OfAPluginWhoseRecordsAreRedeflatedAndHoldANegativeZero_ReturnsNull()
     {
-        var (original, recompiled, originalBytes, rewrittenBytes) = await ParseWriteAndReparse(NegativeZeroPlugin.Plugin);
+        var (divergence, originalBytes, rewrittenBytes) = await ParseRewriteAndCompare(NegativeZeroPlugin.Plugin);
 
         Assert.False(RawPlugin.FirstMiscZlibHeader(originalBytes).SequenceEqual(RawPlugin.FirstMiscZlibHeader(rewrittenBytes)),
             "The rewrite does not re-deflate the generated plugin's records — this test does not exercise the re-deflate it depends on.");
-
-        var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
-
         Assert.Null(divergence);
     }
 
     [Fact]
-    public void FindFirst_WhenAFieldGenuinelyDiffers_NamesTheRecordAndTheField()
+    public async Task DivergenceFrom_WhenAFieldGenuinelyDiffers_NamesTheRecordAndTheField()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew("OriginalNpc");
@@ -34,19 +32,20 @@ public sealed class ModelIdentityTests
         var recompiledNpc = new Npc(npc.FormKey, Fallout4Release.Fallout4) { EditorID = "OriginalNpc", HeightMin = 2.5f };
         recompiled.Npcs.Add(recompiledNpc);
 
-        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
+        var divergence = await DivergenceAsync(mod, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Equal("Npc", divergence.RecordType);
-        Assert.Equal(npc.FormKey, divergence.FormKey);
-        Assert.Contains("HeightMin", divergence.Description);
+        Assert.StartsWith($"Npc {npc.FormKey} ", divergence, StringComparison.Ordinal);
+        Assert.Contains("HeightMin", divergence);
     }
 
     [Fact]
-    public void FindFirst_WhenOnlyGroupHeaderDerivedFieldsDiffer_ReturnsNull()
+    public async Task DivergenceFrom_WhenOnlyGroupHeaderDerivedFieldsDiffer_ReturnsNull()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var cell = new Cell(mod) { EditorID = "TestCell", Timestamp = 1, UnknownGroupData = 2 };
+        var placed = new PlacedObject(mod);
+        cell.Temporary.Add(placed);
         AddInteriorCell(mod, cell);
 
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
@@ -56,19 +55,22 @@ public sealed class ModelIdentityTests
             Timestamp = 99,
             UnknownGroupData = 100,
         };
+        recompiledCell.Temporary.Add(new PlacedObject(placed.FormKey, Fallout4Release.Fallout4));
         AddInteriorCell(recompiled, recompiledCell);
 
-        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
+        var divergence = await DivergenceAsync(mod, recompiled);
 
         Assert.Null(divergence);
     }
 
     [Fact]
-    public void FindFirst_WhenOnlyTheEmbeddedTopCellsGroupHeaderDerivedFieldsDiffer_ReturnsNull()
+    public async Task DivergenceFrom_WhenOnlyTheEmbeddedTopCellsGroupHeaderDerivedFieldsDiffer_ReturnsNull()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var ws = mod.Worldspaces.AddNew("TestWs");
         var topCell = new Cell(mod) { Timestamp = 1, UnknownGroupData = 2 };
+        var placed = new PlacedObject(mod);
+        topCell.Temporary.Add(placed);
         ws.TopCell = topCell;
 
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
@@ -77,15 +79,16 @@ public sealed class ModelIdentityTests
             EditorID = "TestWs",
             TopCell = new Cell(topCell.FormKey, Fallout4Release.Fallout4) { Timestamp = 99, UnknownGroupData = 100 },
         };
+        recompiledWs.TopCell.Temporary.Add(new PlacedObject(placed.FormKey, Fallout4Release.Fallout4));
         recompiled.Worldspaces.Add(recompiledWs);
 
-        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
+        var divergence = await DivergenceAsync(mod, recompiled);
 
         Assert.Null(divergence);
     }
 
     [Fact]
-    public void FindFirst_WhenAWorldspacesBlockLevelsAreInAnotherOrder_ReturnsNull_BecauseBlockSubBlockAndCellOrderIsEncodingTheTreeCarriesNoneSoTheReadersDirectoryEnumerationDecidesIt()
+    public async Task DivergenceFrom_WhenAWorldspacesBlockLevelsAreInAnotherOrder_ReturnsNull_BecauseBlockSubBlockAndCellOrderIsEncodingTheTreeCarriesNoneSoTheReadersDirectoryEnumerationDecidesIt()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var ws = mod.Worldspaces.AddNew("TestWs");
@@ -101,11 +104,11 @@ public sealed class ModelIdentityTests
         recompiledWs.SubCells.Add(Block(0, 0, SubBlock(0, 0, cellB.DeepCopy(), cellA.DeepCopy())));
         recompiled.Worldspaces.Add(recompiledWs);
 
-        Assert.Null(ModelIdentity.FindFirstDivergence(mod, recompiled));
+        Assert.Null(await DivergenceAsync(mod, recompiled));
     }
 
     [Fact]
-    public void FindFirst_WhenACellUnderAWorldspaceBlockGenuinelyDiffers_NamesIt()
+    public async Task DivergenceFrom_WhenACellUnderAWorldspaceBlockGenuinelyDiffers_NamesIt()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var ws = mod.Worldspaces.AddNew("TestWs");
@@ -120,14 +123,14 @@ public sealed class ModelIdentityTests
         recompiledWs.SubCells.Add(Block(0, 0, SubBlock(0, 0, changed)));
         recompiled.Worldspaces.Add(recompiledWs);
 
-        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
+        var divergence = await DivergenceAsync(mod, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Contains("Point", divergence.Description);
+        Assert.Contains("Point", divergence);
     }
 
     [Fact]
-    public void FindFirst_WhenACellSitsUnderAnotherBlockCoordinate_NamesIt_TheOneThingTheWorldspacesOwnComparisonGuardsThatThePerRecordWalkDoesNot()
+    public async Task DivergenceFrom_WhenACellSitsUnderAnotherBlockCoordinate_NamesIt_TheOneThingTheWorldspacesOwnComparisonGuardsThatThePerRecordWalkDoesNot()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var ws = mod.Worldspaces.AddNew("TestWs");
@@ -139,11 +142,11 @@ public sealed class ModelIdentityTests
         recompiledWs.SubCells.Add(Block(5, 0, SubBlock(0, 0, cell.DeepCopy())));
         recompiled.Worldspaces.Add(recompiledWs);
 
-        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
+        var divergence = await DivergenceAsync(mod, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Equal("Worldspace", divergence.RecordType);
-        Assert.Contains("BlockNumberX", divergence.Description);
+        Assert.StartsWith("Worldspace ", divergence, StringComparison.Ordinal);
+        Assert.Contains("BlockNumberX", divergence);
     }
 
     private static WorldspaceBlock Block(short x, short y, params WorldspaceSubBlock[] subBlocks)
@@ -161,7 +164,7 @@ public sealed class ModelIdentityTests
     }
 
     [Fact]
-    public void FindFirst_WhenOnlyASubCellsBlocksGroupHeaderDerivedFieldsDiffer_ReturnsNull()
+    public async Task DivergenceFrom_WhenOnlyASubCellsBlocksGroupHeaderDerivedFieldsDiffer_ReturnsNull()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var ws = mod.Worldspaces.AddNew("TestWs");
@@ -172,27 +175,33 @@ public sealed class ModelIdentityTests
         recompiledWs.SubCells.Add(new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0, LastModified = 99, Unknown = 100 });
         recompiled.Worldspaces.Add(recompiledWs);
 
-        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
+        var divergence = await DivergenceAsync(mod, recompiled);
 
         Assert.Null(divergence);
     }
 
     [Fact]
-    public async Task FindFirst_WhenTheWriterDropsAQuestsNestedTopicsEmptyChildrenGroupAndItsHeaderValues_ReturnsNull()
+    public async Task DivergenceFrom_WhenOnlyAQuestsNestedTopicGroupHeaderFieldsDiffer_ReturnsNull()
     {
         var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var quest = original.Quests.AddNew("TestQuest");
-        quest.DialogTopics.Add(new DialogTopic(original) { Quest = quest.ToLink(), Timestamp = 140636, Unknown = 467 });
+        var topic = new DialogTopic(original) { Quest = quest.ToLink(), Timestamp = 140636, Unknown = 467 };
+        var response = new DialogResponses(original);
+        topic.Responses.Add(response);
+        quest.DialogTopics.Add(topic);
 
-        var recompiled = await WriteAndReparse(original);
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var recompiledQuest = new Quest(quest.FormKey, Fallout4Release.Fallout4) { EditorID = "TestQuest" };
+        var recompiledTopic = new DialogTopic(topic.FormKey, Fallout4Release.Fallout4) { Quest = quest.ToLink() };
+        recompiledTopic.Responses.Add(new DialogResponses(response.FormKey, Fallout4Release.Fallout4));
+        recompiledQuest.DialogTopics.Add(recompiledTopic);
+        recompiled.Quests.Add(recompiledQuest);
 
-        var recompiledTopic = recompiled.Quests.Single().DialogTopics.Single();
-        Assert.Equal((0, 0), (recompiledTopic.Timestamp, recompiledTopic.Unknown));
-        Assert.Null(ModelIdentity.FindFirstDivergence(original, recompiled));
+        Assert.Null(await DivergenceAsync(original, recompiled));
     }
 
     [Fact]
-    public void FindFirstHeaderFieldDivergence_WithMatchingOpaqueFields_ReturnsNull()
+    public async Task DivergenceFrom_WithMatchingOpaqueFields_ReturnsNull()
     {
         var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         SetOpaqueHeaderFields(original);
@@ -200,7 +209,7 @@ public sealed class ModelIdentityTests
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         SetOpaqueHeaderFields(recompiled);
 
-        var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
+        var divergence = await DivergenceAsync(original, recompiled);
 
         Assert.Null(divergence);
     }
@@ -220,7 +229,7 @@ public sealed class ModelIdentityTests
 
     [Theory]
     [MemberData(nameof(AllowListedHeaderFieldCorruptions))]
-    public void FindFirstHeaderFieldDivergence_ForEveryAllowListedField_NamesItWhenItAloneDiverges(
+    public async Task DivergenceFrom_ForEveryAllowListedField_NamesItWhenItAloneDiverges(
         string fieldName, Action<Fallout4ModHeader> setOriginal, Action<Fallout4ModHeader> setCorrupted)
     {
         var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
@@ -229,27 +238,27 @@ public sealed class ModelIdentityTests
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         setCorrupted(recompiled.ModHeader);
 
-        var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
+        var divergence = await DivergenceAsync(original, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Contains($"'{fieldName}'", divergence.Description, StringComparison.Ordinal);
+        Assert.Contains($"'{fieldName}'", divergence, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void FindFirstHeaderFieldDivergence_WhenOnlyAnExcludedFieldDiffers_ReturnsNull()
+    public async Task DivergenceFrom_WhenOnlyAnExcludedFieldDiffers_ReturnsNull()
     {
         var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         original.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Localized;
 
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
 
-        var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
+        var divergence = await DivergenceAsync(original, recompiled);
 
         Assert.Null(divergence);
     }
 
     [Fact]
-    public void FindFirst_WhenOnlyAGenderedItemSubFieldDiffers_ReportsTheDivergence_BecauseMutagensEqualsAndGetEqualsMaskEachMissRealDivergenceAt0531SoTheVerdictMayNeverDependOnThemAlone()
+    public async Task DivergenceFrom_WhenOnlyAGenderedItemSubFieldDiffers_ReportsTheDivergence_BecauseMutagensEqualsAndGetEqualsMaskEachMissRealDivergenceAt0531SoTheVerdictMayNeverDependOnThemAlone()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var armor = mod.Armors.AddNew("GenderedArmor");
@@ -265,14 +274,14 @@ public sealed class ModelIdentityTests
         };
         recompiled.Armors.Add(recompiledArmor);
 
-        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
+        var divergence = await DivergenceAsync(mod, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Equal(armor.FormKey, divergence.FormKey);
+        Assert.Contains(armor.FormKey.ToString(), divergence, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void FindFirst_WhenOnlyAPackageDataIntValueDiffers_ReportsTheDivergence_BecauseMutagensEqualsAndGetEqualsMaskEachMissRealDivergenceAt0531SoTheVerdictMayNeverDependOnThemAlone()
+    public async Task DivergenceFrom_WhenOnlyAPackageDataIntValueDiffers_ReportsTheDivergence_BecauseMutagensEqualsAndGetEqualsMaskEachMissRealDivergenceAt0531SoTheVerdictMayNeverDependOnThemAlone()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var package = mod.Packages.AddNew("IntPackage");
@@ -283,15 +292,15 @@ public sealed class ModelIdentityTests
         recompiledPackage.Data.Add(0, new PackageDataInt { Name = "Count", Data = 99 });
         recompiled.Packages.Add(recompiledPackage);
 
-        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
+        var divergence = await DivergenceAsync(mod, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Equal(package.FormKey, divergence.FormKey);
-        Assert.Contains("field 'Data[0].Data' changed", divergence.Description, StringComparison.Ordinal);
+        Assert.Contains(package.FormKey.ToString(), divergence, StringComparison.Ordinal);
+        Assert.Contains("field 'Data[0].Data' changed", divergence, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void FindFirst_WhenAnOrderedKeyValueShapedListIsReordered_ReportsTheDivergence_BecauseNpcMorphsIsAnOrderedListSoAReorderIsARealContentChangeNotDictionaryEnumerationOrderEvenThoughNpcMorphIsExactlyKeyAndValue()
+    public async Task DivergenceFrom_WhenAnOrderedKeyValueShapedListIsReordered_ReportsTheDivergence_BecauseNpcMorphsIsAnOrderedListSoAReorderIsARealContentChangeNotDictionaryEnumerationOrderEvenThoughNpcMorphIsExactlyKeyAndValue()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew("MorphNpc");
@@ -304,11 +313,11 @@ public sealed class ModelIdentityTests
         recompiledNpc.Morphs.Add(new NpcMorph { Key = 1, Value = 0.25f });
         recompiled.Npcs.Add(recompiledNpc);
 
-        Assert.NotNull(ModelIdentity.FindFirstDivergence(mod, recompiled));
+        Assert.NotNull(await DivergenceAsync(mod, recompiled));
     }
 
     [Fact]
-    public void FindFirstHeaderFieldDivergence_WithATransientTypesItemCorruption_NamesTransientTypes()
+    public async Task DivergenceFrom_WithATransientTypesItemCorruption_NamesTransientTypes()
     {
         var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         original.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
@@ -316,24 +325,24 @@ public sealed class ModelIdentityTests
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         recompiled.ModHeader.TransientTypes.Add(new TransientType { FormType = 99 });
 
-        var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
+        var divergence = await DivergenceAsync(original, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Contains("'TransientTypes'", divergence.Description, StringComparison.Ordinal);
+        Assert.Contains("'TransientTypes'", divergence, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void FindFirstHeaderFieldDivergence_WithATransientTypesCountDivergence_NamesTransientTypes()
+    public async Task DivergenceFrom_WithATransientTypesCountDivergence_NamesTransientTypes()
     {
         var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         original.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
 
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
 
-        var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
+        var divergence = await DivergenceAsync(original, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Contains("'TransientTypes'", divergence.Description, StringComparison.Ordinal);
+        Assert.Contains("'TransientTypes'", divergence, StringComparison.Ordinal);
     }
 
     private static void SetOpaqueHeaderFields(Fallout4Mod mod)
@@ -357,22 +366,32 @@ public sealed class ModelIdentityTests
         mod.Cells.Records.Add(block);
     }
 
-    private static async Task<Fallout4Mod> WriteAndReparse(Fallout4Mod mod)
+    private static async Task<string> Write(Fallout4Mod mod, string folder)
     {
-        using var scratch = new ScratchDirectory("medit-modelidentity-");
-        var path = Path.Combine(scratch.Path, mod.ModKey.FileName);
+        var path = Path.Combine(Directory.CreateDirectory(folder).FullName, mod.ModKey.FileName);
         await mod.BeginWrite.ToPath(path).WithNoLoadOrder().WriteAsync();
-        return Fallout4Mod.CreateFromBinary(new ModPath(mod.ModKey, path), Fallout4Release.Fallout4);
+        return path;
     }
 
-    internal static async Task<(Fallout4Mod Original, Fallout4Mod Recompiled, byte[] OriginalBytes, byte[] RewrittenBytes)>
-        ParseWriteAndReparse(GeneratedPlugin plugin)
+    internal static async Task<string?> DivergenceAsync(Fallout4Mod original, Fallout4Mod recompiled)
+    {
+        using var scratch = new ScratchDirectory("medit-modelidentity-");
+        var originalPath = await Write(original, Path.Combine(scratch.Path, "original"));
+        var recompiledPath = await Write(recompiled, Path.Combine(scratch.Path, "recompiled"));
+        return Adapter.DivergenceFrom(
+            original.ModKey.FileName, originalPath, recompiledPath, GameRelease.Fallout4,
+            new PluginStrings(null, scratch.Path)).Answered();
+    }
+
+    private static async Task<(string? Divergence, byte[] OriginalBytes, byte[] RewrittenBytes)> ParseRewriteAndCompare(
+        GeneratedPlugin plugin)
     {
         using var scratch = new ScratchDirectory("medit-modelidentity-");
         var fileName = plugin.FileName;
         plugin.WriteInto(scratch.Path);
+        var originalPath = Path.Combine(scratch.Path, fileName);
         var original = Fallout4Mod.CreateFromBinary(
-            new ModPath(ModKey.FromFileName(fileName), Path.Combine(scratch.Path, fileName)), Fallout4Release.Fallout4);
+            new ModPath(ModKey.FromFileName(fileName), originalPath), Fallout4Release.Fallout4);
 
         var rewrittenPath = Path.Combine(Directory.CreateDirectory(Path.Combine(scratch.Path, "rewritten")).FullName, fileName);
         await original.BeginWrite
@@ -383,10 +402,8 @@ public sealed class ModelIdentityTests
             .WithRecordCount(RecordCountOption.NoCheck)
             .WriteAsync();
 
-        var recompiled = Fallout4Mod.CreateFromBinary(
-            new ModPath(ModKey.FromFileName(fileName), rewrittenPath), Fallout4Release.Fallout4);
-        var originalBytes = await File.ReadAllBytesAsync(Path.Combine(scratch.Path, fileName));
-        var rewrittenBytes = await File.ReadAllBytesAsync(rewrittenPath);
-        return (original, recompiled, originalBytes, rewrittenBytes);
+        var divergence = Adapter.DivergenceFrom(
+            fileName, originalPath, rewrittenPath, GameRelease.Fallout4, new PluginStrings(null, scratch.Path)).Answered();
+        return (divergence, await File.ReadAllBytesAsync(originalPath), await File.ReadAllBytesAsync(rewrittenPath));
     }
 }

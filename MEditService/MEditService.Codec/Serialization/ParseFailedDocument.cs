@@ -8,7 +8,7 @@ namespace MEditService.Codec.Serialization;
 
 /// <summary>The document stored for a record whose own document could not be produced: the members
 /// the codec reads before any field, and nothing else. Every later read deserializes it.</summary>
-internal static class ParseFailedDocument
+public static class ParseFailedDocument
 {
     public static byte[] For(IMajorRecordGetter record, string? editorId, GameRelease release)
     {

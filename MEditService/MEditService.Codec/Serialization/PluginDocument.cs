@@ -41,34 +41,6 @@ public sealed record PluginDocument(
 /// whatever was reachable before the throw.</summary>
 public sealed record RecordTypeFailure(string RecordType, string Diagnosis);
 
-/// <summary>One plugin's records looked up a few at a time rather than streamed: what a copy asks
-/// of a source whose tree it cannot read. Owns the open until disposed.</summary>
-public interface IPluginRecordLookup : IDisposable
-{
-    /// <summary>The record type and EditorID the plugin's copy gives <paramref name="formKey"/>,
-    /// without serializing the record; null when it holds nothing under that key.</summary>
-    RecordIdentity? IdentityOf(string formKey);
-
-    /// <summary>The record header's flags, read without its fields; null when the plugin holds
-    /// nothing under that key.</summary>
-    long? RecordFlagsOf(string formKey);
-
-    /// <summary>The record's own document, or null when the plugin holds nothing under that
-    /// key.</summary>
-    string? TextOf(string formKey);
-
-    /// <summary>The container whose own document carries <paramref name="formKey"/> inline, and the
-    /// slot it sits in; null when the record has a document of its own.</summary>
-    DocumentContainment? ContainmentOf(string formKey);
-
-    /// <summary>Where the GRUP hierarchy puts the cell <paramref name="formKey"/> names, or null when the plugin holds no cell under that key.</summary>
-    CellStructure? CellStructureOf(string formKey);
-
-    /// <summary>The FormKey of the exterior cell the plugin holds at grid (<paramref name="x"/>,
-    /// <paramref name="y"/>) of <paramref name="worldspace"/>, or null when it holds none there.</summary>
-    string? CellAt(string worldspace, int x, int y);
-}
-
 /// <summary>A plugin's documents, whichever door they came through: the binary through the Plugin
 /// adapter, or a tracked plugin's source tree.</summary>
 public interface IPluginDocuments : IDisposable

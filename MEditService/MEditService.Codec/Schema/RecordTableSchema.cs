@@ -1,5 +1,7 @@
 using System.Text.Json;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Schema;
 
@@ -64,6 +66,13 @@ public sealed class RecordTableSchema
         }
         return fields;
     }
+
+    /// <summary>The records of this table the mod holds. Mutagen's enumeration by one placed-trap variant
+    /// (a placed arrow, hazard, missile...) yields every variant a cell holds, so the table is checked per record.
+    /// Enumerated lazily: Mutagen's group enumerator throws out of MoveNext and cannot be resumed.</summary>
+    public IEnumerable<IMajorRecordGetter> RecordsIn(IModGetter mod) =>
+        mod.EnumerateMajorRecords(RecordType, throwIfUnknown: false)
+            .Where(record => RecordType.IsInstanceOfType(record) || RecordTypes.For(mod.GameRelease).RecordTypeOf(record) == TableName);
 
     // A ModHeader cannot carry the Partial Form flag.
     public bool IsPartialForm(JsonElement document) => !IsHeader && PartialFormFlag.IsSet(document, RecordType);

@@ -7,7 +7,7 @@ namespace MEditService.Codec.Serialization;
 
 /// <summary>Reading and writing a container's child major records through the members
 /// <see cref="ContainerMembers"/> derives. Nothing is stripped.</summary>
-internal static class ContainerChildFields
+public static class ContainerChildFields
 {
     /// <summary>The child-major field names for <paramref name="recordType"/>, or null when it is not a
     /// known container shape, or its assembly is outside every game this build references.</summary>
@@ -106,7 +106,7 @@ internal static class ContainerChildFields
     /// <summary>Child major records read non-destructively off a getter, so ingest captures parentage in
     /// the same pass that writes the parent. <c>SlotIndex</c> is preserved so compile reproduces the
     /// original list order.</summary>
-    internal static IEnumerable<(string SlotName, int SlotIndex, IMajorRecordGetter Child)> EnumerateChildren(
+    public static IEnumerable<(string SlotName, int SlotIndex, IMajorRecordGetter Child)> EnumerateChildren(
         IMajorRecordGetter record)
     {
         foreach (var (fieldName, property) in ChildProperties.GetOrAdd(record.GetType(), ChildPropertiesOf))
