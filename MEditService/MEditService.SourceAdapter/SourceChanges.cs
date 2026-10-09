@@ -1,8 +1,7 @@
 namespace MEditService.SourceAdapter;
 
-/// <summary>What a write changes in one mod folder's plugin source, written nowhere: each move, then each
-/// deletion of a file or a folder with all it holds, then each document's new text at its path once moved.
-/// Paths are relative to the mod folder.</summary>
+/// <summary>What a write changes in one mod folder's plugin source, written nowhere: moves, then deletions of
+/// a file or a folder, then each document's new text at its moved path. Paths are relative to the mod folder.</summary>
 public sealed record SourceChanges(IReadOnlyList<SourceMove> Moves, IReadOnlyList<DocumentChange> Documents)
 {
     internal IReadOnlyList<string> Deletions { get; init; } = [];
