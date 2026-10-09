@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
@@ -166,17 +165,13 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         return RecordEditResult.Success();
     }
 
-    private static JsonNode RequireParsed(string text) =>
-        JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a document's text to parse as JSON.");
-
     private static SourceDocument WithGridFrom(string sourceCellText, SourceDocument cell, GameRelease release)
     {
-        var grid = RequireParsed(sourceCellText).AsObject()[RecordTypes.CellGridMember];
-        if (grid == null) return cell;
+        var sourceCell = Document.Parse(sourceCellText);
+        if (sourceCell.DocumentAt(RecordTypes.CellGridMember) is null) return cell;
 
-        var withGrid = RequireParsed(cell.Body).AsObject();
-        withGrid[RecordTypes.CellGridMember] = grid.DeepClone();
-        return cell with { Body = RecordTextCodec.RoundTrip(withGrid.ToJsonString(), release, cell.RecordType) };
+        var withGrid = Document.Parse(cell.Body).WithCopyOf(sourceCell, RecordTypes.CellGridMember);
+        return cell with { Body = RecordTextCodec.RoundTrip(withGrid.Text, release, cell.RecordType) };
     }
 
     /// <summary>What the destination's tree names at <paramref name="formKey"/>, or null when nothing
@@ -259,9 +254,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     private static SourceDocument PartialFormOf(SourceDocument container, RecordTableSchema schema, GameRelease release)
     {
         var body = ContainerDocumentEdits.WithoutChildren(container.Body, release, container.RecordType);
-        var record = RequireParsed(body).AsObject();
-        return RecordEmptying.MakePartialForm(record, schema, release)
-            ? container with { Body = RecordTextCodec.RoundTrip(record.ToJsonString(), release, container.RecordType) }
+        return RecordEmptying.AsPartialForm(Document.Parse(body), schema, release) is { } partialForm
+            ? container with { Body = RecordTextCodec.RoundTrip(partialForm.Text, release, container.RecordType) }
             : container with { Body = body };
     }
 

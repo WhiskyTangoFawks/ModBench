@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
@@ -7,10 +6,10 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>Everything a record's edit needs and nothing it may touch: its own text, the container record that
+/// <summary>Everything a record's edit needs and nothing it may touch: its own document, the container record that
 /// holds it if any, and the walk to the left that a cell's place and a refill read.</summary>
 internal sealed record RecordTextEditRequest(
-    string Text,
+    Document Record,
     HeldIn? Held,
     RecordTableSchema Schema,
     RecordEditEnvelope Envelope,
@@ -18,67 +17,55 @@ internal sealed record RecordTextEditRequest(
     Func<string, string> RoundTrip,
     LoadOrderResolution.MastersWalk Masters);
 
-/// <summary>A write is a patch on the record's own document (ADR-0005). Pure: text and metadata in,
-/// text or one refusal out.</summary>
+/// <summary>A write is an edit by path on the record's own document (ADR-0005), refused by the rules that
+/// decide a write. Pure: a document and metadata in, text or one refusal out.</summary>
 internal static class RecordTextEdit
 {
-    private const string FormKeyMember = RecordMembers.FormKey;
-
     /// <summary>The record's new text in <paramref name="text"/> on success (a null return), and the group it
     /// moves into; a refusal otherwise, with nothing written anywhere.</summary>
     internal static RecordEditResult? Patch(RecordTextEditRequest request, out string text, out CellGroupMove? move)
     {
-        text = request.Text;
+        text = "";
         move = null;
         var envelope = request.Envelope;
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
-        if (ValidateEnvelope(envelope, spelled) is { } malformed) return malformed;
+        if (ValidateEnvelope(envelope, spelled, out var op) is { } malformed) return malformed;
 
-        if (JsonNode.Parse(request.Text) is not JsonObject record) return Malformed(spelled, "the record's text is not a JSON object");
-        var before = record.DeepClone();
+        var record = request.Record;
+        if (DocumentEdit.Locate(record, request.Schema, op, [.. envelope.Path.Select(hop => hop.Hop)], out var located) is { } unaddressed)
+            return Refusal(unaddressed);
+        var edit = located ?? throw new InvalidOperationException("Expected Locate to answer an edit when it does not refuse.");
+        if (edit.ReadOnlyTarget is { } readOnly) return ReadOnlyRefusal(readOnly.Path, readOnly.Member, readOnly.Reason);
+        var column = edit.Column;
 
-        var creating = envelope.Op is RecordEditEnvelope.Set or RecordEditEnvelope.Add;
-        if (Resolve(record, request.Schema, envelope.Path, creating, out var resolvedCursor) is { } unresolved) return unresolved;
-        var cursor = resolvedCursor ?? throw new InvalidOperationException("Expected Resolve to set a cursor when it does not refuse.");
+        if (RefuseIfPartialForm(record, request.Schema, column, spelled) is { } partialForm) return partialForm;
 
-        if (RefuseIfPartialForm(record, request.Schema, cursor, spelled) is { } partialForm) return partialForm;
-
-        var emptying = RecordEmptying.Of(record, request.Schema, cursor.Column, envelope.Value);
+        var requested = RecordFlagsWrite.Requested(request.Schema, column, envelope.Value);
+        var emptying = RecordEmptying.Of(record, request.Schema, requested);
         if (emptying?.RefuseCell(record, request.Held, request.Schema, request.Release, request.Masters, spelled) is { } cannot)
             return cannot;
-        var formKey = record[FormKeyMember]?.GetValue<string>();
+        var formKey = record.StringAt(RecordMembers.FormKey);
         var refill = emptying?.RefillFrom(request.Masters, request.Schema, formKey);
         if (RecordEmptying.RefuseRefill(refill, request.Schema, formKey, spelled) is { } unreadable)
             return unreadable;
         var left = RecordEmptying.LeftOf(refill);
-        if (emptying != null) envelope = envelope with { Value = emptying.FlagsWith(left) };
-        if (RefusePersistentOnDeleted(record, request, cursor.Column, envelope.Value, spelled) is { } deleted) return deleted;
-        var groupMove = CellGroupMove.Of(record, request.Held, request.Schema, cursor.Column, envelope.Value);
+        if (emptying != null) requested = emptying.FlagsWith(left);
+        if (RefusePersistentOnDeleted(record, request, column, requested, spelled) is { } deleted) return deleted;
+        var groupMove = CellGroupMove.Of(record, request.Held, requested);
         AnotherCell? into = null;
         if (groupMove?.RefuseUnknownCell(record, request.Release, request.Masters, spelled, out into) is { } unknown) return unknown;
 
-        JsonNode? edited;
-        FieldMetadata editedMeta;
-        var patched = cursor.Column.Synthetic is { } bit
-            ? PatchSyntheticBit(record, bit, envelope, spelled, out edited, out editedMeta)
-            : envelope switch
-            {
-                { Op: RecordEditEnvelope.Set, Value: { } setValue } => Set(cursor, setValue, spelled, out edited, out editedMeta),
-                { Op: RecordEditEnvelope.Set } =>
-                    throw new InvalidOperationException("ValidateEnvelope should have refused a set with no value."),
-                { Op: RecordEditEnvelope.Add } => Add(cursor, envelope.Value, spelled, out edited, out editedMeta),
-                { Op: RecordEditEnvelope.Remove } => Remove(cursor, out edited, out editedMeta),
-                _ => Move(cursor, envelope.Value, spelled, out edited, out editedMeta),
-            };
-        if (patched is { } refused) return refused;
-        RecordEmptying.ClearAliases(record, cursor.Column);
-        emptying?.Apply(record, request.Schema, request.Release, left);
+        if (op == EditOp.Move && RefuseMove(edit, envelope, spelled) is { } unmoved) return unmoved;
+        var value = envelope.Value?.GetRawText();
+        if (edit.ReadOnlyReached(value) is { } reached) return ReadOnlyRefusal(reached.Path, reached.Member, reached.Reason);
+        if (edit.Apply(value, out var applied) is { } refused) return Refusal(refused);
+        var patch = applied ?? throw new InvalidOperationException("Expected Apply to answer a patch when it does not refuse.");
+        var patched = emptying?.Apply(patch.Document, request.Schema, request.Release, left) ?? patch.Document;
 
-        var chain = IndexChain(edited ?? throw new InvalidOperationException("Expected the edit to set which node changed."));
         string written;
         try
         {
-            written = request.RoundTrip(record.ToJsonString());
+            written = request.RoundTrip(patched.Text);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -86,26 +73,23 @@ internal static class RecordTextEdit
                 RecordEditRefusal.CodecRejected, spelled, $"'{spelled}': the codec rejected the document — {ex.Message}");
         }
 
-        var writtenRoot = JsonNode.Parse(written) as JsonObject
-            ?? throw new InvalidOperationException("Expected the codec's round trip to produce a JSON object.");
-        if (!SilentSkipGuard.Keeps(At(writtenRoot, chain), edited, editedMeta, spelled, out var dropped))
+        var after = Document.Parse(written);
+        if (patch.FirstDropped(patched, after) is { } dropped)
         {
             return RecordEditResult.RefusedAt(
                 RecordEditRefusal.CodecDroppedValue, dropped,
                 $"'{dropped}' was not kept by the codec: the record's own class has no member the document can carry it in, so nothing was written.");
         }
 
-        var after = JsonSerializer.SerializeToElement(writtenRoot);
-        var was = JsonSerializer.SerializeToElement(before);
-        foreach (var column in request.Schema.RecordColumns)
+        foreach (var other in request.Schema.RecordColumns)
         {
-            if (column.Synthetic is not { } synthetic || column == cursor.Column) continue;
-            if (SyntheticBits.IsSet(was, synthetic) != SyntheticBits.IsSet(after, synthetic))
+            if (other.Synthetic is not { } synthetic || other == column) continue;
+            if (SyntheticBits.IsSet(record, synthetic) != SyntheticBits.IsSet(after, synthetic))
             {
                 return RecordEditResult.RefusedAt(
                     RecordEditRefusal.SyntheticMemberIndirectWrite, spelled,
-                    $"'{spelled}' would change '{column.Name}' as a side effect of writing an unrelated column. " +
-                    $"That bit is only writable through '{column.Name}' — nothing was written.");
+                    $"'{spelled}' would change '{other.Name}' as a side effect of writing an unrelated column. " +
+                    $"That bit is only writable through '{other.Name}' — nothing was written.");
             }
         }
 
@@ -116,19 +100,26 @@ internal static class RecordTextEdit
 
     // ── envelope ────────────────────────────────────────────────────────────
 
-    private static RecordEditResult? ValidateEnvelope(RecordEditEnvelope envelope, string spelled)
+    private static RecordEditResult? ValidateEnvelope(RecordEditEnvelope envelope, string spelled, out EditOp op)
     {
-        if (envelope.Op is not (RecordEditEnvelope.Set or RecordEditEnvelope.Add or RecordEditEnvelope.Remove or RecordEditEnvelope.Move))
-            return Malformed(spelled, $"'{envelope.Op}' is not an operation; use set, add, remove or move");
+        op = default;
+        switch (envelope.Op)
+        {
+            case RecordEditEnvelope.Set: op = EditOp.Set; break;
+            case RecordEditEnvelope.Add: op = EditOp.Add; break;
+            case RecordEditEnvelope.Remove: op = EditOp.Remove; break;
+            case RecordEditEnvelope.Move: op = EditOp.Move; break;
+            default: return Malformed(spelled, $"'{envelope.Op}' is not an operation; use set, add, remove or move");
+        }
         if (envelope.Path.Count == 0 || envelope.Path[0].Kind != PathHop.MemberKind)
             return Malformed(spelled, "a path starts with a member hop");
         if (envelope.Path.Any(hop => !WellFormed(hop)))
             return Malformed(spelled, "every hop is a member with a name or an index with a position");
-        if (envelope.Op == RecordEditEnvelope.Set && envelope.Value is null)
+        if (op == EditOp.Set && envelope.Value is null)
             return Malformed(spelled, "set takes a value (JSON null clears a member)");
-        if (envelope.Op is RecordEditEnvelope.Remove or RecordEditEnvelope.Move && envelope.Path[^1].Kind == PathHop.MemberKind)
+        if (op is EditOp.Remove or EditOp.Move && envelope.Path[^1].Kind == PathHop.MemberKind)
             return Malformed(spelled, $"{envelope.Op} addresses an element by its index");
-        if (envelope.Op == RecordEditEnvelope.Move && envelope.Value is not { ValueKind: JsonValueKind.Number })
+        if (op == EditOp.Move && envelope.Value is not { ValueKind: JsonValueKind.Number })
             return Malformed(spelled, "move takes the destination index as its value");
         return null;
     }
@@ -144,175 +135,55 @@ internal static class RecordTextEdit
     private static RecordEditResult Malformed(string spelled, string why) =>
         RecordEditResult.RefusedAt(RecordEditRefusal.InvalidEnvelope, spelled, $"'{spelled}': {why}.");
 
-    // ── resolution ──────────────────────────────────────────────────────────
+    private static RecordEditResult NotFound(string spelled, string why) =>
+        RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, spelled, why);
 
-    // Where the path landed: the node (null when the document omits it), its shape, the member spec
-    // it was reached through, and the container the last hop addressed it in.
-    private sealed class Cursor
+    private static RecordEditResult Refusal(EditFailure failure) => failure switch
     {
-        internal required ColumnSpec Column { get; init; }
-        internal JsonNode? Node { get; set; }
-        internal required FieldMetadata Meta { get; set; }
-        internal FieldMetadata? Field { get; set; }
-        internal JsonObject? OwnerObject { get; set; }
-        internal FieldMetadata? OwnerMeta { get; set; }
-        internal string? MemberName { get; set; }
-        internal JsonArray? OwnerArray { get; set; }
-        internal int Index { get; set; }
+        EditFailure.NoField(var path, var owner, var field) => NotFound(path, $"'{owner}' has no field '{field}'."),
+        EditFailure.NoMember(var path, var owner, var member) => NotFound(path, $"'{owner}' has no member '{member}'."),
+        EditFailure.NoMembers(var path, var subject) => NotFound(path, $"'{subject}' has no members."),
+        EditFailure.Absent(var path, var subject) => NotFound(path, $"'{subject}' is not present in the document."),
+        EditFailure.NoElement(var path, var count) =>
+            NotFound(path, $"'{path}' names no element: the array holds {count} element(s), so nothing was written."),
+        EditFailure.NotAnArray(var path, var subject, var inTheDocument) =>
+            Malformed(path, inTheDocument ? $"'{subject}' is not an array in the document" : $"'{subject}' is not an array"),
+        EditFailure.NoArrayToAppendTo(var path) => Malformed(path, $"'{path}' is not an array; add appends to one"),
+        EditFailure.NullElement(var path) => Malformed(path, "an element is not cleared with null; remove it"),
+        EditFailure.NotABoolean(var path) => Malformed(path, $"'{path}' takes a JSON boolean through set"),
+        EditFailure.NotALeaf(var path, var discriminator) => RecordEditResult.RefusedAt(
+            RecordEditRefusal.DiscriminatorInvalid, path,
+            $"'{path}' must lead with '{discriminator.Name}' naming one of: {string.Join(", ", discriminator.EnumMembers.Select(m => m.Value))}."),
+        EditFailure.HexResize(var path, var held, var given) => RecordEditResult.RefusedAt(
+            RecordEditRefusal.HexLengthMismatch, path,
+            $"'{path}' holds {held} bytes; a value of {given} bytes would resize it, and nothing here knows which bytes a resize moves."),
+        EditFailure.AlphaGiven(var path, var color) => RecordEditResult.RefusedAt(
+            RecordEditRefusal.AlphaNotHeld, path,
+            $"'{path}' holds no alpha; '{color}' gives one that compiling would drop, so nothing was written. Give it as #RRGGBB."),
+        _ => throw new InvalidOperationException($"Expected a refusal for every edit failure, not {failure.GetType().Name}."),
+    };
 
-        internal JsonArray RequireOwnerArray() =>
-            OwnerArray ?? throw new InvalidOperationException("Expected this cursor to sit in an array, not an object.");
-
-        internal string RequireMemberName() =>
-            MemberName ?? throw new InvalidOperationException("Expected this cursor to name a member.");
-
-        internal FieldMetadata RequireOwnerMeta() =>
-            OwnerMeta ?? throw new InvalidOperationException("Expected this cursor to carry its owner's metadata.");
-
-        internal FieldMetadata RequireField() =>
-            Field ?? throw new InvalidOperationException("Expected this cursor to carry the field it resolved to.");
-    }
-
-    private static RecordEditResult? Resolve(
-        JsonObject record, RecordTableSchema schema, IReadOnlyList<PathHop> path, bool creating, out Cursor? cursor)
+    private static RecordEditResult? RefuseMove(DocumentEdit edit, RecordEditEnvelope envelope, string spelled)
     {
-        cursor = null;
-        var spelled = RecordEditEnvelope.Spell(path);
-        var name = path[0].RequireName();
-        if (schema.RecordColumns.FirstOrDefault(c => c.Name == name) is not { } column)
-        {
-            return RecordEditResult.RefusedAt(
-                RecordEditRefusal.FieldNotFound, spelled, $"'{schema.TableName}' has no field '{name}'.");
-        }
-        if (column.Synthetic != null && path.Count > 1)
-            return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, spelled, $"'{name}' has no members.");
-
-        var meta = column.Field;
-        if (LeafOf(record) is { } recordLeaf && meta.Variants is { } byClass && !byClass.ContainsKey(recordLeaf))
-        {
-            return RecordEditResult.RefusedAt(
-                RecordEditRefusal.FieldNotFound, spelled, $"'{recordLeaf}' has no field '{name}'.");
-        }
-
-        var segments = column.PropertyName.Split('.');
-        var owner = record;
-        for (var i = 0; i < segments.Length - 1; i++)
-        {
-            if (owner[segments[i]] is not JsonObject inner)
-            {
-                if (!creating) { cursor = new Cursor { Column = column, Meta = meta }; return null; }
-                owner[segments[i]] = inner = new JsonObject();
-            }
-            owner = inner;
-        }
-        cursor = new Cursor
-        {
-            Column = column,
-            Node = owner[segments[^1]],
-            Meta = DocumentNodes.VariantFor(meta, record),
-            Field = meta,
-            OwnerObject = owner,
-            OwnerMeta = RootMetadata(schema),
-            MemberName = segments[^1],
-        };
-
-        for (var i = 1; i < path.Count; i++)
-        {
-            var hop = path[i];
-            var sofar = RecordEditEnvelope.Spell(path.Take(i + 1));
-            if (hop.Kind == PathHop.MemberKind)
-            {
-                if (cursor.Meta.Fields is not { } fields)
-                    return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, sofar, $"'{RecordEditEnvelope.Spell(path.Take(i))}' has no members.");
-                if (cursor.Node is not JsonObject obj)
-                {
-                    if (cursor.Node != null || !creating)
-                        return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, sofar, $"'{RecordEditEnvelope.Spell(path.Take(i))}' is not present in the document.");
-                    obj = new JsonObject();
-                    Attach(cursor, obj);
-                }
-                var field = fields.FirstOrDefault(f => f.Name == hop.Name);
-                if (field == null)
-                    return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, sofar, $"'{cursor.Meta.LeafTypeName ?? RecordEditEnvelope.Spell(path.Take(i))}' has no member '{hop.Name}'.");
-                if (LeafOf(obj) is { } leaf && field.Variants is { } variants && !variants.ContainsKey(leaf))
-                    return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, sofar, $"'{leaf}' has no member '{hop.Name}'.");
-
-                cursor = new Cursor
-                {
-                    Column = column,
-                    Node = obj[hop.RequireName()],
-                    Meta = DocumentNodes.VariantFor(field, obj),
-                    Field = field,
-                    OwnerObject = obj,
-                    OwnerMeta = cursor.Meta,
-                    MemberName = hop.Name,
-                };
-                continue;
-            }
-
-            if (cursor.Meta.ElementType is not { } elementMeta)
-                return Malformed(sofar, $"'{RecordEditEnvelope.Spell(path.Take(i))}' is not an array");
-            if (cursor.Node is not JsonArray array)
-            {
-                if (cursor.Node != null)
-                    return Malformed(sofar, $"'{RecordEditEnvelope.Spell(path.Take(i))}' is not an array in the document");
-                array = new JsonArray();
-                if (creating) Attach(cursor, array);
-            }
-            var index = hop.RequireIndex();
-            // An element that is not there is a path the document does not know, on every operation:
-            // a stale panel must never hear that a write which did nothing landed.
-            if (index >= array.Count) return NoElement(sofar, array.Count);
-            cursor = new Cursor
-            {
-                Column = column,
-                Node = array[index],
-                Meta = elementMeta,
-                Field = elementMeta,
-                OwnerArray = array,
-                OwnerMeta = cursor.Meta,
-                Index = index,
-            };
-        }
-
-        // Asked once, of whatever the path resolved to: a read-only member's reason reaches every
-        // member below it (FieldMetadata.WithReadOnlyReason), so no path through one ends writable.
-        return cursor.Field?.ReadOnlyReason is { } why
-            ? ReadOnlyRefusal(spelled, cursor.MemberName ?? name, why)
-            : null;
+        // xedit.md, divergence 14.
+        if (edit.InKeyedArray)
+            return Malformed(spelled, $"'{RecordEditEnvelope.Spell(envelope.Path.SkipLast(1))}' is a keyed array, and a keyed array's elements take no move");
+        var destination = (envelope.Value ?? throw new InvalidOperationException("Expected a move's destination index.")).GetInt32();
+        return destination == edit.Position ? Malformed(spelled, $"the element is already at position {destination}") : null;
     }
 
     internal static RecordEditResult ReadOnlyRefusal(string path, string name, string reason) =>
         RecordEditResult.RefusedAt(RecordEditRefusal.FieldReadOnly, path, $"'{name}' is read-only: {reason}.");
 
-    private static RecordEditResult NoElement(string spelled, int count) =>
-        RecordEditResult.RefusedAt(
-            RecordEditRefusal.FieldNotFound, spelled,
-            $"'{spelled}' names no element: the array holds {count} element(s), so nothing was written.");
-
-    private static void Attach(Cursor cursor, JsonNode node)
-    {
-        if (cursor.OwnerObject != null) cursor.OwnerObject[cursor.RequireMemberName()] = node;
-        else cursor.RequireOwnerArray()[cursor.Index] = node;
-        cursor.Node = node;
-    }
-
-    private static string? LeafOf(JsonObject? obj) =>
-        obj?[LoquiUnions.UnionTypeDiscriminator] is JsonValue value && value.TryGetValue<string>(out var leaf) ? leaf : null;
-
-    private static FieldMetadata RootMetadata(RecordTableSchema schema) =>
-        new("", "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
-            Fields: [.. schema.RecordColumns.Where(c => c.Synthetic == null).Select(c => c.Field)]);
-
     // A Partial Form record's own fields are never seen by the game (CONTEXT.md). Its EditorID and
     // record header edit (editor-fields.md § Partial Form), as does the flag itself.
-    private static RecordEditResult? RefuseIfPartialForm(JsonObject record, RecordTableSchema schema, Cursor cursor, string spelled)
+    private static RecordEditResult? RefuseIfPartialForm(Document record, RecordTableSchema schema, ColumnSpec column, string spelled)
     {
-        if (!schema.IsPartialForm(JsonSerializer.SerializeToElement(record))) return null;
-        if (cursor.Column.Field.IsEditorId || cursor.Column.Field.IsRecordHeaderMember) return null;
+        if (!schema.IsPartialForm(record)) return null;
+        if (column.Field.IsEditorId || column.Field.IsRecordHeaderMember) return null;
         return RecordEditResult.RefusedAt(
             RecordEditRefusal.PartialFormFieldReadOnly, spelled,
-            $"{record[FormKeyMember]} is a Partial Form override — its own fields are ignored for conflict " +
+            $"{record.StringAt(RecordMembers.FormKey)} is a Partial Form override — its own fields are ignored for conflict " +
             "resolution and read-only here. Editing this record requires clearing the Partial " +
             "Form flag on its header first.");
     }
@@ -320,15 +191,15 @@ internal static class RecordTextEdit
     // xEdit applies a write's Deleted before its Persistent, and reverts Persistent on a record that
     // then reads Deleted (xedit.md, divergence 24).
     private static RecordEditResult? RefusePersistentOnDeleted(
-        JsonObject record, RecordTextEditRequest request, ColumnSpec column, JsonElement? value, string spelled)
+        Document record, RecordTextEditRequest request, ColumnSpec column, long? requested, string spelled)
     {
-        if (RecordFlagsWrite.Of(record, request.Schema, column, value) is not { } write
+        if (RecordFlagsWrite.Of(record, requested) is not { } write
             || (write.Next & DeletedFlag.Bit) == 0 || !write.Changes(PersistentFlag.Bit)
             || !(request.Held is { IsPlaced: true } || column.Field.EnumMembers.Any(NamesPersistent)))
             return null;
         return RecordEditResult.RefusedAt(
             RecordEditRefusal.PersistentOnDeletedRecord, spelled,
-            $"{record[FormKeyMember]} is Deleted once this write lands, and a Deleted record's Persistent " +
+            $"{record.StringAt(RecordMembers.FormKey)} is Deleted once this write lands, and a Deleted record's Persistent " +
             "does not change. Nothing was written.");
     }
 
@@ -339,306 +210,4 @@ internal static class RecordTextEdit
     private static bool NamesPersistent(EnumMember flag) =>
         flag.Value == PersistentName
         && flag.BitValue == PersistentFlag.Bit.ToString(System.Globalization.CultureInfo.InvariantCulture);
-
-    // ── the operations ──────────────────────────────────────────────────────
-
-    private static RecordEditResult? Set(
-        Cursor cursor, JsonElement value, string spelled,
-        out JsonNode? edited, out FieldMetadata editedMeta)
-    {
-        edited = null;
-        editedMeta = cursor.Meta;
-        if (value.ValueKind == JsonValueKind.Null && cursor.OwnerArray != null)
-            return Malformed(spelled, "an element is not cleared with null; remove it");
-
-        var node = value.ValueKind == JsonValueKind.Null ? null : JsonNode.Parse(value.GetRawText());
-        if (PreCheck(node, cursor.Meta, cursor.Node, spelled) is { } refused) return refused;
-        node = LeafSpelling.AsRead(node, cursor.Meta);
-        Cascade(node, cursor.Meta, cursor.Node);
-
-        if (cursor.OwnerArray != null)
-        {
-            cursor.OwnerArray[cursor.Index] = node;
-            // An element is never cleared with null (refused above), so parsing its value succeeded.
-            edited = node ?? throw new InvalidOperationException("Expected a non-null element value.");
-            return null;
-        }
-
-        var owner = cursor.OwnerObject ?? throw new InvalidOperationException("Expected this cursor to sit in an object, not an array.");
-        var field = cursor.RequireField();
-        var memberName = cursor.RequireMemberName();
-        if (field.IsDiscriminator)
-        {
-            if (node is not JsonValue leafValue || !leafValue.TryGetValue<string>(out var leaf) || !field.EnumMembers.Any(m => m.Value == leaf))
-                return DiscriminatorRefusal(spelled, field);
-            SwitchLeaf(owner, cursor.RequireOwnerMeta(), LeafOf(owner), leaf);
-            edited = owner;
-            editedMeta = cursor.RequireOwnerMeta();
-            return null;
-        }
-
-        if (field.SiblingsInUse is { } inUse)
-        {
-            // A stale slot posted under an earlier value is cleared here, never carried.
-            foreach (var idle in Idle(inUse, node, field)) owner.Remove(idle);
-            if (node == null) owner.Remove(memberName); else owner[memberName] = node;
-            edited = owner;
-            editedMeta = cursor.RequireOwnerMeta();
-            return null;
-        }
-
-        if (node == null)
-        {
-            owner.Remove(memberName);
-            edited = owner;
-            editedMeta = cursor.RequireOwnerMeta();
-            return null;
-        }
-        owner[memberName] = node;
-        edited = node;
-        return null;
-    }
-
-    // The cascade over a whole value: wherever it changes a governing member from what the document
-    // holds, only the slots the new value uses stay, so a stale slot cannot ride in beside it. An
-    // unchanged member idles nothing.
-    private static void Cascade(JsonNode? value, FieldMetadata meta, JsonNode? current)
-    {
-        switch (value)
-        {
-            case JsonObject obj when meta.Fields is { } fields:
-                var was = current as JsonObject;
-                foreach (var field in fields)
-                {
-                    if (field.SiblingsInUse is { } inUse && !JsonNode.DeepEquals(obj[field.Name], was?[field.Name]))
-                        foreach (var idle in Idle(inUse, obj[field.Name], field)) obj.Remove(idle);
-                    if (obj.TryGetPropertyValue(field.Name, out var child))
-                        Cascade(child, DocumentNodes.VariantFor(field, obj), was?[field.Name]);
-                }
-                break;
-            case JsonArray array when meta.ElementType is { } elementMeta:
-                var held = current as JsonArray;
-                for (var i = 0; i < array.Count; i++)
-                    Cascade(array[i], elementMeta, held != null && i < held.Count ? held[i] : null);
-                break;
-        }
-    }
-
-    // Every slot the table governs is idle unless the value puts it in use.
-    private static IEnumerable<string> Idle(IReadOnlyDictionary<string, IReadOnlyList<string>> table, JsonNode? value, FieldMetadata field) =>
-        table.Values.SelectMany(v => v).Distinct(StringComparer.Ordinal).Except(InUse(table, value, field), StringComparer.Ordinal);
-
-    // The siblings a governing member's value puts in use; an absent member reads as its declared default.
-    private static IEnumerable<string> InUse(IReadOnlyDictionary<string, IReadOnlyList<string>> table, JsonNode? value, FieldMetadata field)
-    {
-        var name = value is JsonValue v && v.TryGetValue<string>(out var s) ? s : field.Default as string;
-        return name != null && table.TryGetValue(name, out var siblings) ? siblings : [];
-    }
-
-    // The incoming leaf keeps every member it shapes alike; the outgoing leaf's own members, and any
-    // shaped differently, are removed so the codec builds the new leaf from what it can hold. The
-    // discriminator leads, as the codec requires.
-    private static void SwitchLeaf(JsonObject owner, FieldMetadata ownerMeta, string? from, string to)
-    {
-        var fields = ownerMeta.Fields
-            ?? throw new InvalidOperationException($"Expected '{ownerMeta.LeafTypeName ?? ownerMeta.Name}' to declare its own fields.");
-        foreach (var member in fields)
-        {
-            if (member.Variants is not { } variants || !owner.ContainsKey(member.Name)) continue;
-            var kept = variants.TryGetValue(to, out var incoming)
-                && (from == null || !variants.TryGetValue(from, out var outgoing) || SameShape(incoming, outgoing));
-            if (!kept) owner.Remove(member.Name);
-        }
-
-        var rest = owner.Where(p => p.Key != LoquiUnions.UnionTypeDiscriminator).ToList();
-        owner.Clear();
-        owner[LoquiUnions.UnionTypeDiscriminator] = to;
-        foreach (var (name, node) in rest) owner[name] = node;
-    }
-
-    // Alike means the codec would take the same value under either leaf: same kind, same class and
-    // — since each leaf closes an enum over its own members — the same domain, element included.
-    private static bool SameShape(FieldMetadata? a, FieldMetadata? b) =>
-        a is null || b is null
-            ? a is null && b is null
-            : a.Type == b.Type && a.LeafTypeName == b.LeafTypeName
-              && a.EnumMembers.Select(m => m.Value).SequenceEqual(b.EnumMembers.Select(m => m.Value), StringComparer.Ordinal)
-              && a.ValidFormKeyTypes.SequenceEqual(b.ValidFormKeyTypes, StringComparer.Ordinal)
-              && SameShape(a.ElementType, b.ElementType);
-
-    private static RecordEditResult? Add(
-        Cursor cursor, JsonElement? value, string spelled,
-        out JsonNode? edited, out FieldMetadata editedMeta)
-    {
-        edited = null;
-        editedMeta = cursor.Meta;
-        if (cursor.Meta.ElementType is not { } elementMeta) return Malformed(spelled, $"'{spelled}' is not an array; add appends to one");
-        if (cursor.Node is not JsonArray array)
-        {
-            if (cursor.Node != null) return Malformed(spelled, $"'{spelled}' is not an array in the document");
-            array = new JsonArray();
-            Attach(cursor, array);
-        }
-
-        var element = value is { ValueKind: not JsonValueKind.Null } given
-            ? JsonNode.Parse(given.GetRawText())
-            : LeafSpelling.Minted(elementMeta);
-        if (PreCheck(element, elementMeta, null, $"{spelled}[{array.Count}]") is { } refused) return refused;
-        element = LeafSpelling.AsRead(element, elementMeta);
-        Cascade(element, elementMeta, null);
-        array.Add(element);
-        edited = array;
-        return null;
-    }
-
-    private static RecordEditResult? Remove(Cursor cursor, out JsonNode? edited, out FieldMetadata editedMeta)
-    {
-        var array = cursor.RequireOwnerArray();
-        array.RemoveAt(cursor.Index);
-        edited = array;
-        editedMeta = cursor.RequireOwnerMeta();
-        return null;
-    }
-
-    private static RecordEditResult? Move(Cursor cursor, JsonElement? value, string spelled, out JsonNode? edited, out FieldMetadata editedMeta)
-    {
-        edited = null;
-        editedMeta = cursor.Meta;
-        var array = cursor.RequireOwnerArray();
-        // xedit.md, divergence 14.
-        if (cursor.RequireOwnerMeta().KeyMembers != null)
-            return Malformed(spelled, $"'{Owner(spelled)}' is a keyed array, and a keyed array's elements take no move");
-        // ValidateEnvelope confirms a move's value is a non-null number before Move ever runs.
-        var destination = (value ?? throw new InvalidOperationException("Expected a move's destination index.")).GetInt32();
-        if (destination < 0 || destination >= array.Count) return NoElement($"{Owner(spelled)}[{destination}]", array.Count);
-        if (destination == cursor.Index) return Malformed(spelled, $"the element is already at position {destination}");
-        var node = array[cursor.Index];
-        array.RemoveAt(cursor.Index);
-        array.Insert(destination, node);
-        edited = array;
-        editedMeta = cursor.RequireOwnerMeta();
-        return null;
-    }
-
-    // The array's own spelling, which is the element's without its last hop.
-    private static string Owner(string spelledElement) => spelledElement[..spelledElement.LastIndexOf('[')];
-
-    // ── the closed pre-check list ───────────────────────────────────────────
-
-    // Discriminator first on a union element, a member a known-defect row marks read-only, hex
-    // length where the document establishes one, no alpha where a colour holds none; walked over the
-    // value with the metadata beside it.
-    private static RecordEditResult? PreCheck(JsonNode? value, FieldMetadata meta, JsonNode? current, string path)
-    {
-        switch (value)
-        {
-            case JsonObject obj when meta.Fields is { } fields:
-                var discriminator = fields.FirstOrDefault(f => f.IsDiscriminator);
-                if (discriminator != null)
-                {
-                    var first = obj.FirstOrDefault();
-                    if (first.Key != discriminator.Name || first.Value is not JsonValue leafValue
-                        || !leafValue.TryGetValue<string>(out var leaf) || !discriminator.EnumMembers.Any(m => m.Value == leaf))
-                    {
-                        return DiscriminatorRefusal(path, discriminator);
-                    }
-                }
-                var currentObj = current as JsonObject;
-                foreach (var (name, child) in obj)
-                {
-                    if (fields.FirstOrDefault(f => f.Name == name) is not { } field) continue;
-                    // A whole-subtree set reaches a read-only member the same way a path to it does.
-                    if (field.ReadOnlyReason is { } reason) return ReadOnlyRefusal($"{path}.{name}", name, reason);
-                    if (PreCheck(child, DocumentNodes.VariantFor(field, obj), currentObj?[name], $"{path}.{name}") is { } refused) return refused;
-                }
-                return null;
-            case JsonArray array when meta.ElementType is { } elementMeta:
-                var currentArray = current as JsonArray;
-                for (var i = 0; i < array.Count; i++)
-                {
-                    if (PreCheck(array[i], elementMeta, currentArray != null && i < currentArray.Count ? currentArray[i] : null, $"{path}[{i}]") is { } refused)
-                        return refused;
-                }
-                return null;
-            case JsonValue text when meta.Type == ByteSliceHex.HexApiType:
-                if (current is JsonValue held && held.TryGetValue<string>(out var heldHex) && ByteSliceHex.TryParseHex(heldHex, out var heldBytes)
-                    && heldBytes.Length > 0 && text.TryGetValue<string>(out var newHex) && ByteSliceHex.TryParseHex(newHex, out var newBytes)
-                    && newBytes.Length != heldBytes.Length)
-                {
-                    return RecordEditResult.RefusedAt(
-                        RecordEditRefusal.HexLengthMismatch, path,
-                        $"'{path}' holds {heldBytes.Length} bytes; a value of {newBytes.Length} bytes would resize it, and nothing here knows which bytes a resize moves.");
-                }
-                return null;
-            case JsonValue text when meta.Type == ColorReading.ApiType && !meta.HoldsAlpha:
-                if (text.TryGetValue<string>(out var color) && ColorReading.SpellsAlpha(color))
-                {
-                    return RecordEditResult.RefusedAt(
-                        RecordEditRefusal.AlphaNotHeld, path,
-                        $"'{path}' holds no alpha; '{color}' gives one that compiling would drop, so nothing was written. Give it as #RRGGBB.");
-                }
-                return null;
-            default:
-                return null;
-        }
-    }
-
-    private static RecordEditResult DiscriminatorRefusal(string path, FieldMetadata discriminator) =>
-        RecordEditResult.RefusedAt(
-            RecordEditRefusal.DiscriminatorInvalid, path,
-            $"'{path}' must lead with '{discriminator.Name}' naming one of: {string.Join(", ", discriminator.EnumMembers.Select(m => m.Value))}.");
-
-    // ── synthetic members ───────────────────────────────────────────────────
-
-    private static RecordEditResult? PatchSyntheticBit(
-        JsonObject record, SyntheticBit bit, RecordEditEnvelope envelope, string spelled,
-        out JsonNode? edited, out FieldMetadata editedMeta)
-    {
-        edited = null;
-        editedMeta = new("", "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
-        if (envelope.Op != RecordEditEnvelope.Set || envelope.Value is not { ValueKind: JsonValueKind.True or JsonValueKind.False } value)
-            return Malformed(spelled, $"'{spelled}' takes a JSON boolean through set");
-        var set = value.GetBoolean();
-
-        var segments = bit.BackingPath.Split('.');
-        var owner = record;
-        foreach (var segment in segments[..^1])
-        {
-            if (owner[segment] is not JsonObject inner) owner[segment] = inner = new JsonObject();
-            owner = inner;
-        }
-        var member = segments[^1];
-        var names = (owner[member] as JsonArray)?
-            .Select(n => (n ?? throw new InvalidOperationException("Expected every flag-array element to be a non-null string."))
-                .GetValue<string>())
-            .Where(n => n != bit.FlagName).ToList() ?? [];
-        if (set) names.Add(bit.FlagName);
-        if (names.Count == 0) owner.Remove(member); else owner[member] = new JsonArray([.. names.Select(n => (JsonNode)n)]);
-        edited = owner;
-        return null;
-    }
-
-    // ── walking ─────────────────────────────────────────────────────────────
-
-    // The node's place from the root, by member name and by position, so the same chain addresses
-    // it in what the codec wrote back.
-    private static List<object> IndexChain(JsonNode node)
-    {
-        var chain = new List<object>();
-        for (var current = node; current.Parent != null; current = current.Parent)
-            chain.Insert(0, current.Parent is JsonArray ? current.GetElementIndex() : current.GetPropertyName());
-        return chain;
-    }
-
-    private static JsonNode? At(JsonNode root, List<object> chain)
-    {
-        JsonNode? node = root;
-        foreach (var step in chain)
-        {
-            if (step is int index) node = node is JsonArray array && index < array.Count ? array[index] : null;
-            else node = (node as JsonObject)?[(string)step];
-            if (node == null) return null;
-        }
-        return node;
-    }
 }

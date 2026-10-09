@@ -108,6 +108,11 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         }
     }
 
+    private static readonly string[] RecordFlagViews = ["Fallout4MajorRecordFlags", "IsCompressed", "IsDeleted", "MajorFlags"];
+
+    private static bool IsAFlagView(ColumnSpec column, string member) =>
+        column.Name == "MajorRecordFlagsRaw" && RecordFlagViews.Contains(member);
+
     [Fact]
     public void EveryDirectRecordProperty_IsRepresentedInItsSchemaOrExplicitlyExcluded_ReDerivedFromMutagensReflectionNotTheReflectorsClassificationAcceptingNoGap()
     {
@@ -124,7 +129,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             {
                 foreach (var prop in DirectDataProperties(owner, HandKeptSkipOfEditorIdTheWritePathOwnsAndGrupTimestampsSoADriftFailsLoud))
                 {
-                    if (schema.RecordColumns.Any(c => c.PropertyName == prop.Name || c.Aliases.Contains(prop.Name))) continue;
+                    if (schema.RecordColumns.Any(c => c.PropertyName == prop.Name || IsAFlagView(c, prop.Name))) continue;
                     gaps.Add($"{owner.Name}.{prop.Name} (missing from '{schema.TableName}' entirely)");
                 }
             }

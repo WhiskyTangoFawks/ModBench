@@ -1,5 +1,5 @@
-using System.Text;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 
 namespace MEditService.Commands.Edits;
 
@@ -9,16 +9,8 @@ public sealed record PathHop(string Kind, string? Name = null, int? Index = null
     public const string MemberKind = "member";
     public const string IndexKind = "index";
 
-    internal static PathHop Member(string name) => new(MemberKind, Name: name);
-    internal static PathHop At(int index) => new(IndexKind, Index: index);
-
-    /// <summary>A well-formed member hop's name — a caller's claim this hop is well-formed.</summary>
-    internal string RequireName() =>
-        Name ?? throw new InvalidOperationException("Expected a well-formed member hop to carry a name.");
-
-    /// <summary>A well-formed index hop's position — a caller's claim this hop is well-formed.</summary>
-    internal int RequireIndex() =>
-        Index ?? throw new InvalidOperationException("Expected a well-formed index hop to carry a position.");
+    /// <summary>The hop into the document this one names.</summary>
+    internal DocumentHop Hop => Kind == MemberKind ? new(Name ?? "", null) : new(null, Index);
 }
 
 /// <summary>The one write shape (ADR-0005): set puts the value at the path (null clears); add
@@ -32,22 +24,5 @@ public sealed record RecordEditEnvelope(string Op, IReadOnlyList<PathHop> Path, 
     public const string Move = "move";
 
     /// <summary>The path as a refusal names it: <c>Conditions[0].Data.Function</c>.</summary>
-    public static string Spell(IEnumerable<PathHop> path)
-    {
-        var sb = new StringBuilder();
-        foreach (var hop in path)
-        {
-            switch (hop.Kind)
-            {
-                case PathHop.MemberKind:
-                    if (sb.Length > 0) sb.Append('.');
-                    sb.Append(hop.Name);
-                    break;
-                default:
-                    sb.Append('[').Append(hop.Index).Append(']');
-                    break;
-            }
-        }
-        return sb.ToString();
-    }
+    public static string Spell(IEnumerable<PathHop> path) => DocumentHop.Spell(path.Select(hop => hop.Hop));
 }

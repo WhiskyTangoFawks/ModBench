@@ -1,4 +1,3 @@
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
@@ -11,13 +10,11 @@ internal static class GridCells
     /// <summary>A bare cell under the FormKey <paramref name="allocator"/> draws next, at <paramref name="grid"/>.</summary>
     internal static RecordEditResult? Mint(
         FormKeyAllocator allocator, RecordTableSchema schema, GameRelease release,
-        (int X, int Y) grid, out JsonObject cell)
+        (int X, int Y) grid, out Document? cell)
     {
-        cell = [];
+        cell = null;
         if (allocator.Next(out var formKey) is { } exhausted) return exhausted;
-        cell = JsonNode.Parse(RecordMint.BareDocument(schema, release, formKey, editorId: null)) as JsonObject
-            ?? throw new InvalidOperationException($"Expected the minted cell {formKey}'s document to hold a JSON object.");
-        cell[RecordTypes.CellGridMember] = PlacedCell.GridAt(grid.X, grid.Y);
+        cell = PlacedCell.WithGrid(Document.Parse(RecordMint.BareDocument(schema, release, formKey, editorId: null)), grid.X, grid.Y);
         return null;
     }
 }

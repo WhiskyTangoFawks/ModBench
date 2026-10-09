@@ -1,5 +1,6 @@
 using System.Globalization;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -98,11 +99,14 @@ public sealed class RecordHeaderSchemaTests
     }
 
     [Fact]
-    public void TheDocumentsOtherSpellingsOfTheFlags_AreNoColumns_AndAreTheFlagsAliases()
+    public void TheDocumentsOtherSpellingsOfTheFlags_AreNoColumns_AndClearWithTheFlags()
     {
-        var aliases = RecordFlags("cell").Aliases;
+        string[] aliases = ["Fallout4MajorRecordFlags", "IsCompressed", "IsDeleted", "MajorFlags"];
+        var cell = Document.Parse("""{"Fallout4MajorRecordFlags":0,"IsCompressed":0,"IsDeleted":0,"MajorFlags":0,"WaterHeight":0}""");
 
-        Assert.Equal(["Fallout4MajorRecordFlags", "IsCompressed", "IsDeleted", "MajorFlags"], aliases.Order(StringComparer.Ordinal));
+        var cleared = cell.WithoutAliasesOf(RecordFlags("cell"));
+
+        Assert.Equal("""{"WaterHeight":0}""", cleared.Text);
         Assert.Empty(Schema("cell").RecordColumns.Select(c => c.Name).Intersect(aliases));
     }
 

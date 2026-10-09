@@ -89,7 +89,7 @@ public sealed class VmadEditTests : IDisposable
         var after = _fixture.Body(_fixture.Npc);
         Assert.Equal(["Beta", "Alpha", "Aardvark"], WrittenScriptNames(after));
         Assert.All(
-            ConditionEditTests.DocumentDiff(before, after),
+            DocumentDiffs.Of(before, after),
             d => Assert.StartsWith("VirtualMachineAdapter.Scripts[2]", d, StringComparison.Ordinal));
     }
 
@@ -121,7 +121,7 @@ public sealed class VmadEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             ["VirtualMachineAdapter.Scripts[1].Name: \"Alpha\" -> \"Zulu\""],
-            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Npc)));
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public sealed class VmadEditTests : IDisposable
                 "VirtualMachineAdapter.Scripts[1].Properties[1].MutagenObjectType: \"ScriptIntProperty\" -> \"ScriptStringProperty\"",
                 "VirtualMachineAdapter.Scripts[1].Properties[1].Data: 1 -> \"one\"",
             ],
-            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Npc)));
     }
 
     [Fact]
@@ -176,7 +176,7 @@ public sealed class VmadEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             ["VirtualMachineAdapter.Scripts[1].Properties[1].Data: 1 -> 42"],
-            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Npc)));
     }
 
     [Theory]
@@ -200,7 +200,7 @@ public sealed class VmadEditTests : IDisposable
         var tags = WrittenProperty(_fixture.Body(_fixture.Npc), "Alpha", "Tags");
         Assert.Equal(expected, tags["Data"].Require().AsArray().Select(e => e.Require().GetValue<string>()));
         Assert.All(
-            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)),
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Npc)),
             d => Assert.StartsWith("VirtualMachineAdapter.Scripts[1].Properties[0].Data[", d, StringComparison.Ordinal));
     }
 
@@ -217,7 +217,7 @@ public sealed class VmadEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             ["VirtualMachineAdapter.Scripts[1].Properties[2].Members[0].Properties[0].Data: 3 -> 9"],
-            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Npc)));
     }
 
     [Fact]
@@ -240,7 +240,7 @@ public sealed class VmadEditTests : IDisposable
         var result = Edit(_fixture.Npc, adapter);
 
         Assert.True(result.Applied, result.Message);
-        var added = Assert.Single(ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)));
+        var added = Assert.Single(DocumentDiffs.Of(before, _fixture.Body(_fixture.Npc)));
         Assert.StartsWith(
             "VirtualMachineAdapter.Scripts[1].Properties[3].Structs[1]: <absent> -> ",
             added, StringComparison.Ordinal);
@@ -259,7 +259,7 @@ public sealed class VmadEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             ["VirtualMachineAdapter.Aliases[0].Scripts[0].Properties[0].Data: 1 -> 7"],
-            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Quest)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Quest)));
     }
 
     [Fact]
@@ -274,7 +274,7 @@ public sealed class VmadEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             ["VirtualMachineAdapter.Fragments[0].ScriptName: \"Ten\" -> \"Renamed\""],
-            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Quest)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Quest)));
     }
 
     [Fact]
@@ -289,7 +289,7 @@ public sealed class VmadEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             ["VirtualMachineAdapter.ScriptFragments.Fragments[0].ScriptName: \"Two\" -> \"Renamed\""],
-            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Perk)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Perk)));
     }
 
     [Fact]
@@ -304,7 +304,7 @@ public sealed class VmadEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
             ["VirtualMachineAdapter.ScriptFragments.PhaseFragments[0].FragmentName: \"F1S\" -> \"Renamed\""],
-            ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Scene)));
+            DocumentDiffs.Of(before, _fixture.Body(_fixture.Scene)));
     }
 
     [Fact]
@@ -334,7 +334,7 @@ public sealed class VmadEditTests : IDisposable
             """[{"Property":{"Name":"","Alias":0},"Scripts":[{"Name":"AliasScript"}]}]""",
             JsonNode.Parse(after).Require()["VirtualMachineAdapter"].Require()["Aliases"].Require().ToJsonString());
         Assert.All(
-            ConditionEditTests.DocumentDiff(before, after),
+            DocumentDiffs.Of(before, after),
             d => Assert.StartsWith("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties", d, StringComparison.Ordinal));
     }
 
@@ -349,7 +349,7 @@ public sealed class VmadEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var after = _fixture.Body(_fixture.Quest);
         Assert.All(
-            ConditionEditTests.DocumentDiff(before, after),
+            DocumentDiffs.Of(before, after),
             d => Assert.StartsWith("VirtualMachineAdapter.Script", d, StringComparison.Ordinal));
     }
 
