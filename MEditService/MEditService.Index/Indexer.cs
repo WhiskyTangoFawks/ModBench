@@ -15,6 +15,7 @@ namespace MEditService.Index;
 internal sealed class Indexer : IQueryIndex, IDisposable
 {
     private readonly LoadOrderHolder _holder;
+    private readonly UnsavedDocuments _unsaved;
     private readonly DuckDbRecordIndexFactory _indexFactory;
     private readonly FilterInForce _filter;
     // One per Indexer, never replaced: a reconcile swaps the store beneath it, which is when the
@@ -25,6 +26,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     /// <summary>The registration's door: the Index opens its own store (ADR-0014).</summary>
     public Indexer(
         LoadOrderHolder holder,
+        UnsavedDocuments unsaved,
         IPluginAdapter adapter,
         ISourceAdapter source,
         SchemaReflector schemaReflector,
@@ -33,6 +35,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
         TimeProvider? timeProvider = null)
     {
         _holder = holder;
+        _unsaved = unsaved;
         var logger = loggerFactory?.CreateLogger<Indexer>() ?? NullLogger<Indexer>.Instance;
         _filter = new FilterInForce(logger, notifications);
         _indexFactory = new DuckDbRecordIndexFactory(
@@ -99,13 +102,18 @@ internal sealed class Indexer : IQueryIndex, IDisposable
         return null;
     }
 
-    public void Subscribe() => _holder.Arrived += OnArrived;
+    public void Subscribe()
+    {
+        _holder.Arrived += OnArrived;
+        _unsaved.Arrived += _reconciler.ValidateTreesHolding;
+    }
 
     private void OnArrived(LoadOrderSnapshot snapshot, long version) => _reconciler.StartReconcile();
 
     public void Dispose()
     {
         _holder.Arrived -= OnArrived;
+        _unsaved.Arrived -= _reconciler.ValidateTreesHolding;
         _reconciler.Dispose();
     }
 }

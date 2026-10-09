@@ -30,7 +30,9 @@ internal static class Indexes
         services.AddSingleton(holder);
         if (adapter is null) services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
         else services.AddSingleton(adapter);
-        services.AddSingleton(source ?? new GitSourceAdapter());
+        services.AddSingleton<UnsavedDocuments>();
+        if (source is null) services.AddSingleton<ISourceAdapter, GitSourceAdapter>();
+        else services.AddSingleton(source);
         services.AddSingleton(SharedSchemaReflector.Instance);
         services.AddSingleton(loggerFactory ?? NullLoggerFactory.Instance);
         services.AddSingleton(timeProvider ?? TimeProvider.System);

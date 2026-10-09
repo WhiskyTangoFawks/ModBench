@@ -9,11 +9,12 @@ import { referencesOf } from './formKeyReferences';
 import { locationOf } from './recordLocation';
 import { completionsAt } from './completion';
 import { workspaceSymbolsOf, type RecordSymbol } from './workspaceSymbols';
+import { handUnsavedPluginSource } from './handUnsaved';
 import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'originFiles'> {
   reporter: Pick<Reporter, 'shownOnSurface'>;
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrTrackedPlugins' | 'getPlugins'> & RecordDocumentClient & SourceProblemsDeps['client'];
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrTrackedPlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & SourceProblemsDeps['client'];
 }
 
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };
@@ -103,5 +104,5 @@ export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposabl
     },
   };
   const symbols = vscode.languages.registerWorkspaceSymbolProvider(symbolProvider);
-  return vscode.Disposable.from(hover, completion, definition, references, symbols, sourceProblems(deps));
+  return vscode.Disposable.from(handUnsavedPluginSource(client), hover, completion, definition, references, symbols, sourceProblems(deps));
 }

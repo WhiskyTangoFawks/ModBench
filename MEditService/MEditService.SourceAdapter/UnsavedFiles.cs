@@ -18,7 +18,7 @@ internal sealed class UnsavedFiles(IEnumerable<DocumentChange> unsaved) : ISourc
 
     public string ReadAllText(string path) => UnsavedText(path) ?? DiskFiles.Instance.ReadAllText(path);
 
-    public bool HoldsUnsavedText(string path) => FileExists(path) && UnsavedText(path) is not null;
+    public bool HoldsUnsavedText(string path) => UnsavedText(path) is not null && FileExists(path);
 
     public IEnumerable<string> EntriesUnder(string directory) => DiskFiles.Instance.EntriesUnder(directory);
 

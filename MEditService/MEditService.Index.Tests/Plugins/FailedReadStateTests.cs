@@ -528,7 +528,7 @@ public sealed class FailedReadStateTests : IDisposable
 
     private sealed class HookedSource(Action<TreeMoment, PluginAddress> at) : ISourceAdapter
     {
-        private readonly GitSourceAdapter _inner = new();
+        private readonly GitSourceAdapter _inner = new(new UnsavedDocuments());
 
         public bool SourceReads(RegisteredPlugin plugin) => _inner.SourceReads(plugin);
 
@@ -538,6 +538,8 @@ public sealed class FailedReadStateTests : IDisposable
 
         public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) =>
             _inner.Over(plugin, release) is { } reads ? new HookedRepository(reads, at) : null;
+
+        public bool TreeHolds(RegisteredPlugin plugin, string path) => _inner.TreeHolds(plugin, path);
 
         public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => _inner.RecordOfFile(loadOrder, path);
 

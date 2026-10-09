@@ -1,5 +1,5 @@
 import type {
-  MEditClient, NotificationKind, NotificationPayloads, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot,
+  MEditClient, NotificationKind, NotificationPayloads, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
 } from '../MEditClient';
 import type { LoadOrderStatus, NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
@@ -65,6 +65,7 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly notifications = new SseNotificationSubscriber({ openStream: () => Promise.reject(new Error('never started')) });
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private readonly reconnectListeners = new Set<() => void>();
+  private readonly handOverListeners = new Set<(failure: string | undefined) => void>();
   private _status: BackendStatus = 'starting';
   private putAnswer: LoadOrderWire['put'] = () => Promise.reject(new Error('InMemoryMEditClient: no scripted answer for a put'));
   private startAnswer: () => Promise<void> = () => { this.setStatus('running'); return Promise.resolve(); };
@@ -217,6 +218,18 @@ export class InMemoryMEditClient implements MEditClient {
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.sender.latest(); }
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
     return this.sender.onResent(listener);
+  }
+
+  handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.record('handUnsavedDocuments', [documents]); }
+
+  onUnsavedHandOver(listener: (failure: string | undefined) => void): () => void {
+    this.handOverListeners.add(listener);
+    return () => { this.handOverListeners.delete(listener); };
+  }
+
+  /** A put of the unsaved documents answers: undefined when mEdit took them, else why not. */
+  settleHandOver(failure: string | undefined): void {
+    for (const listener of this.handOverListeners) listener(failure);
   }
 
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {

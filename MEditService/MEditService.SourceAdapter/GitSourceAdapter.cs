@@ -4,7 +4,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;
 
-public sealed class GitSourceAdapter : ISourceAdapter
+/// <summary>Reads each tree with <paramref name="unsaved"/>'s documents in place of their files.</summary>
+public sealed class GitSourceAdapter(UnsavedDocuments unsaved) : ISourceAdapter
 {
     public bool SourceReads(RegisteredPlugin plugin) => SourceRepository.SourceReads(plugin);
 
@@ -13,9 +14,14 @@ public sealed class GitSourceAdapter : ISourceAdapter
     public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => SourceRepository.WhySourceDoesNotRead(plugin);
 
     public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) =>
-        plugin.Provider is PluginProvider.FromMod mod ? SourceRepository.Over(mod, release) : null;
+        plugin.Provider is PluginProvider.FromMod mod ? SourceRepository.Over(mod, release).Over(Files()) : null;
 
-    public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => SourceRepository.RecordOfFile(loadOrder, path);
+    public bool TreeHolds(RegisteredPlugin plugin, string path) => SourceRepository.TreeHolds(plugin, Path.GetFullPath(path));
+
+    public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) =>
+        SourceRepository.RecordOfFile(loadOrder, path, Files());
 
     public string FileNameOf(RecordIdentity identity) => SourceRepository.FileNameOf(identity);
+
+    private UnsavedFiles Files() => new(unsaved.Current);
 }

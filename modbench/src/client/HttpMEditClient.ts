@@ -9,6 +9,7 @@ import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } 
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
+import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
@@ -83,6 +84,7 @@ class HttpMEditClient implements MEditClient {
   private readonly notifications: SseNotificationSubscriber;
   private readonly loadOrder: LoadOrderSender;
   private readonly loadOrderStatusKept: LoadOrderStatusKeeper;
+  private readonly handOver: UnsavedHandOver;
   constructor(deps: HttpMEditClientDeps) {
     this.log = deps.log ?? (() => {});
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
@@ -107,6 +109,12 @@ class HttpMEditClient implements MEditClient {
       start: () => this.lifecycle.start(),
       stop: () => this.lifecycle.stop(),
       put: (snapshot, signal) => this.putLoadOrder(snapshot, signal),
+    });
+    this.handOver = createUnsavedHandOver({
+      status: () => this.lifecycle.status,
+      onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
+      onReconnected: (listener) => this.notifications.onReconnected(listener),
+      put: (documents) => this.putUnsavedDocuments(documents),
     });
   }
 
@@ -144,6 +152,14 @@ class HttpMEditClient implements MEditClient {
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.loadOrder.latest(); }
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
     return this.loadOrder.onResent(listener);
+  }
+
+  handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.handOver.hand(documents); }
+  onUnsavedHandOver(listener: (failure: string | undefined) => void): () => void { return this.handOver.onSettled(listener); }
+
+  private async putUnsavedDocuments(documents: readonly UnsavedDocument[]): Promise<void> {
+    const { error, response } = await this.apiClient.PUT('/unsaved-documents', { body: { documents: [...documents] } });
+    if (!response.ok) throw new Error(`mEdit answered ${response.status}: ${errorText(error)}`);
   }
 
   // ── notifications ────────────────────────────────────────────────────────
