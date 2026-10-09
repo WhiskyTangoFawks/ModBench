@@ -48,9 +48,8 @@ internal static class ModelIdentity
     private static ILoquiObjectGetter? HeaderOf(IModGetter mod) =>
         mod.GetType().GetProperty("ModHeader")?.GetValue(mod) as ILoquiObjectGetter;
 
-    /// <summary>The first record, in <paramref name="original"/>'s GRUP order, that does not survive a
-    /// round trip, naming the field the mask disagrees on, else the codec document path that differs;
-    /// null when every record is model-identical.</summary>
+    // The first record, in the original's GRUP order, that does not survive a round trip, naming the
+    // field the mask disagrees on, else the codec document path that differs; null when none differs.
     private static Divergence? FindFirst(IModGetter original, IModGetter recompiled)
     {
         var recompiledByFormKey = recompiled.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
@@ -98,8 +97,8 @@ internal static class ModelIdentity
     internal static readonly HashSet<string> OpaqueHeaderFields =
         ["TypeOffsets", "Deleted", "Screenshot", "INTV", "INCC", "Author", "Description"];
 
-    /// <summary>The first <see cref="OpaqueHeaderFields"/> member the mask disagrees on, or null. The
-    /// allow-list is shared across games; only the TransientTypes check below is FO4-shaped.</summary>
+    // The first OpaqueHeaderFields member the mask disagrees on, or null. The allow-list is shared
+    // across games; only the TransientTypes check below is FO4-shaped.
     private static string? FindFirstHeaderFieldDivergence(ILoquiObjectGetter original, ILoquiObjectGetter recompiled)
     {
         if (FailingFields(original, recompiled).FirstOrDefault(OpaqueHeaderFields.Contains) is { } field)
@@ -301,9 +300,8 @@ internal static class ModelIdentity
         cell.TemporaryUnknownGroupData = 0;
     }
 
-    /// <summary>Every field name the generated mask disagrees on.
-    /// Typed <see cref="ILoquiObjectGetter"/>, the narrowest type records and the mod header share, so
-    /// a caller with no generated mask fails to compile.</summary>
+    // Every field name the generated mask disagrees on. Typed ILoquiObjectGetter, the narrowest type
+    // records and the mod header share, so a caller with no generated mask fails to compile.
     private static List<string> FailingFields(
         ILoquiObjectGetter original, ILoquiObjectGetter recompiled)
     {

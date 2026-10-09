@@ -10,8 +10,8 @@ namespace MEditService.Codec.Serialization;
 public static class DeletedRecord
 {
     /// <summary>The record's document, or its header's where it is deleted, its file gives it no field and
-    /// the overlay cannot serialize it; <paramref name="fileHoldsNoFields"/> is asked only then. Any
-    /// other failure is the caller's to diagnose.</summary>
+    /// the overlay cannot serialize it; <paramref name="fileHoldsNoFields"/> is asked only then. Other
+    /// failures are the caller's.</summary>
     public static byte[] Serialize(
         IMajorRecordGetter record, RecordTableSchema schema, GameRelease release, Func<bool> fileHoldsNoFields)
     {
