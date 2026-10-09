@@ -8,6 +8,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection } from '../../src/wire/messages';
+import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
@@ -16,7 +17,10 @@ import {
   parseJsonRecord, required,
   type PanelOpts,
 } from './test/fixtures';
-import type { CompareResult, PluginLoadFailure } from './types';
+import type { ColumnKey, CompareResult, PluginLoadFailure } from './types';
+import type { UnreadableSource } from '../../src/wire/unreadableSource';
+
+type Loaded = Awaited<ReturnType<RecordPanelClient['load']>>;
 
 const strMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
 
@@ -600,8 +604,9 @@ describe('RecordPanel — column header native right-click menu', () => {
       })],
     });
     const load = vi.fn().mockResolvedValue({
-      ok: true, result: compare, immutableSet: null, trackedSet: null, sourceUnreadableReasons: null, modsByOrigin: {}, conflictsComputed: true, loadFailures: [],
-    });
+      ok: true, result: compare, immutableSet: null, trackedSet: null, editableSet: null, sourceUnreadableReasons: null, modsByOrigin: {}, conflictsComputed: true, loadFailures: [],
+      fileColumn: undefined, fileCopyAlone: false, fileOverriddenBy: null,
+    } satisfies Loaded);
     const { container } = renderPanel(compare, { load });
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
@@ -1144,11 +1149,12 @@ describe('RecordPanel — a plugin mEdit cannot read', () => {
 
   it('goes once a read lands with the plugin readable again', async () => {
     const answered = (loadFailures: PluginLoadFailure[]) => ({
-      ok: true as const, result: compareResult, immutableSet: new Set<string>(), trackedSet: new Set<string>(),
-      sourceUnreadableReasons: new Map<string, string>(),
+      ok: true as const, result: compareResult, immutableSet: new Set<ColumnKey>(), trackedSet: new Set<ColumnKey>(),
+      sourceUnreadableReasons: new Map<ColumnKey, UnreadableSource>(),
       modsByOrigin: {},
       conflictsComputed: true, loadFailures,
-    });
+      editableSet: new Set<ColumnKey>(), fileColumn: undefined, fileCopyAlone: false, fileOverriddenBy: null,
+    } satisfies Loaded);
     const load = vi.fn()
       .mockResolvedValueOnce(answered([{ name: 'MyMod.esp', origin: 'Data/', reason: 'truncated' }]))
       .mockResolvedValue(answered([]));
@@ -1263,8 +1269,9 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
 });
 
 const loaded = (result: CompareResult | null, conflictsComputed = true, gone = ['000001:Fallout4.esm'], copiesLacking: string[] = []) => ({
-  ok: true as const, ...(result === null ? { result, gone, copiesLacking } : { result }), immutableSet: new Set<string>(), trackedSet: new Set<string>(), sourceUnreadableReasons: new Map<string, string>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
-});
+  ok: true as const, ...(result === null ? { result, gone, copiesLacking } : { result }), immutableSet: new Set<ColumnKey>(), trackedSet: new Set<ColumnKey>(), sourceUnreadableReasons: new Map<ColumnKey, UnreadableSource>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
+  editableSet: new Set<ColumnKey>(), fileColumn: undefined, fileCopyAlone: false, fileOverriddenBy: null,
+} satisfies Loaded);
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => undefined;

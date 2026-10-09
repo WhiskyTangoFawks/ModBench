@@ -4,7 +4,7 @@ import type { RecordEditEnvelope } from '../client';
 import { pluginAddressOf } from '../wire/pluginAddress';
 import type { ExtendedFieldDocuments, FieldAddress } from './extendedFieldEditor';
 import type { EditAddress, EditGate } from './recordTab';
-import type { FocusedCellContext } from './focusedCells';
+import type { FocusedCellContext } from '../wire/messages';
 
 export interface FieldCommitDeps {
   // An edit's gate is that of the panels showing the record it is addressed to.

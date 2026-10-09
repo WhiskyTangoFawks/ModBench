@@ -62,7 +62,7 @@ export type WebviewToExtension =
     }
   | { type: typeof WEBVIEW_TO_EXTENSION.ADD_ELEMENT; context: Record<string, unknown>; value?: unknown }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
-  | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null; entered: boolean }
+  | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: FocusedCellContext | null; entered: boolean }
   | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string; columns: ColumnCopy[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_COLUMNS; records: ColumnCopy[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.VIEW_STATE; state: ViewState };
@@ -315,10 +315,32 @@ function isContextObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** A record tab's focused cell, as the context its right-click menu hands a command. The members
+ *  named are the ones the host reads; the cell's own sections carry the rest. */
+export interface FocusedCellContext {
+  webviewSection?: string;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  copyText?: string;
+  editorOpen?: boolean;
+}
+
+const focusedCellMembers = {
+  webviewSection: isString,
+  canMoveUp: (value: unknown) => typeof value === 'boolean',
+  canMoveDown: (value: unknown) => typeof value === 'boolean',
+  copyText: isString,
+  editorOpen: (value: unknown) => typeof value === 'boolean',
+};
+
+export function isFocusedCellContext(value: unknown): value is FocusedCellContext {
+  return isContextObject(value) && Object.entries(focusedCellMembers).every(([name, holds]) => value[name] === undefined || holds(value[name]));
+}
+
 function parseFocusCell(w: WebviewToExtensionWitness): WebviewToExtension {
   if (typeof w.entered !== 'boolean') throw new Error('Expected "focusCell" to carry a boolean entered.');
   if (w.context === null) return { type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null, entered: w.entered };
-  if (!isContextObject(w.context)) throw new Error('Expected "focusCell" to carry a context object or null.');
+  if (!isFocusedCellContext(w.context)) throw new Error('Expected "focusCell" to carry a focused cell context or null.');
   return { type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: w.context, entered: w.entered };
 }
 

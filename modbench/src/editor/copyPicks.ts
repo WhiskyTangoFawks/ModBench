@@ -1,3 +1,4 @@
+import { pluginCanBeEdited } from '../wire/pluginEditable';
 import type * as vscode from 'vscode';
 import { pluginAddressOf, samePluginAddress } from '../wire/pluginAddress';
 import type { CopyItem, CopyMode, PluginAddress, PluginMetadata, RecordAddress } from '../client';
@@ -25,7 +26,7 @@ export function copyDestinationItems(
 ): CopyDestinationItem[] {
   const livesInEveryRecord = (p: PluginMetadata) => records.every((r) => samePluginAddress(pluginAddressOf(r), p));
   return plugins
-    .filter((p) => p.isTracked && p.pluginSourceUnreadable == null && !p.isImmutable)
+    .filter(pluginCanBeEdited)
     .filter((p) => mode !== 'Override' || !livesInEveryRecord(p))
     .map((p) => ({
       label: p.name,

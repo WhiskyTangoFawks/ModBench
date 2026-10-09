@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { EXTENSION_TO_WEBVIEW, hasSection, type EditableCellContext, type ExtensionToWebview } from '../wire/messages';
-import { GRID_VIEW, type FocusedCellContext } from './focusedCells';
+import { EXTENSION_TO_WEBVIEW, hasSection, type EditableCellContext, type ExtensionToWebview, type FocusedCellContext } from '../wire/messages';
+import { GRID_VIEW } from './focusedCells';
 
 export interface GridKeyCommandDeps {
   focusedCell: () => FocusedCellContext | undefined;
