@@ -205,8 +205,8 @@ export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
   createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
-  // The changes renaming the plugin source makes, which mEdit answers over `unsaved` in place of the files it names, and
-  // the name the source's tree is filed under. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
+  // The changes renaming the plugin source makes over `unsaved`, and the name its tree is filed under. A WriteRefused
+  // is the call failing or mEdit refusing. Nothing is written.
   getRenameSourceChanges(plugin: PluginAddress, newName: string, unsaved: readonly UnsavedDocument[]): Promise<RenameSourceChangesOutcome | WriteRefused>;
   // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
   moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;

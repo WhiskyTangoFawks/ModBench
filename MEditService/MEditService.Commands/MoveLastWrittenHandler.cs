@@ -12,9 +12,9 @@ public sealed class MoveLastWrittenHandler
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal MoveLastWrittenHandler(LoadOrderHolder loadOrder) => _loadOrder = loadOrder;
 
-    /// <summary>What Modbench last wrote for the plugin, filed under <paramref name="treeName"/> as the rename's
-    /// changes answered, becomes <paramref name="newName"/>'s. A refusal leaves it where it was. Throws
-    /// <see cref="NoLoadOrderException"/> when no load order is held.</summary>
+    /// <summary>What Modbench last wrote for the plugin, filed under <paramref name="treeName"/>, becomes
+    /// <paramref name="newName"/>'s. A refusal leaves it where it was. Throws <see cref="NoLoadOrderException"/>
+    /// when no load order is held.</summary>
     public MoveLastWrittenResult MoveLastWritten(PluginAddress plugin, string treeName, string newName)
     {
         var loadOrder = _loadOrder.Require();
