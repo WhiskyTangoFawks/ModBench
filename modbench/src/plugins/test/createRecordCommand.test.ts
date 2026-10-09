@@ -31,7 +31,7 @@ import { present } from '../../ports/present';
 import { registerRecordCreateCommand } from '../createRecordCommand';
 import type { SourceEditing } from '../../drivingLib/sourceEditing';
 import type { RecordPlace } from '../createdRecordSelection';
-import { PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
+import { PluginNode, type PluginsTreeNode } from '../pluginRows';
 import type { RecordBrowserNode } from '../RecordBrowser';
 import { cellRow, recordGroupRow, recordRow, worldspaceRow } from './browserRows';
 

@@ -26,7 +26,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/p
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { registerPluginEnableCommands } from '../pluginParticipationCommands';
-import { PluginNode, ImplicitMasterNode } from '../PluginsTreeProvider';
+import { PluginNode, ImplicitMasterNode } from '../pluginRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';

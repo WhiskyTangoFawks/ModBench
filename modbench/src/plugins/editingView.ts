@@ -1,5 +1,5 @@
+import type { Reporter } from '../ports/reporter';
 import type { SyncFailureReport } from '../drivingLib/syncFailureReport';
-import type { Told } from '../instanceCommands/editing';
 import type { PutLoadOrderResult } from '../instanceCommands/loadOrder';
 
 type AppliedStatus = Extract<Extract<PutLoadOrderResult, { sent: true }>['outcome'], { outcome: 'applied' }>['status'];
@@ -13,20 +13,16 @@ export interface EditingViewDeps {
     while(work: () => Promise<void>): Promise<void>;
     say(message: string): void;
   };
-  reportPut: (message: string) => void;
-  reportEntry: (message: string) => void;
-  reportExit: (message: string) => void;
-  reportLaunch: (message: string, reason: string) => void;
+  reporterFor: (tag: string) => Reporter;
   log: { info(message: string): void; error(message: string): void };
   revealLog: () => void;
   /** The load order the loader refused to build, the Plugins view's message line and the Output. */
   loadOrderPut: Pick<SyncFailureReport, 'run' | 'clear'>;
 }
 
-const STOPPED = 'mEdit stopped. Reload the window to start it again.';
-
 export function editingView(deps: EditingViewDeps) {
-  const { narrator, progress, reportPut, reportEntry, reportExit, reportLaunch, log, revealLog, loadOrderPut } = deps;
+  const { narrator, progress, reporterFor, log, revealLog, loadOrderPut } = deps;
+  const reportPut = (message: string) => { reporterFor('loadOrder').report('error', message); };
 
   const around = (entry: () => Promise<void>): Promise<void> => progress.while(async () => {
     revealLog();
@@ -35,25 +31,9 @@ export function editingView(deps: EditingViewDeps) {
     await entry();
   });
 
-  const tell = async (told: Told): Promise<void> => {
-    switch (told.kind) {
-      case 'launchFailed':
-        reportLaunch(STOPPED, told.reason);
-        return;
-      case 'backendFailed':
-        reportEntry(STOPPED);
-        return;
-      case 'exited':
-        reportExit(STOPPED);
-        return;
-      case 'put':
-        await tellPut(told.put);
-    }
-  };
-
   // A game folder not found, or one whose plugins cannot be listed, is told by the views and the
   // Output already; a line per value would repeat it.
-  const tellPut = async (put: PutLoadOrderResult): Promise<void> => {
+  const onPut = async (put: PutLoadOrderResult): Promise<void> => {
     if (!put.sent) {
       const { refusal } = put;
       if (refusal !== undefined) await loadOrderPut.run(() => Promise.resolve({ applied: false as const, refusal }));
@@ -70,5 +50,5 @@ export function editingView(deps: EditingViewDeps) {
     await narrator.settled(outcome.status.version);
   };
 
-  return { around, tell };
+  return { around, onPut };
 }

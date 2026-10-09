@@ -32,7 +32,7 @@ import { join } from 'node:path';
 import type { MEditClient, PluginMetadata } from '../../client';
 import type { PluginsDrop } from '../../pluginsCommands/plugins';
 import { registerPluginMoveCommand } from '../pluginMoveCommand';
-import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
+import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
