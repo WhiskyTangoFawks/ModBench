@@ -10,7 +10,6 @@ import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
-import type { PluginAddress } from './wire/pluginAddress';
 import { createSourceLanguage } from './sourceLanguage';
 import { saveDirtyPluginSource } from './sourceLanguage/dirtyPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
@@ -20,7 +19,7 @@ import type { SourceEditing } from './drivingLib/sourceEditing';
 import { applyWorkspaceChanges } from './drivingLib/applyWorkspaceChanges';
 import { oneAtATime } from './drivingLib/oneAtATime';
 import { Instance } from './instanceLoader/instance';
-import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
+import { deferredFacts, factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
 import { originFiles, NO_ORIGIN_FILES, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
@@ -230,14 +229,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const treeProvider = new RecordBrowser(meditClient, log);
   const focusedView = createFocusedView();
 
-  const modFacts = {
-    trackedMods: () => views.facts.trackedMods(), modDirs: () => views.facts.modDirs(),
-    standingOf: (plugin: PluginAddress) => views.facts.standingOf(plugin),
-    onChange: (listener: () => void) => views.facts.onChange(listener),
-  };
-  const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...modFacts });
-  const instance = { refresh: () => views.facts.refresh() };
-  const recordWrite = recordWriteOver(instance, meditClient);
+  const facts = deferredFacts(() => views.facts);
+  const trackedRepositories = trackedRepositoriesOver({ client: meditClient, outputChannel, ...facts });
+  const recordWrite = recordWriteOver(facts, meditClient);
   const sourceEditing: SourceEditing = {
     applyWorkspaceChanges: (items) => applyWorkspaceChanges(items),
     oneAtATime: oneAtATime(),
@@ -251,7 +245,7 @@ export function activate(context: vscode.ExtensionContext): void {
     recordViewIds: ['modbench.pluginListTree'],
     recordWrite,
     sourceEditing,
-    modFacts,
+    modFacts: facts,
   });
   const views = buildViews({
     outputChannel, client: meditClient,
