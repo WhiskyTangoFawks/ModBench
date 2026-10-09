@@ -1,12 +1,15 @@
 using System.Collections.Concurrent;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.PluginAdapter;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.TestSupport;
 
-/// <summary>Real plugins, with the adapter saying a file has gone or changed while its bytes stay
-/// as they are on disk. <paramref name="clock"/> decides when a file's stamp is settled enough to
-/// keep its hash.</summary>
+/// <summary>Real plugins, with the adapter saying a file has gone or changed while its bytes stay as
+/// they are; every read of a gone file answers as a read of no file does.</summary>
 internal sealed class DiskSaysAdapter(TimeProvider? clock = null)
     : DelegatingPluginAdapter(new MutagenPluginAdapter(clock ?? TimeProvider.System))
 {
@@ -19,13 +22,30 @@ internal sealed class DiskSaysAdapter(TimeProvider? clock = null)
 
     public void Changed(string pluginPath) => _changed[pluginPath] = true;
 
-    public override bool Exists(string pluginPath) => !_gone.ContainsKey(pluginPath) && base.Exists(pluginPath);
+    private bool IsGone(string pluginPath) => _gone.ContainsKey(pluginPath);
 
-    public override string? HashOf(string pluginPath) =>
-        _changed.ContainsKey(pluginPath) ? ChangedHash : base.HashOf(pluginPath);
+    public override bool Exists(string pluginPath) => !IsGone(pluginPath) && base.Exists(pluginPath);
 
-    public override FileClaim? ClaimOf(string pluginPath) =>
-        _changed.ContainsKey(pluginPath) && base.ClaimOf(pluginPath) is { } claim
-            ? claim with { Hash = ChangedHash }
+    public override string? HashOf(string pluginPath)
+    {
+        if (IsGone(pluginPath)) return null;
+        return _changed.ContainsKey(pluginPath) ? ChangedHash : base.HashOf(pluginPath);
+    }
+
+    public override PluginAnswer<FileClaim> ClaimOf(string pluginPath)
+    {
+        if (IsGone(pluginPath)) return PluginFailures.Inaccessible();
+        return _changed.ContainsKey(pluginPath) && base.ClaimOf(pluginPath).Holds(out var claim, out _)
+            ? PluginAnswer.Of(claim with { Hash = ChangedHash })
             : base.ClaimOf(pluginPath);
+    }
+
+    public override PluginAnswer<(PluginContent Content, PluginFailure? Unreachable)> ReadContent(
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
+        IsGone(modPath.Path) ? PluginFailures.Inaccessible() : base.ReadContent(modPath, gameRelease, strings);
+
+    public override PluginAnswer<IPluginDocuments> OpenDocuments(
+        ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        PluginStrings? strings = null) =>
+        IsGone(modPath.Path) ? PluginFailures.Inaccessible() : base.OpenDocuments(modPath, gameRelease, schemas, strings);
 }

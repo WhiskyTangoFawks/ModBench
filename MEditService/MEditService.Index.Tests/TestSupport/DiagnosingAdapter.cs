@@ -13,10 +13,11 @@ internal sealed class DiagnosingAdapter() : DelegatingPluginAdapter(TestAdapters
 {
     public string? Unreadable { get; set; }
 
-    public override IPluginDocuments OpenDocuments(
+    public override PluginAnswer<IPluginDocuments> OpenDocuments(
         ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         PluginStrings? strings = null) =>
-        new Diagnosed(base.OpenDocuments(modPath, gameRelease, schemas, strings), Unreadable);
+        base.OpenDocuments(modPath, gameRelease, schemas, strings).Map<IPluginDocuments, IPluginDocuments>(
+            documents => new Diagnosed(documents, Unreadable));
 }
 
 file sealed class Diagnosed(IPluginDocuments inner, string? unreadable) : IPluginDocuments

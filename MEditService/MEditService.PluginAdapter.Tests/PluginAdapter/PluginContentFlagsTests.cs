@@ -19,7 +19,7 @@ public sealed class PluginContentFlagsTests
         var mod = new Fallout4Mod(ModKey.FromFileName(fileName), Fallout4Release.Fallout4);
         shape(mod);
         mod.WriteToBinary(path);
-        return Adapter.ReadContent(new ModPath(mod.ModKey, path), GameRelease.Fallout4).Content;
+        return Adapter.ReadContent(new ModPath(mod.ModKey, path), GameRelease.Fallout4).Answered().Content;
     }
 
     private static PluginContent ReadStarfield(string fileName, Action<StarfieldMod> shape)
@@ -29,7 +29,7 @@ public sealed class PluginContentFlagsTests
         var mod = new StarfieldMod(ModKey.FromFileName(fileName), StarfieldRelease.Starfield);
         shape(mod);
         mod.WriteToBinary(path);
-        return Adapter.ReadContent(new ModPath(mod.ModKey, path), GameRelease.Starfield).Content;
+        return Adapter.ReadContent(new ModPath(mod.ModKey, path), GameRelease.Starfield).Answered().Content;
     }
 
     [Theory]

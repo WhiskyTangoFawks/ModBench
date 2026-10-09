@@ -81,7 +81,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         Destination destination, GameRelease release)
     {
         var containerFormKey = container.ParentFormKey;
-        var sourceContainer = HeldBy(source, containerFormKey);
+        if (!HeldBy(source, containerFormKey).Holds(out var sourceContainer, out var why))
+            return WriteTargets.RefuseUnreadableSource(containerFormKey, why);
         if (!TryCopyIn(source, sourceContainer, destination, release, out var ownFields, out var refused)) return refused;
         var withChild = ownFields with
         {
@@ -92,7 +93,9 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
                        $"The copy of {containerFormKey} does not carry its own FormKey."),
         };
 
-        var landed = source.ContainerOf(sourceContainer) is { } ownParent
+        if (!source.ContainerOf(sourceContainer).Holds(out var parentOfContainer, out why))
+            return WriteTargets.RefuseUnreadableSource(containerFormKey, why);
+        var landed = parentOfContainer is { } ownParent
             ? AppendEmbeddedChild(transaction, source, ownParent, withChild, destination, release)
             : PlaceContainer(transaction, source, withChild, destination, release);
 
@@ -138,8 +141,11 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         SourceTransaction transaction, CopySource source, SourceDocument container, Destination destination, GameRelease release)
     {
         var formKey = container.FormKey;
-        var sourceCell = RecordTypes.For(release).IsCell(container.RecordType) ? source.Identity(formKey) : null;
-        if (sourceCell is { } cell && source.WorldspaceOf(cell) is { } worldspace)
+        CopyRead<string?> worldspaceRead = (string?)null;
+        if (RecordTypes.For(release).IsCell(container.RecordType))
+            worldspaceRead = source.Identity(formKey).Then<string?>(cell => cell is { } held ? source.WorldspaceOf(held) : (string?)null);
+        if (!worldspaceRead.Holds(out var worldspace, out var why)) return WriteTargets.RefuseUnreadableSource(formKey, why);
+        if (worldspace is not null)
         {
             return PlaceExteriorCell(transaction, source, worldspace, container, destination, release);
         }
@@ -170,15 +176,18 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         SourceDocument? worldspaceCopy = null;
         if (Identity(destination, worldspaceFormKey) is null)
         {
-            var worldspace = HeldBy(source, worldspaceFormKey);
+            if (!HeldBy(source, worldspaceFormKey).Holds(out var worldspace, out var unread))
+                return WriteTargets.RefuseUnreadableSource(worldspaceFormKey, unread);
             if (!TryCopyIn(source, worldspace, destination, release, out var copied, out var refused)) return refused;
             worldspaceCopy = copied;
         }
 
-        var sourceCell = source.Identity(cellFormKey)
+        if (!source.Identity(cellFormKey).Holds(out var named, out var why)) return WriteTargets.RefuseUnreadableSource(cellFormKey, why);
+        var sourceCell = named
             ?? throw new InvalidOperationException(
                 $"{source.Plugin.Name} does not hold {cellFormKey} — its own worldspace named it.");
-        var landing = WithGridFrom(source.Body(sourceCell), cell with { RecordType = sourceCell.RecordType }, release);
+        if (!source.Body(sourceCell).Holds(out var sourceCellText, out why)) return WriteTargets.RefuseUnreadableSource(cellFormKey, why);
+        var landing = WithGridFrom(sourceCellText, cell with { RecordType = sourceCell.RecordType }, release);
         var (repository, plugin) = destination;
         if (worldspaceCopy is not null) transaction.Apply(repository.ChangesToPut(plugin, worldspaceCopy));
         transaction.Apply(repository.ChangesToPutInWorldspace(plugin, landing, worldspaceFormKey));
@@ -228,41 +237,55 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     internal static InvalidOperationException NoDocumentCarries(PluginAddress plugin, string formKey) =>
         new($"{plugin.Name} holds {formKey}, but no document in its source tree carries it.");
 
-    private static RecordIdentity HeldBy(CopySource source, string containerFormKey) =>
-        source.Identity(containerFormKey)
-        ?? throw new InvalidOperationException(
-            $"{source.Plugin.Name} does not hold {containerFormKey}, which a copied record names as its container.");
+    private static CopyRead<RecordIdentity> HeldBy(CopySource source, string containerFormKey) =>
+        source.Identity(containerFormKey).Then<RecordIdentity>(held => held
+            ?? throw new InvalidOperationException(
+                $"{source.Plugin.Name} does not hold {containerFormKey}, which a copied record names as its container."));
 
     private bool TryCopyIn(
         CopySource source, RecordIdentity container, Destination destination, GameRelease release,
         [NotNullWhen(true)] out SourceDocument? copy, [NotNullWhen(false)] out RecordEditResult? refused)
     {
-        refused = null;
+        (copy, refused) = (null, null);
         var schema = schemaReflector.GetSchemas(release)[container.RecordType];
-        if (CanBePartial.Of(schema, release, container.FormKey, TemporaryExterior(source, container, release)) is CanBePartial.Verdict.Can)
+        if (!TemporaryExterior(source, container, release).Holds(out var temporaryExterior, out var why))
         {
-            copy = PartialFormOf(source.Document(container), schema, release);
+            refused = WriteTargets.RefuseUnreadableSource(container.FormKey, why);
+            return false;
+        }
+        if (CanBePartial.Of(schema, release, container.FormKey, temporaryExterior) is CanBePartial.Verdict.Can)
+        {
+            if (!source.Document(container).Holds(out var document, out why))
+            {
+                refused = WriteTargets.RefuseUnreadableSource(container.FormKey, why);
+                return false;
+            }
+            copy = PartialFormOf(document, schema, release);
             return true;
         }
 
-        copy = null;
         if (resolution.HighestOverrideVisibleToTheDestination(
                 source, container, destination.Repository, destination.Plugin, out var visibleText) is { } visibleRefusal)
         {
             refused = visibleRefusal;
             return false;
         }
-        copy = OwnFieldsOf(source, container, visibleText, release);
+        if (!OwnFieldsOf(source, container, visibleText, release).Holds(out copy, out why))
+        {
+            refused = WriteTargets.RefuseUnreadableSource(container.FormKey, why);
+            return false;
+        }
         return true;
     }
 
-    private static bool? TemporaryExterior(CopySource source, RecordIdentity container, GameRelease release) =>
-        RecordTypes.For(release).IsCell(container.RecordType)
-            ? CanBePartial.TemporaryExterior(
-                (source.RecordFlags(container) & PersistentFlag.Bit) != 0,
-                source.ContainerOf(container) is not null,
-                source.WorldspaceOf(container) is null)
-            : null;
+    private static CopyRead<bool?> TemporaryExterior(CopySource source, RecordIdentity container, GameRelease release)
+    {
+        if (!RecordTypes.For(release).IsCell(container.RecordType)) return (bool?)null;
+        return source.RecordFlags(container).Then<bool?>(flags =>
+            source.ContainerOf(container).Then<bool?>(held =>
+                source.WorldspaceOf(container).Then<bool?>(worldspace =>
+                    CanBePartial.TemporaryExterior((flags & PersistentFlag.Bit) != 0, held is not null, worldspace is null))));
+    }
 
     private static SourceDocument PartialFormOf(SourceDocument container, RecordTableSchema schema, GameRelease release)
     {
@@ -274,11 +297,12 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     }
 
     // The container as xEdit copies it in: the copy the destination can see, its own fields only.
-    private static SourceDocument OwnFieldsOf(CopySource source, RecordIdentity container, string? visibleText, GameRelease release)
+    private static CopyRead<SourceDocument> OwnFieldsOf(CopySource source, RecordIdentity container, string? visibleText, GameRelease release)
     {
         var visible = visibleText is null
             ? source.Document(container)
             : new SourceDocument(container.FormKey, container.RecordType, EditorIds.In(visibleText), visibleText);
-        return visible with { Body = ContainerDocumentEdits.WithoutChildren(visible.Body, release, visible.RecordType) };
+        return visible.Then<SourceDocument>(document =>
+            document with { Body = ContainerDocumentEdits.WithoutChildren(document.Body, release, document.RecordType) });
     }
 }

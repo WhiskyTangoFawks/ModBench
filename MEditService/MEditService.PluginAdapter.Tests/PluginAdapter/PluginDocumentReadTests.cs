@@ -26,7 +26,7 @@ public sealed class PluginDocumentReadTests
         var path = Path.Combine(data.DataFolder, PluginName);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas);
+            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas).Answered();
         var npc = documents.Records.Single(d => d.RecordType == "npc_");
 
         using var loaded = Fallout4Mod.CreateFromBinaryOverlay(
@@ -47,7 +47,7 @@ public sealed class PluginDocumentReadTests
         var path = Path.Combine(data.DataFolder, PluginName);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas);
+            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas).Answered();
 
         Assert.Equal(PluginHeader.RecordType, documents.Header.RecordType);
         Assert.Equal($"000000:{PluginName}", documents.Header.FormKey);
@@ -63,7 +63,7 @@ public sealed class PluginDocumentReadTests
         var path = Path.Combine(scratch.Path, MisshapedPerkPlugin.FileName);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(MisshapedPerkPlugin.FileName), path), GameRelease.Fallout4, Schemas);
+            new ModPath(ModKey.FromFileName(MisshapedPerkPlugin.FileName), path), GameRelease.Fallout4, Schemas).Answered();
         var perks = documents.Records.Where(d => d.RecordType == "perk").ToList();
 
         var unreadable = perks.Single(d => d.FormKey == MisshapedPerkPlugin.FormKey);
@@ -85,7 +85,7 @@ public sealed class PluginDocumentReadTests
         var path = Path.Combine(data.DataFolder, PluginName);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas);
+            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas).Answered();
         var cell = documents.Records.Single(d => d.RecordType == "cell" && d.FormKey == extCellFormKey);
 
         Assert.Equal(new CellStructure("000800:Documents.esp", 3, 4, 1, 2, IsInterior: false), cell.Cell);
@@ -98,7 +98,7 @@ public sealed class PluginDocumentReadTests
         var path = Path.Combine(data.DataFolder, PluginName);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas);
+            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas).Answered();
         var cell = documents.Records.Single(d => d.RecordType == "cell" && d.FormKey == extCellFormKey);
 
         Assert.NotNull(cell.Contents);
@@ -128,7 +128,7 @@ public sealed class PluginDocumentReadTests
         var path = Path.Combine(data.DataFolder, PluginName);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas);
+            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas).Answered();
         var quest = documents.Records.Single(d => d.RecordType == "qust" && d.FormKey == questFormKey);
 
         Assert.Equal([new ChildRecord(topicFormKey, "DialogTopics", 0)], quest.Contents ?? []);

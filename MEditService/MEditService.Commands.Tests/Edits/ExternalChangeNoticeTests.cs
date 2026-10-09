@@ -52,22 +52,6 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         Assert.Single(_notifications.Notifications.OfType<ExternalChangeNotification>());
 
     [Fact]
-    public void ASnapshot_NamesATrackedPlugin_WithTheStateOfItsBytes_WhenTheyDifferFromWhatModbenchLastWrote()
-    {
-        var tracked = "the tracked binary"u8.ToArray();
-        var changed = "changed-by-xedit"u8.ToArray();
-        WithPlugins((PluginName, tracked));
-        Track((PluginName, tracked));
-        var loadOrder = WithPlugins((PluginName, changed));
-
-        Put(loadOrder);
-
-        var notice = TheExternalChange();
-        Assert.Equal(Origin, notice.Origin);
-        Assert.Equal([new ChangedPlugin(PluginName, Sha256(changed))], notice.Plugins);
-    }
-
-    [Fact]
     public async Task ASnapshot_NamesNoPlugin_ForTheBinaryARealCompileJustWrote()
     {
         using var mod = SourceEditFixture.Tracked();
@@ -82,7 +66,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     }
 
     [Fact]
-    public void ASnapshot_NamesATrackedPlugin_WithTheHashThePluginAdapterGivesItsBytes()
+    public void ASnapshot_NamesATrackedPlugin_WithTheStateOfItsBytes_WhenTheyDifferFromWhatModbenchLastWrote()
     {
         var tracked = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, tracked));
@@ -90,7 +74,9 @@ public sealed class ExternalChangeNoticeTests : IDisposable
 
         Put(loadOrder, TestEditService.PutLoadOrderHandler(new LoadOrderHolder(), _notifications, new HashingAs("changed")));
 
-        Assert.Equal([new ChangedPlugin(PluginName, "changed")], TheExternalChange().Plugins);
+        var notice = TheExternalChange();
+        Assert.Equal(Origin, notice.Origin);
+        Assert.Equal([new ChangedPlugin(PluginName, "changed")], notice.Plugins);
     }
 
     private sealed class HashingAs(string hash) : DelegatingPluginAdapter(TestAdapters.Mutagen())

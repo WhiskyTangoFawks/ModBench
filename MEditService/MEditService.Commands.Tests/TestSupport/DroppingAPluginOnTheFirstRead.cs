@@ -1,6 +1,6 @@
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -13,7 +13,7 @@ internal sealed class DroppingAPluginOnTheFirstRead(LoadOrderHolder holder, Plug
 {
     private bool _dropped;
 
-    public override IPluginRecordLookup OpenRecordLookup(
+    public override PluginAnswer<IPluginRecords> OpenRecordLookup(
         RegisteredPlugin plugin, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         if (!_dropped)

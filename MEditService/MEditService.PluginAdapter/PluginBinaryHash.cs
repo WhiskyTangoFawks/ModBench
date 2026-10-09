@@ -33,27 +33,22 @@ internal static class PluginBinaryHash
         return Convert.ToHexString(SHA256.HashData(stream));
     }
 
-    /// <summary>The hash and diagnoses from one read of the file. Null on <see cref="OfFile"/>'s
-    /// no-evidence terms; null Diagnoses when the scan threw.</summary>
-    internal static FileClaim? ClaimOfFile(string path)
+    /// <summary>The hash and diagnoses from one read of the file.</summary>
+    internal static PluginAnswer<FileClaim> ClaimOfFile(string path)
     {
         byte[] bytes;
         try
         {
             bytes = File.ReadAllBytes(path);
         }
-        catch (IOException) { return null; }
-        catch (UnauthorizedAccessException) { return null; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new PluginFailure.Inaccessible(ex);
+        }
 
-        try
-        {
-            return new FileClaim(OfBytes(bytes), MalformedPluginScan.Scan(bytes));
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            return new FileClaim(OfBytes(bytes), null, ex);
-        }
+        return PluginAnswer.Of(new FileClaim(OfBytes(bytes), PluginFailure.Answer<IReadOnlyList<PluginDiagnosis>>(() => MalformedPluginScan.Scan(bytes))));
     }
 }
 
-public sealed record FileClaim(string Hash, IReadOnlyList<PluginDiagnosis>? Diagnoses, Exception? ScanError = null);
+/// <summary>A plugin file's hash, and the malformed records the same read of it found.</summary>
+public sealed record FileClaim(string Hash, PluginAnswer<IReadOnlyList<PluginDiagnosis>> Diagnoses);

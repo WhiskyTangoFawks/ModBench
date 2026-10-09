@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
@@ -63,13 +64,11 @@ public sealed class TrackModTests
 
     private sealed class LockedPluginAdapter(string lockedName) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override bool CanRead(RegisteredPlugin plugin) =>
-            !plugin.Name.Equals(lockedName, StringComparison.OrdinalIgnoreCase) && base.CanRead(plugin);
-
-        public override Task<PluginDiagnosis?> WriteFromTreeAsync(
-            IReadOnlyList<TreeFile> files, string destinationPath,
-            IReadOnlyList<string> masterOrder, CancellationToken cancel = default) =>
-            TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
+        public override Task<PluginAnswer<PluginSource>> ReadSourceOfAsync(
+            RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
+            plugin.Name.Equals(lockedName, StringComparison.OrdinalIgnoreCase)
+                ? Task.FromResult<PluginAnswer<PluginSource>>(PluginFailures.Inaccessible())
+                : base.ReadSourceOfAsync(plugin, gameRelease, strings, cancel);
     }
 
     [Fact]

@@ -139,7 +139,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ABinaryRewrittenDuringAFailedRead_IsReadAgain()
     {
-        var adapter = new FailsToOpen(new InvalidOperationException("injected read failure"), atOpen: n => n == 1, () =>
+        var adapter = new FailsToOpen(PluginFailures.Unparsed(), atOpen: n => n == 1, () =>
             PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenAfterTheFailure")));
 
         using var index = Reconciled(adapter);
@@ -182,7 +182,7 @@ public sealed class FailedReadStateTests : IDisposable
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         ClaimedTwice();
-        using var index = Reconciled(new FailsToOpen(new InvalidOperationException("injected read failure"), atOpen: _ => true));
+        using var index = Reconciled(new FailsToOpen(PluginFailures.Unparsed(), atOpen: _ => true));
         Assert.True(Failed(index));
         var readsBefore = TreeReads();
         Mend();
@@ -199,7 +199,7 @@ public sealed class FailedReadStateTests : IDisposable
     {
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         ClaimedTwice();
-        using var index = Reconciled(new FailsToOpen(new InvalidOperationException("injected read failure"), atOpen: _ => true));
+        using var index = Reconciled(new FailsToOpen(PluginFailures.Unparsed(), atOpen: _ => true));
         Assert.True(Failed(index));
         var readsBefore = TreeReads();
 
@@ -330,7 +330,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ABinaryHeldByAnotherProcessWhenItIsReadAgain_IsReadAtTheNextSnapshot()
     {
-        using var index = Reconciled(new FailsToOpen(new IOException("held by another process"), atOpen: n => n == 2));
+        using var index = Reconciled(new FailsToOpen(PluginFailures.Inaccessible(), atOpen: n => n == 2));
         PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenBeforeTheHold"));
         index.NextSnapshotUntil(() => Failed(index), "the held read's failure");
 
@@ -342,11 +342,11 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ABinaryHeldByAnotherProcessWhenItArrives_IsReadAgainWithItsBytesUnchanged()
     {
-        var adapter = new FailsToOpen(new IOException("held by another process"), atOpen: n => n == 1);
+        var adapter = new FailsToOpen(PluginFailures.Inaccessible(), atOpen: n => n == 1);
 
         using var index = Reconciled(adapter);
 
-        Assert.True(adapter.Threw);
+        Assert.True(adapter.Failed);
         Assert.False(Failed(index));
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
     }
@@ -372,7 +372,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void AJustTrackedTreeWhoseBinaryAlsoFails_SaysTheBinarysLastReadStillShows()
     {
-        using var index = Reconciled(new FailsToOpen(new InvalidOperationException("injected read failure"), atOpen: n => n == 2));
+        using var index = Reconciled(new FailsToOpen(PluginFailures.Unparsed(), atOpen: n => n == 2));
         TrackedMods.Track(Plugin, _fixture.GameDirectory);
         ClaimedTwice();
 
@@ -385,7 +385,7 @@ public sealed class FailedReadStateTests : IDisposable
     [Fact]
     public void ABinaryRewrittenThatFailsToRead_SaysItsLastReadStillShows()
     {
-        using var index = Reconciled(new FailsToOpen(new InvalidOperationException("injected read failure"), atOpen: n => n == 2));
+        using var index = Reconciled(new FailsToOpen(PluginFailures.Unparsed(), atOpen: n => n == 2));
         PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
 
         index.NextSnapshotUntil(() => Failed(index), "the rewritten binary's failure");
@@ -439,28 +439,28 @@ public sealed class FailedReadStateTests : IDisposable
 
         public HeldAtFirstRead() : base(TestAdapters.Mutagen()) { }
 
-        public override (PluginContent Content, Exception? Unreachable) ReadContent(
+        public override PluginAnswer<(PluginContent Content, PluginFailure? Unreachable)> ReadContent(
             ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
             Interlocked.Increment(ref _read) == 1
-                ? throw new IOException("held by another process")
+                ? PluginFailures.Inaccessible()
                 : base.ReadContent(modPath, gameRelease, strings);
     }
 
-    private sealed class FailsToOpen(Exception failure, Func<int, bool> atOpen, Action? beforeFailing = null)
+    private sealed class FailsToOpen(PluginFailure failure, Func<int, bool> atOpen, Action? beforeFailing = null)
         : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         private int _opened;
 
-        public bool Threw { get; private set; }
+        public bool Failed { get; private set; }
 
-        public override IPluginDocuments OpenDocuments(
+        public override PluginAnswer<IPluginDocuments> OpenDocuments(
             ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
             PluginStrings? strings = null)
         {
             if (!atOpen(Interlocked.Increment(ref _opened))) return base.OpenDocuments(modPath, gameRelease, schemas, strings);
             beforeFailing?.Invoke();
-            Threw = true;
-            throw failure;
+            Failed = true;
+            return failure;
         }
     }
 

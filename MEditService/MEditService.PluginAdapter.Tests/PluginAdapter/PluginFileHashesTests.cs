@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
 
@@ -24,30 +23,30 @@ public sealed class PluginFileHashesTests : IDisposable
     private static MutagenPluginAdapter WithTheClockPastEveryWrite() =>
         new(new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1)));
 
-    private static FileClaim? ClaimOf(string path) => TestAdapters.Mutagen().ClaimOf(path);
+    private static PluginAnswer<FileClaim> ClaimOf(string path) => TestAdapters.Mutagen().ClaimOf(path);
 
     private FileStream HeldAgainstReaders()
     {
         var held = new FileStream(PluginPath, FileMode.Open, FileAccess.Read, FileShare.None);
-        Assert.Null(ClaimOf(PluginPath));
+        Assert.IsType<PluginFailure.Inaccessible>(ClaimOf(PluginPath).Failure());
         return held;
     }
 
     [Fact]
     public void TheClaimOfAFile_CarriesTheHashOfTheBytesItScanned()
     {
-        var claim = ClaimOf(PluginPath);
+        var claim = ClaimOf(PluginPath).Answered();
 
-        Assert.Equal(Sha256Hex(File.ReadAllBytes(PluginPath)), claim?.Hash);
-        Assert.Empty(claim?.Diagnoses ?? [new PluginDiagnosis(null, "unscanned", null, "")]);
+        Assert.Equal(Sha256Hex(File.ReadAllBytes(PluginPath)), claim.Hash);
+        Assert.Empty(claim.Diagnoses.Answered());
     }
 
     [Fact]
-    public void TheClaimOfAFileHeldAgainstReaders_IsNull()
+    public void TheClaimOfAFileHeldAgainstReaders_IsInaccessible()
     {
         using var held = HeldAgainstReaders();
 
-        Assert.Null(ClaimOf(PluginPath));
+        Assert.IsType<PluginFailure.Inaccessible>(ClaimOf(PluginPath).Failure());
     }
 
     [Fact]

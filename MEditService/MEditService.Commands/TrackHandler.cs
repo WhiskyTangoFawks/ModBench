@@ -76,7 +76,7 @@ public sealed class TrackHandler
                 $"'{modFolder}' already holds a repository Track did not make, with no main branch.");
         }
 
-        var verified = new List<(RegisteredPlugin Plugin, PluginSourceRead.Read Source)>();
+        var verified = new List<(RegisteredPlugin Plugin, PluginSource Source)>();
         var refused = new List<ItemRefused<PluginAddress, TrackRefusal>>();
         foreach (var plugin in plugins)
         {
@@ -116,7 +116,7 @@ public sealed class TrackHandler
 
     // The adapter writes nothing when any plugin's files fail (plugins.md, Track, story 5).
     private List<ItemRefused<PluginAddress, TrackRefusal>> Commit(
-        string modFolder, List<(RegisteredPlugin Plugin, PluginSourceRead.Read Source)> verified)
+        string modFolder, List<(RegisteredPlugin Plugin, PluginSource Source)> verified)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {

@@ -56,7 +56,8 @@ internal sealed class LoadOrderResolution(
     {
         text = null;
         var snapshot = source.Snapshot;
-        var sourcePartial = source.IsPartialForm(identity);
+        if (!source.IsPartialForm(identity).Holds(out var sourcePartial, out var why))
+            return WriteTargets.RefuseUnreadableSource(identity.FormKey, why);
         if (!sourcePartial && snapshot.LoadsBefore(source.Plugin, destinationPlugin) != true) return null;
 
         var masters = WalkIn(snapshot, destinationRepository, destinationPlugin, schemaReflector.GetSchemas(snapshot.GameRelease));
@@ -109,13 +110,14 @@ internal sealed class LoadOrderResolution(
         /// <summary>The nearest master's copy of <paramref name="formKey"/> that <paramref name="says"/> accepts,
         /// passing over one whose header holds a flag of <paramref name="passOver"/>. An unreadable copy ends the walk.</summary>
         internal LeftCopy NearestCopy(string formKey, Func<JsonObject, bool> says, long passOver = 0) =>
-            Walk(formKey, source =>
+            Walk(formKey, source => source.Identity(formKey).Then<string?>(held =>
             {
-                if (source.Identity(formKey) is not { } identity) return null;
-                if (passOver != 0 && (source.RecordFlags(identity) & passOver) != 0) return null;
-                var body = source.Body(identity);
-                return JsonNode.Parse(body) is JsonObject copy && says(copy) ? body : null;
-            });
+                if (held is not { } identity) return (string?)null;
+                return source.RecordFlags(identity).Then<string?>(flags =>
+                    passOver != 0 && (flags & passOver) != 0
+                        ? (string?)null
+                        : source.Body(identity).Then<string?>(body => JsonNode.Parse(body) is JsonObject copy && says(copy) ? body : null));
+            }));
 
         /// <summary>The copy saying where <paramref name="cell"/> sits is its own, else its nearest copy to the left
         /// (xEdit's highest override). A refusal when the walk cannot read, <paramref name="unsaid"/> when none says.</summary>
@@ -134,11 +136,12 @@ internal sealed class LoadOrderResolution(
         /// <summary>The nearest master's copy of the exterior cell at grid (<paramref name="x"/>, <paramref name="y"/>)
         /// of <paramref name="worldspace"/>.</summary>
         internal LeftCopy NearestCell(string worldspace, int x, int y) =>
-            Walk(worldspace, source => source.CellAt(worldspace, x, y) is { } identity ? source.Body(identity) : null);
+            Walk(worldspace, source => source.CellAt(worldspace, x, y).Then<string?>(held =>
+                held is { } identity ? source.Body(identity).Then<string?>(body => body) : (string?)null));
 
         // The plugins left of this one, nearest first, until one answers a text. An unreadable one ends the
         // walk, named by what it was asked about, as does a source tree that cannot say which are masters.
-        private LeftCopy Walk(string askedAbout, Func<CopySource, string?> answer)
+        private LeftCopy Walk(string askedAbout, Func<CopySource, CopyRead<string?>> answer)
         {
             IReadOnlySet<string> required;
             try
@@ -156,14 +159,8 @@ internal sealed class LoadOrderResolution(
             foreach (var left in asked)
             {
                 using var source = resolution.SourceIn(snapshot, left);
-                try
-                {
-                    if (answer(source) is { } text) return new LeftCopy.Found(text, left);
-                }
-                catch (Exception ex) when (ex is not OutOfMemoryException)
-                {
-                    return new LeftCopy.UnreadableCopy(left, askedAbout, ex.Message);
-                }
+                if (!answer(source).Holds(out var text, out var why)) return new LeftCopy.UnreadableCopy(left, askedAbout, why);
+                if (text is not null) return new LeftCopy.Found(text, left);
             }
             return new LeftCopy.None();
         }

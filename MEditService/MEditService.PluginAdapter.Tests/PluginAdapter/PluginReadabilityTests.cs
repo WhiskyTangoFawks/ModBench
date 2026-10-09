@@ -1,5 +1,7 @@
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -7,7 +9,7 @@ public sealed class PluginReadabilityTests : IDisposable
 {
     private const string PluginName = "Readable.esp";
 
-    private readonly PluginFixtureData _data = new PluginFixtureBuilder("adapter-canread")
+    private readonly PluginFixtureData _data = new PluginFixtureBuilder("adapter-readability")
         .WithPlugin(PluginName)
         .Build();
 
@@ -15,53 +17,53 @@ public sealed class PluginReadabilityTests : IDisposable
 
     private string PluginPath => Path.Combine(_data.DataFolder, PluginName);
 
-    private static RegisteredPlugin PluginAt(string path) =>
-        new(Path.GetFileName(path), PluginOrigin.DataDirectory, path, PluginProvider.Game, Line: null);
-
     public void Dispose() => _data.Dispose();
 
-    [Fact]
-    public void CanRead_ForAPluginOnDisk_IsTrue() =>
-        Assert.True(Adapter.CanRead(PluginAt(PluginPath)));
+    private Task<PluginAnswer<PluginSource>> ReadSourceAt(string path) =>
+        Adapter.ReadSourceOfAsync(
+            new RegisteredPlugin(Path.GetFileName(path), PluginOrigin.DataDirectory, path, PluginProvider.Game, Line: null),
+            GameRelease.Fallout4, new PluginStrings(null, _data.DataFolder));
 
     [Fact]
-    public void CanRead_ForAPluginThatIsNotThere_IsFalse() =>
-        Assert.False(Adapter.CanRead(PluginAt(Path.Combine(_data.DataFolder, "Absent.esp"))));
+    public async Task APluginThatIsNotThere_IsInaccessible() =>
+        Assert.IsType<PluginFailure.Inaccessible>((await ReadSourceAt(Path.Combine(_data.DataFolder, "Absent.esp"))).Failure());
 
     [Fact]
-    public void CanRead_ForAnEmptyFile_IsTrue()
+    public void TheContentOfAPluginThatIsNotThere_IsInaccessible()
+    {
+        var path = Path.Combine(_data.DataFolder, "Absent.esp");
+
+        var read = Adapter.ReadContent(new ModPath(ModKey.FromFileName("Absent.esp"), path), GameRelease.Fallout4);
+
+        Assert.IsType<PluginFailure.Inaccessible>(read.Failure());
+    }
+
+    [Fact]
+    public async Task AnEmptyFile_OpensAndIsUnparsed()
     {
         var path = Path.Combine(_data.DataFolder, "Empty.esp");
         File.WriteAllBytes(path, []);
 
-        Assert.True(Adapter.CanRead(PluginAt(path)));
+        Assert.IsType<PluginFailure.Unparsed>((await ReadSourceAt(path)).Failure());
     }
 
     [Fact]
-    public void CanRead_WhileAnotherHandleDeniesSharing_IsFalse()
-    {
-        using var held = new FileStream(PluginPath, FileMode.Open, FileAccess.Read, FileShare.None);
-
-        Assert.False(Adapter.CanRead(PluginAt(PluginPath)));
-    }
-
-    [Fact]
-    public void CanRead_AfterTheHoldingHandleIsClosed_IsTrueAgain()
+    public async Task APluginAnotherHandleHoldsAgainstSharing_IsInaccessible_UntilThatHandleCloses()
     {
         using (new FileStream(PluginPath, FileMode.Open, FileAccess.Read, FileShare.None))
         {
-            Assert.False(Adapter.CanRead(PluginAt(PluginPath)));
+            Assert.IsType<PluginFailure.Inaccessible>((await ReadSourceAt(PluginPath)).Failure());
         }
 
-        Assert.True(Adapter.CanRead(PluginAt(PluginPath)));
+        Assert.NotEmpty((await ReadSourceAt(PluginPath)).Answered().Files);
     }
 
     [Fact]
-    public void CanRead_ForADirectoryAtThePluginsPath_IsFalse()
+    public async Task ADirectoryAtThePluginsPath_IsInaccessible()
     {
         var path = Path.Combine(_data.DataFolder, "Folder.esp");
         Directory.CreateDirectory(path);
 
-        Assert.False(Adapter.CanRead(PluginAt(path)));
+        Assert.IsType<PluginFailure.Inaccessible>((await ReadSourceAt(path)).Failure());
     }
 }

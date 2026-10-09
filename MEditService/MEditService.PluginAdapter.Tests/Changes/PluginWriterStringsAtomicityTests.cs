@@ -28,8 +28,9 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
 
     public void Dispose() => _dataFolder.Dispose();
 
-    private Task<PreparedPluginSave> PrepareModifiedAsync() => TreeSaves.PrepareAsync(
+    private Task<T> SaveModifiedAsync<T>(Func<PreparedPluginSave, T> land) => TreeSaves.SaveAsync(
         _pluginPath,
+        land,
         loadOrder: null,
         ("The Original Title", "The New Title"),
         ("The original description.", "The new description."),
@@ -42,19 +43,17 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
         Directory.GetFiles(_stringsDir).ToDictionary(f => Path.GetFileName(f), File.ReadAllBytes);
 
     [Fact]
-    public async Task PrepareSaveAsync_LocalizedMod_LeavesFinalStringsFilesUntouchedBeforeCommit_AndTheDataFolderAsItWasOnceDisposedUncommitted()
+    public async Task SaveAsync_LocalizedMod_LeavesFinalStringsFilesUntouchedBeforeCommit_AndTheDataFolderAsItWasOnceDisposedUncommitted()
     {
         var originalFiles = ReadStringsFiles();
         var entriesBefore = FolderEntries.Of(_dataFolder);
         Assert.True(originalFiles.Count >= 2, "fixture should produce at least Normal + DL strings files");
 
-        using (var prep = await PrepareModifiedAsync())
-        {
-            var afterPrepare = ReadStringsFiles();
-            Assert.Equal(originalFiles.Keys.OrderBy(k => k), afterPrepare.Keys.OrderBy(k => k));
-            foreach (var (name, bytes) in originalFiles)
-                Assert.True(bytes.AsSpan().SequenceEqual(afterPrepare[name]), $"{name} was modified before Commit()");
-        }
+        var afterPrepare = await SaveModifiedAsync(_ => ReadStringsFiles());
+
+        Assert.Equal(originalFiles.Keys.OrderBy(k => k), afterPrepare.Keys.OrderBy(k => k));
+        foreach (var (name, bytes) in originalFiles)
+            Assert.True(bytes.AsSpan().SequenceEqual(afterPrepare[name]), $"{name} was modified before Commit()");
 
         Assert.Equal(entriesBefore, FolderEntries.Of(_dataFolder));
     }
@@ -65,8 +64,11 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
         var originalFiles = ReadStringsFiles();
         var entriesBefore = FolderEntries.Of(_dataFolder);
 
-        using (var prep = await PrepareModifiedAsync())
+        await SaveModifiedAsync(prep =>
+        {
             prep.Commit();
+            return true;
+        });
 
         var afterCommit = ReadStringsFiles();
         Assert.Equal(originalFiles.Keys.OrderBy(k => k), afterCommit.Keys.OrderBy(k => k));
@@ -84,13 +86,13 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
 
         var entriesBefore = FolderEntries.Of(_dataFolder);
 
-        using (var prep = await PrepareModifiedAsync())
+        await SaveModifiedAsync(prep =>
         {
             var added = FolderEntries.TheOneAddedTo(_dataFolder, entriesBefore);
             File.Delete(Directory.GetFiles(Path.Combine(added, "Strings"))[0]);
 
-            Assert.ThrowsAny<IOException>(prep.Commit);
-        }
+            return Assert.ThrowsAny<IOException>(prep.Commit);
+        });
 
         Assert.Equal(before, File.ReadAllBytes(_pluginPath));
     }

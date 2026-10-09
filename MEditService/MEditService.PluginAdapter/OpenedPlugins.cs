@@ -6,7 +6,7 @@ namespace MEditService.PluginAdapter;
 /// <see cref="IPluginAdapter"/> so the verbs cannot drift between implementations.</summary>
 internal static class OpenedPlugins
 {
-    internal static (PluginContent Content, Exception? Unreachable) ContentIn(
+    internal static (PluginContent Content, PluginFailure? Unreachable) ContentIn(
         IModGetter mod, string pluginName, bool isBlueprint)
     {
         var (recordCount, unreachable) = ReachableRecordCount(mod);
@@ -23,7 +23,7 @@ internal static class OpenedPlugins
 
     // A group whose location scan Mutagen refuses stops the walk, and the count is a readout, not a
     // gate: the plugin reads on what was reachable and the ingest reports the type that was not.
-    private static (int Count, Exception? Unreachable) ReachableRecordCount(IModGetter mod)
+    private static (int Count, PluginFailure? Unreachable) ReachableRecordCount(IModGetter mod)
     {
         var count = 0;
         try
@@ -32,7 +32,7 @@ internal static class OpenedPlugins
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            return (count, ex);
+            return (count, PluginFailure.Of(ex));
         }
         return (count, null);
     }

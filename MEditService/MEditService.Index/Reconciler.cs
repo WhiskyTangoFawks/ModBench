@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
@@ -353,6 +352,9 @@ internal sealed class Reconciler(
         var (held, index) = (scope.Held, scope.Index);
         FailCollisions(snapshot.CaseOnlyCollisions);
         var resolved = snapshot.Plugins;
+        // A hash is kept only for a file the load order names, or the kept hashes grow by every path
+        // a session ever read.
+        adapter.KeepHashesOf(resolved.Select(r => r.Path).ToHashSet(StringComparer.Ordinal));
         var wanted = resolved.ToDictionary(r => r.Key, PluginAddress.Comparer);
         var open = held.Plugins.ToDictionary(p => p.Key, PluginAddress.Comparer);
 
@@ -443,10 +445,9 @@ internal sealed class Reconciler(
 
             PluginMetadata? metadata = null;
             ReadOne(scope, plugin, state =>
-            {
-                metadata = held.Open(plugin, Registration.In(snapshot, plugin.Key));
-                return metadata is not null ? RegisterOrIndex(scope, metadata, state, token) : ReadOutcome.Unread;
-            });
+                held.Open(plugin, Registration.In(snapshot, plugin.Key)).Holds(out metadata, out var failure)
+                    ? RegisterOrIndex(scope, metadata, state, token)
+                    : ReadOutcome.Failed(failure));
             if (metadata is null) continue;
             firstUsableMs ??= timer.ElapsedMilliseconds;
         }
@@ -500,12 +501,13 @@ internal sealed class Reconciler(
     {
         try
         {
-            scope.Failed.Read(plugin, read);
+            if (scope.Failed.Read(plugin, read).Failure is { } failure)
+                FailRead(scope, plugin.Key, ReadFailure(failure.Reason, scope.Index.DerivationOf(plugin.Key)));
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
             logger.LogWarning(ex, "Could not read {Plugin} ({Origin})", plugin.Name, plugin.Origin);
-            FailRead(scope, plugin.Key, ReadFailure(ex, scope.Index.DerivationOf(plugin.Key)));
+            FailRead(scope, plugin.Key, ReadFailure(PluginLoadFailure.ReasonFor(ex), scope.Index.DerivationOf(plugin.Key)));
         }
     }
 
@@ -538,8 +540,8 @@ internal sealed class Reconciler(
     }
 
     // common.md, Errors (ADR-0019): the rows a failed read leaves stand, and the reason says whose they are.
-    private static string ReadFailure(Exception ex, DerivedFrom? rowsFrom) =>
-        $"Could not read this plugin ({PluginLoadFailure.ReasonFor(ex)})." + rowsFrom switch
+    private static string ReadFailure(string reason, DerivedFrom? rowsFrom) =>
+        $"Could not read this plugin ({reason})." + rowsFrom switch
         {
             null => "",
             DerivedFrom.SourceTree => " Still showing what was last read from its source tree.",
@@ -585,6 +587,7 @@ internal sealed class Reconciler(
     private ReadOutcome RegisterOrIndex(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
         var outcome = scope.Index.Commit(_ => RegisterWarmOrIndex(scope, plugin, state, token));
+        if (outcome.Failure is not null) return outcome;
         lock (_lock) _indexed.Add(plugin.Key);
         PublishStatus();
         return outcome;
@@ -629,11 +632,7 @@ internal sealed class Reconciler(
     private ReadOutcome IndexOnePluginRows(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
     {
         var truth = scope.Projector.TruthOf(plugin.Registered);
-        if (truth != DerivedFrom.SourceTree)
-        {
-            IndexFromBinary(scope, plugin, truth);
-            return ReadOutcome.Read;
-        }
+        if (truth != DerivedFrom.SourceTree) return IndexFromBinary(scope, plugin, truth);
 
         try
         {
@@ -648,9 +647,10 @@ internal sealed class Reconciler(
         {
             // Every exception, not a curated set: a third-party deserializer fails in open-ended ways.
             logger.LogWarning(ex, "Could not ingest {Plugin} from its source tree; reading its binary", plugin.Name);
-            if (!BinaryStandsIn(scope.Index, plugin.Key, state))
-                IndexFromBinary(scope, plugin, DerivedFrom.BinaryForUnreadableSource);
-            return ReadOutcome.StoppedAt(ex);
+            var binary = BinaryStandsIn(scope.Index, plugin.Key, state)
+                ? ReadOutcome.Read
+                : IndexFromBinary(scope, plugin, DerivedFrom.BinaryForUnreadableSource);
+            return binary.Failure is null ? ReadOutcome.StoppedAt(ex) : binary;
         }
     }
 
@@ -661,18 +661,23 @@ internal sealed class Reconciler(
 
     // ADR-0005: the binary reaches the index as documents, through the adapter's own door,
     // never as a mod this side holds.
-    private void IndexFromBinary(OpenScope scope, PluginMetadata plugin, DerivedFrom derivedFrom)
+    private ReadOutcome IndexFromBinary(OpenScope scope, PluginMetadata plugin, DerivedFrom derivedFrom)
     {
-        using var documents = OpenDocuments(scope, plugin);
-        scope.Index.Index(documents, plugin, plugin.Path, derivedFrom);
-    }
+        if (!adapter.OpenDocuments(
+                new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path),
+                scope.Index.Release,
+                scope.Index.Schemas,
+                new PluginStrings(Path.GetDirectoryName(plugin.Path), scope.Held.DataFolderPath))
+            .Holds(out var opened, out var failure))
+        {
+            logger.LogWarning(failure.Error, "Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
+            return ReadOutcome.Failed(failure);
+        }
 
-    private IPluginDocuments OpenDocuments(OpenScope scope, PluginMetadata plugin) =>
-        adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path),
-            scope.Index.Release,
-            scope.Index.Schemas,
-            new PluginStrings(Path.GetDirectoryName(plugin.Path), scope.Held.DataFolderPath));
+        using var documents = opened;
+        scope.Index.Index(documents, plugin, plugin.Path, derivedFrom);
+        return ReadOutcome.Read;
+    }
 
     // ADR-0015.
     private void ValidateIndex(CancellationToken token)
@@ -794,20 +799,23 @@ internal sealed class Reconciler(
     private void ReindexHeldPlugin(OpenScope scope, PluginMetadata plugin)
     {
         var key = plugin.Key;
+        ReadOutcome outcome;
         try
         {
-            scope.Index.Commit(projection =>
+            outcome = scope.Index.Commit(projection =>
             {
-                scope.Failed.Read(plugin.Registered, state => IndexOnePlugin(scope, plugin, state, CancellationToken.None));
-                projection.PluginChanged(key);
+                var read = scope.Failed.Read(plugin.Registered, state => IndexOnePlugin(scope, plugin, state, CancellationToken.None));
+                if (read.Failure is null) projection.PluginChanged(key);
+                return read;
             });
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            FailRead(scope, key, ReadFailure(ex, scope.Index.DerivationOf(key)));
+            FailRead(scope, key, ReadFailure(PluginLoadFailure.ReasonFor(ex), scope.Index.DerivationOf(key)));
             throw;
         }
-        if (scope.Held.ClearFailure(key)) PublishStatus();
+        if (outcome.Failure is { } failure) FailRead(scope, key, ReadFailure(failure.Reason, scope.Index.DerivationOf(key)));
+        else if (scope.Held.ClearFailure(key)) PublishStatus();
     }
 
     /// <summary>Drops the scope: the plugins it has open and the store's connection. Cancels an in-flight

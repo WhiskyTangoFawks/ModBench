@@ -1,5 +1,6 @@
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
@@ -101,6 +102,18 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     }
 
     [Fact]
+    public void AReconcile_KeepsNoHashOfAFileTheLoadOrderNoLongerNames()
+    {
+        using (new FileStream(_untracked.Path, FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.NotNull(_disk.HashOf(_untracked.Path));
+
+        _index.Reconcile(_holder, _fixture.GameDirectory, [_tracked], GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        using var held = new FileStream(_untracked.Path, FileMode.Open, FileAccess.Read, FileShare.None);
+        Assert.Null(_disk.HashOf(_untracked.Path));
+    }
+
+    [Fact]
     public void AnEqualSnapshot_TakesTheRowsOfAnUntrackedBinaryTheAdapterSaysIsGone()
     {
         _disk.Gone(_untracked.Path);
@@ -151,7 +164,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     public void AnEqualSnapshot_OfABinaryWhoseStampHolds_ReadsNothing()
     {
         using var held = new FileStream(_untracked.Path, FileMode.Open, FileAccess.Read, FileShare.None);
-        Assert.Null(_disk.ClaimOf(_untracked.Path));
+        Assert.IsType<PluginFailure.Inaccessible>(_disk.ClaimOf(_untracked.Path).Failure());
 
         var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _tracked.RenamedByHand(_index));
 

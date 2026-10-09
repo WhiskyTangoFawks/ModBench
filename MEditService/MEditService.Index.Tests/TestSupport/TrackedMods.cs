@@ -23,7 +23,7 @@ internal static class TrackedMods
                 new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null), release,
                 new PluginStrings(modFolder, dataFolder))
             .GetAwaiter().GetResult();
-        var source = Assert.IsType<PluginSourceRead.Read>(read);
+        var source = read.Answered();
 
         SourceRepository.Track(modFolder, [(source.Files, new DecompiledPlugin(pluginName, source.BinarySha256))]);
     }

@@ -57,63 +57,52 @@ internal sealed class HeldPlugins
     public PluginMetadata? Find(PluginAddress key) =>
         Plugins.FirstOrDefault(p => PluginAddress.Comparer.Equals(p.Key, key));
 
-    /// <summary>A plugin that cannot be parsed is recorded in <see cref="Failures"/> and nothing is
-    /// held for it; a file that cannot be read throws, for its reader to read again. A success
-    /// clears an earlier failure.</summary>
-    public PluginMetadata? Open(RegisteredPlugin plugin, Registration registration)
+    /// <summary>What the adapter read of the plugin's file, held; or the failure that stopped the
+    /// read, with nothing held. A success clears an earlier failure.</summary>
+    public PluginAnswer<PluginMetadata> Open(RegisteredPlugin plugin, Registration registration)
     {
-        if (!_adapter.Exists(plugin.Path))
-        {
-            _logger.LogWarning("Plugin file not found: {FilePath}", plugin.Path);
-            SetFailure(plugin.Key, $"Plugin file not found: {plugin.Path}");
-            return null;
-        }
-
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("Opening binary overlay: {FileName} ({Origin}, load index {LoadOrderIndex})",
                 plugin.Name, plugin.Origin, registration.LoadOrderIndex);
         }
 
-        try
-        {
-            // The binary path (ADR-0007) needs the same explicit strings parameters
-            // Track does, or a Localized untracked plugin throws instead of opening.
-            var readTimer = Stopwatch.StartNew();
-            var (content, unreachable) = _adapter.ReadContent(
+        // The binary path (ADR-0007) needs the same explicit strings parameters
+        // Track does, or a Localized untracked plugin fails instead of opening.
+        var readTimer = Stopwatch.StartNew();
+        if (!_adapter.ReadContent(
                 new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), GameRelease,
-                new PluginStrings(Path.GetDirectoryName(plugin.Path), DataFolderPath));
-            var readMs = readTimer.ElapsedMilliseconds;
-
-            if (unreachable is { } stoppedWalk)
-            {
-                // The ingest walks the same records per type and reports the one it could not finish,
-                // so this only keeps a readout from becoming a refusal to open the plugin.
-                _logger.LogWarning(stoppedWalk,
-                    "Could not walk all of {FileName}'s records for its count; reporting the {Count} that were reachable",
-                    plugin.Name, content.RecordCount);
-            }
-
-            var metadata = BuildPluginMetadata(content, plugin, registration);
-            Hold(metadata);
-
-            if (_logger.IsEnabled(LogLevel.Information))
-            {
-                _logger.LogInformation("{FileName}: {RecordCount} records, masters: [{Masters}]",
-                    plugin.Name, metadata.RecordCount, string.Join(", ", metadata.Masters));
-            }
-            if (_logger.IsEnabled(LogLevel.Debug))
-            {
-                _logger.LogDebug("{FileName} read in {ReadMs} ms", plugin.Name, readMs);
-            }
-            return metadata;
-        }
-        catch (Exception ex) when (ex is not (OutOfMemoryException or IOException or UnauthorizedAccessException))
+                new PluginStrings(Path.GetDirectoryName(plugin.Path), DataFolderPath))
+            .Holds(out var read, out var failure))
         {
-            _logger.LogWarning(ex, "Failed to open plugin {FileName} ({Origin}); it is held in an error state", plugin.Name, plugin.Origin);
-            SetFailure(plugin.Key, PluginLoadFailure.ReasonFor(ex));
-            return null;
+            _logger.LogWarning(failure.Error, "Failed to open plugin {FileName} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
+            return failure;
         }
+        var readMs = readTimer.ElapsedMilliseconds;
+        var (content, unreachable) = read;
+
+        if (unreachable is { } stoppedWalk)
+        {
+            // The ingest walks the same records per type and reports the one it could not finish,
+            // so this only keeps a readout from becoming a refusal to open the plugin.
+            _logger.LogWarning(stoppedWalk.Error,
+                "Could not walk all of {FileName}'s records for its count; reporting the {Count} that were reachable: {Reason}",
+                plugin.Name, content.RecordCount, stoppedWalk.Reason);
+        }
+
+        var metadata = BuildPluginMetadata(content, plugin, registration);
+        Hold(metadata);
+
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("{FileName}: {RecordCount} records, masters: [{Masters}]",
+                plugin.Name, metadata.RecordCount, string.Join(", ", metadata.Masters));
+        }
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("{FileName} read in {ReadMs} ms", plugin.Name, readMs);
+        }
+        return PluginAnswer.Of(metadata);
     }
 
     // Republishes the snapshot readers see, so a plugin is never half-held from a reader's point of
