@@ -26,6 +26,12 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
 
     public virtual bool CanRead(RegisteredPlugin plugin) => inner.CanRead(plugin);
 
+    public virtual bool Exists(string pluginPath) => inner.Exists(pluginPath);
+
+    public virtual string? HashOf(string pluginPath) => inner.HashOf(pluginPath);
+
+    public virtual FileClaim? ClaimOf(string pluginPath) => inner.ClaimOf(pluginPath);
+
     public virtual bool GameFolderExists(string gameFolder) => inner.GameFolderExists(gameFolder);
 
     public virtual LinkAnswers LinkTargets(
@@ -36,12 +42,12 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         IReadOnlyList<TreeFile> files, GameRelease gameRelease, CancellationToken cancel = default) =>
         inner.ReadTreeAsync(files, gameRelease, cancel);
 
-    public virtual Task WriteFromTreeAsync(
+    public virtual Task<PluginDiagnosis?> WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
         CancellationToken cancel = default) =>
         inner.WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
 
-    public virtual Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceOfAsync(
+    public virtual Task<PluginSourceRead> ReadSourceOfAsync(
         RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
         inner.ReadSourceOfAsync(plugin, gameRelease, strings, cancel);
 

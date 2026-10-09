@@ -68,11 +68,6 @@ internal sealed class CopySource(
     internal SourceDocument Document(RecordIdentity identity) =>
         new(identity.FormKey, identity.RecordType, identity.EditorId, Body(identity));
 
-    /// <summary>The reader's own words for a record it cannot read: the codec's message for a working
-    /// tree's document, the diagnosis Track uses for a plugin's own file.</summary>
-    internal string Diagnose(Exception ex) =>
-        _tree != null ? ex.Message : PluginDiagnosis.FromParseException(ex).Describe();
-
     /// <summary>The container carrying this record, or null when it has a document of its own. A
     /// worldspace's persistent cell answers its worldspace; a numbered cell has a document of its own.</summary>
     internal DocumentContainment? ContainerOf(RecordIdentity identity) =>

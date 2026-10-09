@@ -66,7 +66,7 @@ public sealed class TrackModTests
         public override bool CanRead(RegisteredPlugin plugin) =>
             !plugin.Name.Equals(lockedName, StringComparison.OrdinalIgnoreCase) && base.CanRead(plugin);
 
-        public override Task WriteFromTreeAsync(
+        public override Task<PluginDiagnosis?> WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
             IReadOnlyList<string> masterOrder, CancellationToken cancel = default) =>
             TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);

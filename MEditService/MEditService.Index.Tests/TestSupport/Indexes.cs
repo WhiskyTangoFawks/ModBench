@@ -28,7 +28,8 @@ internal static class Indexes
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         var services = new ServiceCollection();
         services.AddSingleton(holder);
-        services.AddSingleton(adapter ?? TestAdapters.Mutagen());
+        if (adapter is null) services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
+        else services.AddSingleton(adapter);
         services.AddSingleton(source ?? new GitSourceAdapter());
         services.AddSingleton(SharedSchemaReflector.Instance);
         services.AddSingleton(loggerFactory ?? NullLoggerFactory.Instance);

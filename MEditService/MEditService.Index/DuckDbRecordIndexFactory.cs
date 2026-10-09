@@ -14,6 +14,7 @@ namespace MEditService.Index;
 internal sealed class DuckDbRecordIndexFactory(
     SchemaReflector schemaReflector,
     TableDdlBuilder ddlBuilder,
+    IPluginAdapter plugins,
     IndexWriteGate gate,
     FilterInForce filter,
     INotificationPublisher? notifications,
@@ -59,7 +60,7 @@ internal sealed class DuckDbRecordIndexFactory(
         long? atLeastSequence, out string? refusal)
     {
         var store = new Store(
-            _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), schemaReflector, ddlBuilder,
+            _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), schemaReflector, ddlBuilder, plugins,
             timeProvider, openedPlugins);
         refusal = store.Open();
         if (refusal is not null)

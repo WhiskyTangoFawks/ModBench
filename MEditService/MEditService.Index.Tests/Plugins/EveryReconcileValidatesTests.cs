@@ -1,6 +1,5 @@
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
@@ -23,6 +22,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     private readonly string _trackedNpc;
     private readonly LoadOrderHolder _holder = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
+    private readonly DiskSaysAdapter _disk;
     private readonly OpenedIndex _index;
 
     public EveryReconcileValidatesTests()
@@ -37,7 +37,8 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         _trackedNpc = npc.ToString();
         TrackedMods.Track(_tracked, _fixture.GameDirectory);
         var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
-        _index = Indexes.Open(_holder, notifications: _notifications, timeProvider: clock);
+        _disk = new DiskSaysAdapter(clock);
+        _index = Indexes.Open(_holder, _disk, notifications: _notifications, timeProvider: clock);
         Reconcile();
     }
 
@@ -100,6 +101,26 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     }
 
     [Fact]
+    public void AnEqualSnapshot_TakesTheRowsOfAnUntrackedBinaryTheAdapterSaysIsGone()
+    {
+        _disk.Gone(_untracked.Path);
+
+        ArrivalAnnouncing(PluginChanged(_untracked));
+
+        Assert.Empty(_index.ListedIn(_untracked.KeyOf()));
+    }
+
+    [Fact]
+    public void AnEqualSnapshot_ReindexesAnUntrackedBinaryTheAdapterSaysChanged()
+    {
+        _disk.Changed(_untracked.Path);
+
+        ArrivalAnnouncing(PluginChanged(_untracked));
+
+        Assert.Contains(_index.ListedIn(_untracked.KeyOf()), row => row.EditorId == "UntrackedNpc");
+    }
+
+    [Fact]
     public void AnEqualSnapshot_TakesEveryRowOfAPluginWhoseRepositoryAndBinaryWent()
     {
         HandEditTracked();
@@ -130,7 +151,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     public void AnEqualSnapshot_OfABinaryWhoseStampHolds_ReadsNothing()
     {
         using var held = new FileStream(_untracked.Path, FileMode.Open, FileAccess.Read, FileShare.None);
-        Assert.Null(PluginBinaryHash.ClaimOfFile(_untracked.Path));
+        Assert.Null(_disk.ClaimOf(_untracked.Path));
 
         var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _tracked.RenamedByHand(_index));
 

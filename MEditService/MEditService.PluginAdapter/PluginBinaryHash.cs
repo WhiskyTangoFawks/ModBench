@@ -3,10 +3,8 @@ using MEditService.Codec.Serialization;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>The content hash of a plugin binary (ADR-0003).
-/// Sits in the one namespace both the index and the runtime watches may reference, so their two
-/// hashes cannot drift apart.</summary>
-public static class PluginBinaryHash
+/// <summary>The content hash of a plugin binary (ADR-0003).</summary>
+internal static class PluginBinaryHash
 {
     /// <summary>Streams the file: the game's own master runs to hundreds of megabytes. Null when the
     /// file cannot be read — no evidence either way, so each caller decides; deliberately not an
@@ -28,8 +26,8 @@ public static class PluginBinaryHash
 
     /// <summary>The same hash upper-cased, which is how the commit messages spell it (ADR-0007;
     /// ADR-0003).
-    /// Throws rather than answering null: a caller here has just written the file.</summary>
-    public static string TrailerFormOfFile(string path)
+    /// Throws rather than answering null: its caller reads or has just written the file.</summary>
+    internal static string TrailerFormOfFile(string path)
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream));
@@ -37,7 +35,7 @@ public static class PluginBinaryHash
 
     /// <summary>The hash and diagnoses from one read of the file. Null on <see cref="OfFile"/>'s
     /// no-evidence terms; null Diagnoses when the scan threw.</summary>
-    public static FileClaim? ClaimOfFile(string path)
+    internal static FileClaim? ClaimOfFile(string path)
     {
         byte[] bytes;
         try

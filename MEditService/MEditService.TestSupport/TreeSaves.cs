@@ -20,11 +20,11 @@ public static class TreeSaves
     {
         var adapter = TestAdapters.Mutagen();
         var name = Path.GetFileName(pluginPath);
-        var (files, missingStrings) = await adapter.ReadSourceOfAsync(
+        var read = await adapter.ReadSourceOfAsync(
             new RegisteredPlugin(name, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null), GameRelease.Fallout4, new PluginStrings(null, Path.GetDirectoryName(pluginPath) ?? throw new ArgumentException("No folder.", nameof(pluginPath))));
-        if (missingStrings is not null) throw new InvalidOperationException($"{name} declares {missingStrings}, which the disk lacks.");
+        if (read is not PluginSourceRead.Read source) throw new InvalidOperationException($"{name} does not read as its source: {read}");
 
-        var edited = files.Select(file => new TreeFile(
+        var edited = source.Files.Select(file => new TreeFile(
             file.RelativePath,
             Encoding.UTF8.GetBytes(textEdits.Aggregate(
                 Encoding.UTF8.GetString(file.Content),
@@ -34,7 +34,8 @@ public static class TreeSaves
             edited, GameRelease.Fallout4);
         if (tree is null) throw new InvalidOperationException($"{name}'s source tree will not compile: {diagnosis}", error);
 
-        return await tree.PrepareSaveAsync(
+        var (save, unmappable) = await tree.PrepareSaveAsync(
             pluginPath, loadOrder ?? adapter.ReadContent(new ModPath(ModKey.FromFileName(name), pluginPath), GameRelease.Fallout4).Content.Masters);
+        return save ?? throw new InvalidOperationException($"{name} will not save: {unmappable}");
     }
 }

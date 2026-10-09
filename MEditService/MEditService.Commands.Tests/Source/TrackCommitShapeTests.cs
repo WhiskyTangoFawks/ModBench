@@ -158,7 +158,7 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private sealed class RoundTripFailsForEvery(params string[] plugins) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override Task WriteFromTreeAsync(
+        public override Task<PluginDiagnosis?> WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
             IReadOnlyList<string> masterOrder, CancellationToken cancel = default) =>
             plugins.Contains(Path.GetFileName(destinationPath))
@@ -184,7 +184,7 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private sealed class RoundTripFailsFor(string plugin) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override Task WriteFromTreeAsync(
+        public override Task<PluginDiagnosis?> WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
             IReadOnlyList<string> masterOrder, CancellationToken cancel = default) =>
             Path.GetFileName(destinationPath) == plugin

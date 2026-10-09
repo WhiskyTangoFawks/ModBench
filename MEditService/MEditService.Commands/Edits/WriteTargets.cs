@@ -137,7 +137,7 @@ internal sealed class WriteTargets(
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            return RefuseUnreadableCopySource(formKey, source.Diagnose(ex));
+            return RefuseUnreadableCopySource(formKey, ex.Message);
         }
     }
 

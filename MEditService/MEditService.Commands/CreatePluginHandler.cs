@@ -35,10 +35,10 @@ public sealed class CreatePluginHandler
         try
         {
             var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, folder, onParsed: () => { }, default);
-            if (decompiled.Files is { } files)
+            if (decompiled.Source is { } source)
             {
                 SourceRepository.Over((PluginProvider.FromMod)provider, loadOrder.GameRelease)
-                    .ReplaceSourceFrom(address, files, PluginBinaryHash.TrailerFormOfFile(path));
+                    .ReplaceSourceFrom(address, source.Files, source.BinarySha256);
                 return new PluginCreateResult();
             }
 

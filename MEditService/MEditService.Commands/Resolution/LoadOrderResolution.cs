@@ -162,7 +162,7 @@ internal sealed class LoadOrderResolution(
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
-                    return new LeftCopy.UnreadableCopy(left, askedAbout, source.Diagnose(ex));
+                    return new LeftCopy.UnreadableCopy(left, askedAbout, ex.Message);
                 }
             }
             return new LeftCopy.None();

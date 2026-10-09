@@ -115,19 +115,12 @@ internal sealed class PluginCompileService(
 
         var loadOrderNames = loadOrder.InJudgedOrder().Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-        PreparedPluginSave save;
-        try
+        var (prepared, unmappable) = await tree.PrepareSaveAsync(registered.Path, loadOrderNames);
+        if (prepared is not { } save)
         {
-            save = await tree.PrepareSaveAsync(registered.Path, loadOrderNames);
-        }
-        catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
-        {
-            // A struct-list script property's FormLink is invisible to Mutagen's EnumerateFormLinks
-            // (Mutagen issue 688), so the content-derived master pass (ADR-0008) prunes a
-            // master this write still needs. Every other write failure propagates raw.
+            var diagnosis = unmappable ?? throw new InvalidOperationException("Expected a save not prepared to carry a diagnosis.");
             return CompileResult.Refused(
-                CompileRefusal.FormIdUnmappable,
-                $"{plugin.Name} could not be compiled: {PluginDiagnosis.FromWriteException(ex).Describe()}");
+                CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be compiled: {diagnosis.Describe()}");
         }
         bool recorded;
         using (save)

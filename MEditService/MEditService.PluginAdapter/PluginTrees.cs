@@ -13,20 +13,28 @@ namespace MEditService.PluginAdapter;
 /// them.</summary>
 internal static class PluginTrees
 {
-    /// <summary>A plugin's own binary read as the documents its tree would hold.
-    /// <c>MissingStringsFile</c> names the localization file it declares and the disk has not, in
-    /// which case there are no files.</summary>
-    internal static async Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadAsync(
+    /// <summary>A plugin's own binary read as the documents its tree would hold.</summary>
+    internal static async Task<PluginSourceRead> ReadAsync(
         ModPath modPath, string pluginName, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default)
     {
-        var mod = OpenFor(modPath, gameRelease, strings);
+        try
+        {
+            // Hashed before the read: bytes another tool writes after it are then named as an external
+            // change, never taken for the bytes this tree came from.
+            var binarySha256 = PluginBinaryHash.TrailerFormOfFile(modPath.Path);
+            var mod = OpenFor(modPath, gameRelease, strings);
 
-        // Refuse by name before any serialize: TranslatedString.TryLookup returns false for a missing
-        // file with no exception.
-        return LocalizedStrings.FindMissingStringsFile(mod, pluginName, strings, gameRelease) is { } missing
-            ? ([], missing)
-            : (await SerializeTree(mod, cancel), null);
+            // Refuse by name before any serialize: TranslatedString.TryLookup returns false for a missing
+            // file with no exception.
+            return LocalizedStrings.FindMissingStringsFile(mod, pluginName, strings, gameRelease) is { } missing
+                ? new PluginSourceRead.MissingStrings(missing)
+                : new PluginSourceRead.Read(await SerializeTree(mod, cancel), binarySha256);
+        }
+        catch (Exception ex) when (ex is not (OutOfMemoryException or OperationCanceledException))
+        {
+            return new PluginSourceRead.Unparsed(PluginDiagnosis.FromParseException(ex), ex);
+        }
     }
 
     private static IMod OpenFor(ModPath modPath, GameRelease gameRelease, PluginStrings strings) =>
@@ -72,7 +80,7 @@ internal static class PluginTrees
     /// <summary>The tree in <paramref name="files"/> compiled to bytes at
     /// <paramref name="destinationPath"/>, in place with no rename: a scratch verification, never a
     /// replacement of the real plugin.</summary>
-    internal static async Task WriteFromTreeAsync(
+    internal static async Task<PluginDiagnosis?> WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
         CancellationToken cancel = default)
     {
@@ -82,12 +90,22 @@ internal static class PluginTrees
             var recompiled = await DeserializeTree(
                 await MaterializeTree(files, scratchDir, cancel), cancel);
             await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder);
+            return null;
+        }
+        catch (Exception ex) when (PrunedAMasterItNeeded(ex))
+        {
+            return PluginDiagnosis.FromWriteException(ex);
         }
         finally
         {
             Directory.Delete(scratchDir, recursive: true);
         }
     }
+
+    // ADR-0008's content-derived master pass prunes a master a write still needs when its only
+    // reference sits in a VMAD struct-list property, which Mutagen never walks (upstream issue 688).
+    // Every other write failure propagates.
+    internal static bool PrunedAMasterItNeeded(Exception ex) => PluginDiagnosis.HasUnmappableFormID(ex);
 
     // The files written under baseDirectory, answering the root the door reads from.
     private static async Task<string> MaterializeTree(
@@ -221,7 +239,18 @@ public sealed class CompiledTree
     public Task<IReadOnlyList<TreeFile>> SerializeTreeAsync() => PluginTrees.SerializeTree(_mod);
 
     /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/>, which the
-    /// returned save renames into place on Commit.</summary>
-    public Task<PreparedPluginSave> PrepareSaveAsync(string pluginPath, IReadOnlyList<string> loadOrder) =>
-        PluginWriter.PrepareFromModAsync(_mod, pluginPath, loadOrder);
+    /// returned save renames into place on Commit; or the diagnosis of a write that pruned a master it
+    /// still needed.</summary>
+    public async Task<(PreparedPluginSave? Save, PluginDiagnosis? Unmappable)> PrepareSaveAsync(
+        string pluginPath, IReadOnlyList<string> loadOrder)
+    {
+        try
+        {
+            return (await PluginWriter.PrepareFromModAsync(_mod, pluginPath, loadOrder), null);
+        }
+        catch (Exception ex) when (PluginTrees.PrunedAMasterItNeeded(ex))
+        {
+            return (null, PluginDiagnosis.FromWriteException(ex));
+        }
+    }
 }

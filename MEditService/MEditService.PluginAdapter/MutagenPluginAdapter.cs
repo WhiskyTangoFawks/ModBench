@@ -21,8 +21,10 @@ internal interface ILoadedMod : IDisposable
 
 /// <summary>The one implementation: Mutagen's own mod factory and write builder, reached by the
 /// release the caller passed and never by a game this code names.</summary>
-public sealed class MutagenPluginAdapter : IPluginAdapter
+public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAdapter
 {
+    private readonly PluginFileHashes _hashes = new(timeProvider);
+
     internal static ILoadedMod OpenForRead(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
         => new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(strings)));
 
@@ -51,10 +53,11 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var modPath = new ModPath(plugin.Path);
-        ILoadedMod? loaded = OpenForRead(modPath, gameRelease);
+        ILoadedMod? loaded = DiagnosedRecordLookup.Diagnosed(() => OpenForRead(modPath, gameRelease));
         try
         {
-            var lookup = ModDocuments.LookupOf(loaded.Getter, new PluginRecordBytes(modPath, gameRelease), schemas, loaded);
+            var lookup = new DiagnosedRecordLookup(
+                ModDocuments.LookupOf(loaded.Getter, new PluginRecordBytes(modPath, gameRelease), schemas, loaded));
             loaded = null;
             return lookup;
         }
@@ -65,6 +68,12 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     }
 
     public bool GameFolderExists(string gameFolder) => Directory.Exists(gameFolder);
+
+    public bool Exists(string pluginPath) => File.Exists(pluginPath);
+
+    public string? HashOf(string pluginPath) => _hashes.Of(pluginPath);
+
+    public FileClaim? ClaimOf(string pluginPath) => PluginBinaryHash.ClaimOfFile(pluginPath);
 
     // FileMode.Open, FileAccess.Read, FileShare.Read: what File.OpenRead gives, and what every
     // read below opens the same file with, so this answers for the read that follows it.
@@ -122,12 +131,12 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         CancellationToken cancel = default) =>
         PluginTrees.ReadTreeAsync(files, gameRelease, cancel);
 
-    public Task WriteFromTreeAsync(
+    public Task<PluginDiagnosis?> WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
         CancellationToken cancel = default) =>
         PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
 
-    public Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceOfAsync(
+    public Task<PluginSourceRead> ReadSourceOfAsync(
         RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
         PluginTrees.ReadAsync(
             new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), plugin.Name, gameRelease, strings, cancel);

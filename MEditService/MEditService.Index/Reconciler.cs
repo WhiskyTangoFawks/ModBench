@@ -681,7 +681,7 @@ internal sealed class Reconciler(
         var holdsTree = scope.Projector.TruthOf(plugin.Registered) == DerivedFrom.SourceTree;
         try
         {
-            if (!holdsTree && !File.Exists(plugin.Path))
+            if (!holdsTree && !adapter.Exists(plugin.Path))
             {
                 if (index.IndexedContentHash(key) is not null) index.Unindex(key);
                 return;

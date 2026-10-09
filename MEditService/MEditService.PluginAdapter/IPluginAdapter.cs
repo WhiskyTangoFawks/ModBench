@@ -30,6 +30,16 @@ public interface IPluginAdapter
     /// tool holds it against a reader. Neither a read of its bytes nor a parse.</summary>
     bool CanRead(RegisteredPlugin plugin);
 
+    bool Exists(string pluginPath);
+
+    /// <summary>The content hash of the plugin file, kept by its stamp (ADR-0003). Null when the
+    /// file cannot be read: no evidence either way, so each caller decides.</summary>
+    string? HashOf(string pluginPath);
+
+    /// <summary>The hash and malformed-record diagnoses from one read of the file, freshly read.
+    /// Null on <see cref="HashOf"/>'s no-evidence terms.</summary>
+    FileClaim? ClaimOf(string pluginPath);
+
     bool GameFolderExists(string gameFolder);
 
     /// <summary>What a plugin's own binary says about itself, which is what the Index holds for it.
@@ -55,17 +65,15 @@ public interface IPluginAdapter
         GameRelease gameRelease,
         CancellationToken cancel = default);
 
-    /// <summary>The tree in <paramref name="files"/> compiled to bytes at <paramref name="destinationPath"/>,
-    /// in place: a scratch verification, never a replacement. The master list follows
-    /// <paramref name="masterOrder"/>, plugin file names (ADR-0008).</summary>
-    Task WriteFromTreeAsync(
+    /// <summary>The tree in <paramref name="files"/> compiled to a scratch plugin, its masters in
+    /// <paramref name="masterOrder"/> (ADR-0008). Null once written, or the diagnosis of a write that
+    /// pruned a master it still needed.</summary>
+    Task<PluginDiagnosis?> WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
         CancellationToken cancel = default);
 
-    /// <summary>A plugin's binary read as the source tree it would commit.
-    /// <c>MissingStringsFile</c> names the localization file it declares and the disk has not, in
-    /// which case there are no files.</summary>
-    Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceOfAsync(
+    /// <summary>A plugin's binary read as the source tree it would commit.</summary>
+    Task<PluginSourceRead> ReadSourceOfAsync(
         RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default);
 
     /// <summary>How the plugin at <paramref name="recompiledPath"/> differs from the named one as the

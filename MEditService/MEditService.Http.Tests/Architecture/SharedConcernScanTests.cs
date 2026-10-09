@@ -8,7 +8,7 @@ public sealed class SharedConcernScanTests
     private static readonly (string Concern, string Needle, string Module)[] ConcernMechanismNeedles =
     [
         ("target resolution", @"\bnew (WriteTargets\.)?EditTarget\(", "WriteTargets.cs"),
-        ("FormKey allocation", @"\bHighRangeFormIdFloor\b", "FormKeyAllocator.cs"),
+        ("FormKey allocation", @"\bDefaultHighRangeFormID\b", "FormKeyAllocator.cs"),
         ("FormKey allocation", @"\bFullIdMask\b", "FormKeyAllocator.cs"),
     ];
 
@@ -45,9 +45,9 @@ public sealed class SharedConcernScanTests
         File.WriteAllText(
             Path.Combine(root, "Layer", "Second.cs"),
             "target = new WriteTargets.EditTarget(release, document.Identity, repository);\n"
-            + "var floor = PluginFlagPredicates.HighRangeFormIdFloor(release);\n");
+            + "var floor = GameConstants.Get(release).DefaultHighRangeFormID;\n");
         File.WriteAllText(Path.Combine(root, "Layer", "WriteTargets.cs"), "target = new EditTarget(release, record, repository);");
-        File.WriteAllText(Path.Combine(root, "Layer", "FormKeyAllocator.cs"), "var floor = PluginFlagPredicates.HighRangeFormIdFloor(release);");
+        File.WriteAllText(Path.Combine(root, "Layer", "FormKeyAllocator.cs"), "var floor = GameConstants.Get(release).DefaultHighRangeFormID;");
         File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "target = new WriteTargets.EditTarget(release, document.Identity, repository);");
         File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "repository.Put(plugin, document);");
 
@@ -55,7 +55,7 @@ public sealed class SharedConcernScanTests
 
         Assert.Equal(
             [
-                @"Layer/Second.cs: \bHighRangeFormIdFloor\b: 1",
+                @"Layer/Second.cs: \bDefaultHighRangeFormID\b: 1",
                 @"Layer/Second.cs: \bnew (WriteTargets\.)?EditTarget\(: 1",
             ],
             counts);

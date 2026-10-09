@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -173,7 +174,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         await Create("Second.esp", folder, "ParkedMod");
 
         Assert.Equal(
-            [PluginBinaryHash.TrailerFormOfFile(Path.Combine(folder, "Second.esp"))],
+            [Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(folder, "Second.esp"))))],
             SourceRepository.Over(new PluginProvider.FromMod("ParkedMod", folder), GameRelease.Fallout4).LastWrittenBinarySha256s(new PluginAddress("Second.esp", "ParkedMod")));
     }
 
@@ -182,11 +183,12 @@ public sealed class CreatePluginHandlerTests : IDisposable
         public Action? Before { get; init; }
         public Exception? TakeBackFailure { get; init; }
 
-        public override Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceOfAsync(
+        public override Task<PluginSourceRead> ReadSourceOfAsync(
             RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default)
         {
             Before?.Invoke();
-            throw new IOException("unreadable");
+            var error = new IOException("unreadable");
+            return Task.FromResult<PluginSourceRead>(new PluginSourceRead.Unparsed(PluginDiagnosis.FromParseException(error), error));
         }
 
         public override EmptyPluginTakeBack TakeBackEmpty(ModKey modKey, string folder, string written) =>

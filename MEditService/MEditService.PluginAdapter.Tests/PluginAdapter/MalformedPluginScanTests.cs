@@ -149,7 +149,7 @@ public sealed class MalformedPluginScanTests
         using var folder = new ScratchDirectory("malformed-scan");
         var path = Path.Combine(folder.Path, "scanned.esp");
         File.WriteAllBytes(path, bytes);
-        var claim = PluginBinaryHash.ClaimOfFile(path);
+        var claim = TestAdapters.Mutagen().ClaimOf(path);
         Assert.NotNull(claim);
         Assert.NotNull(claim.Diagnoses);
         return [.. claim.Diagnoses];

@@ -23,8 +23,8 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     public ExternalChangeNoticeTests() =>
         _handler = new(() => TestEditService.PutLoadOrderHandler(new LoadOrderHolder(), notifications: _notifications));
 
-    private void Put(LoadOrderSnapshot snapshot) =>
-        Assert.True(_handler.Value.Put(snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease,
+    private void Put(LoadOrderSnapshot snapshot, PutLoadOrderHandler? handler = null) =>
+        Assert.True((handler ?? _handler.Value).Put(snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease,
             snapshot.Plugins, [.. snapshot.Active.Select(p => p.Key)], [.. snapshot.LoadedWithNoLine.Select(p => p.Key)]).Applied);
 
     private string ModFolder => Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
@@ -79,6 +79,23 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         var notice = Assert.IsType<ExternalChangeNotification>(Assert.Single(_notifications.Notifications));
         Assert.Equal(SourceEditFixture.ModFolderOrigin, notice.Origin);
         Assert.Empty(notice.Plugins);
+    }
+
+    [Fact]
+    public void ASnapshot_NamesATrackedPlugin_WithTheHashThePluginAdapterGivesItsBytes()
+    {
+        var tracked = "the tracked binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, tracked));
+        Track((PluginName, tracked));
+
+        Put(loadOrder, TestEditService.PutLoadOrderHandler(new LoadOrderHolder(), _notifications, new HashingAs("changed")));
+
+        Assert.Equal([new ChangedPlugin(PluginName, "changed")], TheExternalChange().Plugins);
+    }
+
+    private sealed class HashingAs(string hash) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        public override string? HashOf(string pluginPath) => hash;
     }
 
     [Fact]

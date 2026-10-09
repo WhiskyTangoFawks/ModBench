@@ -9,7 +9,7 @@ namespace MEditService.Commands.Edits;
 
 /// <summary>A plugin's bytes as the whole-mod door's tree of its plugin source, or why they cannot be: ADR-0006's
 /// gate refused it, or it cannot be read. Writes nothing.</summary>
-internal sealed record Decompiled(IReadOnlyList<TreeFile>? Files, DecompileRefusal Refusal, string Message)
+internal sealed record Decompiled(PluginSourceRead.Read? Source, DecompileRefusal Refusal, string Message)
 {
     internal static Decompiled Refused(DecompileRefusal refusal, string message) => new(null, refusal, message);
 }
@@ -33,33 +33,27 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
         var strings = new PluginStrings(modFolder, loadOrder.DataFolderPath);
 
         // A fresh deep parse, not the load order's own overlay, whose lifetime this gate does not control.
-        (IReadOnlyList<TreeFile> Files, string? MissingStringsFile) tree;
-        try
+        var read = await adapter.ReadSourceOfAsync(plugin, loadOrder.GameRelease, strings, cancel);
+        if (read is PluginSourceRead.Unparsed unparsed)
         {
-            tree = await adapter.ReadSourceOfAsync(plugin, loadOrder.GameRelease, strings, cancel);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            // A raw parse exception's Message carries no located identity; the diagnosis walks the tree for
-            // the innermost RecordException.
-            var diagnosis = PluginDiagnosis.FromParseException(ex);
-            logger.LogWarning(ex, "Refused to decompile {Plugin}: its own binary could not be deep-parsed", plugin.Name);
+            logger.LogWarning(unparsed.Error, "Refused to decompile {Plugin}: its own binary could not be deep-parsed", plugin.Name);
             return Decompiled.Refused(DecompileRefusal.RoundTripFailed,
-                $"{plugin.Name} could not be parsed from its own binary: {diagnosis.Describe()}");
+                $"{plugin.Name} could not be parsed from its own binary: {unparsed.Diagnosis.Describe()}");
         }
 
-        if (tree.MissingStringsFile is { } missingFile)
+        if (read is PluginSourceRead.MissingStrings missing)
         {
             return Decompiled.Refused(DecompileRefusal.MissingLocalizationStrings,
-                $"{plugin.Name} is a localized plugin but its strings file '{missingFile}' was not found " +
+                $"{plugin.Name} is a localized plugin but its strings file '{missing.File}' was not found " +
                 $"in {strings.Folder}. Restore the file, then try again.");
         }
 
+        var source = (PluginSourceRead.Read)read;
         onParsed();
-        if (await VerifyRoundTrip(plugin.Name, plugin.Path, tree.Files, loadOrder.GameRelease, strings, cancel) is { } refusal)
+        if (await VerifyRoundTrip(plugin.Name, plugin.Path, source.Files, loadOrder.GameRelease, strings, cancel) is { } refusal)
             return Decompiled.Refused(DecompileRefusal.RoundTripFailed, refusal);
 
-        return new Decompiled(tree.Files, DecompileRefusal.None, "");
+        return new Decompiled(source, DecompileRefusal.None, "");
     }
 
     // ADR-0006's gate. Reparse, not the pre-write object: only written bytes show what
@@ -74,20 +68,14 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
     {
         using var scratch = ScratchPlugin.For(pluginName);
         var recompiledPath = scratch.PluginPath;
-        try
+        var originalMasters = adapter.MastersOf(pluginName, originalPluginPath, gameRelease, strings);
+        if (await adapter.WriteFromTreeAsync(
+                SourceRepository.ReadBackOf(pluginName, tree, gameRelease), recompiledPath, originalMasters, cancel)
+            is { } unmappable)
         {
-            var originalMasters = adapter.MastersOf(pluginName, originalPluginPath, gameRelease, strings);
-            await adapter.WriteFromTreeAsync(
-                SourceRepository.ReadBackOf(pluginName, tree, gameRelease), recompiledPath, originalMasters, cancel);
-        }
-        catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
-        {
-            // ADR-0008's content-derived master pass prunes a master this write still needs when the only
-            // reference lives in a VMAD struct-list property Mutagen never walks (upstream issue 688). Never
-            // widen this catch.
-            var diagnosis = PluginDiagnosis.FromWriteException(ex);
-            logger.LogWarning(ex, "Refused to decompile {Plugin}: its round-trip write dropped a needed master", pluginName);
-            return $"{pluginName} does not round-trip through its own source: {diagnosis.Describe()}";
+            var described = unmappable.Describe();
+            logger.LogWarning("Refused to decompile {Plugin}: its round-trip write dropped a needed master: {Diagnosis}", pluginName, described);
+            return $"{pluginName} does not round-trip through its own source: {described}";
         }
 
         var comparison = await adapter.CompareBytesAsync(originalPluginPath, recompiledPath, cancel);

@@ -7,7 +7,7 @@ namespace MEditService.Commands;
 
 /// <summary>Each tracked plugin changed outside Modbench (ADR-0003), and each tracked mod's
 /// plugins whose plugin source is unreadable.</summary>
-internal sealed class ExternalChangeCheck(INotificationPublisher notifications, PluginFileHashes hashes)
+internal sealed class ExternalChangeCheck(INotificationPublisher notifications, IPluginAdapter adapter)
 {
     private readonly Lock _checking = new();
     // A mod whose repository went since is told it names no changed plugin.
@@ -42,7 +42,7 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
     {
         var sourceReads = plugins.ToLookup(plugin => SourceRepository.SourceReads(plugin));
         notifications.Publish(new ExternalChangeNotification(origin, [.. sourceReads[true]
-            .Select(plugin => (plugin.Key, Observed: hashes.Of(plugin.Path)))
+            .Select(plugin => (plugin.Key, Observed: adapter.HashOf(plugin.Path)))
             .Where(plugin => !MatchesLastWrite(repository, plugin.Key, plugin.Observed))
             .Select(plugin => new ChangedPlugin(plugin.Key.Name, plugin.Observed))]));
 

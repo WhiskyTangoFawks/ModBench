@@ -18,18 +18,14 @@ internal static class TrackedMods
         var modFolder = Path.GetDirectoryName(pluginPath)
             ?? throw new ArgumentException("A plugin path names a file inside a mod folder.", nameof(pluginPath));
         var pluginName = Path.GetFileName(pluginPath);
-        var (files, missingStrings) = TestAdapters.Mutagen()
+        var read = TestAdapters.Mutagen()
             .ReadSourceOfAsync(
                 new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null), release,
                 new PluginStrings(modFolder, dataFolder))
             .GetAwaiter().GetResult();
-        if (missingStrings is not null)
-            throw new InvalidOperationException($"{pluginName} declares strings file '{missingStrings}' and the disk has none.");
+        var source = Assert.IsType<PluginSourceRead.Read>(read);
 
-        SourceRepository.Track(
-            modFolder,
-            [(files,
-              new DecompiledPlugin(pluginName, PluginBinaryHash.TrailerFormOfFile(pluginPath)))]);
+        SourceRepository.Track(modFolder, [(source.Files, new DecompiledPlugin(pluginName, source.BinarySha256))]);
     }
 
     internal static void Track(LoadOrderEntry entry, string dataFolder, GameRelease release = GameRelease.Fallout4) =>

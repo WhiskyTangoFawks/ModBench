@@ -62,7 +62,7 @@ internal sealed class HeldPlugins
     /// clears an earlier failure.</summary>
     public PluginMetadata? Open(RegisteredPlugin plugin, Registration registration)
     {
-        if (!File.Exists(plugin.Path))
+        if (!_adapter.Exists(plugin.Path))
         {
             _logger.LogWarning("Plugin file not found: {FilePath}", plugin.Path);
             SetFailure(plugin.Key, $"Plugin file not found: {plugin.Path}");
