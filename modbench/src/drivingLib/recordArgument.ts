@@ -1,4 +1,5 @@
-import { carriedArgument, isAddress, isString } from './argument';
+import { carriedArgument } from './argument';
+import { isPluginAddress, isString } from '../wire/messages';
 import type { ArgumentOf } from '../wire/argument';
 
 export type RecordArgument = ArgumentOf<'record'>;
@@ -10,5 +11,5 @@ export function recordArgumentOf(carrier: unknown): RecordArgument | undefined {
   const plugin: unknown = Reflect.get(argument, 'plugin');
   if (!isString(formKey)) return undefined;
   if (plugin === undefined) return { kind: 'record', formKey };
-  return isAddress(plugin) ? { kind: 'record', formKey, plugin } : undefined;
+  return isPluginAddress(plugin) ? { kind: 'record', formKey, plugin } : undefined;
 }

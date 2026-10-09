@@ -39,7 +39,7 @@ describe('hoverAt (plugin-source.md, In the text editor, story 3)', () => {
   it('shows the FormKey alone when the winner has no EditorID', async () => {
     const answer = comparison([{ plugin: 'Mod.esp', isWinner: true, editorId: null }]);
     const hover = await hoverAt({ client: askingFor(answer), reporter }, `"${FORM_KEY}"`, 3);
-    expect(hover?.markdown).toBe(`\`[${FORM_KEY}]\`\n\nWeapon\n\nWinner: Mod.esp`);
+    expect(hover?.markdown).toBe(`\`${FORM_KEY}\`\n\nWeapon\n\nWinner: Mod.esp`);
   });
 
   it('answers the record\'s own root FormKey member too', async () => {

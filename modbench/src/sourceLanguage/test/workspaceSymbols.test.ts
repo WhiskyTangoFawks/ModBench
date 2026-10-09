@@ -76,7 +76,7 @@ describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story
 
     expect(listed(await symbolsFor('Rusty'))).toEqual([
       { name: `RustyGun [${GUN}]`, plugin: 'A.esp', uri: `file:${GUN_FILE}` },
-      { name: `[${STAND}]`, plugin: 'B.esp', uri: `file:${STAND_FILE}` },
+      { name: STAND, plugin: 'B.esp', uri: `file:${STAND_FILE}` },
     ]);
   });
 

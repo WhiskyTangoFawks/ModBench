@@ -6,10 +6,11 @@ import { runWritingGesture } from '../drivingLib/writingGesture';
 import { reorderPlugins, type PluginsDrop } from '../pluginsCommands/plugins';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
+import { isPluginAddress } from '../wire/messages';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
-import { PluginNode, isAddress, type PluginsTreeNode, type PluginsTreeProvider } from './PluginsTreeProvider';
+import { PluginNode, type PluginsTreeNode, type PluginsTreeProvider } from './PluginsTreeProvider';
 
-const isAddresses = (value: unknown): value is PluginAddress[] => Array.isArray(value) && value.every(isAddress);
+const isAddresses = (value: unknown): value is PluginAddress[] => Array.isArray(value) && value.every(isPluginAddress);
 
 function isDrop(value: unknown): value is PluginsDrop {
   if (typeof value !== 'object' || value === null || !('kind' in value)) return false;

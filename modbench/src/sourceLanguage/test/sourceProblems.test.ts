@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { feedSourceProblems, type ProblemsByFile } from '../sourceProblems';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { PluginProblems } from '../../client';
-import type { NotificationEvent } from '../../client/apiClient';
+import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
 import type { OriginFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 
 const MISSING = '000ABC:Absent.esp';

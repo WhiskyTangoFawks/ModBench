@@ -1,4 +1,4 @@
-import type { NotificationEvent } from '../../client/apiClient';
+import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const h = vi.hoisted(() => ({ items: [] as { text: string }[] }));

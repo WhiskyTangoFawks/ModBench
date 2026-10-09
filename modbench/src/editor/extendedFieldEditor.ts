@@ -2,9 +2,9 @@ import * as vscode from 'vscode';
 import type { CompareResult, MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
-import type { PathHop, StringValueContext } from '../wire/messages';
+import { isPluginAddress, type PathHop, type StringValueContext } from '../wire/messages';
 import { columnKey } from '../wire/columnKey';
-import { pluginAddressOf, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
+import { pluginAddressOf, samePluginAddress } from '../wire/pluginAddress';
 import type { EditAddress } from './recordTab';
 import { followReportedCopies, type CopyChanged } from './recordCopy';
 import { answerOf } from '../wire/readFailed';
@@ -25,11 +25,6 @@ export interface ExtendedFieldDocumentsDeps {
 
 const EDITABLE_FIELD_SCHEME = 'modbench-field';
 const READONLY_FIELD_SCHEME = 'modbench-field-readonly';
-
-function isPluginAddress(value: unknown): value is PluginAddress {
-  if (typeof value !== 'object' || value === null) return false;
-  return ['name', 'origin'].every(name => typeof Reflect.get(value, name) === 'string');
-}
 
 function isFieldAddress(value: unknown): value is FieldAddress {
   if (typeof value !== 'object' || value === null) return false;

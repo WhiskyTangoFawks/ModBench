@@ -1,4 +1,4 @@
-import type { NotificationEvent } from '../../client/apiClient';
+import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon } from '../../test/vscodeMock';
 
