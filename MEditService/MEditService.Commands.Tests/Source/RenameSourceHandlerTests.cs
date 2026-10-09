@@ -179,6 +179,30 @@ public sealed class RenameSourceHandlerTests : IDisposable
 
     private MoveLastWrittenHandler Moving => TestEditService.Over(_holder).GetRequiredService<MoveLastWrittenHandler>();
 
+    [Fact]
+    public void MoveLastWritten_ForATreeSpelledInAnotherCase_MovesTheRefFiledUnderTheTreesSpelling()
+    {
+        const string sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        Directory.Move(PluginSourceRoot.In(_trackedMod, Old.Name), Path.Combine(_trackedMod, "plugin-source", "OLD.ESP"));
+        var recased = Old with { Name = "OLD.ESP" };
+        Repository.WriteBinary(recased, sha256, () => { }).Value();
+
+        var result = Moving.MoveLastWritten(Old, "OLD.ESP", "New.esp");
+
+        Assert.Null(result.Refusal);
+        Assert.Equal([sha256], Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }).Value());
+        Assert.Empty(Repository.LastWrittenBinarySha256s(recased).Value());
+    }
+
+    [Fact]
+    public void MoveLastWritten_ForATreeNameThatIsNoSpellingOfThePlugin_RefusesIt_AndMovesNothing()
+    {
+        var result = Moving.MoveLastWritten(Old, "Other.esp", "New.esp");
+
+        Assert.Equal(RenameSourceRefusal.TreeNameNotThePlugins, result.Refusal);
+        Assert.Contains("Other.esp", result.Message, StringComparison.Ordinal);
+    }
+
     private sealed record Read(RenameSourceRefusal? Refusal, string? Message, SourceChanges? Changes, string? TreeName)
     {
         internal Read(RenameSourceResult result)

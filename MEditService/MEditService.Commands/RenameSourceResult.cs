@@ -50,6 +50,9 @@ public enum RenameSourceRefusal
     /// <summary>A file of the plugin source is no JSON document; the way out is mending it.</summary>
     UnreadableSource,
 
+    /// <summary>The tree name sent is not a spelling of the plugin's file name, compared without case.</summary>
+    TreeNameNotThePlugins,
+
     /// <summary>git is not on PATH (ADR-0007).</summary>
     GitUnavailable,
 

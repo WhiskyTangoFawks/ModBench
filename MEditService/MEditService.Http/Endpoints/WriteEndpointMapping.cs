@@ -93,7 +93,7 @@ internal static class WriteEndpointMapping
         detail: message,
         statusCode: refusal switch
         {
-            RenameSourceRefusal.NotAPluginFile => 400,
+            RenameSourceRefusal.NotAPluginFile or RenameSourceRefusal.TreeNameNotThePlugins => 400,
             RenameSourceRefusal.PluginNotLoaded => 404,
             // The request is sound; the plugin's present state refuses it until that state changes.
             RenameSourceRefusal.NotTracked or RenameSourceRefusal.NameTaken => 409,

@@ -18,6 +18,12 @@ public sealed class MoveLastWrittenHandler
     public MoveLastWrittenResult MoveLastWritten(PluginAddress plugin, string treeName, string newName)
     {
         var loadOrder = _loadOrder.Require();
+        if (!string.Equals(treeName, plugin.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            return new MoveLastWrittenResult(
+                RenameSourceRefusal.TreeNameNotThePlugins, $"'{treeName}' is not a spelling of {plugin.Name}, so no ref was moved.");
+        }
+
         if (!RenameSourceTarget.Of(loadOrder, plugin, newName, out var target, out var refused))
             return new MoveLastWrittenResult(refused.Value.Refusal, refused.Value.Message);
 
