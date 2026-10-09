@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import type { Reporter } from '../ports/reporter';
 import type { MEditClient, RecordEditEnvelope, SourceChanges } from '../client';
 import type { PluginAddress } from '../wire/pluginAddress';
