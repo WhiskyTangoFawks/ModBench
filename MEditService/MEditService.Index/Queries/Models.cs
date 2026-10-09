@@ -71,8 +71,9 @@ public record CompareOverride(
     IReadOnlyList<FieldValue> Fields,
     ConflictThis? ConflictThis,
     string Origin,
-    // xEdit's load index, as the column header's label shows it: `0A`, or `FE 001` for a light plugin.
-    string LoadIndex,
+    // xEdit's load index, as the column header's label shows it: `0A`, or `FE:001` for a light plugin.
+    // Null for a plugin that is not active: it has no load index.
+    string? LoadIndex,
     string RecordType,
     bool IsPartialForm = false,
     string? ParseDiagnosis = null,

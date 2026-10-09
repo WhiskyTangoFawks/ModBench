@@ -31,7 +31,7 @@ internal sealed class RecordQueryService(
         // Index's. A plugin the Index has not opened has none of the latter and is not a row.
         var snapshot = _loadOrder.Require();
         var rows = snapshot.Plugins.Where(c => opened.ContainsKey(c.Key)).ToList();
-        var masterIssues = _index.Status.State == LoadOrderState.Ready
+        var masterIssues = Indexed
             ? MasterResolution.Classify(snapshot, opened)
             : null;
         var parseFailures = reads.GetPluginsWithParseFailures();
@@ -171,7 +171,8 @@ internal sealed class RecordQueryService(
         // Two copies may come from one plugin, so a column is named by its place as well.
         var columns = records.Select((r, i) => $"{i}#{ColumnKey.Of(r.Plugin, r.Origin)}").ToList();
         var diffs = _conflictClassifier.Align(
-            records, columns, snapshot.GameRelease, reads.LinkResolver(copies[0].FormKey), LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins));
+            records, columns, snapshot.GameRelease, reads.LinkResolver(copies[0].FormKey), LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins),
+            indexed: true);
         var overrides = records.Select((r, i) => ToCompareOverride(r, state: null, columns[i], snapshot, reads)).ToList();
 
         return new CompareResult(overrides, diffs, ConflictAll.NoConflict, RequireSchemas().DisplayNameFor(documents[0].RecordType));
@@ -217,12 +218,12 @@ internal sealed class RecordQueryService(
         // With no active copy there is nothing to compare: the copy outside it stands alone.
         var classification = committedOverrides.Count > 0
             ? _conflictClassifier.Classify(
-                committedOverrides, release, resolveFormKey, loadOrderFormIds, _index.Status.State == LoadOrderState.Ready, outsideTheComparison)
+                committedOverrides, release, resolveFormKey, loadOrderFormIds, Indexed, outsideTheComparison)
             : new ClassifyResult(
                 ConflictAll.NoConflict, new Dictionary<string, ConflictThis>(),
                 _conflictClassifier.Align(
                     outsideTheComparison, [.. (outsideTheComparison).Select(r => ColumnKey.Of(r.Plugin, r.Origin))],
-                    release, resolveFormKey, loadOrderFormIds));
+                    release, resolveFormKey, loadOrderFormIds, Indexed));
         return (classification, classification.ConflictAll);
     }
 
@@ -360,6 +361,8 @@ internal sealed class RecordQueryService(
             document.Fields, Origin: document.Plugin.Origin, RecordType: document.RecordType,
             IsPartialForm: document.IsPartialForm,
             ParseDiagnosis: document.ParseDiagnosis);
+
+    private bool Indexed => _index.Status.State == LoadOrderState.Ready;
 
     private IRecordReads RequireReads() => _index.RequireReads();
 

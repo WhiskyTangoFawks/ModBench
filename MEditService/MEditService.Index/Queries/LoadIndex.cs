@@ -29,16 +29,17 @@ internal static class LoadIndex
         })];
     }
 
-    internal static string Of(
+    internal static string? Of(
         PluginAddress plugin, int loadOrderIndex, LoadOrderSnapshot snapshot,
         IReadOnlyDictionary<PluginAddress, PluginContent> opened)
     {
+        if (!snapshot.Active.Any(active => PluginAddress.Comparer.Equals(active.Key, plugin))) return null;
         var style = StyleOf(plugin, opened);
         var place = Places(snapshot, opened).Take(loadOrderIndex).Count(active => active.Style == style);
         return style switch
         {
-            MasterStyle.Small => $"{FormID.SmallMasterMarker:X2} {place:X3}",
-            MasterStyle.Medium => $"{FormID.MediumMasterMarker:X2} {place:X2}",
+            MasterStyle.Small => $"{FormID.SmallMasterMarker:X2}:{place:X3}",
+            MasterStyle.Medium => $"{FormID.MediumMasterMarker:X2}:{place:X2}",
             _ => $"{place:X2}",
         };
     }
