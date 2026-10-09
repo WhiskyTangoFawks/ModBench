@@ -21,15 +21,6 @@ public sealed record SourceChanges(
     }
 }
 
-/// <summary>Changes answered by the source adapter, made one after another.</summary>
-public static class SourceChangesAnswers
-{
-    /// <summary><paramref name="first"/>'s changes, then <paramref name="next"/>'s, or the first failure of
-    /// the two.</summary>
-    public static SourceAnswer<SourceChanges> Then(this SourceAnswer<SourceChanges> first, SourceAnswer<SourceChanges> next) =>
-        first.Then(made => next.Then(more => SourceAnswer.Of(made.Then(more))));
-}
-
 public sealed record SourceMove(string From, string To);
 
 public sealed record DocumentChange(string Path, string Text);
