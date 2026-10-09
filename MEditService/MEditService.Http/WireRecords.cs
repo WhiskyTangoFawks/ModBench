@@ -85,15 +85,37 @@ internal sealed record DocumentChange(string Path, string Text);
 internal sealed record RecordCreateChangesRequest(
     string Origin, string RecordType, string? Container = null, GridPosition? Position = null, IReadOnlyList<DocumentChange>? Documents = null);
 
+/// <summary>Changes to plugin source as the wire carries them: moves, then deletions, then each document's text, by absolute path.</summary>
+internal sealed record SourceChangesResponse(
+    IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents)
+{
+    internal static SourceChangesResponse Of(SourceAdapter.SourceChanges changes) =>
+        new(
+            [.. changes.Moves.Select(move => new SourceMove(move.From, move.To))],
+            changes.Deletions,
+            [.. changes.Documents.Select(document => new DocumentChange(document.Path, document.Text))]);
+}
+
 /// <summary>The changes creating a record makes to plugin source, written nowhere, as an edit's are.</summary>
 internal sealed record RecordCreateChangesResponse(
     string FormKey, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents)
 {
-    internal static RecordCreateChangesResponse Of(string formKey, RecordEditChanges answer) =>
-        new(formKey,
-            [.. answer.Changes.Moves.Select(move => new SourceMove(move.From, move.To))],
-            answer.Changes.Deletions,
-            [.. answer.Changes.Documents.Select(document => new DocumentChange(document.Path, document.Text))]);
+    internal static RecordCreateChangesResponse Of(string formKey, RecordEditChanges answer)
+    {
+        var (moves, deletions, documents) = SourceChangesResponse.Of(answer.Changes);
+        return new(formKey, moves, deletions, documents);
+    }
+}
+
+/// <summary>The changes renaming a plugin's source makes, and the name its tree was filed under.</summary>
+internal sealed record RenameSourceChangesResponse(
+    string TreeName, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents)
+{
+    internal static RenameSourceChangesResponse Of(string treeName, SourceAdapter.SourceChanges changes)
+    {
+        var (moves, deletions, documents) = SourceChangesResponse.Of(changes);
+        return new(treeName, moves, deletions, documents);
+    }
 }
 
 /// <summary>A record and the plugin holding it (ADR-0012).</summary>

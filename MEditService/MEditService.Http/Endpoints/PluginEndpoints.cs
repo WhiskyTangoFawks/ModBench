@@ -165,18 +165,31 @@ internal static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        app.MapPost("/plugins/rename-source", RenameSource)
-            .WithName("RenameSource")
-            .WithTags(Tag)
+        app.MapPost("/plugins/rename-source-changes", RenameSourceChanges)
+            .WithName("RenameSourceChanges")
+            .WithSummary("The changes renaming a tracked plugin's source makes, writing nothing.")
             .WithDescription(
-                "Moves a tracked plugin's source, and what Modbench last wrote for it, to the new name as " +
-                "working-tree changes: every FormKey of the plugin follows. The plugin file and its " +
-                "plugins.txt lines stay as they are.")
-            .Produces(204)
+                "Given the current text of any unsaved document, the files and folders renaming the plugin's source " +
+                "moves and the text each document it changes holds afterwards: every FormKey of the plugin follows. " +
+                "Moves come first, then deletions, then documents, and every path is absolute. The plugin file, its " +
+                "plugins.txt lines and what Modbench last wrote stay as they are.")
+            .Produces<RenameSourceChangesResponse>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)
             .ProducesProblem(422)
+            .ProducesProblem(500)
+            .ProducesProblem(503);
+
+        app.MapPost("/plugins/move-last-written", MoveLastWritten)
+            .WithName("MoveLastWritten")
+            .WithDescription(
+                "Moves what Modbench last wrote for a plugin to the plugin's new name, once the source rename is applied and saved.")
+            .WithTags(Tag)
+            .Produces(204)
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(409)
             .ProducesProblem(500)
             .ProducesProblem(503);
 
@@ -240,19 +253,38 @@ internal static class PluginEndpoints
             : null;
     }
 
-    internal static IResult RenameSource(
-        RenameSourceRequest req, RenameSourceHandler rename, ILoggerFactory loggerFactory)
+    internal static IResult RenameSourceChanges(
+        RenameSourceChangesRequest req, RenameSourceChangesHandler rename, ILoggerFactory loggerFactory)
     {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Plugin name and origin are required.", statusCode: 400);
+        if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return Results.Problem("Plugin name and origin are required.", statusCode: 400);
 
-        var plugin = new PluginAddress(req.Name, req.Origin);
-        var result = rename.RenameSource(plugin, req.NewName ?? string.Empty);
-        if (result.Refusal is not { } refusal) return Results.NoContent();
+        var result = rename.RenameSource(
+            plugin, req.NewName ?? string.Empty,
+            [.. (req.Documents ?? []).Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))]);
+        return result.Match(
+            (changes, treeName) => Results.Ok(RenameSourceChangesResponse.Of(treeName, changes)),
+            (refusal, message) => Refused(loggerFactory, "Rename source", refusal, message, plugin));
+    }
 
-        WriteEndpointMapping.LogRefusal(logger, "Rename source", refusal, result.Message, plugin);
-        return WriteEndpointMapping.Refusal(refusal, result.Message);
+    internal static IResult MoveLastWritten(
+        MoveLastWrittenRequest req, MoveLastWrittenHandler move, ILoggerFactory loggerFactory)
+    {
+        if (RenamedPlugin(req.Name, req.Origin) is not { } plugin || string.IsNullOrWhiteSpace(req.TreeName))
+            return Results.Problem("Plugin name, origin and tree name are required.", statusCode: 400);
+
+        var result = move.MoveLastWritten(plugin, req.TreeName, req.NewName ?? string.Empty);
+        return result.Refusal is { } refusal
+            ? Refused(loggerFactory, "Move last written", refusal, result.Message, plugin)
+            : Results.NoContent();
+    }
+
+    private static PluginAddress? RenamedPlugin(string? name, string? origin) =>
+        string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(origin) ? null : new PluginAddress(name, origin);
+
+    private static IResult Refused(ILoggerFactory loggerFactory, string gesture, RenameSourceRefusal refusal, string? message, PluginAddress plugin)
+    {
+        WriteEndpointMapping.LogRefusal(loggerFactory.CreateLogger(nameof(PluginEndpoints)), gesture, refusal, message, plugin);
+        return WriteEndpointMapping.Refusal(refusal, message);
     }
 
     // Track (ADR-0007) over a selection of mods (commands.md, A selection is one gesture); the
@@ -369,8 +401,12 @@ internal sealed record PluginDependantsResponse(IReadOnlyList<PluginAddress> Dep
 /// it, and nothing registers it.</summary>
 internal sealed record PluginCreatedResponse(string Name, string Origin);
 
-/// <summary>The plugin by its origin and file name (ADR-0012), and the file name its source takes.</summary>
-internal sealed record RenameSourceRequest(string Origin, string Name, string NewName);
+/// <summary>The plugin by its origin and file name (ADR-0012), the file name its source takes, and the unsaved texts
+/// that stand in for their files.</summary>
+internal sealed record RenameSourceChangesRequest(string Origin, string Name, string NewName, IReadOnlyList<DocumentChange>? Documents = null);
+
+/// <summary>The plugin, the name its tree was filed under before the rename, and the file name its source took.</summary>
+internal sealed record MoveLastWrittenRequest(string Origin, string Name, string TreeName, string NewName);
 
 /// <summary>The mods by name; the load order says each one's plugins and folder.</summary>
 internal sealed record TrackRequest(IReadOnlyList<string> Mods);

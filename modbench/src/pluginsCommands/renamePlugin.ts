@@ -1,15 +1,24 @@
-// Rename plugin (rename-plugin trace). The client's reach is the plugin source, which only mEdit
-// can rename, and the dependants query; the file and its lines are the Instance adapter's.
+// Rename plugin (rename-plugin trace). The client's reach is the plugin source's changes, which only mEdit
+// can answer, and the dependants query; the file and its lines are the Instance adapter's.
 
 import { OVERWRITE_ORIGIN, type FileOrigin, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { isRefused, type MEditClient } from '../client';
+import { isRefused, type MEditClient, type SourceChanges, type UnsavedDocument } from '../client';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
 
+/** `notApplied` and `unsaved` have been reported by whoever applied the changes. */
+export type SourceApplied = 'saved' | 'unsaved' | 'notApplied';
+
+interface RenameSourceEditing {
+  readonly unsaved: () => readonly UnsavedDocument[];
+  readonly applyAndSave: (changes: SourceChanges) => Promise<SourceApplied>;
+}
+
 export interface PluginRenameAccess {
   readonly adapter: InstanceAdapter;
-  readonly client: Pick<MEditClient, 'renameSource'>;
+  readonly client: Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten'>;
+  readonly source: RenameSourceEditing;
 }
 
 export interface PluginRenameConfirmation {
@@ -21,9 +30,11 @@ export interface PluginRenameConfirmation {
 /** `refusal` is absent when the user declined the question. */
 export type RenameConfirmed = { confirmed: true } | { confirmed: false; refusal?: string };
 
-/** `sourceRenamed` is true when the files and lines failed after the source had moved. */
+/** `sourceRenamed` is true when the files and lines failed after the source had moved. `reported` is a failure to
+ *  apply the source changes, which the apply has already told. */
 export type PluginRenameResult =
   | { applied: true }
+  | { applied: false; reported: true }
   | { applied: false; sourceRenamed: boolean; refusal: string };
 
 const CONFIRM = 'Rename';
@@ -68,8 +79,13 @@ export async function renamePlugin(
   const checked = await access.adapter.checkPluginRename(origin, plugin.name, newName, gameRelease);
   if (!checked.applied) return { applied: false, sourceRenamed: false, refusal: checked.refusal };
 
-  const source = await access.client.renameSource(plugin, newName);
-  if (isRefused(source)) return { applied: false, sourceRenamed: false, refusal: source.message };
+  const changes = await access.client.getRenameSourceChanges(plugin, newName, access.source.unsaved());
+  if (isRefused(changes)) return { applied: false, sourceRenamed: false, refusal: changes.message };
+  const savedAs = await access.source.applyAndSave(changes);
+  if (savedAs !== 'saved') return { applied: false, reported: true };
+
+  const moved = await access.client.moveLastWritten(plugin, changes.treeName, newName);
+  if (isRefused(moved)) return { applied: false, sourceRenamed: true, refusal: moved.message };
   try {
     await access.adapter.renamePlugin(origin, plugin.name, newName, gameRelease);
     return { applied: true };

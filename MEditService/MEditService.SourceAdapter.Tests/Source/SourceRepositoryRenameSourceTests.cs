@@ -67,9 +67,9 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     public void Dispose() => _modFolder.Dispose();
 
     [Fact]
-    public void RenameSource_MovesTheTreeToTheNewName_AndEveryFormKeyOfThePluginFollowsIt_InTextAndInLeafNames()
+    public void ChangesToRenameSource_MoveTheTreeToTheNewName_AndEveryFormKeyOfThePluginFollowsIt_InTextAndInLeafNames()
     {
-        Assert.True(Repository.RenameSource(Old, "New.esm").Value());
+        Assert.True(Rename("New.esm"));
 
         Assert.False(Directory.Exists(PluginSourceRoot.In(_modFolder, Old.Name)));
         Assert.Equal(
@@ -116,11 +116,37 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     }
 
     [Fact]
-    public void RenameSource_ToANameWithAnUppercaseExtension_LeavesTheHeaderWhereTheLayoutLooksForIt()
+    public void ChangesToRenameSource_WriteNothing()
+    {
+        var before = TreeOf(Old.Name);
+        var head = Git("rev-parse", "HEAD");
+
+        var changes = Repository.ChangesToRenameSource(Old, "New.esp").Value().Require();
+
+        Assert.NotEmpty(changes.Moves);
+        Assert.Equal(before, TreeOf(Old.Name));
+        Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
+        Assert.Equal(head, Git("rev-parse", "HEAD"));
+    }
+
+    [Fact]
+    public void ChangesToRenameSource_AnswerADocumentOnlyWhenItsTextChanges()
+    {
+        var batch = SourceBatch.Over(Repository, []);
+
+        var changes = batch.Repository.ChangesToRenameSource(Old, "New.esp").Value().Require();
+
+        Assert.Equal(
+            ["000000_New.esp.json", "Cells/0/0/EmbedCell - 000804_New.esp/EmbedCell - 000804_New.esp.json", "Npcs/MasterNpc - 000800_DLC.esm.json", "Npcs/SelfNpc - 000801_New.esp.json"],
+            changes.Documents.Select(document => Path.GetRelativePath(PluginSourceRoot.In(_modFolder, "New.esp"), Path.Combine(_modFolder, document.Path)).Replace('\\', '/')).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void ChangesToRenameSource_ToANameWithAnUppercaseExtension_LeaveTheHeaderWhereTheLayoutLooksForIt()
     {
         var renamed = Old with { Name = "New.ESM" };
 
-        Repository.RenameSource(Old, renamed.Name).Value();
+        Rename(renamed.Name);
 
         var documents = TreeDocuments.Of(Repository, renamed);
         Assert.Contains(documents, d => d.RecordType == PluginHeader.RecordType);
@@ -130,59 +156,63 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     }
 
     [Fact]
-    public void RenameSource_MovesWhatModbenchLastWroteToTheNewName()
+    public void ChangesToRenameSource_ReadAnUnsavedTextInPlaceOfItsFile()
     {
-        Repository.RenameSource(Old, "New.esp").Value();
+        var self = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "Npcs", "SelfNpc - 000801_Old.esp.json");
+
+        Rename("New.esp", [new DocumentChange(self, """{"FormKey":"000801:Old.esp","Name":"Unsaved"}""")]);
+
+        Assert.Equal(
+            """{"FormKey":"000801:New.esp","Name":"Unsaved"}""",
+            File.ReadAllText(Path.Combine(PluginSourceRoot.In(_modFolder, "New.esp"), "Npcs", "SelfNpc - 000801_New.esp.json")));
+    }
+
+    [Fact]
+    public void ChangesToRenameSource_AnswerAnUnsavedTextTheRenameLeavesAsItIs_SoItIsSavedAtItsNewPath()
+    {
+        var metadata = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "Cells", "0", "0", "GroupRecordData.json");
+        var batch = SourceBatch.Over(Repository, [new DocumentChange(metadata, """{"unsaved":true}""")]);
+
+        var changes = batch.Repository.ChangesToRenameSource(Old, "New.esp").Value().Require();
+
+        var document = Assert.Single(changes.Documents, document => document.Path.EndsWith("GroupRecordData.json", StringComparison.Ordinal));
+        Assert.Equal("""{"unsaved":true}""", document.Text);
+    }
+
+    [Fact]
+    public void MoveLastWrittenTo_MovesWhatModbenchLastWroteToTheNewName()
+    {
+        Assert.Null(Repository.MoveLastWrittenTo(Old.Name, "New.esp"));
 
         Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }).Value());
         Assert.Empty(Repository.LastWrittenBinarySha256s(Old).Value());
     }
 
     [Fact]
-    public void RenameSource_LeavesTheRenameAsWorkingTreeChanges_AndCommitsNothing()
+    public void MoveLastWrittenTo_AfterTheTreeMoved_MovesTheRefTheTreeWasWrittenUnder()
     {
-        var head = Git("rev-parse", "HEAD");
+        Rename("New.esp");
 
-        Repository.RenameSource(Old, "New.esp").Value();
+        Assert.Null(Repository.MoveLastWrittenTo(Old.Name, "New.esp"));
 
-        Assert.Equal(head, Git("rev-parse", "HEAD"));
-        Assert.Contains("plugin-source/New.esp/", Git("status", "--porcelain", "--untracked-files=all"), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void RenameSource_KeepsADocumentsByteOrderMark()
-    {
-        var self = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "Npcs", "SelfNpc - 000801_Old.esp.json");
-        File.WriteAllBytes(self, [0xEF, 0xBB, 0xBF, .. """{"FormKey":"000801:Old.esp"}"""u8]);
-
-        Repository.RenameSource(Old, "New.esp").Value();
-
-        Assert.Equal(
-            [0xEF, 0xBB, 0xBF, .. """{"FormKey":"000801:New.esp"}"""u8],
-            File.ReadAllBytes(Path.Combine(PluginSourceRoot.In(_modFolder, "New.esp"), "Npcs", "SelfNpc - 000801_New.esp.json")));
+        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }).Value());
     }
 
     [Theory]
     [InlineData("OTHER.esp")]
     [InlineData("OLD.ESP")]
-    public void RenameSource_ToANameThatAPluginSourceHoldsComparedWithoutCase_WritesNothing(string taken)
+    public void ChangesToRenameSource_ToANameThatAPluginSourceHoldsComparedWithoutCase_AnswerNone(string taken)
     {
-        var before = TreeOf(Old.Name);
-
-        Assert.False(Repository.RenameSource(Old, taken).Value());
-
-        Assert.Equal(before, TreeOf(Old.Name));
-        Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
-        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old).Value());
+        Assert.Null(Repository.ChangesToRenameSource(Old, taken).Value());
     }
 
     [Fact]
-    public void RenameSource_OfATreeWhoseGroupMetadataIsNoJson_RefusesNamingIt_WithoutCallingItARecord()
+    public void ChangesToRenameSource_OfATreeWhoseGroupMetadataIsNoJson_RefuseNamingIt_WithoutCallingItARecord()
     {
         var broken = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "Cells", "0", "0", "GroupRecordData.json");
         File.WriteAllText(broken, "{");
 
-        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.RenameSource(Old, "New.esp").Stopped());
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.ChangesToRenameSource(Old, "New.esp").Stopped());
 
         Assert.Equal(Path.GetRelativePath(_modFolder, broken), refused.File?.SourceRelativePath);
         Assert.DoesNotContain("filed as a record", refused.Reason, StringComparison.Ordinal);
@@ -191,94 +221,35 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     [Theory]
     [InlineData("""{ "FormKey": "000801:Old.esp", """)]
     [InlineData("""{ "FormKey": "000801:Old.esp" } // a comment no document reader takes""")]
-    public void RenameSource_OfATreeHoldingADocumentThatIsNoJson_RefusesNamingIt_AndWritesNothing(string text)
+    public void ChangesToRenameSource_OfATreeHoldingADocumentThatIsNoJson_RefuseNamingIt(string text)
     {
         var broken = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "Npcs", "SelfNpc - 000801_Old.esp.json");
         File.WriteAllText(broken, text);
-        var before = TreeOf(Old.Name);
 
-        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.RenameSource(Old, "New.esp").Stopped());
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.ChangesToRenameSource(Old, "New.esp").Stopped());
 
         Assert.Equal(Path.GetRelativePath(_modFolder, broken), refused.File?.SourceRelativePath);
-        Assert.Equal(before, TreeOf(Old.Name));
-        Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
     }
 
     [Fact]
-    public void RenameSource_WhenGitRefusesToMoveWhatModbenchLastWrote_PutsTheTreeAndTheRefBack()
+    public void MoveLastWrittenTo_WhenGitRefusesToMoveIt_PutsNothingBack_AndTheOldRefStays()
     {
-        var before = TreeOf(Old.Name);
         LastWriteRecord.RefuseRecordingUnder(_modFolder, "New.esp");
 
-        Assert.IsType<SourceFailure.GitFailed>(Repository.RenameSource(Old, "New.esp").Stopped());
+        Assert.IsType<SourceFailure.GitFailed>(Repository.MoveLastWrittenTo(Old.Name, "New.esp"));
 
-        Assert.Equal(before, TreeOf(Old.Name));
-        Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
         Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old).Value());
     }
 
-    [Fact]
-    public void RenameSource_WhenAnotherProgramChangesAnOldFileAfterItWasRead_DoesNotRemoveIt_AndSaysSo()
+    private bool Rename(string newName, IReadOnlyList<DocumentChange>? unsaved = null)
     {
-        var changed = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "000000_Old.esp.json");
-        GitHooks.Write(_modFolder, "reference-transaction", $"[ \"$1\" = prepared ] || exit 0\necho theirs > '{changed}'");
-
-        var failure = Assert.IsType<SourceFailure.Inaccessible>(Repository.RenameSource(Old, "New.esp").Stopped());
-
-        Assert.Equal("theirs", File.ReadAllText(changed).Trim());
-        Assert.Contains("000000_Old.esp.json was changed by another program", failure.Reason);
-        Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
-    }
-
-    [Fact]
-    public void RenameSource_WhenGitRefusesToClearTheOldNamesRef_PutsBackBothRefs_TheNewNamesEarlierOneIncluded()
-    {
-        var newName = Old with { Name = "New.esp" };
-        Repository.WriteBinary(newName, "EARLIER-UNDER-THE-NEW-NAME", () => { }).Value();
-        var before = TreeOf(Old.Name);
-        LastWriteRecord.RefuseClearing(_modFolder, "Old.esp");
-
-        Assert.IsType<SourceFailure.GitFailed>(Repository.RenameSource(Old, "New.esp").Stopped());
-
-        Assert.Equal(before, TreeOf(Old.Name));
-        Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
-        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old).Value());
-        Assert.Equal(["EARLIER-UNDER-THE-NEW-NAME"], Repository.LastWrittenBinarySha256s(newName).Value());
-    }
-
-    [Fact]
-    public void RenameSource_WhenTheOldTreeCannotAllBeDeleted_PutsBackWhatWent_TakesTheNewTreeAway_AndPutsTheRefBack()
-    {
-        var before = TreeOf(Old.Name);
-        var npcs = Path.Combine(PluginSourceRoot.In(_modFolder, Old.Name), "Npcs");
-        FileModes.Set(npcs, "555");
-        try
-        {
-            Assert.IsType<SourceFailure.Inaccessible>(Repository.RenameSource(Old, "New.esp").Stopped());
-        }
-        finally
-        {
-            FileModes.Set(npcs, "755");
-        }
-
-        Assert.Equal(before, TreeOf(Old.Name));
-        Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
-        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old).Value());
-        Assert.Empty(Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }).Value());
-    }
-
-    [PosixFact]
-    public void RenameSource_WhenTheRefCannotBePutBack_NamesWhatModbenchLastWrote_WithTheReasonGitGave()
-    {
-        var marker = Path.Combine(_modFolder, "second-ref-update");
-        GitHooks.Write(
-            _modFolder,
-            "reference-transaction",
-            $"[ \"$1\" = prepared ] || exit 0\n[ -e '{marker}' ] && exit 1\ntouch '{marker}'");
-
-        var failure = Assert.IsType<SourceFailure.GitFailed>(Repository.RenameSource(Old, "New.esp").Stopped());
-
-        Assert.Contains("what Modbench last wrote for Old.esp \u2014 could not be restored: git", failure.Reason, StringComparison.Ordinal);
+        var batch = SourceBatch.Over(Repository, unsaved ?? []);
+        if (batch.Repository.ChangesToRenameSource(Old, newName).Value() is not { } changes) return false;
+        Assert.Null(SourceTransaction.Atomically(batch.Repository, transaction => transaction.Apply(SourceAnswer.Of(changes))));
+        EditSaving.Save(
+            batch.Changes.Moves.Select(move => (move.From, move.To)), batch.Changes.Deletions,
+            batch.Changes.Documents.Select(document => (document.Path, document.Text)));
+        return true;
     }
 
     private SourceRepository Repository => SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require();

@@ -12,6 +12,9 @@ internal interface ISourceFiles
 
     string ReadAllText(string path);
 
+    /// <summary>Whether reading <paramref name="path"/> answers text VS Code holds unsaved, not the file's.</summary>
+    bool HoldsUnsavedText(string path);
+
     IEnumerable<string> EntriesUnder(string directory);
 
     IEnumerable<string> FilesIn(string directory, string pattern, SearchOption option);
@@ -34,6 +37,8 @@ internal sealed class DiskFiles : ISourceFiles
     public byte[] ReadAllBytes(string path) => File.ReadAllBytes(path);
 
     public string ReadAllText(string path) => File.ReadAllText(path);
+
+    public bool HoldsUnsavedText(string path) => false;
 
     public IEnumerable<string> EntriesUnder(string directory) =>
         Directory.EnumerateFileSystemEntries(directory, "*", SearchOption.AllDirectories);

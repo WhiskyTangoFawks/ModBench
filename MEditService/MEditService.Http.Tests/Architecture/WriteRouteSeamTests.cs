@@ -14,7 +14,8 @@ public sealed class WriteRouteSeamTests
         ("POST /plugins/track", "Track"),
         ("POST /plugins/decompile", "Decompile"),
         ("POST /plugins/compile", "Compile"),
-        ("POST /plugins/rename-source", "RenameSource"),
+        ("POST /plugins/rename-source-changes", "RenameSourceChanges"),
+        ("POST /plugins/move-last-written", "MoveLastWritten"),
         ("POST /plugins/{plugin}/create-record-changes", "CreateRecordChanges"),
         ("PUT /load-order", "PutLoadOrder"),
     ];
@@ -35,6 +36,7 @@ public sealed class WriteRouteSeamTests
         """Results.Problem("At least one destination is required.", statusCode: 400)""",
         """Results.Problem("Every destination needs a name and an origin.", statusCode: 400)""",
         """Results.Problem("Plugin name is required.", statusCode: 400)""",
+        """Results.Problem("Plugin name, origin and tree name are required.", statusCode: 400)""",
         """Results.Problem("The folder and the origin are required.", statusCode: 400)""",
         """Results.Problem("Origin is required.", statusCode: 400)""",
         """Results.Problem("At least one plugin is required.", statusCode: 400)""",

@@ -350,24 +350,31 @@ public sealed class SourceRepository : ISourceRepositoryReads
             Writes.ReplaceSourceFrom(name, SourceRepositoryLayout.PristineFilesOf(name, tree), binarySha256);
         });
 
-    /// <summary>The plugin's source and what Modbench last wrote move to <paramref name="newName"/>, and
-    /// every FormKey of the plugin follows. False, writing nothing, when a plugin source of the mod holds
-    /// that name, compared without case.</summary>
-    public SourceAnswer<bool> RenameSource(PluginAddress plugin, string newName) =>
-        SourceFailure.Answer(() =>
+    /// <summary>What renaming the plugin's source to <paramref name="newName"/> changes, written nowhere: the tree
+    /// moves, and every FormKey of the plugin follows. None, when a plugin source of the mod holds that name,
+    /// compared without case.</summary>
+    public SourceAnswer<SourceChanges?> ChangesToRenameSource(PluginAddress plugin, string newName) =>
+        SourceFailure.Answer<SourceChanges?>(() =>
         {
-            RefuseInABatch();
             var name = Spelled(plugin).Name;
             var sources = Path.Combine(_modFolder, SourceRepositoryLayout.RootFolderName);
-            if (Directory.EnumerateFileSystemEntries(sources)
-                .Any(entry => string.Equals(Path.GetFileName(entry), newName, StringComparison.OrdinalIgnoreCase)))
-            {
-                return false;
-            }
-
-            Writes.RenameSource(name, newName);
-            return true;
+            return Files.EntriesUnder(sources).Any(entry => string.Equals(Path.GetFileName(entry), newName, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(PathShape.DirectoryOf(entry), sources, SourceRepositoryLocator.PathComparison))
+                ? null
+                : Writes.ChangesToRenameSource(name, newName);
         });
+
+    /// <summary>The name the plugin's tree folder is spelled with, which is what Modbench's last write of the
+    /// plugin is filed under.</summary>
+    public string TreeNameOf(PluginAddress plugin) => Spelled(plugin).Name;
+
+    /// <summary>What Modbench last wrote for the plugin, filed under <paramref name="treeName"/>, becomes
+    /// <paramref name="newName"/>'s. A failure leaves it where it was.</summary>
+    public SourceFailure? MoveLastWrittenTo(string treeName, string newName)
+    {
+        RefuseInABatch();
+        return SourceFailure.Answer(() => Writes.MoveLastWritten(treeName, newName));
+    }
 
     /// <summary>Runs <paramref name="write"/>, recording <paramref name="binarySha256"/> as the one last
     /// written; an interrupted write leaves the old and new (ADR-0003). Git failing before the write

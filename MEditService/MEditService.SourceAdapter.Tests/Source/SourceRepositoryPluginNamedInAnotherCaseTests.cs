@@ -110,11 +110,12 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [Fact]
-    public void RenameSource_ForThePluginNamedInAnotherCase_MovesItsTree()
+    public void ChangesToRenameSource_ForThePluginNamedInAnotherCase_MoveItsTree()
     {
         var renamed = new PluginAddress("Renamed.esp", TestMod.Name);
 
-        Assert.True(Repository.RenameSource(Recased, renamed.Name).Value());
+        var changes = Repository.ChangesToRenameSource(Recased, renamed.Name).Value().Require();
+        Assert.Null(SourceTransaction.Atomically(Repository, transaction => transaction.Apply(SourceAnswer.Of(changes))));
 
         Assert.Equal(2, TreeDocuments.Of(Repository, renamed).Count);
         Assert.False(SourceRepository.SourceReads(Registered(AsTreeNamesIt)));
@@ -135,6 +136,23 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Repository.WriteBinary(AsTreeNamesIt, sha256, () => { }).Value();
 
         Assert.Equal([sha256], Repository.LastWrittenBinarySha256s(Recased).Value());
+    }
+
+    [Fact]
+    public void MoveLastWrittenTo_TheTreeNameTheRenameAnswered_MovesWhatWasWrittenUnderTheTreesSpelling()
+    {
+        const string sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        Repository.WriteBinary(AsTreeNamesIt, sha256, () => { }).Value();
+        var renamed = new PluginAddress("Renamed.esp", TestMod.Name);
+        var treeName = Repository.TreeNameOf(Recased);
+        var changes = Repository.ChangesToRenameSource(Recased, renamed.Name).Value().Require();
+        Assert.Null(SourceTransaction.Atomically(Repository, transaction => transaction.Apply(SourceAnswer.Of(changes))));
+
+        Assert.Null(Repository.MoveLastWrittenTo(treeName, renamed.Name));
+
+        Assert.Equal(TreeName, treeName);
+        Assert.Equal([sha256], Repository.LastWrittenBinarySha256s(renamed).Value());
+        Assert.Empty(Repository.LastWrittenBinarySha256s(AsTreeNamesIt).Value());
     }
 
     [PosixFact]

@@ -16,7 +16,7 @@ import {
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
-  type GridPosition, type RecordAddress, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument,
+  type GridPosition, type RecordAddress, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type TrackOutcome,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
@@ -189,12 +189,24 @@ class HttpMEditClient implements MEditClient {
     return answer;
   }
 
-  async renameSource(plugin: PluginAddress, newName: string): Promise<{ renamed: true } | WriteRefused> {
-    return this.mutate({
-      op: `renameSource(${plugin.name}, ${plugin.origin})`,
+  async getRenameSourceChanges(
+    plugin: PluginAddress, newName: string, unsaved: readonly UnsavedDocument[],
+  ): Promise<RenameSourceChangesOutcome | WriteRefused> {
+    return this.mutate<RenameSourceChangesOutcome>({
+      op: `getRenameSourceChanges(${plugin.name}, ${plugin.origin})`,
       failMsg: `Could not rename the source of "${plugin.name}"`,
-      post: () => this.apiClient.POST('/plugins/rename-source', { body: { origin: plugin.origin, name: plugin.name, newName } }),
-      noContent: { renamed: true },
+      post: () => this.apiClient.POST('/plugins/rename-source-changes', {
+        body: { origin: plugin.origin, name: plugin.name, newName, documents: [...unsaved] },
+      }),
+    });
+  }
+
+  async moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused> {
+    return this.mutate({
+      op: `moveLastWritten(${plugin.name}, ${plugin.origin})`,
+      failMsg: `Could not move what Modbench last wrote for "${plugin.name}"`,
+      post: () => this.apiClient.POST('/plugins/move-last-written', { body: { origin: plugin.origin, name: plugin.name, treeName, newName } }),
+      noContent: { moved: true },
     });
   }
 

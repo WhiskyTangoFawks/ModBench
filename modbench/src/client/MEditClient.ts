@@ -121,6 +121,9 @@ export interface DeleteChangesOutcome {
   refused: readonly ItemRefusal<RecordAddress>[];
 }
 
+/** The changes renaming a plugin's source makes, and the name its tree was filed under. */
+export type RenameSourceChangesOutcome = SourceChanges & { treeName: string };
+
 /** The changes creating a record makes to plugin source, and the new record's FormKey. */
 export type CreateChangesOutcome = SourceChanges & { formKey: string };
 
@@ -202,9 +205,11 @@ export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
   createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
-  // Renames the plugin source and moves the last-compile ref, as working-tree changes with no
-  // commit. Its file and its lines are the Instance adapter's.
-  renameSource(plugin: PluginAddress, newName: string): Promise<{ renamed: true } | WriteRefused>;
+  // The changes renaming the plugin source makes over `unsaved`, and the name its tree is filed under. A WriteRefused
+  // is the call failing or mEdit refusing. Nothing is written.
+  getRenameSourceChanges(plugin: PluginAddress, newName: string, unsaved: readonly UnsavedDocument[]): Promise<RenameSourceChangesOutcome | WriteRefused>;
+  // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
+  moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   track(mods: readonly string[], options?: { onProgress?: (status: TrackStatus) => void }): Promise<TrackOutcome | WriteRefused>;
   // `unsaved` stands in for the files it names. A WriteRefused is the call failing or mEdit refusing. Nothing is written.

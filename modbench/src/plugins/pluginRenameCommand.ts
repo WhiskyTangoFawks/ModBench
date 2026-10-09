@@ -1,24 +1,27 @@
 import * as vscode from 'vscode';
-import type { MEditClient } from '../client';
+import type { MEditClient, SourceChanges } from '../client';
 import type { Instance } from '../instanceLoader/instance';
-import { confirmRename, renamePlugin, type PluginRenameAccess, type PluginRenameConfirmation } from '../pluginsCommands/renamePlugin';
+import { confirmRename, renamePlugin, type SourceApplied, type PluginRenameAccess, type PluginRenameConfirmation } from '../pluginsCommands/renamePlugin';
 import { registerGesture, singularArgument } from '../drivingLib/gestureEntry';
 import { promptRename } from '../drivingLib/promptRename';
+import { applyAndReport } from '../drivingLib/applyAnswered';
+import type { SourceEditing } from '../drivingLib/sourceEditing';
 import type { Reporter } from '../ports/reporter';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
 import { creatablePluginExtensionsOf, pluginNameRefusal } from './pluginName';
 import { holdsPlugin } from './pluginPlaces';
 import type { PluginsTreeNode } from './PluginsTreeProvider';
 
-export interface RenamePluginDeps extends PluginRenameAccess, PluginRenameConfirmation {
+export interface RenamePluginDeps extends Omit<PluginRenameAccess, 'source'>, PluginRenameConfirmation {
   client: PluginRenameAccess['client'] & PluginRenameConfirmation['client'] & Pick<MEditClient, 'getCreatablePluginExtensions'>;
+  source: SourceEditing;
   instance: Pick<Instance, 'value' | 'quiet'>;
   reporter: Reporter;
 }
 
 /** commands.md, `rename` under Plugin. */
 export function registerRenamePluginCommand(
-  { client, adapter, ask, instance, reporter }: RenamePluginDeps, viewSelection: () => readonly PluginsTreeNode[],
+  { client, adapter, ask, instance, reporter, source }: RenamePluginDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   return registerGesture('modbench.plugin.rename', viewSelection, async (entry) => {
     const row = singularArgument(entry, 'plugin');
@@ -42,9 +45,17 @@ export function registerRenamePluginCommand(
     }
 
     await vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>
-      instance.quiet(async () => {
-        const result = await renamePlugin({ adapter, client }, plugin, newName, instance.value.gameRelease);
-        if (result.applied) return;
+      instance.quiet(() => source.oneAtATime(async () => {
+        const applyAndSave = async (changes: SourceChanges): Promise<SourceApplied> => {
+          const { applied, notSaved } = await applyAndReport(source, reporter, [changes], [plugin], {
+            notApplied: `Could not rename "${plugin.name}" (${plugin.origin}): its plugin source may be partly renamed. Reverting the source rename in git undoes it.`,
+            notSaved: `Could not save the rename of "${plugin.name}" (${plugin.origin}) in full. Reverting the source rename in git undoes it.`,
+          });
+          if (!applied) return 'notApplied';
+          return notSaved.length > 0 ? 'unsaved' : 'saved';
+        };
+        const result = await renamePlugin({ adapter, client, source: { unsaved: source.unsaved, applyAndSave } }, plugin, newName, instance.value.gameRelease);
+        if (result.applied || 'reported' in result) return;
         if (!result.sourceRenamed) {
           reporter.report('error', result.refusal);
           return;
@@ -52,6 +63,6 @@ export function registerRenamePluginCommand(
         reporter.report('error',
           `Could not rename "${plugin.name}" (${plugin.origin}): its plugin source was renamed, its file and lines were not. Reverting the source rename in git undoes it.`,
           result.refusal);
-      }));
+      })));
   });
 }

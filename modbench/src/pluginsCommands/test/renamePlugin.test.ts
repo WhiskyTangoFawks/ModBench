@@ -4,7 +4,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { rm } from 'node:fs/promises';
-import { confirmRename, renamePlugin } from '../renamePlugin';
+import { confirmRename, renamePlugin, type SourceApplied } from '../renamePlugin';
 import { OVERWRITE_ORIGIN } from '../../instanceAdapter/instanceAdapter';
 import { adapterOver, readPluginLines } from '../../test/mo2/adapterOver';
 import { cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
@@ -17,35 +17,80 @@ const PLUGIN = { name: 'Tracked Patch Mod.esp', origin: 'Tracked Patch Mod' };
 const CHILD = { name: 'Child.esp', origin: 'ChildMod' };
 const OTHER = { name: 'Other.esp', origin: 'OtherMod' };
 
+const CHANGES = { treeName: 'Tracked Patch Mod.esp', moves: [{ from: '/m/plugin-source/Tracked Patch Mod.esp', to: '/m/plugin-source/Renamed Patch.esp' }], deletions: [], documents: [] };
+const UNSAVED = [{ path: '/m/plugin-source/Tracked Patch Mod.esp/h.json', text: '{}' }];
+
 describe('renamePlugin — the plugin source first, then the file and its lines', () => {
   let root: string;
   let client: InMemoryMEditClient;
-  const rename = (newName: string, plugin = PLUGIN) => renamePlugin({ adapter: adapterOver(root), client }, plugin, newName, 'Fallout4');
+  let applied: unknown[];
+  let savedAs: SourceApplied;
+  const apply = vi.fn((changes: unknown) => {
+    applied.push(changes);
+    return Promise.resolve(savedAs);
+  });
+  const rename = (newName: string, plugin = PLUGIN) =>
+    renamePlugin({ adapter: adapterOver(root), client, source: { unsaved: () => UNSAVED, applyAndSave: apply } }, plugin, newName, 'Fallout4');
 
   beforeEach(() => {
     root = cloneCorpusFixture();
     client = new InMemoryMEditClient();
-    client.setCommandResult('renameSource', { renamed: true });
+    client.setCommandResult('getRenameSourceChanges', CHANGES);
+    client.setCommandResult('moveLastWritten', { moved: true });
+    applied = [];
+    savedAs = 'saved';
+    apply.mockClear();
   });
   afterEach(async () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  it('renames the source through the client, then the file and its line in place', async () => {
+  it('applies the source changes, moves what was last written, then renames the file and its line in place', async () => {
     expect(await rename('Renamed Patch.esp')).toEqual({ applied: true });
 
-    expect(client.calls).toEqual([{ method: 'renameSource', args: [PLUGIN, 'Renamed Patch.esp'] }]);
+    expect(client.calls).toEqual([
+      { method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed Patch.esp', UNSAVED] },
+      { method: 'moveLastWritten', args: [PLUGIN, 'Tracked Patch Mod.esp', 'Renamed Patch.esp'] },
+    ]);
+    expect(applied).toEqual([CHANGES]);
     expect((await readPluginLines(root)).map((line) => line.name)).toContain('Renamed Patch.esp');
     expect((await snapshotTree(root)).has('mods/Tracked Patch Mod/Renamed Patch.esp')).toBe(true);
   });
 
-  it('writes nothing when the source is refused, and carries the refusal', async () => {
-    client.setCommandResult('renameSource', { refused: true, message: 'Could not rename the source of "Tracked Patch Mod.esp" — NotTracked' });
+  it('applies nothing and writes nothing when mEdit refuses the changes, and carries the refusal', async () => {
+    client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename the source of "Tracked Patch Mod.esp" — NotTracked' });
     const before = await snapshotTree(root);
 
     expect(await rename('Renamed Patch.esp')).toEqual({
       applied: false, sourceRenamed: false, refusal: 'Could not rename the source of "Tracked Patch Mod.esp" — NotTracked',
     });
+    expect(apply).not.toHaveBeenCalled();
+    expect(await snapshotTree(root)).toEqual(before);
+  });
+
+  it('moves nothing and renames no file when VS Code does not apply the changes, which the apply has told', async () => {
+    savedAs = 'notApplied';
+    const before = await snapshotTree(root);
+
+    expect(await rename('Renamed Patch.esp')).toEqual({ applied: false, reported: true });
+    expect(client.calls.map((call) => call.method)).toEqual(['getRenameSourceChanges']);
+    expect(await snapshotTree(root)).toEqual(before);
+  });
+
+  it('moves nothing and renames no file when VS Code applied the changes but did not save them all', async () => {
+    savedAs = 'unsaved';
+    const before = await snapshotTree(root);
+
+    expect(await rename('Renamed Patch.esp')).toEqual({ applied: false, reported: true });
+    expect(client.calls.map((call) => call.method)).toEqual(['getRenameSourceChanges']);
+    expect(await snapshotTree(root)).toEqual(before);
+  });
+
+  it('renames no file when what was last written could not move, and reports the source renamed', async () => {
+    client.setCommandResult('moveLastWritten', { refused: true, message: 'git refused' });
+    const before = await snapshotTree(root);
+
+    expect(await rename('Renamed Patch.esp')).toEqual({ applied: false, sourceRenamed: true, refusal: 'git refused' });
     expect(await snapshotTree(root)).toEqual(before);
   });
 
@@ -57,6 +102,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     expect(result).toMatchObject({ applied: false, sourceRenamed: false });
     expect('refusal' in result && result.refusal).toContain('Missing.esp');
     expect(client.calls).toEqual([]);
+    expect(apply).not.toHaveBeenCalled();
     expect(await snapshotTree(root)).toEqual(before);
   });
 
@@ -64,7 +110,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     const adapter = adapterOver(root);
     vi.spyOn(adapter, 'renamePlugin').mockRejectedValue(new Error('disk full'));
 
-    const result = await renamePlugin({ adapter, client }, PLUGIN, 'Renamed Patch.esp', 'Fallout4');
+    const result = await renamePlugin({ adapter, client, source: { unsaved: () => UNSAVED, applyAndSave: apply } }, PLUGIN, 'Renamed Patch.esp', 'Fallout4');
 
     expect(result).toEqual({ applied: false, sourceRenamed: true, refusal: 'disk full' });
   });
@@ -74,7 +120,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     const checkOnAdapter = vi.spyOn(adapter, 'checkPluginRename').mockResolvedValue({ applied: true });
     const renamePluginOnAdapter = vi.spyOn(adapter, 'renamePlugin').mockResolvedValue();
 
-    await renamePlugin({ adapter, client }, { name: 'Run.esp', origin: OVERWRITE_ORIGIN }, 'Ran.esp', 'Fallout4');
+    await renamePlugin({ adapter, client, source: { unsaved: () => UNSAVED, applyAndSave: apply } }, { name: 'Run.esp', origin: OVERWRITE_ORIGIN }, 'Ran.esp', 'Fallout4');
 
     expect(checkOnAdapter).toHaveBeenCalledWith({ kind: 'runtimeOutput' }, 'Run.esp', 'Ran.esp', 'Fallout4');
     expect(renamePluginOnAdapter).toHaveBeenCalledWith({ kind: 'runtimeOutput' }, 'Run.esp', 'Ran.esp', 'Fallout4');

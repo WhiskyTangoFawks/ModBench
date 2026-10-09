@@ -148,19 +148,6 @@ internal sealed class SourceRepositoryGit(string modFolder)
         ParkTrailers("Decompile", pluginFileName, headSha, [$"{BinaryTrailer}: {binarySha256}"]);
     }
 
-    /// <summary>The act that puts what Modbench last wrote for both names back as it stands now, however
-    /// much of a move ran since.</summary>
-    internal Action LastWrittenPutBack(string from, string to)
-    {
-        var (fromRef, toRef) = (LastCompileRef(from), LastCompileRef(to));
-        var (held, replaced) = (CommitOf(fromRef), CommitOf(toRef));
-        return () =>
-        {
-            SetRef(fromRef, held);
-            SetRef(toRef, replaced);
-        };
-    }
-
     /// <summary>What Modbench last wrote for <paramref name="from"/> becomes <paramref name="to"/>'s, and
     /// <paramref name="from"/> has none.</summary>
     internal void MoveLastWritten(string from, string to)
