@@ -84,7 +84,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     [Fact]
     public void RecordOfFile_ADocumentOfTheTree_IsHeldByThePluginAsTheLoadOrderNamesIt()
     {
-        var answer = new GitSourceAdapter().RecordOfFile(LoadOrderNaming(Recased), Path.Combine(_modFolder, NpcDocument));
+        var answer = new GitSourceAdapter(new UnsavedDocuments()).RecordOfFile(LoadOrderNaming(Recased), Path.Combine(_modFolder, NpcDocument));
 
         Assert.Equal(new RecordAt(Recased, NpcFormKey), Assert.IsType<RecordOfFileAnswer.Holds>(answer).Record);
     }
@@ -178,7 +178,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         MakeTwinOfTheTreeIn(Recased.Name);
 
         var why = Assert.IsType<SourceFailure.TwinFolders>(
-            new GitSourceAdapter().WhySourceDoesNotRead(Registered(new PluginAddress("fixture.esp", TestMod.Name))));
+            new GitSourceAdapter(new UnsavedDocuments()).WhySourceDoesNotRead(Registered(new PluginAddress("fixture.esp", TestMod.Name))));
 
         Assert.Contains(TreeName, why.Reason, StringComparison.Ordinal);
         Assert.Contains(Recased.Name, why.Reason, StringComparison.Ordinal);
@@ -187,7 +187,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     [Fact]
     public void WhySourceDoesNotRead_ForAPluginWithNoFolder_SaysSo()
     {
-        var why = new GitSourceAdapter().WhySourceDoesNotRead(Registered(new PluginAddress("Other.esp", TestMod.Name)));
+        var why = new GitSourceAdapter(new UnsavedDocuments()).WhySourceDoesNotRead(Registered(new PluginAddress("Other.esp", TestMod.Name)));
 
         var missing = Assert.IsType<SourceFailure.NotCarried>(why);
         Assert.Contains("Other.esp", missing.Reason, StringComparison.Ordinal);
@@ -201,7 +201,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         FileModes.Set(sources, "000");
         try
         {
-            var why = Assert.IsType<SourceFailure.Inaccessible>(new GitSourceAdapter().WhySourceDoesNotRead(Registered(AsTreeNamesIt)));
+            var why = Assert.IsType<SourceFailure.Inaccessible>(new GitSourceAdapter(new UnsavedDocuments()).WhySourceDoesNotRead(Registered(AsTreeNamesIt)));
             Assert.Contains("plugin-source", why.Reason, StringComparison.Ordinal);
             Assert.False(why.DecompileRepairs);
         }
@@ -214,7 +214,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     [Fact]
     public void WhySourceDoesNotRead_ForATreeThatReads_IsNull()
     {
-        Assert.Null(new GitSourceAdapter().WhySourceDoesNotRead(Registered(Recased)));
+        Assert.Null(new GitSourceAdapter(new UnsavedDocuments()).WhySourceDoesNotRead(Registered(Recased)));
     }
 
     [PosixFact]
@@ -239,7 +239,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     {
         MakeTwinOfTheTreeIn(Recased.Name);
 
-        var answer = new GitSourceAdapter().RecordOfFile(LoadOrderNaming(AsTreeNamesIt), TwinNpcDocument(Recased.Name));
+        var answer = new GitSourceAdapter(new UnsavedDocuments()).RecordOfFile(LoadOrderNaming(AsTreeNamesIt), TwinNpcDocument(Recased.Name));
 
         Assert.IsType<RecordOfFileAnswer.Refused>(answer);
     }

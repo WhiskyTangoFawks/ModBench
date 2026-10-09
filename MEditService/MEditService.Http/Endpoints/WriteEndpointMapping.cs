@@ -7,8 +7,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Endpoints;
 
-/// <summary>The write handlers' shared binding and error-mapping seam, and the one place a refusal is
-/// logged.</summary>
+/// <summary>The binding shared by the endpoints that take unsaved documents, the write handlers' error-mapping
+/// seam, and the one place a refusal is logged.</summary>
 internal static class WriteEndpointMapping
 {
     /// <summary>For route-bound (URL-encoded) plugin names only. A body-sourced name must never pass

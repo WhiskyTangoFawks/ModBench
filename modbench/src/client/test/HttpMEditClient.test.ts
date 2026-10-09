@@ -48,6 +48,8 @@ function loadOrderStatusTick(loadOrderStatus: {
 
 const readyTickThatSettlesPutLoadOrder = () => loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: true, failures: [], version: 1 });
 
+const noContent = () => Promise.resolve(new Response(null, { status: 204 }));
+
 function routedFetch(routes: [match: string, handle: (req: Request) => Promise<Response>][]) {
   return vi.fn((req: Request) => {
     const route = routes.find(([match]) => req.url.includes(match));
@@ -115,26 +117,23 @@ describe('HttpMEditClient — the notification stream follows the status', () =>
   afterEach(() => { vi.restoreAllMocks(); });
 
   it('opens the stream when the backend attaches', async () => {
-    const fetch = vi.fn((req: Request) => {
-      expect(req.url).toContain('/notifications/stream');
-      return Promise.resolve(new Response(new ReadableStream({ start: () => {} }), { status: 200 }));
-    });
-    const client = makeClient(fetch);
+    const stream = vi.fn(() => Promise.resolve(new Response(new ReadableStream({ start: () => {} }), { status: 200 })));
+    const client = makeClient(routedFetch([['/notifications/stream', stream], ['/unsaved-documents', noContent]]));
 
     await client.start();
 
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(stream).toHaveBeenCalledTimes(1));
   });
 
   it('closes the stream when the backend stops', async () => {
     let sawSignal: AbortSignal | undefined;
-    const fetch = vi.fn((req: Request) => {
+    const stream = vi.fn((req: Request) => {
       sawSignal = req.signal;
       return new Promise<Response>(() => {});
     });
-    const client = makeClient(fetch);
+    const client = makeClient(routedFetch([['/notifications/stream', stream], ['/unsaved-documents', noContent]]));
     await client.start();
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(stream).toHaveBeenCalledTimes(1));
 
     await client.stop();
 
@@ -1203,7 +1202,9 @@ describe('HttpMEditClient — onNotification', () => {
         controller.enqueue(new TextEncoder().encode(`event: plugin-changed\ndata: ${JSON.stringify(frame)}\n\n`));
       },
     });
-    const client = makeClient(() => Promise.resolve(new Response(body, { status: 200 })));
+    const client = makeClient(routedFetch([
+      ['/notifications/stream', () => Promise.resolve(new Response(body, { status: 200 }))], ['/unsaved-documents', noContent],
+    ]));
     const heard: unknown[] = [];
     client.onNotification('plugin-changed', (p) => heard.push(p));
 

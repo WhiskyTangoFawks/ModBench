@@ -58,7 +58,7 @@ internal static class TreeStamps
 
     internal static string ContentStamp(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
-    internal static RecordStamps StampsOf(string modFolder, PluginAddress plugin)
+    internal static RecordStamps StampsOf(string modFolder, PluginAddress plugin, ISourceFiles files)
     {
         var unreadable = new List<UnreadableFile>();
         var holders = new OneDocumentPerFormKey(modFolder);
@@ -78,7 +78,11 @@ internal static class TreeStamps
                 listed.Add(file);
 
                 var relativePath = Path.GetRelativePath(modFolder, file);
-                if (known.Of(file, () => Read(file, relativePath, plugin.Name, unreadable)) is not { } document) continue;
+                // An unsaved text moves no file-system stamp, so it is read every time.
+                var document = files.HoldsUnsavedText(file)
+                    ? Read(files, file, relativePath, plugin.Name, unreadable)
+                    : known.Of(file, () => Read(files, file, relativePath, plugin.Name, unreadable));
+                if (document is null) continue;
                 holders.Hold(document.FormKey, file);
                 stamps[document.FormKey] = document.Content;
             }
@@ -88,12 +92,13 @@ internal static class TreeStamps
         return new RecordStamps(stamps, unreadable, holders.Claimed);
     }
 
-    private static KnownDocument? Read(string file, string relativePath, string pluginName, List<UnreadableFile> unreadable)
+    private static KnownDocument? Read(
+        ISourceFiles files, string file, string relativePath, string pluginName, List<UnreadableFile> unreadable)
     {
         byte[] bytes;
         try
         {
-            bytes = DocumentText.StripUtf8Bom(File.ReadAllBytes(file));
+            bytes = DocumentText.StripUtf8Bom(files.ReadAllBytes(file));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

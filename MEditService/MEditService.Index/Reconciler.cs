@@ -35,11 +35,12 @@ internal sealed class Reconciler(
     private int _plannedCount;
     private int _activeCount;
     private IReadOnlyList<PluginLoadFailure> _collisionFailures = [];
-    // Set only by the reconcile door's own catch, cleared at the top of every attempt: a repeated
-    // refusal re-sets it a moment later, a successful one leaves it clear.
+    // Cleared at the top of every attempt: a repeated refusal re-sets it a moment later, a successful
+    // one leaves it clear.
     private string? _heldElsewhereMessage;
     // The same lifetime as _heldElsewhereMessage, for the reconcile's other known-unknown outcome.
     private string? _failureMessage;
+    private string? _handOverFailure;
     // The version the reconcile door last finished answering for: never a superseded attempt's,
     // since that one returns before reaching its own update.
     private long _version;
@@ -56,6 +57,9 @@ internal sealed class Reconciler(
     private readonly Lock _exclusive = new();
     private CancellationTokenSource? _reconcileCancellation;
     private bool _disposed;
+
+    private readonly List<string> _handed = [];
+    private bool _validatingHanded;
 
     private sealed record OpenScope(HeldPlugins Held, DuckDbRecordIndex Index, Projector Projector, FailedReads Failed);
 
@@ -136,7 +140,7 @@ internal sealed class Reconciler(
 
                 if (_heldElsewhereMessage is { } heldElsewhere)
                     return held with { State = LoadOrderState.HeldElsewhere, Message = heldElsewhere };
-                if (_failureMessage is { } failure)
+                if ((_failureMessage ?? _handOverFailure) is { } failure)
                     return held with { State = LoadOrderState.Failed, Message = failure };
                 return held;
             }
@@ -174,6 +178,58 @@ internal sealed class Reconciler(
     /// the newer.</summary>
     public void StartReconcile() =>
         Task.Factory.StartNew(ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+    /// <summary>ADR-0015: validates each plugin whose tree holds one of <paramref name="paths"/>, as a change on
+    /// disk is. A reconcile in flight is waited out, never cancelled; paths handed meanwhile are validated together.</summary>
+    public void ValidateTreesHolding(IReadOnlyList<string> paths)
+    {
+        lock (_lock)
+        {
+            _handed.AddRange(paths);
+            if (_validatingHanded) return;
+            _validatingHanded = true;
+        }
+        Task.Factory.StartNew(ValidateHanded, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    }
+
+    private void ValidateHanded()
+    {
+        while (true)
+        {
+            List<string> paths;
+            lock (_lock)
+            {
+                if (_handed.Count == 0 || _disposed)
+                {
+                    _validatingHanded = false;
+                    return;
+                }
+                paths = [.. _handed];
+                _handed.Clear();
+            }
+
+            bool moved;
+            _exclusive.Enter();
+            try
+            {
+                var failure = ValidationFailure(() => ValidateTreesOf(paths));
+                lock (_lock)
+                {
+                    moved = _handOverFailure != failure;
+                    _handOverFailure = failure;
+                }
+            }
+            finally { _exclusive.Exit(); }
+            if (moved) PublishStatus();
+        }
+    }
+
+    private void ValidateTreesOf(List<string> paths)
+    {
+        var scope = RequireScope();
+        var holding = scope.Held.Plugins.Where(plugin => paths.Exists(path => source.TreeHolds(plugin.Registered, path))).ToList();
+        if (holding.Count > 0) scope.Index.Commit(_ => holding.ForEach(plugin => ValidateOne(scope, plugin)));
+    }
 
     // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
     // reconcile opens a store after Dispose.
@@ -246,9 +302,10 @@ internal sealed class Reconciler(
             bool refusalCleared;
             lock (_lock)
             {
-                refusalCleared = _heldElsewhereMessage is not null || _failureMessage is not null;
+                refusalCleared = _heldElsewhereMessage is not null || _failureMessage is not null || _handOverFailure is not null;
                 _heldElsewhereMessage = null;
                 _failureMessage = null;
+                _handOverFailure = null;
             }
             var token = BeginReconcile();
             if (EnsureScope(snapshot, out heldElsewhere, out failure) is not { } scope)
@@ -796,7 +853,9 @@ internal sealed class Reconciler(
     // ADR-0003: the status answering the version is published once the plugins are validated, and a
     // reconcile that changed the status reads Reconciling until then. The message when validation
     // failed outright, which becomes status data.
-    private string? ValidateHeld(CancellationToken token)
+    private string? ValidateHeld(CancellationToken token) => ValidationFailure(() => ValidateIndex(token));
+
+    private string? ValidationFailure(Action validate)
     {
         lock (_lock)
         {
@@ -804,7 +863,7 @@ internal sealed class Reconciler(
         }
         try
         {
-            ValidateIndex(token);
+            validate();
             return null;
         }
         catch (IndexWriteGateTimeoutException ex)
@@ -916,6 +975,7 @@ internal sealed class Reconciler(
         _collisionFailures = [];
         _heldElsewhereMessage = null;
         _failureMessage = null;
+        _handOverFailure = null;
         return detached;
     }
 }

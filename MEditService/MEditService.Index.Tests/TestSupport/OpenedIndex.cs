@@ -1,6 +1,7 @@
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Index.Tests;
@@ -10,6 +11,8 @@ namespace MEditService.Index.Tests;
 internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder holder) : IDisposable
 {
     internal LoadOrderHolder Holder { get; } = holder;
+
+    internal UnsavedDocuments Unsaved { get; } = container.GetRequiredService<UnsavedDocuments>();
 
     internal IRecordQueryService Records { get; } = container.GetRequiredService<IRecordQueryService>();
 

@@ -70,6 +70,9 @@ internal sealed record RecordEditChangesResponse(
             answer.Outcome.NewFormKey);
 }
 
+/// <summary>Documents are the unsaved texts of every dirty plugin-source document.</summary>
+internal sealed record UnsavedDocumentsRequest(IReadOnlyList<DocumentChange> Documents);
+
 /// <summary>A file or folder an edit moves, by absolute path.</summary>
 internal sealed record SourceMove(string From, string To);
 

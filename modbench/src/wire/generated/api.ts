@@ -634,6 +634,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/unsaved-documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Every plugin-source document VS Code holds unsaved, each read in place of the file at its absolute path, replacing those put before (ADR-0015). Answers once they are held; the plugins whose source holds a document put or dropped are validated after, and announce rows-changed. */
+        put: operations["PutUnsavedDocuments"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/{plugin}/worldspaces": {
         parameters: {
             query?: never;
@@ -1291,6 +1308,9 @@ export interface components {
         UnreadableSource: {
             reason: string;
             decompileRepairs: boolean;
+        };
+        UnsavedDocumentsRequest: {
+            documents: components["schemas"]["DocumentChange"][];
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";
@@ -3104,6 +3124,37 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    PutUnsavedDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnsavedDocumentsRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

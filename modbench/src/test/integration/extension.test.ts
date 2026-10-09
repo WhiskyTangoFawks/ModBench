@@ -92,6 +92,7 @@ const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
 const requestLog: string[] = [];
 const putLoadOrders: string[][] = [];
+const handedUnsaved: unknown[][] = [];
 const comparedTexts: unknown[] = [];
 const comparedSideBySide: unknown[] = [];
 
@@ -214,6 +215,18 @@ function createMockBackend(): http.Server {
       req.on('close', () => {
         const i = sseClients.indexOf(res);
         if (i >= 0) sseClients.splice(i, 1);
+      });
+      return;
+    }
+    if (method === 'PUT' && url === '/unsaved-documents') {
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        const handed: unknown = JSON.parse(body);
+        if (!isRecord(handed) || !Array.isArray(handed.documents)) throw new Error(`expected the unsaved documents, got: ${body}`);
+        handedUnsaved.push(handed.documents);
+        res.writeHead(204);
+        res.end();
       });
       return;
     }
@@ -1732,6 +1745,54 @@ describe('A FormKey in plugin source', () => {
       (renamed) => renamed, () => undefined);
 
     assert.strictEqual(edit?.size ?? 0, 0);
+  });
+});
+
+describe('An unsaved document in plugin source', () => {
+  let folder = '';
+  let file = '';
+
+  before(() => {
+    folder = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-unsaved-'));
+    file = path.join(folder, 'plugin-source', 'Held.esp', 'Typed.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, EditorID: 'Saved' }));
+  });
+  after(() => fs.rmSync(folder, { recursive: true, force: true }));
+
+  const textHanded = (documents: unknown[] | undefined, at: string): unknown => {
+    const document = documents?.find((each) => isRecord(each) && each.path === at);
+    return isRecord(document) ? document.text : undefined;
+  };
+
+  it('is handed to mEdit as I type, and dropped from the next hand-over once saved', async () => {
+    const document = await vscode.workspace.openTextDocument(file);
+    const edit = new vscode.WorkspaceEdit();
+    edit.insert(document.uri, new vscode.Position(0, 1), '"Typed": 1, ');
+    await vscode.workspace.applyEdit(edit);
+
+    await waitFor('the typed text handed to mEdit', () =>
+      handedUnsaved.some((documents) => textHanded(documents, document.uri.fsPath) === document.getText()));
+
+    await document.save();
+    await waitFor('a hand-over without the saved document', () =>
+      handedUnsaved.length > 0 && textHanded(handedUnsaved.at(-1), document.uri.fsPath) === undefined);
+  });
+
+  it('is dropped from the next hand-over once closed without saving', async () => {
+    const document = await vscode.workspace.openTextDocument(file);
+    await vscode.window.showTextDocument(document);
+    const edit = new vscode.WorkspaceEdit();
+    edit.insert(document.uri, new vscode.Position(0, 1), '"Discarded": 1, ');
+    await vscode.workspace.applyEdit(edit);
+    await waitFor('the typed text handed to mEdit', () =>
+      handedUnsaved.some((documents) => textHanded(documents, document.uri.fsPath) === document.getText()));
+
+    await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+
+    await waitFor('a hand-over without the discarded document', () =>
+      textHanded(handedUnsaved.at(-1), document.uri.fsPath) === undefined);
+    assert.strictEqual(fs.readFileSync(file, 'utf8').includes('Discarded'), false);
   });
 });
 

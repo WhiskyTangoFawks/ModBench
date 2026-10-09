@@ -19,6 +19,8 @@ public interface ISourceAdapter
     /// when no mod provides it. One serves a batch, so what it learns of the tree is learned once.</summary>
     ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release);
 
+    bool TreeHolds(RegisteredPlugin plugin, string path);
+
     RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path);
 
     /// <summary>The name of the file of a record's own document where no tree has renamed it.</summary>

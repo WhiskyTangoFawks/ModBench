@@ -66,6 +66,7 @@ try
     builder.Services.AddSingleton<SseNotificationPublisher>();
     builder.Services.AddSingleton<INotificationPublisher>(sp => sp.GetRequiredService<SseNotificationPublisher>());
     builder.Services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
+    builder.Services.AddSingleton<UnsavedDocuments>();
     builder.Services.AddSingleton<ISourceAdapter, GitSourceAdapter>();
     builder.Services.AddSingleton<LoadOrderHolder>();
     // One Index for the whole process (ADR-0014). Which file it opens comes from the
@@ -110,6 +111,7 @@ try
     app.MapContainerChildEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapNotificationEndpoints();
     app.MapIndexEndpoints();
+    app.MapUnsavedDocumentEndpoints();
 
     await app.RunAsync();
 }
