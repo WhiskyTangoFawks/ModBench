@@ -4,8 +4,8 @@ using MEditService.SourceAdapter;
 namespace MEditService.Index;
 
 /// <summary>How one read of a plugin ended: whether its own truth served, what stopped its tree when
-/// the read went on without it, the binary's failure when nothing was read, and why it failed when the
-/// rows of the last good read stand.</summary>
+/// the read went on without it, the binary's failure when nothing was read, and why the last good
+/// read's rows stand.</summary>
 internal sealed record ReadOutcome(
     bool Served, Exception? StoppedBy = null, PluginFailure? Failure = null, SourceFailure? TreeStopped = null,
     string? LaterReadFailure = null)

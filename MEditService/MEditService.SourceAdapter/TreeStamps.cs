@@ -8,8 +8,7 @@ using MEditService.RepositoriesLib;
 namespace MEditService.SourceAdapter;
 
 /// <summary>A file of a plugin's tree, as the mod folder spells it, that could not be read as a
-/// document, the FormKey it was read for when one is known, and whether it was read as the text VS Code
-/// holds unsaved.</summary>
+/// document, the FormKey it was read for when known, and whether its text was unsaved.</summary>
 public sealed record UnreadableFile(string SourceRelativePath, string Message, string? FormKey = null, bool Unsaved = false);
 
 /// <summary>A FormKey a plugin's tree holds more than once, with the documents holding it as the mod
