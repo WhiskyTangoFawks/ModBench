@@ -1,4 +1,4 @@
-import * as fs from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -38,7 +38,7 @@ export async function detectGamePaths(
 async function findLibraryInVdfs(vdfPaths: string[], steamAppId: string): Promise<string | null> {
   for (const vdfPath of vdfPaths) {
     try {
-      const library = parseLibraryFoldersVdf(await fs.readFile(vdfPath, 'utf-8'), steamAppId);
+      const library = parseLibraryFoldersVdf(await readFile(vdfPath, 'utf-8'), steamAppId);
       if (library !== null) return library;
     } catch {
       continue;
@@ -63,7 +63,7 @@ async function detectLinux(game: GameAutodetect): Promise<GamePaths | null> {
   if (!library) return null;
   try {
     const dataFolder = path.join(library, 'steamapps', 'common', game.steamFolderName, 'Data');
-    await fs.access(dataFolder);
+    await access(dataFolder);
     return { dataFolder };
   } catch {
     return null;
@@ -93,7 +93,7 @@ async function detectWindows(
 
     const library = (await findLibraryInVdfs(windowsVdfPaths(steamPath), game.steamAppId)) ?? steamPath;
     const dataFolder = path.join(library, 'steamapps', 'common', game.steamFolderName, 'Data');
-    await fs.access(dataFolder);
+    await access(dataFolder);
     return { dataFolder };
   } catch {
     return null;

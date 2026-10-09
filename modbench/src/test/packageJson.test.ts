@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import * as fs from 'fs';
+import { readFileSync } from 'fs';
 import * as path from 'path';
 import { present } from '../ports/present';
 import {
@@ -137,7 +137,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
 }
 
 const pkg = parsePackageManifest(
-  JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')),
+  JSON.parse(readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')),
 );
 
 type Context = Parameters<typeof holds>[1];
@@ -1326,7 +1326,7 @@ function catalogCommandIds(markdown: string): Set<string> {
   return ids;
 }
 
-const commandsMarkdown = fs.readFileSync(
+const commandsMarkdown = readFileSync(
   path.join(__dirname, '..', '..', '..', 'docs', 'architecture', 'commands.md'), 'utf8',
 );
 

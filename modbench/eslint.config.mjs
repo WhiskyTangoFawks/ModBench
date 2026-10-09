@@ -57,17 +57,37 @@ const CLIENT_IMPORT = {
     regex: '^(\\.{1,2}/)+client(/.*)?$',
     message: 'The mEdit client is Editing\'s seam: Mod Management never reaches mEdit.',
 };
+const CLIENT_SEAM_IMPORT = {
+    group: ['**/generated', '**/generated/**'],
+    message: 'The generated client is the mEdit client box\'s: a type reaches the rest through src/wire.',
+};
+const HTTP_PACKAGES = [
+    { name: 'openapi-fetch', message: 'Only the mEdit client box speaks HTTP to the backend.' },
+    { name: 'undici', message: 'Only the mEdit client box speaks HTTP to the backend.' },
+];
+// `default` and `promises` are the whole module under another name.
+const BYTE_READS = ['default', 'promises', 'open', 'openSync', 'openAsBlob', 'createReadStream', 'read', 'readSync', 'readv', 'readvSync'];
+const BYTE_READ_PATHS = ['node:fs', 'node:fs/promises', 'fs', 'fs/promises'].map((name) => ({
+    name,
+    importNames: BYTE_READS,
+    message: 'The extension interprets no plugin binary (ADR-0004): the one byte-level read is the Instance adapter\'s content digest.',
+}));
 const VSCODE_IMPORT = { name: 'vscode', message: 'Only a view takes VS Code types, and the Instance adapter\'s watch.' };
 const REPORTER_IMPORT = {
     group: ['**/reporter'],
     message: 'The Instance leaves a read failure in its value for a subscriber to render; it raises no notification.',
 };
 
-/** @param {{ vscode: boolean, packages: boolean, path: boolean, client?: boolean, inAdapter?: boolean, adapterAllowed?: string[], extra?: object[] }} where */
-function restrictedImports({ vscode, packages, path, client = false, inAdapter = false, adapterAllowed, extra = [] }) {
+/** @param {{ vscode: boolean, packages: boolean, path: boolean, client?: boolean, inAdapter?: boolean, adapterAllowed?: string[], extra?: object[], clientSeam?: boolean, byteReads?: boolean }} where */
+function restrictedImports({ vscode, packages, path, client = false, inAdapter = false, adapterAllowed, extra = [], clientSeam = true, byteReads = true }) {
     return ['error', {
-        paths: vscode ? [VSCODE_IMPORT] : [],
+        paths: [
+            ...(vscode ? [VSCODE_IMPORT] : []),
+            ...(clientSeam ? HTTP_PACKAGES : []),
+            ...(byteReads ? BYTE_READ_PATHS : []),
+        ],
         patterns: [
+            ...(clientSeam ? [CLIENT_SEAM_IMPORT] : []),
             ...(inAdapter ? [] : [FS_IMPORT, ADAPTER_INTERNALS_IMPORT(adapterAllowed)]),
             ...(path ? [PATH_IMPORT] : []), ...(packages ? [PACKAGE_IMPORT] : []), ...(client ? [CLIENT_IMPORT] : []), ...extra,
         ],
@@ -82,6 +102,8 @@ const SYNTAX = {
     typeImport: [{ selector: 'TSImportType', message: 'A type is imported by an import declaration, which no-restricted-imports checks; `import(\'x\')` in a type position evades it.' }],
     hostFs: ['MemberExpression[object.property.name=\'workspace\'][property.name=\'fs\']', 'MemberExpression[object.name=\'workspace\'][property.name=\'fs\']']
         .map((selector) => ({ selector, message: 'A view reads no file: the host file system is the Instance adapter\'s.' })),
+    editField: ['MemberExpression[object.name=\'WEBVIEW_TO_EXTENSION\'][property.name=\'EDIT_FIELD\']', 'MemberExpression[object.name=\'WEBVIEW_TO_EXTENSION\'][computed=true][property.value=\'EDIT_FIELD\']']
+        .map((selector) => ({ selector, message: 'The record editor writes through one message from one module: the native bridge posts EDIT_FIELD.' })),
     activation: ACTIVATION_DECIDES_SELECTORS.map((selector) => ({ selector, message: ACTIVATION_DECIDES_MESSAGE })),
 };
 /** @type {(keyof typeof SYNTAX)[]} */
@@ -167,9 +189,26 @@ export default defineConfig(
                 path: PATHLESS_BOXES.includes(box),
                 client: box === 'toolbox',
                 inAdapter: box === 'instanceAdapter',
+                clientSeam: box !== 'client',
             }),
         },
     })),
+    // No test reads a plugin's bytes either (ADR-0004).
+    {
+        files: ['src/**/*.test.ts', 'src/test/**/*.ts', 'src/*/test/**/*.ts'],
+        rules: { 'no-restricted-imports': ['error', { paths: BYTE_READ_PATHS }] },
+    },
+    // The wire's type-only readers of the generated schema.
+    ...['messages', 'pluginAddress', 'wireContractChecks'].map((name) => ({
+        files: [`src/wire/${name}.ts`],
+        rules: { 'no-restricted-imports': restrictedImports({ vscode: true, packages: true, path: false, clientSeam: false }) },
+    })),
+    {
+        files: ['src/instanceAdapter/contentDigest.ts'],
+        rules: {
+            'no-restricted-imports': restrictedImports({ vscode: true, packages: true, path: false, inAdapter: true, byteReads: false }),
+        },
+    },
     {
         files: ['src/instanceLoader/instance.ts'],
         rules: {
@@ -207,7 +246,11 @@ export default defineConfig(
     // The reporter and the dialog own a message API; tests swap it out to observe a toast.
     {
         files: ['webview/src/**/*.{ts,tsx}'],
-        ignores: ['webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**'],
+        ignores: ['webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**', 'webview/src/nativeBridge.ts'],
+        rules: { 'no-restricted-syntax': restrictedSyntax(['message', 'editField']) },
+    },
+    {
+        files: ['webview/src/nativeBridge.ts'],
         rules: { 'no-restricted-syntax': restrictedSyntax(['message']) },
     },
     {
