@@ -2,9 +2,10 @@ import type { ColumnKey, CompareResult, PluginLoadFailure } from './types';
 import { columnKey, copyColumnKey } from '../../src/wire/columnKey';
 import { unreadableSources, type UnreadableSource } from '../../src/wire/unreadableSource';
 import { pluginAddressOf, samePluginAddress } from '../../src/wire/pluginAddress';
-import { requestRecordLoad } from './nativeBridge';
+import { pageGlobals, requestRecordLoad } from './nativeBridge';
 import { tabState } from './vscode';
 import { isColumnCopies, type ColumnCopy, type ModRepository } from '../../src/wire/messages';
+import { pluginCanBeEdited } from '../../src/wire/pluginEditable';
 import type { ReadFailed } from '../../src/wire/readFailed';
 
 // `load` asks the host for compare, plugins and status in one round trip: a compare failure fails
@@ -25,6 +26,8 @@ interface LoadedPanel {
   // editable" (commands.md, No dead entries). Read fail-closed.
   trackedSet: Set<ColumnKey> | null;
   sourceUnreadableReasons: Map<ColumnKey, UnreadableSource> | null;
+  // The columns whose copy can be written; null exactly when immutableSet is.
+  editableSet: Set<ColumnKey> | null;
   // The repository state of each origin that names a mod, which a column header offers track or decompile on.
   modsByOrigin: Record<string, ModRepository>;
   // Whether the winner sweep has run (editor.md, States, story 3). Fails *closed*: an absent
@@ -48,8 +51,6 @@ export interface RecordPanelClient {
   showColumns: (columns: ColumnCopy[]) => void;
 }
 
-const mEditWindow = window as Window & typeof globalThis & { mEditColumns?: unknown };
-
 // The columns are kept with the tab, so they outlive a reload.
 function keptColumns(): ColumnCopy[] | undefined {
   const state = tabState.getState();
@@ -61,7 +62,7 @@ const keepColumns = (columns: ColumnCopy[]): void => { tabState.setState({ colum
 
 export function createRecordPanelClient(): RecordPanelClient {
   // The page states the columns only when the tab is new.
-  if (!keptColumns()) keepColumns(isColumnCopies(mEditWindow.mEditColumns) ? mEditWindow.mEditColumns : []);
+  if (!keptColumns()) keepColumns(pageGlobals().mEditColumns ?? []);
   return {
     showColumns: keepColumns,
     async load(formKey) {
@@ -82,6 +83,7 @@ export function createRecordPanelClient(): RecordPanelClient {
         ...read,
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p))) : null,
         trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p))) : null,
+        editableSet: pluginList ? new Set(pluginList.filter(pluginCanBeEdited).map(p => columnKey(p))) : null,
         sourceUnreadableReasons: pluginList ? unreadableSources(pluginList) : null,
         modsByOrigin: answer.modsByOrigin,
         conflictsComputed: answer.conflictsComputed,

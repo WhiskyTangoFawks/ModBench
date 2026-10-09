@@ -1,6 +1,7 @@
+import { pluginCanBeEdited } from '../../../src/wire/pluginEditable';
 import { vi } from 'vitest';
 import { act } from '@testing-library/react';
-import { WEBVIEW_TO_EXTENSION, hasSection, type ExtensionToWebview, type ModRepository, type WebviewToExtension } from '../../../src/wire/messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection, type ExtensionToWebview, type FocusedCellContext, type ModRepository, type WebviewToExtension } from '../../../src/wire/messages';
 import type { RecordPanelClient } from '../RecordPanelClient';
 import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
 import { columnKey, copyColumnKey } from '../../../src/wire/columnKey';
@@ -87,6 +88,7 @@ export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}):
       immutableSet: columnsWhere(p => p.isImmutable === true),
       // ADR-0007: an unstated plugin is untracked.
       trackedSet: columnsWhere(p => p.isTracked === true),
+      editableSet: new Set(plugins.filter(pluginCanBeEdited).map(x => columnKey({ name: x.name, origin: x.origin ?? 'Data/' }))),
       sourceUnreadableReasons: unreadableSources(plugins.map(p => ({ ...p, origin: p.origin ?? 'Data/' }))),
       modsByOrigin: opts.modsByOrigin ?? {},
       conflictsComputed: opts.conflictsComputed ?? true,
@@ -109,7 +111,7 @@ export function postedEnvelopes(postMessage: (msg: WebviewToExtension) => void):
 }
 
 /** What the focused cell last told the host: the Arguments its keys' commands act on. */
-export function lastToldCell(postMessage: (msg: WebviewToExtension) => void): Record<string, unknown> | undefined {
+export function lastToldCell(postMessage: (msg: WebviewToExtension) => void): FocusedCellContext | undefined {
   return vi.mocked(postMessage).mock.calls
     .flatMap(([m]) => (m.type === WEBVIEW_TO_EXTENSION.FOCUS_CELL && m.context ? [m.context] : []))
     .at(-1);
@@ -117,7 +119,7 @@ export function lastToldCell(postMessage: (msg: WebviewToExtension) => void): Re
 
 /** The focused cell last told the host when it is an element: what Delete and Alt+Up and Alt+Down
  *  act on. */
-export function lastToldElement(postMessage: (msg: WebviewToExtension) => void): Record<string, unknown> | undefined {
+export function lastToldElement(postMessage: (msg: WebviewToExtension) => void): FocusedCellContext | undefined {
   const cell = lastToldCell(postMessage);
   return hasSection(cell, 'arrayElement') ? cell : undefined;
 }
@@ -165,3 +167,13 @@ export function parseJsonRecord(json: string): Record<string, unknown> {
   if (!isRecord(parsed)) throw new Error('expected a JSON object');
   return parsed;
 }
+
+/** The host answering each FormKey picker the page asks for with `pick`'s choice, null for none. */
+export const hostPicking = (pick: (seed: string, validTypes: string[]) => Promise<string | null>) => (msg: WebviewToExtension): void => {
+  if (msg.type !== WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER) return;
+  void pick(msg.seed, msg.validTypes).then((formKey) => {
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: msg.requestId, formKey },
+    }));
+  });
+};

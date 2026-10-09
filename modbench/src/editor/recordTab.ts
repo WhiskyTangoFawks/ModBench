@@ -1,7 +1,7 @@
 import type * as vscode from 'vscode';
 import { EXTENSION_TO_WEBVIEW, type ColumnCopy, type ExtensionToWebview, type ViewState } from '../wire/messages';
 import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
-import type { FocusedCellContext } from './focusedCells';
+import type { FocusedCellContext } from '../wire/messages';
 
 export type TabPanel = Pick<vscode.WebviewPanel, 'title' | 'active' | 'viewColumn' | 'onDidDispose'> & {
   webview: Pick<vscode.Webview, 'postMessage'>;

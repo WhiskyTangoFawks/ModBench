@@ -15,6 +15,7 @@ import {
 } from '../drivingLib/recordDocument';
 import { errorMessage } from '../ports/errorMessage';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension, type ViewState } from '../wire/messages';
+import type { RecordPageGlobals } from '../wire/recordPage';
 import { failureReason, isReadFailed, localFailure, type ReadFailed } from '../wire/readFailed';
 
 export const RECORD_VIEW_TYPE = 'modbench.record';
@@ -179,7 +180,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
         if (reason === shownReason || !tab.awaitsRecord) return;
         shownReason = reason;
         this.deps.channel.warn(`Failed to read ${fsPath}: ${reason}`);
-        showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: 'main.js', globals: { mEditLoadError: failure } });
+        showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: 'main.js', globals: { mEditLoadError: failure } satisfies RecordPageGlobals });
       };
       try {
         const record = await this.deps.client.getRecordOfFile(fsPath);
@@ -246,7 +247,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     tabs.focus(tab);
     tab.own(panel.onDidChangeViewState(() => { if (panel.active) tabs.focus(tab); }));
     showWebviewPage(panel.webview, context.extensionUri, {
-      script: 'main.js', globals: { mEditFormKey: formKey, mEditColumns: columns, ...(place && { mEditViewState: place }) },
+      script: 'main.js', globals: { mEditFormKey: formKey, mEditColumns: [...columns], ...(place && { mEditViewState: place }) } satisfies RecordPageGlobals,
     });
   }
 }
