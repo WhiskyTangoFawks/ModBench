@@ -89,7 +89,7 @@ internal sealed class Indexer : IQueryIndex, IDisposable
         {
             _reconciler.StartReconcile();
             return new(StoreRebuildRefusal.StillServingReads,
-                $"mEdit's index was not rebuilt: a read of it was still open after {IndexWriteGate.HoldLimit.TotalSeconds:0}s. It is reopened as it was.");
+                IndexWriteGate.NotDrained("mEdit's index was not rebuilt", "It is reopened as it was."));
         }
         if (_indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence) is { } heldElsewhere)
             return new(StoreRebuildRefusal.HeldByAnotherWindow, heldElsewhere);

@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 
 namespace MEditService.Index.Queries;
@@ -12,18 +13,19 @@ public interface IWorldspaceQueryService
 
 /// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin
 /// winner.</summary>
-internal sealed class WorldspaceQueryService(IQueryIndex index) : IWorldspaceQueryService
+internal sealed class WorldspaceQueryService(IQueryIndex index, LoadOrderHolder loadOrder) : IWorldspaceQueryService
 {
     private const int WorldspaceListLimit = 5000;
 
     private readonly IQueryIndex _index = index;
+    private readonly LoadOrderHolder _loadOrder = loadOrder;
 
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(PluginAddress plugin)
     {
         var repo = _index.RequireReads();
         // Without an origin filter, two same-filename plugins' worldspace lists silently merge
         // into one under this plugin name.
-        var query = new RecordQuery(RecordQueryScope.Navigator, RecordTypes: ["wrld"], Plugin: plugin.Name, Origin: plugin.Origin, Limit: WorldspaceListLimit, Offset: 0, GroupOnly: true);
+        var query = new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [RecordTypes.For(_loadOrder.Require().GameRelease).Worldspace], Plugin: plugin.Name, Origin: plugin.Origin, Limit: WorldspaceListLimit, Offset: 0, GroupOnly: true);
         var holdingCells = repo.GetWorldspacesHoldingCells(plugin);
         return [.. repo.Search(query)
             .Items.Select(r => new WorldspaceSummary(
