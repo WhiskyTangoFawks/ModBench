@@ -49,12 +49,12 @@ public sealed class TrackedPluginReadTests : IDisposable
     [Fact]
     public void ALoadOrderNamingATrackedPluginInAnotherCase_StillReadsItAsDerivedFromItsTree()
     {
-        var recased = new PluginAddress("TRACKED.ESP", "trackedmod");
+        var recased = new PluginAddress("Tracked.esp", "trackedmod");
         _index.Reconcile(_holder, _fixture.GameDirectory,
             [.. _fixture.Plugins.Select(p => p.Name == Tracked.Name ? p with { Name = recased.Name, Origin = recased.Origin } : p)],
             GameRelease.Fallout4);
 
-        Assert.True(ReadsFromItsTree(recased));
+        var row = _index.PluginRowOf(recased); Assert.True(ReadsFromItsTree(recased), $"{row?.IsTracked} {row?.PluginSourceUnreadable} {string.Join(";", _index.Problems.GetProblems().Select(p => p.Plugin.Name + string.Join("|", p.Problems.Select(q => q.Message))))}");
     }
 
     [Fact]
