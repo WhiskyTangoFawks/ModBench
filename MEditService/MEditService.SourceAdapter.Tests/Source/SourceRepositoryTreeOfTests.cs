@@ -6,7 +6,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-public sealed class SourceRepositoryFilesOfTests : IDisposable
+public sealed class SourceRepositoryTreeOfTests : IDisposable
 {
     private const string PluginName = "FilesOf.esp";
     private const string NpcFormKey = "000800:FilesOf.esp";
@@ -18,7 +18,7 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
 
     private readonly ScratchDirectory _modFolder = new("medit-filesof-");
 
-    public SourceRepositoryFilesOfTests()
+    public SourceRepositoryTreeOfTests()
     {
         PluginBaselines.Track(
             _modFolder,
@@ -48,27 +48,21 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
 
     private string NpcFullPath => Path.Combine(_modFolder, NpcRelativePath);
 
-    private List<string> PathsOnDisk() =>
-        [.. Directory.EnumerateFiles(
-                Path.Combine(_modFolder, PluginSourceRoot.For(PluginName)), "*", SearchOption.AllDirectories)
-            .Select(file => Path.GetRelativePath(_modFolder, file))
-            .Order(StringComparer.Ordinal)];
-
     [Fact]
-    public void FilesOf_AnswersEveryFileUnderThePluginsSourceRoot_WithItsOwnBytes()
+    public void TreeOf_AnswersEveryFileUnderThePluginsSourceRoot_AsTheDoorNamesIt_WithItsOwnBytes()
     {
-        var files = Repository.FilesOf(Plugin).Files;
+        var files = Repository.TreeOf(Plugin).Files;
 
-        Assert.Equal(PathsOnDisk(), [.. files.Select(f => f.RelativePath).Order(StringComparer.Ordinal)]);
-        var npc = files.Single(f => f.RelativePath == NpcRelativePath);
-        Assert.Equal(File.ReadAllBytes(NpcFullPath), npc.Content);
+        var npcDoorPath = Path.Combine("Npcs", "FixtureNpc - 000800_FilesOf.esp.json");
+        Assert.Equal([npcDoorPath, "RecordData.json"], [.. files.Select(f => f.RelativePath).Order(StringComparer.Ordinal)]);
+        Assert.Equal(File.ReadAllBytes(NpcFullPath), files.Single(f => f.RelativePath == npcDoorPath).Content);
     }
 
     [Fact]
-    public void FilesOf_AfterAPutThroughTheSameRepository_AnswersTheTreeAsItNowStands_NotFromAMemoOfBeforeTheWrite()
+    public void TreeOf_AfterAPutThroughTheSameRepository_AnswersTheTreeAsItNowStands_NotFromAMemoOfBeforeTheWrite()
     {
         var repository = Repository;
-        var before = repository.FilesOf(Plugin).Files.Count;
+        var before = repository.TreeOf(Plugin).Files.Count;
 
         repository.Put(
             Plugin,
@@ -76,26 +70,26 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
                 "000950:FilesOf.esp", "npc_", "MemoNpc",
                 "{\n  \"FormKey\": \"000950:FilesOf.esp\",\n  \"EditorID\": \"MemoNpc\"\n}"));
 
-        Assert.Equal(before + 1, repository.FilesOf(Plugin).Files.Count);
+        Assert.Equal(before + 1, repository.TreeOf(Plugin).Files.Count);
     }
 
     [Fact]
-    public void FilesOf_WhenAFileCannotBeRead_NamesThatFile_AndAnswersNoFiles_NotHalfATreeACallerTakesForASmallerOne()
+    public void TreeOf_WhenAFileCannotBeRead_NamesThatFile_AndAnswersNoFiles_NotHalfATreeACallerTakesForASmallerOne()
     {
         var npcRelativePath = NpcRelativePath;
         using var held = new FileStream(NpcFullPath, FileMode.Open, FileAccess.Read, FileShare.None);
 
-        var files = Repository.FilesOf(Plugin);
+        var files = Repository.TreeOf(Plugin);
 
         Assert.Equal(npcRelativePath, files.Unreadable);
         Assert.Empty(files.Files);
     }
 
     [Fact]
-    public void FilesOf_ForAPluginTheTreeHoldsNoSourceFor_IsEmpty()
+    public void TreeOf_ForAPluginTheTreeHoldsNoSourceFor_IsEmpty()
     {
         var stranger = new PluginAddress("Stranger.esp", Plugin.Origin);
 
-        Assert.Empty(Repository.FilesOf(stranger).Files);
+        Assert.Empty(Repository.TreeOf(stranger).Files);
     }
 }

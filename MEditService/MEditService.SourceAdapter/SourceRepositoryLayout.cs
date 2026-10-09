@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -52,37 +53,53 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     /// looks under.</summary>
     internal static IReadOnlyList<TreeFile> PristineFilesOf(
         string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
-        [.. treeFiles.Select(file => new TreeFile(
-            file.RelativePath == DocumentFileNames.Root
-                ? HeaderDocumentFor(pluginFileName)
-                : Path.Combine(RootFor(pluginFileName), SourceNameOf(file.RelativePath)),
-            file.Content))];
+        [.. treeFiles.Select(file => PlacedFileOf(pluginFileName, file))];
 
-    /// <summary>The files of <see cref="PristineFilesOf"/> as the whole-mod door names them.</summary>
-    internal static IReadOnlyList<TreeFile> DoorFilesOf(
+    /// <summary>One file of the door's tree where the mod folder holds it.</summary>
+    internal static TreeFile PlacedFileOf(string pluginFileName, TreeFile doorFile) =>
+        new(doorFile.RelativePath == DocumentFileNames.Root
+                ? HeaderDocumentFor(pluginFileName)
+                : Path.Combine(RootFor(pluginFileName), SourceNameOf(doorFile.RelativePath)),
+            doorFile.Content);
+
+    /// <summary>Placed files of <paramref name="pluginFileName"/>'s tree as the whole-mod door names them,
+    /// relative to the tree's root.</summary>
+    internal static IReadOnlyList<TreeFile> DoorTreeOf(
         string pluginFileName, IEnumerable<TreeFile> files, GameRelease gameRelease)
     {
         var held = files.ToList();
         return [.. DoorNames(pluginFileName, held, gameRelease).Zip(held, (name, file) => new TreeFile(name.Door, file.Content))];
     }
 
-    /// <summary><paramref name="doorText"/>, the door's words about <paramref name="pluginFileName"/>'s tree,
-    /// with each of <paramref name="files"/> named as the layout names it.</summary>
-    internal static string SourceTextOf(
-        string pluginFileName, string doorText, IEnumerable<TreeFile> files, GameRelease gameRelease) =>
-        DoorNames(pluginFileName, [.. files], gameRelease)
-            .Where(name => name.Door != name.Source)
-            .Aggregate(doorText, (text, name) => text.Replace(name.Door, name.Source, StringComparison.Ordinal));
+    /// <summary><paramref name="diagnosis"/> of a read of <paramref name="files"/>' door tree, each file it
+    /// names named where <paramref name="files"/> hold it. A name inside another path is that path's.</summary>
+    internal static PluginDiagnosis InSourceNames(
+        string pluginFileName, PluginDiagnosis diagnosis, IEnumerable<TreeFile> files, GameRelease gameRelease)
+    {
+        var names = DoorNames(pluginFileName, [.. files], gameRelease).ToList();
+        string SourceOf(string door) =>
+            names.FirstOrDefault(name => name.Door == door).Source ?? Path.Combine(RootFor(pluginFileName), door);
+
+        return diagnosis with
+        {
+            Anchor = diagnosis.Anchor is { } anchor ? SourceOf(anchor) : null,
+            Message = names.Aggregate(diagnosis.Message, (text, name) =>
+                Regex.Replace(text, $@"(?<![\w/\\.-]){Regex.Escape(name.Door)}(?![\w/\\.-])", _ => name.Source)),
+        };
+    }
 
     private static IEnumerable<(string Source, string Door)> DoorNames(
         string pluginFileName, IReadOnlyList<TreeFile> files, GameRelease gameRelease)
     {
+        var root = RootFor(pluginFileName);
         var sources = files.Select(file => file.RelativePath).ToList();
         var documents = ContainerDocumentsAmong(sources, gameRelease);
         string DoorName(string source)
         {
-            if (IsHeaderDocumentPath(source, pluginFileName)) return DoorHeaderDocumentFor(pluginFileName);
-            return documents.Contains(source) ? Path.Combine(PathShape.DirectoryOf(source), DocumentFileNames.Root) : source;
+            if (IsHeaderDocumentPath(source, pluginFileName)) return DocumentFileNames.Root;
+            return Path.GetRelativePath(root, documents.Contains(source)
+                ? Path.Combine(PathShape.DirectoryOf(source), DocumentFileNames.Root)
+                : source);
         }
 
         return sources.Select(source => (source, DoorName(source)));
@@ -137,9 +154,6 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         ContainerDocumentAmong(
             directory,
             Directory.Exists(directory) ? Directory.EnumerateFiles(directory).Where(file => !CarriesNoRecord(file)) : []);
-
-    private static string DoorHeaderDocumentFor(string pluginFileName) =>
-        Path.Combine(RootFor(pluginFileName), DocumentFileNames.Root);
 
     /// <summary>The plugin header's own document, named for its FormKey: a header has no EditorID.</summary>
     internal static string HeaderDocumentIn(string modFolder, string pluginFileName) =>

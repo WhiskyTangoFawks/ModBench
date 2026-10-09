@@ -90,6 +90,17 @@ public sealed class PluginDiagnosisTests
     }
 
     [Fact]
+    public void FromSourceReadException_NamesAPathItsMessageCarries_RelativeToTheTree()
+    {
+        var treeRoot = Path.GetFullPath("medit-diagnosis-unit-tree");
+        var ex = new InvalidOperationException($"Could not locate a GameRelease to use from path: {Path.Combine(treeRoot, "RecordData.json")}");
+
+        var diagnosis = PluginDiagnosis.FromSourceReadException(ex, treeRoot);
+
+        Assert.Equal("Could not locate a GameRelease to use from path: RecordData.json", diagnosis.Message);
+    }
+
+    [Fact]
     public void Describe_WithNoAnchorAndNoTail_NamesThePluginAndTheUnknownClass()
     {
         var diagnosis = new PluginDiagnosis(Anchor: null, DefectClass: PluginDiagnosis.UnknownClass, Tail: null, Message: "boom");

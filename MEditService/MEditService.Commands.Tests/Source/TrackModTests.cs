@@ -206,7 +206,7 @@ public sealed class TrackModTests
             return deserialized;
         }
 
-        var adapter = new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenCorruptTheNpc);
+        var adapter = new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc);
 
         var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
 
@@ -241,7 +241,7 @@ public sealed class TrackModTests
             return deserialized;
         }
 
-        var adapter = new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenMutateTheFloat);
+        var adapter = new ForgedTreeWriteAdapter(DeserializeThenMutateTheFloat);
 
         var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
 
@@ -318,7 +318,7 @@ public sealed class TrackModTests
             return deserialized;
         }
 
-        var adapter = new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenCorrupt);
+        var adapter = new ForgedTreeWriteAdapter(DeserializeThenCorrupt);
 
         var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
 

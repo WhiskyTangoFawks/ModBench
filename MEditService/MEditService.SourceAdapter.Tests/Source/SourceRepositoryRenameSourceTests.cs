@@ -60,8 +60,8 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         SourceRepository.Track(
             _modFolder,
             [
-                (Files(Old.Name, OldTree), new DecompiledPlugin(Old.Name, LastWritten)),
-                (Files(Other.Name, [("000000_Other.esp.json", """{ "ModKey": "Other.esp" }""")]), new DecompiledPlugin(Other.Name, null)),
+                (Files(OldTree), new DecompiledPlugin(Old.Name, LastWritten)),
+                (Files([("000000_Other.esp.json", """{ "ModKey": "Other.esp" }""")]), new DecompiledPlugin(Other.Name, null)),
             ]);
 
     public void Dispose() => _modFolder.Dispose();
@@ -125,8 +125,8 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         var documents = TreeDocuments.Of(Repository, renamed);
         Assert.Contains(documents, d => d.RecordType == PluginHeader.RecordType);
         Assert.Contains(
-            SourceRepository.DoorFilesOf(renamed.Name, Repository.FilesOf(renamed).Files, GameRelease.Fallout4),
-            file => file.RelativePath == Path.Combine(PluginSourceRoot.For(renamed.Name), "RecordData.json"));
+            Repository.TreeOf(renamed).Files,
+            file => file.RelativePath == "RecordData.json");
     }
 
     [Fact]
@@ -283,8 +283,8 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
 
     private SourceRepository Repository => SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require();
 
-    private static List<TreeFile> Files(string plugin, IEnumerable<(string Path, string Text)> tree) =>
-        [.. tree.Select(file => new TreeFile($"plugin-source/{plugin}/{file.Path}", Encoding.UTF8.GetBytes(file.Text)))];
+    private static List<TreeFile> Files(IEnumerable<(string Path, string Text)> tree) =>
+        [.. tree.Select(file => new TreeFile(file.Path, Encoding.UTF8.GetBytes(file.Text)))];
 
     private (string Path, string Text)[] TreeOf(string plugin)
     {

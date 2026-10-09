@@ -7,7 +7,7 @@ namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>The adapter with the tree write's deserialize replaced, which is how the round-trip
 /// gate's negative tests forge a codec defect no real codec has.</summary>
-internal sealed class ForgedTreeWriteAdapter(string pluginFileName, Func<string, CancellationToken, Task<IMod>> deserialize)
+internal sealed class ForgedTreeWriteAdapter(Func<string, CancellationToken, Task<IMod>> deserialize)
     : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {
     public override async Task WriteFromTreeAsync(
@@ -22,8 +22,7 @@ internal sealed class ForgedTreeWriteAdapter(string pluginFileName, Func<string,
             await File.WriteAllBytesAsync(fullPath, file.Content, cancel);
         }
 
-        var treeRoot = Path.Combine(scratchDir, PluginSourceRoot.For(pluginFileName));
-        var recompiled = await deserialize(treeRoot, cancel);
+        var recompiled = await deserialize(scratchDir, cancel);
 
         await recompiled.BeginWrite
             .ToPath(destinationPath)

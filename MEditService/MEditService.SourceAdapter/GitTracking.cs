@@ -12,7 +12,7 @@ internal static class GitTracking
 {
     /// <summary>Answers each plugin whose files could not be written.</summary>
     internal static IReadOnlyList<(string Plugin, string Reason)> Track(
-        string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin)> plugins)
+        string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins)
     {
         if (SourceRepositoryGit.IsTracked(modFolder) || SourceRepositoryGit.HoldsAnotherRepository(modFolder))
             throw new InvalidOperationException($"'{modFolder}' already holds a repository.");
@@ -49,16 +49,16 @@ internal static class GitTracking
     }
 
     private static (List<DecompiledPlugin> Written, List<(string Plugin, string Reason)> Refused) WriteEachPlugin(
-        string workTree, IReadOnlyList<(IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin)> plugins, WriteJournal journal)
+        string workTree, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins, WriteJournal journal)
     {
         List<DecompiledPlugin> written = [];
         List<(string Plugin, string Reason)> refused = [];
-        foreach (var (files, plugin) in plugins)
+        foreach (var (tree, plugin) in plugins)
         {
             var mark = journal.Mark;
             try
             {
-                journal.WriteAll(files, workTree);
+                journal.WriteAll(tree.Select(file => SourceRepositoryLayout.PlacedFileOf(plugin.Plugin, file)), workTree);
                 written.Add(plugin);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)

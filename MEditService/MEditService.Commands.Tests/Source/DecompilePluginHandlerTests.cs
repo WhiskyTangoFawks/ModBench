@@ -132,7 +132,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var before = SourceTextOf("First.esp");
         WritePlugin(_trackedMod, "First.esp", "UpgradedNpc");
 
-        var result = await Decompile(new ForgedTreeWriteAdapter("First.esp", DeserializeThenCorruptTheNpc), Tracked("First.esp"));
+        var result = await Decompile(new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc), Tracked("First.esp"));
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.RoundTripFailed, refused.Refusal);
