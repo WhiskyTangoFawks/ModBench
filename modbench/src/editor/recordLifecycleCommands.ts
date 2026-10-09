@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
-import { isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress } from '../client';
+import {
+  isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress, type SourceChanges,
+  type UnsavedDocument,
+} from '../client';
 import { copyModeItems, copiesWritten, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -78,12 +81,26 @@ function selectedRecords(nodes: readonly unknown[]): Selection {
   };
 }
 
-type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords'>;
+function pluginsOf(records: readonly RecordAddress[]): PluginAddress[] {
+  const byKey = new Map(records.map(({ plugin, origin }) => [`${origin}\u0000${plugin}`, { name: plugin, origin }]));
+  return [...byKey.values()];
+}
+
+type RecordLifecycleClient = Pick<MEditClient, 'getDeleteChanges'>;
+
+/** How a delete reaches plugin source: the dirty documents mEdit reads in place of their files, the workspace edit
+ *  that makes its answer, and the Source Control panel, which misses the change on its own. */
+export interface DeleteDeps {
+  unsaved: () => readonly UnsavedDocument[];
+  apply: (items: readonly SourceChanges[]) => Promise<void>;
+  refreshSourceControlFor: (plugin: PluginAddress) => void;
+}
 
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, reporter: Reporter, ask: AskQuestion,
   selections: ViewSelections,
   write: RecordWrite,
+  source: DeleteDeps,
 ): vscode.Disposable[] {
   return [
     // Asked once for the whole selection and naming each record, so the user confirms the right thing.
@@ -93,12 +110,19 @@ export function registerRecordLifecycleCommands(
       if (records.length > 0 && await askToDelete(records.map(label), ask) !== 'Delete') return;
 
       const reportOutcome = async () => {
-        const answer = records.length > 0 ? await client.deleteRecords(records) : { landed: [], refused: [] };
+        const answer = records.length > 0 ? await client.getDeleteChanges(records, source.unsaved()) : { applied: [], refused: [] };
         if (isRefused(answer)) { reporter.report('error', answer.message); return; }
+        try {
+          if (answer.applied.length > 0) await source.apply(answer.applied);
+        } catch (error) {
+          reporter.report('error', 'Could not delete the records.', errorMessage(error));
+          return;
+        }
+        for (const plugin of pluginsOf(answer.applied.map(({ record }) => record))) source.refreshSourceControlFor(plugin);
         const refused = [...unreadable, ...answer.refused];
         reporter.selectionOutcome(
           `Could not delete ${refused.length} of ${records.length + unreadable.length} records.`,
-          { landed: answer.landed, refused }, label);
+          { landed: answer.applied.map(({ record }) => record), refused }, label);
       };
       await (records.length > 0 ? write(reportOutcome, invokedFrom) : reportOutcome());
     }),

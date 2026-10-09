@@ -30,10 +30,10 @@ public static class CommandHandlers
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<EditRecordChangesHandler>>()));
 
-        services.AddSingleton(sp => new DeleteRecordHandler(
+        services.AddSingleton(sp => new DeleteRecordChangesHandler(
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<ILogger<DeleteRecordHandler>>()));
+            sp.GetRequiredService<ILogger<DeleteRecordChangesHandler>>()));
 
         services.AddSingleton(sp => new CreateRecordHandler(
             sp.GetRequiredService<WriteTargets>(),

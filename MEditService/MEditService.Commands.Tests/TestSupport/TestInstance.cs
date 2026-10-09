@@ -53,7 +53,7 @@ public abstract class TestInstance : IDisposable
 
     public TestEditor EditHandler => new(Handler<EditRecordChangesHandler>(), Holder);
     public EditRecordChangesHandler EditChangesHandler => Handler<EditRecordChangesHandler>();
-    public DeleteRecordHandler DeleteHandler => Handler<DeleteRecordHandler>();
+    public DeleteRecordChangesHandler DeleteHandler => Handler<DeleteRecordChangesHandler>();
     public CreateRecordHandler CreateHandler => Handler<CreateRecordHandler>();
     public CopyRecordHandler CopyHandler => Handler<CopyRecordHandler>();
     public CompilePluginHandler CompileHandler => Handler<CompilePluginHandler>();

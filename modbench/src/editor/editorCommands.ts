@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
-import type { MEditClient } from '../client';
+import type { MEditClient, UnsavedDocument } from '../client';
 import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { pickRecord } from './recordPicker';
 import type { SharedRecordPanelDeps } from './recordPanelMessageRouter';
 import type { RecordTabs } from './recordTabs';
 import { RECORD_VIEW_TYPE, RecordEditorProvider } from './recordPanelHost';
-import { applyRecordEdit, oneAtATime, type RecordWriteDeps } from './applyRecordEdit';
+import { applyRecordEdit, applySourceChanges, oneAtATime, type RecordWriteDeps } from './applyRecordEdit';
 import { ExtendedFieldDocuments } from './extendedFieldEditor';
 import { commitField, registerRecordPanelContextCommands, type FieldCommitDeps } from './recordPanelContextCommands';
 import { registerGridKeyCommands } from './gridKeyCommands';
@@ -32,7 +32,7 @@ export interface EditorCommandDeps {
   tabs: RecordTabs;
   meditClient: Pick<MEditClient,
     | 'getEditChanges' | 'searchRecords'
-    | 'deleteRecords' | 'copyRecords'
+    | 'getDeleteChanges' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders'
     | 'getComparison' | 'getRecordsComparison' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onReconnected' | 'getRecordOwner'
     | 'getCopyDocument' | 'getRecordOfFile' | 'getRenderedDocument'>;
@@ -44,6 +44,8 @@ export interface EditorCommandDeps {
   // The plugin's Source Control status, which a committed field edit redrives, lives on the session
   // object, narrowed to a callback like focusedViewSelection.
   refreshSourceControlFor: (plugin: PluginAddress) => void;
+  // The documents with unsaved changes under plugin source, which mEdit reads in place of their files.
+  dirtyPluginSource: () => readonly UnsavedDocument[];
   // The instance's mods, which a column header reads for its mod's repository state.
   modFacts: ModFacts;
   outputChannel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
@@ -104,7 +106,11 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       tellFocusedPanel: (message) => { tabs.activeTab()?.post(message); },
     }),
     ...registerRecordLifecycleCommands(
-      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, selections, deps.recordWrite),
+      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, selections, deps.recordWrite, {
+        unsaved: deps.dirtyPluginSource,
+        apply: (items) => applySourceChanges(items),
+        refreshSourceControlFor: writeDeps.refreshSourceControlFor,
+      }),
     ...registerRecordCopyCommands(
       meditClient, deps.reporterFor('recordCopy'), deps.ask, selections, deps.recordWrite),
     vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {

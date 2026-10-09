@@ -1,4 +1,5 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
+import type { RecordAddress } from '../../client';
 
 interface PickItem { label: string; description?: string; mode?: string; plugin?: { name: string } }
 type ShowQuickPick = (items: readonly PickItem[], options?: { canPickMany?: boolean }) => Promise<unknown>;
@@ -65,13 +66,17 @@ function recordingWrite(): { write: RecordWrite; writing: string[]; viewsAskedFo
   };
 }
 
+const UNSAVED = { path: '/mods/ModA/plugin-source/MyPatch.esp/Cell.json', text: '{}' };
+const changes = (record: RecordAddress) => ({ record, moves: [], deletions: [], documents: [] });
+
 describe('registerRecordLifecycleCommands', () => {
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
     const { write, writing, viewsAskedFor } = recordingWrite();
-    registerRecordLifecycleCommands(client, reporter, ask, selections, write);
-    return { reporter, ask, writing, viewsAskedFor };
+    const source = { unsaved: () => [UNSAVED], apply: vi.fn(() => Promise.resolve()), refreshSourceControlFor: vi.fn() };
+    registerRecordLifecycleCommands(client, reporter, ask, selections, write, source);
+    return { reporter, ask, writing, viewsAskedFor, source };
   }
 
   describe('from the palette, handed no row, taking the Plugins selection', () => {
@@ -79,13 +84,13 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('delete removes the selected records, asking once', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { landed: [RECORD_IDENTITY], refused: [] });
+      client.setCommandResult('getDeleteChanges', { applied: [RECORD_IDENTITY].map(changes), refused: [] });
       viewSelection = [RECORD_NODE];
       invoke(client, 'Delete');
 
       await present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")();
 
-      expect(client.calls.filter(c => c.method === 'deleteRecords').map(c => c.args[0])).toEqual([
+      expect(client.calls.filter(c => c.method === 'getDeleteChanges').map(c => c.args[0])).toEqual([
         [{ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' }],
       ]);
     });
@@ -96,14 +101,14 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('deletes the selection of the view it is bound in, not the view last selected in', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { landed: [], refused: [] });
+      client.setCommandResult('getDeleteChanges', { applied: [].map(changes), refused: [] });
       viewSelection = [carrying({ formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' })];
       selectionsOfViews.set('modbench.pluginListTree', [RECORD_NODE]);
       invoke(client, 'Delete');
 
       await present(handlers.get('modbench.record.delete'), 'the delete command')({ view: 'modbench.pluginListTree' });
 
-      expect(client.calls.filter(c => c.method === 'deleteRecords').map(c => c.args[0])).toEqual([[RECORD_IDENTITY]]);
+      expect(client.calls.filter(c => c.method === 'getDeleteChanges').map(c => c.args[0])).toEqual([[RECORD_IDENTITY]]);
     });
 
     it('deletes nothing with nothing selected in its view, rather than fall back to another view', async () => {
@@ -113,7 +118,7 @@ describe('registerRecordLifecycleCommands', () => {
 
       await present(handlers.get('modbench.record.delete'), 'the delete command')({ view: 'modbench.pluginListTree' });
 
-      expect(client.calls.filter(c => c.method === 'deleteRecords')).toEqual([]);
+      expect(client.calls.filter(c => c.method === 'getDeleteChanges')).toEqual([]);
     });
   });
 
@@ -126,29 +131,29 @@ describe('registerRecordLifecycleCommands', () => {
     const UNTRACKED = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
     const SECOND_NODE = carrying(SECOND, 'SecondNpc');
     const UNTRACKED_NODE = carrying(UNTRACKED);
-    const deleteCalls = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'deleteRecords').map(c => c.args);
+    const deleteCalls = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'getDeleteChanges').map(c => c.args[0]);
 
     const COLUMN_HEADER = { webviewSection: 'recordHeader', ...carrying(FIRST), compilable: true, editable: true, preventDefaultContextMenuItems: true };
 
     it.each([['a row', RECORD_NODE], ['the Editor\'s column header', COLUMN_HEADER]])(
       'sends the clicked record alone from %s when no selection comes with it', async (_label, arg) => {
         const client = new InMemoryMEditClient();
-        client.setCommandResult('deleteRecords', { landed: [FIRST], refused: [] });
+        client.setCommandResult('getDeleteChanges', { applied: [FIRST].map(changes), refused: [] });
         invoke(client, 'Delete');
 
         await deleteRecords(arg);
 
-        expect(deleteCalls(client)).toEqual([[[FIRST]]]);
+        expect(deleteCalls(client)).toEqual([[FIRST]]);
       });
 
     it.each(['worldspace', 'cell', 'placed'])('names a %s row\'s record by the FormKey and EditorID the row states beside its plugin', async (kind) => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { landed: [SECOND], refused: [] });
+      client.setCommandResult('getDeleteChanges', { applied: [SECOND].map(changes), refused: [] });
       const { ask } = invoke(client, 'Delete');
 
       await deleteRecords({ kind, ...carrying(SECOND, 'Here') });
 
-      expect(deleteCalls(client)).toEqual([[[SECOND]]]);
+      expect(deleteCalls(client)).toEqual([[SECOND]]);
       expect(ask.asked.map((question) => question.message)).toEqual([
         'Delete Here [000802:MyPatch.esp] in MyPatch.esp (ModA)? It leaves its plugin source as a working-tree change you can review.',
       ]);
@@ -156,13 +161,13 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('names the plugin copy a Referenced By row stands for, with its origin and the EditorID of the record it holds', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { landed: [SECOND], refused: [] });
+      client.setCommandResult('getDeleteChanges', { applied: [SECOND].map(changes), refused: [] });
       const { ask } = invoke(client, 'Delete');
       const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'TestNPC', { name: SECOND.plugin, origin: SECOND.origin }, []);
 
       await deleteRecords(holder);
 
-      expect(deleteCalls(client)).toEqual([[[SECOND]]]);
+      expect(deleteCalls(client)).toEqual([[SECOND]]);
       expect(ask.asked.map((question) => question.message)).toEqual([
         'Delete TestNPC [000802:MyPatch.esp] in MyPatch.esp (ModA)? It leaves its plugin source as a working-tree change you can review.',
       ]);
@@ -197,17 +202,17 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('sends the whole selection as one call', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { landed: [FIRST, UNTRACKED, SECOND], refused: [] });
+      client.setCommandResult('getDeleteChanges', { applied: [FIRST, UNTRACKED, SECOND].map(changes), refused: [] });
       invoke(client, 'Delete');
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, UNTRACKED_NODE, SECOND_NODE]);
 
-      expect(deleteCalls(client)).toEqual([[[FIRST, UNTRACKED, SECOND]]]);
+      expect(deleteCalls(client)).toEqual([[FIRST, UNTRACKED, SECOND]]);
     });
 
     it('asks once, listing every selected record with its plugin and origin, in working-tree words', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { landed: [FIRST, UNTRACKED, SECOND], refused: [] });
+      client.setCommandResult('getDeleteChanges', { applied: [FIRST, UNTRACKED, SECOND].map(changes), refused: [] });
       const { ask } = invoke(client, 'Delete');
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, UNTRACKED_NODE, SECOND_NODE]);
@@ -223,7 +228,7 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('names a lone record in the question itself, in working-tree words', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { landed: [SECOND], refused: [] });
+      client.setCommandResult('getDeleteChanges', { applied: [SECOND].map(changes), refused: [] });
       const { ask } = invoke(client, 'Delete');
 
       await deleteRecords(SECOND_NODE);
@@ -238,7 +243,7 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('deletes nothing and says nothing when the confirmation is cancelled, rather than deleting whatever the dialog answered', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { landed: [FIRST, SECOND], refused: [] });
+      client.setCommandResult('getDeleteChanges', { applied: [FIRST, SECOND].map(changes), refused: [] });
       const { reporter } = invoke(client, undefined);
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
@@ -253,7 +258,7 @@ describe('registerRecordLifecycleCommands', () => {
         landed: [FIRST, SECOND],
         refused: [{ item: UNTRACKED, reason: 'Other.esp is not tracked, so it is read-only.' }],
       };
-      client.setCommandResult('deleteRecords', outcome);
+      client.setCommandResult('getDeleteChanges', { applied: outcome.landed.map(changes), refused: outcome.refused });
       const { reporter } = invoke(client, 'Delete');
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, UNTRACKED_NODE, SECOND_NODE]);
@@ -268,12 +273,12 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('refuses a row that carries no record Argument, naming it, and still deletes the rest', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { landed: [FIRST], refused: [] });
+      client.setCommandResult('getDeleteChanges', { applied: [FIRST].map(changes), refused: [] });
       const { reporter } = invoke(client, 'Delete');
 
       await deleteRecords(RECORD_NODE, [RECORD_NODE, { label: 'Lost.esp', formKey: '000700:Lost.esp', plugin: 'Lost.esp', origin: 'ModA' }]);
 
-      expect(deleteCalls(client)).toEqual([[[FIRST]]]);
+      expect(deleteCalls(client)).toEqual([[FIRST]]);
       expect(reporter.reports).toEqual([{
         severity: 'error',
         message: 'Could not delete 1 of 2 records.',
@@ -283,7 +288,7 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('says nothing when every record landed', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { landed: [FIRST, SECOND], refused: [] });
+      client.setCommandResult('getDeleteChanges', { applied: [FIRST, SECOND].map(changes), refused: [] });
       const { reporter } = invoke(client, 'Delete');
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
@@ -294,7 +299,7 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('reports the ready-to-show message at error when the call itself fails', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { refused: true, message: 'Could not delete 2 records — boom' });
+      client.setCommandResult('getDeleteChanges', { refused: true, message: 'Could not delete 2 records — boom' });
       const { reporter } = invoke(client, 'Delete');
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
@@ -304,12 +309,50 @@ describe('registerRecordLifecycleCommands', () => {
       ]);
     });
 
+    it('gives mEdit the dirty plugin source in place of its files', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('getDeleteChanges', { applied: [], refused: [] });
+      invoke(client, 'Delete');
+
+      await deleteRecords(SECOND_NODE);
+
+      expect(client.calls.filter(c => c.method === 'getDeleteChanges').map(c => c.args[1])).toEqual([[UNSAVED]]);
+    });
+
+    it('makes what mEdit answered as one workspace edit, then refreshes Source Control once for each plugin it changed', async () => {
+      const client = new InMemoryMEditClient();
+      const answered = [changes(FIRST), changes(SECOND), changes(UNTRACKED)];
+      client.setCommandResult('getDeleteChanges', { applied: answered, refused: [] });
+      const { source } = invoke(client, 'Delete');
+
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE, UNTRACKED_NODE]);
+
+      expect(source.apply.mock.calls).toEqual([[answered]]);
+      expect(source.refreshSourceControlFor.mock.calls).toEqual([
+        [{ name: 'MyPatch.esp', origin: 'ModA' }], [{ name: 'Other.esp', origin: 'ModB' }],
+      ]);
+    });
+
+    it('reports a workspace edit VS Code did not make, and lands nothing', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('getDeleteChanges', { applied: [changes(FIRST)], refused: [] });
+      const { reporter, source } = invoke(client, 'Delete');
+      source.apply.mockRejectedValue(new Error('VS Code did not apply the changes mEdit answered.'));
+
+      await deleteRecords(SECOND_NODE);
+
+      expect(reporter.reports).toEqual([
+        { severity: 'error', message: 'Could not delete the records.', detail: 'VS Code did not apply the changes mEdit answered.' },
+      ]);
+      expect(source.refreshSourceControlFor).not.toHaveBeenCalled();
+    });
+
     it('runs the delete inside the write, which ends when the call is answered', async () => {
       const client = new InMemoryMEditClient();
       const { writing } = invoke(client, 'Delete');
-      client.setCommandHandler('deleteRecords', () => {
+      client.setCommandHandler('getDeleteChanges', () => {
         writing.push('delete');
-        return Promise.resolve({ landed: [FIRST], refused: [{ item: SECOND, reason: 'no' }] });
+        return Promise.resolve({ applied: [changes(FIRST)], refused: [{ item: SECOND, reason: 'no' }] });
       });
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
@@ -319,7 +362,7 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('runs under Referenced By\'s bar when the rows are Referenced By\'s, and under the default bar for a Plugins row', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { landed: [], refused: [] });
+      client.setCommandResult('getDeleteChanges', { applied: [].map(changes), refused: [] });
       const { viewsAskedFor } = invoke(client, 'Delete', 'Delete');
       const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'SecondNpc', { name: 'MyPatch.esp', origin: 'ModA' }, []);
 
@@ -340,7 +383,7 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('ends the write after mEdit refuses the call, and reports it', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { refused: true, message: 'Could not delete 1 record — socket hang up' });
+      client.setCommandResult('getDeleteChanges', { refused: true, message: 'Could not delete 1 record — socket hang up' });
       const { writing, reporter } = invoke(client, 'Delete');
 
       await deleteRecords(SECOND_NODE);

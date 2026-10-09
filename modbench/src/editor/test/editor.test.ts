@@ -186,6 +186,7 @@ function makeEditor(
     recordViewIds,
     recordWrite: (command) => command(),
     refreshSourceControlFor: () => undefined,
+    dirtyPluginSource: () => [],
     modFacts,
   });
   const provider = h.editorProviders.get('modbench.record');
@@ -346,7 +347,7 @@ describe('Referenced By, as record tabs retarget and close', () => {
       client.setQueryAnswer('getPlugins', activeA);
       client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
       client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
-      client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], documents: [] });
+      client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], deletions: [], documents: [] });
       const { open, referencedBy } = makeEditor(client);
       const moving = open(OLD);
       open(OTHER);
@@ -506,9 +507,9 @@ describe('a record tab whose record an edit of its FormID moved', () => {
     client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
     const { open } = makeEditor(client);
     const tab = open(OLD);
-    client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], documents: [] });
+    client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], deletions: [], documents: [] });
     await editField(OLD);
-    client.setQueryAnswer('getEditChanges', { applied: true, moves: [], documents: [] });
+    client.setQueryAnswer('getEditChanges', { applied: true, moves: [], deletions: [], documents: [] });
     client.emit({ kind: 'rows-changed', plugin: 'Mod.esp', origin: 'ModA', keys: [OLD, MOVED], sequence: 2 });
     expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: MOVED }]]);
 
@@ -531,7 +532,7 @@ describe('an edit of a FormID, fired with no panel', () => {
     client.setQueryAnswer('getRecordsComparison', { compare: null, missing: [{ formKey: OLD, plugin: COPY_PLUGIN, reason: 'RecordGone', message: 'gone' }] });
     client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
     client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
-    client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], documents: [] });
+    client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], deletions: [], documents: [] });
     const { open } = makeEditor(client);
     const [one, other, elsewhere] = [open(OLD), open(OLD), open(ELSEWHERE)];
 
@@ -1029,7 +1030,7 @@ describe('what a record tab\'s webview posts', () => {
       const editing = client();
       editing.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/mods/ModA/plugin-source/A.esp/Npcs/Npc.json' });
       editing.setQueryAnswer('getRecordOfFile', { formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA' });
-      editing.setQueryAnswer('getEditChanges', { applied: true, moves: [], documents: [] });
+      editing.setQueryAnswer('getEditChanges', { applied: true, moves: [], deletions: [], documents: [] });
       return editing;
     }
     const edits = (client: InMemoryMEditClient) => client.calls.filter(({ method }) => method === 'getEditChanges').map(({ args }) => args.slice(0, 3));
@@ -1058,13 +1059,13 @@ describe('what a record tab\'s webview posts', () => {
 
     it('from a right-click, on a record the tab\'s last edit moved, is sent to the FormKey the record is at now', async () => {
       const mEdit = editing();
-      mEdit.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MODDED, moves: [], documents: [] });
+      mEdit.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MODDED, moves: [], deletions: [], documents: [] });
       const { open } = makeEditor(mEdit);
       const tab = open(FORM_KEY);
       const context = { webviewSection: 'arrayParent', formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA', path, preventDefaultContextMenuItems: true };
       await h.commands.get('modbench.record.editField')?.(
         { formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA' }, { op: 'set', path, value: 'x' });
-      mEdit.setQueryAnswer('getEditChanges', { applied: true, moves: [], documents: [] });
+      mEdit.setQueryAnswer('getEditChanges', { applied: true, moves: [], deletions: [], documents: [] });
 
       await h.commands.get('modbench.record.addElement')?.(context);
 

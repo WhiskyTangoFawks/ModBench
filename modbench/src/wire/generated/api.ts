@@ -558,7 +558,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/records/delete": {
+    "/records/delete-changes": {
         parameters: {
             query?: never;
             header?: never;
@@ -568,10 +568,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Delete records as working-tree changes, each on its own.
-         * @description Deletes each record's source file — a git-native, null-Body working-tree change: gone at Effective, still served at Head until the deletion is committed and compiled. Each record is deleted or refused on its own, and the answer names both. No reference cascade — a FormLink elsewhere pointing at a deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0007), the same as any other dangling link.
+         * The changes deleting records makes to plugin source, writing nothing, each record on its own.
+         * @description Given the current text of any unsaved document, each record's deletion as the files and folders it deletes and the text each document it changes holds afterwards, as an edit's are. Each item answers on the ones before it, and applying them in order leaves the records deleted. A record is changed or refused on its own, and the answer names both. No reference cascade — a FormLink elsewhere pointing at a deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0007).
          */
-        post: operations["DeleteRecord"];
+        post: operations["DeleteRecordChanges"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1119,11 +1119,18 @@ export interface components {
             formKey: string;
             recordType: string;
         };
-        RecordDeleteRequest: {
-            records: components["schemas"]["RecordAddress"][];
+        RecordDeleteChanges: {
+            record: components["schemas"]["RecordAddress"];
+            moves: components["schemas"]["SourceMove"][];
+            deletions: string[];
+            documents: components["schemas"]["DocumentChange"][];
         };
-        RecordDeleteResponse: {
-            applied: components["schemas"]["RecordAddress"][];
+        RecordDeleteChangesRequest: {
+            records: components["schemas"]["RecordAddress"][];
+            documents: components["schemas"]["DocumentChange"][];
+        };
+        RecordDeleteChangesResponse: {
+            applied: components["schemas"]["RecordDeleteChanges"][];
             refused: components["schemas"]["RecordAddressRefusal"][];
         };
         RecordDetail: {
@@ -2844,7 +2851,7 @@ export interface operations {
             };
         };
     };
-    DeleteRecord: {
+    DeleteRecordChanges: {
         parameters: {
             query?: never;
             header?: never;
@@ -2853,7 +2860,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RecordDeleteRequest"];
+                "application/json": components["schemas"]["RecordDeleteChangesRequest"];
             };
         };
         responses: {
@@ -2863,7 +2870,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordDeleteResponse"];
+                    "application/json": components["schemas"]["RecordDeleteChangesResponse"];
                 };
             };
             /** @description Bad Request */

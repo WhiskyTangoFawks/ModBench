@@ -33,7 +33,7 @@ public sealed class GitMissingApiTests : HostedTests
         Environment.SetEnvironmentVariable("PATH", string.Empty);
         try
         {
-            response = await Client.PostAsJsonAsync("/records/delete", new
+            response = await Client.PostAsJsonAsync("/records/delete-changes", new
             {
                 records = npcs.Select(formKey => new { formKey, plugin = Plugin, origin = Origin }).ToArray(),
             });

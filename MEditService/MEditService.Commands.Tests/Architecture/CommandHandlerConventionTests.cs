@@ -16,7 +16,7 @@ public sealed class CommandHandlerConventionTests
 
     private static readonly Type[] SelectionHandlers =
     [
-        typeof(DeleteRecordHandler),
+        typeof(DeleteRecordChangesHandler),
         typeof(TrackHandler),
         typeof(CompilePluginHandler),
         typeof(DecompilePluginHandler),

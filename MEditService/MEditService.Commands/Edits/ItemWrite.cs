@@ -66,4 +66,19 @@ internal static class ItemWrite
                     ? ItemAnswer<RecordEditRefusal, string?>.Landed(result.NewFormKey)
                     : ItemAnswer<RecordEditRefusal, string?>.Refused(result.Refusal, result.Message));
             });
+
+    /// <summary><see cref="Over{TItem}"/> for items answered as the changes they make, written nowhere: a landed
+    /// item's outcome is its changes.</summary>
+    internal static Task<SelectionResult<TItem, RecordEditRefusal, SourceChanges>> OverChanges<TItem>(
+        IEnumerable<TItem> items, IEqualityComparer<TItem> sameItem,
+        Func<TItem, SourceAnswer<RecordEditChanges>> write, Func<TItem, string> failure, ILogger logger) =>
+        OverAsync(
+            items, sameItem, RecordEditRefusal.GitUnavailable,
+            item =>
+            {
+                var result = WriteFailure.Refused(write(item), refused => refused, failure(item), logger);
+                return Task.FromResult(result.Outcome.Applied
+                    ? ItemAnswer<RecordEditRefusal, SourceChanges>.Landed(result.Changes)
+                    : ItemAnswer<RecordEditRefusal, SourceChanges>.Refused(result.Outcome.Refusal, result.Outcome.Message));
+            });
 }

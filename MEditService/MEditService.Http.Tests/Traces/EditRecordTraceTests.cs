@@ -85,10 +85,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         using var stream = await Client.NotificationStream();
 
-        var response = await Client.PostAsJsonAsync("/records/delete", new
-        {
-            records = new[] { new { formKey, plugin = Plugin, origin = Origin } },
-        });
+        var response = await Client.DeleteRecords([(formKey, Plugin, Origin)]);
 
         response.EnsureSuccessStatusCode();
         Assert.Single((await Body(response)).GetProperty("applied").EnumerateArray());
