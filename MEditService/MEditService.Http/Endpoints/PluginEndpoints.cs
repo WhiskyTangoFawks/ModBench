@@ -258,6 +258,8 @@ internal static class PluginEndpoints
     {
         if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return Results.Problem("Plugin name and origin are required.", statusCode: 400);
 
+        if (WriteEndpointMapping.MissingDocuments(req.Documents) is { } missing) return missing;
+
         var result = rename.RenameSource(
             plugin, req.NewName ?? string.Empty,
             WriteEndpointMapping.Unsaved(req.Documents));
@@ -361,6 +363,7 @@ internal static class PluginEndpoints
             logReceived: null,
             validate: () =>
             {
+                if (WriteEndpointMapping.MissingDocuments(req.Documents) is { } missing) return missing;
                 if (string.IsNullOrWhiteSpace(req.Origin))
                     return Results.Problem("Origin is required.", statusCode: 400);
                 if (string.IsNullOrWhiteSpace(req.RecordType))

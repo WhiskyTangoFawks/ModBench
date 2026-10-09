@@ -35,6 +35,7 @@ public sealed class RefusalLoggingApiTests : HostedTests
         await Client.PostAsJsonAsync("/records/delete-changes", new
         {
             records = new[] { new { formKey = "000FFF:Held.esp", plugin = Plugin, origin = Origin } },
+            documents = Array.Empty<object>(),
         });
 
         AssertLoggedOnce("Refused Delete of", "RecordNotFound");

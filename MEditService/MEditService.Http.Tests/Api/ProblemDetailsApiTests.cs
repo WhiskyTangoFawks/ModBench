@@ -144,6 +144,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             "deleteRecordChanges" => await client.PostAsJsonAsync("/records/delete-changes", new
             {
                 records = new[] { new { formKey = "000800:New.esp", plugin = "New.esp", origin = "NoLoadOrderMod" } },
+                documents = Array.Empty<object>(),
             }),
             _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Unknown operation"),
         };
