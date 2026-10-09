@@ -23,7 +23,7 @@ const isUnder = (folder: string, path: string): boolean => {
   return inside !== '' && !inside.startsWith('..') && !isAbsolute(inside);
 };
 
-/** Saves each unsaved plugin-source document under `folder` and answers the paths VS Code left unsaved. */
+// Saves each unsaved plugin-source document under `folder` and answers the paths VS Code left unsaved.
 async function saveDirtyPluginSource(folder: string): Promise<string[]> {
   const inFolder = () => vscode.workspace.textDocuments.filter(
     (document) => document.isDirty && isPluginSourceDocument(document.uri) && isUnder(folder, document.uri.fsPath));
