@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
@@ -47,7 +46,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
                     $"'{_pluginFileName}' is tracked but its source tree holds no root " +
                     $"{Path.GetFileName(_headerRelativePath)}, so it describes no plugin.", path);
 
-            using var _ = JsonDocument.Parse(text);
+            _ = Document.Parse(text);
             return new PluginDocument(
                 PluginHeader.RecordType, PluginHeader.FormKeyFor(ModKey.FromFileName(_pluginFileName)), text);
         }
@@ -171,8 +170,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         if (!_types.IsCell(recordType)) return null;
 
-        using var document = JsonDocument.Parse(text);
-        return [.. _containers.ChildrenOf(recordType, document.RootElement)
+        return [.. _containers.ChildrenOf(recordType, Document.Parse(text))
             .Select(c => new ChildRecord(c.FormKey, c.SlotName, c.SlotIndex))];
     }
 
@@ -205,7 +203,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     internal static string RequireReadable(string modFolder, ContainerDocuments.ChildDocument child, string ownerFile)
     {
         var type = child.RecordType ?? throw SourceStopException.UnreadableIn(modFolder, ownerFile, child.WhyUntyped, child.FormKey);
-        if (DocumentNodes.EditorIdOf(child.Node).WhyUnreadable is { } why)
+        if (child.Document.EditorId.WhyUnreadable is { } why)
         {
             throw SourceStopException.UnreadableIn(
                 modFolder, ownerFile, $"its '{child.SlotName}' names '{child.FormKey}', whose {why}", child.FormKey);
@@ -233,9 +231,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     private IEnumerable<(ContainerDocuments.ChildDocument Child, string Text, string DirectOwner)> EmbeddedTexts(
         string ownerRecordType, string ownerFormKey, string ownerText)
     {
-        List<ContainerDocuments.ChildDocument> children;
-        using (var document = JsonDocument.Parse(ownerText))
-            children = [.. _containers.ChildrenOf(ownerRecordType, document.RootElement)];
+        List<ContainerDocuments.ChildDocument> children = [.. _containers.ChildrenOf(ownerRecordType, Document.Parse(ownerText))];
 
         var ownerBytes = Encoding.UTF8.GetBytes(ownerText);
         foreach (var child in children)

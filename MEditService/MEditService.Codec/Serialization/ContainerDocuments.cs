@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 
@@ -8,27 +7,27 @@ namespace MEditService.Codec.Serialization;
 /// <see cref="RecordTypes"/> holds.</summary>
 public sealed class ContainerDocuments(GameRelease release)
 {
-    /// <summary><c>Node</c> is the child's subtree of its owner's document; <c>SlotIndex</c> is its
+    /// <summary><c>Document</c> is the child's subtree of its owner's document; <c>SlotIndex</c> is its
     /// GRUP position. <c>RecordType</c> is null when nothing names a type this game has.</summary>
     public readonly record struct ChildDocument(
-        string SlotName, int SlotIndex, string FormKey, string? RecordType, JsonElement Node)
+        string SlotName, int SlotIndex, string FormKey, string? RecordType, Document Document)
     {
         /// <summary>Why no type resolves, for a child whose <c>RecordType</c> is null.</summary>
         public string WhyUntyped =>
-            Node.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var named) && named.ValueKind == JsonValueKind.String
-                ? $"its '{SlotName}' names '{FormKey}' a '{named.GetString()}', and its slot holds no record type of that name"
+            Document.StringAt(LoquiUnions.UnionTypeDiscriminator) is { } named
+                ? $"its '{SlotName}' names '{FormKey}' a '{named}', and its slot holds no record type of that name"
                 : $"its '{SlotName}' names '{FormKey}' with no '{LoquiUnions.UnionTypeDiscriminator}' naming its type, " +
                   "and its slot holds more than one record type";
 
-        public string? EditorId => DocumentNodes.EditorIdOf(Node).EditorId;
+        public string? EditorId => Document.EditorId.EditorId;
     }
 
     private readonly RecordTypes _types = RecordTypes.For(release);
 
     /// <summary>Empty for a record type with no child slots. A slot the document omits is a slot with
     /// no children.</summary>
-    public IEnumerable<ChildDocument> ChildrenOf(string ownerRecordType, JsonElement ownerRoot) =>
-        Document.Over(ownerRoot)?.ChildrenOf(ownerRecordType, _types) ?? [];
+    public IEnumerable<ChildDocument> ChildrenOf(string ownerRecordType, Document owner) =>
+        owner.ChildrenOf(ownerRecordType, _types);
 
     /// <summary>The links a record holds in its own right: a child carried inline holds its own, so
     /// the owner's document drops the paths that lie under a child slot.</summary>
@@ -48,15 +47,15 @@ public sealed class ContainerDocuments(GameRelease release)
     /// in its own right, so what a container yields and what ingest stores are one text.</summary>
     public string TextOf(ChildDocument child) =>
         RecordTextCodec.RoundTrip(
-            child.Node.GetRawText(),
+            child.Document.Element.GetRawText(),
             release,
-            child.Node.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out _) ? null : child.RecordType);
+            child.Document.Element.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out _) ? null : child.RecordType);
 
     /// <summary>The direct container of <paramref name="formKey"/> inside
-    /// <paramref name="ownerRoot"/>, and its slot. A worldspace's top cell holds its placed
+    /// <paramref name="owner"/>, and its slot. A worldspace's top cell holds its placed
     /// references, so the container may itself be embedded.</summary>
-    public DocumentContainment? ContainmentOf(string ownerRecordType, JsonElement ownerRoot, string formKey) =>
-        Document.Over(ownerRoot)?.ContainmentOf(ownerRecordType, formKey, _types);
+    public DocumentContainment? ContainmentOf(string ownerRecordType, Document owner, string formKey) =>
+        owner.ContainmentOf(ownerRecordType, formKey, _types);
 
     /// <summary>The child <paramref name="formKey"/> names anywhere inside <paramref name="ownerBytes"/>.
     /// Null when no embedded slot carries it, the text is no JSON, or no owner type resolves.</summary>

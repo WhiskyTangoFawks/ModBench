@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
@@ -33,10 +32,10 @@ public sealed class ContainerDocumentsTests
     [Fact]
     public void APlacedReferenceInAWorldspacesTopCell_IsContainedByTheTopCellsTemporarySlot()
     {
-        using var document = JsonDocument.Parse(Worldspace);
+        var document = Document.Parse(Worldspace);
 
         Assert.Equal(
             new DocumentContainment("000801:A.esp", "cell", "Temporary"),
-            Documents.ContainmentOf("wrld", document.RootElement, "000803:A.esp"));
+            Documents.ContainmentOf("wrld", document, "000803:A.esp"));
     }
 }

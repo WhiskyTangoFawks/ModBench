@@ -192,7 +192,7 @@ internal static class ModelIdentity
                     .Select((pair, i) => FirstModelDifference(pair.First, pair.Second, $"{path}[{i}]", propertyName))
                     .FirstOrDefault(difference => difference != null);
             case System.Text.Json.JsonValueKind.String:
-                return NormalizeNegativeZeros(DocumentNodes.StringValueOf(a)) == NormalizeNegativeZeros(DocumentNodes.StringValueOf(b))
+                return NormalizeNegativeZeros(a.GetString() ?? string.Empty) == NormalizeNegativeZeros(b.GetString() ?? string.Empty)
                     ? null
                     : path;
             case System.Text.Json.JsonValueKind.Number:

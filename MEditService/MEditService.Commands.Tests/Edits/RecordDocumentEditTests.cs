@@ -138,7 +138,7 @@ public sealed class RecordDocumentEditTests : IDisposable
     {
         var formKey = SeedNpc();
         var hops = path == "Keywords[0]" ? new[] { Member("Keywords"), At(0) } : [Member(path)];
-        var envelope = new RecordEditEnvelope(op, hops, value == null ? null : Json(value));
+        var envelope = new RecordEditEnvelope(op, hops, value == null ? null : ValueOf(Json(value)));
 
         var (result, _) = _fixture.Apply(formKey, envelope);
 

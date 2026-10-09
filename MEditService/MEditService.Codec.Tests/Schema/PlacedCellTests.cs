@@ -1,4 +1,3 @@
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
@@ -12,17 +11,16 @@ public sealed class PlacedCellTests
     [InlineData("""{ "Grid": {} }""", 0, 0)]
     public void ACellsGrid_IsThePointItsTextSpells_AndTheOriginWhereItsGridOmitsThePoint(string text, int x, int y)
     {
-        Assert.Equal((x, y), PlacedCell.Grid(Cell(text)));
+        Assert.Equal((x, y), Cell(text).Grid);
     }
 
     [Fact]
     public void ACellWhoseTextCarriesNoGrid_HasNone()
     {
-        Assert.Null(PlacedCell.Grid(Cell("""{ "FormKey": "000801:Holds.esm" }""")));
+        Assert.Null(Cell("""{ "FormKey": "000801:Holds.esm" }""").Grid);
     }
 
-    private static JsonObject Cell(string text) =>
-        JsonNode.Parse(text) as JsonObject ?? throw new InvalidOperationException("Expected the cell's text to be a JSON object.");
+    private static Document Cell(string text) => Document.Parse(text);
 
     [Fact]
     public void APlacedRecordCreatedInAGridCell_OfAGameWithNoKnownCellWidth_IsRefusedNamingTheCell_AndKeepsTheBareDocument()

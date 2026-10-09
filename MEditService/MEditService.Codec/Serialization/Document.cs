@@ -16,6 +16,11 @@ public sealed class Document
 
     private Document(JsonElement root) => _root = root;
 
+    /// <summary>A document with no member.</summary>
+    public static Document Empty { get; } = new(JsonElement.Parse("{}"));
+
+    internal JsonElement Element => _root;
+
     /// <summary>False, with the reader's words, when the text is no JSON or its root is no object.</summary>
     public static bool TryRead(string text, [NotNullWhen(true)] out Document? document, [NotNullWhen(false)] out string? whyNot) =>
         TryParse(() => JsonElement.Parse(text), out document, out whyNot);
@@ -68,6 +73,13 @@ public sealed class Document
     public string Text => JsonSerializer.Serialize(_root);
 
     public Document With(long value, params ReadOnlySpan<string> path)
+    {
+        var member = path[^1];
+        var owner = path[..^1].ToArray();
+        return Edited(root => OwnerOf(root, owner)[member] = value);
+    }
+
+    public Document With(string value, params ReadOnlySpan<string> path)
     {
         var member = path[^1];
         var owner = path[..^1].ToArray();
@@ -146,7 +158,8 @@ public sealed class Document
         return current;
     }
 
-    internal EditorIdRead EditorId => At(RecordMembers.EditorId) switch
+    /// <summary>The EditorID the record's own document names.</summary>
+    public EditorIdRead EditorId => At(RecordMembers.EditorId) switch
     {
         null or { ValueKind: JsonValueKind.Null } => EditorIdRead.None,
         { ValueKind: JsonValueKind.String } editorId => EditorIdRead.Of(DocumentNodes.StringValueOf(editorId)),
@@ -182,7 +195,7 @@ public sealed class Document
 
     private static ChildDocument? Child(string owner, string slotName, int index, JsonElement node, RecordTypes types) =>
         Over(node) is { } child && child.StringAt(RecordMembers.FormKey) is { } formKey
-            ? new ChildDocument(slotName, index, formKey, child.RecordTypeIn(owner, slotName, types), node.Clone())
+            ? new ChildDocument(slotName, index, formKey, child.RecordTypeIn(owner, slotName, types), new Document(node.Clone()))
             : null;
 
     // The child's own spelling where the document carries one, else the slot's declared element type:
@@ -211,7 +224,7 @@ public sealed class Document
             if (!types.IsEmbeddedSlot(ownerRecordType, child.SlotName)) continue;
             yield return child;
             if (child.RecordType is not { } childType) continue;
-            foreach (var deeper in new Document(child.Node).EmbeddedDescendantsOf(childType, types)) yield return deeper;
+            foreach (var deeper in child.Document.EmbeddedDescendantsOf(childType, types)) yield return deeper;
         }
     }
 
@@ -225,7 +238,7 @@ public sealed class Document
                 return new DocumentContainment(ownKey, ownerRecordType, child.SlotName);
 
             if (!types.IsEmbeddedSlot(ownerRecordType, child.SlotName) || child.RecordType is not { } childType) continue;
-            if (new Document(child.Node).ContainmentOf(childType, formKey, types) is { } deeper) return deeper;
+            if (child.Document.ContainmentOf(childType, formKey, types) is { } deeper) return deeper;
         }
         return null;
     }

@@ -103,7 +103,7 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
         using var document = JsonDocument.Parse(File.ReadAllText(golden));
         return new(document.RootElement.EnumerateObject()
             .SelectMany(recordType => recordType.Value.EnumerateArray())
-            .Select(record => DocumentNodes.StringValueOf(record.GetProperty("FormKey")))
+            .Select(record => JsonStrings.Of(record.GetProperty("FormKey")))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal));
     }

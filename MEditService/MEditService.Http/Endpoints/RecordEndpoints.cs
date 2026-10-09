@@ -224,7 +224,7 @@ internal static class RecordEndpoints
             validate: () => EditRequestProblem(edit),
             execute: () => edits.Changes(
                 new PluginAddress(request.Edit.Plugin, request.Edit.Origin), decoded,
-                new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.Value)),
+                new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.EditedValue)),
             outcome: answer => answer.Outcome,
             onApplied: answer => Results.Ok(RecordEditChangesResponse.Of(decoded, spelled, answer)));
     }

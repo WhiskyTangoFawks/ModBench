@@ -1,5 +1,4 @@
-using System.Text.Json;
-using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 
 namespace MEditService.Index;
 
@@ -10,17 +9,8 @@ internal static class CallerText
 
     internal static (string Body, string? EditorId, string? ParseDiagnosis) Read(string text)
     {
-        try
-        {
-            using var parsed = JsonDocument.Parse(text);
-            var root = parsed.RootElement;
-            if (root.ValueKind != JsonValueKind.Object) return (NoBody, null, "A record's document is a JSON object.");
-            var editorId = DocumentNodes.EditorIdOf(root);
-            return editorId.WhyUnreadable is { } why ? (NoBody, null, $"The record's {why}.") : (text, editorId.EditorId, null);
-        }
-        catch (JsonException ex)
-        {
-            return (NoBody, null, ex.Message);
-        }
+        if (!Document.TryRead(text, out var document, out var whyNot)) return (NoBody, null, whyNot);
+        var editorId = document.EditorId;
+        return editorId.WhyUnreadable is { } why ? (NoBody, null, $"The record's {why}.") : (text, editorId.EditorId, null);
     }
 }

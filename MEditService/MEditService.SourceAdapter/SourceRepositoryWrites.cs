@@ -1,10 +1,10 @@
 using System.Text;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using CodecDocument = MEditService.Codec.Serialization.Document;
 
 namespace MEditService.SourceAdapter;
 
@@ -18,7 +18,7 @@ internal sealed class SourceRepositoryWrites(
     private readonly GameRelease _release = release;
 
     internal static CellPlacement PlacementIn(string worldspace, SourceDocument cell) =>
-        JsonNode.Parse(cell.Body) is JsonObject document && PlacedCell.Grid(document) is var (x, y)
+        CodecDocument.TryRead(cell.Body, out var document, out _) && document.Grid is var (x, y)
             ? CellPlacement.AtGrid(worldspace, x, y)
             : throw new InvalidOperationException(
                 $"{cell.FormKey}'s document carries no grid, so it has no place in worldspace {worldspace}.");

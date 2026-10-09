@@ -11,22 +11,29 @@ internal static class Envelopes
     internal static PathHop Member(string name) => new(PathHop.MemberKind, Name: name);
     internal static PathHop At(int index) => new(PathHop.IndexKind, Index: index);
 
+    internal static EditValue ValueOf(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Number => new(EditValueKind.Number, element.GetRawText()),
+        JsonValueKind.String => new(EditValueKind.Text, element.GetRawText(), element.GetString()),
+        _ => new(EditValueKind.Other, element.GetRawText()),
+    };
+
     internal static RecordEditEnvelope SetAt(JsonElement value, params PathHop[] path) =>
-        new(RecordEditEnvelope.Set, path, value);
+        new(RecordEditEnvelope.Set, path, ValueOf(value));
 
     /// <summary>A set of JSON null: the member is cleared and reads as its default (ADR-0005).</summary>
     internal static RecordEditEnvelope Clear(params PathHop[] path) =>
-        new(RecordEditEnvelope.Set, path, JsonDocument.Parse("null").RootElement);
+        new(RecordEditEnvelope.Set, path, new EditValue(EditValueKind.Other, "null"));
 
     internal static RecordEditEnvelope AddAt(params PathHop[] path) => new(RecordEditEnvelope.Add, path);
 
     internal static RecordEditEnvelope AddAt(JsonElement element, params PathHop[] path) =>
-        new(RecordEditEnvelope.Add, path, element);
+        new(RecordEditEnvelope.Add, path, ValueOf(element));
 
     internal static RecordEditEnvelope RemoveAt(params PathHop[] path) => new(RecordEditEnvelope.Remove, path);
 
     internal static RecordEditEnvelope MoveTo(int destination, params PathHop[] path) =>
-        new(RecordEditEnvelope.Move, path, JsonDocument.Parse(destination.ToString(System.Globalization.CultureInfo.InvariantCulture)).RootElement);
+        new(RecordEditEnvelope.Move, path, new EditValue(EditValueKind.Number, destination.ToString(System.Globalization.CultureInfo.InvariantCulture)));
 
     /// <summary>A set of one top-level member: the gesture most tests make.</summary>
     internal static RecordEditResult Set(

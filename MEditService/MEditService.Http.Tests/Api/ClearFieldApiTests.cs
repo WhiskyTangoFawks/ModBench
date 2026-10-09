@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -36,7 +35,7 @@ public sealed class ClearFieldApiTests(LoadedApiFixture<TestPluginFixture> loade
         await _client.PluginReportsTracked(Plugin);
         var created = await _client.CreateRecord(Plugin, Origin, "npc_");
         created.EnsureSuccessStatusCode();
-        var formKey = DocumentNodes.StringValueOf((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));
+        var formKey = JsonStrings.Of((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));
         await _client.NextSnapshot(fx, Origin);
         await Wire.Eventually(
             async () => (await _client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(formKey)}", UriKind.Relative))).IsSuccessStatusCode,

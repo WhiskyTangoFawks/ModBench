@@ -134,7 +134,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
     {
         foreach (var (column, columnMeta) in GesturableColumns.GetOrAdd(schema.TableName, _ => GesturableColumnsOf(schema)))
         {
-            if (DocumentNodes.At(root, column.PropertyName) is not { ValueKind: JsonValueKind.Array } array || array.GetArrayLength() == 0) continue;
+            if (MemberAt(root, column.PropertyName) is not { ValueKind: JsonValueKind.Array } array || array.GetArrayLength() == 0) continue;
             var meta = DocumentNodes.VariantFor(columnMeta, root);
             var first = array[0];
             yield return (RemoveAt(Member(column.Name), At(0)), column.Name);
@@ -175,6 +175,16 @@ public sealed class DocumentEditRealDataTests : IDisposable
         if (diffs.Count == 0) yield return $"{gesture}: nothing changed";
         foreach (var stray in diffs.Where(d => !d.StartsWith(path, StringComparison.Ordinal)))
             yield return $"{gesture}: {stray}";
+    }
+
+    private static JsonElement? MemberAt(JsonElement root, string dottedPath)
+    {
+        var current = root;
+        foreach (var hop in dottedPath.Split('.'))
+        {
+            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(hop, out current)) return null;
+        }
+        return current;
     }
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;

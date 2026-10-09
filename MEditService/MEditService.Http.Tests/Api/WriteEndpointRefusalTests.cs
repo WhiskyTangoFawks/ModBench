@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -49,7 +48,7 @@ public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture
     private async Task<string> FirstNpcFormKey(string plugin, string origin)
     {
         var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&origin={origin}&type=npc_");
-        return DocumentNodes.StringValueOf(records.GetProperty("items")[0].GetProperty("formKey"));
+        return JsonStrings.Of(records.GetProperty("items")[0].GetProperty("formKey"));
     }
 
     private static string ModFolderOf(ScatteredFixtureData fx, string origin)

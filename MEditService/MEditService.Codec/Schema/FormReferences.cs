@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using MEditService.Codec.Serialization;
 
 namespace MEditService.Codec.Schema;
 
@@ -14,7 +15,10 @@ public static class FormReferences
 {
     /// <summary>Every link the document holds, in the schema's column order. A target named at two
     /// members is answered twice, once under each path, because a path is what names it.</summary>
-    public static List<FormReference> Collect(JsonElement document, IReadOnlyList<ColumnSpec> columns)
+    public static List<FormReference> Collect(Document document, IReadOnlyList<ColumnSpec> columns) =>
+        Collect(document.Element, columns);
+
+    internal static List<FormReference> Collect(JsonElement document, IReadOnlyList<ColumnSpec> columns)
     {
         var refs = new List<FormReference>();
         foreach (var col in columns)

@@ -50,7 +50,16 @@ internal sealed record RecordEditRequest(
     string Origin,
     string Op,
     IReadOnlyList<PathHop> Path,
-    [property: JsonConverter(typeof(KeepsJsonNullConverter))] JsonElement? Value = null);
+    [property: JsonConverter(typeof(KeepsJsonNullConverter))] JsonElement? Value = null)
+{
+    internal EditValue? EditedValue => Value switch
+    {
+        null => null,
+        { ValueKind: JsonValueKind.Number } number => new(EditValueKind.Number, number.GetRawText()),
+        { ValueKind: JsonValueKind.String } text => new(EditValueKind.Text, text.GetRawText(), text.GetString()),
+        { } other => new(EditValueKind.Other, other.GetRawText()),
+    };
+}
 
 internal sealed record RecordEditChangesRequest(RecordEditRequest Edit);
 
