@@ -149,7 +149,7 @@ internal sealed class LoadOrderResolution(
             foreach (var left in asked)
             {
                 using var source = resolution.SourceIn(snapshot, left);
-                if (!answer(source).Holds(out var text, out var why)) return new LeftCopy.UnreadableCopy(left, askedAbout, why);
+                if (!answer(source).Holds(out var text, out var why)) return new LeftCopy.UnreadableCopy(left, askedAbout, why.Why, why.Kind);
                 if (text is not null) return new LeftCopy.Found(text, left);
             }
             return new LeftCopy.None();

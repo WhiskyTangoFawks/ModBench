@@ -32,7 +32,7 @@ public sealed class SourceRepositoryRefEncodingTests
 
         repository.WriteBinary(address, "DEADBEEF", () => { }).Value();
 
-        Assert.Equal(["DEADBEEF"], repository.LastWrittenBinarySha256s(address));
+        Assert.Equal(["DEADBEEF"], repository.LastWrittenBinarySha256s(address).Value());
     }
 
     [Fact]
@@ -47,8 +47,8 @@ public sealed class SourceRepositoryRefEncodingTests
         repository.WriteBinary(spaced, "SPACED", () => { }).Value();
         repository.WriteBinary(underscored, "UNDERSCORED", () => { }).Value();
 
-        Assert.Equal(["SPACED"], repository.LastWrittenBinarySha256s(spaced));
-        Assert.Equal(["UNDERSCORED"], repository.LastWrittenBinarySha256s(underscored));
+        Assert.Equal(["SPACED"], repository.LastWrittenBinarySha256s(spaced).Value());
+        Assert.Equal(["UNDERSCORED"], repository.LastWrittenBinarySha256s(underscored).Value());
     }
 
     [Fact]

@@ -48,7 +48,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
         var repository = SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4);
         var address = new PluginAddress(Plugin, "TestMod");
         repository.WriteBinary(address, "DEADBEEF", () => { }).Value();
-        Assert.Equal(["DEADBEEF"], repository.LastWrittenBinarySha256s(address));
+        Assert.Equal(["DEADBEEF"], repository.LastWrittenBinarySha256s(address).Value());
         Assert.True(File.Exists(usersLock), "the user's own lock is theirs to release");
     }
 }

@@ -44,6 +44,20 @@ public sealed class UnreadableCopySourceTests : IDisposable
     }
 
     [Fact]
+    public void CopyAsOverride_OfARecordTwoDocumentsOfItsSourceClaim_IsRefusedAsAmbiguous_NamingTheClaim_AndWritesNothing()
+    {
+        var document = _mod.Document(_mod.SourcePlugin, _mod.FlatNpc.ToString()).Require();
+        TreeTampering.Duplicate(_mod.SourceModFolder, _mod.SourcePlugin, document.Identity);
+
+        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, _mod.FlatNpc.ToString())], CopyMode.Override, [_mod.DestinationPlugin], replace: false);
+
+        var refused = result.OnlyRefused();
+        Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
+        Assert.Contains($"More than one document in this plugin's source tree holds {_mod.FlatNpc}", refused.Message, StringComparison.Ordinal);
+        Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
+    }
+
+    [Fact]
     public void CopyAsOverride_OntoADestinationDocumentThatIsNoJsonDocument_IsRefused_AndLeavesItAlone()
     {
         _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, _mod.FlatNpc.ToString())], CopyMode.Override, [_mod.DestinationPlugin], replace: false).OnlyLanded();

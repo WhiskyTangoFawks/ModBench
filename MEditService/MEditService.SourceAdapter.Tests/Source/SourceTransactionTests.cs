@@ -311,6 +311,40 @@ public sealed class SourceTransactionTests : IDisposable
     }
 
     [Fact]
+    public void Apply_HandedAFailedAnswerAfterAChangeApplied_PutsTheChangeBack_AndAnswersTheFailure()
+    {
+        Seed(Fk("000800"), "npc_", "Kept");
+        var before = TreeSnapshot.Of(_root);
+
+        var failure = SourceTransaction.Atomically(Repo, transaction =>
+        {
+            transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Kept", Body(Fk("000800"), "Ours")));
+            transaction.Apply(Repo.ChangesToRewrite(Plugin, new SourceDocument(Fk("000999"), "npc_", "Absent", Body(Fk("000999"), "Absent"))));
+        });
+
+        Assert.IsType<SourceFailure.NotCarried>(failure);
+        Assert.Equal(before, TreeSnapshot.Of(_root));
+    }
+
+    [Fact]
+    public void Apply_HandedAFailedAnswerWhosePutBackLeavesAPath_KeepsTheFailuresKind_AndNamesThePath()
+    {
+        Seed(Fk("000800"), "npc_", "Contested");
+        var contestedFile = FlatFile(Fk("000800"), "npc_", "Contested");
+
+        var failure = SourceTransaction.Atomically(Repo, transaction =>
+        {
+            transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Contested", Body(Fk("000800"), "Ours")));
+            File.WriteAllText(contestedFile, "someone else's work");
+            transaction.Apply(Repo.ChangesToRewrite(Plugin, new SourceDocument(Fk("000999"), "npc_", "Absent", Body(Fk("000999"), "Absent"))));
+        });
+
+        var notCarried = Assert.IsType<SourceFailure.NotCarried>(failure);
+        Assert.Contains("Contested - 000800_Fixture.esp.json — changed by something else", notCarried.Reason, StringComparison.Ordinal);
+        Assert.Equal("someone else's work", File.ReadAllText(contestedFile));
+    }
+
+    [Fact]
     public void Atomically_ADefectThatLeavesNothing_IsRethrownAsItself()
     {
         Seed(Fk("000800"), "npc_", "Quiet");

@@ -24,7 +24,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha).Wrote();
 
         Assert.Equal(["npc_/A.esp/000002.json"], FilesUnderRoot());
-        Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address));
+        Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address).Value());
         Assert.Equal(" D plugin-source/A.esp/npc_/A.esp/000001.json", Git("status", "--porcelain", "--untracked-files=no").TrimEnd('\n'));
     }
 
@@ -122,13 +122,13 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var failure = FailAfterWritingWhile(
             $"mkdir -p '{second}'\necho theirs > '{second}/theirs.txt'", [File("armo/A.esp/000003.json", "{}")]);
 
+        Assert.StartsWith("git update-ref failed (128) Not put back: ", failure.Reason, StringComparison.Ordinal);
         Assert.Contains("000002.json — could not be restored", failure.Reason);
-        Assert.NotNull(failure.Error?.InnerException);
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(first));
     }
 
-    private SourceFailure.Inaccessible FailAfterWritingWhile(string script, TreeFile[] files) =>
-        Assert.IsType<SourceFailure.Inaccessible>(FailAfterWriting(script, files));
+    private SourceFailure.GitFailed FailAfterWritingWhile(string script, TreeFile[] files) =>
+        Assert.IsType<SourceFailure.GitFailed>(FailAfterWriting(script, files));
 
     private SourceFailure FailAfterWriting(string script, TreeFile[] files)
     {
@@ -139,7 +139,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     [Fact]
     public void ReplaceSourceFrom_AFileThatCannotBeWritten_LeavesTheSourceAndTheRefAsTheyWere()
     {
-        var lastWrittenBefore = Repository.LastWrittenBinarySha256s(Address);
+        var lastWrittenBefore = Repository.LastWrittenBinarySha256s(Address).Value();
 
         TreeFile[] secondFileNeedsADirectoryTheFirstOccupies = [File("npc_", "{}"), File("npc_/A.esp/000002.json", "{}")];
 
@@ -148,7 +148,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
 
         Assert.Equal(["npc_/A.esp/000001.json"], FilesUnderRoot());
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(Root, "npc_", "A.esp", "000001.json")));
-        Assert.Equal(lastWrittenBefore, Repository.LastWrittenBinarySha256s(Address));
+        Assert.Equal(lastWrittenBefore, Repository.LastWrittenBinarySha256s(Address).Value());
     }
 
     [Fact]
@@ -157,21 +157,21 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha).Wrote();
 
         var parked = LastWriteRecord.RefOfTheOnlyPlugin(_modFolder);
-        Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address));
+        Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address).Value());
         Assert.Equal("Decompile: A.esp", Git("log", "-1", "--format=%s", parked).Trim());
     }
 
     [Fact]
     public void ReplaceSourceFrom_OnABranchWithNoCommitYetWhereGitRefusesToParkAfterEveryFileIsWritten_LeavesTheSourceAndTheRefAsTheyWere()
     {
-        var lastWrittenBefore = Repository.LastWrittenBinarySha256s(Address);
+        var lastWrittenBefore = Repository.LastWrittenBinarySha256s(Address).Value();
         Git("checkout", "-q", "--orphan", "unborn");
 
         Assert.IsType<SourceFailure.GitFailed>(Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Failed());
 
         Assert.Equal(["npc_/A.esp/000001.json"], FilesUnderRoot());
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(Root, "npc_", "A.esp", "000001.json")));
-        Assert.Equal(lastWrittenBefore, Repository.LastWrittenBinarySha256s(Address));
+        Assert.Equal(lastWrittenBefore, Repository.LastWrittenBinarySha256s(Address).Value());
     }
 
     [Fact]

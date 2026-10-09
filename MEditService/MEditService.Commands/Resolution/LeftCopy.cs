@@ -14,7 +14,7 @@ internal abstract record LeftCopy
 
     internal sealed record None : LeftCopy;
 
-    internal abstract record Unreadable(PluginAddress Plugin, string Why, RecordEditRefusal Kind = RecordEditRefusal.RecordParseFailed) : LeftCopy
+    internal abstract record Unreadable(PluginAddress Plugin, string Why, RecordEditRefusal Kind) : LeftCopy
     {
         protected abstract string Unread { get; }
 
@@ -26,7 +26,7 @@ internal abstract record LeftCopy
     }
 
     /// <summary>A plugin's copy of <paramref name="Asked"/> (a FormKey or a worldspace).</summary>
-    internal sealed record UnreadableCopy(PluginAddress Plugin, string Asked, string Why) : Unreadable(Plugin, Why)
+    internal sealed record UnreadableCopy(PluginAddress Plugin, string Asked, string Why, RecordEditRefusal Kind) : Unreadable(Plugin, Why, Kind)
     {
         protected override string Unread => $"{Plugin.Name}'s copy of {Asked}";
     }

@@ -134,7 +134,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         const string sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         Repository.WriteBinary(AsTreeNamesIt, sha256, () => { }).Value();
 
-        Assert.Equal([sha256], Repository.LastWrittenBinarySha256s(Recased));
+        Assert.Equal([sha256], Repository.LastWrittenBinarySha256s(Recased).Value());
     }
 
     [PosixFact]

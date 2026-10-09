@@ -35,7 +35,7 @@ internal sealed class OverrideCopy
         if (PluginAddress.Comparer.Equals(source.Plugin, destinationPlugin)) return RecordEditResult.Success();
         try
         {
-            return WriteTargets.UnreadableAsCopyRefusal(formKey, CopyAsOverride(copy, destinationPlugin, replace));
+            return CopyAsOverride(copy, destinationPlugin, replace);
         }
         catch (ChildSlotHeldByAnotherRecordException ex)
         {

@@ -135,7 +135,7 @@ internal sealed class SourceRepositoryGit(string modFolder)
             ParkTrailers("Compile", pluginFileName, parent, [$"{BinaryTrailer}: {binarySha256}"]);
             return true;
         }
-        catch (SourceStopException stop) when (stop.Failure is SourceFailure.GitFailed)
+        catch (SourceStopException)
         {
             return false;
         }

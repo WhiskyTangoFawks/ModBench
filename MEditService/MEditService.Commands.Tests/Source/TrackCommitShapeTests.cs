@@ -50,7 +50,7 @@ public sealed class TrackCommitShapeTests : IDisposable
 
         Assert.Equal(
             ["READ-FROM"],
-            SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4).LastWrittenBinarySha256s(Key("First.esp")));
+            SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4).LastWrittenBinarySha256s(Key("First.esp")).Value());
     }
 
     [Fact]

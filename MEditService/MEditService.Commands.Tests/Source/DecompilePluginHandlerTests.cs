@@ -81,7 +81,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
         Assert.Equal(
             ["READ-FROM"],
-            SourceRepository.Over(new PluginProvider.FromMod(TrackedModName, _trackedMod), GameRelease.Fallout4).LastWrittenBinarySha256s(Tracked("Second.esp")));
+            SourceRepository.Over(new PluginProvider.FromMod(TrackedModName, _trackedMod), GameRelease.Fallout4).LastWrittenBinarySha256s(Tracked("Second.esp")).Value());
     }
 
     [Fact]

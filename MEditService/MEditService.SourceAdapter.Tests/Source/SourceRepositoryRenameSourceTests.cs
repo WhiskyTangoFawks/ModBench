@@ -134,8 +134,8 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     {
         Repository.RenameSource(Old, "New.esp").Value();
 
-        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }));
-        Assert.Empty(Repository.LastWrittenBinarySha256s(Old));
+        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }).Value());
+        Assert.Empty(Repository.LastWrittenBinarySha256s(Old).Value());
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
 
         Assert.Equal(before, TreeOf(Old.Name));
         Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
-        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old));
+        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old).Value());
     }
 
     [Fact]
@@ -214,7 +214,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
 
         Assert.Equal(before, TreeOf(Old.Name));
         Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
-        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old));
+        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old).Value());
     }
 
     [Fact]
@@ -242,8 +242,8 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
 
         Assert.Equal(before, TreeOf(Old.Name));
         Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
-        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old));
-        Assert.Equal(["EARLIER-UNDER-THE-NEW-NAME"], Repository.LastWrittenBinarySha256s(newName));
+        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old).Value());
+        Assert.Equal(["EARLIER-UNDER-THE-NEW-NAME"], Repository.LastWrittenBinarySha256s(newName).Value());
     }
 
     [Fact]
@@ -263,8 +263,8 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
 
         Assert.Equal(before, TreeOf(Old.Name));
         Assert.Equal(["Old.esp", "Other.esp"], PluginSources());
-        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old));
-        Assert.Empty(Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }));
+        Assert.Equal([LastWritten], Repository.LastWrittenBinarySha256s(Old).Value());
+        Assert.Empty(Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }).Value());
     }
 
     [PosixFact]
@@ -276,7 +276,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
             "reference-transaction",
             $"[ \"$1\" = prepared ] || exit 0\n[ -e '{marker}' ] && exit 1\ntouch '{marker}'");
 
-        var failure = Assert.IsType<SourceFailure.Inaccessible>(Repository.RenameSource(Old, "New.esp").Stopped());
+        var failure = Assert.IsType<SourceFailure.GitFailed>(Repository.RenameSource(Old, "New.esp").Stopped());
 
         Assert.Contains("what Modbench last wrote for Old.esp \u2014 could not be restored: git", failure.Reason, StringComparison.Ordinal);
     }

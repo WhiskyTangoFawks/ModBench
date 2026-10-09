@@ -68,7 +68,11 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="TreeOf"/> answers it once written:
     /// what a round-trip gate compiles, so that it compiles what is written.</summary>
     public static IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
-        SourceRepositoryLayout.DoorTreeOf(pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, tree), gameRelease);
+        SourceFailure.Answer(() => SourceRepositoryLayout.DoorTreeOf(
+                pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, tree), gameRelease))
+            .Holds(out var readBack, out var failure)
+            ? readBack
+            : throw new InvalidOperationException($"Expected the whole-mod door to write one document per container: {failure.Reason}");
 
     /// <summary>Why git cannot be run here, so no repository can be made or written; null when it can.</summary>
     public static SourceFailure? WhyGitCannotRun() => SourceFailure.Answer(GitCli.EnsureOnPath);
@@ -361,8 +365,11 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary>Every binary hash Modbench last wrote for the plugin: one, or several while a write
     /// was interrupted. Empty when none is recorded.</summary>
-    public IReadOnlyList<string> LastWrittenBinarySha256s(PluginAddress plugin) =>
-        _git.LastWrittenBinarySha256s(Spelled(plugin).Name);
+    public SourceAnswer<IReadOnlyList<string>> LastWrittenBinarySha256s(PluginAddress plugin)
+    {
+        var name = Spelled(plugin).Name;
+        return SourceFailure.Answer(() => _git.LastWrittenBinarySha256s(name));
+    }
 
     // A plugin's tree is read and written as its folder spells it. With no tree to say, or twins spelled
     // otherwise, the name stays as given: SourceReads refuses the twins.

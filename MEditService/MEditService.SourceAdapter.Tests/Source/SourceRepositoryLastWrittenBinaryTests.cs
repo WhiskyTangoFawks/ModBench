@@ -34,7 +34,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
 
         repository.WriteBinary(Test, "DEADBEEF1234", () => { }).Value();
 
-        Assert.Equal(["DEADBEEF1234"], repository.LastWrittenBinarySha256s(Test));
+        Assert.Equal(["DEADBEEF1234"], repository.LastWrittenBinarySha256s(Test).Value());
     }
 
     [Fact]
@@ -45,10 +45,10 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
         repository.WriteBinary(Test, "FIRST", () => { }).Value();
 
         IReadOnlyList<string>? during = null;
-        repository.WriteBinary(Test, "SECOND", () => during = repository.LastWrittenBinarySha256s(Test)).Value();
+        repository.WriteBinary(Test, "SECOND", () => during = repository.LastWrittenBinarySha256s(Test).Value()).Value();
 
         Assert.Equal(["SECOND", "FIRST"], during);
-        Assert.Equal(["SECOND"], repository.LastWrittenBinarySha256s(Test));
+        Assert.Equal(["SECOND"], repository.LastWrittenBinarySha256s(Test).Value());
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
 
         Assert.IsType<SourceFailure.Inaccessible>(repository.WriteBinary(Test, "SECOND", () => throw new IOException("disk full")).Stopped());
 
-        Assert.Equal(["SECOND", "FIRST"], repository.LastWrittenBinarySha256s(Test));
+        Assert.Equal(["SECOND", "FIRST"], repository.LastWrittenBinarySha256s(Test).Value());
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
 
         Assert.False(recorded);
         Assert.True(written);
-        Assert.Equal(["SECOND", "FIRST"], repository.LastWrittenBinarySha256s(Test));
+        Assert.Equal(["SECOND", "FIRST"], repository.LastWrittenBinarySha256s(Test).Value());
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
 
         Assert.False(written);
         Assert.DoesNotContain(modFolder, failure.Reason, StringComparison.Ordinal);
-        Assert.Equal(["FIRST"], repository.LastWrittenBinarySha256s(Test));
+        Assert.Equal(["FIRST"], repository.LastWrittenBinarySha256s(Test).Value());
     }
 
     [Fact]
@@ -103,12 +103,12 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
         var repository = TrackedOver(modFolder);
-        Assert.Empty(repository.LastWrittenBinarySha256s(Test));
+        Assert.Empty(repository.LastWrittenBinarySha256s(Test).Value());
 
         repository.WriteBinary(Test, "FOR-TEST", () => { }).Value();
 
-        Assert.Equal(["FOR-TEST"], repository.LastWrittenBinarySha256s(Test));
-        Assert.Equal([OthersTrackedBinary], repository.LastWrittenBinarySha256s(Other));
+        Assert.Equal(["FOR-TEST"], repository.LastWrittenBinarySha256s(Test).Value());
+        Assert.Equal([OthersTrackedBinary], repository.LastWrittenBinarySha256s(Other).Value());
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
         using var modFolder = new ScratchDirectory("medit-last-written-");
         var repository = TrackedOver(modFolder);
 
-        Assert.Empty(repository.LastWrittenBinarySha256s(new PluginAddress("Unknown.esp", "TestMod")));
+        Assert.Empty(repository.LastWrittenBinarySha256s(new PluginAddress("Unknown.esp", "TestMod")).Value());
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
 
-        Assert.Empty(SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4).LastWrittenBinarySha256s(Test));
+        Assert.Empty(SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4).LastWrittenBinarySha256s(Test).Value());
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
         var repository = SourceRepository.Over(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
 
         Assert.Throws<ArgumentException>(() => repository.WriteBinary(new PluginAddress("Test.esp", "OtherMod"), "ABC", () => { }).Value());
-        Assert.Empty(repository.LastWrittenBinarySha256s(Test));
+        Assert.Empty(repository.LastWrittenBinarySha256s(Test).Value());
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
         TrackedOver(modFolder);
         var repository = SourceRepository.Over(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
 
-        Assert.Throws<ArgumentException>(() => repository.LastWrittenBinarySha256s(new PluginAddress("Test.esp", "OtherMod")));
+        Assert.Throws<ArgumentException>(() => repository.LastWrittenBinarySha256s(new PluginAddress("Test.esp", "OtherMod")).Value());
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
         var repository = SourceRepository.Over(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
 
         Assert.Throws<ArgumentException>(() => repository.ReplaceSourceFrom(new PluginAddress("Test.esp", "OtherMod"), [], "ABC"));
-        Assert.Empty(repository.LastWrittenBinarySha256s(Test));
+        Assert.Empty(repository.LastWrittenBinarySha256s(Test).Value());
     }
 
     [Fact]
@@ -169,6 +169,51 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
 
         repository.WriteBinary(Test, "ABC", () => { }).Value();
 
-        Assert.Equal(["ABC"], repository.LastWrittenBinarySha256s(Test));
+        Assert.Equal(["ABC"], repository.LastWrittenBinarySha256s(Test).Value());
+    }
+}
+
+[Collection(ProcessEnvironmentCollection.Name)]
+public sealed class SourceRepositoryLastWrittenBinaryWithoutGitTests : IDisposable
+{
+    private readonly ScratchDirectory _modFolder = new("medit-last-written-nogit-");
+
+    public SourceRepositoryLastWrittenBinaryWithoutGitTests() =>
+        PluginBaselines.Track(_modFolder, [new TreeFile("plugin-source/A.esp/npc_/A.esp/000001.json", "{}"u8.ToArray())]);
+
+    public void Dispose() => _modFolder.Dispose();
+
+    [Fact]
+    public void TheLastWrittenBinaries_WithGitGoneFromPath_AnswerGitUnavailable()
+    {
+        var repository = SourceRepository.Over(TestMod.In(_modFolder), GameRelease.Fallout4);
+        var path = Environment.GetEnvironmentVariable("PATH");
+        Environment.SetEnvironmentVariable("PATH", string.Empty);
+        try
+        {
+            Assert.IsType<SourceFailure.GitUnavailable>(repository.LastWrittenBinarySha256s(new PluginAddress("A.esp", TestMod.Name)).Stopped());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", path);
+        }
+    }
+
+    [Fact]
+    public void AWrite_AfterWhichGitIsGoneFromPath_AnswersTheRecordUnfinished_ForTheBinaryIsWritten()
+    {
+        var repository = SourceRepository.Over(TestMod.In(_modFolder), GameRelease.Fallout4);
+        var path = Environment.GetEnvironmentVariable("PATH");
+        try
+        {
+            var finished = repository.WriteBinary(
+                new PluginAddress("A.esp", TestMod.Name), "SECOND", () => Environment.SetEnvironmentVariable("PATH", string.Empty));
+
+            Assert.False(finished.Value());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", path);
+        }
     }
 }

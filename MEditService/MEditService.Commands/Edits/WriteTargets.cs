@@ -61,12 +61,10 @@ internal sealed class WriteTargets(
         return true;
     }
 
-    // Two documents claiming the record leave it no one document; any other failure is the reader's own words
-    // for why the document carrying it cannot be read, which is not absence.
     private static RecordEditResult RefuseUnresolved(string formKey, SourceFailure failure) =>
-        failure is SourceFailure.Ambiguous
-            ? RecordEditResult.Refused(RecordEditRefusal.AmbiguousSourceUnit, failure.Reason)
-            : RefuseUnreadable(formKey, failure.Reason);
+        failure is SourceFailure.Unreadable
+            ? RefuseUnreadable(formKey, failure.Reason)
+            : RecordEditResult.Refused(WriteFailure.KindOf(failure), failure.Reason);
 
     private static RecordEditResult RecordNotFound(PluginAddress plugin, string formKey) =>
         RecordEditResult.Refused(
@@ -116,22 +114,18 @@ internal sealed class WriteTargets(
 
     // A record's own descendants are inside its text, so one unreadable response refuses its topic
     // here too.
-    private static RecordEditResult RefuseUnreadableCopySource(string formKey, string why) =>
-        RecordEditResult.Refused(
-            RecordEditRefusal.RecordParseFailed,
-            $"{formKey} cannot be read, so copying it would land a stub holding only its FormKey and " +
-            $"EditorID rather than the record: {why}");
-
-    /// <summary>A copy that met a document it could not read refuses naming it; any other failure stands.</summary>
-    internal static SourceAnswer<RecordEditResult> UnreadableAsCopyRefusal(string formKey, SourceAnswer<RecordEditResult> copied) =>
-        !copied.Holds(out _, out var failure) && failure is SourceFailure.Unreadable
-            ? RefuseUnreadableSource(formKey, failure.Reason)
-            : copied;
+    private static RecordEditResult RefuseUnreadableCopySource(string formKey, CopyUnread unread) =>
+        unread.Kind == RecordEditRefusal.RecordParseFailed
+            ? RecordEditResult.Refused(
+                RecordEditRefusal.RecordParseFailed,
+                $"{formKey} cannot be read, so copying it would land a stub holding only its FormKey and " +
+                $"EditorID rather than the record: {unread.Why}")
+            : RefuseUnreadableSource(formKey, unread);
 
     /// <summary>A copy that reads its source beyond its own record, as an exterior cell's worldspace,
     /// refuses naming what it could not read.</summary>
-    internal static RecordEditResult RefuseUnreadableSource(string formKey, string why) =>
-        RecordEditResult.Refused(RecordEditRefusal.RecordParseFailed, $"{formKey} cannot be copied: {why} Nothing was written.");
+    internal static RecordEditResult RefuseUnreadableSource(string formKey, CopyUnread unread) =>
+        RecordEditResult.Refused(unread.Kind, $"{formKey} cannot be copied: {unread.Why} Nothing was written.");
 
     // The six record gestures enter here first.
     internal RecordEditResult? RefuseUnlessEditable(PluginAddress plugin, out SourceRepository? repository)

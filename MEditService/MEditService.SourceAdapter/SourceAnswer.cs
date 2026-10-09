@@ -52,7 +52,10 @@ public abstract record SourceFailure
 {
     private SourceFailure(string reason) => Reason = reason;
 
-    public string Reason { get; }
+    public string Reason { get; private init; }
+
+    /// <summary>This failure, in <paramref name="reason"/>'s words.</summary>
+    internal SourceFailure Saying(string reason) => this with { Reason = reason };
 
     /// <summary>A file filed as a record document is not one this reader can read.</summary>
     public sealed record Unreadable : SourceFailure
@@ -176,7 +179,7 @@ internal sealed class SourceStopException : InvalidOperationException
 
     internal SourceFailure Failure { get; }
 
-    internal static SourceStopException Of(SourceFailure failure) => new(failure);
+    internal static SourceStopException Of(SourceFailure failure, Exception? cause = null) => new(failure, cause);
 
     internal static SourceStopException Unreadable(string reason) => new(new SourceFailure.Unreadable(reason, null));
 

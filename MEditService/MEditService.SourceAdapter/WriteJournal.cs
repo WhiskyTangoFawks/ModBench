@@ -153,12 +153,14 @@ internal sealed class WriteJournal(string modFolder)
         return unrestored;
     }
 
-    /// <summary>None when the rollback left nothing. Otherwise an IOException naming what it left when the
-    /// cause is a failed write, else an AggregateException so no refusal handler catches a defect.</summary>
+    /// <summary>None when the rollback left nothing. Otherwise the cause's own stop, or an IOException when
+    /// the cause is another failed write, naming what it left; else an AggregateException so no refusal
+    /// handler catches a defect.</summary>
     internal Exception? Report(Exception cause, List<Unrestored> unrestored)
     {
         if (unrestored.Count == 0) return null;
         var message = Describe(cause.Message, unrestored);
+        if (cause is SourceStopException stop) return SourceStopException.Of(stop.Failure.Saying(message), stop);
         return IsAFailedWrite(cause) ? new IOException(message, cause) : new AggregateException(message, cause);
     }
 
