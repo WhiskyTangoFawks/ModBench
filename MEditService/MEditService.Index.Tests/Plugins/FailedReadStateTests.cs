@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -499,7 +500,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         public HeldAtFirstRead() : base(TestAdapters.Mutagen()) { }
 
-        public override PluginAnswer<(PluginContent Content, PluginFailure? Unreachable)> ReadContent(
+        public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
             ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
             Interlocked.Increment(ref _read) == 1
                 ? PluginFailures.Inaccessible()
@@ -513,7 +514,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         public bool Failed { get; private set; }
 
-        public override PluginAnswer<IPluginDocuments> OpenDocuments(
+        public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
             ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
             PluginStrings? strings = null)
         {
@@ -555,7 +556,7 @@ public sealed class FailedReadStateTests : IDisposable
             return stamps;
         }
 
-        public SourceAnswer<T> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read)
+        public Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read)
         {
             at(TreeMoment.ReadBegins, plugin);
             try
@@ -568,25 +569,25 @@ public sealed class FailedReadStateTests : IDisposable
             }
         }
 
-        public SourceAnswer<SourceDocument?> RecordOf(PluginAddress plugin, RecordIdentity identity)
+        public Answer<SourceDocument?, SourceFailure> RecordOf(PluginAddress plugin, RecordIdentity identity)
         {
             at(TreeMoment.RecordRead, plugin);
             return inner.RecordOf(plugin, identity);
         }
 
-        public SourceAnswer<IReadOnlyDictionary<string, RecordChange>> ChangedSinceLastCommit(PluginAddress plugin) =>
+        public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin) =>
             inner.ChangedSinceLastCommit(plugin);
 
         public SourceFailure? WhyUnreadable(PluginAddress plugin, RecordIdentity identity, string body) =>
             inner.WhyUnreadable(plugin, identity, body);
 
-        public SourceAnswer<SourceDocument?> RecordFromText(PluginAddress plugin, string formKey, string text) =>
+        public Answer<SourceDocument?, SourceFailure> RecordFromText(PluginAddress plugin, string formKey, string text) =>
             inner.RecordFromText(plugin, formKey, text);
 
-        public SourceAnswer<DocumentFile?> DocumentOf(PluginAddress plugin, RecordIdentity identity) => inner.DocumentOf(plugin, identity);
+        public Answer<DocumentFile?, SourceFailure> DocumentOf(PluginAddress plugin, RecordIdentity identity) => inner.DocumentOf(plugin, identity);
 
-        public SourceAnswer<string?> RelativePathOf(PluginAddress plugin, RecordIdentity identity) => inner.RelativePathOf(plugin, identity);
+        public Answer<string?, SourceFailure> RelativePathOf(PluginAddress plugin, RecordIdentity identity) => inner.RelativePathOf(plugin, identity);
 
-        public SourceAnswer<string?> FileNameOf(PluginAddress plugin, RecordIdentity identity) => inner.FileNameOf(plugin, identity);
+        public Answer<string?, SourceFailure> FileNameOf(PluginAddress plugin, RecordIdentity identity) => inner.FileNameOf(plugin, identity);
     }
 }

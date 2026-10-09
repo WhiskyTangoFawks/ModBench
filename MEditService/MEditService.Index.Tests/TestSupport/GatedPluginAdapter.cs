@@ -1,6 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -23,7 +24,7 @@ internal sealed class GatedPluginAdapter(
     /// is absent.</summary>
     public List<string> Opened { get; } = [];
 
-    public override PluginAnswer<IPluginDocuments> OpenDocuments(
+    public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         PluginStrings? strings = null)
     {

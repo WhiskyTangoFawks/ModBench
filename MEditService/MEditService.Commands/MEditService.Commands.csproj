@@ -23,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MEditService.RepositoriesLib\MEditService.RepositoriesLib.csproj" />
     <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />
     <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
     <!-- The kernel, by the band's rule (target-architecture.d2 medit_kernel). -->

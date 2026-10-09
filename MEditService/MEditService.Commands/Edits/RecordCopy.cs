@@ -4,6 +4,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -20,7 +21,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
 
     /// <summary>A copy of a child the destination lacks, as every Copy as Override: own fields only, so a copied
     /// topic lands with no responses.</summary>
-    internal SourceAnswer<RecordEditResult> CopyNewChildAsOverride(
+    internal Answer<RecordEditResult, SourceFailure> CopyNewChildAsOverride(
         CopySource source, SourceDocument child, DocumentContainment container,
         Destination destination, GameRelease release)
     {
@@ -45,8 +46,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     }
 
     /// <summary>What a copy made over <paramref name="batch"/> since <paramref name="before"/>, once it applied.</summary>
-    internal static SourceAnswer<RecordEditChanges> ChangesSince(
-        SourceBatch batch, SourceChanges before, SourceAnswer<RecordEditResult> copied) =>
+    internal static Answer<RecordEditChanges, SourceFailure> ChangesSince(
+        SourceBatch batch, SourceChanges before, Answer<RecordEditResult, SourceFailure> copied) =>
         copied.Then(result => SourceAnswer.Of(
             result.Applied ? new RecordEditChanges(result, batch.ChangesAddedSince(before)) : result));
 
@@ -57,7 +58,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
 
     /// <summary>The container rule: the child lands at the end of its slot in the destination's copy
     /// of its container, which is copied in with its own fields when absent, transitively.</summary>
-    internal SourceAnswer<RecordEditResult> PutChildInContainer(
+    internal Answer<RecordEditResult, SourceFailure> PutChildInContainer(
         SourceTransaction transaction, CopySource source, DocumentContainment container, SourceDocument child,
         Destination destination, GameRelease release)
     {
@@ -75,7 +76,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
 
     // A container the destination lacks is copied in around the child: itself a child lands in its
     // own container's slot by the same rule, a top-level one at a placement.
-    private SourceAnswer<RecordEditResult> CopyContainerInAround(
+    private Answer<RecordEditResult, SourceFailure> CopyContainerInAround(
         SourceTransaction transaction, CopySource source, DocumentContainment container, SourceDocument child,
         Destination destination, GameRelease release)
     {
@@ -107,7 +108,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
 
     // A top-level container the destination lacks: an exterior cell lands through the spatial mint
     // with its worldspace; everything else is a put, which places it.
-    private SourceAnswer<RecordEditResult> PlaceContainer(
+    private Answer<RecordEditResult, SourceFailure> PlaceContainer(
         SourceTransaction transaction, CopySource source, SourceDocument container, Destination destination, GameRelease release)
     {
         var formKey = container.FormKey;
@@ -135,7 +136,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     /// <summary>Lands an exterior CELL in <paramref name="worldspaceFormKey"/>, copying the WRLD in with
     /// its own fields first when the destination has none: the put of a cell whose worldspace is
     /// absent refuses.</summary>
-    internal SourceAnswer<RecordEditResult> PlaceExteriorCell(
+    internal Answer<RecordEditResult, SourceFailure> PlaceExteriorCell(
         SourceTransaction transaction, CopySource source, string worldspaceFormKey, SourceDocument cell,
         Destination destination, GameRelease release)
     {
@@ -180,7 +181,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
 
     /// <summary>What the destination's tree names at <paramref name="formKey"/>, or null when nothing
     /// in it carries that key at the working tree.</summary>
-    internal static SourceAnswer<RecordIdentity?> Identity(Destination destination, string formKey) =>
+    internal static Answer<RecordIdentity?, SourceFailure> Identity(Destination destination, string formKey) =>
         destination.Repository.Get(destination.Plugin, formKey).Then(held => SourceAnswer.Of(held?.Identity));
 
     internal static RecordEditResult RefuseHeldWithoutReplace(string formKey, PluginAddress destination) =>

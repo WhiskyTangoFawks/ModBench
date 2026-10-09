@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -21,7 +22,7 @@ internal sealed class NewRecordCopy
 
     /// <summary>The fresh FormKey comes from the same allocator create draws on. A self-link is
     /// remapped onto it, as xEdit does.</summary>
-    internal SourceAnswer<RecordEditChanges> Copy(
+    internal Answer<RecordEditChanges, SourceFailure> Copy(
         CopySource source, string formKey, PluginAddress destinationPlugin, UnsavedBatches batches)
     {
         if (_targets.ResolveCopySource(destinationPlugin, source, formKey, batches, out var copy) is { } blocked) return blocked;
@@ -29,7 +30,7 @@ internal sealed class NewRecordCopy
         return RecordCopy.ChangesSince(copy.Batch, before, CopyAsNewRecord(copy, destinationPlugin));
     }
 
-    private SourceAnswer<RecordEditResult> CopyAsNewRecord(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin)
+    private Answer<RecordEditResult, SourceFailure> CopyAsNewRecord(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin)
     {
         var (source, identity, destination, _, release, _) = copy;
         if (RefuseIfDisallowedForCopyAsNewRecord(identity.RecordType, RecordTypes.For(release)) is { } disallowedRefusal) return disallowedRefusal;
@@ -47,7 +48,7 @@ internal sealed class NewRecordCopy
             "new working-tree source document");
     }
 
-    private SourceAnswer<RecordEditResult> CopyChildAsNewRecord(
+    private Answer<RecordEditResult, SourceFailure> CopyChildAsNewRecord(
         WriteTargets.CopyTarget copy, DocumentContainment container, PluginAddress destinationPlugin) =>
         CopyUnderNextFormKey(
             copy, destinationPlugin,
@@ -55,9 +56,9 @@ internal sealed class NewRecordCopy
                 transaction, copy.Source, container, duplicate, copy.Destination, copy.Release),
             $"inside {container.ParentFormKey}'s {container.SlotName} slot");
 
-    private SourceAnswer<RecordEditResult> CopyUnderNextFormKey(
+    private Answer<RecordEditResult, SourceFailure> CopyUnderNextFormKey(
         WriteTargets.CopyTarget copy, PluginAddress destinationPlugin,
-        Func<SourceTransaction, SourceDocument, SourceAnswer<RecordEditResult>> land, string landedAt)
+        Func<SourceTransaction, SourceDocument, Answer<RecordEditResult, SourceFailure>> land, string landedAt)
     {
         var (source, identity, destination, _, release, body) = copy;
         if (!FormKeyAllocator.Over(destination.Repository, destinationPlugin, release).Holds(out var allocator, out var unread)) return unread;

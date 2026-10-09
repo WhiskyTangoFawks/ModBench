@@ -3,6 +3,7 @@ using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
@@ -377,7 +378,7 @@ internal static class PluginEndpoints
 
     // A source tree that cannot say where the copy is answers why.
     private static IResult PluginRecordAnswer<T>(
-        string plugin, string formKey, string? origin, Func<PluginAddress, string, SourceAnswer<T?>> answer) where T : class
+        string plugin, string formKey, string? origin, Func<PluginAddress, string, Answer<T?, SourceFailure>> answer) where T : class
     {
         if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
         if (!answer(WriteEndpointMapping.PluginAddressOf(plugin, origin), Uri.UnescapeDataString(formKey)).Holds(out var found, out var failure))

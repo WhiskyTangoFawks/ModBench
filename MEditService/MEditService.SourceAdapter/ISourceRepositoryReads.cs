@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
 
@@ -8,19 +9,19 @@ public interface ISourceRepositoryReads
 {
     RecordStamps StampsOf(PluginAddress plugin);
 
-    SourceAnswer<T> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read);
+    Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read);
 
-    SourceAnswer<IReadOnlyDictionary<string, RecordChange>> ChangedSinceLastCommit(PluginAddress plugin);
+    Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin);
 
-    SourceAnswer<SourceDocument?> RecordOf(PluginAddress plugin, RecordIdentity identity);
+    Answer<SourceDocument?, SourceFailure> RecordOf(PluginAddress plugin, RecordIdentity identity);
 
     SourceFailure? WhyUnreadable(PluginAddress plugin, RecordIdentity identity, string body);
 
-    SourceAnswer<SourceDocument?> RecordFromText(PluginAddress plugin, string formKey, string text);
+    Answer<SourceDocument?, SourceFailure> RecordFromText(PluginAddress plugin, string formKey, string text);
 
-    SourceAnswer<DocumentFile?> DocumentOf(PluginAddress plugin, RecordIdentity identity);
+    Answer<DocumentFile?, SourceFailure> DocumentOf(PluginAddress plugin, RecordIdentity identity);
 
-    SourceAnswer<string?> RelativePathOf(PluginAddress plugin, RecordIdentity identity);
+    Answer<string?, SourceFailure> RelativePathOf(PluginAddress plugin, RecordIdentity identity);
 
-    SourceAnswer<string?> FileNameOf(PluginAddress plugin, RecordIdentity identity);
+    Answer<string?, SourceFailure> FileNameOf(PluginAddress plugin, RecordIdentity identity);
 }

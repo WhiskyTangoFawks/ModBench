@@ -4,6 +4,7 @@ using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -118,7 +119,7 @@ public sealed class DiagnosedContainerTests : IDisposable
 
     private sealed class StubbedDocumentsAdapter(string? cellDiagnosis) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override PluginAnswer<IPluginDocuments> OpenDocuments(
+        public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
             ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
             PluginStrings? strings = null) =>
             RequireExtensions.AnswerOf<IPluginDocuments>(() => new StubDocuments(cellDiagnosis));

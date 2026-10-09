@@ -1,6 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -11,7 +12,7 @@ namespace MEditService.Index.Tests.TestSupport;
 /// record after the first <paramref name="afterRecords"/>, inside its write.</summary>
 internal sealed class PartwayAdapter(int afterRecords, Action atRecord) : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {
-    public override PluginAnswer<IPluginDocuments> OpenDocuments(
+    public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         PluginStrings? strings = null) =>
         base.OpenDocuments(modPath, gameRelease, schemas, strings).Map<IPluginDocuments, IPluginDocuments>(

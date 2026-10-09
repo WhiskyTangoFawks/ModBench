@@ -1,49 +1,11 @@
-using System.Diagnostics.CodeAnalysis;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>What a read or write of a plugin's source answers (ADR-0019): its value, or why it stopped.</summary>
-public abstract class SourceAnswer<T>
-{
-    private SourceAnswer()
-    {
-    }
-
-    internal static SourceAnswer<T> Of(T value) => new Answered(value);
-
-    public static implicit operator SourceAnswer<T>(SourceFailure failure) => new Failed(failure);
-
-    public static implicit operator SourceAnswer<T>(T value) => new Answered(value);
-
-    public abstract bool Holds([MaybeNullWhen(false)] out T value, [NotNullWhen(false)] out SourceFailure? failure);
-
-    /// <summary>What <paramref name="next"/> answers of this value, or this answer's failure.</summary>
-    public SourceAnswer<TNext> Then<TNext>(Func<T, SourceAnswer<TNext>> next) =>
-        Holds(out var value, out var failure) ? next(value) : failure;
-
-    private sealed class Answered(T answer) : SourceAnswer<T>
-    {
-        public override bool Holds([MaybeNullWhen(false)] out T value, [NotNullWhen(false)] out SourceFailure? failure)
-        {
-            (value, failure) = (answer, null);
-            return true;
-        }
-    }
-
-    private sealed class Failed(SourceFailure stopped) : SourceAnswer<T>
-    {
-        public override bool Holds([MaybeNullWhen(false)] out T value, [NotNullWhen(false)] out SourceFailure? failure)
-        {
-            (value, failure) = (default, stopped);
-            return false;
-        }
-    }
-}
-
-/// <summary>Builds the answers <see cref="SourceAnswer{T}"/> carries.</summary>
+/// <summary>Builds the answers <see cref="Answer{T, TFailure}"/> carries.</summary>
 public static class SourceAnswer
 {
-    public static SourceAnswer<T> Of<T>(T value) => SourceAnswer<T>.Of(value);
+    public static Answer<T, SourceFailure> Of<T>(T value) => value;
 }
 
 /// <summary>Why a read or write of a plugin's source stopped, in the words a refusal or a status names
@@ -160,11 +122,11 @@ public abstract record SourceFailure
     };
 
     /// <summary><paramref name="read"/>'s value, or the failure its throw stands for.</summary>
-    internal static SourceAnswer<T> Answer<T>(Func<T> read)
+    internal static Answer<T, SourceFailure> Answer<T>(Func<T> read)
     {
         try
         {
-            return SourceAnswer<T>.Of(read());
+            return SourceAnswer.Of(read());
         }
         catch (Exception ex) when (Of(ex) is { } failure)
         {

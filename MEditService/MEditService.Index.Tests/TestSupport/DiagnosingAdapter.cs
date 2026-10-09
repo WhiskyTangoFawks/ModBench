@@ -1,6 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -13,7 +14,7 @@ internal sealed class DiagnosingAdapter() : DelegatingPluginAdapter(TestAdapters
 {
     public string? Unreadable { get; set; }
 
-    public override PluginAnswer<IPluginDocuments> OpenDocuments(
+    public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         PluginStrings? strings = null) =>
         base.OpenDocuments(modPath, gameRelease, schemas, strings).Map<IPluginDocuments, IPluginDocuments>(

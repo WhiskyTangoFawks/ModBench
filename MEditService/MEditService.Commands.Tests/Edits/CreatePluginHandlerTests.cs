@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -184,14 +185,14 @@ public sealed class CreatePluginHandlerTests : IDisposable
         public PluginFailure? TakeBackFailure { get; init; }
         public PluginFailure Unread { get; } = PluginFailures.Unparsed();
 
-        public override Task<PluginAnswer<PluginSource>> ReadSourceOfAsync(
+        public override Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
             RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default)
         {
             Before?.Invoke();
-            return Task.FromResult<PluginAnswer<PluginSource>>(Unread);
+            return Task.FromResult<Answer<PluginSource, PluginFailure>>(Unread);
         }
 
-        public override PluginAnswer<EmptyPluginTakeBack> TakeBackEmpty(ModKey modKey, string folder, string written) =>
+        public override Answer<EmptyPluginTakeBack, PluginFailure> TakeBackEmpty(ModKey modKey, string folder, string written) =>
             TakeBackFailure ?? base.TakeBackEmpty(modKey, folder, written);
     }
 
@@ -310,15 +311,15 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
     private sealed class FailingWriteAdapter(PluginFailure failure) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override Task<PluginAnswer<EmptyPluginCreated>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease) =>
-            Task.FromResult<PluginAnswer<EmptyPluginCreated>>(failure);
+        public override Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease) =>
+            Task.FromResult<Answer<EmptyPluginCreated, PluginFailure>>(failure);
     }
 
     private sealed class WritesAsFallout4Adapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public List<GameRelease> Asked { get; } = [];
 
-        public override Task<PluginAnswer<EmptyPluginCreated>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease)
+        public override Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease)
         {
             Asked.Add(gameRelease);
             return base.CreateAndWriteAsync(modKey, folder, GameRelease.Fallout4);

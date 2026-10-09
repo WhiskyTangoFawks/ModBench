@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda.Plugins;
 
@@ -15,7 +16,7 @@ internal sealed class RequiredMasters(PluginAddress plugin)
     private readonly HashSet<string> _links = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The masters <paramref name="plugin"/>'s working tree requires (ADR-0008).</summary>
-    internal static SourceAnswer<IReadOnlySet<string>> InTheTree(
+    internal static Answer<IReadOnlySet<string>, SourceFailure> InTheTree(
         SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         repository.ReadDocuments(plugin, documents =>
         {

@@ -2,6 +2,7 @@ using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -59,7 +60,7 @@ public sealed class WarmReconcileTests
     {
         public OpenedIndex? Index { get; set; }
 
-        public override PluginAnswer<(PluginContent Content, PluginFailure? Unreachable)> ReadContent(
+        public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
             ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
         {
             var index = Index

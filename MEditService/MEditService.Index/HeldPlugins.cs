@@ -2,6 +2,7 @@ using System.Diagnostics;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RepositoriesLib;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -59,7 +60,7 @@ internal sealed class HeldPlugins
 
     /// <summary>What the adapter read of the plugin's file, held; or the failure that stopped the
     /// read, with nothing held. A success clears an earlier failure.</summary>
-    public PluginAnswer<PluginMetadata> Open(RegisteredPlugin plugin, Registration registration)
+    public Answer<PluginMetadata, PluginFailure> Open(RegisteredPlugin plugin, Registration registration)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {

@@ -2,6 +2,7 @@ using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -96,7 +97,7 @@ public sealed class SourceBatchTests : IDisposable
         Assert.Contains("\"UnsavedName\"", response.Body, StringComparison.Ordinal);
     }
 
-    private static SourceFailure? Write(SourceBatch batch, Func<SourceRepository, SourceAnswer<SourceChanges>> changes) =>
+    private static SourceFailure? Write(SourceBatch batch, Func<SourceRepository, Answer<SourceChanges, SourceFailure>> changes) =>
         SourceTransaction.Atomically(batch.Repository, transaction => transaction.Apply(changes(batch.Repository)));
 
     [Fact]
@@ -130,7 +131,7 @@ public sealed class SourceBatchTests : IDisposable
         Assert.True(File.Exists(FullPath(QuestPath)));
     }
 
-    private IReadOnlyList<string> TreeTheBatchAnswers(Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes)
+    private IReadOnlyList<string> TreeTheBatchAnswers(Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
     {
         var batch = SourceBatch.Over(Repository, []);
         foreach (var write in writes) Assert.Null(Write(batch, write));
@@ -138,7 +139,7 @@ public sealed class SourceBatchTests : IDisposable
         return TreeSnapshot.Of(_modFolder);
     }
 
-    private IReadOnlyList<string> TreeTheWritesLeaveOneAfterAnother(Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes)
+    private IReadOnlyList<string> TreeTheWritesLeaveOneAfterAnother(Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
     {
         using var oneAfterAnother = new ScratchDirectory("medit-batch-sequence-");
         PluginBaselines.Track(oneAfterAnother, TheTree());
@@ -160,7 +161,7 @@ public sealed class SourceBatchTests : IDisposable
     {
         var renamed = Renamed(_quest, "qust", QuestPath, "Renamed");
 
-        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToPut(Plugin, renamed),
             repository => repository.ChangesToRemove(Plugin, Identity(_response, "info")),
@@ -174,7 +175,7 @@ public sealed class SourceBatchTests : IDisposable
     {
         var renamed = Renamed(_quest, "qust", QuestPath, "Renamed");
 
-        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToPut(Plugin, renamed),
             repository => repository.ChangesToRemove(Plugin, renamed.Identity),
@@ -189,7 +190,7 @@ public sealed class SourceBatchTests : IDisposable
         var renamed = Renamed(_cell, "cell", CellPath, "RenamedCell");
         var child = Child(new PlacedObject(_mod) { EditorID = "AddedRef" }, "refr");
 
-        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToPut(Plugin, renamed),
             repository => repository.ChangesToPutChild(Plugin, renamed.Identity, "Temporary", child),
@@ -204,7 +205,7 @@ public sealed class SourceBatchTests : IDisposable
         var npc = new Npc(_mod) { EditorID = "NewNpc" };
         var created = Child(npc, "npc_");
 
-        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToPut(Plugin, created),
             repository => repository.ChangesToPut(Plugin, created with
@@ -223,7 +224,7 @@ public sealed class SourceBatchTests : IDisposable
         var cell = Identity(_cell, "cell");
         var rekeyed = cell with { FormKey = $"000900:{PluginName}" };
 
-        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToRekey(Plugin, cell, rekeyed.FormKey),
             repository => repository.ChangesToRemove(Plugin, rekeyed),
@@ -237,7 +238,7 @@ public sealed class SourceBatchTests : IDisposable
     {
         var renamed = Renamed(_worldspace, "wrld", WorldspacePath, "RenamedWorld");
 
-        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")),
             repository => repository.ChangesToPut(Plugin, renamed),
@@ -394,7 +395,7 @@ public sealed class SourceBatchTests : IDisposable
     {
         var cell = Child(new Cell(_mod) { EditorID = "NewCell" }, "cell");
         var child = Child(new PlacedObject(_mod) { EditorID = "AddedRef" }, "refr");
-        Func<SourceRepository, SourceAnswer<SourceChanges>>[] writes =
+        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToPut(Plugin, cell),
             repository => repository.ChangesToPutChild(Plugin, cell.Identity, "Temporary", child),

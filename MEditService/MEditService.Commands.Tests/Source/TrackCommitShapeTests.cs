@@ -4,6 +4,7 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -170,7 +171,7 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private sealed class RoundTripFailsForEvery(params string[] plugins) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override Task<PluginAnswer<string>> WriteFromTreeAsync(
+        public override Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
             IReadOnlyList<string> masterOrder, CancellationToken cancel = default) =>
             plugins.Contains(Path.GetFileName(destinationPath))
@@ -196,7 +197,7 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private sealed class RoundTripFailsFor(string plugin) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override Task<PluginAnswer<string>> WriteFromTreeAsync(
+        public override Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
             IReadOnlyList<string> masterOrder, CancellationToken cancel = default) =>
             Path.GetFileName(destinationPath) == plugin

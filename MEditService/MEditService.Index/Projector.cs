@@ -2,6 +2,7 @@ using System.Diagnostics;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -58,7 +59,7 @@ internal sealed class Projector(
     /// <summary>Sets each of <paramref name="plugin"/>'s rows to how the Source repository says its
     /// record stands against the last commit (ADR-0007). Returns the keys that moved, for the caller
     /// to announce.</summary>
-    internal SourceAnswer<IReadOnlyList<string>> LearnWorkingTreeStates(RegisteredPlugin plugin)
+    internal Answer<IReadOnlyList<string>, SourceFailure> LearnWorkingTreeStates(RegisteredPlugin plugin)
     {
         var key = plugin.Key;
         if (!Over(plugin).ChangedSinceLastCommit(key).Holds(out var changes, out var stopped)) return stopped;
@@ -120,7 +121,7 @@ internal sealed class Projector(
     });
 
     // Re-derives one key's rows. Called again with the same bytes, nothing below fires.
-    private SourceAnswer<IReadOnlyList<string>> RefreshOneKey(ISourceRepositoryReads repository, PluginAddress key, string formKey)
+    private Answer<IReadOnlyList<string>, SourceFailure> RefreshOneKey(ISourceRepositoryReads repository, PluginAddress key, string formKey)
     {
         // Gone since the batch was read: another key's projection in this same batch took it (a
         // container's document carries its children's rows).

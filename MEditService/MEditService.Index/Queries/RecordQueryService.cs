@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -292,14 +293,14 @@ internal sealed class RecordQueryService(
     }
 
     // The index stores each copy's document as the codec writes it, or a stub (ADR-0005).
-    public SourceAnswer<RenderedDocument?> GetRenderedDocument(PluginAddress plugin, string formKey)
+    public Answer<RenderedDocument?, SourceFailure> GetRenderedDocument(PluginAddress plugin, string formKey)
     {
         if (RequireReads().GetCopyText(formKey, plugin) is not var (identity, body)) return SourceAnswer.Of<RenderedDocument?>(null);
         return RenderedFileName(plugin, identity).Then(name => SourceAnswer.Of<RenderedDocument?>(new RenderedDocument(name, body)));
     }
 
     // A tracked plugin's truth is its tree (ADR-0006), so a copy whose file is gone has no answer.
-    public SourceAnswer<CopyDocument?> GetCopyDocument(PluginAddress plugin, string formKey)
+    public Answer<CopyDocument?, SourceFailure> GetCopyDocument(PluginAddress plugin, string formKey)
     {
         if (RequireReads().GetCopyText(formKey, plugin) is not var (identity, _)) return SourceAnswer.Of<CopyDocument?>(null);
         if (TreeOf(plugin) is not { } tree)
@@ -314,7 +315,7 @@ internal sealed class RecordQueryService(
         new(file.IsContainersDocument ? CopyDocumentKind.ContainersFile : CopyDocumentKind.OwnFile, file.Path);
 
     // A tracked copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.
-    private SourceAnswer<string> RenderedFileName(PluginAddress plugin, RecordIdentity identity)
+    private Answer<string, SourceFailure> RenderedFileName(PluginAddress plugin, RecordIdentity identity)
     {
         var snapshot = _loadOrder.Require();
         if (snapshot.Plugin(plugin) is not { } registered || !source.IsTracked(registered)
