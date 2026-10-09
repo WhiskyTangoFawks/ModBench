@@ -112,7 +112,7 @@ export interface UnsavedDocument { path: string; text: string }
  *  each document's text once moved. */
 export type SourceChanges = Pick<components['schemas']['RecordEditChangesResponse'], 'moves' | 'deletions' | 'documents'>;
 
-/** What deleting one record changes in plugin source. */
+// What deleting one record changes in plugin source.
 type RecordDeleteChanges = SourceChanges & { record: RecordAddress };
 
 /** A delete's changes per record, in the order to make them, and the records mEdit refused. */

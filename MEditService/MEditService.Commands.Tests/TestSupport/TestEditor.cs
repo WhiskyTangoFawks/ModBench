@@ -6,7 +6,7 @@ using MEditService.TestSupport;
 namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>Modbench's part in an edit, as the tests play it: mEdit is given the text of the document carrying
-/// the record, and the changes it answers are saved, each move in order, then each deletion and each document.</summary>
+/// the record, and the changes it answers are saved, in the order answered.</summary>
 public sealed class TestEditor(EditRecordChangesHandler edits, LoadOrderHolder loadOrder)
 {
     public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
