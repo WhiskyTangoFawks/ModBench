@@ -9,7 +9,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { answerOf } from '../wire/readFailed';
 
-export interface RenameSourceEditing {
+interface RenameSourceEditing {
   /** Resolves whether the changes were applied; a failure has been reported by whoever applied them. */
   readonly apply: (changes: SourceChanges) => Promise<boolean>;
 }
