@@ -33,13 +33,8 @@ const { installFromArchive, installFromFolder } = vi.hoisted(() => ({
   installFromFolder: vi.fn(),
 }));
 
-vi.mock('../../install/install', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../install/install')>()),
-  installFromArchive, installFromFolder,
-}));
-
 import { registerModInstallCommands } from '../installCommands';
-import { ARCHIVE_EXTENSIONS } from '../../install/install';
+import { installCommands } from '../../install/install';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
@@ -54,13 +49,13 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 }
 
 const GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE ='Skyrim Special Edition';
-const ACCESS = accessTo('/instance');
+const INSTALL = { ...installCommands(accessTo('/instance')), installFromArchive, installFromFolder };
 
 type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
 
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
-    access: ACCESS,
+    install: INSTALL,
     instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE, downloads: { kind: 'listed', rows: [downloadRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
     warnIfFomod: vi.fn(),
@@ -119,7 +114,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     await invoke('modbench.mod.install');
 
     expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
-      filters: { 'Mod archives': [...ARCHIVE_EXTENSIONS] },
+      filters: { 'Mod archives': ['zip', '7z', 'rar'] },
     }));
   });
 
@@ -134,7 +129,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
 
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'foo' }));
     expect(installFromArchive).toHaveBeenCalledWith(
-      ACCESS, { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', { gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE },
+      { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', { gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE },
     );
     expect(succeeded).toEqual({ installed: true });
   });
@@ -176,7 +171,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     }));
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'Loose Files' }));
     expect(installFromFolder).toHaveBeenCalledWith(
-      ACCESS, { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE },
+      { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE },
     );
     expect(succeeded).toEqual({ installed: true });
   });
@@ -215,7 +210,7 @@ describe('modbench.mod.install: a downloaded file is its source', () => {
     registerModInstallCommands(deps());
     const outcome = await invoke('modbench.mod.install', { argument: { kind: 'download', row } });
 
-    expect(installFromArchive).toHaveBeenCalledWith(ACCESS, { kind: 'new', name: 'Foo' }, row.path, expect.objectContaining({ modID: row.modID }));
+    expect(installFromArchive).toHaveBeenCalledWith({ kind: 'new', name: 'Foo' }, row.path, expect.objectContaining({ modID: row.modID }));
     expect(showQuickPick).not.toHaveBeenCalled();
     expect(showOpenDialog).not.toHaveBeenCalled();
     expect(outcome).toEqual({ installed: true });

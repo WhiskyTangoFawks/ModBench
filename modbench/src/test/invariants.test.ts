@@ -21,6 +21,7 @@ describe('every MO2 text-file write command has a corpus test', () => {
     ]) expect(writeVerbs).toContain(verb);
     expect(writeVerbs).toContain('switchProfile');
     expect(writeVerbs).toContain('excludeDownloads');
+    expect(writeVerbs).toContain('includeDownloads');
     expect(writeVerbs).toContain('modSyncOver');
     expect(writeVerbs).toContain('pluginSyncOver');
     expect(writeVerbs).toContain('deleteDownloads');
