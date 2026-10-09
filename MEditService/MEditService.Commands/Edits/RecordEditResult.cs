@@ -164,6 +164,10 @@ public sealed record RecordEditChanges(RecordEditResult Outcome, SourceChanges C
 {
     public static implicit operator RecordEditChanges(RecordEditResult outcome) => new(outcome, SourceChanges.None);
 
+    /// <summary><paramref name="outcome"/>, which changes nothing, or why it could not be reached.</summary>
+    internal static SourceAnswer<RecordEditChanges> Of(SourceAnswer<RecordEditResult> outcome) =>
+        outcome.Then(reached => SourceAnswer.Of<RecordEditChanges>(reached));
+
     /// <summary>The edit that lands as <paramref name="outcome"/> by making <paramref name="changes"/>, or why
     /// they could not be made.</summary>
     internal static SourceAnswer<RecordEditChanges> Making(RecordEditResult outcome, SourceAnswer<SourceChanges> changes) =>

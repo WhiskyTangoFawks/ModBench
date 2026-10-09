@@ -29,6 +29,14 @@ public sealed class SourceBatch : ISourceFiles
     /// documents, it leaves the tree as the writes would have one after another.</summary>
     public SourceChanges Changes { get; internal set; } = SourceChanges.None;
 
+    /// <summary>What the writes since <paramref name="before"/>, a snapshot of <see cref="Changes"/>, added to it. Moves
+    /// only append, so a move made since is the moves beyond those of <paramref name="before"/>.</summary>
+    public SourceChanges ChangesAddedSince(SourceChanges before) =>
+        new(
+            [.. Changes.Moves.Skip(before.Moves.Count)],
+            [.. Changes.Deletions.Except(before.Deletions, StringComparer.Ordinal)],
+            [.. Changes.Documents.Except(before.Documents)]);
+
     /// <summary>Makes <paramref name="absolute"/>'s changes over those made so far, throwing as the file system
     /// would where one cannot be made. A move the answer's order cannot make is a defect: no gesture writes one.</summary>
     internal void Apply(SourceChanges absolute)

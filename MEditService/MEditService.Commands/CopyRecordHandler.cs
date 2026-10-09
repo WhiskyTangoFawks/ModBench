@@ -41,12 +41,13 @@ public sealed class CopyRecordHandler
         return await ItemWrite.Over(
             containersFirst.SelectMany(record => destinations.Select(destination => new CopyItem(record, destination))),
             SameCopy.Instance,
-            item => mode switch
+            item => RecordEditChanges.Of(mode switch
             {
                 CopyMode.Override => _override.Copy(sources.Of(item.Record.Plugin), item.Record.FormKey, item.Destination, replace),
                 CopyMode.New => _new.Copy(sources.Of(item.Record.Plugin), item.Record.FormKey, item.Destination),
                 _ => throw new InvalidEnumArgumentException(nameof(mode), (int)mode, typeof(CopyMode)),
-            },
+            }),
+            changes => changes.Outcome.NewFormKey,
             item => $"Could not write the copy of {item.Record.FormKey} into {item.Destination.Name} ({item.Destination.Origin})",
             _logger);
     }

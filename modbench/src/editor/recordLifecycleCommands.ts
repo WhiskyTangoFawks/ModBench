@@ -13,6 +13,7 @@ import { keyArgsView } from '../drivingLib/copyValue';
 import { gestureEntry, isClickedRow } from '../drivingLib/gestureEntry';
 import { rowLabelOf, rowNameOf } from '../drivingLib/argument';
 import { recordArgumentOf } from '../drivingLib/recordArgument';
+import { pluginAddressKey, pluginAddressOf } from '../wire/pluginAddress';
 import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from './ReferencedByTreeProvider';
 
 function recordName(formKey: string, label: string | undefined): string {
@@ -81,18 +82,16 @@ function selectedRecords(nodes: readonly unknown[]): Selection {
   };
 }
 
-function pluginsOf(records: readonly RecordAddress[]): PluginAddress[] {
-  const byKey = new Map(records.map(({ plugin, origin }) => [`${origin}\u0000${plugin}`, { name: plugin, origin }]));
-  return [...byKey.values()];
-}
-
 type RecordLifecycleClient = Pick<MEditClient, 'getDeleteChanges'>;
 
 /** How a delete reaches plugin source: the dirty documents mEdit reads in place of their files, the workspace edit
  *  that makes its answer, and the Source Control panel, which misses the change on its own. */
 export interface DeleteDeps {
   unsaved: () => readonly UnsavedDocument[];
-  apply: (items: readonly SourceChanges[]) => Promise<void>;
+  /** Resolves the files VS Code did not save, and rejects when it did not apply the changes. */
+  apply: (items: readonly SourceChanges[]) => Promise<readonly string[]>;
+  /** Runs each delete after the edits before it settle, so none saves after this one read the unsaved texts. */
+  oneAtATime: <T>(run: () => Promise<T>) => Promise<T>;
   refreshSourceControlFor: (plugin: PluginAddress) => void;
 }
 
@@ -109,21 +108,26 @@ export function registerRecordLifecycleCommands(
       const label = (item: RecordAddress | string) => (typeof item === 'string' ? item : addressLabel(item, labels));
       if (records.length > 0 && await askToDelete(records.map(label), ask) !== 'Delete') return;
 
-      const reportOutcome = async () => {
+      const reportOutcome = () => source.oneAtATime(async () => {
         const answer = records.length > 0 ? await client.getDeleteChanges(records, source.unsaved()) : { applied: [], refused: [] };
         if (isRefused(answer)) { reporter.report('error', answer.message); return; }
+        const refused = [...unreadable, ...answer.refused];
+        const outcome = (landed: readonly RecordAddress[]) => reporter.selectionOutcome(
+          `Could not delete ${refused.length} of ${records.length + unreadable.length} records.`, { landed, refused }, label);
+        let notSaved: readonly string[] = [];
         try {
-          if (answer.applied.length > 0) await source.apply(answer.applied);
+          if (answer.applied.length > 0) notSaved = await source.apply(answer.applied);
         } catch (error) {
           reporter.report('error', 'Could not delete the records.', errorMessage(error));
+          outcome([]);
           return;
         }
-        for (const plugin of pluginsOf(answer.applied.map(({ record }) => record))) source.refreshSourceControlFor(plugin);
-        const refused = [...unreadable, ...answer.refused];
-        reporter.selectionOutcome(
-          `Could not delete ${refused.length} of ${records.length + unreadable.length} records.`,
-          { landed: answer.applied.map(({ record }) => record), refused }, label);
-      };
+        const landed = answer.applied.map(({ record }) => record);
+        const touched = new Map(landed.map((record) => [pluginAddressKey(pluginAddressOf(record)), pluginAddressOf(record)]));
+        for (const plugin of touched.values()) source.refreshSourceControlFor(plugin);
+        if (notSaved.length > 0) reporter.report('error', 'Could not save the deletions.', `VS Code did not save ${notSaved.join(', ')}.`);
+        outcome(landed);
+      });
       await (records.length > 0 ? write(reportOutcome, invokedFrom) : reportOutcome());
     }),
   ];

@@ -123,14 +123,14 @@ describe('an edit of a record', () => {
     expect(meditClient.calls.filter(c => c.method === 'getEditChanges')).toEqual([]);
   });
 
-  it('reports a document VS Code did not save, so nothing is left unsaved in silence', async () => {
+  it('reports a document VS Code did not save as a part that failed, and still refreshes Source Control', async () => {
     const { deps, reporter, refreshSourceControlFor } = makeDeps({ applied: true, moves: [], deletions: [], documents: [{ path: FILE, text: 'edited' }] });
     h.savesLand = false;
 
     await applyRecordEdit(deps, address, height);
 
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not edit Height.', detail: `VS Code did not save ${FILE}.` }]);
-    expect(refreshSourceControlFor).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not save the edit of Height.', detail: `VS Code did not save ${FILE}.` }]);
+    expect(refreshSourceControlFor).toHaveBeenCalledWith(plugin);
   });
 });
 
@@ -171,6 +171,34 @@ describe('the changes of several records, made as one workspace edit', () => {
   it('says VS Code did not apply them, and saves nothing', async () => {
     h.applyLands = false;
 
-    await expect(applySourceChanges([{ ...none, deletions: [FOLDER] }])).rejects.toThrow('VS Code did not apply');
+    await expect(applySourceChanges([{ ...none, documents: [{ path: OWNER, text: 'x' }] }])).rejects.toThrow('VS Code did not apply');
+    expect(h.saved).toEqual([]);
+  });
+
+  it('resolves the files VS Code did not save', async () => {
+    h.savesLand = false;
+
+    expect(await applySourceChanges([{ ...none, documents: [{ path: OWNER, text: 'x' }] }])).toEqual([OWNER]);
+  });
+
+  it('writes a document beside a deleted folder whose name only begins the same, on either separator', async () => {
+    const sibling = `${FOLDER}2/Child.json`;
+    const backslashed = 'C:\\mods\\Npc\\Child.json';
+
+    await applySourceChanges([
+      { ...none, documents: [{ path: sibling, text: 'stays' }, { path: backslashed, text: 'goes' }] },
+      { ...none, deletions: [FOLDER, 'C:\\mods\\Npc'] },
+    ]);
+
+    expect(h.applied[0]?.filter((op) => Array.isArray(op) && op[0] === 'replace')).toEqual([['replace', sibling, 'stays']]);
+  });
+
+  it('writes a document under a folder an earlier item deleted', async () => {
+    await applySourceChanges([
+      { ...none, deletions: [FOLDER] },
+      { ...none, documents: [{ path: `${FOLDER}/Child.json`, text: 'recreated' }] },
+    ]);
+
+    expect(h.applied[0]?.filter((op) => Array.isArray(op) && op[0] === 'replace')).toEqual([['replace', `${FOLDER}/Child.json`, 'recreated']]);
   });
 });

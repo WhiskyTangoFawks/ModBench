@@ -109,6 +109,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       meditClient, deps.reporterFor('recordLifecycle'), deps.ask, selections, deps.recordWrite, {
         unsaved: deps.dirtyPluginSource,
         apply: (items) => applySourceChanges(items),
+        oneAtATime: writeDeps.oneAtATime,
         refreshSourceControlFor: writeDeps.refreshSourceControlFor,
       }),
     ...registerRecordCopyCommands(

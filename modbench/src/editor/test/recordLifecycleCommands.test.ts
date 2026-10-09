@@ -1,5 +1,6 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RecordAddress } from '../../client';
+import type { DeleteDeps } from '../recordLifecycleCommands';
 
 interface PickItem { label: string; description?: string; mode?: string; plugin?: { name: string } }
 type ShowQuickPick = (items: readonly PickItem[], options?: { canPickMany?: boolean }) => Promise<unknown>;
@@ -74,7 +75,8 @@ describe('registerRecordLifecycleCommands', () => {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
     const { write, writing, viewsAskedFor } = recordingWrite();
-    const source = { unsaved: () => [UNSAVED], apply: vi.fn(() => Promise.resolve()), refreshSourceControlFor: vi.fn() };
+    const serially = vi.fn();
+    const source = { unsaved: () => [UNSAVED], apply: vi.fn<DeleteDeps['apply']>(() => Promise.resolve([])), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
     registerRecordLifecycleCommands(client, reporter, ask, selections, write, source);
     return { reporter, ask, writing, viewsAskedFor, source };
   }
@@ -333,18 +335,46 @@ describe('registerRecordLifecycleCommands', () => {
       ]);
     });
 
-    it('reports a workspace edit VS Code did not make, and lands nothing', async () => {
+    it('reports a workspace edit VS Code did not make, lands nothing, and still names the records mEdit refused', async () => {
+      const client = new InMemoryMEditClient();
+      const refusal = { item: UNTRACKED, reason: 'Other.esp is not tracked, so it is read-only.' };
+      client.setCommandResult('getDeleteChanges', { applied: [changes(FIRST)], refused: [refusal] });
+      const { reporter, source } = invoke(client, 'Delete');
+      source.apply.mockRejectedValue(new Error('VS Code did not apply the changes mEdit answered.'));
+
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, UNTRACKED_NODE]);
+
+      expect(reporter.reports[0]).toEqual(
+        { severity: 'error', message: 'Could not delete the records.', detail: 'VS Code did not apply the changes mEdit answered.' });
+      expect(reporter.selectionOutcomeCalls).toEqual([
+        { message: 'Could not delete 1 of 2 records.', outcome: { landed: [], refused: [refusal] } },
+      ]);
+      expect(source.refreshSourceControlFor).not.toHaveBeenCalled();
+    });
+
+    it('reports the files VS Code did not save as a part that failed, with the records landed and Source Control refreshed', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('getDeleteChanges', { applied: [changes(FIRST)], refused: [] });
       const { reporter, source } = invoke(client, 'Delete');
-      source.apply.mockRejectedValue(new Error('VS Code did not apply the changes mEdit answered.'));
+      source.apply.mockResolvedValue(['/mods/ModA/plugin-source/MyPatch.esp/Cell.json']);
 
       await deleteRecords(SECOND_NODE);
 
       expect(reporter.reports).toEqual([
-        { severity: 'error', message: 'Could not delete the records.', detail: 'VS Code did not apply the changes mEdit answered.' },
+        { severity: 'error', message: 'Could not save the deletions.', detail: 'VS Code did not save /mods/ModA/plugin-source/MyPatch.esp/Cell.json.' },
       ]);
-      expect(source.refreshSourceControlFor).not.toHaveBeenCalled();
+      expect(reporter.selectionOutcomeCalls[0]?.outcome).toEqual({ landed: [FIRST], refused: [] });
+      expect(source.refreshSourceControlFor).toHaveBeenCalledWith({ name: 'MyPatch.esp', origin: 'ModA' });
+    });
+
+    it('runs the whole delete after the edits in flight settle', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('getDeleteChanges', { applied: [], refused: [] });
+      const { source } = invoke(client, 'Delete');
+
+      await deleteRecords(SECOND_NODE);
+
+      expect(source.serially).toHaveBeenCalledOnce();
     });
 
     it('runs the delete inside the write, which ends when the call is answered', async () => {

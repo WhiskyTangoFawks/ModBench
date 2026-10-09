@@ -27,9 +27,10 @@ public sealed class DeleteRecordChangesHandler
     {
         _loadOrder.Require();
         var batches = new Dictionary<string, SourceBatch>(StringComparer.Ordinal);
-        return ItemWrite.OverChanges(
+        return ItemWrite.Over(
             records, SameRecord.Instance,
             record => Delete(record.Plugin, record.FormKey, unsaved, batches),
+            changes => changes.Changes,
             record => $"Could not delete the source file for {record.FormKey} in {record.Plugin.Name} ({record.Plugin.Origin})",
             _logger);
     }
@@ -68,7 +69,7 @@ public sealed class DeleteRecordChangesHandler
                 "Answered the deletion of {FormKey} from {Plugin} ({Origin}) — working-tree deletion of {SourcePath}",
                 formKey, plugin.Name, plugin.Origin, relativePath);
         }
-        return SourceAnswer.Of(new RecordEditChanges(RecordEditResult.Success(), Since(before, batch.Changes)));
+        return SourceAnswer.Of(new RecordEditChanges(RecordEditResult.Success(), batch.ChangesAddedSince(before)));
     }
 
     // One batch per mod folder, so an item sees what the ones before it changed there.
@@ -80,10 +81,4 @@ public sealed class DeleteRecordChangesHandler
         if (!batches.TryGetValue(mod.Folder, out var batch)) batches[mod.Folder] = batch = SourceBatch.Over(repository, unsaved);
         return batch;
     }
-
-    private static SourceChanges Since(SourceChanges before, SourceChanges after) =>
-        new(
-            [.. after.Moves.Skip(before.Moves.Count)],
-            [.. after.Deletions.Except(before.Deletions, StringComparer.Ordinal)],
-            [.. after.Documents.Except(before.Documents)]);
 }

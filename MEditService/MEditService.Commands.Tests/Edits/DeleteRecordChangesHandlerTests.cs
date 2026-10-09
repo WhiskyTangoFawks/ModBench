@@ -76,8 +76,8 @@ public sealed class DeleteRecordChangesHandlerTests
         var result = mod.DeleteHandler.DeleteChangesSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
         var deletion = Assert.Single(Assert.Single(result.Landed).Outcome.Deletions);
-        Assert.True(Path.IsPathRooted(deletion));
-        Assert.True(File.Exists(deletion) || Directory.Exists(deletion));
+        Assert.Equal(TreeTampering.FileOf(mod.ModFolder, mod.Plugin, mod.NpcIdentity), deletion);
+        Assert.True(File.Exists(deletion));
         Assert.NotNull(mod.Document(mod.Npc.ToString()));
     }
 

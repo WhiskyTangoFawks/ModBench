@@ -70,11 +70,12 @@ async function editDocuments(
   }
   if (isNoChange(outcome)) return outcome.newFormKey;
 
-  await applySourceChanges([outcome], {
+  const unsaved = await applySourceChanges([outcome], {
     read: document.uri,
     moving: (moves) => deps.moving(moves, address, outcome.newFormKey),
   });
   deps.refreshSourceControlFor(address.plugin);
+  if (unsaved.length > 0) deps.reporter.report('error', `Could not save the edit of ${field}.`, `VS Code did not save ${unsaved.join(', ')}.`);
   return outcome.newFormKey;
 }
 
@@ -84,11 +85,12 @@ const isNoChange = ({ moves, deletions, documents }: SourceChanges) =>
 const within = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`) || path.startsWith(`${folder}\\`);
 
 /** Makes what mEdit answered as one workspace edit and saves each document it changed (ADR-0001). One document keeps
- *  the last text answered for it, and a document a later item deletes is not written. */
+ *  the last text answered for it, and a document a later item deletes is not written. Throws when VS Code did not apply
+ *  them; resolves the files it did not save. */
 export async function applySourceChanges(
   items: readonly SourceChanges[],
   options: { read?: vscode.Uri; moving?: (moves: readonly SourceMove[]) => () => void } = {},
-): Promise<void> {
+): Promise<string[]> {
   const lastWriter = new Map<string, number>();
   items.forEach(({ documents }, index) => { for (const { path } of documents) lastWriter.set(path, index); });
   const deletedLater = (path: string, index: number) =>
@@ -125,7 +127,7 @@ export async function applySourceChanges(
     const saved = await vscode.workspace.openTextDocument(uri);
     return saved.isDirty && !await saved.save() ? [uri.fsPath] : [];
   }));
-  if (unsaved.flat().length > 0) throw new Error(`VS Code did not save ${unsaved.flat().join(', ')}.`);
+  return unsaved.flat();
 }
 
 // The file the edit read is changed through the document it read, so a child record's tab keeps its own.
