@@ -223,10 +223,11 @@ internal static class RecordEndpoints
             },
             validate: () => request.Text is null
                 ? Results.Problem("The text of the document carrying the record is required.", statusCode: 400)
-                : EditRequestProblem(edit),
+                : WriteEndpointMapping.MissingDocuments(request.Documents) ?? EditRequestProblem(edit),
             execute: () => edits.Changes(
                 new PluginAddress(request.Edit.Plugin, request.Edit.Origin), decoded,
-                new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.Value), request.Text),
+                new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.Value), request.Text,
+                WriteEndpointMapping.Unsaved(request.Documents)),
             outcome: answer => answer.Outcome,
             onApplied: answer => Results.Ok(RecordEditChangesResponse.Of(decoded, spelled, answer)));
     }
@@ -244,16 +245,15 @@ internal static class RecordEndpoints
     internal static Task<IResult> DeleteRecordChanges(RecordDeleteChangesRequest request, DeleteRecordChangesHandler edits, ILogger logger)
     {
         var records = request.Records ?? [];
-        var unsaved = request.Documents ?? [];
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Received DeleteRecordChanges for {Count} records", records.Count);
         }
-        return OverRecords(records, validateOptions: () => null, answer: addressed =>
+        return OverRecords(records, validateOptions: () => WriteEndpointMapping.MissingDocuments(request.Documents), answer: addressed =>
         {
             return WriteEndpointMapping.Answered(
                 "Delete", logger,
-                edits.DeleteRecords(addressed, [.. unsaved.Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))]),
+                edits.DeleteRecords(addressed, WriteEndpointMapping.Unsaved(request.Documents)),
                 WriteEndpointMapping.Refusal,
                 landed => new RecordDeleteChanges(
                     Addressed(landed.Item),
@@ -269,7 +269,6 @@ internal static class RecordEndpoints
     {
         var records = request.Records ?? [];
         var destinations = request.Destinations ?? [];
-        var unsaved = request.Documents ?? [];
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
@@ -278,6 +277,7 @@ internal static class RecordEndpoints
         }
         return OverRecords(records, validateOptions: () =>
         {
+            if (WriteEndpointMapping.MissingDocuments(request.Documents) is { } missing) return missing;
             if (destinations.Count == 0)
                 return Results.Problem("At least one destination is required.", statusCode: 400);
             if (destinations.Any(d => string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.Origin)))
@@ -289,7 +289,7 @@ internal static class RecordEndpoints
                 "Copy", logger,
                 edits.CopyRecords(
                     addressed, request.Mode, destinations, request.Replace,
-                    [.. unsaved.Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))]),
+                    WriteEndpointMapping.Unsaved(request.Documents)),
                 WriteEndpointMapping.Refusal,
                 landed => new RecordCopyChanges(
                     Addressed(landed.Item.Record), landed.Item.Destination,

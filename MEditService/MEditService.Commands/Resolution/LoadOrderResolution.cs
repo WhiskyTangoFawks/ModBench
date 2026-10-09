@@ -19,10 +19,10 @@ internal sealed class LoadOrderResolution(
         new(plugin, snapshot, adapter, schemaReflector, batches);
 
     /// <summary>The walk to the left among the masters <paramref name="plugin"/>'s source tree requires,
-    /// over the load order held now, whole.</summary>
+    /// over the load order held now, whole, each master read over <paramref name="batches"/>.</summary>
     internal MastersWalk WalkAmongMastersOf(
-        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        WalkIn(loadOrder.Current, repository, plugin, schemas, new UnsavedBatches([]));
+        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas, UnsavedBatches batches) =>
+        WalkIn(loadOrder.Current, repository, plugin, schemas, batches);
 
     private MastersWalk WalkIn(
         LoadOrderSnapshot snapshot, SourceRepository repository, PluginAddress plugin,
@@ -78,12 +78,12 @@ internal sealed class LoadOrderResolution(
     /// AllVisibleForFile, ADR-0018). A refusal is spelled at <paramref name="spelled"/>, naming <paramref name="subject"/>.</summary>
     internal GridCellHolder HolderOfCell(
         SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        string worldspace, (int X, int Y) grid, string spelled, string subject)
+        string worldspace, (int X, int Y) grid, string spelled, string subject, UnsavedBatches batches)
     {
         if (!repository.GetCellAt(plugin, worldspace, grid.X, grid.Y).Holds(out var held, out var failure))
             return Unreadable(failure);
         if (held is not null) return new GridCellHolder.Plugins(held);
-        switch (WalkAmongMastersOf(repository, plugin, schemas).NearestCell(worldspace, grid.X, grid.Y))
+        switch (WalkAmongMastersOf(repository, plugin, schemas, batches).NearestCell(worldspace, grid.X, grid.Y))
         {
             case LeftCopy.Unreadable left:
                 return new GridCellHolder.Unreadable(

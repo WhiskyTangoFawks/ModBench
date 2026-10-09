@@ -274,9 +274,10 @@ export interface MEditClient {
   /** The record whose own document the file at the absolute `path` is; null when mEdit answers the file holds
    *  no record. Rejects with mEdit's reason when it cannot read the file. */
   getRecordOfFile(path: string): Promise<RecordAddress | null>;
-  /** `text` is the current text of the document carrying the record; mEdit writes nothing. */
+  /** `unsaved` is every dirty document, read in place of its file; `text` is the current text of the one
+   *  carrying the record, and stands over its own entry. mEdit writes nothing. */
   getEditChanges(
-    formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope, text: string,
+    formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope, text: string, unsaved: readonly UnsavedDocument[],
   ): Promise<RecordEditChangesOutcome>;
   getWorldspaces(plugin: PluginAddress): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: PluginAddress, worldspaceFormKey: string): Promise<WorldspaceBlocks>;

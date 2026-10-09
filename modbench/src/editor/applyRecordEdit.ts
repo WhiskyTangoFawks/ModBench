@@ -6,6 +6,7 @@ import type { PathHop } from '../wire/messages';
 import type { RecordDocument } from '../drivingLib/recordDocument';
 import { applyWorkspaceChanges, type FileMove, type WorkspaceChanges } from '../drivingLib/applyWorkspaceChanges';
 import { applyAnswered } from '../drivingLib/applyAnswered';
+import type { SourceEditing } from '../drivingLib/sourceEditing';
 import type { OneAtATime } from '../drivingLib/oneAtATime';
 import { errorMessage } from '../ports/errorMessage';
 import type { EditAddress } from './recordTab';
@@ -15,6 +16,7 @@ import type { EditAddress } from './recordTab';
  *  command they invoke. */
 export interface RecordWriteDeps {
   meditClient: Pick<MEditClient, 'getEditChanges'>;
+  unsaved: SourceEditing['unsaved'];
   // The document carrying the record: an open tab's, or the one the record opens as.
   documentOf: (address: EditAddress) => Promise<RecordDocument>;
   // Told before VS Code moves a file, so a tab the move takes along shows its record where it lands.
@@ -53,7 +55,7 @@ async function editDocuments(
   const carrying = await deps.documentOf(address);
   if ('refused' in carrying) throw new Error(carrying.refused);
   const document = await vscode.workspace.openTextDocument(carrying.uri);
-  const outcome = await deps.meditClient.getEditChanges(address.formKey, address.plugin, envelope, document.getText());
+  const outcome = await deps.meditClient.getEditChanges(address.formKey, address.plugin, envelope, document.getText(), deps.unsaved());
   if (!outcome.applied) {
     deps.reporter.report('warning', `${field}: ${outcome.message}`);
     return undefined;

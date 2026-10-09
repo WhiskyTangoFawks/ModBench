@@ -145,10 +145,11 @@ internal static class Wire
     }
 
     internal static Task<HttpResponseMessage> EditChanges(
-        this HttpClient client, string formKey, string plugin, string origin, string member, object value, string? text, string op = "set") =>
+        this HttpClient client, string formKey, string plugin, string origin, string member, object value, string? text, string op = "set",
+        IEnumerable<(string Path, string Text)>? unsaved = null) =>
         client.PostAsJsonAsync(
             $"/records/{Uri.EscapeDataString(formKey)}/edit-changes",
-            new { edit = new { plugin, origin, op, path = new[] { new { kind = "member", name = member } }, value }, text });
+            new { edit = new { plugin, origin, op, path = new[] { new { kind = "member", name = member } }, value }, text, documents = (unsaved ?? []).Select(document => new { path = document.Path, text = document.Text }) });
 
     /// <summary>A copy as Modbench makes one: mEdit answers the changes each copy makes, and each landed item's are
     /// saved in the order answered. The answer is mEdit's.</summary>

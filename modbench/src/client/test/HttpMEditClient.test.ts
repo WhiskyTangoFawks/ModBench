@@ -559,11 +559,11 @@ describe('HttpMEditClient — an edit answered as its source changes', () => {
       return Promise.resolve(jsonResponse(200, { formKey: '000800:MyPatch.esp', path: 'EditorID', moves, deletions, documents, newFormKey: null }));
     });
 
-    const outcome = await makeClient(fetch).getEditChanges('000800:MyPatch.esp', plugin, renamed, '{"EditorID": "Old"}');
+    const outcome = await makeClient(fetch).getEditChanges('000800:MyPatch.esp', plugin, renamed, '{"EditorID": "Old"}', [{ path: '/m/Master.json', text: 'unsaved' }]);
 
     expect(outcome).toEqual({ applied: true, moves, deletions, documents });
     expect(new URL(seen?.url ?? '').pathname).toBe('/records/000800%3AMyPatch.esp/edit-changes');
-    expect(await seen?.json()).toEqual({ edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed }, text: '{"EditorID": "Old"}' });
+    expect(await seen?.json()).toEqual({ edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed }, text: '{"EditorID": "Old"}', documents: [{ path: '/m/Master.json', text: 'unsaved' }] });
   });
 
   it('getEditChanges carries the new FormKey an edit of the FormID answers with', async () => {
@@ -572,7 +572,7 @@ describe('HttpMEditClient — an edit answered as its source changes', () => {
     })));
 
     const outcome = await makeClient(fetch).getEditChanges(
-      '000800:MyPatch.esp', plugin, { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' }, '{}');
+      '000800:MyPatch.esp', plugin, { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' }, '{}', []);
 
     expect(outcome).toEqual({ applied: true, moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp' });
   });
@@ -582,7 +582,7 @@ describe('HttpMEditClient — an edit answered as its source changes', () => {
       refusal: 'PluginNotTracked', detail: 'MyPatch.esp is not tracked, so it is read-only.',
     })));
 
-    const outcome = await makeClient(fetch).getEditChanges('000800:MyPatch.esp', plugin, renamed, '{}');
+    const outcome = await makeClient(fetch).getEditChanges('000800:MyPatch.esp', plugin, renamed, '{}', []);
 
     expect(outcome).toEqual({ applied: false, refusal: 'PluginNotTracked', message: 'MyPatch.esp is not tracked, so it is read-only.' });
   });
@@ -597,7 +597,7 @@ describe('HttpMEditClient — the not-OK response text', () => {
     const client = makeClient(fetch);
 
     const outcome = await client.getEditChanges(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' }, '{}',
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' }, '{}', [],
     );
 
     expect(outcome).toEqual({
@@ -612,7 +612,7 @@ describe('HttpMEditClient — the not-OK response text', () => {
     const client = makeClient(fetch);
 
     const outcome = await client.getEditChanges(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' }, '{}',
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' }, '{}', [],
     );
 
     expect(outcome).toEqual({
@@ -625,7 +625,7 @@ describe('HttpMEditClient — the not-OK response text', () => {
     const client = makeClient(fetch);
 
     const outcome = await client.getEditChanges(
-      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' }, '{}',
+      '000800:MyPatch.esp', { name: 'MyPatch.esp', origin: 'ModA' }, { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' }, '{}', [],
     );
 
     expect(outcome).toEqual({ applied: false, refusal: 'Unknown', message: 'No load order has been received.' });

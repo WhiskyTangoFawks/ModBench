@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -65,14 +66,14 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
 
     private Fallout4Mod Edited => _edited ?? throw new InvalidOperationException("Load the plugins first.");
 
-    private RecordEditResult WriteFlags(FormKey formKey, int raw) =>
+    private RecordEditResult WriteFlags(FormKey formKey, int raw, IReadOnlyList<DocumentChange>? unsaved = null) =>
         _plugins.EditHandler.Edit(
             Address(Edited), formKey.ToString(),
-            SetAt(JsonDocument.Parse(raw.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")));
+            SetAt(JsonDocument.Parse(raw.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")), unsaved);
 
-    private JsonObject Written(FormKey formKey, int raw)
+    private JsonObject Written(FormKey formKey, int raw, IReadOnlyList<DocumentChange>? unsaved = null)
     {
-        var result = WriteFlags(formKey, raw);
+        var result = WriteFlags(formKey, raw, unsaved);
         Assert.True(result.Applied, result.Message);
         return JsonNode.Parse(_plugins.Text(Edited, formKey)).Require().AsObject();
     }
@@ -202,6 +203,22 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         var undeleted = Written(TheNpc, 0);
 
         Assert.Equal(0.7f, undeleted["HeightMax"]?.GetValue<float>());
+    }
+
+    [Fact]
+    public void ClearingDeleted_FillsFromTheUnsavedTextOfATrackedCopyToItsLeft()
+    {
+        var middle = Plugin("Middle.esp", NpcCopy(0, "Saved"));
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy")), false),
+            (middle, true),
+            (Plugin("Override.esp", Mastering("Middle.esp", NpcCopy(Deleted))), true));
+        var file = _plugins.DocumentFileOf(middle, TheNpc);
+        var unsaved = new DocumentChange(file, File.ReadAllText(file).Replace("Saved", "Unsaved", StringComparison.Ordinal));
+
+        var undeleted = Written(TheNpc, 0, [unsaved]);
+
+        Assert.Equal("Unsaved", undeleted["EditorID"]?.GetValue<string>());
     }
 
     [Fact]

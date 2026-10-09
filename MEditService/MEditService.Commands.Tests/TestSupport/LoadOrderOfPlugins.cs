@@ -55,4 +55,8 @@ internal sealed class LoadOrderOfPlugins : TestInstance
     private static string Origin(IModGetter mod) => mod.ModKey.Name + "Mod";
 
     internal string FolderOf(IModGetter mod) => FolderOf(Origin(mod));
+
+    /// <summary>The absolute path of the file of a tracked plugin's document for <paramref name="formKey"/>.</summary>
+    internal string DocumentFileOf(IModGetter mod, FormKey formKey) =>
+        Path.Combine(FolderOf(mod), TrackedTree.DocumentFile(FolderOf(mod), Address(mod), formKey.ToString()).Require());
 }

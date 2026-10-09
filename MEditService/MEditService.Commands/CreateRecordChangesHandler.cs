@@ -64,6 +64,7 @@ public sealed class CreateRecordChangesHandler
         var onDisk = openedRepository
             ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
         var batch = SourceBatch.Over(onDisk, unsaved);
+        var unsavedByFolder = new UnsavedBatches(unsaved);
         var repository = batch.Repository;
 
         var release = _loadOrder.Current.GameRelease;
@@ -73,7 +74,7 @@ public sealed class CreateRecordChangesHandler
             return RecordEditResult.Refused(
                 RecordEditRefusal.RecordTypeNotFound, $"'{recordType}' is not a creatable record type.");
         }
-        if (container is not null) return MintChild(batch, plugin, recordType, schema, release, container, position);
+        if (container is not null) return MintChild(batch, unsavedByFolder, plugin, recordType, schema, release, container, position);
         if (position is not null) return MalformedPosition("names no container");
         if (!RecordTypes.For(release).IsCreatable(recordType))
         {
@@ -110,7 +111,7 @@ public sealed class CreateRecordChangesHandler
         SourceAnswer.Of(new RecordEditChanges(RecordEditResult.Success(formKey), batch.Changes));
 
     private SourceAnswer<RecordEditChanges> MintChild(
-        SourceBatch batch, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
+        SourceBatch batch, UnsavedBatches unsavedByFolder, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
         string container, GridPosition? position)
     {
         var repository = batch.Repository;
@@ -137,7 +138,7 @@ public sealed class CreateRecordChangesHandler
         if (exteriorCell && containerHoldsIt)
         {
             return position is { X: int x, Y: int y }
-                ? CreateCellAt(batch, plugin, recordType, schemas, release, container, (x, y))
+                ? CreateCellAt(batch, unsavedByFolder, plugin, recordType, schemas, release, container, (x, y))
                 : RecordEditResult.Refused(
                     RecordEditRefusal.InvalidEnvelope, $"A cell created in the worldspace {container} takes a grid position, both x and y.");
         }
@@ -158,12 +159,12 @@ public sealed class CreateRecordChangesHandler
     }
 
     private SourceAnswer<RecordEditChanges> CreateCellAt(
-        SourceBatch batch, PluginAddress plugin, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        SourceBatch batch, UnsavedBatches unsavedByFolder, PluginAddress plugin, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         GameRelease release, string worldspace, (int X, int Y) grid)
     {
         var repository = batch.Repository;
         var at = $"at {grid.X}, {grid.Y}";
-        var holder = _resolution.HolderOfCell(repository, plugin, schemas, worldspace, grid, worldspace, $"whether a cell sits {at}");
+        var holder = _resolution.HolderOfCell(repository, plugin, schemas, worldspace, grid, worldspace, $"whether a cell sits {at}", unsavedByFolder);
         switch (holder)
         {
             case GridCellHolder.Unreadable(var why):

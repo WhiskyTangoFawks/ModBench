@@ -1134,15 +1134,15 @@ export interface components {
             records: components["schemas"]["RecordAddress"][];
             mode: components["schemas"]["CopyMode"];
             destinations: components["schemas"]["PluginAddress"][];
+            documents: components["schemas"]["DocumentChange"][];
             replace: boolean;
-            documents?: components["schemas"]["DocumentChange"][] | null;
         };
         RecordCreateChangesRequest: {
             origin: string;
             recordType: string;
+            documents: components["schemas"]["DocumentChange"][];
             container?: string | null;
             position?: components["schemas"]["GridPosition"] | null;
-            documents?: components["schemas"]["DocumentChange"][] | null;
         };
         RecordCreateChangesResponse: {
             formKey: string;
@@ -1178,6 +1178,7 @@ export interface components {
         RecordEditChangesRequest: {
             edit: components["schemas"]["RecordEditRequest"];
             text: string;
+            documents: components["schemas"]["DocumentChange"][];
         };
         RecordEditChangesResponse: {
             formKey: string;
@@ -1236,7 +1237,7 @@ export interface components {
             origin: string;
             name: string;
             newName: string;
-            documents?: components["schemas"]["DocumentChange"][] | null;
+            documents: components["schemas"]["DocumentChange"][];
         };
         RenameSourceChangesResponse: {
             treeName: string;

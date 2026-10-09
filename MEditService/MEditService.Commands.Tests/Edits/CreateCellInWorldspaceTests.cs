@@ -22,13 +22,14 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     private static readonly FormKey MovedOverride = new(Fallout4Esm, 0x904);
 
     private readonly LoadOrderOfPlugins _plugins = new();
+    private readonly Fallout4Mod _master;
     private readonly Fallout4Mod _edited;
     private readonly FormKey _ownCell;
     private readonly FormKey _deletedWorld;
 
     public CreateCellInWorldspaceTests()
     {
-        var master = Plugin("Fallout4.esm", mod =>
+        _master = Plugin("Fallout4.esm", mod =>
         {
             var world = new Worldspace(World, Fallout4Release.Fallout4) { EditorID = "World" };
             world.SubCells.Add(CellBlocks.Exterior(
@@ -54,7 +55,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         _ownCell = _edited.Worldspaces[World].SubCells
             .SelectMany(block => block.Items).SelectMany(subBlock => subBlock.Items).Single(cell => cell.EditorID == "OwnCell").FormKey;
         _deletedWorld = _edited.Worldspaces.Single(world => world.EditorID == "DeletedWorld").FormKey;
-        _plugins.Load((master, false), (_edited, true));
+        _plugins.Load((_master, false), (_edited, true));
     }
 
     public void Dispose() => _plugins.Dispose();
@@ -102,8 +103,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
     public void ACellCreatedWhereTheUnsavedTextOfThePluginsCellNoLongerSits_LandsThere_AndWritesNothing()
     {
         var before = Tree;
-        var folder = _plugins.FolderOf(_edited);
-        var file = Path.Combine(folder, TrackedTree.DocumentFile(folder, Edited, _ownCell.ToString()).Require());
+        var file = _plugins.DocumentFileOf(_edited, _ownCell);
         var moved = JsonNode.Parse(File.ReadAllText(file)).Require().AsObject();
         moved[RecordTypes.CellGridMember] = PlacedCell.GridAt(20, 21);
 
@@ -113,6 +113,21 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         Assert.True(outcome.Applied, outcome.Message);
         Assert.Contains(changes.Documents, document => document.Text.Contains(outcome.NewFormKey.Require(), StringComparison.Ordinal));
         Assert.Equal(before, Tree);
+    }
+
+    [Fact]
+    public void ACellCreatedWhereTheUnsavedTextOfAMastersCellNoLongerSits_LandsThere()
+    {
+        using var trackedMaster = new LoadOrderOfPlugins();
+        trackedMaster.Load((_master, true), (_edited, true));
+        var file = trackedMaster.DocumentFileOf(_master, MasterCell);
+        var moved = JsonNode.Parse(File.ReadAllText(file)).Require().AsObject();
+        moved[RecordTypes.CellGridMember] = PlacedCell.GridAt(20, 21);
+
+        var (outcome, _) = trackedMaster.CreateHandler.CreateRecord(
+            Edited, "cell", [new DocumentChange(file, moved.ToJsonString())], World.ToString(), new GridPosition(3, 3));
+
+        Assert.True(outcome.Applied, outcome.Message);
     }
 
     [Fact]

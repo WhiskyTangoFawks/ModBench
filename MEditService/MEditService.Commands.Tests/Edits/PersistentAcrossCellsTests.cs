@@ -31,6 +31,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
     private readonly LoadOrderOfPlugins _plugins = new();
     private readonly Dictionary<string, FormKey> _keys = [];
+    private Fallout4Mod? _master;
     private Fallout4Mod? _edited;
 
     public void Dispose() => _plugins.Dispose();
@@ -97,16 +98,17 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     private void Load(bool masterTracked, bool masterHasPersistentCell = true, Fallout4Mod? middle = null)
     {
         _edited = Edited();
-        _plugins.Load([(Master(masterHasPersistentCell), masterTracked), .. middle is null ? [] : new[] { (middle, false) }, (_edited, true)]);
+        _master = Master(masterHasPersistentCell);
+        _plugins.Load([(_master, masterTracked), .. middle is null ? [] : new[] { (middle, false) }, (_edited, true)]);
     }
 
     private Fallout4Mod Override => _edited ?? throw new InvalidOperationException("Load the plugins first.");
 
-    private void SetFlags(string placed, int raw)
+    private void SetFlags(string placed, int raw, IReadOnlyList<DocumentChange>? unsaved = null)
     {
         var result = _plugins.EditHandler.Edit(
             Address(Override), _keys[placed].ToString(),
-            SetAt(JsonDocument.Parse(raw.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")));
+            SetAt(JsonDocument.Parse(raw.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")), unsaved);
         Assert.True(result.Applied, result.Message);
     }
 
@@ -166,6 +168,44 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Equal(7f, copied["WaterHeight"].Require().GetValue<float>());
         Assert.Equal(["Leaver"], Group(copied, "Temporary"));
         Assert.Equal(["Wanderer"], Group(Document(_keys["Here"]), "Persistent"));
+    }
+
+    private DocumentChange MastersUnsaved(FormKey formKey, string respelled, string with)
+    {
+        var file = _plugins.DocumentFileOf(_master.Require(), formKey);
+        return new DocumentChange(file, File.ReadAllText(file).Replace(respelled, with, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void SettingPersistent_CopiesTheMastersPersistentCellFromItsUnsavedText()
+    {
+        Load(masterTracked: true);
+
+        SetFlags("Mover", Persistent, [MastersUnsaved(World, "MasterPersistentCell", "UnsavedPersistent")]);
+
+        Assert.Equal("UnsavedPersistent", Document(World)["TopCell"].Require()["EditorID"].Require().GetValue<string>());
+    }
+
+    [Fact]
+    public void SettingPersistent_KeepsTheUnsavedTextOfThePluginsOwnWorldspaceDocument_ItLandsIn()
+    {
+        Load(masterTracked: false);
+        var file = _plugins.DocumentFileOf(Override, World);
+        var dirty = new DocumentChange(file, File.ReadAllText(file).Replace("\"World\"", "\"DirtyWorld\"", StringComparison.Ordinal));
+
+        SetFlags("Mover", Persistent, [dirty]);
+
+        Assert.Equal("DirtyWorld", Document(World)["EditorID"].Require().GetValue<string>());
+    }
+
+    [Fact]
+    public void ClearingPersistent_CopiesTheMastersCellFromItsUnsavedText()
+    {
+        Load(masterTracked: true);
+
+        SetFlags("Leaver", 0, [MastersUnsaved(MasterGridCell, "MasterGrid", "UnsavedGrid")]);
+
+        Assert.Equal("UnsavedGrid", Document(MasterGridCell)["EditorID"].Require().GetValue<string>());
     }
 
     [Fact]

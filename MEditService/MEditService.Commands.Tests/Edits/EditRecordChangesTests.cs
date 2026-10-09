@@ -5,6 +5,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -35,7 +36,7 @@ public sealed class EditRecordChangesTests : IDisposable
         File.ReadAllText(Path.Combine(instance.ModFolderOf(plugin), TrackedTree.DocumentFile(instance.ModFolderOf(plugin), plugin, formKey).Require()));
 
     private static RecordEditChanges Changes(TestInstance instance, PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
-        instance.EditChangesHandler.Changes(plugin, formKey, envelope, TextOf(instance, plugin, formKey));
+        instance.EditChangesHandler.Changes(plugin, formKey, envelope, TextOf(instance, plugin, formKey), []);
 
     [Fact]
     public void AFieldEdit_AnswersTheRecordsDocumentWithTheNewValue_AndWritesNothing()
@@ -59,11 +60,25 @@ public sealed class EditRecordChangesTests : IDisposable
             .Replace($"\"{SourceEditFixture.NpcEditorId}\"", "\"TypedButUnsaved\"", StringComparison.Ordinal);
         Assert.Contains("TypedButUnsaved", unsaved, StringComparison.Ordinal);
 
-        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"), unsaved);
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"), unsaved, []);
 
         var document = Assert.Single(answer.Changes.Documents);
         Assert.Contains("TypedButUnsaved", document.Text, StringComparison.Ordinal);
         Assert.Contains("0.75", document.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFieldEdit_BuildsOnTheTextItIsGiven_NotOnTheDirtyEntryOfItsOwnDocument()
+    {
+        var given = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString());
+        var file = Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require());
+        var stale = new DocumentChange(file, given.Replace($"\"{SourceEditFixture.NpcEditorId}\"", "\"Stale\"", StringComparison.Ordinal));
+
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"), given, [stale]);
+
+        var document = Assert.Single(answer.Changes.Documents);
+        Assert.DoesNotContain("Stale", document.Text, StringComparison.Ordinal);
+        Assert.Contains(SourceEditFixture.NpcEditorId, document.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -73,7 +88,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var file = Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require());
         File.WriteAllText(file, "not a document");
 
-        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"), given);
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"), given, []);
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         var document = Assert.Single(answer.Changes.Documents);
@@ -92,7 +107,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var given = TextOf(_mod, _mod.Plugin, formKey);
         File.Delete(Path.Combine(_mod.ModFolder, _mod.DocumentFile(formKey).Require()));
 
-        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, formKey, Set("EditorID", "\"Edited\""), given);
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, formKey, Set("EditorID", "\"Edited\""), given, []);
 
         Assert.Equal(RecordEditRefusal.RecordNotFound, answer.Outcome.Refusal);
         Assert.Empty(answer.Changes.Documents);
@@ -104,7 +119,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var unsaved = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString())
             .Replace($"\"{SourceEditFixture.NpcEditorId}\"", "\"TypedButUnsaved\"", StringComparison.Ordinal);
 
-        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("FormKey", "\"000F00:Fixture.esp\""), unsaved);
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("FormKey", "\"000F00:Fixture.esp\""), unsaved, []);
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         var document = answer.Changes.Documents.Single(change => change.Text.Contains("000F00:Fixture.esp", StringComparison.Ordinal));
@@ -118,7 +133,7 @@ public sealed class EditRecordChangesTests : IDisposable
         cell.Temporary.Add(new PlacedObject(new FormKey(_mod.Cell.ModKey, 0xF00), Fallout4Release.Fallout4));
         var unsaved = RecordTextCodec.SerializeToText(cell, GameRelease.Fallout4);
 
-        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Cell.ToString(), Set("FormKey", $"\"000F00:{_mod.Cell.ModKey}\""), unsaved);
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Cell.ToString(), Set("FormKey", $"\"000F00:{_mod.Cell.ModKey}\""), unsaved, []);
 
         Assert.Equal(RecordEditRefusal.FormKeyCollision, answer.Outcome.Refusal);
     }
@@ -131,7 +146,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var unreadable = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString())
             .Replace($"\"{SourceEditFixture.NpcEditorId}\"", $"\"{SourceEditFixture.NpcEditorId}\", \"HeightMax\": {{ \"x\": 1 }}", StringComparison.Ordinal);
 
-        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set(member, value), unreadable);
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set(member, value), unreadable, []);
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, answer.Outcome.Refusal);
         Assert.Empty(answer.Changes.Moves);
@@ -147,7 +162,7 @@ public sealed class EditRecordChangesTests : IDisposable
             .Replace("\"Wanderer\"", "\"TypedButUnsaved\"", StringComparison.Ordinal);
         Assert.Contains("TypedButUnsaved", unsaved, StringComparison.Ordinal);
 
-        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Flags(Persistent), unsaved);
+        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Flags(Persistent), unsaved, []);
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         var left = Assert.Single(answer.Changes.Documents, document => document.Path == leaving);
@@ -204,7 +219,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var given = TextOf(world, world.Plugin, keys["Mover"].ToString())
             .Replace("\"EditorID\": \"Wanderer\"", "\"EditorID\":\"Wanderer\"", StringComparison.Ordinal);
 
-        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Set("EditorID", "\"Renamed\""), given);
+        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Set("EditorID", "\"Renamed\""), given, []);
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         Assert.Equal(
@@ -219,7 +234,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var given = TextOf(world, world.Plugin, keys["Mover"].ToString())
             .Replace("\"EditorID\": \"Wanderer\"", "\"EditorID\": \"Wanderer\", \"Scale\": { \"x\": 1 }", StringComparison.Ordinal);
 
-        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Set("EditorID", "\"Renamed\""), given);
+        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Set("EditorID", "\"Renamed\""), given, []);
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         Assert.Equal(
@@ -235,7 +250,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var given = TextOf(world, world.Plugin, keys["Mover"].ToString())
             .Replace("\"EditorID\": \"Wanderer\"", "\"EditorID\":\"Wanderer\", \"Scale\": { \"x\": 1 }", StringComparison.Ordinal);
 
-        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Set("FormKey", "\"000F00:World.esp\""), given);
+        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Set("FormKey", "\"000F00:World.esp\""), given, []);
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         Assert.Equal(
@@ -253,7 +268,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var withoutWanderer = JsonNode.Parse(held).Require().AsObject();
         withoutWanderer.Remove("Persistent");
 
-        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Wanderer"].ToString(), Flags(0), given);
+        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Wanderer"].ToString(), Flags(0), given, []);
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         Assert.Equal(
@@ -294,7 +309,7 @@ public sealed class EditRecordChangesTests : IDisposable
         mover["MajorRecordFlagsRaw"] = Persistent;
         cell["Persistent"].Require().AsArray().Add(mover);
 
-        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Flags(0), cell.ToJsonString());
+        var answer = world.EditChangesHandler.Changes(world.Plugin, keys["Mover"].ToString(), Flags(0), cell.ToJsonString(), []);
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         var written = JsonNode.Parse(Assert.Single(answer.Changes.Documents).Text).Require();

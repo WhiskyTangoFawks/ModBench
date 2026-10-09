@@ -16,6 +16,14 @@ internal static class WriteEndpointMapping
     internal static PluginAddress PluginAddressOf(string routePlugin, string origin) =>
         new(Uri.UnescapeDataString(routePlugin), origin);
 
+    /// <summary>The unsaved texts a request carries, which stand in for their files.</summary>
+    internal static IReadOnlyList<SourceAdapter.DocumentChange> Unsaved(IReadOnlyList<DocumentChange> documents) =>
+        [.. documents.Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))];
+
+    /// <summary>The 400 for a request that omits its unsaved texts: without them mEdit would read the disk.</summary>
+    internal static IResult? MissingDocuments(IReadOnlyList<DocumentChange>? documents) =>
+        documents is null ? Results.Problem("The unsaved documents are required, empty when none are dirty.", statusCode: 400) : null;
+
     /// <summary>The release a request names, or the 400 that says which names are known.</summary>
     internal static IResult? ParseGameRelease(string? raw, out GameRelease release) =>
         Enum.TryParse(raw, out release)
