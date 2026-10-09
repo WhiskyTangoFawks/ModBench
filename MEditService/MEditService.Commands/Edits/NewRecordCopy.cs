@@ -33,7 +33,7 @@ internal sealed class NewRecordCopy
         if (RefuseIfDisallowedForCopyAsNewRecord(identity.RecordType, RecordTypes.For(release)) is { } disallowedRefusal) return disallowedRefusal;
 
         if (!source.ContainerOf(identity).Holds(out var container, out var why)) return WriteTargets.RefuseUnreadableSource(identity.FormKey, why);
-        if (container is { } held) return CopyEmbeddedChildAsNewRecord(copy, held, destinationPlugin);
+        if (container is { } held) return CopyChildAsNewRecord(copy, held, destinationPlugin);
 
         return CopyUnderNextFormKey(
             copy, destinationPlugin,
@@ -45,11 +45,11 @@ internal sealed class NewRecordCopy
             "new working-tree source document");
     }
 
-    private SourceAnswer<RecordEditResult> CopyEmbeddedChildAsNewRecord(
+    private SourceAnswer<RecordEditResult> CopyChildAsNewRecord(
         WriteTargets.CopyTarget copy, DocumentContainment container, PluginAddress destinationPlugin) =>
         CopyUnderNextFormKey(
             copy, destinationPlugin,
-            (transaction, duplicate) => _recordCopy.AppendEmbeddedChild(
+            (transaction, duplicate) => _recordCopy.PutChildInContainer(
                 transaction, copy.Source, container, duplicate, copy.Destination, copy.Release),
             $"inside {container.ParentFormKey}'s {container.SlotName} slot");
 

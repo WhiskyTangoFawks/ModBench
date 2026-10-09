@@ -35,7 +35,7 @@ internal sealed class SourceRepositoryWrites(
 
         if (unit.IsEmbedded)
         {
-            var ownerBytes = OwnerBytes(unit);
+            var ownerBytes = FileBytes(unit);
             return DocumentText.EmbeddedChildIn(ownerBytes, unit, identity.FormKey, _release) is { } span
                 ? Written(unit.FullPath, EmbeddedChildSplice.Cut(ownerBytes, span))
                 : throw NoLongerCarried(unit, identity.FormKey);
@@ -69,12 +69,8 @@ internal sealed class SourceRepositoryWrites(
     /// changes: the container's own text with the child appended, rewritten as <see cref="ChangesToRewrite"/> says.</summary>
     internal SourceChanges ChangesToPutChild(PluginAddress plugin, RecordIdentity container, string slot, SourceDocument child)
     {
-        var unit = locator.Locate(plugin, container) is { } held && (held.IsEmbedded || files.FileExists(held.FullPath))
-            ? held
-            : throw SourceStopException.NotCarried(
-                $"No document in {plugin.Name}'s tree holds {container.FormKey}, so there is no slot to put a child in. " +
-                SourceFailure.NotCarried.MovedOrRemovedOutside);
-        var containerText = DocumentText.RecordBodyFromOwnerBytes(OwnerBytes(unit), unit, container.FormKey, _release)
+        var unit = HeldUnit(plugin, container, "there is no slot to put a child in");
+        var containerText = DocumentText.RecordBodyFromOwnerBytes(FileBytes(unit), unit, container.FormKey, _release)
             ?? throw NoLongerCarried(unit, container.FormKey);
         var withChild = Read(() => ContainerDocumentEdits.WithChildAppended(
             containerText, _release, container.RecordType, slot, child.Body, child.RecordType));
@@ -84,10 +80,13 @@ internal sealed class SourceRepositoryWrites(
     /// <summary>What rewriting a document the tree holds changes: its text, inside its owner's when embedded, and
     /// the move to its leaf name. One no document holds throws, since an edit never creates.</summary>
     internal SourceChanges ChangesToRewrite(PluginAddress plugin, SourceDocument document) =>
-        locator.Locate(plugin, document.Identity) is { } unit && (unit.IsEmbedded || files.FileExists(unit.FullPath))
-            ? ChangesToHeld(unit, document)
+        ChangesToHeld(HeldUnit(plugin, document.Identity, "there is none to rewrite"), document);
+
+    private SourceUnit HeldUnit(PluginAddress plugin, RecordIdentity identity, string consequence) =>
+        locator.Locate(plugin, identity) is { } unit && (unit.IsEmbedded || files.FileExists(unit.FullPath))
+            ? unit
             : throw SourceStopException.NotCarried(
-                $"No document in {plugin.Name}'s tree holds {document.FormKey}, so there is none to rewrite. " +
+                $"No document in {plugin.Name}'s tree holds {identity.FormKey}, so {consequence}. " +
                 SourceFailure.NotCarried.MovedOrRemovedOutside);
 
     private SourceChanges ChangesToPlace(PluginAddress plugin, SourceDocument document, CellPlacement? placement)
@@ -101,7 +100,7 @@ internal sealed class SourceRepositoryWrites(
     {
         if (!unit.IsEmbedded) return Planned(LeafPlan(unit, document), document.Body);
 
-        var ownerBytes = OwnerBytes(unit);
+        var ownerBytes = FileBytes(unit);
         if (DocumentText.EmbeddedChildIn(ownerBytes, unit, document.FormKey, _release) is not { } span)
             throw NoLongerCarried(unit, document.FormKey);
         return Written(unit.FullPath, EmbeddedChildSplice.Replace(ownerBytes, span, document.Body));
@@ -118,24 +117,23 @@ internal sealed class SourceRepositoryWrites(
             throw SourceStopException.Unreadable($"{unit.RelativePath} is not a readable document, so its name cannot be checked: {why}");
     }
 
-    /// <summary>What changing <paramref name="identity"/>'s FormKey changes, read from the text of the document
-    /// <paramref name="carrying"/> it: its own file or folder moves to the new leaf name, or its owner's text changes.</summary>
-    internal SourceChanges ChangesToRekey(
-        PluginAddress plugin, SourceDocument carrying, RecordIdentity identity, string newFormKey)
+    /// <summary>What changing <paramref name="identity"/>'s FormKey changes: its own file or folder moves to the
+    /// new leaf name, or its owner's text changes.</summary>
+    internal SourceChanges ChangesToRekey(PluginAddress plugin, RecordIdentity identity, string newFormKey)
     {
-        var unit = locator.Locate(plugin, identity)
-            ?? throw new InvalidOperationException($"No document in {plugin.Name}'s tree carries {identity.FormKey}.");
+        var unit = HeldUnit(plugin, identity, "there is none to rekey");
 
-        if (!carrying.FormKey.Equals(identity.FormKey, StringComparison.Ordinal))
+        if (unit.IsEmbedded)
         {
-            var ownerBytes = Encoding.UTF8.GetBytes(carrying.Body);
+            var ownerBytes = FileBytes(unit);
             var span = DocumentText.EmbeddedChildIn(ownerBytes, unit, identity.FormKey, _release) ?? throw NoLongerCarried(unit, identity.FormKey);
             var rekeyed = Read(() => RecordDocumentEdits.WithFormKey(
                 EmbeddedChildSplice.Extract(ownerBytes, span, _release), _release, identity.RecordType, newFormKey));
             return Written(unit.FullPath, EmbeddedChildSplice.Replace(ownerBytes, span, rekeyed));
         }
 
-        var text = Read(() => RecordDocumentEdits.WithFormKey(carrying.Body, _release, carrying.RecordType, newFormKey));
+        var text = Read(() => RecordDocumentEdits.WithFormKey(
+            Encoding.UTF8.GetString(FileBytes(unit)), _release, identity.RecordType, newFormKey));
         if (unit.IsDirectoryPerRecord)
         {
             var from = PathShape.DirectoryOf(unit.FullPath);
@@ -283,7 +281,7 @@ internal sealed class SourceRepositoryWrites(
     private static List<(string From, string To)> Differing(IEnumerable<(string From, string To)> moves) =>
         [.. moves.Where(move => !string.Equals(move.From, move.To, StringComparison.Ordinal))];
 
-    private byte[] OwnerBytes(SourceUnit unit) => DocumentText.StripUtf8Bom(files.ReadAllBytes(unit.FullPath));
+    private byte[] FileBytes(SourceUnit unit) => DocumentText.StripUtf8Bom(files.ReadAllBytes(unit.FullPath));
 
     private static InvalidOperationException NoPlaceInTheTree(PluginAddress plugin, RecordIdentity identity) =>
         new($"No document in {plugin.Name}'s tree holds {identity.FormKey}, and its type has no file of " +

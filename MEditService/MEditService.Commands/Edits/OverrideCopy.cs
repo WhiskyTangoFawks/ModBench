@@ -62,12 +62,12 @@ internal sealed class OverrideCopy
             return ReplaceHeldCopy(source, identity, body, existingTarget, destination, release);
         }
 
-        // A record a container's document carries, a worldspace's persistent cell among them, lands
-        // inside the destination's copy of that document (the container rule).
+        // A record with a container, a worldspace's persistent cell among them, lands in the
+        // destination's copy of that container (the container rule).
         if (!source.ContainerOf(identity).Holds(out var container, out var why)) return WriteTargets.RefuseUnreadableSource(formKey, why);
-        return container is { } carrier
-            ? _recordCopy.CopyNewEmbeddedChildAsOverride(
-                source, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body), carrier, destination, release)
+        return container is { } parent
+            ? _recordCopy.CopyNewChildAsOverride(
+                source, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body), parent, destination, release)
             : LandNewRecord(copy, body, destinationPlugin);
     }
 
@@ -84,7 +84,7 @@ internal sealed class OverrideCopy
                     transaction, source, worldspace,
                     new SourceDocument(
                         formKey, identity.RecordType, identity.EditorId,
-                        StripEmbeddedChildren(body, identity.RecordType, release)),
+                        ContainerDocumentEdits.WithoutChildren(body, release, identity.RecordType)),
                     destination, release)).Holds(out var placed, out var unplaced))
             {
                 return unplaced;
@@ -99,9 +99,9 @@ internal sealed class OverrideCopy
             return placed;
         }
 
-        // Copy as Override is own-fields-only, so a container's inline children are stripped.
+        // Copy as Override is own-fields-only, so a container's children are left out.
         if (RecordTypes.For(release).HasChildSlots(identity.RecordType))
-            body = StripEmbeddedChildren(body, identity.RecordType, release);
+            body = ContainerDocumentEdits.WithoutChildren(body, release, identity.RecordType);
 
         if (destination.Repository.Put(
                 destinationPlugin, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body)) is { } unwritten)
@@ -157,7 +157,4 @@ internal sealed class OverrideCopy
                 $"{destinationPlugin.Name} loads before {master}, a master the copy of {identity.FormKey} needs — copying it " +
                 $"there would be an underride, not an override. Pick a destination that loads after {master}.")
             : null;
-
-    private static string StripEmbeddedChildren(string body, string recordType, GameRelease release) =>
-        ContainerDocumentEdits.WithoutChildren(body, release, recordType);
 }

@@ -19,10 +19,9 @@ internal sealed class FormKeyChange(ILogger logger)
     internal static bool IsFormIdEdit(RecordEditEnvelope envelope) =>
         envelope is { Op: RecordEditEnvelope.Set, Path: [{ Kind: PathHop.MemberKind, Name: Member }] };
 
-    /// <summary>The record's file or folder moved to its new key, or its owner's text, read from
-    /// <paramref name="carrying"/>.</summary>
+    /// <summary>The record under its new key.</summary>
     internal SourceAnswer<RecordEditResult> Change(
-        PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, SourceDocument carrying, JsonElement? value)
+        PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, JsonElement? value)
     {
         var (release, identity, repository) = editTarget;
         if (identity.RecordType == PluginHeader.RecordType)
@@ -60,7 +59,7 @@ internal sealed class FormKeyChange(ILogger logger)
         return WriteFailure.Refused(
             RecordEditResult.Making(RecordEditResult.Success(targetFormKey), repository, transaction =>
             {
-                transaction.Apply(repository.ChangesToRekey(plugin, carrying, identity, targetFormKey));
+                transaction.Apply(repository.ChangesToRekey(plugin, identity, targetFormKey));
                 transaction.Apply(allocator.HeaderChanges());
             }),
             refused => refused, failed, logger);
