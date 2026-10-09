@@ -316,8 +316,8 @@ public sealed class SourceRepository : ISourceRepositoryReads
         SourceFailure.Answer(() => Writes.ChangesToPutInWorldspace(Spelled(plugin), cell, worldspace));
 
     /// <summary>What putting <paramref name="child"/> at the end of <paramref name="slot"/> of
-    /// <paramref name="container"/> changes, written nowhere, inside whichever document carries the container.
-    /// A single-value slot that already holds a record answers <see cref="SourceFailure.SlotHeld"/>.</summary>
+    /// <paramref name="container"/> changes, written nowhere, in whichever document carries the container.
+    /// A single-value slot that that is filled answers <see cref="SourceFailure.SlotHeld"/>.</summary>
     public SourceAnswer<SourceChanges> ChangesToPutChild(
         PluginAddress plugin, RecordIdentity container, string slot, SourceDocument child) =>
         SourceFailure.Answer(() => Writes.ChangesToPutChild(Spelled(plugin), container, slot, child));
