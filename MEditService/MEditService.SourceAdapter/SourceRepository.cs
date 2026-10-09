@@ -74,9 +74,8 @@ public sealed class SourceRepository : ISourceRepositoryReads
     /// can be made or written here.</summary>
     public static void EnsureTrackable() => GitCli.EnsureOnPath();
 
-    /// <summary>A repository for a mod that has none: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>, holding
-    /// each plugin that tracked from the tree the whole-mod door wrote for it. Answers each plugin whose files
-    /// could not be written.</summary>
+    /// <summary>A repository for a mod that has none: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>, of
+    /// each plugin's door tree. Answers each plugin whose files could not be written.</summary>
     public static IReadOnlyList<(string Plugin, string Reason)> Track(
         string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins) =>
         GitTracking.Track(modFolder, plugins);
