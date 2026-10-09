@@ -37,14 +37,14 @@ import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyConte
 import { createDownloadsView } from './downloads/downloadsView';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
-import { openedFolder, whenOpened } from './drivingLib/instanceCheck';
+import { openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { pluginSyncOver } from './pluginsCommands/plugins';
 import { modSyncOver, modlistCommands } from './modlist/modlist';
 import { warnIfFomod } from './install/fomodWarning';
 import { installCommands } from './install/install';
 import { downloadsCommands } from './downloadsCommands/downloads';
-import { refresh } from './instanceCommands/loadOrder';
+import { instanceCommands } from './instanceCommands/instanceCommands';
 import { editingFlow } from './instanceCommands/editing';
 import { instanceSyncs, loadOrderPutHandler, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
@@ -113,7 +113,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     adapter, window: vscode.window, log, logReadFailure: (line) => outputChannel.error(line),
   }));
   own(markFirstReadLanded(instance));
-  const refreshIndex = () => refresh(client, instanceRoot, instance.value);
+  const commands = instanceCommands({ adapter, client, instanceRoot });
   const { modSync, pluginSync } = own(instanceSyncs({
     instance, syncMods: modSyncOver(adapter), syncPlugins: pluginSyncOver(adapter), channel: outputChannel,
   }));
@@ -156,7 +156,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
   own(loadOrderPutOnEachValue(instance, putLoadOrder));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putLoadOrder));
   const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
-  ownAll(own, registerToolboxCommands({ adapter, instance, extensionId, reporterFor }));
+  ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));
   own(deps.focusedView.follow('modbench.modList', mods.view));
   own(deps.focusedView.follow('modbench.pluginListTree', plugins.followed));
   own(deps.focusedView.follow('modbench.downloads', downloadsView));
@@ -168,7 +168,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ViewsDeps): Ins
     ]),
     () => vscode.window.setStatusBarMessage('Focus a list to filter it.', 5000)));
   own(registerRefreshCommand({
-    refresh: refreshIndex, nextRefill: () => plugins.narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
+    commands, nextRefill: () => plugins.narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
     instance, toolboxProvider,
