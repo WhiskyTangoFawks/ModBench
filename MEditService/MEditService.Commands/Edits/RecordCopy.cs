@@ -18,30 +18,19 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     /// write here is a put, and the repository decides where a document goes.</summary>
     internal readonly record struct Destination(SourceRepository Repository, PluginAddress Plugin);
 
-    /// <summary>Own fields only, as every Copy as Override: a copied topic lands with no responses.</summary>
-    internal SourceAnswer<RecordEditResult> CopyEmbeddedChildAsOverride(
+    /// <summary>A copy of a child the destination lacks, as every Copy as Override: own fields only, so a copied
+    /// topic lands with no responses.</summary>
+    internal SourceAnswer<RecordEditResult> CopyNewEmbeddedChildAsOverride(
         CopySource source, SourceDocument child, DocumentContainment container,
-        Destination destination, GameRelease release, bool replace)
+        Destination destination, GameRelease release)
     {
-        var formKey = child.FormKey;
         var landing = child with { Body = ContainerDocumentEdits.WithoutChildren(child.Body, release, child.RecordType) };
-
-        if (!destination.Repository.FormKeysUsed(destination.Plugin).Holds(out var used, out var unread)) return unread;
-        if (used.Contains(formKey))
-        {
-            if (!Identity(destination, formKey).Holds(out var held, out unread)) return unread;
-            if (held is not { } existing) return RefuseKeyWithNoDocument(destination, formKey);
-            if (!replace) return RefuseHeldWithoutReplace(formKey, destination.Plugin);
-
-            // Replaced in place, never duplicated.
-            return ReplaceEmbeddedChildInPlace(source.Plugin, existing, landing, destination, release);
-        }
 
         if (!SourceTransaction.Atomically(
                 destination.Repository, transaction => AppendEmbeddedChild(transaction, source, container, landing, destination, release))
-            .Holds(out var appended, out unread))
+            .Holds(out var appended, out var unread))
         {
-            return unread;
+            return unread is SourceFailure.SlotHeld held ? RefuseSlotHeldByAnotherRecord(destination.Plugin, held) : unread;
         }
 
         if (appended.Applied && logger.IsEnabled(LogLevel.Information))
@@ -49,11 +38,16 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
             logger.LogInformation(
                 "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
                 "({DestinationOrigin}) — inside {ContainerFormKey}'s {SlotName} slot",
-                formKey, source.Plugin.Name, source.Plugin.Origin, destination.Plugin.Name, destination.Plugin.Origin,
+                child.FormKey, source.Plugin.Name, source.Plugin.Origin, destination.Plugin.Name, destination.Plugin.Origin,
                 container.ParentFormKey, container.SlotName);
         }
         return appended;
     }
+
+    private static RecordEditResult RefuseSlotHeldByAnotherRecord(PluginAddress destinationPlugin, SourceFailure.SlotHeld held) =>
+        RecordEditResult.Refused(
+            RecordEditRefusal.ChildSlotHeldByAnotherRecord,
+            $"{destinationPlugin.Name} ({destinationPlugin.Origin}) holds another record where the copy puts one: {held.Reason}");
 
     /// <summary>The container rule: the child lands at the end of its slot in the destination's copy
     /// of its container, which is copied in with its own fields when absent, transitively.</summary>
@@ -68,15 +62,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
             return CopyContainerInAround(transaction, source, container, child, destination, release);
         }
 
-        // The container may itself be embedded (a topic inside its quest's document); its put lands
-        // wherever the tree holds it.
-        var withChild = ContainerDocumentEdits.WithChildAppended(
-                containerDocument.Body, release, containerDocument.RecordType, containerFormKey,
-                container.SlotName, child.Body, child.RecordType)
-            ?? throw new InvalidOperationException(
-                $"{containerFormKey} was found, but its own text does not carry it.");
-
-        transaction.Apply(destination.Repository.ChangesToPut(destination.Plugin, containerDocument with { Body = withChild }));
+        transaction.Apply(destination.Repository.ChangesToPutChild(
+            destination.Plugin, containerDocument.Identity, container.SlotName, child));
         return RecordEditResult.Success();
     }
 
@@ -90,25 +77,19 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         if (!HeldBy(source, containerFormKey).Holds(out var sourceContainer, out var why))
             return WriteTargets.RefuseUnreadableSource(containerFormKey, why);
         if (!TryCopyIn(source, sourceContainer, destination, release, out var ownFields, out var refused)) return refused;
-        var withChild = ownFields with
-        {
-            Body = ContainerDocumentEdits.WithChildAppended(
-                       ownFields.Body, release, ownFields.RecordType, containerFormKey, container.SlotName,
-                       child.Body, child.RecordType)
-                   ?? throw new InvalidOperationException(
-                       $"The copy of {containerFormKey} does not carry its own FormKey."),
-        };
-
         if (!source.ContainerOf(sourceContainer).Holds(out var parentOfContainer, out why))
             return WriteTargets.RefuseUnreadableSource(containerFormKey, why);
         if (!(parentOfContainer is { } ownParent
-                ? AppendEmbeddedChild(transaction, source, ownParent, withChild, destination, release)
-                : PlaceContainer(transaction, source, withChild, destination, release)).Holds(out var landed, out var unread))
+                ? AppendEmbeddedChild(transaction, source, ownParent, ownFields, destination, release)
+                : PlaceContainer(transaction, source, ownFields, destination, release)).Holds(out var landed, out var unread))
         {
             return unread;
         }
+        if (!landed.Applied) return landed;
 
-        if (landed.Applied && logger.IsEnabled(LogLevel.Information))
+        transaction.Apply(destination.Repository.ChangesToPutChild(destination.Plugin, ownFields.Identity, container.SlotName, child));
+
+        if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
                 "Landed {FormKey} in {DestinationPlugin} ({DestinationOrigin}) — copied in its container {ContainerFormKey} " +
@@ -116,35 +97,6 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
                 child.FormKey, destination.Plugin.Name, destination.Plugin.Origin, containerFormKey);
         }
         return landed;
-    }
-
-    // A GRUP's element order is binary-format position, so a replace must land at the record's
-    // exact slot; xEdit's copy-into never drops a child the destination's copy already carries.
-    private SourceAnswer<RecordEditResult> ReplaceEmbeddedChildInPlace(
-        PluginAddress sourcePlugin, RecordIdentity existing, SourceDocument replacement,
-        Destination destination, GameRelease release)
-    {
-        if (!DocumentOf(destination, existing).Holds(out var existingDocument, out var unread)) return unread;
-
-        var withOwnFields = ContainerDocumentEdits.WithOwnFieldsReplaced(
-            existingDocument.Body, existing.RecordType, replacement.Body, replacement.RecordType, release);
-
-        if (destination.Repository.Put(
-                destination.Plugin,
-                new SourceDocument(existing.FormKey, existing.RecordType, withOwnFields.EditorId, withOwnFields.Text)) is { } unwritten)
-        {
-            return unwritten;
-        }
-
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
-                "({DestinationOrigin}) — replaced the existing embedded copy in place",
-                existing.FormKey, sourcePlugin.Name, sourcePlugin.Origin, destination.Plugin.Name,
-                destination.Plugin.Origin);
-        }
-        return RecordEditResult.Success();
     }
 
     // A top-level container the destination lacks: an exterior cell lands through the spatial mint
@@ -206,10 +158,6 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         transaction.Apply(repository.ChangesToPutInWorldspace(plugin, landing, worldspaceFormKey));
         return RecordEditResult.Success();
     }
-
-    private static SourceAnswer<SourceDocument> DocumentOf(Destination destination, RecordIdentity existing) =>
-        destination.Repository.RecordOf(destination.Plugin, existing)
-            .Then(held => SourceAnswer.Of(held ?? throw NoDocumentCarries(destination.Plugin, existing.FormKey)));
 
     private static JsonNode RequireParsed(string text) =>
         JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a document's text to parse as JSON.");

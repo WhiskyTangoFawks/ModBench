@@ -27,7 +27,10 @@ public sealed class CopyAsOverrideContainerTests
 
         var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.TopCell.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
-        Assert.Equal(RecordEditRefusal.ChildSlotHeldByAnotherRecord, result.OnlyRefused().Refusal);
+        var refused = result.OnlyRefused();
+        Assert.Equal(RecordEditRefusal.ChildSlotHeldByAnotherRecord, refused.Refusal);
+        Assert.Contains("holds another record where the copy puts one", refused.Message, StringComparison.Ordinal);
+        Assert.Contains(ContainerCopyFixture.DestinationPluginName, refused.Message, StringComparison.Ordinal);
         Assert.Equal(before, TreeSnapshot.Of(fixture.DestinationModFolder));
     }
 
