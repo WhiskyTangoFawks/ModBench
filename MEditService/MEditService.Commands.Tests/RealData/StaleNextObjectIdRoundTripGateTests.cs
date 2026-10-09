@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -61,15 +62,15 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     public async Task Compile_OfAGeneratedPluginWithAStaleHeader_ReproducesTheSourceContent(string fileName)
     {
         using var scratch = new TrackedScratch(fileName);
-        var original = Fallout4Mod.CreateFromBinary(
-            new ModPath(ModKey.FromFileName(fileName), scratch.PluginPath), Fallout4Release.Fallout4);
+        using var before = new ScratchDirectory("medit-stale-header-before-");
+        var original = Path.Combine(before, fileName);
+        File.Copy(scratch.PluginPath, original);
         await scratch.TrackAsync();
 
         await scratch.CompileService().CompileLandedAsync(scratch.Plugin);
 
-        var compiled = Fallout4Mod.CreateFromBinary(
-            new ModPath(ModKey.FromFileName(fileName), scratch.PluginPath), Fallout4Release.Fallout4);
-        var divergence = ModelIdentity.FindFirstDivergence(original, compiled);
+        var divergence = TestAdapters.Mutagen().DivergenceFrom(
+            fileName, original, scratch.PluginPath, GameRelease.Fallout4, new PluginStrings(null, before.Path)).Answered();
         Assert.Null(divergence);
     }
 

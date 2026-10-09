@@ -1,19 +1,20 @@
 using System.Text;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Codec.Serialization;
+namespace MEditService.PluginAdapter;
 
 /// <summary>A live mod answered one record at a time, as documents: the second half of
-/// <see cref="ModDocuments"/>'s job, for a caller asking about a handful of keys rather than the
+/// <see cref="MutagenModDocuments"/>'s job, for a caller asking about a handful of keys rather than the
 /// whole plugin.</summary>
-internal sealed class ModRecordLookup : IPluginRecordLookup
+internal sealed class ModRecordLookup : IPluginRecords
 {
     private readonly IModGetter _mod;
-    private readonly IRecordFieldProbe _file;
+    private readonly PluginRecordBytes _file;
     private readonly IReadOnlyDictionary<string, RecordTableSchema> _schemas;
     private readonly IDisposable? _open;
     private readonly RecordTypes _types;
@@ -23,7 +24,7 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
     private readonly Lazy<Dictionary<(string Worldspace, int X, int Y), string>> _cellsByGrid;
 
     internal ModRecordLookup(
-        IModGetter mod, IRecordFieldProbe file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open)
+        IModGetter mod, PluginRecordBytes file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open)
     {
         _mod = mod;
         _file = file;
@@ -36,26 +37,28 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
         _cellsByGrid = new Lazy<Dictionary<(string Worldspace, int X, int Y), string>>(BuildCellsByGrid);
     }
 
-    public RecordIdentity? IdentityOf(string formKey) =>
-        Resolve(formKey) is { } record
+    public PluginAnswer<RecordIdentity?> IdentityOf(string formKey) =>
+        PluginFailure.Answer(() => Resolve(formKey) is { } record
             ? new RecordIdentity(record.FormKey.ToString(), _types.RecordTypeOf(record), record.EditorID)
-            : null;
+            : (RecordIdentity?)null);
 
-    public long? RecordFlagsOf(string formKey) => Resolve(formKey)?.MajorRecordFlagsRaw;
+    public PluginAnswer<long?> RecordFlagsOf(string formKey) =>
+        PluginFailure.Answer(() => (long?)Resolve(formKey)?.MajorRecordFlagsRaw);
 
-    public string? TextOf(string formKey) =>
-        Resolve(formKey) is { } record
-            ? Encoding.UTF8.GetString(DeletedRecord.Serialize(record, _schemas[_types.RecordTypeOf(record)], _mod.GameRelease, _file))
-            : null;
+    public PluginAnswer<string?> TextOf(string formKey) =>
+        PluginFailure.Answer(() => Resolve(formKey) is { } record
+            ? Encoding.UTF8.GetString(DeletedRecord.Serialize(
+                record, _schemas[_types.RecordTypeOf(record)], _mod.GameRelease, () => _file.HoldsNoFields(record.FormKey)))
+            : null);
 
-    public DocumentContainment? ContainmentOf(string formKey) =>
-        _containments.Value.TryGetValue(formKey, out var found) ? found : null;
+    public PluginAnswer<DocumentContainment?> ContainmentOf(string formKey) =>
+        PluginFailure.Answer(() => _containments.Value.TryGetValue(formKey, out var found) ? found : (DocumentContainment?)null);
 
-    public CellStructure? CellStructureOf(string formKey) =>
-        _cells.Value.TryGetValue(formKey, out var cell) ? cell.Structure : null;
+    public PluginAnswer<CellStructure?> CellStructureOf(string formKey) =>
+        PluginFailure.Answer(() => _cells.Value.TryGetValue(formKey, out var cell) ? cell.Structure : (CellStructure?)null);
 
-    public string? CellAt(string worldspace, int x, int y) =>
-        _cellsByGrid.Value.TryGetValue((worldspace, x, y), out var cell) ? cell : null;
+    public PluginAnswer<string?> CellAt(string worldspace, int x, int y) =>
+        PluginFailure.Answer(() => _cellsByGrid.Value.TryGetValue((worldspace, x, y), out var cell) ? cell : null);
 
     public void Dispose()
     {

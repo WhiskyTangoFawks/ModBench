@@ -33,23 +33,3 @@ public interface IPluginRecords : IDisposable
     /// <paramref name="y"/>) of <paramref name="worldspace"/>, or null when it holds none there.</summary>
     PluginAnswer<string?> CellAt(string worldspace, int x, int y);
 }
-
-/// <summary>The codec's lookup over a mod this adapter opened, each answer its own.</summary>
-internal sealed class AnsweredRecords(IPluginRecordLookup inner) : IPluginRecords
-{
-    public PluginAnswer<RecordIdentity?> IdentityOf(string formKey) => PluginFailure.Answer(() => inner.IdentityOf(formKey));
-
-    public PluginAnswer<long?> RecordFlagsOf(string formKey) => PluginFailure.Answer(() => inner.RecordFlagsOf(formKey));
-
-    public PluginAnswer<string?> TextOf(string formKey) => PluginFailure.Answer(() => inner.TextOf(formKey));
-
-    public PluginAnswer<DocumentContainment?> ContainmentOf(string formKey) =>
-        PluginFailure.Answer(() => inner.ContainmentOf(formKey));
-
-    public PluginAnswer<CellStructure?> CellStructureOf(string formKey) =>
-        PluginFailure.Answer(() => inner.CellStructureOf(formKey));
-
-    public PluginAnswer<string?> CellAt(string worldspace, int x, int y) => PluginFailure.Answer(() => inner.CellAt(worldspace, x, y));
-
-    public void Dispose() => inner.Dispose();
-}

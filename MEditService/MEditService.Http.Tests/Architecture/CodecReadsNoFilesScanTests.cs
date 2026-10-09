@@ -28,8 +28,7 @@ public sealed class CodecReadsNoFilesScanTests
         Assert.True(
             named.Count == 0,
             "The Codec names a file system call or a plugin path. It turns text into documents and back and reads "
-            + "no file; what a plugin file holds is the Plugin adapter's answer behind an interface the Codec "
-            + "declares (ADR-0004, ADR-0014):\n"
+            + "no file; what a plugin file holds is the Plugin adapter's answer (ADR-0004, ADR-0014):\n"
             + string.Join("\n", named));
     }
 

@@ -5,36 +5,22 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Text;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Codec.Serialization;
+namespace MEditService.PluginAdapter;
 
 /// <summary>A cell the mod holds, where its GRUP hierarchy puts it.</summary>
 internal readonly record struct HeldCell(CellStructure Structure, object Cell);
 
-/// <summary>A live mod read as the documents its source tree would hold (ADR-0007). The
-/// one place a getter becomes text, so every caller downstream of it holds documents.</summary>
-public static class ModDocuments
-{
-    /// <summary><paramref name="open"/> is disposed with the result, so a caller that opened the
-    /// plugin hands ownership over rather than outliving the read.</summary>
-    public static IPluginDocuments Of(
-        IModGetter mod, IRecordFieldProbe file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
-        new MutagenModDocuments(mod, file, schemas, open);
-
-    /// <summary>The same mod for a caller asking about a handful of records by key rather than
-    /// streaming the whole plugin. <paramref name="open"/> is disposed with the result.</summary>
-    public static IPluginRecordLookup LookupOf(
-        IModGetter mod, IRecordFieldProbe file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
-        new ModRecordLookup(mod, file, schemas, open);
-}
-
-// Large enough to keep eight cores busy on cheap records; small enough that a batch of the largest
-// cell documents stays inside a few hundred MB.
+/// <summary>A live mod read as the documents its source tree would hold (ADR-0007). The open is
+/// disposed with the result, so a caller that opened the plugin hands ownership over.</summary>
 internal sealed class MutagenModDocuments(
-    IModGetter mod, IRecordFieldProbe file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open) : IPluginDocuments
+    IModGetter mod, PluginRecordBytes file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open) : IPluginDocuments
 {
+    // Large enough to keep eight cores busy on cheap records; small enough that a batch of the largest
+    // cell documents stays inside a few hundred MB.
     private const int SerializeBatchSize = 2048;
 
     private readonly List<RecordTypeFailure> _failures = [];
@@ -72,9 +58,7 @@ internal sealed class MutagenModDocuments(
         var records = new List<IMajorRecordGetter>();
         try
         {
-            var ofTable = mod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false)
-                .Where(record => IsOf(tableName, schema, record));
-            foreach (var record in ofTable)
+            foreach (var record in schema.RecordsIn(mod))
                 records.Add(record);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -101,17 +85,12 @@ internal sealed class MutagenModDocuments(
         }
     }
 
-    // Mutagen's enumeration by one placed-trap variant (a placed arrow, hazard, missile...) yields
-    // every variant a cell holds.
-    private bool IsOf(string tableName, RecordTableSchema schema, IMajorRecordGetter record) =>
-        schema.RecordType.IsInstanceOfType(record) || RecordTypes.For(mod.GameRelease).RecordTypeOf(record) == tableName;
-
     private PluginDocument Document(string tableName, RecordTableSchema schema, IMajorRecordGetter record)
     {
         var formKey = record.FormKey.ToString();
         try
         {
-            var text = Encoding.UTF8.GetString(DeletedRecord.Serialize(record, schema, mod.GameRelease, file));
+            var text = Encoding.UTF8.GetString(DeletedRecord.Serialize(record, schema, mod.GameRelease, () => file.HoldsNoFields(record.FormKey)));
             return WithGrupFacts(new PluginDocument(tableName, formKey, text), record);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

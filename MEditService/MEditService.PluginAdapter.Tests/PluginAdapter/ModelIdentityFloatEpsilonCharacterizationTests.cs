@@ -1,14 +1,13 @@
-using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Codec.Tests.Serialization;
+namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
 public sealed class ModelIdentityFloatEpsilonCharacterizationTests
 {
     [Fact]
-    public void FindFirst_WhenAFloatNearZeroChangesByLessThanTheMasksAbsoluteEpsilon_RefusesViaTheCodecDecider_BecauseMutagensFillEqualsMaskComparesFloatsWithinALiteral1e9BandThatOnlyDiffersFromBitExactVeryCloseToZero()
+    public async Task DivergenceFrom_WhenAFloatNearZeroChangesByLessThanTheMasksAbsoluteEpsilon_RefusesViaTheCodecDecider_BecauseMutagensFillEqualsMaskComparesFloatsWithinALiteral1e9BandThatOnlyDiffersFromBitExactVeryCloseToZero()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew("SomeNpc");
@@ -21,9 +20,9 @@ public sealed class ModelIdentityFloatEpsilonCharacterizationTests
 
         Assert.NotEqual(npc.HeightMin, recompiledNpc.HeightMin);
 
-        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
+        var divergence = await ModelIdentityTests.DivergenceAsync(mod, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Equal(npc.FormKey, divergence.FormKey);
+        Assert.Contains(npc.FormKey.ToString(), divergence, StringComparison.Ordinal);
     }
 }

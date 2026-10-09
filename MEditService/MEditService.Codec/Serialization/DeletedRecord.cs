@@ -7,12 +7,13 @@ namespace MEditService.Codec.Serialization;
 
 /// <summary>A deleted record holding no fields as its header alone, which is what a mutable read makes
 /// of it; Mutagen's overlay throws reading some absent fields instead.</summary>
-internal static class DeletedRecord
+public static class DeletedRecord
 {
     /// <summary>The record's document, or its header's where it is deleted, its file gives it no field and
-    /// the overlay cannot serialize it. Any other failure is the caller's to diagnose.</summary>
-    internal static byte[] Serialize(
-        IMajorRecordGetter record, RecordTableSchema schema, GameRelease release, IRecordFieldProbe file)
+    /// the overlay cannot serialize it; <paramref name="fileHoldsNoFields"/> is asked only then. Other
+    /// failures are the caller's.</summary>
+    public static byte[] Serialize(
+        IMajorRecordGetter record, RecordTableSchema schema, GameRelease release, Func<bool> fileHoldsNoFields)
     {
         try
         {
@@ -20,7 +21,7 @@ internal static class DeletedRecord
         }
         catch (Exception ex) when (ex is not OutOfMemoryException
             && (record.MajorRecordFlagsRaw & DeletedFlag.Bit) != 0
-            && file.HoldsNoFields(record.FormKey)
+            && fileHoldsNoFields()
             && HeaderOf(record, schema, release) is { } header)
         {
             return RecordTextCodec.SerializeToBytes(header, release);

@@ -2,17 +2,18 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using Loqui;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Codec.Serialization;
+namespace MEditService.PluginAdapter;
 
 /// <summary>ADR-0006's round-trip verdict. Mutagen's equality mask is walked by
 /// reflection rather than its ToString(), which omits inherited members; bare Equals has false
 /// negatives.</summary>
-public static class ModelIdentity
+internal static class ModelIdentity
 {
     /// <summary>One record that failed the model-identity verdict, or the whole-mod fallback when
     /// every individual record matched (header/container-only divergence).</summary>
@@ -47,10 +48,9 @@ public static class ModelIdentity
     private static ILoquiObjectGetter? HeaderOf(IModGetter mod) =>
         mod.GetType().GetProperty("ModHeader")?.GetValue(mod) as ILoquiObjectGetter;
 
-    /// <summary>The first record, in <paramref name="original"/>'s GRUP order, that does not survive a
-    /// round trip, naming the field the mask disagrees on, else the codec document path that differs;
-    /// null when every record is model-identical.</summary>
-    internal static Divergence? FindFirst(IModGetter original, IModGetter recompiled)
+    // The first record, in the original's GRUP order, that does not survive a round trip, naming the
+    // field the mask disagrees on, else the codec document path that differs; null when none differs.
+    private static Divergence? FindFirst(IModGetter original, IModGetter recompiled)
     {
         var recompiledByFormKey = recompiled.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
         var originalFormKeys = new HashSet<FormKey>();
@@ -97,9 +97,9 @@ public static class ModelIdentity
     internal static readonly HashSet<string> OpaqueHeaderFields =
         ["TypeOffsets", "Deleted", "Screenshot", "INTV", "INCC", "Author", "Description"];
 
-    /// <summary>The first <see cref="OpaqueHeaderFields"/> member the mask disagrees on, or null. The
-    /// allow-list is shared across games; only the TransientTypes check below is FO4-shaped.</summary>
-    internal static string? FindFirstHeaderFieldDivergence(ILoquiObjectGetter original, ILoquiObjectGetter recompiled)
+    // The first OpaqueHeaderFields member the mask disagrees on, or null. The allow-list is shared
+    // across games; only the TransientTypes check below is FO4-shaped.
+    private static string? FindFirstHeaderFieldDivergence(ILoquiObjectGetter original, ILoquiObjectGetter recompiled)
     {
         if (FailingFields(original, recompiled).FirstOrDefault(OpaqueHeaderFields.Contains) is { } field)
             return field;
@@ -128,18 +128,18 @@ public static class ModelIdentity
         return true;
     }
 
-    // Both records through the codec, byte-compared.
+    // Both records through the codec, text-compared.
     private static string? FirstCodecDocumentDifference(
         IMajorRecordGetter original, IMajorRecordGetter recompiled, Mutagen.Bethesda.GameRelease release)
     {
-        var originalBytes = RecordTextCodec.SerializeToBytes(original, release);
-        var recompiledBytes = RecordTextCodec.SerializeToBytes(recompiled, release);
-        if (originalBytes.AsSpan().SequenceEqual(recompiledBytes)) return null;
+        var originalText = RecordTextCodec.SerializeToText(original, release);
+        var recompiledText = RecordTextCodec.SerializeToText(recompiled, release);
+        if (string.Equals(originalText, recompiledText, StringComparison.Ordinal)) return null;
 
-        // Not byte-identical: decide structurally, honouring only the two model-equal respellings a rewrite
+        // Not text-identical: decide structurally, honouring only the two model-equal respellings a rewrite
         // is entitled to — negative zero and a dictionary field's enumeration order.
-        using var originalDoc = System.Text.Json.JsonDocument.Parse(originalBytes);
-        using var recompiledDoc = System.Text.Json.JsonDocument.Parse(recompiledBytes);
+        using var originalDoc = System.Text.Json.JsonDocument.Parse(originalText);
+        using var recompiledDoc = System.Text.Json.JsonDocument.Parse(recompiledText);
         return FirstModelDifference(originalDoc.RootElement, recompiledDoc.RootElement, path: "", propertyName: null);
     }
 
@@ -300,10 +300,9 @@ public static class ModelIdentity
         cell.TemporaryUnknownGroupData = 0;
     }
 
-    /// <summary>Every field name the generated mask disagrees on.
-    /// Typed <see cref="ILoquiObjectGetter"/>, the narrowest type records and the mod header share, so
-    /// a caller with no generated mask fails to compile.</summary>
-    internal static IEnumerable<string> FailingFields(
+    // Every field name the generated mask disagrees on. Typed ILoquiObjectGetter, the narrowest type
+    // records and the mod header share, so a caller with no generated mask fails to compile.
+    private static List<string> FailingFields(
         ILoquiObjectGetter original, ILoquiObjectGetter recompiled)
     {
         var method = FindGetEqualsMaskMethod(original.GetType());

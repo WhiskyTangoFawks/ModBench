@@ -1,4 +1,3 @@
-using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Analysis;
@@ -9,7 +8,7 @@ namespace MEditService.PluginAdapter;
 
 /// <summary>A plugin file's own bytes for a record: what subrecords it holds, which the overlay does not
 /// say. Located on first use, as only a record the overlay cannot serialize asks.</summary>
-internal sealed class PluginRecordBytes(ModPath path, GameRelease release) : IRecordFieldProbe
+internal sealed class PluginRecordBytes(ModPath path, GameRelease release)
 {
     private static readonly RecordType EditorId = new("EDID");
 
