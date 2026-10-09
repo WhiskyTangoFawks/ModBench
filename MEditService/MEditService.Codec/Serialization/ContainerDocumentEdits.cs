@@ -26,7 +26,7 @@ public static class ContainerDocumentEdits
         var child = RecordTextCodec.Deserialize(childText, release, childRecordType);
         return ContainerChildFields.TryAddChildToSlot(container, slotName, child, out var held)
             ? new ChildAppend.Appended(ChildTextInsertion.Inserted(containerText, RecordTextCodec.SerializeToBytes(container, release), slotName))
-            : new ChildAppend.SlotHeld(slotName, held.FormKey.ToString());
+            : new ChildAppend.SlotHeld(held.FormKey.ToString());
     }
 
     /// <summary><paramref name="destinationText"/> with its own fields replaced by

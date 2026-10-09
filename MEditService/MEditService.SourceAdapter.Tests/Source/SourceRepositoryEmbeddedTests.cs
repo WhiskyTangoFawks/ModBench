@@ -817,6 +817,18 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
+    public void ChangesToPutChild_IntoASlotItsContainersTextNamesTwice_IsUnreadable()
+    {
+        var text = File.ReadAllText(FullPath(InteriorCellPath));
+        File.WriteAllText(FullPath(InteriorCellPath), text.Replace("\"Temporary\": [", "\"Temporary\": [],\n  \"Temporary\": [", StringComparison.Ordinal));
+        var added = new PlacedObject(_mod) { EditorID = "AddedRef", Position = new P3Float(1f, 1f, 1f), Scale = 1f };
+
+        var stopped = Repository.ChangesToPutChild(Plugin, Identity(_interiorCell, "cell"), "Temporary", ANewChild(added, "refr")).Stopped();
+
+        Assert.IsType<SourceFailure.Unreadable>(stopped);
+    }
+
+    [Fact]
     public void ChangesToPutChild_IntoAContainerNoDocumentHolds_IsNotCarried()
     {
         var added = new DialogResponses(_mod) { EditorID = "Response3" };

@@ -77,8 +77,8 @@ internal sealed class SourceRepositoryWrites(
         {
             ChildAppend.Appended(var withChild) =>
                 ChangesToHeld(unit, new SourceDocument(container.FormKey, container.RecordType, container.EditorId, withChild)),
-            ChildAppend.SlotHeld(var heldSlot, var held) => throw SourceStopException.Of(new SourceFailure.SlotHeld(
-                $"{container.FormKey}'s {heldSlot} already holds {held}, so {child.FormKey} cannot take its place.")),
+            ChildAppend.SlotHeld(var held) => throw SourceStopException.Of(new SourceFailure.SlotHeld(
+                $"{container.FormKey}'s {slot} already holds {held}, so {child.FormKey} cannot take its place.")),
             var answer => throw new InvalidOperationException($"Expected the codec to append the child or answer its slot held, not {answer}."),
         };
     }

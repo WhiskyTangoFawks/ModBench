@@ -42,7 +42,7 @@ public sealed class ContainerDocumentEditsTests
         var worldspace = new Worldspace(mod) { EditorID = "World", TopCell = held };
         var other = new Cell(mod) { EditorID = "Other" };
 
-        Assert.Equal(new ChildAppend.SlotHeld("TopCell", held.FormKey.ToString()), Appended(worldspace, other));
+        Assert.Equal(new ChildAppend.SlotHeld(held.FormKey.ToString()), Appended(worldspace, other));
     }
 
     [Fact]
@@ -110,6 +110,59 @@ public sealed class ContainerDocumentEditsTests
         var edited = Assert.IsType<ChildAppend.Appended>(Appended(handFormatted, RecordTypeOf(expected), "Temporary", added)).Text;
 
         OneInsertion.AssertKeepsEveryOtherByte(handFormatted, edited);
+        Assert.Equal(Text(expected), RecordTextCodec.RoundTrip(edited, Release, RecordTypeOf(expected)));
+    }
+
+    [Fact]
+    public void AppendingToAList_OfTextWithCrlfLineEndings_EndsEveryInsertedLineWithCrlf()
+    {
+        var crlf = """
+            {
+              "FormKey": "000840:Append.esp",
+              "EditorID": "Topic",
+              "Responses": [
+                {
+                  "FormKey": "000841:Append.esp",
+                  "EditorID": "R1"
+                }
+              ]
+            }
+            """.ReplaceLineEndings("\r\n");
+        var added = new DialogResponses(Key("000842"), Fallout4Release.Fallout4) { EditorID = "R2" };
+        var expected = new DialogTopic(Key("000840"), Fallout4Release.Fallout4) { EditorID = "Topic" };
+        expected.Responses.Add(new DialogResponses(Key("000841"), Fallout4Release.Fallout4) { EditorID = "R1" });
+        expected.Responses.Add(added);
+
+        var edited = Assert.IsType<ChildAppend.Appended>(Appended(crlf, RecordTypeOf(expected), "Responses", added)).Text;
+
+        OneInsertion.AssertKeepsEveryOtherByte(crlf, edited);
+        Assert.Equal(edited.Split("\r\n").Length, edited.Split('\n').Length);
+        Assert.Equal(Text(expected), RecordTextCodec.RoundTrip(edited, Release, RecordTypeOf(expected)));
+    }
+
+    [Fact]
+    public void AppendingToAList_WhoseTextEndsItWithATrailingComma_InsertsTheChildAtItsEnd_AndChangesNoOtherByte()
+    {
+        const string trailingComma = """
+            {
+              "FormKey": "000850:Append.esp",
+              "EditorID": "Topic",
+              "Responses": [
+                {
+                  "FormKey": "000851:Append.esp",
+                  "EditorID": "R1"
+                },
+              ]
+            }
+            """;
+        var added = new DialogResponses(Key("000852"), Fallout4Release.Fallout4) { EditorID = "R2" };
+        var expected = new DialogTopic(Key("000850"), Fallout4Release.Fallout4) { EditorID = "Topic" };
+        expected.Responses.Add(new DialogResponses(Key("000851"), Fallout4Release.Fallout4) { EditorID = "R1" });
+        expected.Responses.Add(added);
+
+        var edited = Assert.IsType<ChildAppend.Appended>(Appended(trailingComma, RecordTypeOf(expected), "Responses", added)).Text;
+
+        OneInsertion.AssertKeepsEveryOtherByte(trailingComma, edited);
         Assert.Equal(Text(expected), RecordTextCodec.RoundTrip(edited, Release, RecordTypeOf(expected)));
     }
 }

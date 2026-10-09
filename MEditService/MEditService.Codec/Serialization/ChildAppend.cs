@@ -11,5 +11,5 @@ public abstract record ChildAppend
     public sealed record Appended(string Text) : ChildAppend;
 
     /// <summary>The single-record slot already holds <paramref name="HeldFormKey"/>.</summary>
-    public sealed record SlotHeld(string Slot, string HeldFormKey) : ChildAppend;
+    public sealed record SlotHeld(string HeldFormKey) : ChildAppend;
 }
