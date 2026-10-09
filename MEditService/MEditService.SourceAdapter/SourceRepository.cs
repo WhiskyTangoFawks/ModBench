@@ -182,24 +182,30 @@ public sealed class SourceRepository : ISourceRepositoryReads
             : null);
 
     /// <summary>What the file at <paramref name="path"/> holds, read from its text as the index reads it.</summary>
-    internal static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path)
+    internal static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path, ISourceFiles files)
     {
         var fullPath = Path.GetFullPath(path);
         if (SourceRepositoryLayout.CarriesNoRecord(fullPath)) return new RecordOfFileAnswer.HoldsNone();
         foreach (var plugin in loadOrder.Plugins)
         {
-            if (plugin.Provider is PluginProvider.FromMod mod
-                && SourceRepositoryLayout.TreeFolderHolding(mod.Folder, fullPath) is { } tree
-                && tree.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
-                && IsTracked(mod.Folder)
-                && SourceRepositoryLayout.TreeNameIn(mod.Folder, plugin.Name).Holds(out var named, out _)
-                && string.Equals(named, tree, SourceRepositoryLocator.PathComparison))
-            {
-                return Over(mod, loadOrder.GameRelease).Locator.RecordOfFile(plugin.Key, tree, fullPath);
-            }
+            if (plugin.Provider is PluginProvider.FromMod mod && TreeFolderHolding(plugin, fullPath) is { } tree)
+                return Over(mod, loadOrder.GameRelease).Over(files).Locator.RecordOfFile(plugin.Key, tree, fullPath);
         }
         return new RecordOfFileAnswer.Refused($"{fullPath} is under no tracked plugin's source.");
     }
+
+    /// <summary>Whether <paramref name="fullPath"/> is under the plugin's tree in its tracked mod.</summary>
+    internal static bool TreeHolds(RegisteredPlugin plugin, string fullPath) => TreeFolderHolding(plugin, fullPath) is not null;
+
+    private static string? TreeFolderHolding(RegisteredPlugin plugin, string fullPath) =>
+        plugin.Provider is PluginProvider.FromMod mod
+        && SourceRepositoryLayout.TreeFolderHolding(mod.Folder, fullPath) is { } tree
+        && tree.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
+        && IsTracked(mod.Folder)
+        && SourceRepositoryLayout.TreeNameIn(mod.Folder, plugin.Name).Holds(out var named, out _)
+        && string.Equals(named, tree, SourceRepositoryLocator.PathComparison)
+            ? tree
+            : null;
 
     /// <summary>The name the layout gives the file of the record's own document.</summary>
     internal static string FileNameOf(RecordIdentity identity) =>
@@ -323,8 +329,8 @@ public sealed class SourceRepository : ISourceRepositoryReads
         });
 
     /// <summary>One listing of the plugin's tree. A file whose file-system stamp is unchanged and
-    /// settled is not read again.</summary>
-    public RecordStamps StampsOf(PluginAddress plugin) => TreeStamps.StampsOf(_modFolder, Spelled(plugin));
+    /// settled is not read again, unless an unsaved text stands in for it.</summary>
+    public RecordStamps StampsOf(PluginAddress plugin) => TreeStamps.StampsOf(_modFolder, Spelled(plugin), Files);
 
     /// <summary>Every record the tree holds whose text differs from the last commit's, an embedded
     /// child among them; a tree with no repository is all added. A failed read answers why, never

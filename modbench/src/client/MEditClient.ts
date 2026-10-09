@@ -312,6 +312,10 @@ export interface MEditClient {
    *  behind the stream may hold nothing sent before. */
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
 
+  /** Every plugin-source document VS Code holds unsaved, which mEdit reads in place of its file (ADR-0015).
+   *  Put at once and in order while mEdit runs, and the newest again whenever the process may hold none. */
+  handUnsavedDocuments(documents: readonly UnsavedDocument[]): void;
+
   // The backend process: today's four values, read as a current value and observed through a
   // status-changed event.
   readonly status: BackendStatus;

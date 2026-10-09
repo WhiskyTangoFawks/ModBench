@@ -19,6 +19,7 @@ public static class RecordIndexServices
         {
             var index = new Indexer(
                 sp.GetRequiredService<LoadOrderHolder>(),
+                sp.GetRequiredService<UnsavedDocuments>(),
                 sp.GetRequiredService<IPluginAdapter>(),
                 sp.GetRequiredService<ISourceAdapter>(),
                 sp.GetRequiredService<SchemaReflector>(),

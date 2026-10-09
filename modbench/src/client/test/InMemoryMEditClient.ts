@@ -1,5 +1,5 @@
 import type {
-  MEditClient, NotificationKind, NotificationPayloads, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot,
+  MEditClient, NotificationKind, NotificationPayloads, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
 } from '../MEditClient';
 import type { LoadOrderStatus, NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
@@ -218,6 +218,8 @@ export class InMemoryMEditClient implements MEditClient {
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
     return this.sender.onResent(listener);
   }
+
+  handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.record('handUnsavedDocuments', [documents]); }
 
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
     this.record('onNotification', [kind]);

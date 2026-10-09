@@ -57,6 +57,10 @@ internal sealed class Reconciler(
     private CancellationTokenSource? _reconcileCancellation;
     private bool _disposed;
 
+    // The paths of unsaved documents handed over and not yet validated, guarded by _lock.
+    private readonly List<string> _handed = [];
+    private bool _validatingHanded;
+
     private sealed record OpenScope(HeldPlugins Held, DuckDbRecordIndex Index, Projector Projector, FailedReads Failed);
 
     // Takes the exclusive right to reconcile or tear down, waiting out any in-flight reconcile.
@@ -174,6 +178,61 @@ internal sealed class Reconciler(
     /// the newer.</summary>
     public void StartReconcile() =>
         Task.Factory.StartNew(ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+    /// <summary>ADR-0015: validates each plugin whose tree holds one of <paramref name="paths"/>, as a change on
+    /// disk is. A reconcile in flight is waited out, never cancelled; paths handed meanwhile are validated together.</summary>
+    public void ValidateTreesHolding(IReadOnlyList<string> paths)
+    {
+        lock (_lock)
+        {
+            _handed.AddRange(paths);
+            if (_validatingHanded) return;
+            _validatingHanded = true;
+        }
+        Task.Factory.StartNew(ValidateHanded, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    }
+
+    private void ValidateHanded()
+    {
+        while (true)
+        {
+            List<string> paths;
+            lock (_lock)
+            {
+                if (_handed.Count == 0 || _disposed)
+                {
+                    _validatingHanded = false;
+                    return;
+                }
+                paths = [.. _handed];
+                _handed.Clear();
+            }
+
+            _exclusive.Enter();
+            try
+            {
+                ValidateTreesOf(paths);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // Validation is idempotent: the next hand-over or snapshot validates again.
+                logger.LogWarning(ex, "Could not validate the plugins whose unsaved documents were handed over");
+            }
+            finally { _exclusive.Exit(); }
+        }
+    }
+
+    private void ValidateTreesOf(List<string> paths)
+    {
+        OpenScope scope;
+        lock (_lock)
+        {
+            if (_disposed || _scope is null) return;
+            scope = _scope;
+        }
+        var holding = scope.Held.Plugins.Where(plugin => paths.Exists(path => source.TreeHolds(plugin.Registered, path))).ToList();
+        if (holding.Count > 0) scope.Index.Commit(_ => holding.ForEach(plugin => ValidateOne(scope, plugin)));
+    }
 
     // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
     // reconcile opens a store after Dispose.

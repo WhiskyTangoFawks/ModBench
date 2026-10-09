@@ -9,6 +9,7 @@ import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } 
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
+import { createUnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type CellChildRecords, type CompileOutcome,
@@ -83,6 +84,7 @@ class HttpMEditClient implements MEditClient {
   private readonly notifications: SseNotificationSubscriber;
   private readonly loadOrder: LoadOrderSender;
   private readonly loadOrderStatusKept: LoadOrderStatusKeeper;
+  private readonly handOver: (documents: readonly UnsavedDocument[]) => void;
   constructor(deps: HttpMEditClientDeps) {
     this.log = deps.log ?? (() => {});
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
@@ -108,6 +110,12 @@ class HttpMEditClient implements MEditClient {
       stop: () => this.lifecycle.stop(),
       put: (snapshot, signal) => this.putLoadOrder(snapshot, signal),
     });
+    this.handOver = createUnsavedHandOver({
+      status: () => this.lifecycle.status,
+      onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
+      onReconnected: (listener) => this.notifications.onReconnected(listener),
+      put: (documents) => this.putUnsavedDocuments(documents),
+    }, this.log);
   }
 
   // The port is the lifecycle's to choose, so the generated client is built once it is known.
@@ -144,6 +152,13 @@ class HttpMEditClient implements MEditClient {
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.loadOrder.latest(); }
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
     return this.loadOrder.onResent(listener);
+  }
+
+  handUnsavedDocuments(documents: readonly UnsavedDocument[]): void { this.handOver(documents); }
+
+  private async putUnsavedDocuments(documents: readonly UnsavedDocument[]): Promise<void> {
+    const { error, response } = await this.apiClient.PUT('/unsaved-documents', { body: { documents: [...documents] } });
+    if (!response.ok) throw new Error(`mEdit answered ${response.status}: ${errorText(error)}`);
   }
 
   // ── notifications ────────────────────────────────────────────────────────
