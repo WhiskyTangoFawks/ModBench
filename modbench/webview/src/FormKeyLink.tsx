@@ -1,5 +1,6 @@
 import React from 'react';
 import { mono } from './gridStyles';
+import { recordLabel } from '../../src/wire/recordLabel';
 import type { FormKeyResolution } from './types';
 
 // Safe default when a caller has no resolution to offer —
@@ -10,7 +11,7 @@ const UNRESOLVED: FormKeyResolution = { state: 'Unresolved', recordType: null, e
 // the Ctrl+C copy path produces exactly what the link displays — a cell must never show one
 // string and hand over another.
 export function formKeyLabel(value: string, resolution?: Pick<FormKeyResolution, 'editorId'>): string {
-  return resolution?.editorId ? `${resolution.editorId} [${value}]` : value;
+  return recordLabel(resolution?.editorId, value);
 }
 
 // The label is the composite, never the bare EditorID: a FormKey is the identity and the EditorID

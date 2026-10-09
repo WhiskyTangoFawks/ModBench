@@ -1,3 +1,4 @@
+import { isString } from '../../src/wire/messages';
 import React, { useRef } from 'react';
 import { pickFormKey } from './nativeBridge';
 import { FormKeyLink, formKeyLabel } from './FormKeyLink';
@@ -22,7 +23,7 @@ interface FormKeyCellProps {
 
 /** A native QuickPick rather than an in-webview control (xedit.md, divergence 1). */
 export function FormKeyCell({ value, meta, editable, onCommit, checkError, resolution }: FormKeyCellProps) {
-  const fk = typeof value === 'string' && value ? value : null;
+  const fk = isString(value) && value ? value : null;
   const picking = useRef(false);
 
   // Split out so both the gated plain-click path and the unconditional double-click path share it.

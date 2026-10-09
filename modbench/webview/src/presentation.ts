@@ -1,3 +1,4 @@
+import { isString } from '../../src/wire/messages';
 import { displayValue } from './modelValue';
 import { defaultOf, discriminatorOf, getAtPath, metaAtPath, rootFieldOf, toStr } from './recordUtils';
 import { siblingsInUseFor } from './siblingsInUse';
@@ -200,7 +201,7 @@ function leafOf(meta: FieldMetadata | undefined, value: unknown): string | null 
   const leaf = (value as Record<string, unknown> | null)?.[discriminator];
   // A union whose value names no leaf has none, not the declared base: a concrete base is one of
   // its own leaves, so falling back there would hand an object of unknown leaf the base's reading.
-  return typeof leaf === 'string' ? leaf : undefined;
+  return isString(leaf) ? leaf : undefined;
 }
 
 // A leaf the table has no entry of its own for reads by its declared base's entry, since a union's
