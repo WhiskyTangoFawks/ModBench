@@ -9,9 +9,10 @@ namespace MEditService.Commands.Tests.TestSupport;
 /// the record, and the changes it answers are saved, in the order answered.</summary>
 public sealed class TestEditor(EditRecordChangesHandler edits, LoadOrderHolder loadOrder)
 {
-    public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
+    public RecordEditResult Edit(
+        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, IReadOnlyList<DocumentChange>? unsaved = null)
     {
-        var (outcome, changes) = edits.Changes(plugin, formKey, envelope, TextCarrying(plugin, formKey));
+        var (outcome, changes) = edits.Changes(plugin, formKey, envelope, TextCarrying(plugin, formKey), unsaved ?? []);
         EditSaving.Save(
             changes.Moves.Select(move => (move.From, move.To)), changes.Deletions,
             changes.Documents.Select(document => (document.Path, document.Text)));

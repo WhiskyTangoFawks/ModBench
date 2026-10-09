@@ -1178,6 +1178,7 @@ export interface components {
         RecordEditChangesRequest: {
             edit: components["schemas"]["RecordEditRequest"];
             text: string;
+            documents?: components["schemas"]["DocumentChange"][] | null;
         };
         RecordEditChangesResponse: {
             formKey: string;

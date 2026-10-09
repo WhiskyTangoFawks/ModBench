@@ -20,7 +20,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
 
     private sealed record Move(
         PluginAddress Plugin, SourceRepository Repository, GameRelease Release, RecordIdentity Moved, string Worldspace,
-        string CellType, string Spelled);
+        string CellType, string Spelled, UnsavedBatches Batches);
 
     // One step of a landing: the value it yields, or the refusal or source failure that ends the landing.
     private abstract record Step<T>
@@ -58,21 +58,23 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
     /// <summary>Takes <paramref name="moved"/>, the record's new text, out of the cell <paramref name="from"/> holds
     /// it in, and puts it into <paramref name="into"/>. A tree it cannot read refuses, with nothing written.</summary>
     internal RecordEditResult Land(
-        PluginAddress plugin, WriteTargets.EditTarget edit, HeldIn from, SourceDocument moved, AnotherCell into, string spelled)
+        PluginAddress plugin, WriteTargets.EditTarget edit, HeldIn from, SourceDocument moved, AnotherCell into, string spelled,
+        UnsavedBatches batches)
     {
         var failed = $"Moving {moved.FormKey} into another cell failed";
-        return WriteFailure.Refused(Cross(plugin, edit, from, moved, into, spelled), refused => refused, failed, logger);
+        return WriteFailure.Refused(Cross(plugin, edit, from, moved, into, spelled, batches), refused => refused, failed, logger);
     }
 
     private SourceAnswer<RecordEditResult> Cross(
-        PluginAddress plugin, WriteTargets.EditTarget edit, HeldIn from, SourceDocument moved, AnotherCell into, string spelled)
+        PluginAddress plugin, WriteTargets.EditTarget edit, HeldIn from, SourceDocument moved, AnotherCell into, string spelled,
+        UnsavedBatches batches)
     {
         var (release, _, repository) = edit;
         if (!repository.WorldspaceOf(plugin, from.Container.Identity).Holds(out var worldspace, out var unread)) return unread;
         if (worldspace is null)
             return CellGroupMove.Unknown(spelled, moved.FormKey, $"{plugin.Name} holds no worldspace above its cell {from.Container.FormKey}");
 
-        var move = new Move(plugin, repository, release, moved.Identity, worldspace, RecordTypes.For(release).Cell, spelled);
+        var move = new Move(plugin, repository, release, moved.Identity, worldspace, RecordTypes.For(release).Cell, spelled, batches);
         var landing = into is AnotherCell.GridCell grid ? IntoGridCell(move, grid) : IntoPersistentCell(move);
         return landing.Finish(landed => RecordEditResult.Making(RecordEditResult.Success(), repository, transaction =>
         {
@@ -111,7 +113,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
     {
         var holder = resolution.HolderOfCell(
             move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release), move.Worldspace, (grid.X, grid.Y),
-            move.Spelled, $"the cell {move.Moved.FormKey} moves into");
+            move.Spelled, $"the cell {move.Moved.FormKey} moves into", move.Batches);
         return holder switch
         {
             GridCellHolder.Plugins(var held) => new Step<Landed>.Done(new(held.Identity, null, SourceChanges.None)),
@@ -130,7 +132,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
 
     // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile; ADR-0018).
     private LoadOrderResolution.MastersWalk MastersWalkOf(Move move) =>
-        resolution.WalkAmongMastersOf(move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release));
+        resolution.WalkAmongMastersOf(move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release), move.Batches);
 
     // The own fields of the nearest master's copy, as an override, or else a new cell native to the plugin.
     private Step<CellIn> CopiedOrNew(Move move, LeftCopy left, Func<string, JsonNode?> cellIn, long flags, (int X, int Y) grid)

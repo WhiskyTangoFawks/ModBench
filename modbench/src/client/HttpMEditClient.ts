@@ -437,10 +437,11 @@ class HttpMEditClient implements MEditClient {
    *  transport failure rejects. */
   async getEditChanges(
     formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope, text: string,
+    unsaved: readonly UnsavedDocument[],
   ): Promise<RecordEditChangesOutcome> {
     const { data, error, response } = await this.apiClient.POST('/records/{formKey}/edit-changes', {
       params: { path: { formKey } },
-      body: { edit: { plugin, origin, ...envelope }, text },
+      body: { edit: { plugin, origin, ...envelope }, text, documents: [...unsaved] },
     });
     if (response.ok && data) {
       const { moves, deletions, documents, newFormKey } = data;

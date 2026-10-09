@@ -53,8 +53,8 @@ internal sealed record RecordEditRequest(
     [property: JsonConverter(typeof(KeepsJsonNullConverter))] JsonElement? Value = null);
 
 /// <summary>An edit asked for the changes it makes, given <see cref="Text"/>, the current text of the
-/// document carrying the record.</summary>
-internal sealed record RecordEditChangesRequest(RecordEditRequest Edit, string Text);
+/// document carrying the record, and <see cref="Documents"/> the unsaved texts of the other documents.</summary>
+internal sealed record RecordEditChangesRequest(RecordEditRequest Edit, string Text, IReadOnlyList<DocumentChange>? Documents = null);
 
 /// <summary>The changes an edit makes to plugin source, written nowhere: each move, then each deletion,
 /// then each document's new text at its absolute path once moved. A refusal is ProblemDetails, as the edit's is.</summary>

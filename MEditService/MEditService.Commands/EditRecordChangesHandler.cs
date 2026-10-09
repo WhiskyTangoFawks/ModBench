@@ -29,12 +29,14 @@ public sealed class EditRecordChangesHandler
         _cellLanding = new(resolution, schemaReflector, logger);
     }
 
-    /// <summary><paramref name="given"/> stands in for the file of the document holding the record.</summary>
-    public RecordEditChanges Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given) =>
+    /// <summary><paramref name="given"/> stands in for the file of the document holding the record, and
+    /// <paramref name="unsaved"/> for the files of the other documents.</summary>
+    public RecordEditChanges Changes(
+        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given, IReadOnlyList<DocumentChange> unsaved) =>
         WriteFailure.Refused(
-            EditSource(plugin, formKey, envelope, given), refused => refused, $"Could not read the source of {formKey}", _logger);
+            EditSource(plugin, formKey, envelope, given, new UnsavedBatches(unsaved)), refused => refused, $"Could not read the source of {formKey}", _logger);
 
-    private SourceAnswer<RecordEditChanges> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given)
+    private SourceAnswer<RecordEditChanges> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string given, UnsavedBatches batches)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
         if (!_targets.TryResolveEditTarget(plugin, formKey, given, out var onDisk, out var blocked)) return blocked;
@@ -42,12 +44,13 @@ public sealed class EditRecordChangesHandler
         var documentFile = file ?? throw new InvalidOperationException($"Expected the document holding {formKey} to have been located.");
 
         var batch = SourceBatch.Over(onDisk.Repository, [new DocumentChange(documentFile.Path, given)]);
-        return Edit(plugin, formKey, envelope, onDisk with { Repository = batch.Repository })
+        return Edit(plugin, formKey, envelope, onDisk with { Repository = batch.Repository }, batches)
             .Then(outcome => SourceAnswer.Of(new RecordEditChanges(outcome, batch.Changes)));
     }
 
     private SourceAnswer<RecordEditResult> Edit(
-        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteTargets.EditTarget editTarget)
+        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteTargets.EditTarget editTarget,
+        UnsavedBatches batches)
     {
         var (release, identity, repository) = editTarget;
         if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, envelope.Value);
@@ -69,7 +72,7 @@ public sealed class EditRecordChangesHandler
             : patched => RecordTextCodec.RoundTrip(patched, release, identity.RecordType);
 
         var request = new RecordTextEditRequest(
-            text, held, schema, envelope, release, roundTrip, _resolution.WalkAmongMastersOf(repository, plugin, schemas));
+            text, held, schema, envelope, release, roundTrip, _resolution.WalkAmongMastersOf(repository, plugin, schemas, batches));
 
         string newText;
         CellGroupMove? move;
@@ -91,7 +94,7 @@ public sealed class EditRecordChangesHandler
         if (refused is { } rejected) return rejected;
 
         var written = new SourceDocument(identity.FormKey, identity.RecordType, EditorIds.In(newText), newText);
-        if (move is { Into: { } into }) return _cellLanding.Land(plugin, editTarget, move.From, written, into, spelled);
+        if (move is { Into: { } into }) return _cellLanding.Land(plugin, editTarget, move.From, written, into, spelled, batches);
         if (move is { StaysInItsCell: true })
         {
             return RecordEditResult.Making(RecordEditResult.Success(), repository, transaction =>
