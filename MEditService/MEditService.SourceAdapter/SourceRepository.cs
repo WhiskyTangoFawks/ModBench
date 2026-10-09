@@ -63,7 +63,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
 
     /// <summary>Why the plugin's source does not read though its mod is tracked: no folder, twin folders, or a plugin
     /// source that cannot be listed. Null when it reads, and when its mod is not tracked.</summary>
-    public static SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) =>
+    internal static SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) =>
         plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.Folder)
         && !SourceRepositoryLayout.TreeNameIn(mod.Folder, plugin.Name).Holds(out _, out var why)
             ? why

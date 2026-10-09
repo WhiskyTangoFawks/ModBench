@@ -49,8 +49,7 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
         Path.Combine(modFolder, RootFor(pluginFileName));
 
     /// <summary>The folder of the mod's plugin source holding <paramref name="pluginFileName"/>'s tree: the one spelled
-    /// so, else the only one spelled so without case, as a ModKey compares a name. None, twins, or a plugin source
-    /// that cannot be listed answer why.</summary>
+    /// so, else the only one spelled so without case, as a ModKey compares a name. Else why there is none.</summary>
     internal static SourceAnswer<string> TreeNameIn(string modFolder, string pluginFileName) =>
         SourceFailure.Answer(() => Directory.EnumerateDirectories(Path.Combine(modFolder, RootFolderName))
                 .Select(Path.GetFileName)
