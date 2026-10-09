@@ -81,8 +81,7 @@ internal sealed record DocumentChange(string Path, string Text);
 // established.
 
 /// <summary>Container is the FormKey, in the plugin the request names, of the record the new one goes into;
-/// Position is an exterior cell's grid position, and only a worldspace takes one. Documents are the unsaved
-/// text of the files that stand in for their files.</summary>
+/// Position is an exterior cell's grid position, and only a worldspace takes one. Documents are unsaved texts.</summary>
 internal sealed record RecordCreateChangesRequest(
     string Origin, string RecordType, string? Container = null, GridPosition? Position = null, IReadOnlyList<DocumentChange>? Documents = null);
 
