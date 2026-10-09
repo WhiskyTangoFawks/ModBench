@@ -48,21 +48,35 @@ internal sealed class SourceRepositoryLayout(string modFolder, GameRelease relea
     internal static string RootIn(string modFolder, string pluginFileName) =>
         Path.Combine(modFolder, RootFor(pluginFileName));
 
-    /// <summary>Each folder of the mod's plugin source named for <paramref name="pluginFileName"/>, compared
-    /// without case as a ModKey compares a plugin's name, and as Windows finds a folder.</summary>
-    internal static IReadOnlyList<string> TreeNamesIn(string modFolder, string pluginFileName)
+    /// <summary>The folder of the mod's plugin source holding <paramref name="pluginFileName"/>'s tree: the one spelled
+    /// so, else the only one spelled so without case, as a ModKey compares a name. Null for none, or for twins.</summary>
+    internal static string? TreeNameIn(string modFolder, string pluginFileName)
     {
+        List<string> named;
         try
         {
-            return [.. Directory.EnumerateDirectories(Path.Combine(modFolder, RootFolderName))
+            named = [.. Directory.EnumerateDirectories(Path.Combine(modFolder, RootFolderName))
                 .Select(Path.GetFileName)
                 .OfType<string>()
                 .Where(name => name.Equals(pluginFileName, StringComparison.OrdinalIgnoreCase))];
         }
-        catch (DirectoryNotFoundException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return [];
+            return null;
         }
+
+        if (named.Contains(pluginFileName, StringComparer.Ordinal)) return pluginFileName;
+        return named is [var only] ? only : null;
+    }
+
+    /// <summary>The folder of the mod's plugin source that <paramref name="fullPath"/> sits in, as the path spells
+    /// it; null for a path outside the plugin source.</summary>
+    internal static string? TreeFolderHolding(string modFolder, string fullPath)
+    {
+        var sources = Path.GetFullPath(Path.Combine(modFolder, RootFolderName));
+        return SourceRepositoryLocator.IsUnder(sources, fullPath)
+            ? Path.GetRelativePath(sources, fullPath).Split(Path.DirectorySeparatorChar)[0]
+            : null;
     }
 
     /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and

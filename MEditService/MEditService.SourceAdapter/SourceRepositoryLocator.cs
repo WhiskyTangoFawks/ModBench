@@ -331,10 +331,11 @@ internal sealed class SourceRepositoryLocator(string modFolder, GameRelease rele
         FormKey.TryFactory(formKey, out var parsed) ? parsed.ToString() : formKey;
 
     // Windows names a file without regard to case, and VS Code spells a drive letter in lower case.
+    internal static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
     internal static bool IsUnder(string directory, string path) =>
-        path.StartsWith(
-            directory + Path.DirectorySeparatorChar,
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        path.StartsWith(directory + Path.DirectorySeparatorChar, PathComparison);
 
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
     /// holds it. Only the repository reads block directories back (ADR-0014). A

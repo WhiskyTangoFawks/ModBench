@@ -4,6 +4,7 @@ using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Noggog;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
@@ -40,14 +41,39 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Assert.True(SourceRepository.SourceReads(Registered(Recased)));
     }
 
+    [PosixFact]
+    public void SourceReads_APluginSourceThatCannotBeListed_IsFalseNotAThrow()
+    {
+        var sources = Path.Combine(_modFolder, "plugin-source");
+        FileModes.Set(sources, "000");
+        try
+        {
+            Assert.False(SourceRepository.SourceReads(Registered(AsTreeNamesIt)));
+        }
+        finally
+        {
+            FileModes.Set(sources, "700");
+        }
+    }
+
     [Fact]
-    public void TheTreesDocuments_AreReadForThePluginNamedInAnotherCase()
+    public void SourceReads_APluginSourceThatIsAFile_IsFalseNotAThrow()
+    {
+        var sources = Path.Combine(_modFolder, "plugin-source");
+        Directory.Delete(sources, recursive: true);
+        File.WriteAllText(sources, "");
+
+        Assert.False(SourceRepository.SourceReads(Registered(AsTreeNamesIt)));
+    }
+
+    [Fact]
+    public void OpenDocuments_ForThePluginNamedInAnotherCase_ReadsEachDocumentOfItsTree()
     {
         Assert.Equal([HeaderBody, NpcBody], TreeDocuments.Of(Repository, Recased).Select(document => document.Body));
     }
 
     [Fact]
-    public void StampsOf_ThePluginNamedInAnotherCase_StampsEachDocumentAndFindsNoneUnreadable()
+    public void StampsOf_ForThePluginNamedInAnotherCase_StampsEachDocumentAndFindsNoneUnreadable()
     {
         var stamps = Repository.StampsOf(Recased);
 
@@ -58,11 +84,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     [Fact]
     public void RecordOfFile_ADocumentOfTheTree_IsHeldByThePluginAsTheLoadOrderNamesIt()
     {
-        var loadOrder = SnapshotPlugins.Snapshot(_modFolder, null, GameRelease.Fallout4, [
-            new LoadOrderEntry(Recased.Name, Path.Combine(_modFolder, Recased.Name), Recased.Origin, Line: 0, Enabled: true, Winning: true),
-        ]);
-
-        var answer = new GitSourceAdapter().RecordOfFile(loadOrder, Path.Combine(_modFolder, NpcDocument));
+        var answer = new GitSourceAdapter().RecordOfFile(LoadOrderNaming(Recased), Path.Combine(_modFolder, NpcDocument));
 
         Assert.Equal(new RecordAt(Recased, NpcFormKey), Assert.IsType<RecordOfFileAnswer.Holds>(answer).Record);
     }
@@ -75,6 +97,27 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Repository.Put(Recased, new SourceDocument("000900:Fixture.esp", "weap", "FixtureWeapon", weaponBody));
 
         Assert.Contains(weaponBody, TreeDocuments.Of(Repository, AsTreeNamesIt).Select(document => document.Body));
+    }
+
+    [Fact]
+    public void ReplaceSourceFrom_ForThePluginNamedInAnotherCase_ReplacesItsTree()
+    {
+        const string decompiledHeader = "{\n  \"ModKey\": \"FIXTURE.ESP\"\n}";
+
+        Repository.ReplaceSourceFrom(Recased, [new TreeFile("RecordData.json", Encoding.UTF8.GetBytes(decompiledHeader))], "ABCDEF0123");
+
+        Assert.Equal([decompiledHeader], TreeDocuments.Of(Repository, AsTreeNamesIt).Select(document => document.Body));
+    }
+
+    [Fact]
+    public void RenameSource_ForThePluginNamedInAnotherCase_MovesItsTree()
+    {
+        var renamed = new PluginAddress("Renamed.esp", TestMod.Name);
+
+        Assert.True(Repository.RenameSource(Recased, renamed.Name));
+
+        Assert.Equal(2, TreeDocuments.Of(Repository, renamed).Count);
+        Assert.False(SourceRepository.SourceReads(Registered(AsTreeNamesIt)));
     }
 
     [Fact]
@@ -94,11 +137,45 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Assert.Equal([sha256], Repository.LastWrittenBinarySha256s(Recased));
     }
 
-    [CaseSensitiveFact]
-    public void SourceReads_TwoTreesWhoseFoldersDifferOnlyInCase_IsFalse()
+    [PosixFact]
+    public void OpenDocuments_ForAPluginWithTwinTreesOneSpelledAsTheLoadOrderNamesIt_ReadsThatOne()
     {
-        Directory.CreateDirectory(PluginSourceRoot.In(_modFolder, Recased.Name));
+        MakeTwinOfTheTreeIn(Recased.Name);
 
-        Assert.False(SourceRepository.SourceReads(Registered(AsTreeNamesIt)));
+        Assert.True(SourceRepository.SourceReads(Registered(AsTreeNamesIt)));
+        Assert.Equal([HeaderBody, NpcBody], TreeDocuments.Of(Repository, AsTreeNamesIt).Select(document => document.Body));
+    }
+
+    [PosixFact]
+    public void SourceReads_ForAPluginWithTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_IsFalse()
+    {
+        MakeTwinOfTheTreeIn(Recased.Name);
+
+        Assert.False(SourceRepository.SourceReads(Registered(new PluginAddress("fixture.esp", TestMod.Name))));
+    }
+
+    [PosixFact]
+    public void RecordOfFile_ADocumentOfATwinTreeThePluginDoesNotRead_IsRefused()
+    {
+        MakeTwinOfTheTreeIn(Recased.Name);
+
+        var answer = new GitSourceAdapter().RecordOfFile(LoadOrderNaming(AsTreeNamesIt), TwinNpcDocument(Recased.Name));
+
+        Assert.IsType<RecordOfFileAnswer.Refused>(answer);
+    }
+
+    private LoadOrderSnapshot LoadOrderNaming(PluginAddress plugin) =>
+        SnapshotPlugins.Snapshot(_modFolder, null, GameRelease.Fallout4, [
+            new LoadOrderEntry(plugin.Name, Path.Combine(_modFolder, plugin.Name), plugin.Origin, Line: 0, Enabled: true, Winning: true),
+        ]);
+
+    private string TwinNpcDocument(string twinName) =>
+        Path.Combine(PluginSourceRoot.In(_modFolder, twinName), "Npcs", "TwinNpc - 000801_Fixture.esp.json");
+
+    private void MakeTwinOfTheTreeIn(string twinName)
+    {
+        var twinNpc = TwinNpcDocument(twinName);
+        Directory.CreateDirectory(Path.GetDirectoryName(twinNpc).Require());
+        File.WriteAllText(twinNpc, "{\n  \"FormKey\": \"000801:Fixture.esp\",\n  \"EditorID\": \"TwinNpc\"\n}");
     }
 }

@@ -59,7 +59,7 @@ public sealed class SourceRepository : ISourceRepositoryReads
         plugin.Provider is PluginProvider.FromMod mod && HoldsTreeFor(mod.Folder, plugin.Name);
 
     private static bool HoldsTreeFor(string modFolder, string pluginFileName) =>
-        IsTracked(modFolder) && SourceRepositoryLayout.TreeNamesIn(modFolder, pluginFileName).Count == 1;
+        IsTracked(modFolder) && SourceRepositoryLayout.TreeNameIn(modFolder, pluginFileName) is not null;
 
     /// <summary>A <c>.git</c> with no <c>main</c> that Track did not mark as its own: someone else's, which Track never
     /// writes to (ADR-0003).</summary>
@@ -161,12 +161,18 @@ public sealed class SourceRepository : ISourceRepositoryReads
     {
         var fullPath = Path.GetFullPath(path);
         if (SourceRepositoryLayout.CarriesNoRecord(fullPath)) return new RecordOfFileAnswer.HoldsNone();
-        if (loadOrder.Plugins.FirstOrDefault(plugin => plugin.Provider is PluginProvider.FromMod mod
-                && SourceRepositoryLocator.IsUnder(Path.GetFullPath(SourceRepositoryLayout.RootIn(mod.Folder, TreeNameOf(mod.Folder, plugin.Name))), fullPath)
-                && SourceReads(plugin)) is not { Provider: PluginProvider.FromMod source } holder)
-            return new RecordOfFileAnswer.Refused($"{fullPath} is under no tracked plugin's source.");
-
-        return Over(source, loadOrder.GameRelease).Locator.RecordOfFile(holder.Key, TreeNameOf(source.Folder, holder.Name), fullPath);
+        foreach (var plugin in loadOrder.Plugins)
+        {
+            if (plugin.Provider is PluginProvider.FromMod mod
+                && SourceRepositoryLayout.TreeFolderHolding(mod.Folder, fullPath) is { } tree
+                && tree.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
+                && IsTracked(mod.Folder)
+                && string.Equals(SourceRepositoryLayout.TreeNameIn(mod.Folder, plugin.Name), tree, SourceRepositoryLocator.PathComparison))
+            {
+                return Over(mod, loadOrder.GameRelease).Locator.RecordOfFile(plugin.Key, tree, fullPath);
+            }
+        }
+        return new RecordOfFileAnswer.Refused($"{fullPath} is under no tracked plugin's source.");
     }
 
     /// <summary>The name the layout gives the file of the record's own document.</summary>
@@ -341,12 +347,10 @@ public sealed class SourceRepository : ISourceRepositoryReads
         return InTreeSpelling(plugin);
     }
 
-    // A plugin's name compares without case, as a ModKey's does, so its tree is read and written as its folder
-    // spells it. Two folders differing in case leave it as given: SourceReads refuses those.
-    private PluginAddress InTreeSpelling(PluginAddress plugin) => plugin with { Name = TreeNameOf(_modFolder, plugin.Name) };
-
-    private static string TreeNameOf(string modFolder, string pluginFileName) =>
-        SourceRepositoryLayout.TreeNamesIn(modFolder, pluginFileName) is [var name] ? name : pluginFileName;
+    // A plugin's tree is read and written as its folder spells it. With no tree to say, or twins spelled
+    // otherwise, the name stays as given: SourceReads refuses the twins.
+    private PluginAddress InTreeSpelling(PluginAddress plugin) =>
+        plugin with { Name = SourceRepositoryLayout.TreeNameIn(_modFolder, plugin.Name) ?? plugin.Name };
 }
 
 /// <summary>Why a record is or is not out of the tree — three states a caller must tell apart, since
