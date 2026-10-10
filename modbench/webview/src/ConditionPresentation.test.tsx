@@ -206,7 +206,7 @@ async function collapseConditions() {
     const toggle = required(cell.closest('tr')?.querySelector('button'), 'the element row toggle');
     fireEvent.click(toggle);
   }
-  await waitFor(() => expect(screen.getAllByText('▶')).toHaveLength(indexCells.length));
+  await waitFor(() => expect(screen.getAllByRole('button', { expanded: false })).toHaveLength(indexCells.length));
 }
 
 function summaryOf(index: number): string {

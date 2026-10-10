@@ -80,7 +80,7 @@ describe('FormKeyCell — immutable column opens nothing, leaving copy to Ctrl+C
       />,
     );
     fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
-    expect(screen.getByText('⚠')).toHaveAttribute('title', 'dangling reference');
+    expect(screen.getByRole('img', { name: 'warning' })).toHaveAttribute('title', 'dangling reference');
   });
 });
 
@@ -179,17 +179,17 @@ describe('FormKeyCell — resolution-driven label', () => {
 describe('FormKeyCell — checkError', () => {
   it('shows no warning icon when checkError is absent', () => {
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onCommit={vi.fn()} />);
-    expect(screen.queryByText('⚠')).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'warning' })).not.toBeInTheDocument();
   });
 
   it('shows a warning icon with the checkError as its title on a read-only cell', () => {
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onCommit={vi.fn()} checkError="dangling reference" />);
-    expect(screen.getByText('⚠')).toHaveAttribute('title', 'dangling reference');
+    expect(screen.getByRole('img', { name: 'warning' })).toHaveAttribute('title', 'dangling reference');
   });
 
   it('shows a warning icon on an editable cell too', () => {
     render(<FormKeyCell value={null} meta={fkMeta} editable={true} onCommit={vi.fn()} checkError="null not allowed" />);
-    expect(screen.getByText('⚠')).toHaveAttribute('title', 'null not allowed');
+    expect(screen.getByRole('img', { name: 'warning' })).toHaveAttribute('title', 'null not allowed');
   });
 });
 
