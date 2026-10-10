@@ -99,7 +99,7 @@ function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): T[][] {
 async function holdsChildren(client: Pick<MEditClient, 'getChildRecordTypes'>, log: Log, plugin: PluginAddress, formKey: string): Promise<boolean> {
   const types = await client.getChildRecordTypes(plugin, formKey).catch((error: unknown) => localFailure(errorMessage(error)));
   if (!isReadFailed(types)) return types.length > 0;
-  log.warn(`[ReferencedBy] getChildRecordTypes(${plugin.name}, ${formKey}) failed: ${failureReason(types)}`);
+  log.warn(`[ReferencedBy] getChildRecordTypes(${plugin.origin}, ${plugin.name}, ${formKey}) failed: ${failureReason(types)}`);
   return false;
 }
 

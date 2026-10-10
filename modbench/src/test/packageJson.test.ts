@@ -941,6 +941,7 @@ describe('package.json record tab menus', () => {
     expect(placed(menu())).toEqual([
       ['modbench.record.openReference', '1_open'],
       ['modbench.record.openFieldValue', '1_open'],
+      ['modbench.record.referencedBy', '1_open'],
       ['modbench.record.addElement', '2_change'],
       ['modbench.record.removeElement', '2_change'],
       ['modbench.record.moveElementUp', '2_change'],
@@ -969,15 +970,15 @@ describe('package.json record tab menus', () => {
   });
 
   it.each([
-    ['an untracked mod', 'untracked', false, false, ['modbench.mod.track', 'modbench.record.copy']],
-    ['a tracked mod', 'tracked', false, false, ['modbench.plugin.decompile', 'modbench.record.copy']],
+    ['an untracked mod', 'untracked', false, false, ['modbench.record.referencedBy', 'modbench.mod.track', 'modbench.record.copy']],
+    ['a tracked mod', 'tracked', false, false, ['modbench.record.referencedBy', 'modbench.plugin.decompile', 'modbench.record.copy']],
     ['a tracked mod, compilable but not editable', 'tracked', true, false, [
-      'modbench.plugin.decompile', 'modbench.plugin.compile', 'modbench.record.copy',
+      'modbench.record.referencedBy', 'modbench.plugin.decompile', 'modbench.plugin.compile', 'modbench.record.copy',
     ]],
     ['a tracked mod, editable', 'tracked', true, true, [
-      'modbench.plugin.decompile', 'modbench.plugin.compile', 'modbench.record.copy', 'modbench.record.delete',
+      'modbench.record.referencedBy', 'modbench.plugin.decompile', 'modbench.plugin.compile', 'modbench.record.copy', 'modbench.record.delete',
     ]],
-    ['the game or Overwrite, in no mod', 'none', false, false, ['modbench.record.copy']],
+    ['the game or Overwrite, in no mod', 'none', false, false, ['modbench.record.referencedBy', 'modbench.record.copy']],
   ])('offers on the column of a plugin in %s only what applies', (_what, inMod, compilable, editable, commands) => {
     expect(offered({ webviewSection: 'recordHeader', inMod, compilable, editable })).toEqual(commands);
   });
