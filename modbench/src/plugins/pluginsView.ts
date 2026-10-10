@@ -114,12 +114,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     showCollapseAll: true,
   });
   const selected = survivingSelection(view, (row) => tree.shownRow(row));
-  const showKeyContext = () => {
-    for (const [name, value] of Object.entries(pluginsKeyContext(selected.rows(), (row) => tree.isEnabled(row)))) {
-      void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
-    }
-    void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', tree.facts.rows.anyCompilable());
-  };
+  const showKeyContext = () => { publishKeyContext(selected.rows(), tree); };
   showKeyContext();
   const keyContextSubscriptions = [view.onDidChangeSelection(showKeyContext), tree.onDidChangeTreeData(showKeyContext)];
   const nameFilter = registerPluginsNameFilter(view, tree, joinSyncMessages(pluginSync, loadOrderPut, recordBrowser.beneathFailure));
@@ -171,6 +166,13 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     progress, narrator: indexStatus.narrator,
     dispose: () => { disposable.dispose(); },
   };
+}
+
+function publishKeyContext(selection: readonly PluginsTreeNode[], tree: PluginsTreeProvider): void {
+  for (const [name, value] of Object.entries(pluginsKeyContext(selection, (row) => tree.isEnabled(row)))) {
+    void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
+  }
+  void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', tree.facts.rows.anyCompilable());
 }
 
 function registerPluginGestures(
