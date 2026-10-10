@@ -26,6 +26,9 @@ internal sealed class GameCodec : IGameCodec
 
     public Assembly GeneratedSerializers => typeof(GameCodec).Assembly;
 
+    public IReadOnlyDictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse =>
+        GameSpecifics.SiblingsInUse;
+
     public uint NextObjectIdDefault => ModStats.NextFormIDDefault;
 
     public Task SerializeWholeMod(
@@ -80,22 +83,16 @@ internal sealed class GameCodec : IGameCodec
                 worldspaceCopy.SubCells.SetTo(worldspaceCopy.SubCells.OrderBy(b => b.BlockNumberX).ThenBy(b => b.BlockNumberY).ToList());
                 if (worldspaceCopy.TopCell is { } topCell) ZeroCellGroupFields(topCell);
                 return worldspaceCopy;
-            case IQuestGetter quest:
-                var questCopy = quest.DeepCopy();
-                questCopy.Timestamp = 0;
-                questCopy.Unknown = 0;
-                foreach (var nestedTopic in questCopy.DialogTopics) ZeroTopicGroupFields(nestedTopic);
-                return questCopy;
             case IDialogTopicGetter topic:
                 var topicCopy = topic.DeepCopy();
                 ZeroTopicGroupFields(topicCopy);
                 return topicCopy;
             default:
-                return record;
+                return GameSpecifics.NormalizeRecord(record);
         }
     }
 
-    private static void ZeroTopicGroupFields(DialogTopic topic)
+    internal static void ZeroTopicGroupFields(DialogTopic topic)
     {
         topic.Timestamp = 0;
         topic.Unknown = 0;

@@ -63,7 +63,7 @@ internal sealed record SchemaAnnotations(
     IReadOnlyList<KnownDefect> KnownDefects,
     // See FieldMetadata.SiblingsInUse. The inner map must name every enum value, since an unnamed one
     // would silently idle every member the row governs; validated in all four directions.
-    Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
+    IReadOnlyDictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
     // xEdit's wbArrayS: elements identified by key members (Mutagen member names, dotted one struct
     // down), not by position. Aligned by key in the compare grid, kept in the order held.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
@@ -130,6 +130,9 @@ internal sealed record SchemaAnnotations(
 
     // Each game's ModHeader declares these (its *ModHeader.xml in Mutagen), the TES4 record's header
     // first, in wbRecordHeader's order (wbDefinitionsCommon.pas).
+    // The game's codec project supplies the real rows (SchemaReflector).
+    private static readonly Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>> NoSiblingsInUse = [];
+
     private static string ModHeaderGetter(GameCategory game) => $"I{game}ModHeaderGetter";
 
     private static string MajorRecordGetter(GameCategory game) => $"I{game}MajorRecordGetter";
@@ -250,11 +253,7 @@ internal sealed record SchemaAnnotations(
                     "SceneActionTypicalType's binary-overlay Type getter is an unimplemented throw upstream, so the "
                     + "leaves under ASceneActionType cannot be read; the member is named as the document holds it and never written"),
             ],
-            SiblingsInUse: new()
-            {
-                [("IFunctionConditionDataGetter", "Function")] = Fallout4ConditionAnnotations.FunctionParameterSlots(),
-                [("IConditionDataGetter", "RunOnType")] = Fallout4ConditionAnnotations.RunOnReference(),
-            },
+            SiblingsInUse: NoSiblingsInUse,
             KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4KeyedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
             ExtendedKeys: Fallout4KeyedArrayAnnotations.ExtendedKeys.ToDictionary(
@@ -296,7 +295,7 @@ internal sealed record SchemaAnnotations(
             // loads. A label, defect, condition or keyed-array row is found from a built schema.
             EnumMemberLabels: [],
             KnownDefects: [],
-            SiblingsInUse: [],
+            SiblingsInUse: NoSiblingsInUse,
             KeyedArrays: [],
             ExtendedKeys: [],
             PermittedNullFormLinks: [],
@@ -339,7 +338,7 @@ internal sealed record SchemaAnnotations(
             // Empty for the same reason as Skyrim's above.
             EnumMemberLabels: [],
             KnownDefects: [],
-            SiblingsInUse: [],
+            SiblingsInUse: NoSiblingsInUse,
             KeyedArrays: [],
             ExtendedKeys: [],
             PermittedNullFormLinks: [],

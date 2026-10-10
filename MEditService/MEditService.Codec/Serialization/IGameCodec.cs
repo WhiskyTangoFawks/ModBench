@@ -30,6 +30,9 @@ public interface IGameCodec
     /// <summary>The Next Object ID the game's serializer omits from a header document.</summary>
     uint NextObjectIdDefault { get; }
 
+    /// <summary>The schema rows that make a member govern which of its siblings are in use, empty for a game with none.</summary>
+    IReadOnlyDictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse { get; }
+
     /// <summary>A copy of <paramref name="record"/> without the encoding a rewrite is entitled to
     /// change: group-header-derived fields zeroed, and a worldspace's block levels in one canonical
     /// order (ADR-0006).</summary>
