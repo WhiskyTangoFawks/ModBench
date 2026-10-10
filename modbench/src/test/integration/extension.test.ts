@@ -944,12 +944,11 @@ describe('a child record of a tracked plugin', () => {
       const { child, container } = await openBoth();
 
       await replace(container, cellText('InContainer'));
-      await waitFor('the child\'s document to show the container\'s change', () => child.getText() === cellText('InContainer'));
-      assert.deepStrictEqual(shown(child), { text: cellText('InContainer'), unsaved: true });
+      // VS Code reports a document's first unsaved change before it marks it unsaved.
+      await waitFor('the child\'s document to show the container\'s change, unsaved', () => child.isDirty && child.getText() === cellText('InContainer'));
 
       await replace(child, cellText('InChild'));
-      await waitFor('the container\'s document to show the child\'s change', () => container.getText() === cellText('InChild'));
-      assert.deepStrictEqual(shown(container), { text: cellText('InChild'), unsaved: true });
+      await waitFor('the container\'s document to show the child\'s change, unsaved', () => container.isDirty && container.getText() === cellText('InChild'));
     });
 
     it('leaves its own tab and its container\'s both saved when either saves, opened first on a file too large for VS Code to compare by content', async () => {
@@ -1072,8 +1071,7 @@ describe('a child record of a tracked plugin', () => {
       await openRecord(childCopy);
 
       const child = await childDocument();
-      await waitFor('the child\'s document to show the container\'s unsaved text', () => child.getText() === cellText('BeforeChildOpened'));
-      assert.deepStrictEqual(shown(child), { text: cellText('BeforeChildOpened'), unsaved: true });
+      await waitFor('the child\'s document to show the container\'s unsaved text, unsaved', () => child.isDirty && child.getText() === cellText('BeforeChildOpened'));
     });
   });
 });
