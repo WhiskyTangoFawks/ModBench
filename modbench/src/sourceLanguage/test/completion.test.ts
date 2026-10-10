@@ -92,6 +92,14 @@ describe('completionsAt (plugin-source.md, In the text editor, story 5)', () => 
     expect(client.searchRecords).toHaveBeenCalledWith('Gu', ['PERK']);
   });
 
+  it('offers nothing for a reference its owner says names an alias, which holds a number', async () => {
+    const target = fieldOf({ name: 'Target', type: 'formKey', validFormKeyTypes: ['REFR'], indexWhen: ['UseAliases'] }).metadata;
+    const client = asking([fieldOf({ name: 'Data', type: 'struct', fields: [target] })]);
+
+    expect(await completingAtBar(client, documentOf('"Data": { "UseAliases": true, "Target": "Gu|" }'))).toBeUndefined();
+    expect(client.searchRecords).not.toHaveBeenCalled();
+  });
+
   it('completes within the nearest enclosing record, an embedded child with its own FormKey', async () => {
     const client = asking([], [record('Gun', GUN)], { [CHILD]: [reference('Base', ['STAT'])] });
     await completingAtBar(client, documentOf(`"Placed": [{ "FormKey": "${CHILD}", "Base": "Gu|" }]`));

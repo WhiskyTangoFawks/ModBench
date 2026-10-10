@@ -82,6 +82,10 @@ public record FieldMetadata(
     // A colour whose binary form holds an alpha, which it reads with (editor-fields.md, By type).
     bool HoldsAlpha = false,
 
+    // A reference Mutagen holds as an index instead while one of these boolean siblings is set (an
+    // alias or package-data parameter), when DocumentNodes.VariantFor shapes it an integer.
+    IReadOnlyList<string>? IndexWhen = null,
+
     // xEdit's extended key: the members ordering the elements that share a key, so the nth of them
     // pairs with the nth in every other column. The compare reads it; the webview never does.
     [property: JsonIgnore] IReadOnlyList<string>? ExtendedKeyMembers = null)

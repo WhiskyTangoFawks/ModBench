@@ -11,8 +11,15 @@ function memberOf(owner: Pick<FieldMetadata, 'fields'>, ownerValue: unknown, nam
   const member = owner.fields?.find((candidate) => candidate.name === name);
   const discriminator = owner.fields?.find((candidate) => candidate.isDiscriminator)?.name;
   const leaf = discriminator && valueAt(ownerValue, [discriminator]);
-  return (typeof leaf === 'string' && member?.variants?.[leaf]) || member;
+  const shape = (typeof leaf === 'string' && member?.variants?.[leaf]) || member;
+  return shape && asIndexWhereTheOwnerSays(shape, ownerValue);
 }
+
+// A link the owner says names an alias or package data holds that index's number.
+const asIndexWhereTheOwnerSays = (shape: FieldMetadata, ownerValue: unknown): FieldMetadata =>
+  shape.indexWhen?.some((flag) => valueAt(ownerValue, [flag]) === true)
+    ? { ...shape, type: 'int', validFormKeyTypes: [], allowsNull: false, indexWhen: null }
+    : shape;
 
 /** The metadata of the field at `path` of a record, from the fields mEdit answers for it; an object's
  *  members take the shape of the leaf its discriminator names. */

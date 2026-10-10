@@ -97,6 +97,7 @@ internal static class SubFieldReflection
             AllowsNull: leaf.AllowsNull || ReflectedTypes.IsNullableMember(prop),
             SiblingsInUse: game.Annotations.SiblingsInUseFor(prop),
             Default: nullable ? null : leaf.Default,
-            HoldsAlpha: leaf.HoldsAlpha);
+            HoldsAlpha: leaf.HoldsAlpha,
+            IndexWhen: leaf.IndexWhen);
     }
 }

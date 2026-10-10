@@ -170,6 +170,17 @@ public sealed class DocumentEditTests
     }
 
     [Fact]
+    public void Set_RecordClass_KeepsTheRecordsHeader()
+    {
+        _globalInt.Data = 3;
+        var before = TextOf(_globalInt);
+
+        var after = Edited(before, "glob", EditOp.Set, "\"GlobalShort\"", Member("MutagenObjectType"));
+
+        Assert.Equal(["MutagenObjectType: \"GlobalInt\" -> \"GlobalShort\""], DocumentDiffs.Of(before, after));
+    }
+
+    [Fact]
     public void Set_Discriminator_ToALeafTheUnionLacks_FailsNamingTheDiscriminator()
     {
         var failure = Failure(CobjText(), "cobj", EditOp.Set, "\"ConditionMaybe\"", Member("Conditions"), At(0), Member("MutagenObjectType"));

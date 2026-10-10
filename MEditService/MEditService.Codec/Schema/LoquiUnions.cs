@@ -103,7 +103,7 @@ public static class LoquiUnions
             if (leafPath == null) continue;
             var members = ReflectedTypes.Members(getterType)
                 .Where(member => !baseMemberNames.Contains(member.Key))
-                .Select(member => member.Where(p => !game.Annotations.IsExcludedMember(p)).ToList())
+                .Select(member => member.Where(p => !game.Annotations.IsExcludedMember(p) && !game.Annotations.IsUnusedSlotMember(union.SetterType, p)).ToList())
                 .Where(declarations => declarations.Count > 0)
                 .Select(ReflectedTypes.MostDerived)
                 .Select(p => SubFieldReflection.GetSubFieldInfo(p, game, leafPath, logger))
@@ -116,7 +116,7 @@ public static class LoquiUnions
         var result = UnionMembers(leaves, s => s.Name, s => s)
             .Select(m => m.Face with { AllowsNull = true, Variants = m.Variants })
             .ToList();
-        result.Add(BuildUnionDiscriminatorField(union with { Leaves = reached }));
+        result.Add(BuildUnionDiscriminatorField(union with { Leaves = reached }, game));
         return result;
     }
 
@@ -146,7 +146,7 @@ public static class LoquiUnions
                 AbsentIsNull = m.Variants != null || m.Face.AbsentIsNull,
             }));
 
-        var discriminator = BuildUnionDiscriminatorField(union);
+        var discriminator = BuildUnionDiscriminatorField(union, game);
         columns.Insert(0, new ColumnSpec(discriminator, discriminator.Name));
         return columns;
     }
@@ -175,11 +175,18 @@ public static class LoquiUnions
 
     // An enum, so the editor's enum-leaf rule renders it and the class names stay wire tokens
     // LeafLabel labels. Setting it switches the object's leaf; see editor-fields.md, A field of several kinds.
-    internal static FieldMetadata BuildUnionDiscriminatorField(LoquiUnion union) =>
-        new(UnionTypeDiscriminator, "enum", false, LeafSpec.NoFormKeyTypes,
+    internal static FieldMetadata BuildUnionDiscriminatorField(LoquiUnion union, GameReflection game)
+    {
+        var baseName = ReflectedTypes.LeafTypeName(union.SetterType);
+        var byFunction = game.Annotations.IsFunctionUnion(union.SetterType);
+        return new(UnionTypeDiscriminator, "enum", false, LeafSpec.NoFormKeyTypes,
             [.. union.Leaves.Select(l => new EnumMember(
-                l.ClassName, Label: LeafLabel.For(ReflectedTypes.LeafTypeName(union.SetterType), LeafLabel.ClassWord(l.ClassName))))],
-            AllowsNull: true, DisplayLabel: UnionTypeDiscriminatorLabel, IsDiscriminator: true);
+                l.ClassName,
+                Label: byFunction ? LeafLabel.FunctionName(baseName, LeafLabel.ClassWord(l.ClassName)) : LeafLabel.For(baseName, LeafLabel.ClassWord(l.ClassName))))],
+            AllowsNull: true, DisplayLabel: byFunction ? FunctionDiscriminatorLabel : UnionTypeDiscriminatorLabel, IsDiscriminator: true);
+    }
 
     internal const string UnionTypeDiscriminatorLabel = "Kind";
+
+    internal const string FunctionDiscriminatorLabel = "Function";
 }

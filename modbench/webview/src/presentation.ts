@@ -56,7 +56,7 @@ function conditionSummary(row: SummaryRow, comparison: (row: SummaryRow) => stri
   // An operator outside the schema's own six reads as no operator at all, exactly as xEdit's own
   // `case Typ and $E0` falls through — the condition still reads, missing only the sign.
   const operator = COMPARISON_OPERATORS[String(row.member('CompareOperator').value)];
-  const call = `${runOn(row)}.${functionName(row)}${parameters(row)}`;
+  const call = `${runOn(row)}.${kindCall(row) ?? `${functionName(row)}${parameters(row)}`}`;
   return `${call}${operator ? ` ${operator} ` : ''}${comparison(row)}${conjunction(row)}`;
 }
 
@@ -70,6 +70,24 @@ function runOn(row: SummaryRow): string {
 
 const enumLabel = (meta: FieldMetadata | undefined, value: unknown): string =>
   meta?.enumMembers.find(m => m.value === value)?.label ?? toStr(value);
+
+// The label mEdit gives a discriminator whose kinds are one function each.
+const FUNCTION_ROW = 'Function';
+
+// A function that is its kind reads as the kind does, and its parameters are the members only that
+// kind holds, a string among them left out as below.
+function kindCall(row: SummaryRow): string | undefined {
+  const data = row.member('Data');
+  if (!data.meta?.fields?.some(f => f.isDiscriminator && f.displayLabel === FUNCTION_ROW)) return undefined;
+  const leaf = leafOf(data.meta, data.value);
+  const kind = row.member('Data', discriminatorOf(data.meta) ?? '');
+  const own = data.meta.fields
+    .filter(f => leaf != null && f.variants?.[leaf] != null)
+    .map(f => row.member('Data', f.name))
+    .filter(m => m.meta?.type !== 'string')
+    .map(m => (m.meta?.type === 'formKey' ? m.shortName : m.label));
+  return `${kind.label}${own.length > 0 ? `(${own.join(', ')})` : ''}`;
+}
 
 // The function member's own value, or — on the leaf that declares no function member because it
 // *is* one function (GetEventData) — that leaf's own type name, which is the function's name.

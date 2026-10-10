@@ -255,27 +255,30 @@ public sealed class DocumentEdit
             return null;
         }
 
-        if (field.SiblingsInUse is { } inUse)
-        {
-            // A stale slot posted under an earlier value is cleared here, never carried.
-            foreach (var idle in Idle(inUse, node, field)) owner.Remove(idle);
-            if (node == null) owner.Remove(memberName); else owner[memberName] = node;
-            edited = owner;
-            editedMeta = cursor.RequireOwnerMeta();
-            return null;
-        }
+        var ownerMeta = cursor.RequireOwnerMeta();
+        var held = ShapesHeld(owner, ownerMeta);
+        // A stale slot posted under an earlier value is cleared here, never carried.
+        if (cursor.Meta.SiblingsInUse is { } inUse)
+            foreach (var idle in Idle(inUse, node, cursor.Meta)) owner.Remove(idle);
+        if (node == null) owner.Remove(memberName); else owner[memberName] = node;
+        var reshaped = ShapesHeld(owner, ownerMeta).Where(s => held.TryGetValue(s.Key, out var was) && was != s.Value).Select(s => s.Key).ToList();
+        foreach (var stale in reshaped) owner.Remove(stale);
 
-        if (node == null)
+        if (node != null && cursor.Meta.SiblingsInUse == null && reshaped.Count == 0)
         {
-            owner.Remove(memberName);
-            edited = owner;
-            editedMeta = cursor.RequireOwnerMeta();
+            edited = node;
             return null;
         }
-        owner[memberName] = node;
-        edited = node;
+        edited = owner;
+        editedMeta = ownerMeta;
         return null;
     }
+
+    // Each held member's type under its owner, which a sibling can decide: a link names an alias
+    // while its owner says so, and then holds a number.
+    private static Dictionary<string, string> ShapesHeld(JsonObject owner, FieldMetadata ownerMeta) =>
+        (ownerMeta.Fields ?? []).Where(f => owner.ContainsKey(f.Name))
+            .ToDictionary(f => f.Name, f => DocumentNodes.VariantFor(f, owner).Type, StringComparer.Ordinal);
 
     // The cascade over a whole value: wherever it changes a governing member from what the document
     // holds, only the slots the new value uses stay, so a stale slot cannot ride in beside it. An
@@ -288,10 +291,11 @@ public sealed class DocumentEdit
                 var was = current as JsonObject;
                 foreach (var field in fields)
                 {
-                    if (field.SiblingsInUse is { } inUse && !JsonNode.DeepEquals(obj[field.Name], was?[field.Name]))
-                        foreach (var idle in Idle(inUse, obj[field.Name], field)) obj.Remove(idle);
+                    var shape = DocumentNodes.VariantFor(field, obj);
+                    if (shape.SiblingsInUse is { } inUse && !JsonNode.DeepEquals(obj[field.Name], was?[field.Name]))
+                        foreach (var idle in Idle(inUse, obj[field.Name], shape)) obj.Remove(idle);
                     if (obj.TryGetPropertyValue(field.Name, out var child))
-                        Cascade(child, DocumentNodes.VariantFor(field, obj), was?[field.Name]);
+                        Cascade(child, shape, was?[field.Name]);
                 }
                 break;
             case JsonArray array when meta.ElementType is { } elementMeta:
@@ -313,19 +317,19 @@ public sealed class DocumentEdit
         return name != null && table.TryGetValue(name, out var siblings) ? siblings : [];
     }
 
-    // The incoming leaf keeps every member it shapes alike; the outgoing leaf's own members, and any
-    // shaped differently, are removed so the codec builds the new leaf from what it can hold. The
-    // discriminator leads, as the codec requires.
+    // The incoming leaf keeps only the members it presents and shapes alike, so an unpresented one (a
+    // slot the function leaves unused) goes too. The discriminator leads, as the codec requires.
     private static void SwitchLeaf(JsonObject owner, FieldMetadata ownerMeta, string? from, string to)
     {
         var fields = ownerMeta.Fields
             ?? throw new InvalidOperationException($"Expected '{ownerMeta.LeafTypeName ?? ownerMeta.Name}' to declare its own fields.");
-        foreach (var member in fields)
+        foreach (var name in owner.Select(p => p.Key).Where(k => k != LoquiUnions.UnionTypeDiscriminator).ToList())
         {
-            if (member.Variants is not { } variants || !owner.ContainsKey(member.Name)) continue;
-            var kept = variants.TryGetValue(to, out var incoming)
-                && (from == null || !variants.TryGetValue(from, out var outgoing) || SameShape(incoming, outgoing));
-            if (!kept) owner.Remove(member.Name);
+            var kept = fields.FirstOrDefault(f => f.Name == name) is { } member
+                && (member.Variants is not { } variants
+                    || (variants.TryGetValue(to, out var incoming)
+                        && (from == null || !variants.TryGetValue(from, out var outgoing) || SameShape(incoming, outgoing))));
+            if (!kept) owner.Remove(name);
         }
 
         var rest = owner.Where(p => p.Key != LoquiUnions.UnionTypeDiscriminator).ToList();
