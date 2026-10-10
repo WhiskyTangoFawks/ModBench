@@ -176,14 +176,13 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const kept = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const gone = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const untracked = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
-  const npc = kept;
   const patch = { name: 'Patch.esp', origin: 'PatchMod' };
   const other = { name: 'Other.esp', origin: 'OtherMod' };
   const newPlugin = { name: 'New.esp', origin: 'ModA' };
   const changes = { moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json', text: '{}' }] };
   const keptChanges = { record: kept, moves: [], deletions: ['/mods/ModA/plugin-source/MyPatch.esp/Npcs/Kept'], documents: [] };
   const goneChanges = { record: gone, moves: [], deletions: [], documents: [{ path: '/mods/ModA/plugin-source/MyPatch.esp/Cell.json', text: '{"cut": true}' }] };
-  const copied = { record: npc, destination: patch, moves: [], deletions: [], documents: [{ path: '/mods/PatchMod/plugin-source/Patch.esp/Header.json', text: '{"h":1}' }] };
+  const copied = { record: kept, destination: patch, moves: [], deletions: [], documents: [{ path: '/mods/PatchMod/plugin-source/Patch.esp/Header.json', text: '{"h":1}' }] };
   const diagnostic = { formKey: '000800:First.esp', sourceRelativePath: 'First.esp/Npc/A.json', message: 'Race: points at nothing' };
   const renamed: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'Renamed' };
   const editChanges = {
@@ -204,101 +203,137 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     plugin: { name: 'Refers.esp', origin: 'ReferringMod' },
     problems: [{ formKey: '000800:Refers.esp', targetFormKey: '000ABC:Absent.esp', sourceRelativePath: 'Refers.esp/Npcs/Npc.json', message: 'Race: 000ABC:Absent.esp is held by no active plugin' }],
   }];
-  const owner = { query: { origin: 'ModA' } };
+  const same = <T>(answer: T) => ({ answer, reads: answer });
+  const createdRecord = { formKey: '000900:MyPatch.esp', ...changes };
+  const formKeyEdit: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' };
 
-  interface Row {
-    name: string; verb: Verb; answer?: unknown; reads?: unknown;
-    method: string; path: string; query?: Record<string, string>; body?: unknown;
-  }
-  const rows: Row[] = [
-    { name: 'getCreateChanges', verb: (c) => c.getCreateChanges(myPatch, 'npc_'), answer: { formKey: '000900:MyPatch.esp', ...changes },
-      method: 'POST', path: '/plugins/MyPatch.esp/create-record-changes', body: { origin: 'ModA', recordType: 'npc_' } },
+  const posts: {
+    name: string; verb: Verb; answer: unknown; reads: unknown; path: string; body: unknown;
+  }[] = [
+    { name: 'getCreateChanges', verb: (c) => c.getCreateChanges(myPatch, 'npc_'), ...same(createdRecord),
+      path: '/plugins/MyPatch.esp/create-record-changes', body: { origin: 'ModA', recordType: 'npc_' } },
     { name: 'getCreateChanges in a container', verb: (c) => c.getCreateChanges(myPatch, 'cell', { container: '000800:MyPatch.esp', position: { x: 1, y: -2 } }),
-      answer: { formKey: '000900:MyPatch.esp', ...changes },
-      method: 'POST', path: '/plugins/MyPatch.esp/create-record-changes',
+      ...same(createdRecord), path: '/plugins/MyPatch.esp/create-record-changes',
       body: { origin: 'ModA', recordType: 'cell', container: '000800:MyPatch.esp', position: { x: 1, y: -2 } } },
     { name: 'getDeleteChanges', verb: (c) => c.getDeleteChanges([kept, untracked, gone]),
       answer: { applied: [keptChanges, goneChanges], refused: [{ item: untracked, refusal: 'PluginNotTracked', message: 'Other.esp is not tracked.' }] },
       reads: { applied: [keptChanges, goneChanges], refused: [{ item: untracked, reason: 'Other.esp is not tracked.' }] },
-      method: 'POST', path: '/records/delete-changes', body: { records: [kept, untracked, gone] } },
-    { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA'), answer: { ...newPlugin, path: '/mods/ModA/New.esp' },
-      method: 'POST', path: '/plugins/create', body: { origin: 'ModA', name: 'New.esp', folder: '/mods/ModA' } },
+      path: '/records/delete-changes', body: { records: [kept, untracked, gone] } },
+    { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA'), ...same({ ...newPlugin, path: '/mods/ModA/New.esp' }),
+      path: '/plugins/create', body: { origin: 'ModA', name: 'New.esp', folder: '/mods/ModA' } },
     { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'),
-      answer: { treeName: 'Old.esp', ...editChanges },
-      method: 'POST', path: '/plugins/rename-source-changes', body: { origin: 'ModA', name: 'Old.esp', newName: 'New.esp' } },
-    { name: 'moveLastWritten', verb: (c) => c.moveLastWritten({ name: 'Old.esp', origin: 'ModA' }, 'OLD.esp', 'New.esp'), reads: { moved: true },
-      method: 'POST', path: '/plugins/move-last-written', body: { origin: 'ModA', name: 'Old.esp', treeName: 'OLD.esp', newName: 'New.esp' } },
-    { name: 'getCopyChanges', verb: (c) => c.getCopyChanges([npc], 'Override', [patch, other], true),
-      answer: { applied: [copied], refused: [{ item: { record: npc, destination: other }, refusal: 'DestinationHoldsRecord', message: 'Other.esp already holds it.' }] },
-      reads: { applied: [copied], refused: [{ item: { record: npc, destination: other }, reason: 'Other.esp already holds it.' }] },
-      method: 'POST', path: '/records/copy-changes', body: { records: [npc], mode: 'Override', destinations: [patch, other], replace: true } },
-    { name: 'getComparison', verb: (c) => c.getComparison('000801:MyPatch.esp'), answer: comparison,
-      method: 'GET', path: '/records/000801%3AMyPatch.esp/compare' },
-    { name: 'getComparison with the document text', verb: (c) => c.getComparison('000801:MyPatch.esp', documentText), answer: comparison,
-      method: 'POST', path: '/records/000801%3AMyPatch.esp/compare', body: documentText },
-    { name: 'getRecordsComparison', verb: (c) => c.getRecordsComparison(copies), answer: { compare: comparison, missing: [] },
-      method: 'POST', path: '/records/compare', body: { copies } },
-    { name: 'getRecordsComparison with copies no plugin gave', verb: (c) => c.getRecordsComparison(copies),
-      answer: { compare: null, missing: [{ formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'AMod' }, reason: 'RecordGone', message: 'held by no plugin' }] },
-      method: 'POST', path: '/records/compare', body: { copies } },
+      ...same({ treeName: 'Old.esp', ...editChanges }),
+      path: '/plugins/rename-source-changes', body: { origin: 'ModA', name: 'Old.esp', newName: 'New.esp' } },
+    { name: 'getCopyChanges', verb: (c) => c.getCopyChanges([kept], 'Override', [patch, other], true),
+      answer: { applied: [copied], refused: [{ item: { record: kept, destination: other }, refusal: 'DestinationHoldsRecord', message: 'Other.esp already holds it.' }] },
+      reads: { applied: [copied], refused: [{ item: { record: kept, destination: other }, reason: 'Other.esp already holds it.' }] },
+      path: '/records/copy-changes', body: { records: [kept], mode: 'Override', destinations: [patch, other], replace: true } },
+    { name: 'getComparison with the document text', verb: (c) => c.getComparison('000801:MyPatch.esp', documentText), ...same(comparison),
+      path: '/records/000801%3AMyPatch.esp/compare', body: documentText },
+    { name: 'getRecordsComparison', verb: (c) => c.getRecordsComparison(copies), ...same({ compare: comparison, missing: [] }),
+      path: '/records/compare', body: { copies } },
     { name: 'track', verb: (c) => c.track(['ModA', 'ModC']),
       answer: { applied: [{ mod: 'ModA', tracked: [first] }], refused: [{ item: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }] },
       reads: { landed: [{ mod: 'ModA', tracked: [first] }], refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }] },
-      method: 'POST', path: '/plugins/track', body: { mods: ['ModA', 'ModC'] } },
+      path: '/plugins/track', body: { mods: ['ModA', 'ModC'] } },
     { name: 'compile', verb: (c) => c.compile([first, second]),
       answer: { applied: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginNotTracked', message: 'Second.esp is not tracked, so there is no source to compile.' }] },
       reads: { landed: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp is not tracked, so there is no source to compile.' }] },
-      method: 'POST', path: '/plugins/compile', body: { plugins: [first, second] } },
+      path: '/plugins/compile', body: { plugins: [first, second] } },
     { name: 'decompile', verb: (c) => c.decompile([first, second]),
       answer: { applied: [first], refused: [{ item: second, refusal: 'NotInTrackedMod', message: 'Second.esp is not in a tracked mod.' }] },
       reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a tracked mod.' }] },
-      method: 'POST', path: '/plugins/decompile', body: { plugins: [first, second] } },
+      path: '/plugins/decompile', body: { plugins: [first, second] } },
     { name: 'getEditChanges', verb: (c) => c.getEditChanges('000800:MyPatch.esp', myPatch, renamed),
       answer: { formKey: '000800:MyPatch.esp', path: 'EditorID', ...editChanges, newFormKey: null }, reads: { applied: true, ...editChanges },
-      method: 'POST', path: '/records/000800%3AMyPatch.esp/edit-changes', body: { edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed } } },
-    { name: 'getEditChanges of the FormID', verb: (c) => c.getEditChanges('000800:MyPatch.esp', myPatch, { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' }),
+      path: '/records/000800%3AMyPatch.esp/edit-changes', body: { edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed } } },
+    { name: 'getEditChanges of the FormID', verb: (c) => c.getEditChanges('000800:MyPatch.esp', myPatch, formKeyEdit),
       answer: { formKey: '000800:MyPatch.esp', path: 'FormKey', moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp' },
       reads: { applied: true, moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp' },
-      method: 'POST', path: '/records/000800%3AMyPatch.esp/edit-changes',
-      body: { edit: { plugin: 'MyPatch.esp', origin: 'ModA', op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' } } },
-    { name: 'rebuildIndex', verb: (c) => c.rebuildIndex('/instance', 'Fallout4'), reads: { rebuilt: true },
-      method: 'POST', path: '/index/rebuild', body: { instanceRoot: '/instance', gameRelease: 'Fallout4' } },
-    { name: 'getCreatableRecordTypes', verb: (c) => c.getCreatableRecordTypes(),
-      answer: [{ type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' }],
-      method: 'GET', path: '/record-types/creatable' },
-    { name: 'getChildRecordTypes', verb: (c) => c.getChildRecordTypes(shared, sharedKey), answer: [{ type: 'dial', displayName: 'Dialog Topic' }],
-      method: 'GET', path: '/plugins/Shared.esp/records/000800%3AShared.esp/child-record-types', ...owner },
-    { name: 'getRenderedDocument', verb: (c) => c.getRenderedDocument(shared, sharedKey),
-      answer: { fileName: 'SharedNpc - 000800_Shared.esp.json', text: '{ "FormKey": "000800:Shared.esp" }' },
-      method: 'GET', path: '/plugins/Shared.esp/records/000800%3AShared.esp/rendered-document', ...owner },
-    { name: 'getCopyDocument', verb: (c) => c.getCopyDocument(shared, sharedKey), answer: sharedFile,
-      method: 'GET', path: '/plugins/Shared.esp/records/000800%3AShared.esp/document', ...owner },
-    { name: 'getRecordOfFile', verb: (c) => c.getRecordOfFile(sourcePath), answer: fileRecord,
-      method: 'GET', path: '/plugin-source/record', query: { path: sourcePath } },
-    { name: 'getRecordOfFile of a file holding no record', verb: (c) => c.getRecordOfFile(sourcePath), reads: null,
-      method: 'GET', path: '/plugin-source/record', query: { path: sourcePath } },
-    { name: 'getCreatablePluginExtensions', verb: (c) => c.getCreatablePluginExtensions(), answer: ['.esp', '.esm'],
-      method: 'GET', path: '/plugins/creatable-extensions' },
-    { name: 'getPluginDependants', verb: (c) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' }),
-      answer: { dependants: [{ name: 'Child.esp', origin: 'ChildMod' }], unreadable: [{ name: 'Bad.esp', origin: 'BadMod' }] },
-      method: 'GET', path: '/plugins/Base.esm/dependants', query: { origin: 'BaseMod' } },
-    { name: 'getPluginProblems', verb: (c) => c.getPluginProblems(), answer: problems,
-      method: 'GET', path: '/plugins/problems' },
+      path: '/records/000800%3AMyPatch.esp/edit-changes', body: { edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...formKeyEdit } } },
   ];
 
-  it.each(rows)('$name sends $method $path and reads the answer', async ({ verb, answer, reads, method, path, query, body }) => {
-    const { result, request } = await exchange(verb, answers(answer === undefined ? 204 : 200, answer));
+  it.each(posts)('$name posts $path once and reads the answer', async ({ verb, answer, reads, path, body }) => {
+    const { result, request, fetch } = await exchange(verb, answers(200, answer));
 
-    expect(result).toEqual(reads === undefined ? answer : reads);
+    expect(result).toEqual(reads);
+    expect(fetch).toHaveBeenCalledOnce();
     const url = new URL(request.url);
-    expect(request.method).toBe(method);
+    expect(request.method).toBe('POST');
     expect(url.pathname).toBe(path);
-    expect(Object.fromEntries(url.searchParams)).toEqual(query ?? {});
-    if (body !== undefined) expect(await request.json()).toEqual(body);
+    expect([...url.searchParams]).toEqual([]);
+    expect(await request.json()).toEqual(body);
+  });
+
+  it.each([
+    { name: 'moveLastWritten', verb: (c: MEditClient) => c.moveLastWritten({ name: 'Old.esp', origin: 'ModA' }, 'OLD.esp', 'New.esp'),
+      reads: { moved: true }, path: '/plugins/move-last-written', body: { origin: 'ModA', name: 'Old.esp', treeName: 'OLD.esp', newName: 'New.esp' } },
+    { name: 'rebuildIndex', verb: (c: MEditClient) => c.rebuildIndex('/instance', 'Fallout4'),
+      reads: { rebuilt: true }, path: '/index/rebuild', body: { instanceRoot: '/instance', gameRelease: 'Fallout4' } },
+  ])('$name posts $path and reads a 204 as done', async ({ verb, reads, path, body }) => {
+    const { result, request } = await exchange(verb, answers(204));
+
+    expect(result).toEqual(reads);
+    expect(request.method).toBe('POST');
+    expect(new URL(request.url).pathname).toBe(path);
+    expect(await request.json()).toEqual(body);
+  });
+
+  const gets: {
+    name: string; verb: Verb; answer: unknown; path: string; query: Record<string, string>;
+  }[] = [
+    { name: 'getComparison', verb: (c) => c.getComparison('000801:MyPatch.esp'), answer: comparison,
+      path: '/records/000801%3AMyPatch.esp/compare', query: {} },
+    { name: 'getCreatableRecordTypes', verb: (c) => c.getCreatableRecordTypes(),
+      answer: [{ type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' }],
+      path: '/record-types/creatable', query: {} },
+    { name: 'getChildRecordTypes', verb: (c) => c.getChildRecordTypes(shared, sharedKey), answer: [{ type: 'dial', displayName: 'Dialog Topic' }],
+      path: '/plugins/Shared.esp/records/000800%3AShared.esp/child-record-types', query: { origin: 'ModA' } },
+    { name: 'getRenderedDocument', verb: (c) => c.getRenderedDocument(shared, sharedKey),
+      answer: { fileName: 'SharedNpc - 000800_Shared.esp.json', text: '{ "FormKey": "000800:Shared.esp" }' },
+      path: '/plugins/Shared.esp/records/000800%3AShared.esp/rendered-document', query: { origin: 'ModA' } },
+    { name: 'getCopyDocument', verb: (c) => c.getCopyDocument(shared, sharedKey), answer: sharedFile,
+      path: '/plugins/Shared.esp/records/000800%3AShared.esp/document', query: { origin: 'ModA' } },
+    { name: 'getRecordOfFile', verb: (c) => c.getRecordOfFile(sourcePath), answer: fileRecord,
+      path: '/plugin-source/record', query: { path: sourcePath } },
+    { name: 'getCreatablePluginExtensions', verb: (c) => c.getCreatablePluginExtensions(), answer: ['.esp', '.esm'],
+      path: '/plugins/creatable-extensions', query: {} },
+    { name: 'getPluginDependants', verb: (c) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' }),
+      answer: { dependants: [{ name: 'Child.esp', origin: 'ChildMod' }], unreadable: [{ name: 'Bad.esp', origin: 'BadMod' }] },
+      path: '/plugins/Base.esm/dependants', query: { origin: 'BaseMod' } },
+    { name: 'getPluginProblems', verb: (c) => c.getPluginProblems(), answer: problems,
+      path: '/plugins/problems', query: {} },
+  ];
+
+  it.each(gets)('$name gets $path and reads the answer untransformed', async ({ verb, answer, path, query }) => {
+    const { result, request } = await exchange(verb, answers(200, answer));
+
+    expect(result).toEqual(answer);
+    const url = new URL(request.url);
+    expect(request.method).toBe('GET');
+    expect(url.pathname).toBe(path);
+    expect(Object.fromEntries(url.searchParams)).toEqual(query);
+  });
+
+  it('getRecordsComparison returns the copies no plugin gave, each with its reason, and no comparison', async () => {
+    const missing = {
+      compare: null,
+      missing: [{ formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'AMod' }, reason: 'RecordGone', message: 'held by no plugin' }],
+    };
+
+    const { result } = await exchange((c) => c.getRecordsComparison(copies), answers(200, missing));
+
+    expect(result).toEqual(missing);
+  });
+
+  it('getRecordOfFile answers null when mEdit answers the file holds no record', async () => {
+    const { result } = await exchange((c) => c.getRecordOfFile(sourcePath), answers(204));
+
+    expect(result).toBeNull();
   });
 
   it('getRecordHolders asks the record\'s holders by plugin and origin', async () => {
-    const { result } = await exchange((c) => c.getRecordHolders(npc.formKey), answers(200, {
+    const { result } = await exchange((c) => c.getRecordHolders(kept.formKey), answers(200, {
       overrides: [{ plugin: 'Patch.esp', origin: 'PatchMod' }, { plugin: 'Patch.esp', origin: 'OtherMod' }],
       diffs: [], conflictAll: 'NoConflict',
     }));
@@ -356,25 +391,24 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   describe('a read mEdit refuses', () => {
     const cannotAnswer = 'No load order has been loaded.';
     const notIndexed = 'mEdit has not finished indexing the plugins.';
-    const reads: { name: string; verb: Verb; status: number; detail: string }[] = [
-      { name: 'getComparison', verb: (c) => c.getComparison('000801:Broken.esp'), status: 500, detail: 'boom' },
-      { name: 'getRecordsComparison', verb: (c) => c.getRecordsComparison([]), status: 400, detail: 'No records.' },
-      { name: 'getCreatableRecordTypes', verb: (c) => c.getCreatableRecordTypes(), status: 503, detail: cannotAnswer },
-      { name: 'getChildRecordTypes', verb: (c) => c.getChildRecordTypes(shared, sharedKey), status: 503, detail: cannotAnswer },
-      { name: 'getRenderedDocument', verb: (c) => c.getRenderedDocument(shared, sharedKey), status: 503, detail: cannotAnswer },
-      { name: 'getCopyDocument', verb: (c) => c.getCopyDocument(shared, sharedKey), status: 503, detail: cannotAnswer },
-      { name: 'getRecordOfFile', verb: (c) => c.getRecordOfFile(sourcePath), status: 422, detail: `${sourcePath} declares no FormKey, so it is no record's document.` },
-      { name: 'getCreatablePluginExtensions', verb: (c) => c.getCreatablePluginExtensions(), status: 503, detail: cannotAnswer },
-      { name: 'getPluginDependants', verb: (c) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' }), status: 503, detail: notIndexed },
-      { name: 'getPluginProblems', verb: (c) => c.getPluginProblems(), status: 503, detail: notIndexed },
+    const refusedReads: { what: string; verb: Verb; status: number; detail: string }[] = [
+      { what: 'getComparison(000801:Broken.esp)', verb: (c) => c.getComparison('000801:Broken.esp'), status: 500, detail: 'boom' },
+      { what: 'getRecordsComparison', verb: (c) => c.getRecordsComparison([]), status: 400, detail: 'No records.' },
+      { what: 'getCreatableRecordTypes', verb: (c) => c.getCreatableRecordTypes(), status: 503, detail: cannotAnswer },
+      { what: 'getChildRecordTypes(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getChildRecordTypes(shared, sharedKey), status: 503, detail: cannotAnswer },
+      { what: 'getRenderedDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getRenderedDocument(shared, sharedKey), status: 503, detail: cannotAnswer },
+      { what: 'getCopyDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getCopyDocument(shared, sharedKey), status: 503, detail: cannotAnswer },
+      { what: `getRecordOfFile(${sourcePath})`, verb: (c) => c.getRecordOfFile(sourcePath), status: 422, detail: `${sourcePath} declares no FormKey, so it is no record's document.` },
+      { what: 'getCreatablePluginExtensions', verb: (c) => c.getCreatablePluginExtensions(), status: 503, detail: cannotAnswer },
+      { what: 'getPluginDependants(Base.esm)', verb: (c) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' }), status: 503, detail: notIndexed },
+      { what: 'getPluginProblems', verb: (c) => c.getPluginProblems(), status: 503, detail: notIndexed },
     ];
 
-    it.each(reads)('$name fails with mEdit\'s reason alone, and files the verb and status in the log', async ({ name, verb, status, detail }) => {
+    it.each(refusedReads)('$what fails with mEdit\'s reason alone, and files the verb and status in the log', async ({ what, verb, status, detail }) => {
       const { result, log } = await exchange(verb, answers(status, { detail }));
 
       expect(result).toEqual({ failed: 'refused', refusal: detail });
-      expect(log.lines.error).toEqual([expect.stringMatching(new RegExp(`${name}.*failed \\(${status}\\): `))]);
-      expect(log.lines.error[0]).toContain(detail);
+      expect(log.lines.error).toEqual([`[HttpMEditClient] ${what} failed (${status}): ${detail}`]);
     });
 
     it.each([
