@@ -141,7 +141,7 @@ internal static class PluginTrees
     }
 
     private static async Task<IMod> DeserializeTree(string treeRoot, CancellationToken cancel) =>
-        HeaderDocument.WithAbsentNextObjectIdAsZero(
+        HeaderDocument.RestoreOmittedNextObjectId(
             await RecordTextCodecGeneratorSeed.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel),
             await File.ReadAllBytesAsync(Path.Combine(treeRoot, DocumentFileNames.Root), cancel));
 

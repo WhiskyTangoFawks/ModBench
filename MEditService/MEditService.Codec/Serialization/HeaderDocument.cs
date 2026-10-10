@@ -53,14 +53,16 @@ public static class HeaderDocument
                 folder, InlineWorkDropoff.Instance, CancellationToken.None,
                 fileSystem: new OnlyTheRootDocumentExists(rootPath),
                 streamCreator: new SupplyRootDocument(rootPath, body)));
-        return WithAbsentNextObjectIdAsZero(mod, body);
+        return RestoreOmittedNextObjectId(mod, body);
     }
 
-    /// <summary>A header document omits a Next Object ID of zero, but a new mod starts at 0x800, so
-    /// a mod read from a document that omits it holds 0x800 unless it is put back to zero.</summary>
-    public static IMod WithAbsentNextObjectIdAsZero(IMod mod, byte[] rootDocument)
+    /// <summary>A document omits a Next Object ID equal to Mutagen's default, which a new mod does
+    /// not start at, so a mod read from a document that omits it is put back to that default. Every
+    /// reader of a root document applies this; the Codec reads no file, so the gateway cannot.</summary>
+    public static IMod RestoreOmittedNextObjectId(IMod mod, byte[] rootDocument)
     {
-        if (JsonNode.Parse(rootDocument)?["ModHeader"]?["Stats"]?["NextFormID"] is null) mod.NextFormID = 0;
+        if (JsonNode.Parse(rootDocument)?["ModHeader"]?["Stats"]?["NextFormID"] is null)
+            mod.NextFormID = ModStats.NextFormIDDefault;
         return mod;
     }
 

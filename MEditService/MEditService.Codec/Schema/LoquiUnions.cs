@@ -114,7 +114,7 @@ public static class LoquiUnions
         }
 
         var result = UnionMembers(leaves, s => s.Name, s => s)
-            .Select(m => m.First with { AllowsNull = true, Variants = m.Variants })
+            .Select(m => m.Face with { AllowsNull = true, Variants = m.Variants })
             .ToList();
         result.Add(BuildUnionDiscriminatorField(union with { Leaves = reached }));
         return result;
@@ -134,16 +134,16 @@ public static class LoquiUnions
             .ToList();
 
         columns.AddRange(UnionMembers(leaves, c => c.Name, c => c.Field)
-            .Select(m => m.First with
+            .Select(m => m.Face with
             {
-                Field = m.First.Field with
+                Field = m.Face.Field with
                 {
                     AllowsNull = true,
                     Variants = m.Variants?.ToDictionary(v => v.Key, v => v.Value.Field, StringComparer.Ordinal),
                 },
                 // A column the record classes shape differently, or one only some of them declare,
                 // has no default to put back for the rest.
-                AbsentIsNull = m.Variants != null || m.First.AbsentIsNull,
+                AbsentIsNull = m.Variants != null || m.Face.AbsentIsNull,
             }));
 
         var discriminator = BuildUnionDiscriminatorField(union);
@@ -151,10 +151,10 @@ public static class LoquiUnions
         return columns;
     }
 
-    // One field per member name, shaped as its first leaf's, with a variant per leaf wherever the
+    // One field per member name, carried as the face that governs its siblings (else the first leaf's), with a variant per leaf wherever the
     // leaves disagree or one lacks it. Shape is the whole wire description, compared as JSON since
     // FieldMetadata's collections compare by reference.
-    private static IEnumerable<(T First, IReadOnlyDictionary<string, T>? Variants)> UnionMembers<T>(
+    private static IEnumerable<(T Face, IReadOnlyDictionary<string, T>? Variants)> UnionMembers<T>(
         IReadOnlyList<(string ClassName, IReadOnlyList<T> Members)> leaves, Func<T, string> name, Func<T, FieldMetadata> shape)
     {
         var byName = leaves
@@ -165,7 +165,7 @@ public static class LoquiUnions
             var declaring = group.ToList();
             var alike = declaring.Count == leaves.Count
                 && declaring.Select(d => JsonSerializer.Serialize(shape(d.Member))).Distinct(StringComparer.Ordinal).Count() == 1;
-            // The field's own face is the one that governs siblings, whatever order the assembly lists its leaves in.
+            // Whatever order the assembly lists its leaves in.
             var face = declaring.FirstOrDefault(d => shape(d.Member).SiblingsInUse != null, declaring[0]);
             yield return (face.Member, alike ? null : declaring.ToDictionary(d => d.ClassName, d => d.Member, StringComparer.Ordinal));
         }
