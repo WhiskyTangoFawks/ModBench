@@ -13,33 +13,33 @@ namespace MEditService.Http.Tests.TestSupport;
 /// it, as another window's hold does.</summary>
 internal sealed class FailingQueries(string? rebuildRefusal = null) : IRecordQueryService, IWorldspaceQueryService
 {
-    public IReadOnlyList<PluginRow> GetPlugins() => throw Failed();
+    public Answer<IReadOnlyList<PluginRow>, IndexRefused> GetPlugins() => throw Failed();
 
-    public PagedResult<RecordSummary> GetRecords(
+    public Answer<PagedResult<RecordSummary>, IndexRefused> GetRecords(
         IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset) => throw Failed();
 
-    public RecordDetail? GetRecord(string formKey) => throw Failed();
+    public Answer<RecordDetail?, IndexRefused> GetRecord(string formKey) => throw Failed();
 
-    public CompareResult? GetCompare(string formKey, CopyText? text = null) => throw Failed();
+    public Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text = null) => throw Failed();
 
-    public CompareResult GetCompareRecords(IReadOnlyList<RecordCopy> copies) => throw Failed();
+    public Answer<CompareResult, IndexRefused> GetCompareRecords(IReadOnlyList<RecordCopy> copies) => throw Failed();
 
-    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(PluginAddress plugin) => throw Failed();
+    public Answer<IReadOnlyList<PluginRecordTypeCount>, IndexRefused> GetPluginRecordTypes(PluginAddress plugin) => throw Failed();
 
-    public WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin) => throw Failed();
+    public Answer<WorkingTreeStatesBeneath, IndexRefused> GetWorkingTreeStatesBeneath(PluginAddress plugin) => throw Failed();
 
-    public IReadOnlyList<RecordTypeChoice> GetCreatableRecordTypes() => throw Failed();
+    public Answer<IReadOnlyList<RecordTypeChoice>, IndexRefused> GetCreatableRecordTypes() => throw Failed();
 
-    public IReadOnlyList<RecordTypeChoice>? GetChildRecordTypes(PluginAddress plugin, string formKey) => throw Failed();
+    public Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused> GetChildRecordTypes(PluginAddress plugin, string formKey) => throw Failed();
 
-    public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => throw Failed();
-    public IReadOnlyList<ReferenceResult> GetReferencesInActiveOrTrackedPlugins(string targetFormKey) => throw Failed();
+    public Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferences(string targetFormKey) => throw Failed();
+    public Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferencesInActiveOrTrackedPlugins(string targetFormKey) => throw Failed();
 
-    public Answer<RenderedDocument?, SourceFailure> GetRenderedDocument(PluginAddress plugin, string formKey) => throw Failed();
+    public Answer<RenderedDocument?, IndexRefused> GetRenderedDocument(PluginAddress plugin, string formKey) => throw Failed();
 
-    public Answer<CopyDocument?, SourceFailure> GetCopyDocument(PluginAddress plugin, string formKey) => throw Failed();
+    public Answer<CopyDocument?, IndexRefused> GetCopyDocument(PluginAddress plugin, string formKey) => throw Failed();
 
-    public RecordOfFileAnswer GetRecordOfFile(string path) => throw Failed();
+    public Answer<RecordOfFileAnswer, IndexRefused> GetRecordOfFile(string path) => throw Failed();
 
     public LoadOrderStatus GetStatus() => throw Failed();
 
@@ -47,22 +47,22 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IRecordQue
 
     public Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout) => throw Failed();
 
-    public (string Sql, string Source)? GetFilter() => throw Failed();
+    public Answer<(string Sql, string Source)?, IndexRefused> GetFilter() => throw Failed();
 
-    public void SetFilter(string sql, string source) => throw Failed();
+    public IndexRefused? SetFilter(string sql, string source) => throw Failed();
 
     public void ClearFilter() => throw Failed();
 
     public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot) =>
         rebuildRefusal is null ? throw Failed() : new(StoreRebuildRefusal.HeldByAnotherWindow, rebuildRefusal);
 
-    public IReadOnlyList<WorldspaceSummary> GetWorldspaces(PluginAddress plugin) => throw Failed();
+    public Answer<IReadOnlyList<WorldspaceSummary>, IndexRefused> GetWorldspaces(PluginAddress plugin) => throw Failed();
 
-    public WorldspaceBlocks GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey) => throw Failed();
+    public Answer<WorldspaceBlocks, IndexRefused> GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey) => throw Failed();
 
-    public CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey) => throw Failed();
+    public Answer<CellChildRecords, IndexRefused> GetCellChildRecords(PluginAddress plugin, string cellFormKey) => throw Failed();
 
-    public IReadOnlyList<InteriorCellBlock> GetInteriorCells(PluginAddress plugin) => throw Failed();
+    public Answer<IReadOnlyList<InteriorCellBlock>, IndexRefused> GetInteriorCells(PluginAddress plugin) => throw Failed();
 
     internal static void Replace(IServiceCollection services, string? rebuildRefusal = null)
     {

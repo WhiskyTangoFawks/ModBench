@@ -17,7 +17,7 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.PlacedFormKey);
 
-        var placed = world.Index.Worldspaces.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey);
+        var placed = world.Index.Worldspaces.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey).Value();
         var cells = world.ExteriorCells();
 
         Assert.True(placed.Persistent.Single().HasParseFailure);
@@ -31,7 +31,7 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.ResponseFormKey);
 
-        Assert.True(Assert.Single(world.Index.Containers.GetChildren(SpatialWorld.Plugin, world.QuestFormKey)).HasParseFailure);
+        Assert.True(Assert.Single(world.Index.Containers.GetChildren(SpatialWorld.Plugin, world.QuestFormKey).Value()).HasParseFailure);
         Assert.True(world.Row("qust").HasParseFailure);
     }
 
@@ -41,7 +41,7 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.PlacedFormKey);
 
-        var groups = world.Index.Records.GetPluginRecordTypes(SpatialWorld.Plugin).ToDictionary(g => g.Type, g => g.HasParseFailure);
+        var groups = world.Index.Records.GetPluginRecordTypes(SpatialWorld.Plugin).Value().ToDictionary(g => g.Type, g => g.HasParseFailure);
 
         Assert.True(groups["wrld"]);
         Assert.False(groups["cell"]);
@@ -53,7 +53,7 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.PlacedFormKey);
 
-        var placed = world.Index.Worldspaces.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey);
+        var placed = world.Index.Worldspaces.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey).Value();
         var cells = world.ExteriorCells();
 
         Assert.Equal("could not be read", placed.Persistent.Single().ParseDiagnosis);
@@ -76,7 +76,7 @@ public sealed class SpatialParseFailurePrefixTests
     {
         using var world = new SpatialWorld();
 
-        var placed = world.Index.Worldspaces.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey);
+        var placed = world.Index.Worldspaces.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey).Value();
         var cells = world.ExteriorCells();
 
         Assert.False(placed.Persistent.Single().HasParseFailure);
@@ -100,7 +100,7 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.InteriorCellFormKey);
 
-        var interior = world.Index.Worldspaces.GetInteriorCells(SpatialWorld.Plugin)
+        var interior = world.Index.Worldspaces.GetInteriorCells(SpatialWorld.Plugin).Value()
             .SelectMany(block => block.SubBlocks).SelectMany(subBlock => subBlock.Cells)
             .Single(c => c.FormKey == world.InteriorCellFormKey);
         Assert.True(interior.HasParseFailure);
@@ -127,10 +127,10 @@ public sealed class SpatialParseFailurePrefixTests
         internal OpenedIndex Index { get; }
 
         internal RecordSummary Row(string recordType) =>
-            Assert.Single(Index.Records.GetRecords([recordType], Plugin, search: null, limit: 100, offset: 0).Items);
+            Assert.Single(Index.Records.GetRecords([recordType], Plugin, search: null, limit: 100, offset: 0).Value().Items);
 
         internal IReadOnlyList<CellSummary> ExteriorCells() =>
-            [.. Index.Worldspaces.GetWorldspaceBlocks(Plugin, WorldspaceFormKey).Blocks
+            [.. Index.Worldspaces.GetWorldspaceBlocks(Plugin, WorldspaceFormKey).Value().Blocks
                 .SelectMany(block => block.SubBlocks).SelectMany(subBlock => subBlock.Cells)];
 
         internal SpatialWorld()

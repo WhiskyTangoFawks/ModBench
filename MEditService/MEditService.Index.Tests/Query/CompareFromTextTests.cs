@@ -53,7 +53,7 @@ public sealed class CompareFromTextTests : IDisposable
     private static string OtherChestText => RecordTextCodec.SerializeToText(OtherChest, GameRelease.Fallout4);
 
     private CompareResult Compare(PluginAddress plugin, string text) =>
-        _index.Records.GetCompare(Chest.ToString(), new CopyText(plugin, text))
+        _index.Records.GetCompare(Chest.ToString(), new CopyText(plugin, text)).Value()
         ?? throw new InvalidOperationException("Expected the record to compare.");
 
     private static PluginAddress AddressOf(CompareOverride column) => new(column.Plugin, column.Origin);
@@ -78,7 +78,7 @@ public sealed class CompareFromTextTests : IDisposable
     [Fact]
     public void ACopyWhosePluginIsNotActive_IsAColumnOutsideTheComparison_TheActiveCopiesClassifyAsWithoutIt()
     {
-        var without = _index.Records.GetCompare(Chest.ToString()) ?? throw new InvalidOperationException("Expected the record to compare.");
+        var without = _index.Records.GetCompare(Chest.ToString()).Value() ?? throw new InvalidOperationException("Expected the record to compare.");
 
         var compare = Compare(InactivePlugin, OtherChestText);
 
@@ -99,7 +99,7 @@ public sealed class CompareFromTextTests : IDisposable
     public void AnOverriddenCopy_IsAColumnJustBeforeThePluginThatOverridesIt_OutsideTheComparison()
     {
         var overridden = new PluginAddress(ModPlugin.Name, "OtherMod");
-        var without = _index.Records.GetCompare(Chest.ToString()) ?? throw new InvalidOperationException("Expected the record to compare.");
+        var without = _index.Records.GetCompare(Chest.ToString()).Value() ?? throw new InvalidOperationException("Expected the record to compare.");
 
         var compare = Compare(overridden, OtherChestText);
 
@@ -140,7 +140,7 @@ public sealed class CompareFromTextTests : IDisposable
     [Fact]
     public void ACopyComparedAlone_IsItsOwnColumnOnly_WithNoConflictState()
     {
-        var compare = _index.Records.GetCompare(Chest.ToString(), new CopyText(InactivePlugin, OtherChestText, Alone: true))
+        var compare = _index.Records.GetCompare(Chest.ToString(), new CopyText(InactivePlugin, OtherChestText, Alone: true)).Value()
             ?? throw new InvalidOperationException("Expected the record to compare.");
 
         Assert.Equal([InactivePlugin], compare.Overrides.Select(AddressOf));
@@ -163,6 +163,6 @@ public sealed class CompareFromTextTests : IDisposable
     [Fact]
     public void ATextForAFormKeyNoPluginIndexes_HasNoComparison()
     {
-        Assert.Null(_index.Records.GetCompare("00DEAD:Nowhere.esp", new CopyText(ModPlugin, "{}")));
+        Assert.Null(_index.Records.GetCompare("00DEAD:Nowhere.esp", new CopyText(ModPlugin, "{}")).Value());
     }
 }

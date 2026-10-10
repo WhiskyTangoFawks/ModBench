@@ -20,14 +20,14 @@ public sealed class RecordTypeViewsTests
         using var index = Indexes.Reconciled(fixture);
         var npc = npcKey.ToString();
         IReadOnlyList<RecordSummary> Listed() =>
-            index.Records.GetRecords(types: null, Plugin, search: null, limit: 10, offset: 0).Items;
+            index.Records.GetRecords(types: null, Plugin, search: null, limit: 10, offset: 0).Value().Items;
 
-        Assert.Equal("LazyNpc", (index.Records.GetRecord(npc)
+        Assert.Equal("LazyNpc", (index.Records.GetRecord(npc).Value()
             ?? throw new InvalidOperationException($"Expected a document for '{npc}'.")).EditorId);
         Assert.Equal("LazyNpc", index.DocumentOf(npc, Plugin).EditorId);
         Assert.Contains(Listed(), i => i.FormKey == npc);
         Assert.Equal("npc_", index.ResolutionOf(npc, Plugin, npc).RecordType);
-        Assert.Contains(index.Records.GetPluginRecordTypes(Plugin), c => c.Type == "npc_" && c.Count == 1);
+        Assert.Contains(index.Records.GetPluginRecordTypes(Plugin).Value(), c => c.Type == "npc_" && c.Count == 1);
 
         index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'LazyNpc'", "filter.sql");
 

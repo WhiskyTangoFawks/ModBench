@@ -1,14 +1,15 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.Index.Queries;
 
 public interface IWorldspaceQueryService
 {
-    IReadOnlyList<WorldspaceSummary> GetWorldspaces(PluginAddress plugin);
-    WorldspaceBlocks GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey);
-    CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey);
-    IReadOnlyList<InteriorCellBlock> GetInteriorCells(PluginAddress plugin);
+    Answer<IReadOnlyList<WorldspaceSummary>, IndexRefused> GetWorldspaces(PluginAddress plugin);
+    Answer<WorldspaceBlocks, IndexRefused> GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey);
+    Answer<CellChildRecords, IndexRefused> GetCellChildRecords(PluginAddress plugin, string cellFormKey);
+    Answer<IReadOnlyList<InteriorCellBlock>, IndexRefused> GetInteriorCells(PluginAddress plugin);
 }
 
 /// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin
@@ -20,7 +21,10 @@ internal sealed class WorldspaceQueryService(IQueryIndex index, LoadOrderHolder 
     private readonly IQueryIndex _index = index;
     private readonly LoadOrderHolder _loadOrder = loadOrder;
 
-    public IReadOnlyList<WorldspaceSummary> GetWorldspaces(PluginAddress plugin)
+    public Answer<IReadOnlyList<WorldspaceSummary>, IndexRefused> GetWorldspaces(PluginAddress plugin) =>
+        IndexAnswer.Of(() => WorldspacesOf(plugin));
+
+    private IReadOnlyList<WorldspaceSummary> WorldspacesOf(PluginAddress plugin)
     {
         var repo = _index.RequireReads();
         // Without an origin filter, two same-filename plugins' worldspace lists silently merge
@@ -33,7 +37,10 @@ internal sealed class WorldspaceQueryService(IQueryIndex index, LoadOrderHolder 
                 holdingCells.Contains(r.FormKey)))];
     }
 
-    public WorldspaceBlocks GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey)
+    public Answer<WorldspaceBlocks, IndexRefused> GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey) =>
+        IndexAnswer.Of(() => BlocksOf(plugin, worldspaceFormKey));
+
+    private WorldspaceBlocks BlocksOf(PluginAddress plugin, string worldspaceFormKey)
     {
         var cells = _index.RequireReads().GetWorldspaceCells(plugin, worldspaceFormKey);
 
@@ -69,10 +76,13 @@ internal sealed class WorldspaceQueryService(IQueryIndex index, LoadOrderHolder 
         return new WorldspaceBlocks(blocks, topCells);
     }
 
-    public CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey) =>
-        _index.RequireReads().GetCellChildRecords(plugin, cellFormKey);
+    public Answer<CellChildRecords, IndexRefused> GetCellChildRecords(PluginAddress plugin, string cellFormKey) =>
+        IndexAnswer.Of(() => _index.RequireReads().GetCellChildRecords(plugin, cellFormKey));
 
-    public IReadOnlyList<InteriorCellBlock> GetInteriorCells(PluginAddress plugin)
+    public Answer<IReadOnlyList<InteriorCellBlock>, IndexRefused> GetInteriorCells(PluginAddress plugin) =>
+        IndexAnswer.Of(() => InteriorCellsOf(plugin));
+
+    private IReadOnlyList<InteriorCellBlock> InteriorCellsOf(PluginAddress plugin)
     {
         return [.. _index.RequireReads().GetInteriorCells(plugin)
             .GroupBy(c => c.BlockX ?? 0)

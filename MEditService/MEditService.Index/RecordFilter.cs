@@ -22,17 +22,18 @@ internal sealed class RecordFilter(Store store)
                     WHERE fh.form_key = {alias}.{formKeyColumn} AND fh.plugin = {alias}.plugin AND fh.origin = {alias}.origin))
         """;
 
-    public void Set(string? sql)
+    /// <summary>Why the SQL cannot be a filter, or null once it is the filter in force; null clears it.</summary>
+    public string? Set(string? sql)
     {
         if (sql is null)
         {
             Active = false;
-            return;
+            return null;
         }
 
         var connection = store.Connection;
         if (SqlDoor.RefusalOf(connection, sql) is { } refusal)
-            throw new ArgumentException(refusal);
+            return refusal;
 
         store.CreateRecordTypeViews();
         using var probeCmd = connection.CreateCommand();
@@ -43,7 +44,7 @@ internal sealed class RecordFilter(Store store)
             .Any(i => string.Equals(probeReader.GetName(i), "form_key", StringComparison.OrdinalIgnoreCase));
 
         if (!hasFormKey)
-            throw new ArgumentException("Filter SQL must return a form_key column");
+            return "Filter SQL must return a form_key column";
 
         DuckDbSql.ExecuteFor(connection, $"CREATE OR REPLACE TABLE {Matches} AS ({sql}\n)");
         DuckDbSql.ExecuteFor(connection, $"""
@@ -59,5 +60,6 @@ internal sealed class RecordFilter(Store store)
             SELECT plugin, origin, form_key FROM holders
             """);
         Active = true;
+        return null;
     }
 }

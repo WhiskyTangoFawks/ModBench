@@ -17,7 +17,7 @@ public sealed class PluginExtensionsQueryServiceTests
     [Fact]
     public void GetCreatable_AReleaseWithLightPlugins_NamesEveryExtension()
     {
-        Assert.Equal([".esm", ".esl", ".esp"], Holding(GameRelease.Fallout4).GetCreatable());
+        Assert.Equal([".esm", ".esl", ".esp"], Holding(GameRelease.Fallout4).GetCreatable().Value());
     }
 
     [Theory]
@@ -25,7 +25,7 @@ public sealed class PluginExtensionsQueryServiceTests
     [InlineData(GameRelease.OblivionRE)]
     public void GetCreatable_AReleaseWithoutLightPlugins_LeavesOutEsl(GameRelease release)
     {
-        Assert.Equal([".esm", ".esp"], Holding(release).GetCreatable());
+        Assert.Equal([".esm", ".esp"], Holding(release).GetCreatable().Value());
     }
 
     [Fact]
@@ -33,6 +33,6 @@ public sealed class PluginExtensionsQueryServiceTests
     {
         var service = new PluginExtensionsQueryService(new LoadOrderHolder());
 
-        Assert.Throws<NoLoadOrderException>(() => service.GetCreatable());
+        Assert.Equal(IndexRefusal.NoLoadOrder, service.GetCreatable().Refused().Refusal);
     }
 }

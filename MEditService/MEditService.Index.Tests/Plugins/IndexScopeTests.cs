@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
@@ -34,7 +35,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var index = OpenIndex(holder);
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        Assert.Equal(TestPluginFixture.PluginName, Assert.Single(index.Records.GetPlugins()).Plugin.Name);
+        Assert.Equal(TestPluginFixture.PluginName, Assert.Single(index.Records.GetPlugins().Value()).Plugin.Name);
     }
 
     [Fact]
@@ -45,7 +46,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         index.Dispose();
 
-        Assert.Throws<NoLoadOrderException>(() => index.Records.GetPlugins());
+        Assert.Equal(IndexRefusal.NoLoadOrder, index.Records.GetPlugins().Refused().Refusal);
     }
 
     [Fact]
@@ -53,8 +54,9 @@ public class IndexScopeTests(TestPluginFixture fixture)
     {
         var holder = new LoadOrderHolder();
         using var index = OpenIndex(holder);
-        var ex = Assert.Throws<NoLoadOrderException>(() => index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql"));
-        Assert.Contains("No load order", ex.Message);
+        var refused = index.Records.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
+        Assert.Equal(IndexRefusal.NoLoadOrder, refused?.Refusal);
+        Assert.Contains("No load order", refused?.Message);
     }
 
     [Fact]
@@ -66,7 +68,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         index.ClearFilter();
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        Assert.Null(index.Records.GetFilter());
+        Assert.Null(index.Records.GetFilter().Value());
     }
 
     [Fact]
@@ -75,7 +77,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         var holder = new LoadOrderHolder();
         using var index = ReconciledIndex(holder);
         index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
-        Assert.Equal("SELECT form_key FROM \"NPC_\"", index.Records.GetFilter()?.Sql);
+        Assert.Equal("SELECT form_key FROM \"NPC_\"", index.Records.GetFilter().Value()?.Sql);
     }
 
     [Fact]
@@ -85,7 +87,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var index = ReconciledIndex(holder);
         index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
         index.ClearFilter();
-        Assert.Null(index.Records.GetFilter());
+        Assert.Null(index.Records.GetFilter().Value());
     }
 
     [Fact]
@@ -98,7 +100,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
 
-        Assert.Null(index.Records.GetFilter());
+        Assert.Null(index.Records.GetFilter().Value());
     }
 
     [Fact]
@@ -111,7 +113,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.SkyrimSE);
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        Assert.Null(index.Records.GetFilter());
+        Assert.Null(index.Records.GetFilter().Value());
     }
 
     [Fact]
@@ -124,7 +126,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
         index.Reconcile(holder, other.DataFolder, other.Plugins, GameRelease.Fallout4);
 
-        Assert.Null(index.Records.GetFilter());
+        Assert.Null(index.Records.GetFilter().Value());
     }
 
     [Fact]
@@ -205,7 +207,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             Assert.Contains(
                 index.ListedIn(new PluginAddress("Plugin.esp", PluginOrigin.DataDirectory)),
                 row => row.EditorId == "NotANumber");
-            Assert.Null(index.Records.GetFilter());
+            Assert.Null(index.Records.GetFilter().Value());
             var cleared = Assert.Single(notifications.Notifications.OfType<RecordFilterClearedNotification>());
             Assert.Equal("filter.sql", cleared.Source);
             Assert.Contains("NotANumber", cleared.Reason, StringComparison.Ordinal);
@@ -238,7 +240,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     private static PagedResult<RecordSummary> NpcsListed(OpenedIndex index) =>
-        index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0);
+        index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value();
 
     private OpenedIndex ReconciledIndex(LoadOrderHolder holder)
     {

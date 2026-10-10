@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.Index.Queries;
 
@@ -17,7 +18,9 @@ public sealed class MalformedPluginQueryService
     }
 
     /// <summary>A plugin the index has not reached holds no rows yet and would read clean.</summary>
-    public IReadOnlyList<PluginDiagnosisReport> GetLoadOrderDiagnoses()
+    public Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses() => IndexAnswer.Of(Diagnoses);
+
+    private IReadOnlyList<PluginDiagnosisReport> Diagnoses()
     {
         var reads = _index.RequireWholeSetReads();
         var held = _loadOrder.Require();

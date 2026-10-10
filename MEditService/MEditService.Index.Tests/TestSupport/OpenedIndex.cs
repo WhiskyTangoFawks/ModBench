@@ -30,7 +30,7 @@ internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder hol
 
     internal long Sequence => Records.GetSequence();
 
-    internal void SetFilter(string sql, string source) => Records.SetFilter(sql, source);
+    internal void SetFilter(string sql, string source) => Records.SetFilter(sql, source).Accepted();
 
     internal void ClearFilter() => Records.ClearFilter();
 
@@ -39,15 +39,7 @@ internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder hol
     /// write is in flight.</summary>
     internal void Settled()
     {
-        (string Sql, string Source)? filter;
-        try
-        {
-            filter = Records.GetFilter();
-        }
-        catch (NoLoadOrderException)
-        {
-            return;
-        }
+        if (!Records.GetFilter().Holds(out var filter, out _)) return;
         if (filter is var (sql, source)) SetFilter(sql, source);
         else ClearFilter();
     }

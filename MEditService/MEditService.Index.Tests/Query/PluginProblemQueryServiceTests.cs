@@ -57,7 +57,7 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
     }
 
     private static IReadOnlyList<PluginProblems> Ready(OpenedIndex index) =>
-        index.Problems.GetProblems();
+        index.Problems.GetProblems().Value();
 
     private string SourceFileHolding(Plugin plugin, string editorId) =>
         Directory.EnumerateFiles(PluginSourceRoot.In(Entry(plugin).ModFolderOf(), plugin.Name), "*.json", SearchOption.AllDirectories)
@@ -223,7 +223,7 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
         using var loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider([], entry =>
         {
             if (reconciled is { } ready && entry.Message.StartsWith("Reconciling load order", StringComparison.Ordinal))
-                answered ??= ready.Problems.GetProblems();
+                answered ??= ready.Problems.GetProblems().Value();
         })));
         using var index = Indexes.Open(holder, loggerFactory: loggers);
         index.Reconcile(holder, Fixture.GameDirectory, Fixture.Plugins, GameRelease.Fallout4);
@@ -323,7 +323,7 @@ public sealed class PluginProblemQueryServiceTests : IDisposable
         var load = Task.Run(() => index.Reconcile(holder, Fixture.GameDirectory, plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        Assert.Throws<IndexNotReadyException>(index.Problems.GetProblems);
+        Assert.Equal(IndexRefusal.IndexNotReady, index.Problems.GetProblems().Refused().Refusal);
 
         gate.Release();
         await load;

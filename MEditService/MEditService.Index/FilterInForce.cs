@@ -18,13 +18,15 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
     }
 
     /// <summary>Materializes <paramref name="filter"/> in <paramref name="index"/> and holds it for
-    /// <paramref name="scope"/>; null clears both. Throws what the index's door throws.</summary>
-    public void Set(DuckDbRecordIndex index, IndexScope scope, (string Sql, string Source)? filter)
+    /// <paramref name="scope"/>; null clears both. Answers why the SQL cannot be a filter, leaving the one in
+    /// force as it was; throws what the index's door throws.</summary>
+    public string? Set(DuckDbRecordIndex index, IndexScope scope, (string Sql, string Source)? filter)
     {
         lock (_lock)
         {
-            index.SetFilter(filter?.Sql);
+            if (index.SetFilter(filter?.Sql) is { } rejection) return rejection;
             _current = filter is { } set ? (set.Sql, set.Source, scope) : null;
+            return null;
         }
     }
 
@@ -61,17 +63,22 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
             }
             try
             {
-                index.SetFilter(filter.Sql);
-                return null;
+                if (index.SetFilter(filter.Sql) is not { } rejection) return null;
+                return Cleared(index, filter.Source, rejection);
             }
             catch (DbException ex)
             {
                 logger.LogWarning(ex,
                     "Could not re-materialize the active filter ({Error}); the filter is cleared", ex.Message);
-                index.SetFilter(null);
-                _current = null;
-                return new RecordFilterClearedNotification(filter.Source, ex.Message);
+                return Cleared(index, filter.Source, ex.Message);
             }
         }
+    }
+
+    private RecordFilterClearedNotification Cleared(DuckDbRecordIndex index, string source, string reason)
+    {
+        index.SetFilter(null);
+        _current = null;
+        return new RecordFilterClearedNotification(source, reason);
     }
 }
