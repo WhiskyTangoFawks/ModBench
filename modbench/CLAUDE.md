@@ -15,4 +15,3 @@ npx vitest run src/<box>   # skips the cross-cutting scans in src/test/; npm run
 - A wait in a test is on a value: a fake clock advances time, or the delay is injected as zero. A check that something never happens waits for a later event ordered after it. Where no such event exists, it waits a fixed window.
 - A rule ESLint holds is tested by ESLint.
 - A removal is proved by the build; each test asserts what the code does.
-- An good integration test treats the service under test as a black box, in order to verify that the chain of modules work end to end. In this context, that typically means driving Modbench as VS Code does, through its commands, and observing the outputs at the end of the chain: e.g. the mock backend, the disk and the Output.

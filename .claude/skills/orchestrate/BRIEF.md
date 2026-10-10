@@ -31,4 +31,4 @@ To park, commit WIP and end your turn with the question as the report.
 
 Done means committed. Gates are green, the SHA is reported, and `git status` is clean. Say committed, never landed.
 
-Report test counts as passed before, passed after, and delta, with skipped stated separately.
+Report test counts as passed before, passed after, and delta, with skipped stated separately. Name each test you deleted, with the member it tested or the test that now holds its case.

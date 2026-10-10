@@ -2,7 +2,7 @@
 
 A modding IDE for Bethesda games, built inside VS Code. Modbench is a VS Code extension plus a local C# service. It manages a Mod Organizer 2 instance in place — install, order, enable — and it edits the plugins in that instance (`.esp`/`.esm`/`.esl`) record by record, xEdit-style, with git as the review and history model.
 
-Status: pre-alpha. Unreleased, no packaged builds, no users yet. Targets Fallout 4 first; the architecture is game-generic (anything [Mutagen](https://github.com/Mutagen-Modding/Mutagen) supports) and nothing is locked to one game.
+Status: pre-alpha. Unreleased, no packaged builds, no users yet. Targets Fallout 4, Skyrim and Starfield.
 
 ## What's different
 

@@ -102,7 +102,7 @@ A condition list is an array like any other. As a user, I want:
 
 1. A parameter the condition's function does not use to have no row, unless a column uses it, so an overridden record's data is never hidden. Source: xedit.md, divergence 13
 2. A change of function, or of Run On, to empty the parameters it leaves unused, so a stale value never reaches the plugin.
-3. The function chosen as any enum is chosen.
+3. The function chosen from VS Code's quick pick, in a row named Function, also where the schema holds one kind per function. Source: xEdit; an exception to § A field of several kinds, story 1
 
 ## Scripts
 

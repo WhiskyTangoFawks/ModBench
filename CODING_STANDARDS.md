@@ -18,7 +18,21 @@ A failure is data (ADR-0019) and a command returns its refusal (ADR-0019). These
 
 ## Tests
 
-Development is /tdd: a failing test, then the code that passes it, one slice at a time. These are the marks a skipped loop leaves in a diff.
+Development is /tdd: a failing test, then the code that passes it, one slice at a time.
+
+A behaviour has one owner: the box whose code decides it. Its test is at that box's seam, and no other box asserts it again.
+
+A box's test asserts what its own code decides. It takes what a box beneath decides as given, through that box or its fake.
+
+A test at a higher box asserts the composition: one test per path through its wiring, and the outcome the user sees. It never repeats the cases the box beneath owns.
+
+The cases of one rule are one table, an `it.each` or a `[Theory]` with a row per case.
+
+An integration test drives a gesture as the user does: a command through VS Code, a request through HTTP. It treats the chain of boxes as a black box and observes its ends: the disk, the backend or its fake, the Output, the view and the HTTP response. It proves the wiring: one test per gesture end to end, and one per way a refusal reaches the user, such as a status mapping.
+
+Tests share fixtures and fakes. A test uses the fake and the fixture that already exist before it builds its own.
+
+These are the marks a skipped loop or a drifted layer leaves in a diff.
 
 - A hunk changes behaviour and no test in the diff covers it. → Name the hunk. Red comes before green.
 - A test cannot fail. Its expected value is computed the way the code computes it, or it asserts only that a value exists or nothing threw, or it asserts what its own double was told to return. → Assert a known literal from the spec, or delete the test.
@@ -28,8 +42,12 @@ Development is /tdd: a failing test, then the code that passes it, one slice at 
 - A refactor hunk arrives with an edit to the test of the same behaviour. → The test was coupled to the implementation. Rewrite it at the seam so the next refactor leaves it alone.
 - A test repeats another test's assertions under a different name. → Keep one.
 - A test name says which method runs. → Rename it to say which behaviour holds.
-- A test contains a loop or a conditional. → Split it into one test per path.
+- A test contains a loop or a conditional. → Make each case a row of a table, or split it into one test per path.
 - A port's test double is a mock that asserts calls or their order. → Replace it with a fake that honours the port's contract. Tests share the fake. The fake is the port's second adapter. A test asserts a call only when the call is the contract.
+- A test asserts a case that a box beneath owns. → Delete it. If no test proves the wiring of that path, keep one.
+- A responsibility moves to another box and its tests stay behind. → Move the tests with the code, and delete what the new owner already asserts.
+- Several tests differ only in inputs and expected values. → Make them one table.
+- A test file builds data that a shared fixture already builds. → Use the fixture.
 
 ## Naming
 

@@ -29,10 +29,11 @@ As a user, I want:
 9. An untracked plugin's copy, or the copy of a plugin whose plugin source is unreadable, to open as a document mEdit renders from the plugin, read-only. It is not a file, so the file features above do not reach it. Source: ADR-0007; ADR-0001
 10. A child record, such as a placed reference, to open in a tab of its own, though it shares its cell's file. A change in either tab shows in both. Source: plugin-source.md, The tree, story 3
 11. A group's metadata file in plugin source to open in the text editor, as any JSON file does. Source: ADR-0001; Existing tools
+12. Records of different record types opened at once to open one grid too. Source: xedit.md, divergence 31
 
 ## The header
 
-One line above the grid: the record type as xEdit names it, then `EditorID [FormKey]`, or the FormKey alone when there is no EditorID. It holds no controls.
+One line above the grid: the record type as xEdit names it, then `EditorID [FormKey]`, or the FormKey alone when there is no EditorID. It holds no controls. Opened on several records, it names the first record's record type.
 
 ## The record header
 
@@ -85,6 +86,7 @@ As a user, I want:
 2. A field that holds other fields, a struct or an array, to expand into a row for each of them, indented one step for each level. Source: xEdit
 3. Every row expanded when the record opens, as xEdit opens it. Source: xEdit
 4. To expand and collapse a row from the arrow beside its label, by double clicking the label, or from the keys below. Source: VS Code's trees; xEdit
+5. Opened on records of different record types, a field of one name to be one row across them: the first record's fields in its order, then each other record's own fields in the order they first appear. Source: xedit.md, divergence 31
 
 ## The focused cell
 

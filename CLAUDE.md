@@ -50,3 +50,4 @@ principle > ADR > spec (`docs/architecture/`) > code. The higher level wins. An 
 - Generalize across mod managers. The game owns the format of `plugins.txt`. The mod manager owns the rest. MO2 is one implementation behind the Instance adapter. A scan holds the names. No scan can catch a design that assumes MO2's shape.
 - A plugin is `(origin, filename)` on every seam, payload, map key, tree row and temp path (ADR-0012). Keyed on the filename alone, two plugins that share a filename collapse into one and nothing fails. The backend scan sees only a public `string` member named `…plugin` with no `…origin` beside it; map keys, return values and all of modbench go unchecked.
 - Detection of an external change is gated; recovery is not. Anything that holds disk-derived state recovers when a file changed without Modbench's knowledge (ADR-0003).
+- A behaviour is tested once, at the box that owns it. CODING_STANDARDS.md § Tests holds the strategy.
