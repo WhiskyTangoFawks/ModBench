@@ -40,6 +40,11 @@ const FALLOUT4_MASTERS = [
   'DLCNukaWorld.esm',
 ];
 const SKYRIM_MASTERS = ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm'];
+const STARFIELD_MASTERS = [
+  'Starfield.esm', 'Constellation.esm', 'OldMars.esm', 'BlueprintShips-Starfield.esm', 'ShatteredSpace.esm',
+  'SFBGS006.esm', 'SFBGS007.esm', 'SFBGS003.esm', 'SFBGS008.esm', 'SFBGS004.esm', 'SFBGS00D.esm', 'SFBGS047.esm',
+  'SFBGS050.esm', 'BlueprintShips-SFBGS050.esm',
+];
 const FALLOUT4_COMPANIONS: PluginCompanions = {
   archiveExtension: '.ba2',
   stringsLanguages: ['en', 'de', 'it', 'es', 'esmx', 'fr', 'pl', 'cn', 'zhhans', 'ja', 'ptbr', 'ru'],
@@ -78,6 +83,10 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS,
   },
   EnderalLE: { gameName: 'Enderal', nexusSlug: 'enderal', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS },
+  Starfield: {
+    gameName: 'Starfield', nexusSlug: 'starfield', masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc',
+    scriptExtenderFolder: 'sfse', pluginCompanions: FALLOUT4_COMPANIONS,
+  },
   Oblivion: { gameName: 'Oblivion', nexusSlug: 'oblivion', masters: ['Oblivion.esm'], scriptExtenderFolder: 'obse', pluginCompanions: NO_STRINGS_COMPANIONS },
 };
 
