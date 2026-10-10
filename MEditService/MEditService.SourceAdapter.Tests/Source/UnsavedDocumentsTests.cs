@@ -2,8 +2,8 @@ namespace MEditService.SourceAdapter.Tests.Source;
 
 public sealed class UnsavedDocumentsTests
 {
-    private static readonly DocumentChange A = new(Path.Combine(Path.GetTempPath(), "A.json"), "a");
-    private static readonly DocumentChange B = new(Path.Combine(Path.GetTempPath(), "B.json"), "b");
+    private static readonly DocumentChange A = new(Path.GetFullPath("A.json"), "a");
+    private static readonly DocumentChange B = new(Path.GetFullPath("B.json"), "b");
 
     private readonly UnsavedDocuments _unsaved = new();
     private readonly List<string[]> _arrivals = [];

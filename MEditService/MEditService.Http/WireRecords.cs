@@ -75,7 +75,7 @@ internal sealed record RecordEditChangesResponse(
 }
 
 /// <summary>Documents are the unsaved texts of every dirty plugin-source document.</summary>
-internal sealed record UnsavedDocumentsRequest(IReadOnlyList<DocumentChange>? Documents);
+internal sealed record UnsavedDocumentsRequest(IReadOnlyList<DocumentChange> Documents);
 
 // The three lifecycle gestures' wire shapes, on the same door (Plugin/Origin as the compound
 // identity, refusals as ProblemDetails carrying the same `refusal` extension) Edit already
