@@ -25,16 +25,6 @@ internal sealed class RecordFilter(Store store)
         """;
 
     /// <summary>Why the SQL cannot be a filter, or null once it is the filter in force; null clears it.</summary>
-    private static bool ReturnsFormKey(DuckDBConnection connection, string sql)
-    {
-        using var probeCmd = connection.CreateCommand();
-        // The newline keeps a trailing line comment in the filter from swallowing the wrapper.
-        probeCmd.CommandText = $"SELECT * FROM ({sql}\n) __probe LIMIT 0";
-        using var probeReader = probeCmd.ExecuteReader();
-        return Enumerable.Range(0, probeReader.FieldCount)
-            .Any(i => string.Equals(probeReader.GetName(i), "form_key", StringComparison.OrdinalIgnoreCase));
-    }
-
     public string? Set(string? sql)
     {
         if (sql is null)
@@ -71,5 +61,15 @@ internal sealed class RecordFilter(Store store)
             """);
         Active = true;
         return null;
+    }
+
+    private static bool ReturnsFormKey(DuckDBConnection connection, string sql)
+    {
+        using var probeCmd = connection.CreateCommand();
+        // The newline keeps a trailing line comment in the filter from swallowing the wrapper.
+        probeCmd.CommandText = $"SELECT * FROM ({sql}\n) __probe LIMIT 0";
+        using var probeReader = probeCmd.ExecuteReader();
+        return Enumerable.Range(0, probeReader.FieldCount)
+            .Any(i => string.Equals(probeReader.GetName(i), "form_key", StringComparison.OrdinalIgnoreCase));
     }
 }
