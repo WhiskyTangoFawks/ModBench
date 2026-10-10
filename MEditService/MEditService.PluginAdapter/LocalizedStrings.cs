@@ -45,8 +45,7 @@ internal static class LocalizedStrings
     }
 
     /// <summary>A missing strings file is refused by name: <c>TranslatedString.TryLookup</c> returns false
-    /// silently for one. Mutagen's writer always emits all three files for a language, so a missing one
-    /// is lost data. Asked of the lookup the read uses, which finds a file loose or in an archive.</summary>
+    /// silently for one. Asked of the lookup the read uses, which finds a file loose or in an archive.</summary>
     internal static string? FindMissingStringsFile(
         IModGetter mod, string pluginName, PluginStrings strings, GameRelease gameRelease)
     {
