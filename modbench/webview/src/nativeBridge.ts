@@ -1,7 +1,7 @@
 import { vscode } from './vscode';
 import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseExtensionToWebview,
-  type ArrayParentContext, type ColumnCopy, type ExtensionToWebview, type FocusedCellContext, type RecordEditEnvelope, type RecordLoadAnswer, type ViewState,
+  type ArrayParentContext, type ColumnCopy, type EnumChoice, type ExtensionToWebview, type FocusedCellContext, type RecordEditEnvelope, type RecordLoadAnswer, type ViewState,
   type WebviewToExtension,
 } from '../../src/wire/messages';
 import { readRecordPageGlobals, type RecordPageGlobals } from '../../src/wire/recordPage';
@@ -66,6 +66,15 @@ export function pickFormKey(seed: string, validTypes: string[]): Promise<string 
     EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED,
     msg => (msg.type === EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED ? msg.formKey : null),
     requestId => ({ type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId, seed, validTypes }),
+  );
+}
+
+// The same native pick for an enum. Resolves to the chosen value, or null on Escape/blur.
+export function pickEnumValue(choices: EnumChoice[], current: string): Promise<string | null> {
+  return requestReply(
+    EXTENSION_TO_WEBVIEW.ENUM_PICKED,
+    msg => (msg.type === EXTENSION_TO_WEBVIEW.ENUM_PICKED ? msg.value : null),
+    requestId => ({ type: WEBVIEW_TO_EXTENSION.OPEN_ENUM_PICKER, requestId, choices, current }),
   );
 }
 
