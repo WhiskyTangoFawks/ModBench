@@ -29,6 +29,12 @@ public sealed class WriteGatesOverAFakeSourceTests
         return TestEditService.Over(holder, source: source);
     }
 
+    private static IServiceProvider OverTrackedOnDisk(FakeSourceAdapter source, out SourceEditFixture disk)
+    {
+        disk = SourceEditFixture.Tracked();
+        return TestEditService.Over(disk.Holder, source: source);
+    }
+
     private static RecordEditChanges SetHeight(IServiceProvider services, string formKey) =>
         services.GetRequiredService<EditRecordChangesHandler>()
             .Changes(Plugin, formKey, SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")));
@@ -36,7 +42,11 @@ public sealed class WriteGatesOverAFakeSourceTests
     [Fact]
     public void EditingAPluginOfAnUntrackedMod_IsRefused_NamingTheTrackCommand()
     {
-        var result = SetHeight(Over(new FakeSourceAdapter()), Npc).Outcome;
+        var services = OverTrackedOnDisk(new FakeSourceAdapter(), out var disk);
+        using var _ = disk;
+
+        var result = services.GetRequiredService<EditRecordChangesHandler>()
+            .Changes(disk.Plugin, disk.Npc.ToString(), SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).Outcome;
 
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
         Assert.Contains("Track its mod", result.Message, StringComparison.Ordinal);
@@ -45,7 +55,11 @@ public sealed class WriteGatesOverAFakeSourceTests
     [Fact]
     public void EditingAFormKeyNoDocumentHolds_OnAnUntrackedPlugin_StillRefusesAsUntracked()
     {
-        var result = SetHeight(Over(new FakeSourceAdapter()), $"ABCDEF:{Plugin.Name}").Outcome;
+        var services = OverTrackedOnDisk(new FakeSourceAdapter(), out var disk);
+        using var _ = disk;
+
+        var result = services.GetRequiredService<EditRecordChangesHandler>()
+            .Changes(disk.Plugin, $"ABCDEF:{disk.Plugin.Name}", SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).Outcome;
 
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
     }
