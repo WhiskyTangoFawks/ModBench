@@ -63,7 +63,7 @@ internal sealed record SchemaAnnotations(
     IReadOnlyList<KnownDefect> KnownDefects,
     // See FieldMetadata.SiblingsInUse. The inner map must name every enum value, since an unnamed one
     // would silently idle every member the row governs; validated in all four directions.
-    IReadOnlyDictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
+    SiblingsInUseRows SiblingsInUse,
     // xEdit's wbArrayS: elements identified by key members (Mutagen member names, dotted one struct
     // down), not by position. Aligned by key in the compare grid, kept in the order held.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
@@ -128,15 +128,15 @@ internal sealed record SchemaAnnotations(
         new("IMajorRecordGetter", "FormVersion", "Form Version", IgnoredInConflicts: true),
     ];
 
-    // Each game's ModHeader declares these (its *ModHeader.xml in Mutagen), the TES4 record's header
-    // first, in wbRecordHeader's order (wbDefinitionsCommon.pas).
     // The game's codec project supplies the real rows (SchemaReflector).
-    private static readonly Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>> NoSiblingsInUse = [];
+    private static readonly SiblingsInUseRows NoSiblingsInUse = [];
 
     private static string ModHeaderGetter(GameCategory game) => $"I{game}ModHeaderGetter";
 
     private static string MajorRecordGetter(GameCategory game) => $"I{game}MajorRecordGetter";
 
+    // Each game's ModHeader declares these (its *ModHeader.xml in Mutagen), the TES4 record's header
+    // first, in wbRecordHeader's order (wbDefinitionsCommon.pas).
     private static PluginHeaderMember[] PluginHeaderMembersOf(string modHeaderGetter) =>
     [
         new(modHeaderGetter, "Flags", "Record Flags"),

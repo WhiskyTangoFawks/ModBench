@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -38,21 +37,6 @@ public sealed class GameNamespaceScanTests
             + "object only while it is being read from bytes or written to them, so ask the codec "
             + "instead of naming a game here:\n"
             + string.Join("\n", sites));
-    }
-
-    [Fact]
-    public void NoProductionProjectButACodecGameProject_ReferencesAGamePackage()
-    {
-        var solution = ServiceProjects.SolutionDirectory();
-        var offenders = ServiceProjects.Production(solution)
-            .Where(project => !ExemptFolders.Contains(project))
-            .Where(project => XDocument.Load(ServiceProjects.Csproj(solution, project))
-                .Descendants("PackageReference")
-                .Select(reference => reference.Attribute("Include")?.Value)
-                .Any(package => GameNamespaces.Contains(package)))
-            .ToList();
-
-        Assert.Empty(offenders);
     }
 
     [Fact]

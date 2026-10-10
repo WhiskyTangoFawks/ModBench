@@ -34,8 +34,8 @@ internal static class ModelIdentity
 
         // FindFirst never reaches ModHeader (not an IMajorRecordGetter); this is the header's own check,
         // scoped to OpaqueHeaderFields' allow-list — a blanket sweep would refuse legitimate divergence.
-        return HeaderOf(original) is { } originalHeader && HeaderOf(recompiled) is { } recompiledHeader
-               && FindFirstHeaderFieldDivergence(originalHeader, recompiledHeader) is { } field
+        return HeaderOf(original) is not null && HeaderOf(recompiled) is not null
+               && FindFirstHeaderFieldDivergence(original, recompiled) is { } field
             ? new Divergence(
                 PluginHeader.RecordType, FormKey.Null, null,
                 $"TES4 header field '{field}' changed after being recompiled from its own tracked source.")
@@ -98,26 +98,20 @@ internal static class ModelIdentity
         ["TypeOffsets", "Deleted", "Screenshot", "INTV", "INCC", "Author", "Description"];
 
     // The first OpaqueHeaderFields member the mask disagrees on, or null. The allow-list is shared
-    // across games; only the TransientTypes check below is FO4-shaped.
-    private static string? FindFirstHeaderFieldDivergence(ILoquiObjectGetter original, ILoquiObjectGetter recompiled)
+    // across games; the game's codec answers the transient types.
+    private static string? FindFirstHeaderFieldDivergence(IModGetter original, IModGetter recompiled)
     {
-        if (FailingFields(original, recompiled).FirstOrDefault(OpaqueHeaderFields.Contains) is { } field)
+        if (HeaderOf(original) is { } originalHeader && HeaderOf(recompiled) is { } recompiledHeader
+            && FailingFields(originalHeader, recompiledHeader).FirstOrDefault(OpaqueHeaderFields.Contains) is { } field)
+        {
             return field;
+        }
 
         // The mask reports a TransientTypes item against the nested leaf's type and ignores a count
         // difference, so it is compared by plain values here.
-        return TransientTypesOf(original).SequenceEqual(TransientTypesOf(recompiled)) ? null : "TransientTypes";
+        var game = GameCodecs.For(original.GameRelease);
+        return game.TransientTypes(original).SequenceEqual(game.TransientTypes(recompiled)) ? null : "TransientTypes";
     }
-
-    // Not every game's header declares TransientTypes, so it is read by name like the header itself.
-    private static IEnumerable<string> TransientTypesOf(ILoquiObjectGetter header) =>
-        header.GetType().GetProperty("TransientTypes")?.GetValue(header) is IEnumerable<object> types
-            ? types.Select(type => $"{Member(type, "FormType")}:{string.Join(",", ((IEnumerable<object>)Member(type, "Links")).Select(link => ((IFormLinkIdentifier)link).FormKey))}")
-            : [];
-
-    private static object Member(object instance, string name) =>
-        instance.GetType().GetProperty(name)?.GetValue(instance)
-        ?? throw new InvalidOperationException($"{instance.GetType().Name} has no {name}.");
 
     // Both records through the codec, text-compared.
     private static string? FirstCodecDocumentDifference(

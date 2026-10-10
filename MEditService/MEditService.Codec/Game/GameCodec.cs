@@ -26,8 +26,10 @@ internal sealed class GameCodec : IGameCodec
 
     public Assembly GeneratedSerializers => typeof(GameCodec).Assembly;
 
-    public IReadOnlyDictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse =>
+    public SiblingsInUseRows SiblingsInUse =>
         GameSpecifics.SiblingsInUse;
+
+    public IReadOnlyList<string> TransientTypes(IModGetter plugin) => GameSpecifics.TransientTypes((IGameModGetter)plugin);
 
     public uint NextObjectIdDefault => ModStats.NextFormIDDefault;
 
