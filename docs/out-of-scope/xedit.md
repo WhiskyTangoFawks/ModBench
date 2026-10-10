@@ -23,7 +23,7 @@ Gestures Modbench does differently.
 
 | # | Where | Modbench | xEdit | Why |
 |---|---|---|---|---|
-| 1 | FormKey, enum and kind editing | A native QuickPick | A combo box | Limitation: VS Code hosts a searchable thousand-row picker better than a webview can. |
+| 1 | FormKey and enum editing | A native QuickPick | A sorted combo box | Limitation: VS Code hosts a searchable thousand-row picker better than a webview can. |
 | 2 | The extended editor | A VS Code editor tab | A modeless form | Limitation. |
 | 3 | Copy as New Record | Prompts for nothing. The copy lands under a derived EditorID, as the Creation Kit does, and is renamed in the grid. It never mints a duplicate EditorID. | Prompts for an EditorID | Ruling. |
 | 4 | Row painting | NoConflict, OnlyOne and expanded struct rows are unpainted, so a background colour means "something here needs attention" | Tints every row | Ruling. |
@@ -121,7 +121,7 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Copy idle animations (games up to FNV) | Navigator | Game-specific |
 | Spreadsheet tabs: WEAP, ARMO, AMMO | Spreadsheet tabs (Oblivion, Skyrim only) | Game-specific |
 | Apply a script over the selection | Navigator, Referenced By: Apply Script... | Scripts, tasks or the agent |
-| Choose the next or previous member of a union (the Kind dropdown chooses it) | View grid: Next Member, Previous Member | Maintainer ruling |
+| Choose the next or previous member of a union (the Kind row chooses it) | View grid: Next Member, Previous Member | Maintainer ruling |
 | Reset a structure to its defaults | View grid: Reset structure | Scripts, tasks or the agent |
 | Copy a field's path or full path (nothing in Modbench takes a path) | View grid: Clipboard > Copy path, Copy full path | Maintainer ruling |
 | Choose a column-width mode (a column fits, and its edge drags) | View grid: Column widths | Maintainer ruling |
