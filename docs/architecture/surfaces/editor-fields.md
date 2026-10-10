@@ -134,3 +134,4 @@ A plugin's header is a record, and reads and edits as one. Its masters are the m
 - An array: given the focused row, which of add, remove, move up and move down are offered.
 - A collapsed element: given its value, what it reads.
 - The record picker: its items, what it opens on, what a pasted label searches, and what Esc yields.
+- The enum pick: its items (the names sorted, `<Unknown: n>` included when the value is unnamed), what it opens on (the current value), and what Esc yields (nothing).
