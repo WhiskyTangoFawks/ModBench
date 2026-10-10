@@ -1,8 +1,8 @@
 // The game's plugins.txt: a leading `*` marks enabled, `#` lines and blanks carry no
-// meaning, and the bottom of the file is winning-most. Mutations edit the lines, so the BOM,
-// the line ending and unmodelled lines survive untouched.
+// meaning, and the bottom of the file is winning-most. Mutations edit the lines, so
+// comment and blank lines survive untouched.
 
-import { editLines, stripBom } from './lineScan';
+import { editLines, entryLineIndices, stripBom } from './lineScan';
 
 /** The plugin order, one line per plugin file. */
 export const PLUGINS_FILE_NAME = 'plugins.txt';
@@ -19,19 +19,17 @@ export interface PluginEntry {
 }
 
 // A hand-edited plugins.txt can pad a line, so reads trim.
-const trimmedEntryContent = (line: string): string => line.trim();
-
 const isEntryLine = (line: string): boolean => {
-  const c = trimmedEntryContent(line);
+  const c = line.trim();
   return c.length > 0 && !c.startsWith('#');
 };
 
-const isEnabledEntry = (line: string): boolean => trimmedEntryContent(line).startsWith('*');
+const isEnabledEntry = (line: string): boolean => line.trim().startsWith('*');
 
 // `PluginEntry.name` is a matching key, so a hand-padded line must resolve to the
 // same name as a clean one — neither the padding nor the `*` may leak into it.
 const pluginNameOf = (line: string): string => {
-  const c = trimmedEntryContent(line);
+  const c = line.trim();
   return c.startsWith('*') ? c.slice(1) : c;
 };
 
@@ -45,9 +43,6 @@ export function parsePlugins(text: string): PluginEntry[] {
   }
   return entries;
 }
-
-const entryLineIndices = (lines: readonly string[]): number[] =>
-  [...lines.entries()].filter(([, line]) => isEntryLine(line)).map(([i]) => i);
 
 const entryLineAt = (lines: readonly string[], pluginName: string): number =>
   lines.findIndex((l) => isEntryLine(l) && pluginNameOf(l) === pluginName);
@@ -63,7 +58,6 @@ export function setPluginEnabledInText(text: string, pluginName: string, enabled
     const idx = entryLineAt(lines, pluginName);
     const line = lines[idx];
     if (line === undefined || isEnabledEntry(line) === enabled) return lines;
-    // The marker is at the first non-whitespace character: a hand-padded line keeps its padding.
     const markerAt = paddingOf(line);
     lines[idx] = line.slice(0, markerAt) + (enabled ? '*' + line.slice(markerAt) : line.slice(markerAt + 1));
     return lines;
@@ -75,7 +69,7 @@ export function setPluginEnabledInText(text: string, pluginName: string, enabled
 export function appendPluginInText(text: string, pluginName: string): string {
   return editLines(text, (lines) => {
     if (entryLineAt(lines, pluginName) !== -1) throw new Error(`Plugin already in plugins.txt: ${pluginName}`);
-    const lastEntry = entryLineIndices(lines).at(-1);
+    const lastEntry = entryLineIndices(lines, isEntryLine).at(-1);
     lines.splice(lastEntry === undefined ? lines.length : lastEntry + 1, 0, pluginName);
     return lines;
   });
@@ -95,8 +89,8 @@ export function removePluginFromText(text: string, pluginName: string): string {
 export function renamePluginInText(text: string, pluginName: string, newName: string): string {
   return editLines(text, (lines) => {
     const idx = entryLineAt(lines, pluginName);
-    const line = lines[idx];
-    if (line === undefined) throw notFound(pluginName);
+    if (idx === -1) throw notFound(pluginName);
+    const line = lines[idx] ?? '';
     const nameAt = line.indexOf(pluginName, paddingOf(line));
     lines[idx] = line.slice(0, nameAt) + newName + line.slice(nameAt + pluginName.length);
     return lines;
@@ -116,7 +110,7 @@ export function movePluginsInText(text: string, pluginNames: string[], toIndex: 
 
     const block = lines.filter(isMoved);
     const rest = lines.filter((line) => !isMoved(line));
-    const entries = entryLineIndices(rest);
+    const entries = entryLineIndices(rest, isEntryLine);
     const atEntry = entries[Math.min(Math.max(0, toIndex), entries.length)];
     const lastEntry = entries.at(-1);
     rest.splice(atEntry ?? (lastEntry === undefined ? rest.length : lastEntry + 1), 0, ...block);

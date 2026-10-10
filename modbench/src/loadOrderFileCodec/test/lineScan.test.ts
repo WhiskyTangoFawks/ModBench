@@ -15,6 +15,13 @@ describe('editLines', () => {
     expect(editLines(text, unchanged)).toBe(text);
   });
 
+  it.each([
+    ['LF and CRLF lines is written with CRLF throughout', 'a\nb\r\n', 'a\r\nb\r\nc\r\n'],
+    ['bare CR lines is written with LF throughout', 'a\rb\r', 'a\nb\nc\n'],
+  ])('a file of %s', (_name, text, expected) => {
+    expect(editLines(text, (lines) => [...lines, 'c'])).toBe(expected);
+  });
+
   it('keeps the BOM at the start when the line that carried it is removed', () => {
     expect(editLines('﻿a\r\nb\r\n', (lines) => lines.slice(1))).toBe('﻿b\r\n');
   });

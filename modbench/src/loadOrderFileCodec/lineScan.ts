@@ -1,5 +1,3 @@
-// Line-based edits of the load-order files, and the line scan the ini codecs still splice with.
-
 export interface LineRange {
   start: number;
   /** Index just past the line content, before any EOL. */
@@ -29,8 +27,8 @@ const BOM = '\uFEFF';
 export const stripBom = (text: string): string => (text.startsWith(BOM) ? text.slice(BOM.length) : text);
 
 /** Parses `text` into its BOM, line ending and lines, applies `edit` to the lines and joins them
- *  back. The file keeps the BOM and line ending it was read with, and whether its last line ends
- *  in a terminator. */
+ *  back. The file keeps its BOM and whether its last line ends in a terminator, and is written
+ *  whole with the one line ending `detectEol` names. */
 export function editLines(text: string, edit: (lines: string[]) => readonly string[]): string {
   const bom = text.startsWith(BOM) ? BOM : '';
   const body = text.slice(bom.length);
@@ -41,6 +39,10 @@ export function editLines(text: string, edit: (lines: string[]) => readonly stri
   const eol = detectEol(text);
   return bom + edited.join(eol) + (terminated && edited.length > 0 ? eol : '');
 }
+
+/** The positions of the lines `isEntry` accepts. */
+export const entryLineIndices = (lines: readonly string[], isEntry: (line: string) => boolean): number[] =>
+  [...lines.entries()].filter(([, line]) => isEntry(line)).map(([i]) => i);
 
 /** Whole-file presence, never a one-line sniff, which could name a bare `\r` the
  *  terminator when it is a partial write. Accepted cost: one stray CRLF line
