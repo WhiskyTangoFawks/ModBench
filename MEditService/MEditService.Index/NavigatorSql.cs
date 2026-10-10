@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Index.Queries;
 
 namespace MEditService.Index;
@@ -10,20 +11,13 @@ internal static class NavigatorSql
     /// response in its topic, a placed reference in its cell, an exterior cell in its worldspace.</summary>
     internal static readonly string Held = HeldIn("");
 
-    internal static string HeldIn(string schema) => $"""
-        SELECT plugin, origin, parent_form_key AS parent, child_form_key AS child,
-               CAST(NULL AS VARCHAR) AS placement_group FROM {schema}container_child
-        UNION ALL
-        SELECT plugin, origin, parent_cell, form_key, placement_group FROM {schema}placement
-        UNION ALL
-        SELECT plugin, origin, parent_worldspace, cell_form_key, NULL FROM {schema}cell_location WHERE parent_worldspace IS NOT NULL
-        """;
+    internal static string HeldIn(string schema) => $"SELECT plugin, origin, parent, child, slot FROM {schema}holdings";
 
     /// <summary>What a cell holds, by <c>parent_cell</c>: a record held outside a placement group,
     /// such as its landscape or a navmesh, lists among the temporary ones as xEdit lists it.</summary>
     internal static readonly string CellChildren = $"""
         SELECT plugin, origin, parent AS parent_cell, child AS form_key,
-               COALESCE(placement_group, 'temporary') AS placement_group
+               CASE WHEN slot = '{PersistentFlag.PersistentGroup}' THEN 'persistent' ELSE 'temporary' END AS placement_group
         FROM ({Held})
         """;
 

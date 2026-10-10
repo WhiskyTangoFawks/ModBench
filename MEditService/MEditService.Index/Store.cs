@@ -643,7 +643,7 @@ internal sealed class Store : IDisposable
         tx.Commit();
         // Per-phase load timing — "documents" spans record enumeration plus every per-record
         // cost (serialize, hash, form/VMAD/condition refs, container children, append); "extracted"
-        // spans placement/header and the form_references/container_child flushes.
+        // spans the holdings/header and form_references flushes.
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug(
@@ -906,21 +906,15 @@ internal sealed class Store : IDisposable
     }
 
     // One row per source document: every Effective record no document embeds. A worldspace's TopCell
-    // is embedded, and its null block coordinates tell it from an exterior cell, which has a directory.
-    private const string DocumentStamps = """
+    // is embedded, while an exterior cell has a directory.
+    private static readonly string DocumentStamps = $"""
         SELECT r.form_key, r.content_hash
         FROM mirror.records r
         WHERE r.plugin = $1 AND r.origin = $2
           AND NOT EXISTS (
-            SELECT 1 FROM mirror.container_child c
-            WHERE c.child_form_key = r.form_key AND c.plugin = r.plugin AND c.origin = r.origin)
-          AND NOT EXISTS (
-            SELECT 1 FROM mirror.placement p
-            WHERE p.form_key = r.form_key AND p.plugin = r.plugin AND p.origin = r.origin)
-          AND NOT EXISTS (
-            SELECT 1 FROM mirror.cell_location l
-            WHERE l.cell_form_key = r.form_key AND l.plugin = r.plugin AND l.origin = r.origin
-              AND l.parent_worldspace IS NOT NULL AND l.block_x IS NULL)
+            SELECT 1 FROM mirror.holdings h
+            WHERE h.child = r.form_key AND h.plugin = r.plugin AND h.origin = r.origin
+              AND h.slot <> {HoldingSlots.Exterior})
         """;
 
     /// <summary>The content stamp of each source document the rows were derived from, by the key of

@@ -131,6 +131,17 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         Assert.Empty(fixture.CellsOf(newWorldspaceKey));
     }
 
+    [Fact]
+    public void ARenamedWorldspaceInTheWorkingTree_StillHoldsItsExteriorCell()
+    {
+        using var fixture = new OneExteriorCellWorldspaceFixture();
+        var body = fixture.Index.BodyOf(fixture.Worldspace, fixture.Plugin);
+
+        fixture.Index.Project(fixture.Entry, [(fixture.Worldspace, body.Replace("TestWorld", "RenamedWorld", StringComparison.Ordinal))]);
+
+        Assert.Equal([fixture.ExteriorCell], fixture.CellsOf(fixture.Worldspace));
+    }
+
     private sealed class OneExteriorCellWorldspaceFixture : IDisposable
     {
         private const string PluginName = "WorldspaceFormId.esp";
