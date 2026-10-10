@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fakeVscodeModule, watchers } from '../../test/mo2/fakeVscodeWatcher';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
@@ -154,12 +155,23 @@ describe('Instance — which copies of a file are the same', () => {
     expect(read).toHaveLength(2);
   });
 
+  // NTFS stamps a change with a clock that ticks every 15.6 ms, so a rewrite within the tick of the last
+  // change keeps its change time.
+  async function afterTheFileSystemClockPasses(file: string): Promise<void> {
+    const { ctimeNs } = await stat(file, { bigint: true });
+    const folder = await mkdtemp(join(tmpdir(), 'modbench-clock-'));
+    const probe = join(folder, 'probe');
+    do await writeFile(probe, ''); while ((await stat(probe, { bigint: true })).ctimeNs <= ctimeNs);
+    await rm(folder, { recursive: true });
+  }
+
   it('reads again a copy another tool rewrote keeping its size and date modified', async () => {
     clockAnHourPastEveryWrite();
     const { instance, paths: [nono] } = await twoCopiesOfOneSize([]);
     const copy = present(nono, 'the winning copy');
     await utimes(copy, MODIFIED_ON_A_WHOLE_SECOND, MODIFIED_ON_A_WHOLE_SECOND);
     await instance.sameCopies([SHARED]);
+    await afterTheFileSystemClockPasses(copy);
 
     await writeFile(copy, 'bbbb');
     await utimes(copy, MODIFIED_ON_A_WHOLE_SECOND, MODIFIED_ON_A_WHOLE_SECOND);
