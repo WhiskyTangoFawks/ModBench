@@ -2,7 +2,7 @@
 
 This file owns the UX vocabulary and the catalog of gestures. `CONTEXT.md` owns the domain vocabulary. A gesture or command the code has and this file lacks is a defect in the code. A gesture this file has and the model cannot hold is a ticket.
 
-- Object: a domain noun the user acts on: Instance, Profile, Mod, Separator, Plugin, Record, Referrer, Downloaded file. `CONTEXT.md` defines each one. Settings is Modbench's own configuration, which VS Code stores at user and workspace scope. It is the object of `open settings` only, and `CONTEXT.md` does not define it, because it is not a domain noun.
+- Object: a domain noun the user acts on: Instance, Profile, Mod, Separator, Plugin, Record, Downloaded file. `CONTEXT.md` defines each one. Settings is Modbench's own configuration, which VS Code stores at user and workspace scope. It is the object of `open settings` only, and `CONTEXT.md` does not define it, because it is not a domain noun.
 - Surface: what a driving box presents to the user. One surface per driving box on the Modbench side. A surface shows objects and offers their gestures. A VS Code view or an editor realizes it.
 - Gesture: one thing the user does to an object. One row in the tables below, under the object it changes. The Gesture column holds the verb the user sees, in a menu or a label.
 - Exclude and hide: to exclude is to mark an object durably on disk. The mark leaves the object out of something until include clears it, as the Downloads list leaves out an excluded downloaded file. To hide acts on the view alone. It changes nothing on disk and ends with the window, like hide excluded or a name filter.
@@ -98,13 +98,13 @@ The xEdit Messages tab is not a surface. Failures go to the Output and the surfa
 | Plugins | Activity Bar | 3 | open |
 | Downloads | Activity Bar | 4 | collapsed |
 | Editor, the record panel | an editor tab | - | opened by the user |
-| Editor, Referenced By | Panel (`modbenchReferencedBy`) | - | follows the active record |
+| Editor, Referenced By | VS Code's References view | - | opened by the gesture |
 | Mods, the conflict table | an editor tab | - | opened by the user |
 | Plugin source, the text editor | an editor tab | - | opened by the user |
 
 No view defaults to the Secondary Side Bar: it is the home of chat. A user can still move any view there.
 
-Every view is always present. A view with nothing to show renders its own empty state, and no view hides itself. Referenced By is a Panel view because it follows the active record, and a sidebar view cannot sit beside an editor tab.
+Every view is always present. A view with nothing to show renders its own empty state, and no view hides itself.
 
 ## Every view
 
@@ -186,14 +186,9 @@ A field gesture from the palette acts on the focused cell of the record tab in f
 | delete | edits | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | edit-record |
 | copy | edits | `modbench.record.copy` | records | mode: new or override; destination plugins; replace, for a destination that holds the record | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirmation asks whether to replace it. | edit-record |
 | open | reads | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open one grid: the first record's file, with the others as its columns. A plugin header is a record. The Go to Record menu item on a reference field opens the record it points to. With no Argument, a picker finds a record by EditorID, FormID or FormKey. | query-index |
+| referenced by | reads | `modbench.record.referencedBy` | a record | - | xEdit Referenced By | List the records that reference a record, in VS Code's References view. With no Argument, the record tab in focus, or a picker. | query-index |
 | open field value | reads | `modbench.record.openFieldValue` | record, plugin, field path | - | xEdit View grid | Open a field value in an editor tab. | none |
 | filter | reads | `modbench.record.filter`, `modbench.record.clearFilter` | - | query: a `.sql` file, or a new document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | query-index |
-
-## Referrer
-
-| Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
-|---|---|---|---|---|---|---|---|
-| sort direction | reads | `modbench.referrer.sortAscending`, `modbench.referrer.sortDescending` | - | - | xEdit Referenced By | List referrers by record type, then label, or in reverse. | none |
 
 ## Downloaded file
 

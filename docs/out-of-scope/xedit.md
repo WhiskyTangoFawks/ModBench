@@ -52,6 +52,7 @@ Gestures Modbench does differently.
 | 28 | A plugin whose master is not active | Stays active and indexed, its row flagged with a master issue; its dependants are untouched | Deactivates it and every plugin that depends on it | Mutagen decides the data: xEdit cannot load a plugin without its master; Mutagen can. The picture then shows the load order the user has, as MO2's does. |
 | 29 | The order of a container's child records | Kept as the plugin holds it | Sorts a changed group by FormID when it saves it. For Oblivion to Skyrim it orders a topic's responses by their previous-response chain. | Ruling: [ADR-0020](../adr/0020-a-child-record-lives-in-its-containers-document.md). |
 | 30 | A container copied in to hold a copied child record | A Partial Form, where the game lets it be one | A full override, unless xEdit started with -IKnowWhatImDoing -AllowMakePartial | Ruling: a container copied in only to hold a child overrides none of its fields. |
+| 31 | Referenced By | A gesture on a record, answered as a snapshot in VS Code's References view | A tab beside the record view that follows the selected record | Ruling: Existing tools. |
 
 ## Omissions by object
 

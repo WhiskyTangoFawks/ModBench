@@ -6,7 +6,7 @@ The Editor surface has three more files:
 
 - [editor-fields.md](editor-fields.md): how each field reads and edits, type by type.
 - [editor-conflicts.md](editor-conflicts.md): the colours of a record order conflict.
-- [editor-referenced-by.md](editor-referenced-by.md): the Referenced By view.
+- [editor-referenced-by.md](editor-referenced-by.md): Referenced By, the records that reference a record.
 
 The panel is a grid, not a list, so the list rules in [common.md](common.md) do not apply to it. Its States, A gesture that writes and Reporting do.
 
@@ -130,7 +130,7 @@ The row menus follow VS Code's groups: open, change, source control, copy, then 
 | Where | Items, in order |
 |---|---|
 | Cell | go to record (on a FormLink that resolves) · open field value (on a text field) · add (on an array, or an element of one) · remove (on an element) · move up · move down (on an element) · copy value |
-| Column header | track (in a mod with no repository) · decompile (in a tracked mod) · compile (tracked) · copy… · delete (tracked) |
+| Column header | referenced by · track (in a mod with no repository) · decompile (in a tracked mod) · compile (tracked) · copy… · delete (tracked) |
 | Keys, on the focused cell | F2: edit. Ctrl+C: copy value. Ctrl+X: cut. Ctrl+V: paste. Delete: remove, or clear. Alt+Up, Alt+Down: move. |
 
 As a user, I want:
