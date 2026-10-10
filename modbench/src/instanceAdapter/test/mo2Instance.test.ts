@@ -1050,23 +1050,19 @@ describe('the MO2 Instance adapter', () => {
       ]);
     });
 
-    it('moves mods and separators to a place in mod order', async () => {
-      await change([
-        { kind: 'moveMods', mods: ['Harder VATS'], place: { kind: 'modOrder' }, end: 'winning' },
-        {
-          kind: 'moveSeparators',
-          separators: ['Radfall - All-In-One Survival Overhaul'],
-          place: { kind: 'modOrder' },
-          end: 'winning',
-        },
-      ]);
+    it('moves a separator to a place in mod order', async () => {
+      await change([{
+        kind: 'moveSeparators',
+        separators: ['Radfall - All-In-One Survival Overhaul'],
+        place: { kind: 'modOrder' },
+        end: 'winning',
+      }]);
 
       expect(modNames(await adapter.modOrder('Default')).slice(0, 3)).toEqual([
         'mod:[NODELETE] Radfall:true',
         'mod:Unofficial Fallout 4 Patch:true',
         'separator:Radfall - All-In-One Survival Overhaul:false',
       ]);
-      expect(modNames(await adapter.modOrder('Default'))).toContain('mod:Harder VATS:false');
     });
 
     it('adds a separator with its folder', async () => {

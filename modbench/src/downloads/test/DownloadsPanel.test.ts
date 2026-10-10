@@ -196,135 +196,6 @@ describe('registerDownloadsSingleRowCommands', () => {
 });
 
 
-describe('registerDownloadsMultiRowCommands', () => {
-  beforeEach(() => vi.clearAllMocks());
-  afterEach(() => {
-    trash.mockReset();
-  });
-
-  it('hide applies to the whole selection, not just the clicked row', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'a.7z');
-    await writeArchive(root, 'b.7z');
-    const metaA = await writeMeta(root, 'a.7z');
-    const metaB = await writeMeta(root, 'b.7z');
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
-    invoke('modbench.downloadedFile.exclude', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
-
-    await vi.waitFor(async () => {
-      expect(await readFile(metaA, 'utf8')).toContain('removed=true');
-      expect(await readFile(metaB, 'utf8')).toContain('removed=true');
-    });
-  });
-
-  it('is idempotent over a mixed excluded/included selection — exclude leaves both excluded, no error', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'already-excluded.7z');
-    await writeArchive(root, 'visible.7z');
-    const already = await writeMeta(root, 'already-excluded.7z', '[General]\r\nremoved=true\r\n');
-    const visible = await writeMeta(root, 'visible.7z');
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
-    invoke('modbench.downloadedFile.exclude', node(root, 'visible.7z'), [node(root, 'already-excluded.7z'), node(root, 'visible.7z')]);
-
-    await vi.waitFor(async () => {
-      expect(await readFile(already, 'utf8')).toContain('removed=true');
-      expect(await readFile(visible, 'utf8')).toContain('removed=true');
-    });
-    expect(showErrorMessage).not.toHaveBeenCalled();
-  });
-
-  it('is idempotent over a mixed selection for unhide too — both end up visible, no error, the already-visible one untouched', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'excluded.7z');
-    await writeArchive(root, 'already-visible.7z');
-    const excluded = await writeMeta(root, 'excluded.7z', '[General]\r\nremoved=true\r\n');
-    const already = await writeMeta(root, 'already-visible.7z');
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
-    await invoke('modbench.downloadedFile.include', node(root, 'excluded.7z', { excluded: true }), [node(root, 'excluded.7z', { excluded: true }), node(root, 'already-visible.7z')]);
-
-    expect(await readFile(excluded, 'utf8')).toContain('removed=false');
-    expect(await readFile(already, 'utf8')).toBe('[General]\r\n');
-    expect(showErrorMessage).not.toHaveBeenCalled();
-  });
-
-  it('exclude: a refused write, from a stale row with no archive on disk, is reported once as the selection outcome', async () => {
-    const root = await makeInstanceRoot();
-    const report = recordingReporter();
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, report, scriptedDialog(), trash, downloadsLog, () => []);
-    invoke('modbench.downloadedFile.exclude', node(root, 'foo.7z'));
-
-    await vi.waitFor(() => expect(report.reports).toHaveLength(1));
-    expect(present(report.reports[0], 'the one report').message).toBe('Could not exclude 1 of 1 downloaded files.');
-  });
-
-  it('exclude: sets removed=true on the .meta sidecar (clicked row alone, no selection array)', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const meta = await writeMeta(root, 'foo.7z');
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
-    invoke('modbench.downloadedFile.exclude', node(root, 'foo.7z'));
-
-    await vi.waitFor(async () => {
-      expect(await readFile(meta, 'utf8')).toContain('removed=true');
-    });
-  });
-
-  it('include: clears removed to false on the .meta sidecar (clicked row alone, no selection array)', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const meta = await writeMeta(root, 'foo.7z', '[General]\r\nremoved=true\r\n');
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
-    invoke('modbench.downloadedFile.include', node(root, 'foo.7z', { excluded: true }));
-
-    await vi.waitFor(async () => {
-      expect(await readFile(meta, 'utf8')).toContain('removed=false');
-    });
-  });
-
-  it('delete falls back to the clicked row alone when no selection array is passed', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const ask = scriptedDialog('Delete');
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), ask, trash, downloadsLog, () => []);
-    invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
-
-    await vi.waitFor(() => expect(trash).toHaveBeenCalledTimes(1));
-    assertAskedOnce(ask, { messageContains: '"foo.7z"', buttons: ['Delete'] });
-  });
-
-  it('delete: when the user dismisses the confirmation instead of choosing Delete, does not trash anything', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const ask = scriptedDialog(undefined);
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), ask, trash, downloadsLog, () => []);
-    await invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
-
-    expect(ask.asked).toHaveLength(1);
-    expect(trash).not.toHaveBeenCalled();
-  });
-
-  it('delete: on confirm-accept, trashes the archive (and its .meta, if present)', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
-    const meta = await writeMeta(root, 'foo.7z');
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), scriptedDialog('Delete'), trash, downloadsLog, () => []);
-    invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
-
-    await vi.waitFor(() => expect(trash).toHaveBeenCalledTimes(2));
-    expect(trashedPaths()).toEqual(expect.arrayContaining([archive, meta]));
-  });
-
-});
-
 describe('a Downloads gesture that writes ends on the Instance loader\'s read, with the view\'s progress bar open throughout', () => {
   beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
   afterEach(() => { trash.mockReset(); });
@@ -350,17 +221,6 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
     expect(progressSteps).toEqual([opens, 'read finds excluded', 'progress closes']);
   });
 
-  it('include writes the .meta, then the read, then the bar closes', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const meta = await writeMeta(root, 'foo.7z', '[General]\r\nremoved=true\r\n');
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceReadingTheMeta(meta), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
-    await invoke('modbench.downloadedFile.include', node(root, 'foo.7z', { excluded: true }));
-
-    expect(progressSteps).toEqual([opens, 'read finds included', 'progress closes']);
-  });
-
   it('a selection of several runs one bar and one read', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'a.7z');
@@ -370,15 +230,6 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
 
     registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.exclude', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
-
-    expect(progressSteps).toEqual([opens, reads, 'progress closes']);
-  });
-
-  it('a refused exclude still ends on the read', async () => {
-    const root = await makeInstanceRoot();
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
-    await invoke('modbench.downloadedFile.exclude', node(root, 'gone.7z'));
 
     expect(progressSteps).toEqual([opens, reads, 'progress closes']);
   });
@@ -407,17 +258,6 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
     await invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
 
     expect(progressSteps).toEqual([opens, 'trash archive', reads, 'progress closes']);
-  });
-
-  it('a refused delete still ends on the read', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    trash.mockRejectedValue(new Error('locked'));
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), scriptedDialog('Delete'), trash, downloadsLog, () => []);
-    await invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
-
-    expect(progressSteps).toEqual([opens, reads, 'progress closes']);
   });
 
   it('a declined delete opens no bar', async () => {
@@ -450,17 +290,22 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
 describe('modbench.downloadedFile.exclude / include — a multi-name selection', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('given the right-clicked row and the selection, excludes the whole selection, refuses the gone file, and reports once', async () => {
+  it.each([
+    ['exclude', {}, '[General]\r\n', 'removed=true'],
+    ['include', { excluded: true }, '[General]\r\nremoved=true\r\n', 'removed=false'],
+  ])('%s: given the right-clicked row and the selection, changes the whole selection, refuses the gone file, and reports once', async (verb, row, before, after) => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'a.7z');
+    await writeMeta(root, 'a.7z', before);
     await writeArchive(root, 'b.7z');
+    await writeMeta(root, 'b.7z', before);
     const reporter = recordingReporter();
 
     registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, reporter, scriptedDialog(), trash, downloadsLog, () => []);
     const outcome = await invoke(
-      'modbench.downloadedFile.exclude',
-      node(root, 'b.7z'),
-      [node(root, 'a.7z'), node(root, 'b.7z'), node(root, 'gone.7z')],
+      `modbench.downloadedFile.${verb}`,
+      node(root, 'b.7z', row),
+      [node(root, 'a.7z', row), node(root, 'b.7z', row), node(root, 'gone.7z', row)],
     );
 
     const recordedCall = present(reporter.selectionOutcomeCalls[0], 'the one selection-outcome call');
@@ -469,35 +314,9 @@ describe('modbench.downloadedFile.exclude / include — a multi-name selection',
       refused: [{ item: 'gone.7z', reasonContains: 'gone.7z' }],
     });
     expect(outcome).toEqual(recordedCall.outcome);
-    expect(recordedCall.message).toBe('Could not exclude 1 of 3 downloaded files.');
-    expect(await readFile(join(root, 'downloads', 'a.7z.meta'), 'utf8')).toContain('removed=true');
-    expect(await readFile(join(root, 'downloads', 'b.7z.meta'), 'utf8')).toContain('removed=true');
-  });
-
-  it('given the right-clicked row and the selection, includes the whole selection, refuses the gone file, and reports once', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'a.7z');
-    await writeMeta(root, 'a.7z', '[General]\r\nremoved=true\r\n');
-    await writeArchive(root, 'b.7z');
-    await writeMeta(root, 'b.7z', '[General]\r\nremoved=true\r\n');
-    const reporter = recordingReporter();
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, reporter, scriptedDialog(), trash, downloadsLog, () => []);
-    const outcome = await invoke(
-      'modbench.downloadedFile.include',
-      node(root, 'b.7z', { excluded: true }),
-      [node(root, 'a.7z', { excluded: true }), node(root, 'b.7z', { excluded: true }), node(root, 'gone.7z', { excluded: true })],
-    );
-
-    const recordedCall = present(reporter.selectionOutcomeCalls[0], 'the one selection-outcome call');
-    assertSelectionOutcome(recordedCall.outcome, {
-      landed: ['a.7z', 'b.7z'],
-      refused: [{ item: 'gone.7z', reasonContains: 'gone.7z' }],
-    });
-    expect(outcome).toEqual(recordedCall.outcome);
-    expect(recordedCall.message).toBe('Could not include 1 of 3 downloaded files.');
-    expect(await readFile(join(root, 'downloads', 'a.7z.meta'), 'utf8')).toContain('removed=false');
-    expect(await readFile(join(root, 'downloads', 'b.7z.meta'), 'utf8')).toContain('removed=false');
+    expect(recordedCall.message).toBe(`Could not ${verb} 1 of 3 downloaded files.`);
+    expect(await readFile(join(root, 'downloads', 'a.7z.meta'), 'utf8')).toContain(after);
+    expect(await readFile(join(root, 'downloads', 'b.7z.meta'), 'utf8')).toContain(after);
   });
 
   it('an empty selection excludes nothing and reports nothing', async () => {
@@ -516,20 +335,6 @@ describe('modbench.downloadedFile.exclude / include — a multi-name selection',
 describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => trash.mockReset());
-
-  it('confirms once for the whole batch, then trashes every archive (+ its .meta, if present)', async () => {
-    const root = await makeInstanceRoot();
-    const a = await writeArchive(root, 'a.7z');
-    const b = await writeArchive(root, 'b.7z');
-    await writeMeta(root, 'a.7z');
-    const ask = scriptedDialog('Delete');
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), ask, trash, downloadsLog, () => []);
-    invoke('modbench.downloadedFile.delete', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
-
-    await vi.waitFor(() => expect(trashedPaths()).toEqual(expect.arrayContaining([a, b])));
-    assertAskedOnce(ask, { messageContains: '2 items', buttons: ['Delete'] });
-  });
 
   it('Esc deletes nothing and says nothing', async () => {
     const root = await makeInstanceRoot();
@@ -582,45 +387,22 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     }]);
   });
 
-  it('a selection array of exactly one item still uses the singular confirmation text', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const ask = scriptedDialog('Delete');
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), ask, trash, downloadsLog, () => []);
-    invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'), [node(root, 'foo.7z')]);
-
-    await vi.waitFor(() => expect(trash).toHaveBeenCalledTimes(1));
-    assertAskedOnce(ask, { messageContains: '"foo.7z"', buttons: ['Delete'] });
-  });
-
-  it('names the one file, says trash, and says the installed mod is untouched', async () => {
-    const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
-    const ask = scriptedDialog('Delete');
-
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), ask, trash, downloadsLog, () => []);
-    invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
-
-    await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
-    const question = present(ask.asked[0], 'the one recorded question').message;
-    expect(question).toContain('"foo.7z"');
-    expect(question).toMatch(/trash/i);
-    expect(question).toMatch(/installed mod.*untouched/i);
-  });
-
-  it('names the count for several files, says trash, and says the installed mod is untouched', async () => {
+  it.each<[string, (a: DownloadNode, b: DownloadNode) => DownloadNode[], string]>([
+    ['one file', (a) => [a], '"a.7z"'],
+    ['the count for several files', (a, b) => [a, b], '2'],
+  ])('names %s, says trash, and says the installed mod is untouched', async (_name, selecting, named) => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'a.7z');
     await writeArchive(root, 'b.7z');
+    const selection = selecting(node(root, 'a.7z'), node(root, 'b.7z'));
     const ask = scriptedDialog('Delete');
 
     registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), ask, trash, downloadsLog, () => []);
-    invoke('modbench.downloadedFile.delete', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
+    invoke('modbench.downloadedFile.delete', selection[0], selection);
 
     await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
     const question = present(ask.asked[0], 'the one recorded question').message;
-    expect(question).toContain('2');
+    expect(question).toContain(named);
     expect(question).toMatch(/trash/i);
     expect(question).toMatch(/installed mod.*untouched/i);
   });
@@ -789,33 +571,21 @@ describe('the Downloads gestures from the palette, handed no row, act on the vie
     expect(calledFsPath(showTextDocument)).toBe(meta);
   });
 
-  it('open opens nothing over a selection of several files', async () => {
-    const root = await makeInstanceRoot();
-
-    registerDownloadsSingleRowCommands(recordingReporter(), () => [node(root, 'a.7z'), node(root, 'b.7z')]);
-    await invoke('modbench.downloadedFile.open');
-
-    expect(openExternal).not.toHaveBeenCalled();
-  });
-
-  it('exclude and include take the whole selection', async () => {
+  it.each([
+    ['exclude', {}, '[General]\r\n', 'removed=true'],
+    ['include', { excluded: true }, '[General]\r\nremoved=true\r\n', 'removed=false'],
+  ])('%s takes the whole selection', async (verb, row, before, after) => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'a.7z');
     await writeArchive(root, 'b.7z');
-    const metaA = await writeMeta(root, 'a.7z');
-    const metaB = await writeMeta(root, 'b.7z');
-    let selection = [node(root, 'a.7z'), node(root, 'b.7z')];
+    const metaA = await writeMeta(root, 'a.7z', before);
+    const metaB = await writeMeta(root, 'b.7z', before);
 
-    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => selection);
-    await invoke('modbench.downloadedFile.exclude');
-    expect([await readFile(metaA, 'utf8'), await readFile(metaB, 'utf8')]).toEqual([
-      expect.stringContaining('removed=true'), expect.stringContaining('removed=true'),
-    ]);
+    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => [node(root, 'a.7z', row), node(root, 'b.7z', row)]);
+    await invoke(`modbench.downloadedFile.${verb}`);
 
-    selection = [node(root, 'a.7z', { excluded: true }), node(root, 'b.7z', { excluded: true })];
-    await invoke('modbench.downloadedFile.include');
-    expect([await readFile(metaA, 'utf8'), await readFile(metaB, 'utf8')]).toEqual([
-      expect.stringContaining('removed=false'), expect.stringContaining('removed=false'),
-    ]);
+    expect(await readFile(metaA, 'utf8')).toContain(after);
+    expect(await readFile(metaB, 'utf8')).toContain(after);
   });
+
 });

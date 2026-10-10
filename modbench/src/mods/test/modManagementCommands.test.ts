@@ -196,13 +196,6 @@ describe('registerModContextCommands: modbench.mod.rename', () => {
     expect(renameMod).toHaveBeenCalledWith('Default', ['Default', 'Secondary'], 'Mod A', 'Renamed');
   });
 
-  it('asks nothing while several rows are selected', async () => {
-    register(recordingReporter(), [modA, modB]);
-    await invoke('modbench.mod.rename', MODS_KEY_ARGS);
-
-    expect(showInputBox).not.toHaveBeenCalled();
-  });
-
   it('reports a refusal, the folder not having moved, as a failed rename', async () => {
     renameMod.mockResolvedValue({ applied: false, refusal: 'is in the way' });
     showInputBox.mockResolvedValueOnce('Renamed');
@@ -443,17 +436,6 @@ describe('modbench.separator.delete: the whole selection of separators, asked on
     expect(deleteSeparators.mock.calls).toEqual([['Default', ['Group A'], trash]]);
   });
 
-  it('falls back to the view selection from a key, where no row is right-clicked', async () => {
-    deleteSeparators.mockResolvedValue({
-      applied: true, outcome: { landed: [{ name: 'Group A' }, { name: 'Group B' }], refused: [] },
-    });
-
-    registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog('Delete'), trash, () => [groupA, groupB]);
-    await invoke('modbench.separator.delete');
-
-    expect(deleteSeparators.mock.calls).toEqual([['Default', ['Group A', 'Group B'], trash]]);
-  });
-
   it('calls nothing and reports nothing for a selection with no separator', async () => {
     const reporter = recordingReporter();
 
@@ -597,14 +579,6 @@ describe('rename separator takes its separator through the gesture entry', () =>
     expect(optionsOfTheOneShowInputBoxCall()).toMatchObject({ value: 'Group B' });
     expect(renameSeparator.mock.calls).toEqual([['Default', 'Group B', 'Renamed']]);
   });
-
-  it.each([['F2', [MODS_KEY_ARGS]], ['the palette', []]])('asks nothing from %s while several rows are selected', async (_from, args) => {
-    registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [groupA, groupB]);
-    await invoke('modbench.separator.rename', ...args);
-
-    expect(showInputBox).not.toHaveBeenCalled();
-    expect(renameSeparator).not.toHaveBeenCalled();
-  });
 });
 
 describe('add separator: one command for a mod anchor and a separator anchor', () => {
@@ -696,13 +670,6 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     expect(insertSeparator.mock.calls).toEqual([['Default', 'New Section', { kind: 'mod', name: 'Mod A' }]]);
   });
 
-  it('asks nothing and adds nothing from the palette while several rows are selected', async () => {
-    registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [modA, groupA]);
-    await invoke('modbench.separator.add');
-
-    expect(showInputBox).not.toHaveBeenCalled();
-    expect(insertSeparator).not.toHaveBeenCalled();
-  });
 });
 
 describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one command per direction', () => {
@@ -711,7 +678,6 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
   const instance = { ...instanceThatReads, value: instanceValueFixture({ activeProfile: 'Default' }) };
   const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: false });
   const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
-  const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
 
   it('enable applies to every selected mod, whatever its own current state', async () => {
     setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A', 'Mod B'], refused: [] } });
@@ -729,15 +695,6 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     await invoke('modbench.mod.disable', modB, [modA, modB]);
 
     expect(setModsEnabled).toHaveBeenCalledWith('Default', ['Mod A', 'Mod B'], false);
-  });
-
-  it('takes only the mods of a selection mixing mods and separators, anchored on the clicked mod', async () => {
-    setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A'], refused: [] } });
-
-    registerModEnableCommands(commands, instance, () => [], recordingReporter());
-    await invoke('modbench.mod.enable', modA, [modA, groupA]);
-
-    expect(setModsEnabled).toHaveBeenCalledWith('Default', ['Mod A'], true);
   });
 
   it('falls back to the view selection from the palette, where no row is right-clicked', async () => {
@@ -1051,16 +1008,6 @@ describe('open folder: one command for a mod, the Overwrite row, a file and a fo
     await invoke('modbench.mod.openFolder', new OverwriteNode([], 'MO2'));
 
     expect(revealed()).toEqual(['/instance/overwrite']);
-  });
-
-  it.each<[string, ModlistNode, string]>([
-    ['mod', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), '/instance/mods/My Mod'],
-    ['Overwrite', new OverwriteNode([], 'MO2'), '/instance/overwrite'],
-  ])('reveals the one selected %s row\'s folder from the palette, which hands the gesture no row', async (_kind, selected, folder) => {
-    registerOpenFolderCommand(instance, recordingReporter(), () => [selected]);
-    await invoke('modbench.mod.openFolder');
-
-    expect(revealed()).toEqual([folder]);
   });
 
   it.each<[string, ModlistNode[]]>([

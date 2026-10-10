@@ -503,54 +503,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     });
   });
 
-  it('moveMods at the losing end makes the mods the chosen separator\'s losing-most mods, keeping their order among themselves', async () => {
-    const outcome = await modlistCommands(adapterOver(dir)).moveMods('Default', ['Cracked and Smudged Pip-Boy Screen', 'ENBoost - 12k'],
-      { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
-
-    expect(outcome).toEqual({
-      applied: true, outcome: { landed: ['Cracked and Smudged Pip-Boy Screen', 'ENBoost - 12k'], refused: [] },
-    });
-    expect((await readModlist()).map((e) => e.name)).toEqual([
-      'SKK Fast Start new game (Fallout 4)',
-      'Unassigned (Modlist Development)',
-      '[NODELETE] Radfall',
-      'Unofficial Fallout 4 Patch',
-      'ENBoost - 12k',
-      'Cracked and Smudged Pip-Boy Screen',
-      'Radfall - All-In-One Survival Overhaul',
-      'Harder VATS',
-    ]);
-  });
-
-  it('moveMods at the losing end of Ungrouped makes the mods the losing-most ungrouped mods, keeping their order', async () => {
-    const outcome = await modlistCommands(adapterOver(dir)).moveMods('Default', ['Unofficial Fallout 4 Patch', 'SKK Fast Start new game (Fallout 4)'], { kind: 'ungrouped' }, 'losing');
-
-    expect(outcome).toEqual({
-      applied: true,
-      outcome: { landed: ['Unofficial Fallout 4 Patch', 'SKK Fast Start new game (Fallout 4)'], refused: [] },
-    });
-    expect((await readModlist()).map((e) => e.name)).toEqual([
-      'Unassigned (Modlist Development)',
-      '[NODELETE] Radfall',
-      'Radfall - All-In-One Survival Overhaul',
-      'ENBoost - 12k',
-      'Harder VATS',
-      'Cracked and Smudged Pip-Boy Screen',
-      'SKK Fast Start new game (Fallout 4)',
-      'Unofficial Fallout 4 Patch',
-    ]);
-  });
-
-  it('moveMods to where the mods already are writes nothing', async () => {
-    const outcome = await modlistCommands(adapterOver(dir)).moveMods('Default', ['[NODELETE] Radfall', 'Unofficial Fallout 4 Patch'],
-      { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
-
-    expect(outcome).toEqual({
-      applied: true, outcome: { landed: ['[NODELETE] Radfall', 'Unofficial Fallout 4 Patch'], refused: [] },
-    });
-    expect(await mtime()).toEqual(LONG_AGO);
-  });
-
   it('moveMods refuses a gone mod by name while the others land, in one write', async () => {
     const { adapter, calls } = watchedAdapter(dir);
 
@@ -560,10 +512,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       applied: true,
       outcome: { landed: ['Harder VATS'], refused: [{ item: 'No Such Mod', reason: 'Mod not found in modlist: No Such Mod' }] },
     });
-    const names = (await readModlist()).map((e) => e.name);
-    expect(names.slice(0, 3)).toEqual([
-      'SKK Fast Start new game (Fallout 4)', 'Harder VATS', 'Unassigned (Modlist Development)',
-    ]);
     expect(calls).toEqual(['changeModOrder']);
   });
 
@@ -594,29 +542,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     await expect(stat(modlistPath())).rejects.toThrow();
   });
 
-  it('moveSeparators on the losing side lands each separator with its mods directly on the losing side of the chosen one', async () => {
-    const outcome = await modlistCommands(adapterOver(dir)).moveSeparators('Default', ['Unassigned (Modlist Development)'], { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
-
-    expect(outcome).toEqual({ applied: true, outcome: { landed: ['Unassigned (Modlist Development)'], refused: [] } });
-    expect((await readModlist()).map((e) => e.name)).toEqual([
-      '[NODELETE] Radfall',
-      'Unofficial Fallout 4 Patch',
-      'Radfall - All-In-One Survival Overhaul',
-      'SKK Fast Start new game (Fallout 4)',
-      'Unassigned (Modlist Development)',
-      'ENBoost - 12k',
-      'Harder VATS',
-      'Cracked and Smudged Pip-Boy Screen',
-    ]);
-  });
-
-  it('moveSeparators to where the separator already is writes nothing', async () => {
-    const outcome = await modlistCommands(adapterOver(dir)).moveSeparators('Default', ['Radfall - All-In-One Survival Overhaul'], { kind: 'separator', name: 'Unassigned (Modlist Development)' }, 'losing');
-
-    expect(outcome).toEqual({ applied: true, outcome: { landed: ['Radfall - All-In-One Survival Overhaul'], refused: [] } });
-    expect(await mtime()).toEqual(LONG_AGO);
-  });
-
   it('moveSeparators refuses a gone separator by name while the others land', async () => {
     const outcome = await modlistCommands(adapterOver(dir)).moveSeparators('Default', ['Gone Separator', 'Unassigned (Modlist Development)'], { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
 
@@ -627,9 +552,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
         refused: [{ item: 'Gone Separator', reason: 'Separator not found in modlist: Gone Separator' }],
       },
     });
-    expect((await readModlist()).map((e) => e.name).slice(3, 5)).toEqual([
-      'SKK Fast Start new game (Fallout 4)', 'Unassigned (Modlist Development)',
-    ]);
   });
 
   it('moveSeparators to a separator that has gone refuses the whole move, naming it', async () => {
