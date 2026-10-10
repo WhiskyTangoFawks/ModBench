@@ -1,7 +1,9 @@
 import React, { useContext, useRef, useState } from 'react';
 import { EditorMounted } from './cellEditor';
 import { displayValue, modelValue, pastedValue } from './modelValue';
+import { pickEnumValue } from './nativeBridge';
 import { mono, fg } from './gridStyles';
+import type { EnumChoice } from '../../src/wire/messages';
 import type { FieldMetadata } from './types';
 
 interface ScalarCellProps {
@@ -22,6 +24,15 @@ interface ScalarCellProps {
   displayOverride?: string;
 }
 
+function enumChoices(value: unknown, meta: FieldMetadata): EnumChoice[] {
+  const named = meta.enumMembers.map(m => ({ value: m.value, label: displayValue(m.value, meta) }));
+  const current = modelValue(value, meta);
+  const choices = value == null || named.some(c => c.value === current)
+    ? named
+    : [...named, { value: current, label: displayValue(value, meta) }];
+  return choices.sort((a, b) => a.label.localeCompare(b.label));
+}
+
 function ScalarText({ value, meta, displayOverride, ariaLabel }: {
   value: unknown; meta: FieldMetadata; displayOverride?: string; ariaLabel?: string;
 }) {
@@ -40,8 +51,17 @@ export function ScalarCell({
   const [prevValue, setPrevValue] = useState(value);
   const [active, setActive] = useState(false);
   const settled = useRef(true);
+  const picking = useRef(false);
   const editorMounted = useContext(EditorMounted);
+  const isEnum = meta.type === 'enum' && meta.enumMembers.length > 0;
   function open() { settled.current = false; setActive(true); }
+  function pickEnum() {
+    if (picking.current) return;
+    picking.current = true;
+    void pickEnumValue(enumChoices(value, meta), modelValue(value, meta))
+      .then(picked => { if (picked !== null && picked !== modelValue(value, meta)) onCommit?.(picked); })
+      .finally(() => { picking.current = false; });
+  }
   if (prevValue !== value) {
     setPrevValue(value);
     setDraft(modelValue(value, meta));
@@ -61,7 +81,7 @@ export function ScalarCell({
     return (
       <span
         data-open-trigger
-        onClick={open}
+        onClick={isEnum ? pickEnum : open}
         style={{ display: 'block', minHeight: '1em' }}
       >
         <ScalarText value={value} meta={meta} displayOverride={displayOverride} ariaLabel={ariaLabel} />
@@ -89,9 +109,8 @@ export function ScalarCell({
     if (modelValue(next, meta) !== modelValue(value, meta)) commit(next);
   }
 
-  const isEnum = meta.type === 'enum' && meta.enumMembers.length > 0;
   // A checkbox writes as it toggles, so closing it has nothing left to write.
-  const pending = meta.type === 'bool' ? value : isEnum ? draft : pastedValue(draft, meta, value);
+  const pending = meta.type === 'bool' ? value : pastedValue(draft, meta, value);
 
   // Enter, Esc and a blur each end the editor, and the focus Enter and Esc hand back blurs it again.
   function settle(write: boolean) {
@@ -126,15 +145,6 @@ export function ScalarCell({
         checked={draft === 'True'}
         onChange={e => { setDraft(modelValue(e.target.checked, meta)); commitIfChanged(e.target.checked); }}
       />
-    );
-  }
-
-  if (isEnum) {
-    return (
-      <select {...editorProps} value={draft} onChange={e => setDraft(e.target.value)} style={inputBase}>
-        {meta.enumMembers.map(m =>
-          <option key={m.value} value={m.value}>{displayValue(m.value, meta)}</option>)}
-      </select>
     );
   }
 
