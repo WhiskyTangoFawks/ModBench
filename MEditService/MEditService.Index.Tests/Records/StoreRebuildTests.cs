@@ -146,35 +146,34 @@ public sealed class StoreRebuildTests : IDisposable
     [ForeignIndexHolderFact]
     public void AFilterClearedWhileARefusedRebuildLeavesNoStore_StaysClearedOnceTheIndexReopens()
     {
-        using var otherWindow = new HoldsTheFileOnceTheRebuildClosesTheStore(() => IndexFiles.In(_fixture.InstanceRoot));
+        List<ForeignIndexHolder> otherWindow = [];
+        var notifications = new InMemoryNotificationPublisher();
+        var armed = false;
+        notifications.OnPublish = n =>
+        {
+            if (armed && otherWindow.Count == 0 && n is LoadOrderStatusNotification)
+                otherWindow.Add(ForeignIndexHolder.Hold(IndexFiles.In(_fixture.InstanceRoot)));
+        };
         var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, notifications: otherWindow);
+        using var index = Indexes.Open(holder, notifications: notifications);
         index.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         index.SetFilter(MatchesNpcA, "npc-a.sql");
-        otherWindow.Armed = true;
+        armed = true;
 
-        Assert.NotNull(index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
-        index.ClearFilter();
-        otherWindow.Dispose();
-        index.NextSnapshot();
-
-        Assert.Null(index.Queries.GetFilter().Value());
-        Assert.Equal(["NpcBeforeRebuild"], ListedNpcs(index));
-    }
-
-    private sealed class HoldsTheFileOnceTheRebuildClosesTheStore(Func<string> indexPath) : INotificationPublisher, IDisposable
-    {
-        private ForeignIndexHolder? _holder;
-
-        public bool Armed { get; set; }
-
-        public void Publish(INotification notification)
+        try
         {
-            if (Armed && _holder is null && notification is LoadOrderStatusNotification)
-                _holder = ForeignIndexHolder.Hold(indexPath());
-        }
+            Assert.NotNull(index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
+            index.ClearFilter();
+            otherWindow.ForEach(window => window.Dispose());
+            index.NextSnapshot();
 
-        public void Dispose() => _holder?.Dispose();
+            Assert.Null(index.Queries.GetFilter().Value());
+            Assert.Equal(["NpcBeforeRebuild"], ListedNpcs(index));
+        }
+        finally
+        {
+            otherWindow.ForEach(window => window.Dispose());
+        }
     }
 
     [Fact]

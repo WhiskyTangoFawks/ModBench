@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -35,13 +34,11 @@ public class ViewDefaultsTests
             })
             .Build();
         using var index = Indexes.Reconciled(fixture, fixture.InstanceRoot);
-        index.SetFilter("SELECT form_key FROM records", "views.sql");
 
-        var absent = IndexFiles.Rows(fixture.InstanceRoot, $"SELECT body FROM records WHERE record_type = '{table}'")
-            .Count(row => !JsonDocument.Parse(row[0]).RootElement.TryGetProperty(column, out _));
+        var absent = index.Matching($"SELECT form_key FROM records WHERE record_type = '{table}' AND NOT json_exists(body, '$.{column}')");
 
         Assert.True(absent > 0, "Positive control: the document must omit the member for this to mean anything.");
-        Assert.Equal(absent, IndexFiles.Rows(fixture.InstanceRoot,
-            $"SELECT form_key FROM \"{table}\" WHERE \"{column}\" IS NOT DISTINCT FROM {viewValue}").Count);
+        Assert.Equal(absent, index.Matching(
+            $"SELECT form_key FROM \"{table}\" WHERE \"{column}\" IS NOT DISTINCT FROM {viewValue}"));
     }
 }

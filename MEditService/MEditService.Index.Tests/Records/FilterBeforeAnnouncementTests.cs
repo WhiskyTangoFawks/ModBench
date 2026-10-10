@@ -19,7 +19,9 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
     private readonly ScatteredFixtureData _fixture;
     private readonly string _trackedNpc;
     private readonly LoadOrderHolder _holder = new();
-    private readonly FilteredNpcsAtEachAnnouncement _probe = new();
+    private readonly InMemoryNotificationPublisher _notifications = new();
+    private readonly ConcurrentQueue<int> _listed = new();
+    private Predicate<INotification> _announces = _ => false;
     private readonly ILoggerFactory _loggers;
     private readonly OpenedIndex _index;
     private string? _failingAt;
@@ -39,8 +41,8 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
             if (_failingAt is { } logged && entry.Message.StartsWith(logged, StringComparison.Ordinal))
                 throw new IOException($"failed at \"{logged}\"");
         })));
-        _index = Indexes.Open(_holder, loggerFactory: _loggers, notifications: _probe);
-        _probe.Index = _index;
+        _index = Indexes.Open(_holder, loggerFactory: _loggers, notifications: _notifications);
+        _notifications.OnPublish = ListNpcsWhenAnnounced;
     }
 
     public void Dispose()
@@ -50,21 +52,10 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
         _fixture.Dispose();
     }
 
-    private sealed class FilteredNpcsAtEachAnnouncement : INotificationPublisher
+    private void ListNpcsWhenAnnounced(INotification notification)
     {
-        private readonly ConcurrentQueue<int> _listed = new();
-
-        internal OpenedIndex? Index { get; set; }
-
-        internal Predicate<INotification> Announces { get; set; } = _ => false;
-
-        internal IReadOnlyList<int> Listed => [.. _listed];
-
-        public void Publish(INotification notification)
-        {
-            if (Index is { } index && Announces(notification))
-                _listed.Enqueue(index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Total);
-        }
+        if (_announces(notification))
+            _listed.Enqueue(_index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Total);
     }
 
     private LoadOrderEntry Entry(string name) => _fixture.Plugins.Single(p => p.Name == name);
@@ -79,13 +70,13 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
         _index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'EditedWhileAway'", "filter.sql");
         Reconcile(Resident);
         Entry(Tracked).HandEdit(document, "\"TrackedNpc\"", "\"EditedWhileAway\"");
-        _probe.Announces = n => n is RowsChangedNotification rows && rows.Keys.Contains(_trackedNpc);
+        _announces = n => n is RowsChangedNotification rows && rows.Keys.Contains(_trackedNpc);
     }
 
     private void AssertEveryAnnouncementFoundTheOneMatch()
     {
-        Assert.NotEmpty(_probe.Listed);
-        Assert.All(_probe.Listed, listed => Assert.Equal(1, listed));
+        Assert.NotEmpty(_listed);
+        Assert.All(_listed, listed => Assert.Equal(1, listed));
     }
 
     [Fact]
@@ -94,7 +85,7 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
         Reconcile(Resident);
         _index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'ArrivingNpc'", "filter.sql");
         var arriving = Entry(Arriving).KeyOf();
-        _probe.Announces = n =>
+        _announces = n =>
             n is LoadOrderStatusNotification status && status.Status.IndexedPlugins.Contains(arriving, PluginAddress.Comparer);
 
         Reconcile(Resident, Arriving);
@@ -132,10 +123,10 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
         var renamed = new Fallout4Mod(ModKey.FromFileName(Resident), Fallout4Release.Fallout4);
         renamed.Npcs.AddNew("RenamedOnDisk");
         renamed.WriteToBinary(resident.Path);
-        _probe.Announces = n => n is PluginChangedNotification changed && changed.Plugin.Equals(resident.KeyOf());
+        _announces = n => n is PluginChangedNotification changed && changed.Plugin.Equals(resident.KeyOf());
         _failingAt = "Swept winners";
 
-        _index.NextSnapshotUnsettledUntil(() => _probe.Listed.Count > 0, "the plugin's announcement");
+        _index.NextSnapshotUnsettledUntil(() => !_listed.IsEmpty, "the plugin's announcement");
 
         AssertEveryAnnouncementFoundTheOneMatch();
     }

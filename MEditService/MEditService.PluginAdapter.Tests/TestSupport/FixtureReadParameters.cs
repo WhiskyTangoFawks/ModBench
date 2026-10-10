@@ -1,0 +1,27 @@
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
+using Mutagen.Bethesda.Strings;
+
+namespace MEditService.PluginAdapter.Tests.TestSupport;
+
+/// <summary>Held for the maintainer, like <c>GitProbe</c>: a test needing a raw, live
+/// Mutagen mod has no door to build these from (ADR-0005 forbids one).</summary>
+public static class FixtureReadParameters
+{
+    // Mutagen's listings resolution reads the LocalAppData environment variable with no
+    // injectable seam; a fixture's own strings folder below stops the implicit lookup, so this
+    // only fills a placeholder when nothing real is there.
+    public static BinaryReadParameters For(PluginStrings strings)
+    {
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LocalAppData")))
+            Environment.SetEnvironmentVariable("LocalAppData", Path.GetTempPath());
+
+        return new BinaryReadParameters
+        {
+            StringsParam = new StringsReadParameters
+            {
+                StringsFolderOverride = strings.Folder,
+                BsaFolderOverride = strings.PluginFolder ?? strings.DataFolderPath,
+            },
+        };
+    }
+}

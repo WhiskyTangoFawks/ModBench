@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
