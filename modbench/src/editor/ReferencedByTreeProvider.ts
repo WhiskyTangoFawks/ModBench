@@ -108,7 +108,6 @@ function messageLine(...parts: (string | undefined)[]): string | undefined {
 const NO_REFERENCES_MESSAGE = 'No references found.';
 const INDEXING_MESSAGE = 'mEdit is still indexing plugins: this list may not be complete.';
 
-/** The rows of one list, fixed when it was read. */
 class ReferencedByTreeProvider implements vscode.TreeDataProvider<ReferencedByTreeNode> {
   constructor(private readonly roots: readonly ReferencedByTreeNode[]) {}
 
