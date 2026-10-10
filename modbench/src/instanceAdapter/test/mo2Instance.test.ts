@@ -1050,6 +1050,21 @@ describe('the MO2 Instance adapter', () => {
       ]);
     });
 
+    it('moves a separator to a place in mod order', async () => {
+      await change([{
+        kind: 'moveSeparators',
+        separators: ['Radfall - All-In-One Survival Overhaul'],
+        place: { kind: 'modOrder' },
+        end: 'winning',
+      }]);
+
+      expect(modNames(await adapter.modOrder('Default')).slice(0, 3)).toEqual([
+        'mod:[NODELETE] Radfall:true',
+        'mod:Unofficial Fallout 4 Patch:true',
+        'separator:Radfall - All-In-One Survival Overhaul:false',
+      ]);
+    });
+
     it('adds a separator with its folder', async () => {
       await change([{ kind: 'addSeparator', separator: 'New Separator', afterIndex: -1 }]);
 

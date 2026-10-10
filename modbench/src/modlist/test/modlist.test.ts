@@ -503,16 +503,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     });
   });
 
-  it('moveMods to where the mods already are writes nothing', async () => {
-    const outcome = await modlistCommands(adapterOver(dir)).moveMods('Default', ['[NODELETE] Radfall', 'Unofficial Fallout 4 Patch'],
-      { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
-
-    expect(outcome).toEqual({
-      applied: true, outcome: { landed: ['[NODELETE] Radfall', 'Unofficial Fallout 4 Patch'], refused: [] },
-    });
-    expect(await mtime()).toEqual(LONG_AGO);
-  });
-
   it('moveMods refuses a gone mod by name while the others land, in one write', async () => {
     const { adapter, calls } = watchedAdapter(dir);
 

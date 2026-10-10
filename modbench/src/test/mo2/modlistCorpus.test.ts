@@ -126,7 +126,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     expect((await readModlistEntries(dir)).filter((e) => e.kind === 'mod')).toEqual(modsBefore);
   });
 
-  it('moveSeparators moves a separator with its mods, touching only modlist.txt', async () => {
+  it('moveSeparators touches only modlist.txt', async () => {
     const before = await snapshotTree(dir);
     await modlistCommands(adapterOver(dir)).moveSeparators(PROFILE, ['Unassigned (Modlist Development)'], { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
     const after = await snapshotTree(dir);

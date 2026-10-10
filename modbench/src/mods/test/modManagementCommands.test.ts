@@ -697,6 +697,15 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     expect(setModsEnabled).toHaveBeenCalledWith('Default', ['Mod A', 'Mod B'], false);
   });
 
+  it('falls back to the view selection from the palette, where no row is right-clicked', async () => {
+    setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A'], refused: [] } });
+
+    registerModEnableCommands(commands, instance, () => [modA], recordingReporter());
+    await invoke('modbench.mod.enable');
+
+    expect(setModsEnabled).toHaveBeenCalledWith('Default', ['Mod A'], true);
+  });
+
   it('calls nothing and reports nothing for an empty selection', async () => {
     const reporter = recordingReporter();
 
@@ -1098,6 +1107,13 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
     expect(opened()).toEqual(['https://www.nexusmods.com/skyrimspecialedition/mods/123']);
   });
 
+  it('opens the right-clicked row\'s page, never the selected one\'s', async () => {
+    registerViewOnNexusCommand(instance, recordingReporter(), () => downloadedFileRow('123'));
+    await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42' }));
+
+    expect(opened()).toEqual(['https://www.nexusmods.com/skyrimspecialedition/mods/42']);
+  });
+
   it('opens nothing for a row with no Nexus id', async () => {
     registerViewOnNexusCommand(instance, recordingReporter(), () => undefined);
     await invoke('modbench.mod.viewOnNexus', downloadedFileRow());
@@ -1190,6 +1206,15 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
 
     expect(markFiles).toHaveBeenCalledWith([refOf(included), refOf(excluded)], 'Excluded');
     expect(reporter.reports).toEqual([]);
+  });
+
+  it('includes the view\'s selection from the palette, where no row is right-clicked', async () => {
+    markFiles.mockResolvedValue({ landed: [], refused: [] });
+
+    registerFileExclusionCommands(commands, instanceThatReads, () => [excluded], recordingReporter());
+    await invoke('modbench.mod.includeFile');
+
+    expect(markFiles).toHaveBeenCalledWith([refOf(excluded)], 'Included');
   });
 
   it('reports each refused file by its mod and path, once, out of the files selected, while the rest land', async () => {

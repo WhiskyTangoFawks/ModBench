@@ -387,17 +387,18 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     }]);
   });
 
-  it.each([
-    ['one file', ['foo.7z'], '"foo.7z"'],
-    ['the count for several files', ['a.7z', 'b.7z'], '2'],
-  ])('names %s, says trash, and says the installed mod is untouched', async (_name, files, named) => {
+  it.each<[string, (a: DownloadNode, b: DownloadNode) => DownloadNode[], string]>([
+    ['one file', (a) => [a], '"a.7z"'],
+    ['the count for several files', (a, b) => [a, b], '2'],
+  ])('names %s, says trash, and says the installed mod is untouched', async (_name, selecting, named) => {
     const root = await makeInstanceRoot();
-    await Promise.all(files.map((file) => writeArchive(root, file)));
-    const nodes = files.map((file) => node(root, file));
+    await writeArchive(root, 'a.7z');
+    await writeArchive(root, 'b.7z');
+    const selection = selecting(node(root, 'a.7z'), node(root, 'b.7z'));
     const ask = scriptedDialog('Delete');
 
     registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), ask, trash, downloadsLog, () => []);
-    invoke('modbench.downloadedFile.delete', nodes[0], nodes);
+    invoke('modbench.downloadedFile.delete', selection[0], selection);
 
     await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
     const question = present(ask.asked[0], 'the one recorded question').message;
@@ -557,6 +558,34 @@ describe('the Downloads gestures from the palette, handed no row, act on the vie
     await invoke('modbench.downloadedFile.open');
 
     expect(calledFsPath(openExternal)).toBe(archive);
+  });
+
+  it('open .meta opens the one selected file\'s .meta', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    const meta = await writeMeta(root, 'foo.7z');
+
+    registerDownloadsSingleRowCommands(recordingReporter(), () => [node(root, 'foo.7z', { hasMeta: true })]);
+    await invoke('modbench.downloadedFile.openMeta');
+
+    expect(calledFsPath(showTextDocument)).toBe(meta);
+  });
+
+  it.each([
+    ['exclude', {}, '[General]\r\n', 'removed=true'],
+    ['include', { excluded: true }, '[General]\r\nremoved=true\r\n', 'removed=false'],
+  ])('%s takes the whole selection', async (verb, row, before, after) => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'a.7z');
+    await writeArchive(root, 'b.7z');
+    const metaA = await writeMeta(root, 'a.7z', before);
+    const metaB = await writeMeta(root, 'b.7z', before);
+
+    registerDownloadsMultiRowCommands(downloadsCommands(adapterOver(root)), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => [node(root, 'a.7z', row), node(root, 'b.7z', row)]);
+    await invoke(`modbench.downloadedFile.${verb}`);
+
+    expect(await readFile(metaA, 'utf8')).toContain(after);
+    expect(await readFile(metaB, 'utf8')).toContain(after);
   });
 
 });
