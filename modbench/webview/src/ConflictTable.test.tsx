@@ -30,7 +30,7 @@ const tree: ConflictRow[] = [
 ];
 
 const nameOf = (cell: Element | null): string => {
-  const arrow = cell?.querySelector('[aria-expanded]');
+  const arrow = cell?.querySelector('button');
   const state = arrow ? (arrow.getAttribute('aria-expanded') === 'true' ? '▼' : '▶') : '';
   return state + (cell?.textContent ?? '');
 };
