@@ -911,6 +911,7 @@ export interface components {
             isVersionControlInfo1: boolean;
             isEditorId: boolean;
             holdsAlpha: boolean;
+            indexWhen?: string[] | null;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];

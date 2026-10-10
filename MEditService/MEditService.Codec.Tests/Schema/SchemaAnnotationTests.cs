@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -36,5 +37,32 @@ public sealed class SchemaAnnotationTests
         Assert.Equal(["Faction"], factions.KeyMembers);
         Assert.Equal(["Data.Level", "Data.Reference"], entries.KeyMembers);
         Assert.Equal(["Data.Count", "ExtraData.ItemCondition", "ExtraData.Owner"], entries.ExtendedKeyMembers);
+    }
+
+    [Fact]
+    public void ASkyrimRecordsScripts_AlignByTheKeysXEditSortsThemBy()
+    {
+        var adapter = SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["qust"]
+            .RecordColumns.Single(c => c.Name == "VirtualMachineAdapter").Field;
+        FieldMetadata Member(FieldMetadata owner, string name) => owner.Fields.Require().Single(f => f.Name == name);
+        var scripts = Member(adapter, "Scripts");
+        var aliases = Member(adapter, "Aliases");
+
+        Assert.Equal(["Name"], scripts.KeyMembers);
+        Assert.Equal(["Name"], Member(scripts.ElementType.Require(), "Properties").KeyMembers);
+        Assert.Equal(["Stage", "StageIndex"], Member(adapter, "Fragments").KeyMembers);
+        Assert.Equal(["Property.Object", "Property.Alias"], aliases.KeyMembers);
+        Assert.Equal(["Name"], Member(aliases.ElementType.Require(), "Scripts").KeyMembers);
+    }
+
+    [Fact]
+    public void ASkyrimScriptObjectBoundToAnAlias_HoldsNoObject()
+    {
+        var property = SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["qust"]
+            .RecordColumns.Single(c => c.Name == "VirtualMachineAdapter").Field
+            .Fields.Require().Single(f => f.Name == "Aliases").ElementType.Require()
+            .Fields.Require().Single(f => f.Name == "Property");
+
+        Assert.True(property.Fields.Require().Single(f => f.Name == "Object").AllowsNull);
     }
 }

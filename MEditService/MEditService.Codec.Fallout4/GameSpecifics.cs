@@ -9,7 +9,7 @@ internal static class GameSpecifics
     public static SiblingsInUseRows SiblingsInUse { get; } = new(new Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>>
     {
         [("IFunctionConditionDataGetter", "Function")] = Fallout4ConditionAnnotations.FunctionParameterSlots,
-        [("IConditionDataGetter", "RunOnType")] = Fallout4ConditionAnnotations.RunOnReference,
+        [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
     });
 
     // Proven over every shipped binary: all 823 entry-point effects, all 1,031 weapon templates.

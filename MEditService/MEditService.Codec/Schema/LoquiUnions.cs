@@ -103,7 +103,7 @@ public static class LoquiUnions
             if (leafPath == null) continue;
             var members = ReflectedTypes.Members(getterType)
                 .Where(member => !baseMemberNames.Contains(member.Key))
-                .Select(member => member.Where(p => !game.Annotations.IsExcludedMember(p)).ToList())
+                .Select(member => member.Where(p => !game.Annotations.IsExcludedMember(p) && !game.Annotations.IsUnusedSlotMember(union.SetterType, p)).ToList())
                 .Where(declarations => declarations.Count > 0)
                 .Select(ReflectedTypes.MostDerived)
                 .Select(p => SubFieldReflection.GetSubFieldInfo(p, game, leafPath, logger))
@@ -116,7 +116,7 @@ public static class LoquiUnions
         var result = UnionMembers(leaves, s => s.Name, s => s)
             .Select(m => m.Face with { AllowsNull = true, Variants = m.Variants })
             .ToList();
-        result.Add(BuildUnionDiscriminatorField(union with { Leaves = reached }));
+        result.Add(BuildUnionDiscriminatorField(union with { Leaves = reached }, game));
         return result;
     }
 
@@ -146,7 +146,7 @@ public static class LoquiUnions
                 AbsentIsNull = m.Variants != null || m.Face.AbsentIsNull,
             }));
 
-        var discriminator = BuildUnionDiscriminatorField(union);
+        var discriminator = BuildUnionDiscriminatorField(union, game);
         columns.Insert(0, new ColumnSpec(discriminator, discriminator.Name));
         return columns;
     }
@@ -157,10 +157,10 @@ public static class LoquiUnions
     {
         var byName = leaves
             .SelectMany(l => l.Members.Select(m => (l.ClassName, Member: m)))
-            .GroupBy(d => name(d.Member), StringComparer.Ordinal);
-        foreach (var group in byName)
+            .ToLookup(d => name(d.Member), StringComparer.Ordinal);
+        foreach (var memberName in OrderKeptByEveryLeaf([.. leaves.Select(l => l.Members.Select(name).ToList())]))
         {
-            var declaring = group.ToList();
+            var declaring = byName[memberName].ToList();
             var alike = declaring.Count == leaves.Count
                 && declaring.Select(d => JsonSerializer.Serialize(shape(d.Member))).Distinct(StringComparer.Ordinal).Count() == 1;
             // Mutagen lists a union's leaves in no fixed order.
@@ -169,17 +169,42 @@ public static class LoquiUnions
         }
     }
 
+    // Every leaf's members keep its own order, so a function's parameters read as xEdit's Parameter
+    // 1, then 2. Where leaves order members both ways (Fallout 4's object-mod properties), first seen wins.
+    private static List<string> OrderKeptByEveryLeaf(List<List<string>> leaves)
+    {
+        var names = leaves.SelectMany(l => l).Distinct(StringComparer.Ordinal).ToList();
+        var placed = new HashSet<string>(StringComparer.Ordinal);
+        var order = new List<string>();
+        while (order.Count < names.Count)
+        {
+            var unplaced = names.Where(n => !placed.Contains(n)).ToList();
+            var next = unplaced.FirstOrDefault(n => leaves.All(l => l.IndexOf(n) is var at && (at < 0 || l.Take(at).All(placed.Contains))))
+                ?? unplaced[0];
+            placed.Add(next);
+            order.Add(next);
+        }
+        return order;
+    }
+
     /// <summary>The document's own discriminator member: the first key of every union element the
     /// codec writes, naming the leaf class.</summary>
     public const string UnionTypeDiscriminator = "MutagenObjectType";
 
     // An enum, so the editor's enum-leaf rule renders it and the class names stay wire tokens
     // LeafLabel labels. Setting it switches the object's leaf; see editor-fields.md, A field of several kinds.
-    internal static FieldMetadata BuildUnionDiscriminatorField(LoquiUnion union) =>
-        new(UnionTypeDiscriminator, "enum", false, LeafSpec.NoFormKeyTypes,
+    internal static FieldMetadata BuildUnionDiscriminatorField(LoquiUnion union, GameReflection game)
+    {
+        var baseName = ReflectedTypes.LeafTypeName(union.SetterType);
+        var byFunction = game.Annotations.IsFunctionUnion(union.SetterType);
+        return new(UnionTypeDiscriminator, "enum", false, LeafSpec.NoFormKeyTypes,
             [.. union.Leaves.Select(l => new EnumMember(
-                l.ClassName, Label: LeafLabel.For(ReflectedTypes.LeafTypeName(union.SetterType), LeafLabel.ClassWord(l.ClassName))))],
-            AllowsNull: true, DisplayLabel: UnionTypeDiscriminatorLabel, IsDiscriminator: true);
+                l.ClassName,
+                Label: byFunction ? LeafLabel.FunctionName(baseName, LeafLabel.ClassWord(l.ClassName)) : LeafLabel.For(baseName, LeafLabel.ClassWord(l.ClassName))))],
+            AllowsNull: true, DisplayLabel: byFunction ? FunctionDiscriminatorLabel : UnionTypeDiscriminatorLabel, IsDiscriminator: true);
+    }
 
     internal const string UnionTypeDiscriminatorLabel = "Kind";
+
+    internal const string FunctionDiscriminatorLabel = "Function";
 }

@@ -96,18 +96,29 @@ public static class DocumentNodes
 
     /// <summary>The shape a member has under the object holding it: its own, or the variant the
     /// object's discriminator names when the member's type varies by leaf.</summary>
-    public static FieldMetadata VariantFor(FieldMetadata member, JsonElement? owner) =>
-        owner is { ValueKind: JsonValueKind.Object } obj
-            && obj.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var leaf)
-            && leaf.ValueKind == JsonValueKind.String
+    public static FieldMetadata VariantFor(FieldMetadata member, JsonElement? owner)
+    {
+        if (owner is not { ValueKind: JsonValueKind.Object } obj) return member;
+        var shape = obj.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var leaf) && leaf.ValueKind == JsonValueKind.String
             ? Variant(member, leaf.GetString())
             : member;
+        return ShapeUnderOwner(shape, flag => obj.TryGetProperty(flag, out var set) && set.ValueKind == JsonValueKind.True);
+    }
 
     /// <summary>The same question over the write path's mutable tree.</summary>
-    internal static FieldMetadata VariantFor(FieldMetadata member, JsonNode? owner) =>
-        owner is JsonObject obj && obj[LoquiUnions.UnionTypeDiscriminator] is JsonValue leaf && leaf.TryGetValue<string>(out var name)
+    internal static FieldMetadata VariantFor(FieldMetadata member, JsonNode? owner)
+    {
+        if (owner is not JsonObject obj) return member;
+        var shape = obj[LoquiUnions.UnionTypeDiscriminator] is JsonValue leaf && leaf.TryGetValue<string>(out var name)
             ? Variant(member, name)
             : member;
+        return ShapeUnderOwner(shape, flag => obj[flag] is JsonValue set && set.TryGetValue<bool>(out var on) && on);
+    }
+
+    private static FieldMetadata ShapeUnderOwner(FieldMetadata shape, Func<string, bool> ownerSets) =>
+        shape.IndexWhen?.Any(ownerSets) == true
+            ? shape with { Type = "int", ValidFormKeyTypes = LeafSpec.NoFormKeyTypes, AllowsNull = false, IndexWhen = null }
+            : shape;
 
     /// <summary>The shape a member has under a named union leaf; its own where no variant
     /// answers to that name.</summary>

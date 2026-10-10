@@ -45,6 +45,12 @@ internal sealed record SchemaAnnotations(
     // Loqui bases the union-leaf expansion must not model: presented by a dedicated section instead,
     // or their leaves cannot be read safely. A struct column deriving from one is not a column either.
     HashSet<string> ExcludedUnions,
+    // Loqui bases whose leaves are one function each: the discriminator is the Function row, and
+    // each leaf reads as its function's name (editor-fields.md § Conditions, story 3).
+    HashSet<string> FunctionUnions,
+    // Members a union's leaves declare only to carry a slot their function leaves unused, keyed by
+    // the union's base: no row (editor-fields.md § Conditions, story 1), and a kind switch drops them.
+    HashSet<(string UnionBase, string MemberName)> UnusedSlotMembers,
     // Getter interfaces the walk may re-enter and stop at silently because the game's format cannot
     // nest them (a Fallout 4 Papyrus struct member is never itself a struct). Any other re-entry is fatal.
     HashSet<string> CycleTruncations,
@@ -232,6 +238,8 @@ internal sealed record SchemaAnnotations(
                 // unimplemented throw upstream; the member it sits on is a KnownDefects row below.
                 "ASceneActionType",
             ],
+            FunctionUnions: [],
+            UnusedSlotMembers: [],
             CycleTruncations: ["IScriptStructPropertyGetter", "IScriptStructListPropertyGetter"],
             EmptySubSchemaTypes:
             [
@@ -295,28 +303,36 @@ internal sealed record SchemaAnnotations(
                 ("IConditionParametersGetter", "Parameter2"),
                 ("IConditionParametersGetter", "Parameter1Type"),
                 ("IConditionParametersGetter", "Parameter2Type"),
+                // Mutagen's answer to which function a leaf is: the document never holds it, since the
+                // leaf's class names the function, and GetEventData's own Function is another member.
+                ("IConditionDataGetter", "Function"),
             ],
             ExcludedUnions: [],
+            FunctionUnions: ["ConditionData"],
+            // Mutagen's names for a slot's raw value under a function that reads nothing from it.
+            UnusedSlotMembers:
+            [
+                ("ConditionData", "FirstUnusedIntParameter"),
+                ("ConditionData", "FirstUnusedStringParameter"),
+                ("ConditionData", "SecondUnusedIntParameter"),
+                ("ConditionData", "SecondUnusedStringParameter"),
+                ("ConditionData", "Unused"),
+            ],
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
             VectorStructTypes: [.. VectorStructTypesInEveryGame],
-            RefusedShapes: new(
-            [
-                .. RefusedShapesInEveryGame,
-                KeyValuePair.Create("IFormLinkOrIndexGetter`1",
-                    "a condition function's form parameter, held as a link or as a parameter index — presentation undecided"),
-            ], StringComparer.Ordinal),
+            RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
             EnumMemberLabels: new()
             {
                 [(ModHeaderGetter(GameCategory.Skyrim), "Flags")] = XEditModHeaderFlagNames,
             },
             KnownDefects: [],
             SiblingsInUse: SiblingsInUseRows.None,
-            KeyedArrays: SkyrimKeyedArrayAnnotations.KeyedArrays.ToDictionary(
+            KeyedArrays: SkyrimVmadAnnotations.KeyedArrays.Concat(SkyrimKeyedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
             ExtendedKeys: SkyrimKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
-            PermittedNullFormLinks: [],
+            PermittedNullFormLinks: [.. SkyrimVmadAnnotations.PermittedNullFormLinks],
             SyntheticFlagMembers: new()
             {
                 [(ModHeaderGetter(GameCategory.Skyrim), "IsSmallMaster")] = ("Flags", "Small"),
@@ -349,6 +365,8 @@ internal sealed record SchemaAnnotations(
                 ("IObjectModEnumPropertyGetter`1", "Unused"),
             ],
             ExcludedUnions: [],
+            FunctionUnions: [],
+            UnusedSlotMembers: [],
             // Starfield's VirtualMachineAdapter.xml declares the same struct-property chain as
             // Fallout 4's, unverified against a built Starfield schema. Empty is loud, not wrong: a
             // lifted VMAD exclusion fails generation naming the chain rather than truncating silently.
@@ -405,6 +423,8 @@ internal sealed record SchemaAnnotations(
             if (ExcludedUnions.Contains(t.Name)) return true;
         return false;
     }
+    public bool IsFunctionUnion(Type setterType) => FunctionUnions.Contains(setterType.Name);
+    public bool IsUnusedSlotMember(Type unionBase, PropertyInfo prop) => UnusedSlotMembers.Contains((unionBase.Name, prop.Name));
     public bool IsCycleTruncation(Type getterInterface) => CycleTruncations.Contains(getterInterface.Name);
     public bool IsEmptySubSchemaType(Type getterInterface) => EmptySubSchemaTypes.Contains(getterInterface.Name);
     public bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type.FullName ?? type.Name);
@@ -604,15 +624,27 @@ internal sealed record SchemaAnnotations(
         }
     }
 
-    // An excluded union that is no union base excludes nothing: the expansion it forbids would never
-    // have happened.
-    private IEnumerable<string> UnresolvedExcludedUnions(ILookup<string, Type> typesByName)
+    // A row naming no union base says nothing: the expansion it governs never happens.
+    private static IEnumerable<string> UnresolvedUnionBases(ILookup<string, Type> typesByName, string table, HashSet<string> rows)
     {
-        foreach (var name in ExcludedUnions.Order(StringComparer.Ordinal))
+        foreach (var name in rows.Order(StringComparer.Ordinal))
         {
             if (typesByName[name].FirstOrDefault(t => t.IsClass) is not { } setterType) continue;
             if (!LoquiUnions.IsUnionBase(setterType))
-                yield return $"{nameof(ExcludedUnions)}: {name} is no union base, so it expands to nothing to exclude";
+                yield return $"{table}: {name} is no union base, so it expands to no leaves";
+        }
+    }
+
+    // A row no leaf of its union declares hides nothing.
+    private IEnumerable<string> UnresolvedUnusedSlotMembers(IReadOnlyList<Type> allTypes, ILookup<string, Type> typesByName)
+    {
+        foreach (var (unionBase, member) in UnusedSlotMembers.Order())
+        {
+            var label = $"{nameof(UnusedSlotMembers)}: {unionBase}.{member}";
+            if (typesByName[unionBase].FirstOrDefault(t => t.IsClass) is not { } setterType || !LoquiUnions.IsUnionBase(setterType))
+                yield return $"{label} names no union base";
+            else if (!allTypes.Any(t => t.IsClass && setterType.IsAssignableFrom(t) && t.GetProperty(member) != null))
+                yield return $"{label} is declared by no leaf";
         }
     }
 
@@ -693,7 +725,10 @@ internal sealed record SchemaAnnotations(
             .. UnresolvedMembers(typesByName, nameof(ExcludedColumns), ExcludedColumns),
             .. UnresolvedMembers(typesByName, nameof(ExcludedMembers), ExcludedMembers),
             .. UnresolvedTypes(nameof(ExcludedUnions), ExcludedUnions),
-            .. UnresolvedExcludedUnions(typesByName),
+            .. UnresolvedUnionBases(typesByName, nameof(ExcludedUnions), ExcludedUnions),
+            .. UnresolvedTypes(nameof(FunctionUnions), FunctionUnions),
+            .. UnresolvedUnionBases(typesByName, nameof(FunctionUnions), FunctionUnions),
+            .. UnresolvedUnusedSlotMembers(allTypes, typesByName),
             .. UnresolvedTypes(nameof(CycleTruncations), CycleTruncations),
             .. UnresolvedTypes(nameof(EmptySubSchemaTypes), EmptySubSchemaTypes),
             .. VectorStructTypes.Where(t => !shapeFullNames.Contains(t)).Order(StringComparer.Ordinal)

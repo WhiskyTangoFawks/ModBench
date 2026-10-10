@@ -31,6 +31,13 @@ internal static partial class LeafLabel
         return string.Join(' ', distinguishing.Count > 0 ? distinguishing : leafWords);
     }
 
+    /// <summary><c>GetIsIDConditionData</c> under <c>ConditionData</c> is "GetIsID": the function's
+    /// name as xEdit spells it, the base's name dropped from its end.</summary>
+    public static string FunctionName(string baseName, string leafClassName) =>
+        leafClassName.Length > baseName.Length && leafClassName.EndsWith(baseName, StringComparison.Ordinal)
+            ? leafClassName[..^baseName.Length]
+            : leafClassName;
+
     /// <summary>The class's own word in a document type name: a nested class's declaring type and a
     /// generic's arguments (<c>Outer+Inner</c>, <c>ObjectModIntProperty&lt;Armor+Property&gt;</c>)
     /// distinguish nothing a label needs.</summary>

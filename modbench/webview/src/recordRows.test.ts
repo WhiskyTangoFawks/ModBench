@@ -194,6 +194,42 @@ describe('a union element', () => {
   });
 });
 
+describe('a condition\'s parameters', () => {
+  const kind = fieldMeta({
+    name: 'MutagenObjectType', type: 'enum', isDiscriminator: true,
+    enumMembers: [{ value: 'LeafA', bitValue: null, label: null }, { value: 'LeafB', bitValue: null, label: null }],
+  });
+  const dataRows = (fields: FieldMetadata[], master: Record<string, unknown>, mod: Record<string, unknown>, member: string) =>
+    fieldRowsOf(rowsFor(answer([fieldMeta({ name: 'Data', type: 'struct', fields: [kind, ...fields] })], [diffNode({
+      fieldName: 'Data', values: { [MASTER]: master, [MOD]: mod },
+      children: [diffNode({ fieldName: member, values: { [MASTER]: master[member], [MOD]: mod[member] } })],
+    })])));
+
+  it('a form parameter takes the shape its own column\'s owner gives it', () => {
+    const target = fieldMeta({ name: 'Target', type: 'formKey', indexWhen: ['UseAliases'] });
+    const link = fieldMeta({ name: 'Target', type: 'formKey', variants: { LeafA: target } });
+
+    const row = dataRows(
+      [link],
+      { MutagenObjectType: 'LeafA', Target: '000801:Fallout4.esm' },
+      { MutagenObjectType: 'LeafA', UseAliases: true, Target: 3 },
+      'Target').find(r => r.name === 'Target');
+
+    expect(row?.cells.get(MOD)?.meta.type).toBe('int');
+  });
+
+  it('a parameter has a row where its own column\'s function puts it in use', () => {
+    const linkUnderA = fieldMeta({ name: 'Mode', type: 'enum', siblingsInUse: { A: ['Link'], B: [] } });
+    const linkUnderB = fieldMeta({ name: 'Mode', type: 'enum', siblingsInUse: { A: [], B: ['Link'] } });
+    const mode = fieldMeta({ ...linkUnderA, variants: { LeafA: linkUnderA, LeafB: linkUnderB } });
+    const value = { MutagenObjectType: 'LeafB', Mode: 'B', Link: '000801:Fallout4.esm' };
+
+    const rows = dataRows([mode, fieldMeta({ name: 'Link', type: 'formKey' })], value, value, 'Link');
+
+    expect(rows.map(r => r.name)).toContain('Link');
+  });
+});
+
 describe('a cell\'s context, which its right-click hands a command and the host\'s keys read while it is focused', () => {
   const level = fieldMeta({ name: 'Level', type: 'int' });
   const rows = fieldRowsOf(rowsFor(answer([level], [diffNode({ fieldName: 'Level', values: { [MASTER]: 5, [MOD]: 7 } })]), [MOD]));

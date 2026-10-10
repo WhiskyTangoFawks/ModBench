@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Globalization;
 using System.Reflection;
+using Mutagen.Bethesda.Plugins;
 using Noggog;
 
 namespace MEditService.Codec.Schema;
@@ -99,8 +100,14 @@ internal static class LeafClassification
                     || (prop != null && game.Annotations.IsPermittedNullFormLink(prop)));
         }
 
+        if (ReflectedTypes.IsFormLinkOrIndex(core))
+            return new("formKey", GetFormLinkValidTypes(core, game), LeafSpec.NoEnumMembers, AllowsNull: true, IndexWhen: IndexFlags);
+
         return null;
     }
+
+    // The owner's members that make every link-or-index member it holds an index (FormLinkOrIndex.UsesLink).
+    private static readonly string[] IndexFlags = [.. typeof(IFormLinkOrIndexFlagGetter).GetProperties().Select(p => p.Name)];
 
     // One text leaf, carrying the zero the codec named for the wire.
     private static LeafSpec TextLeaf(string apiType, string? zero) =>
