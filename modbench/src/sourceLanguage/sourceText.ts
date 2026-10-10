@@ -66,12 +66,22 @@ export function fieldAt(text: string, offset: number): FieldAtOffset | undefined
   return undefined;
 }
 
-/** The span of the `FormKey` member of the record `formKey` names. */
-export function formKeyMember(text: string, formKey: string): TextSpan | undefined {
+function formKeyValueNode(text: string, formKey: string): Node | undefined {
   const root = parseTree(text);
   const record = root && recordOf(root, formKey);
-  const member = record && ownFormKey(record)?.parent;
+  return record && ownFormKey(record);
+}
+
+/** The span of the `FormKey` member of the record `formKey` names. */
+export function formKeyMember(text: string, formKey: string): TextSpan | undefined {
+  const member = formKeyValueNode(text, formKey)?.parent;
   return member ? spanOf(member) : undefined;
+}
+
+/** The span of the `FormKey` value of the record `formKey` names. */
+export function formKeyValue(text: string, formKey: string): TextSpan | undefined {
+  const value = formKeyValueNode(text, formKey);
+  return value ? spanOf(value) : undefined;
 }
 
 const valuesOf = (node: Node): Node[] => (node.type === 'property' ? node.children?.slice(1) : node.children) ?? [];
