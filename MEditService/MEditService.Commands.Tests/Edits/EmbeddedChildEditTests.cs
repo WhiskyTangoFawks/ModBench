@@ -20,6 +20,8 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
+    private string ChildBody() => _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body;
+
     private string WorkingTreeCell() => _fixture.Document(_fixture.EmbedCell.ToString()).Require().Body;
 
     public static TheoryData<Func<ContainerModFixture, FormKey>, string, string, string?, RecordEditRefusal, string> SlotsThatAreStructural => new()
@@ -39,13 +41,14 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     public void EditingAnEmbeddedChild_RewritesItsOwnersDocument_ThatDivergesFromHead_AndTheChildReadsItBack()
     {
         Assert.Empty(_fixture.ChangedFormKeys());
+        var (cellBefore, childBefore) = (WorkingTreeCell(), ChildBody());
 
         var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
 
         Assert.True(result.Applied, result.Message);
         Assert.Contains(_fixture.EmbedCell.ToString(), _fixture.ChangedFormKeys());
-        Assert.Contains("\"Scale\": 2.5", WorkingTreeCell(), StringComparison.Ordinal);
-        Assert.Contains("\"Scale\": 2.5", _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body, StringComparison.Ordinal);
+        Assert.Equal(["Temporary[0].Scale: 1.0 -> 2.5"], DocumentDiffs.Of(cellBefore, WorkingTreeCell()));
+        Assert.Equal(["Scale: 1.0 -> 2.5"], DocumentDiffs.Of(childBefore, ChildBody()));
     }
 
     [Theory]
@@ -65,13 +68,12 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     public void AnExteriorTemporaryRefMovedOutsideItsCellsGrid_StaysInItsOwnCellsDocument()
     {
         var outsideGrid = "\"90000, -90000, 0\"";
+        var before = _fixture.DocumentCarrying("ExteriorCell").Body;
 
         var result = EditService().Set(_fixture.Plugin, _fixture.ExteriorRef.ToString(), "Position", Json(outsideGrid));
 
         Assert.True(result.Applied, result.Message);
-        var owner = _fixture.DocumentCarrying("ExteriorCell").Body;
-        Assert.Contains("\"EditorID\": \"ExteriorRef\"", owner, StringComparison.Ordinal);
-        Assert.Contains("\"Position\": \"90000, -90000, 0\"", owner, StringComparison.Ordinal);
+        Assert.Equal(["""Temporary[0].Position: "100, 100, 0" -> "90000, -90000, 0" """.TrimEnd()], DocumentDiffs.Of(before, _fixture.DocumentCarrying("ExteriorCell").Body));
         Assert.Contains(_fixture.ExteriorCell.ToString(), _fixture.ChangedFormKeys());
     }
 
@@ -79,6 +81,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     public void EveryEmbeddedSlot_ResolvesToItsOwningContainersDocument()
     {
         var service = EditService();
+        var (cellBefore, worldBefore) = (EmbedCellDocument().Body, _fixture.DocumentCarrying(ContainerModPlugin.WorldspaceEditorId).Body);
 
         Assert.True(service.Set(_fixture.Plugin, _fixture.PersistentRef.ToString(), "Scale", Json("2.0")).Applied);
         Assert.True(service.Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("3.0")).Applied);
@@ -86,30 +89,23 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
         Assert.True(service.Set(_fixture.Plugin, _fixture.Navmesh.ToString(), "EditorID", Json("\"EditedNavmesh\"")).Applied);
         Assert.True(service.Set(_fixture.Plugin, _fixture.TopCell.ToString(), "WaterHeight", Json("42.0")).Applied);
 
-        var cellFile = EmbedCellDocument().Body;
-        Assert.Contains("\"Scale\": 2.0", cellFile, StringComparison.Ordinal);
-        Assert.Contains("\"Scale\": 3.0", cellFile, StringComparison.Ordinal);
-        Assert.Contains("\"EditedLandscape\"", cellFile, StringComparison.Ordinal);
-        Assert.Contains("\"EditedNavmesh\"", cellFile, StringComparison.Ordinal);
+        Assert.Equal(["""Landscape.EditorID: "EmbedLandscape" -> "EditedLandscape" """.TrimEnd(), """NavigationMeshes[0].EditorID: "EmbedNavmesh" -> "EditedNavmesh" """.TrimEnd(), "Persistent[0].Scale: 4.0 -> 2.0", "Temporary[0].Scale: 1.0 -> 3.0"], DocumentDiffs.Of(cellBefore, EmbedCellDocument().Body));
 
         var worldspace = _fixture.DocumentCarrying(ContainerModPlugin.WorldspaceEditorId);
-        Assert.Contains("\"WaterHeight\": 42.0", worldspace.Body, StringComparison.Ordinal);
+        Assert.Equal(["TopCell.WaterHeight: 5.0 -> 42.0"], DocumentDiffs.Of(worldBefore, worldspace.Body));
         Assert.Equal(worldspace.FormKey, _fixture.DocumentCarrying(ContainerModPlugin.TopCellEditorId).FormKey);
     }
 
     [Fact]
     public void APlacedRefInsideAWorldspacesTopCell_IsEditable_TwoEmbedLevelsDeepInOneDocument()
     {
-        var before = _fixture.DocumentCarrying(ContainerModPlugin.WorldspaceEditorId).Body;
+        var (before, childBefore) = (_fixture.DocumentCarrying(ContainerModPlugin.WorldspaceEditorId).Body, _fixture.Document(_fixture.TopCellRef.ToString()).Require().Body);
 
         var result = EditService().Set(_fixture.Plugin, _fixture.TopCellRef.ToString(), "Scale", Json("9.5"));
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(
-            before.Replace("\"Scale\": 6.0", "\"Scale\": 9.5", StringComparison.Ordinal),
-            _fixture.DocumentCarrying(ContainerModPlugin.WorldspaceEditorId).Body);
-        Assert.Contains(
-            "\"Scale\": 9.5", _fixture.Document(_fixture.TopCellRef.ToString()).Require().Body, StringComparison.Ordinal);
+        Assert.Equal(["TopCell.Temporary[0].Scale: 6.0 -> 9.5"], DocumentDiffs.Of(before, _fixture.DocumentCarrying(ContainerModPlugin.WorldspaceEditorId).Body));
+        Assert.Equal(["Scale: 6.0 -> 9.5"], DocumentDiffs.Of(childBefore, _fixture.Document(_fixture.TopCellRef.ToString()).Require().Body));
     }
 
     [Fact]
@@ -162,7 +158,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
         var renamed = _fixture.DocumentCarrying("RenamedWorld");
         Assert.Equal(_fixture.Worldspace.ToString(), renamed.FormKey);
-        Assert.Contains("\"EditorID\": \"RenamedWorld\"", renamed.Body, StringComparison.Ordinal);
+        Assert.Equal("RenamedWorld", JsonDocument.Parse(renamed.Body).RootElement.GetProperty("EditorID").GetString());
         Assert.Equal(renamed.FormKey, _fixture.DocumentCarrying(ContainerModPlugin.TopCellEditorId).FormKey);
     }
 

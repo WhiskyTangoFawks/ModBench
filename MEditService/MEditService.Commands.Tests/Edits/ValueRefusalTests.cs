@@ -89,6 +89,7 @@ public sealed class ValueRefusalTests : IDisposable
     [Theory]
     [InlineData(Quest, "Aliases", """[{"MutagenObjectType": "QuestReferenceAlias", "Name": "NewRef", "Conditions": [{"ComparisonValue": 1.0}]}]""")]
     [InlineData(ArmorMod, "Properties", """[{"Property":"BodyPart","Step":1.0,"Value":5,"Value2":6,"FunctionType":"Set"}]""")]
+    [InlineData(Npc, "Level", """{"Level": 20}""")]
     [InlineData(Npc, "VirtualMachineAdapter", """{"Scripts": [{"Name": "S", "Properties": [{"Name": "P", "Flags": "Edited", "Data": 1}]}]}""")]
     public void AnElementOfAUnionNamingNoLeaf_IsRefusedAsDiscriminatorInvalid_NamingTheDiscriminator_AndWritesNothing(string record, string member, string value)
     {

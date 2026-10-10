@@ -20,7 +20,6 @@ public sealed class ValueEditTests : IDisposable
     private const string ScriptedNpc = "000808:DocEdit.esp";
     private const string Debris = "000809:DocEdit.esp";
     private const string TwoPropertyArmorMod = "00080A:DocEdit.esp";
-    private const string Keyword = "00080B:DocEdit.esp";
     private const string Quest = "00080D:DocEdit.esp";
 
     private readonly DocumentEditFixture _fixture = new();

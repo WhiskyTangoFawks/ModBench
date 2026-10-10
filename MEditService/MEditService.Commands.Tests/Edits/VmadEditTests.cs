@@ -41,7 +41,7 @@ public sealed class VmadEditTests : IDisposable
         _fixture.Seed(twins, "npc_");
 
         var quest = new Quest(KeyOf(0x803), Fallout4Release.Fallout4) { EditorID = "Quest" };
-        var questAdapter = new QuestAdapter { Version = 6, ObjectFormat = 2 };
+        var questAdapter = new QuestAdapter { Version = 6, ObjectFormat = 2, Script = new ScriptEntry { Name = "QuestScript" } };
         questAdapter.Fragments.Add(new QuestScriptFragment { Stage = 10, StageIndex = 0, ScriptName = "Ten", FragmentName = "Frag10" });
         questAdapter.Fragments.Add(new QuestScriptFragment { Stage = 5, StageIndex = 1, ScriptName = "Five", FragmentName = "Frag5" });
         var alias = new QuestFragmentAlias { Version = 6, ObjectFormat = 2 };
@@ -135,6 +135,15 @@ public sealed class VmadEditTests : IDisposable
     }
 
     [Fact]
+    public void MovingAnElementOfAScalarArrayInsideAKeyedArraysElement_IsApplied()
+    {
+        var after = Applied(Npc, Spelled(RecordEditEnvelope.Move, "VirtualMachineAdapter.Scripts[1].Properties[0].Data[1]", "0"));
+
+        var tags = JsonNode.Parse(after).Require()[Field].Require()["Scripts"].Require()[1].Require()["Properties"].Require()[0].Require()["Data"].Require();
+        Assert.Equal(["b", "a"], tags.AsArray().Select(tag => tag.Require().GetValue<string>()));
+    }
+
+    [Fact]
     public void MovingAProperty_IsRefusedAsInvalidEnvelope_NamingItsKeyedArray()
     {
         var result = _fixture.Refused(Npc, Spelled(RecordEditEnvelope.Move, "VirtualMachineAdapter.Scripts[1].Properties[1]", "0"));
@@ -158,6 +167,7 @@ public sealed class VmadEditTests : IDisposable
     {
         var changes = _fixture.Changed(Quest, Clear(Member(Field), Member("Script")));
 
+        Assert.NotEmpty(changes);
         Assert.All(changes, change => Assert.StartsWith("VirtualMachineAdapter.Script", change, StringComparison.Ordinal));
     }
 

@@ -84,6 +84,20 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Theory]
+    [InlineData(PartialForm, PartialForm | Deleted)]
+    [InlineData(0, Deleted | PartialForm)]
+    public void AnEmptiedRecordWithNoCopyToItsLeft_HoldsNeitherItsEditorIdNorItsFields(int held, int written)
+    {
+        var cell = InteriorCellOfFallout4Esm(held);
+        cell.WaterHeight = 5f;
+        var formKey = _fixture.Seed(cell, "cell");
+
+        var emptied = SetFlags(formKey, written);
+
+        Assert.DoesNotContain(emptied, p => p.Key is "EditorID" or "WaterHeight");
+    }
+
+    [Theory]
     [InlineData(0, Deleted)]
     [InlineData(0, PartialForm)]
     [InlineData(PartialForm, PartialForm | Deleted)]
