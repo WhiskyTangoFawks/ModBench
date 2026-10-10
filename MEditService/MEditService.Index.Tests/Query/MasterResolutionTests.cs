@@ -32,7 +32,7 @@ public class MasterResolutionTests
     {
         using var fixture = builder.Build();
         using var index = Indexes.Reconciled(fixture);
-        return index.Records.GetPlugins();
+        return index.Records.GetPlugins().Value();
     }
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> Classify(PluginFixtureBuilder builder) =>
@@ -64,7 +64,7 @@ public class MasterResolutionTests
         File.WriteAllBytes(fixture.Plugins.Single(p => p.Name == "Broken.esm").Path, [0xDE, 0xAD]);
         using var index = Indexes.Reconciled(fixture);
 
-        var rows = index.Records.GetPlugins();
+        var rows = index.Records.GetPlugins().Value();
 
         Assert.DoesNotContain(rows, r => r.Plugin.Name == "Broken.esm");
         Assert.Equal([], rows.Single(r => r.Plugin.Name == "Patch.esp").MasterIssues);
@@ -87,7 +87,7 @@ public class MasterResolutionTests
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
 
-        var rows = index.Records.GetPlugins();
+        var rows = index.Records.GetPlugins().Value();
 
         Assert.Equal(["Ghost.esm"], rows.Single(r => r.Plugin.Origin == "WinningMod").MasterIssues);
         Assert.Equal([], rows.Single(r => r.Plugin.Origin == "LosingMod").MasterIssues);
@@ -139,7 +139,7 @@ public class MasterResolutionTests
         IReadOnlyList<PluginRow> rows;
         try
         {
-            rows = index.Records.GetPlugins();
+            rows = index.Records.GetPlugins().Value();
         }
         finally
         {

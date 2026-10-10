@@ -11,7 +11,7 @@ public sealed class IngestOnlySourceFileFailureTests : IDisposable
 
     private OpenedIndex Reloaded() => Indexes.Reconciled(_fixture.GameDirectory, [_fixture.Entry]);
 
-    private static bool AProblemIsNamed(OpenedIndex index) => index.Problems.GetProblems() is [{ Problems: [_, ..] }];
+    private static bool AProblemIsNamed(OpenedIndex index) => index.Problems.GetProblems().Value() is [{ Problems: [_, ..] }];
 
     private string Relative(string path) => Path.GetRelativePath(_fixture.Entry.ModFolderOf(), path);
 

@@ -36,7 +36,7 @@ public sealed class StoreRebuildTests : IDisposable
     {
         _index.Reconcile(_holder, _fixture.GameDirectory, [], GameRelease.Fallout4);
 
-        Assert.Equal(0, _index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 1, offset: 0).Total);
+        Assert.Equal(0, _index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 1, offset: 0).Value().Total);
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class StoreRebuildTests : IDisposable
         .Build();
 
     private static string[] ListedNpcs(OpenedIndex index) =>
-        [.. index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Items.Select(i => i.EditorId ?? "")];
+        [.. index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items.Select(i => i.EditorId ?? "")];
 
     [Fact]
     public void Rebuild_KeepsTheRecordFilter_AndTheRefilledRowsAnswerThroughIt()
@@ -96,7 +96,7 @@ public sealed class StoreRebuildTests : IDisposable
 
         Rebuilt(index, data.InstanceRoot);
 
-        Assert.Equal((MatchesNpcA, "npc-a.sql"), index.Records.GetFilter());
+        Assert.Equal((MatchesNpcA, "npc-a.sql"), index.Records.GetFilter().Value());
         Assert.Equal(["NpcA"], ListedNpcs(index));
     }
 
@@ -139,7 +139,7 @@ public sealed class StoreRebuildTests : IDisposable
         await clear.WaitAsync(Waits.Patience);
         AwaitRefill(index);
 
-        Assert.Null(index.Records.GetFilter());
+        Assert.Null(index.Records.GetFilter().Value());
         Assert.Equal(["NpcA", "NpcB", "NpcOther"], ListedNpcs(index).Order());
     }
 
@@ -158,7 +158,7 @@ public sealed class StoreRebuildTests : IDisposable
         otherWindow.Dispose();
         index.NextSnapshot();
 
-        Assert.Null(index.Records.GetFilter());
+        Assert.Null(index.Records.GetFilter().Value());
         Assert.Equal(["NpcBeforeRebuild"], ListedNpcs(index));
     }
 
@@ -185,7 +185,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Equal(0, _opens.OpenedTotal);
         Assert.Equal(LoadOrderState.None, _index.Status.State);
         Assert.Null(_index.Status.Message);
-        Assert.Throws<NoLoadOrderException>(() => _index.Records.GetFilter());
+        Assert.Equal(IndexRefusal.NoLoadOrder, _index.Records.GetFilter().Refused().Refusal);
     }
 
     [Fact]
@@ -240,8 +240,8 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Equal(bytesBeforeHold, File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex));
     }
 
-    private static bool ScopeClosedUnderTheReadSoTheAnswerIsNoStore(Exception ex) =>
-        ex is ObjectDisposedException or InvalidOperationException or NoLoadOrderException;
+    private static bool ReadMetAClosedScopeOrARefusal(Exception ex) =>
+        ex is ObjectDisposedException or InvalidOperationException;
 
     [Fact]
     public async Task ARebuildWithReadsInFlight_Completes_AndReadsThePluginAgain()
@@ -257,7 +257,7 @@ public sealed class StoreRebuildTests : IDisposable
                 {
                     if (_index.ListedIn(Key) is { Count: > 0 }) Interlocked.Increment(ref answered);
                 }
-                catch (Exception ex) when (ScopeClosedUnderTheReadSoTheAnswerIsNoStore(ex))
+                catch (Exception ex) when (ReadMetAClosedScopeOrARefusal(ex))
                 {
                 }
             }

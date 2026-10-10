@@ -16,7 +16,7 @@ public sealed class HeldPluginsTests
     private static PluginAddress Key(string name, string origin = PluginOrigin.DataDirectory) => new(name, origin);
 
     private static Dictionary<PluginAddress, PluginContent> Opened(OpenedIndex held) =>
-        held.Records.GetPlugins().ToDictionary(row => row.Plugin.Key, row => row.Content, PluginAddress.Comparer);
+        held.Records.GetPlugins().Value().ToDictionary(row => row.Plugin.Key, row => row.Content, PluginAddress.Comparer);
 
     [Fact]
     public void TheGamesMasterSentFirst_IsHeldBeforeTheUserPlugin()
@@ -159,7 +159,7 @@ public sealed class HeldPluginsTests
         using var data = new PluginFixtureBuilder("lo-find").WithPlugin("CaseMod.esp").Build();
         using var held = Open(data);
 
-        Assert.Equal([Key("CaseMod.esp")], held.Records.GetPlugins().Select(row => row.Plugin.Key));
+        Assert.Equal([Key("CaseMod.esp")], held.Records.GetPlugins().Value().Select(row => row.Plugin.Key));
     }
 
     [Fact]

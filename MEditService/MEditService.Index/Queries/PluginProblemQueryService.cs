@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
@@ -48,7 +49,9 @@ public sealed class PluginProblemQueryService
 
     /// <summary>A plugin the index has not reached holds no record yet, so every link into it would
     /// read as a missing record.</summary>
-    public IReadOnlyList<PluginProblems> GetProblems()
+    public Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems() => IndexAnswer.Of(ProblemsOfPlugins);
+
+    private IReadOnlyList<PluginProblems> ProblemsOfPlugins()
     {
         var snapshot = _loadOrder.Require();
         var reads = _index.RequireWholeSetReads();

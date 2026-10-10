@@ -83,7 +83,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetPlugins_ReturnsLoadedPlugin()
     {
-        var plugin = Assert.Single(_svc.GetPlugins());
+        var plugin = Assert.Single(_svc.GetPlugins().Value());
 
         Assert.Equal(PluginName, plugin.Plugin.Name);
         Assert.Equal(2, plugin.Content.RecordCount);
@@ -96,7 +96,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
             .Plugins.Single();
         var index = WithAnUnreadableNpc("000800:Unreadable.esp", readable with { Line = 1 });
 
-        var plugins = index.Records.GetPlugins();
+        var plugins = index.Records.GetPlugins().Value();
 
         Assert.True(plugins.Single(p => p.Plugin.Name == "Unreadable.esp").HasParseFailure);
         Assert.False(plugins.Single(p => p.Plugin.Name == "Readable.esp").HasParseFailure);
@@ -127,7 +127,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Untracked"), origin: "UntrackedMod"));
         TrackedMods.Track(fixture.Plugins.Single(p => p.Origin == "TrackedMod"), fixture.GameDirectory);
 
-        var plugins = Reconciled(fixture).Records.GetPlugins();
+        var plugins = Reconciled(fixture).Records.GetPlugins().Value();
 
         Assert.True(plugins.Single(p => p.Plugin.Origin == "TrackedMod").IsTracked);
         Assert.False(plugins.Single(p => p.Plugin.Origin == "UntrackedMod").IsTracked);
@@ -139,7 +139,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetPlugins_PluginWithMissingMaster_ReportsItAsAMasterIssue()
     {
-        var patch = Assert.Single(PatchOfAGhostMaster().Records.GetPlugins(), p => p.Plugin.Name == "Patch.esp");
+        var patch = Assert.Single(PatchOfAGhostMaster().Records.GetPlugins().Value(), p => p.Plugin.Name == "Patch.esp");
 
         Assert.Equal(["Ghost.esm"], patch.MasterIssues);
     }
@@ -147,7 +147,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetRecord_ReferenceIntoAbsentMaster_RendersUnresolvedRatherThanErroring()
     {
-        var detail = PatchOfAGhostMaster().Records.GetRecord("000800:Patch.esp");
+        var detail = PatchOfAGhostMaster().Records.GetRecord("000800:Patch.esp").Value();
 
         Assert.NotNull(detail);
         var raceField = Assert.Single(detail.Fields, f => f.Metadata.Name == "Race");
@@ -160,7 +160,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetPlugins_PluginWithNoMissingMasters_ReportsEmptyMasterIssues()
     {
-        Assert.Equal([], Assert.Single(_svc.GetPlugins()).MasterIssues);
+        Assert.Equal([], Assert.Single(_svc.GetPlugins().Value()).MasterIssues);
     }
 
     [Fact]
@@ -176,7 +176,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
             mod.Npcs.AddNew("Other");
         }));
 
-        var page = index.Records.GetRecords(types: ["npc_"], plugin: null, search: "Npc", limit: 2, offset: 1);
+        var page = index.Records.GetRecords(types: ["npc_"], plugin: null, search: "Npc", limit: 2, offset: 1).Value();
 
         Assert.Equal(4, page.Total);
         Assert.Equal(["Npc2", "Npc3"], EditorIds(page));
@@ -190,7 +190,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         var index = OwnTwoNpcs();
         index.SetFilter(MatchesNpc02, "npcs.sql");
 
-        var page = index.Records.GetRecords(types: ["npc_"], plugin: null, search: search, limit: 10, offset: 0);
+        var page = index.Records.GetRecords(types: ["npc_"], plugin: null, search: search, limit: 10, offset: 0).Value();
 
         Assert.Equal(expected, EditorIds(page));
     }
@@ -211,7 +211,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
             })
             .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("PatchNpc")));
 
-        var page = index.Records.GetRecords(types: null, plugin: null, search: formId, limit: 20, offset: 0);
+        var page = index.Records.GetRecords(types: null, plugin: null, search: formId, limit: 20, offset: 0).Value();
 
         Assert.Equal([$"000800:{plugin}"], FormKeys(page));
     }
@@ -225,7 +225,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     {
         var index = Roster(("F0.esm", false, true), ("L0.esp", true, true), ("F1.esp", false, true), ("L1.esp", true, true));
 
-        var page = index.Records.GetRecords(types: null, plugin: null, search: formId, limit: 20, offset: 0);
+        var page = index.Records.GetRecords(types: null, plugin: null, search: formId, limit: 20, offset: 0).Value();
 
         Assert.Equal([formKey], FormKeys(page));
     }
@@ -235,7 +235,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     {
         var index = Roster(("F0.esm", false, true), ("Off.esp", false, false), ("F1.esp", false, true));
 
-        var page = index.Records.GetRecords(types: null, plugin: null, search: "01000800", limit: 20, offset: 0);
+        var page = index.Records.GetRecords(types: null, plugin: null, search: "01000800", limit: 20, offset: 0).Value();
 
         Assert.Equal(["000800:F1.esp"], FormKeys(page));
     }
@@ -245,7 +245,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     {
         var index = Roster([.. Enumerable.Range(0, 255).Select(i => ($"P{i:D3}.esp", false, true))]);
 
-        var page = index.Records.GetRecords(types: null, plugin: null, search: "FE000800", limit: 20, offset: 0);
+        var page = index.Records.GetRecords(types: null, plugin: null, search: "FE000800", limit: 20, offset: 0).Value();
 
         Assert.Equal(["000800:P254.esp"], FormKeys(page));
     }
@@ -255,7 +255,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     {
         var index = Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod => mod.Npcs.AddNew("Npc7F000800")));
 
-        var page = index.Records.GetRecords(types: null, plugin: null, search: "7F000800", limit: 20, offset: 0);
+        var page = index.Records.GetRecords(types: null, plugin: null, search: "7F000800", limit: 20, offset: 0).Value();
 
         Assert.Equal(["Npc7F000800"], EditorIds(page));
     }
@@ -289,7 +289,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
             mod.Keywords.AddNew("TheKeyword");
         }));
 
-        var page = index.Records.GetRecords(types: null, plugin: null, search: null, limit: 10, offset: 0);
+        var page = index.Records.GetRecords(types: null, plugin: null, search: null, limit: 10, offset: 0).Value();
 
         Assert.Equal(["TheNpc", "TheKeyword"], EditorIds(page));
     }
@@ -303,7 +303,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("InOther"), origin: "OtherOrigin")
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("InData")));
 
-        var page = index.Records.GetRecords(types: ["npc_"], plugin: new PluginAddress(PluginName, origin), search: null, limit: 10, offset: 0);
+        var page = index.Records.GetRecords(types: ["npc_"], plugin: new PluginAddress(PluginName, origin), search: null, limit: 10, offset: 0).Value();
 
         Assert.Equal(expected, EditorIds(page));
     }
@@ -320,7 +320,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
             mod.Quests.AddNew("BeyondThePage");
         }, origin: PluginKey.Origin));
 
-        var result = index.Records.GetRecords(types: ["qust"], plugin: null, search: null, limit: 2, offset: 0);
+        var result = index.Records.GetRecords(types: ["qust"], plugin: null, search: null, limit: 2, offset: 0).Value();
 
         Assert.Equal(3, result.Total);
         Assert.Equal(
@@ -345,7 +345,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
                 mod.Npcs.Add(patched);
             }));
 
-        var detail = index.Records.GetRecord("000800:Base.esm");
+        var detail = index.Records.GetRecord("000800:Base.esm").Value();
 
         Assert.NotNull(detail);
         Assert.Equal(("Patch.esp", "AsThePatchHasIt", true), (detail.Plugin, detail.EditorId, detail.IsWinner));
@@ -359,7 +359,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     {
         static List<string?> DanglingMarks(OpenedIndex index)
         {
-            var compare = index.Records.GetCompare(NpcWithNoWinnerYet) ?? throw new InvalidOperationException("Expected the record to compare.");
+            var compare = index.Records.GetCompare(NpcWithNoWinnerYet).Value() ?? throw new InvalidOperationException("Expected the record to compare.");
             return [
                 .. compare.Overrides.SelectMany(o => o.Fields).Where(f => f.Metadata.Name == "Race").Select(f => f.CheckError),
                 .. compare.Diffs.Single(d => d.FieldName == "Race").CheckErrors?.Values ?? []];
@@ -414,7 +414,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     {
         await WhileNoCopyIsFlaggedWinner(index =>
         {
-            var compare = index.Records.GetCompare(NpcWithNoWinnerYet);
+            var compare = index.Records.GetCompare(NpcWithNoWinnerYet).Value();
 
             Assert.NotNull(compare);
             Assert.Equal(["Base.esm", "Next.esp"], compare.Overrides.Select(o => o.Plugin));
@@ -426,27 +426,26 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     public async Task GetRecord_BeforeTheWinnerSweep_IsNotReady_ForNoCopyWinsYetAndNullWouldSayItIsGone()
     {
         await WhileNoCopyIsFlaggedWinner(index =>
-            Assert.Throws<IndexNotReadyException>(() => index.Records.GetRecord(NpcWithNoWinnerYet)));
+            Assert.Equal(IndexRefusal.IndexNotReady, index.Records.GetRecord(NpcWithNoWinnerYet).Refused().Refusal));
     }
 
     [Fact]
     public async Task GetCompareRecords_BeforeTheWinnerSweep_IsNotReady_ForALinkResolvesToWinnersOnly()
     {
         await WhileNoCopyIsFlaggedWinner(index =>
-            Assert.Throws<IndexNotReadyException>(
-                () => index.Records.GetCompareRecords([new RecordCopy(NpcWithNoWinnerYet, new PluginAddress("Base.esm", "Base.esm"))])));
+            Assert.Equal(IndexRefusal.IndexNotReady, index.Records.GetCompareRecords([new RecordCopy(NpcWithNoWinnerYet, new PluginAddress("Base.esm", "Base.esm"))]).Refused().Refusal));
     }
 
     [Fact]
     public void GetRecord_ReturnsRecordType_ForCopyAsNewRecordNeedsTheSchemaTableNameUpFront()
     {
-        Assert.Equal("npc_", _svc.GetRecord(Npc01)?.RecordType);
+        Assert.Equal("npc_", _svc.GetRecord(Npc01).Value()?.RecordType);
     }
 
     [Fact]
     public void GetCompare_SingleOverride_ReturnsDiffs()
     {
-        var compare = _svc.GetCompare(Npc01);
+        var compare = _svc.GetCompare(Npc01).Value();
 
         Assert.NotNull(compare);
         Assert.Equal(ConflictThis.OnlyOne, Assert.Single(compare.Overrides).ConflictThis);
@@ -466,7 +465,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
             })
             .WithPlugin("Patch.esp", (mod, prev) => mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First())));
 
-        var compare = index.Records.GetCompare("000800:Base.esm");
+        var compare = index.Records.GetCompare("000800:Base.esm").Value();
 
         Assert.Equal(["00", "FE:000", "01"], compare?.Overrides.Select(o => o.LoadIndex) ?? []);
     }
@@ -479,7 +478,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         var diagnosis = index.RowOf(unreadable, new PluginAddress("Unreadable.esp", PluginOrigin.DataDirectory))?.ParseDiagnosis;
         Assert.NotNull(diagnosis);
 
-        var compare = index.Records.GetCompare(unreadable);
+        var compare = index.Records.GetCompare(unreadable).Value();
 
         Assert.NotNull(compare);
         Assert.Equal(diagnosis, Assert.Single(compare.Overrides).ParseDiagnosis);
@@ -488,7 +487,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetCompare_LeavesAReadableRecordsColumnWithoutADiagnosis()
     {
-        var compare = _svc.GetCompare(Npc01);
+        var compare = _svc.GetCompare(Npc01).Value();
 
         Assert.NotNull(compare);
         Assert.All(compare.Overrides, o => Assert.Null(o.ParseDiagnosis));
@@ -497,7 +496,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetCompare_NamesTheRecordTypeAsXEditDoes()
     {
-        Assert.Equal("Non-Player Character", _svc.GetCompare(Npc01)?.RecordTypeName);
+        Assert.Equal("Non-Player Character", _svc.GetCompare(Npc01).Value()?.RecordTypeName);
     }
 
     private OpenedIndex KeywordReferredToFromBaseAndPatch() => Reconciled(new PluginFixtureBuilder("record-query")
@@ -512,7 +511,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetReferences_NameTheRecordTypeAsXEditDoes()
     {
-        var references = KeywordReferredToFromBaseAndPatch().Records.GetReferences("000800:Target.esp");
+        var references = KeywordReferredToFromBaseAndPatch().Records.GetReferences("000800:Target.esp").Value();
 
         Assert.NotEmpty(references);
         Assert.All(references, reference => Assert.Equal(("npc_", "Non-Player Character"), (reference.RecordType, reference.RecordTypeName)));
@@ -521,7 +520,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetReferences_ListThePluginsInLoadOrder()
     {
-        var plugins = KeywordReferredToFromBaseAndPatch().Records.GetReferences("000800:Target.esp").Select(r => r.Plugin);
+        var plugins = KeywordReferredToFromBaseAndPatch().Records.GetReferences("000800:Target.esp").Value().Select(r => r.Plugin);
 
         Assert.Equal(["Base.esp", "Patch.esp"], plugins);
     }
@@ -529,7 +528,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetCompare_OverridesCarryRecordType()
     {
-        var compare = _svc.GetCompare(Npc01);
+        var compare = _svc.GetCompare(Npc01).Value();
 
         Assert.NotNull(compare);
         Assert.All(compare.Overrides, o => Assert.Equal("npc_", o.RecordType));
@@ -543,7 +542,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     {
         var index = Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod => mod.Npcs.AddNew("TestNPC"), origin: origin));
 
-        var compare = index.Records.GetCompare(Npc01);
+        var compare = index.Records.GetCompare(Npc01).Value();
 
         Assert.NotNull(compare);
         Assert.True(Assert.Single(compare.Overrides).IsInOverwrite);
@@ -552,7 +551,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetCompare_ModOriginColumn_CarriesIsInOverwriteFalse()
     {
-        var compare = _svc.GetCompare(Npc01);
+        var compare = _svc.GetCompare(Npc01).Value();
 
         Assert.NotNull(compare);
         Assert.All(compare.Overrides, o => Assert.False(o.IsInOverwrite));
@@ -573,7 +572,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetCompare_NoOverrideCarriesAnAdapter_OmitsTheFieldEntirely()
     {
-        var compare = _svc.GetCompare(Npc01);
+        var compare = _svc.GetCompare(Npc01).Value();
 
         Assert.NotNull(compare);
         Assert.DoesNotContain(compare.Diffs, d => d.FieldName == VmadField);
@@ -742,7 +741,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     }
 
     private CompareResult Compared(PluginFixtureBuilder plugins, string formKey = "000800:Base.esp") =>
-        Reconciled(plugins).Records.GetCompare(formKey) ?? throw new InvalidOperationException($"Expected a comparison of {formKey}.");
+        Reconciled(plugins).Records.GetCompare(formKey).Value() ?? throw new InvalidOperationException($"Expected a comparison of {formKey}.");
 
     private static void MakeScriptedNpc(IFallout4Mod mod, int power) =>
         mod.Npcs.AddNew("ScriptedNPC").VirtualMachineAdapter = ScriptVmad(power);
@@ -773,13 +772,13 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetCompare_UnknownFormKey_ReturnsNull()
     {
-        Assert.Null(_svc.GetCompare("FFFFFF:Unknown.esp"));
+        Assert.Null(_svc.GetCompare("FFFFFF:Unknown.esp").Value());
     }
 
     [Fact]
     public void GetPluginRecordTypes_ReturnsCountsForPlugin()
     {
-        var result = _svc.GetPluginRecordTypes(PluginKey);
+        var result = _svc.GetPluginRecordTypes(PluginKey).Value();
 
         Assert.Equal(2, Assert.Single(result, r => r.Type == "npc_").Count);
         Assert.All(result, r => Assert.True(r.Count > 0));
@@ -795,7 +794,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         }, origin: PluginKey.Origin));
         MisshapedPerks.Misshape(fixture.Plugins.Single().Path);
 
-        var result = Reconciled(fixture).Records.GetPluginRecordTypes(PluginKey);
+        var result = Reconciled(fixture).Records.GetPluginRecordTypes(PluginKey).Value();
 
         Assert.True(Assert.Single(result, r => r.Type == "perk").HasParseFailure);
         Assert.False(Assert.Single(result, r => r.Type == "npc_").HasParseFailure);
@@ -804,7 +803,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetPluginRecordTypes_DisplayName_MatchesXEdit_WhileTheSignatureStaysTheKey()
     {
-        Assert.Equal("Non-Player Character", Assert.Single(_svc.GetPluginRecordTypes(PluginKey), r => r.Type == "npc_").DisplayName);
+        Assert.Equal("Non-Player Character", Assert.Single(_svc.GetPluginRecordTypes(PluginKey).Value(), r => r.Type == "npc_").DisplayName);
     }
 
     private OpenedIndex ManyTypes() => Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
@@ -823,9 +822,9 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     public void GetPluginRecordTypes_IsCreatable_AgreesWithTheCreatableEndpoint_ForTheGroupMenuReadsItInsteadOfASecondPackageJsonSideList()
     {
         var index = ManyTypes();
-        var creatable = index.Records.GetCreatableRecordTypes().Select(r => r.Type).ToHashSet(StringComparer.Ordinal);
+        var creatable = index.Records.GetCreatableRecordTypes().Value().Select(r => r.Type).ToHashSet(StringComparer.Ordinal);
 
-        var result = index.Records.GetPluginRecordTypes(PluginKey);
+        var result = index.Records.GetPluginRecordTypes(PluginKey).Value();
 
         Assert.Contains("npc_", creatable);
         Assert.Contains("qust", creatable);
@@ -835,7 +834,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetPluginRecordTypes_SaysWhichTypesAreContainers_AnEmptyOneIncluded()
     {
-        var containers = ManyTypes().Records.GetPluginRecordTypes(PluginKey).Where(r => r.IsContainer).Select(r => r.Type);
+        var containers = ManyTypes().Records.GetPluginRecordTypes(PluginKey).Value().Where(r => r.IsContainer).Select(r => r.Type);
 
         Assert.Equal(["cell", "qust", "wrld"], containers.Order(StringComparer.Ordinal));
     }
@@ -843,19 +842,19 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetPluginRecordTypes_ExcludesHeader_ForItIsReachedOnlyViaOpenHeaderOnThePluginNode()
     {
-        Assert.DoesNotContain(_svc.GetPluginRecordTypes(PluginKey), r => r.Type == PluginHeader.RecordType);
+        Assert.DoesNotContain(_svc.GetPluginRecordTypes(PluginKey).Value(), r => r.Type == PluginHeader.RecordType);
     }
 
     [Fact]
     public void GetPluginRecordTypes_UnknownPlugin_ReturnsEmpty()
     {
-        Assert.Empty(_svc.GetPluginRecordTypes(new PluginAddress("DoesNotExist.esp", PluginOrigin.DataDirectory)));
+        Assert.Empty(_svc.GetPluginRecordTypes(new PluginAddress("DoesNotExist.esp", PluginOrigin.DataDirectory)).Value());
     }
 
     [Fact]
     public void GetCreatableRecordTypes_NamesAFlatTypeAsXEditDoes()
     {
-        Assert.Equal("Non-Player Character", Assert.Single(_svc.GetCreatableRecordTypes(), r => r.Type == "npc_").DisplayName);
+        Assert.Equal("Non-Player Character", Assert.Single(_svc.GetCreatableRecordTypes().Value(), r => r.Type == "npc_").DisplayName);
     }
 
     [Theory]
@@ -865,7 +864,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [InlineData("info")]
     public void GetCreatableRecordTypes_LeavesOutTheHeaderAndEveryHeldType(string recordType)
     {
-        Assert.DoesNotContain(_svc.GetCreatableRecordTypes(), r => r.Type == recordType);
+        Assert.DoesNotContain(_svc.GetCreatableRecordTypes().Value(), r => r.Type == recordType);
     }
 
     [Theory]
@@ -874,13 +873,13 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [InlineData("qust")]
     public void GetCreatableRecordTypes_NamesEveryTypeWithATopLevelGroup(string recordType)
     {
-        Assert.Contains(_svc.GetCreatableRecordTypes(), r => r.Type == recordType);
+        Assert.Contains(_svc.GetCreatableRecordTypes().Value(), r => r.Type == recordType);
     }
 
     [Fact]
     public void GetCreatableRecordTypes_IsInNameOrder()
     {
-        var names = _svc.GetCreatableRecordTypes().Select(r => r.DisplayName).ToList();
+        var names = _svc.GetCreatableRecordTypes().Value().Select(r => r.DisplayName).ToList();
 
         Assert.Equal(names.Order(StringComparer.OrdinalIgnoreCase), names);
     }
@@ -895,7 +894,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetCreatableRecordTypes_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        Assert.Throws<NoLoadOrderException>(() => Unloaded().Records.GetCreatableRecordTypes());
+        Assert.Equal(IndexRefusal.NoLoadOrder, Unloaded().Records.GetCreatableRecordTypes().Refused().Refusal);
     }
 
     private OpenedIndex OneOfEachType() => Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
@@ -908,7 +907,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetRecords_SeveralTypes_ListsExactlyThose()
     {
-        var page = OneOfEachType().Records.GetRecords(types: ["npc_", "kywd"], plugin: null, search: "X", limit: 10, offset: 0);
+        var page = OneOfEachType().Records.GetRecords(types: ["npc_", "kywd"], plugin: null, search: "X", limit: 10, offset: 0).Value();
 
         Assert.Equal(["KeywordX", "NpcX"], EditorIds(page));
     }
@@ -916,7 +915,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetRecords_AnUnknownTypeAmongKnownOnes_ListsTheKnownOnes()
     {
-        var page = OneOfEachType().Records.GetRecords(types: ["npc_", "xxxx"], plugin: null, search: "X", limit: 10, offset: 0);
+        var page = OneOfEachType().Records.GetRecords(types: ["npc_", "xxxx"], plugin: null, search: "X", limit: 10, offset: 0).Value();
 
         Assert.Equal(["NpcX"], EditorIds(page));
     }
@@ -924,7 +923,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetRecords_UnknownType_ReturnsEmptyPagedResult()
     {
-        var result = _svc.GetRecords(types: ["xxxx"], plugin: null, search: null, limit: 10, offset: 0);
+        var result = _svc.GetRecords(types: ["xxxx"], plugin: null, search: null, limit: 10, offset: 0).Value();
 
         Assert.Equal(0, result.Total);
         Assert.Empty(result.Items);
@@ -933,15 +932,17 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     [Fact]
     public void GetPlugins_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        var ex = Assert.Throws<NoLoadOrderException>(() => Unloaded().Records.GetPlugins());
-        Assert.Contains("No load order", ex.Message);
+        var refused = Unloaded().Records.GetPlugins().Refused();
+        Assert.Equal(IndexRefusal.NoLoadOrder, refused.Refusal);
+        Assert.Contains("No load order", refused.Message);
     }
 
     [Fact]
     public void GetRecords_NoLoadOrder_ThrowsNoLoadOrderException()
     {
-        var ex = Assert.Throws<NoLoadOrderException>(() => Unloaded().Records.GetRecords(["npc_"], null, null, 10, 0));
-        Assert.Contains("No load order", ex.Message);
+        var refused = Unloaded().Records.GetRecords(["npc_"], null, null, 10, 0).Refused();
+        Assert.Equal(IndexRefusal.NoLoadOrder, refused.Refusal);
+        Assert.Contains("No load order", refused.Message);
     }
 
     [Fact]
@@ -950,7 +951,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         var index = OwnTwoNpcs();
         index.SetFilter(MatchesNpc02, "npcs.sql");
 
-        Assert.True(Assert.Single(index.Records.GetPlugins(), p => p.Plugin.Name == PluginName).HasMatchingRecords);
+        Assert.True(Assert.Single(index.Records.GetPlugins().Value(), p => p.Plugin.Name == PluginName).HasMatchingRecords);
     }
 
     [Fact]
@@ -959,7 +960,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         var index = OwnTwoNpcs();
         index.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key", "nothing.sql");
 
-        Assert.False(Assert.Single(index.Records.GetPlugins(), p => p.Plugin.Name == PluginName).HasMatchingRecords);
+        Assert.False(Assert.Single(index.Records.GetPlugins().Value(), p => p.Plugin.Name == PluginName).HasMatchingRecords);
     }
 
     [Fact]
@@ -969,7 +970,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         index.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key", "nothing.sql");
         index.ClearFilter();
 
-        var plugin = Assert.Single(index.Records.GetPlugins());
+        var plugin = Assert.Single(index.Records.GetPlugins().Value());
         Assert.Equal(PluginName, plugin.Plugin.Name);
         Assert.True(plugin.HasMatchingRecords);
     }
@@ -979,26 +980,26 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
     {
         var index = OwnTwoNpcs();
 
-        index.Records.SetFilter(MatchesNpc02, "npcs.sql");
+        index.Records.SetFilter(MatchesNpc02, "npcs.sql").Accepted();
 
-        Assert.Equal((MatchesNpc02, "npcs.sql"), index.Records.GetFilter());
+        Assert.Equal((MatchesNpc02, "npcs.sql"), index.Records.GetFilter().Value());
     }
 
     [Fact]
     public void ClearFilter_LeavesNoFilterInForce()
     {
         var index = OwnTwoNpcs();
-        index.Records.SetFilter(MatchesNpc02, "npcs.sql");
+        index.Records.SetFilter(MatchesNpc02, "npcs.sql").Accepted();
 
         index.Records.ClearFilter();
 
-        Assert.Null(index.Records.GetFilter());
+        Assert.Null(index.Records.GetFilter().Value());
     }
 
     [Fact]
     public void GetFilter_WithNoLoadOrder_RefusesRatherThanAnsweringUnfiltered()
     {
-        Assert.Throws<NoLoadOrderException>(() => Unloaded().Records.GetFilter());
+        Assert.Equal(IndexRefusal.NoLoadOrder, Unloaded().Records.GetFilter().Refused().Refusal);
     }
 
     [Fact]
@@ -1027,7 +1028,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         Assert.Null(index.Records.RebuildStore(GameRelease.Fallout4, fixture.InstanceRoot));
 
         Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the refill");
-        Assert.Equal("TestNPC02", index.Records.GetRecord(Npc02)?.EditorId);
+        Assert.Equal("TestNPC02", index.Records.GetRecord(Npc02).Value()?.EditorId);
     }
 
     [Fact]
@@ -1041,7 +1042,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
 
         Assert.Equal(StoreRebuildRefusal.InstanceRootNotFound, refusal?.Refusal);
         Assert.Contains(gone, refusal?.Message, StringComparison.Ordinal);
-        Assert.Equal("TestNPC02", index.Records.GetRecord(Npc02)?.EditorId);
+        Assert.Equal("TestNPC02", index.Records.GetRecord(Npc02).Value()?.EditorId);
     }
 
     [Fact]
@@ -1061,7 +1062,7 @@ public sealed class RecordQueryServiceTests(RecordQueryServiceTests.TwoNpcs shar
         index.Create(entry, "000900:TestPlugin.esp", "npc_", "Added",
             body.Replace(Npc02, "000900:TestPlugin.esp", StringComparison.Ordinal).Replace("\"Edited\"", "\"Added\"", StringComparison.Ordinal));
 
-        var result = index.Records.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 10, offset: 0);
+        var result = index.Records.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value();
 
         Assert.Equal(
             [WorkingTreeState.None, WorkingTreeState.Modified, WorkingTreeState.Added],

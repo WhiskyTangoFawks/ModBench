@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -15,10 +16,10 @@ public class FilterTests(TestPluginFixture fixture)
     private OpenedIndex LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
 
     private static PagedResult<RecordSummary> NpcListing(OpenedIndex index) =>
-        index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 100, offset: 0);
+        index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 100, offset: 0).Value();
 
     private static IEnumerable<PluginAddress> PluginsWithMatches(OpenedIndex index) =>
-        index.Records.GetPlugins().Where(row => row.HasMatchingRecords).Select(row => row.Plugin.Key);
+        index.Records.GetPlugins().Value().Where(row => row.HasMatchingRecords).Select(row => row.Plugin.Key);
 
     [Fact]
     public void SetFilter_ValidSqlWithExtraColumns_FiltersByFormKey()
@@ -34,19 +35,31 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void SetFilter_SqlWithoutFormKeyColumn_ThrowsArgumentException()
+    public void SetFilter_SqlWithoutFormKeyColumn_IsRefused()
     {
         using var index = LoadedIndex();
-        var ex = Assert.Throws<ArgumentException>(() =>
-            index.SetFilter("SELECT editor_id FROM \"NPC_\"", "filter.sql"));
-        Assert.Contains("form_key", ex.Message);
+        var refused = index.Records.SetFilter("SELECT editor_id FROM \"NPC_\"", "filter.sql");
+        Assert.Equal(IndexRefusal.FilterRejected, refused?.Refusal);
+        Assert.Contains("form_key", refused?.Message);
     }
 
     [Fact]
-    public void SetFilter_BadSyntax_ThrowsException()
+    public void ARefusedFilter_LeavesTheFilterInForceStanding()
     {
         using var index = LoadedIndex();
-        Assert.ThrowsAny<Exception>(() => index.SetFilter("NOT VALID SQL!!!", "filter.sql"));
+        var firstFormKey = NpcListing(index).Items[0].FormKey;
+        index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "kept.sql");
+
+        index.Records.SetFilter("SELECT editor_id FROM \"NPC_\"", "refused.sql");
+
+        Assert.Equal(("kept.sql", 1), (index.Records.GetFilter().Value()?.Source, NpcListing(index).Total));
+    }
+
+    [Fact]
+    public void SetFilter_BadSyntax_IsRefused()
+    {
+        using var index = LoadedIndex();
+        Assert.Equal(IndexRefusal.FilterRejected, index.Records.SetFilter("NOT VALID SQL!!!", "filter.sql")?.Refusal);
     }
 
     [Fact]
@@ -82,7 +95,7 @@ public class FilterTests(TestPluginFixture fixture)
         using var index = LoadedIndex();
         index.SetFilter($"SELECT '{_fixture.Npc1FormKey}' AS form_key", "filter.sql");
 
-        var found = index.Records.GetRecords(["npc_"], plugin: null, search: "TestNPC02", limit: 100, offset: 0);
+        var found = index.Records.GetRecords(["npc_"], plugin: null, search: "TestNPC02", limit: 100, offset: 0).Value();
 
         Assert.Equal(["TestNPC02"], found.Items.Select(r => r.EditorId));
     }

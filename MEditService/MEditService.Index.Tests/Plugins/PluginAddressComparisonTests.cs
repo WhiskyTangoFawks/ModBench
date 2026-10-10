@@ -44,7 +44,7 @@ public sealed class PluginAddressComparisonTests : IDisposable
     [Fact]
     public void APointReadUnderAnotherCase_AnswersTheRecord()
     {
-        Assert.Equal("FromCased", _index.Records.GetRecord(UnderAnotherCase("FromCased"))?.EditorId);
+        Assert.Equal("FromCased", _index.Records.GetRecord(UnderAnotherCase("FromCased")).Value()?.EditorId);
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public sealed class PluginAddressComparisonTests : IDisposable
     [Fact]
     public void ASearchUnderAnotherCase_FindsThePluginsRecords()
     {
-        Assert.Equal(1, _index.Records.GetRecords(["npc_"], OtherCase, search: "FromCased", limit: 10, offset: 0).Total);
+        Assert.Equal(1, _index.Records.GetRecords(["npc_"], OtherCase, search: "FromCased", limit: 10, offset: 0).Value().Total);
     }
 
     [Fact]
@@ -80,6 +80,6 @@ public sealed class PluginAddressComparisonTests : IDisposable
         using var reopened = Indexes.Reconciled(_fixture.GameDirectory,
             [entry with { Name = OtherCase.Name, Origin = OtherCase.Origin }], _fixture.InstanceRoot);
 
-        Assert.Equal(1, reopened.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Total);
+        Assert.Equal(1, reopened.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Total);
     }
 }

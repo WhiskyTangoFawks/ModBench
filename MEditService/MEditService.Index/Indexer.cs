@@ -67,23 +67,23 @@ internal sealed class Indexer : IQueryIndex, IDisposable
     /// concurrent set never pairs one filter's SQL with another's source.</summary>
     public (string Sql, string Source)? ActiveFilter => _filter.Current;
 
-    /// <summary>Throws <see cref="ArgumentException"/> if the SQL does not return a form_key
-    /// column.</summary>
-    public void SetFilter(string sql, string source) => ApplyFilter((sql, source));
+    /// <summary>Answers why the SQL cannot be a filter, such as no form_key column.</summary>
+    public string? SetFilter(string sql, string source) => ApplyFilter((sql, source));
 
     public void ClearFilter() => ApplyFilter(null);
 
-    private void ApplyFilter((string Sql, string Source)? filter)
+    private string? ApplyFilter((string Sql, string Source)? filter)
     {
         // Materializing the filter is an index write, and the filter box is live while an edit runs, so
         // racing an in-flight edit is the ordinary case: gated like every write.
         using var _ = _gate.Enter();
 
-        if (_reconciler.UnderScope((index, scope) => _filter.Set(index, scope, filter))) return;
+        if (_reconciler.UnderScope((index, scope) => _filter.Set(index, scope, filter), out var rejection)) return rejection;
 
         // A filter kept through a rebuild outlives the store it was materialized in.
         if (filter is not null) throw new NoLoadOrderException();
         _filter.Clear();
+        return null;
     }
 
     /// <summary>ADR-0010: drops the index file, floors its sequence at what this process

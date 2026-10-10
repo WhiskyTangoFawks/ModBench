@@ -29,6 +29,15 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     }
 
     [Fact]
+    public async Task PostFilter_SqlNamingAColumnNoRelationHas_Returns400SayingWhy()
+    {
+        var resp = await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\" WHERE no_such_column = 1", source = "wrong.sql" });
+
+        var problem = await resp.AssertIsProblem(HttpStatusCode.BadRequest);
+        Assert.Contains("no_such_column", problem.GetProperty("detail").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task GetFilter_BeforeAnyFilter_ReturnsSqlNull()
     {
         await ClearFilterAsync();

@@ -64,7 +64,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     [Fact]
     public void AnExteriorCellWithAFullName_CarriesItThrough()
     {
-        var cells = _index.Worldspaces.GetWorldspaceBlocks(_plugin, _worldspaceFormKey).Blocks
+        var cells = _index.Worldspaces.GetWorldspaceBlocks(_plugin, _worldspaceFormKey).Value().Blocks
             .SelectMany(block => block.SubBlocks).SelectMany(subBlock => subBlock.Cells);
 
         var extCell = Assert.Single(cells, c => c.EditorId == "ExtCell");
@@ -74,7 +74,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     [Fact]
     public void ATopCellWithNoFullName_HasANullFullName()
     {
-        var topCell = Assert.Single(_index.Worldspaces.GetWorldspaceBlocks(_plugin, _worldspaceFormKey).TopCells);
+        var topCell = Assert.Single(_index.Worldspaces.GetWorldspaceBlocks(_plugin, _worldspaceFormKey).Value().TopCells);
 
         Assert.Equal("TopCell", topCell.EditorId);
         Assert.Null(topCell.FullName);

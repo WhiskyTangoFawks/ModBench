@@ -395,7 +395,7 @@ public sealed class Fallout4KeyedArrayCompareTests(Fallout4KeyedArrayCopies copi
 
     private IReadOnlyList<FieldDiff> AssertTopCopyIs(ConflictThis expected, FormKey record)
     {
-        var compare = copies.Index.Records.GetCompare(record.ToString())
+        var compare = copies.Index.Records.GetCompare(record.ToString()).Value()
             ?? throw new InvalidOperationException($"Expected {record} to resolve to a compare result.");
 
         var keyedArrays = Records.Single(r => r.Key == record).Fields;

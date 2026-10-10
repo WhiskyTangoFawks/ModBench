@@ -62,7 +62,7 @@ public sealed class LandscapeAndNavmeshReferenceTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private static List<(string Referrer, string Plugin)> ReferrersOf(OpenedIndex index, string target) =>
-        [.. index.Records.GetReferences(target).Select(r => (r.FormKey, r.Plugin)).Order()];
+        [.. index.Records.GetReferences(target).Value().Select(r => (r.FormKey, r.Plugin)).Order()];
 
     [Fact]
     public void ADoorListsTheNavmeshFromEachPluginThatHoldsIt_AndTheInfoMapThatLinksIt()

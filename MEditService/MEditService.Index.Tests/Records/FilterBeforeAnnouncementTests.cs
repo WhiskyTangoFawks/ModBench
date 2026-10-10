@@ -63,7 +63,7 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
         public void Publish(INotification notification)
         {
             if (Index is { } index && Announces(notification))
-                _listed.Enqueue(index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Total);
+                _listed.Enqueue(index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Total);
         }
     }
 

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
@@ -110,12 +111,16 @@ internal sealed class Reconciler(
 
     /// <summary>Runs <paramref name="action"/> under the lock that disposing the scope takes, so the
     /// index cannot be closed beneath it. False, having run nothing, with no scope held.</summary>
-    internal bool UnderScope(Action<DuckDbRecordIndex, IndexScope> action)
+    internal bool UnderScope<T>(Func<DuckDbRecordIndex, IndexScope, T> action, [MaybeNullWhen(false)] out T result)
     {
         lock (_lock)
         {
-            if (_scope is not { } scope) return false;
-            action(scope.Index, IndexScope.Of(scope.Held));
+            if (_scope is not { } scope)
+            {
+                result = default;
+                return false;
+            }
+            result = action(scope.Index, IndexScope.Of(scope.Held));
             return true;
         }
     }

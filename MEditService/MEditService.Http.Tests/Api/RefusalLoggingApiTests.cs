@@ -28,6 +28,14 @@ public sealed class RefusalLoggingApiTests : HostedTests
     }
 
     [Fact]
+    public async Task AReadTheIndexRefuses_IsLoggedOnce_NamingTheRouteAndWhy()
+    {
+        await Client.GetAsync(new Uri("/plugins", UriKind.Relative));
+
+        AssertLoggedOnce("GET /plugins refused", "NoLoadOrder");
+    }
+
+    [Fact]
     public async Task ARefusedDeleteItem_IsLoggedOnce_NamingTheRecordAndWhy()
     {
         await LoadedAndTracked();

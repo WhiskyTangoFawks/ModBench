@@ -46,17 +46,9 @@ public sealed class ValidateByStampsTests : IDisposable
     private void ValidateUntilEditorId(string editorId) =>
         _index.NextSnapshotUntil(() => NpcNamed(editorId), $"the record named {editorId}");
 
-    private bool NpcNamed(string editorId)
-    {
-        try
-        {
-            return _index.CopyIn(_npc, _mod.KeyOf())?.EditorId == editorId;
-        }
-        catch (IndexNotReadyException)
-        {
-            return false;
-        }
-    }
+    private bool NpcNamed(string editorId) =>
+        _index.Records.GetCompareRecords([new RecordCopy(_npc, _mod.KeyOf())]).Holds(out var compared, out _)
+        && compared.Overrides.Single().EditorId == editorId;
 
     private void ValidateUntilSourceUnreadable() =>
         _index.NextSnapshotUntil(() => SourceUnreadable, "the plugin file read in place of its source");
@@ -211,7 +203,7 @@ public sealed class ValidateByStampsTests : IDisposable
         ValidateUntilSourceUnreadable();
 
         Assert.Equal("FixtureNpc", Npc.EditorId);
-        var problems = _index.Problems.GetProblems() ?? throw new InvalidOperationException("Expected the index to be ready.");
+        var problems = _index.Problems.GetProblems().Value();
         Assert.Equivalent(
             new[] { Path.GetRelativePath(_mod.ModFolderOf(), document), Path.GetRelativePath(_mod.ModFolderOf(), copy) },
             problems.Single(p => PluginAddress.Comparer.Equals(p.Plugin, _mod.KeyOf())).Problems.Select(p => p.SourceRelativePath),

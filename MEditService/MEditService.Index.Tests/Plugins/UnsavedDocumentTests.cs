@@ -62,7 +62,7 @@ public sealed class UnsavedDocumentTests : IDisposable
 
     private string Relative(string path) => Path.GetRelativePath(_tracked.ModFolderOf(), path);
 
-    private PluginProblems ProblemsOfTracked() => _index.Problems.GetProblems().Single(p => p.Plugin.Name == Tracked);
+    private PluginProblems ProblemsOfTracked() => _index.Problems.GetProblems().Value().Single(p => p.Plugin.Name == Tracked);
 
     private IReadOnlyList<SourceProblem>? LaterReadFailureOfTracked() => LaterReadFailureOf(_index);
 
@@ -246,7 +246,7 @@ public sealed class UnsavedDocumentTests : IDisposable
     {
         Hand(new DocumentChange(_file, Typed(_race, Absent)));
 
-        var problems = _index.Problems.GetProblems().Single(p => p.Plugin.Name == Tracked).Problems;
+        var problems = _index.Problems.GetProblems().Value().Single(p => p.Plugin.Name == Tracked).Problems;
         Assert.Contains(problems, problem => problem.TargetFormKey == Absent
             && Path.Combine(_tracked.ModFolderOf(), problem.SourceRelativePath) == _file);
     }

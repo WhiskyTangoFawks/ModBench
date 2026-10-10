@@ -105,7 +105,7 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
     [MemberData(nameof(Variants))]
     public void AVariant_IsAChildOfItsCell_InItsPlacementGroup(string table)
     {
-        var children = built.Index.Worldspaces.GetCellChildRecords(Key, built.Cell.ToString());
+        var children = built.Index.Worldspaces.GetCellChildRecords(Key, built.Cell.ToString()).Value();
         var group = Of(table).Group == "persistent" ? children.Persistent : children.Temporary;
 
         var child = Assert.Single(group, c => c.FormKey == Of(table).FormKey.ToString());
@@ -117,7 +117,7 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
     public void AVariant_ReferencesTheRecordItPlaces(string table)
     {
         Assert.Contains(
-            built.Index.Records.GetReferences(Of(table).Base.ToString()),
+            built.Index.Records.GetReferences(Of(table).Base.ToString()).Value(),
             r => r.FormKey == Of(table).FormKey.ToString() && r.RecordType == table);
     }
 }

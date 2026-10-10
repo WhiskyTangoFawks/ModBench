@@ -52,7 +52,7 @@ public class FormLookupTests
         index.NextSnapshot();
 
         Assert.Equal(before, index.ListedIn(key).Count);
-        Assert.Equal(1, index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Total);
+        Assert.Equal(1, index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Total);
         Assert.Equal(("npc_", "TestNPC01"), Resolved(index, npcFormKey, key, npcFormKey.ToString()));
     }
 }
