@@ -23,10 +23,11 @@ internal static class ItemWrite
     /// <summary>Git missing refuses the whole selection with <paramref name="gitUnavailable"/>, and
     /// nothing is written.</summary>
     internal static async Task<SelectionResult<TItem, TRefusal, TOutcome>> OverAsync<TItem, TRefusal, TOutcome>(
+        ISourceAdapter source,
         IEnumerable<TItem> items, IEqualityComparer<TItem> sameItem, TRefusal gitUnavailable,
         Func<TItem, Task<ItemAnswer<TRefusal, TOutcome>>> write)
     {
-        if (SourceRepository.WhyGitCannotRun() is { } gitMissing)
+        if (source.WhyGitCannotRun() is { } gitMissing)
             return SelectionResult<TItem, TRefusal, TOutcome>.WholeSelectionRefused(gitUnavailable, gitMissing.Reason);
 
         var landed = new List<ItemLanded<TItem, TOutcome>>();
@@ -47,19 +48,20 @@ internal static class ItemWrite
     }
 
     /// <summary>The refusal of a single write that needs git when git is missing, before any write.</summary>
-    internal static RecordEditResult? RefuseWithoutGit() =>
-        SourceRepository.WhyGitCannotRun() is { } gitMissing
+    internal static RecordEditResult? RefuseWithoutGit(ISourceAdapter source) =>
+        source.WhyGitCannotRun() is { } gitMissing
             ? RecordEditResult.Refused(RecordEditRefusal.GitUnavailable, gitMissing.Reason)
             : null;
 
     /// <summary>A tree another tool changed, or a file system that refused the write, is that item's answer;
     /// <paramref name="failure"/> names what could not be written. <paramref name="landed"/> makes a landed item's outcome.</summary>
     internal static Task<SelectionResult<TItem, RecordEditRefusal, TOutcome>> Over<TItem, TOutcome>(
+        ISourceAdapter source,
         IEnumerable<TItem> items, IEqualityComparer<TItem> sameItem,
         Func<TItem, Answer<RecordEditChanges, SourceFailure>> write, Func<RecordEditChanges, TOutcome> landed,
         Func<TItem, string> failure, ILogger logger) =>
         OverAsync(
-            items, sameItem, RecordEditRefusal.GitUnavailable,
+            source, items, sameItem, RecordEditRefusal.GitUnavailable,
             item =>
             {
                 var result = WriteFailure.Refused(write(item), refused => refused, failure(item), logger);

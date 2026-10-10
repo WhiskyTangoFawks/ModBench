@@ -99,7 +99,7 @@ public sealed class WriteSessionTests : IDisposable
         Assert.Contains("\"UnsavedName\"", response.Body, StringComparison.Ordinal);
     }
 
-    private static SourceFailure? Write(WriteSession session, Func<SourceRepository, Answer<SourceChanges, SourceFailure>> changes) =>
+    private static SourceFailure? Write(WriteSession session, Func<ISourceRepository, Answer<SourceChanges, SourceFailure>> changes) =>
         session.Atomically(() => session.Apply(changes(session.Repository)));
 
     [Fact]
@@ -133,7 +133,7 @@ public sealed class WriteSessionTests : IDisposable
         Assert.True(File.Exists(FullPath(QuestPath)));
     }
 
-    private IReadOnlyList<string> TreeTheSessionAnswers(Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
+    private IReadOnlyList<string> TreeTheSessionAnswers(Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
     {
         var session = Session();
         foreach (var write in writes) Assert.Null(Write(session, write));
@@ -141,7 +141,7 @@ public sealed class WriteSessionTests : IDisposable
         return TreeSnapshot.Of(_modFolder);
     }
 
-    private IReadOnlyList<string> TreeTheWritesLeaveOneAfterAnother(Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
+    private IReadOnlyList<string> TreeTheWritesLeaveOneAfterAnother(Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
     {
         using var oneAfterAnother = new ScratchDirectory("medit-session-sequence-");
         PluginBaselines.Track(oneAfterAnother, TheTree());
@@ -165,7 +165,7 @@ public sealed class WriteSessionTests : IDisposable
     {
         var renamed = Renamed(_quest, "qust", QuestPath, "Renamed");
 
-        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
+        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToPut(Plugin, renamed),
             repository => repository.ChangesToRemove(Plugin, Identity(_response, "info")),
@@ -179,7 +179,7 @@ public sealed class WriteSessionTests : IDisposable
     {
         var renamed = Renamed(_quest, "qust", QuestPath, "Renamed");
 
-        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
+        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToPut(Plugin, renamed),
             repository => repository.ChangesToRemove(Plugin, renamed.Identity),
@@ -194,7 +194,7 @@ public sealed class WriteSessionTests : IDisposable
         var renamed = Renamed(_cell, "cell", CellPath, "RenamedCell");
         var child = Child(new PlacedObject(_mod) { EditorID = "AddedRef" }, "refr");
 
-        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
+        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToPut(Plugin, renamed),
             repository => repository.ChangesToPutChild(Plugin, renamed.Identity, "Temporary", child),
@@ -209,7 +209,7 @@ public sealed class WriteSessionTests : IDisposable
         var npc = new Npc(_mod) { EditorID = "NewNpc" };
         var created = Child(npc, "npc_");
 
-        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
+        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToPut(Plugin, created),
             repository => repository.ChangesToPut(Plugin, created with
@@ -228,7 +228,7 @@ public sealed class WriteSessionTests : IDisposable
         var cell = Identity(_cell, "cell");
         var rekeyed = cell with { FormKey = $"000900:{PluginName}" };
 
-        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
+        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToRekey(Plugin, cell, rekeyed.FormKey),
             repository => repository.ChangesToRemove(Plugin, rekeyed),
@@ -242,7 +242,7 @@ public sealed class WriteSessionTests : IDisposable
     {
         var renamed = Renamed(_worldspace, "wrld", WorldspacePath, "RenamedWorld");
 
-        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
+        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")),
             repository => repository.ChangesToPut(Plugin, renamed),
@@ -469,7 +469,7 @@ public sealed class WriteSessionTests : IDisposable
     {
         var cell = Child(new Cell(_mod) { EditorID = "NewCell" }, "cell");
         var child = Child(new PlacedObject(_mod) { EditorID = "AddedRef" }, "refr");
-        Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
+        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
         [
             repository => repository.ChangesToPut(Plugin, cell),
             repository => repository.ChangesToPutChild(Plugin, cell.Identity, "Temporary", child),

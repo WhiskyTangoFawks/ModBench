@@ -15,6 +15,7 @@ public sealed class CopyRecordChangesHandler
     private readonly NewRecordCopy _new;
     private readonly LoadOrderHolder _loadOrder;
     private readonly LoadOrderResolution _resolution;
+    private readonly ISourceAdapter _source;
     private readonly UnsavedDocuments _unsaved;
     private readonly ILogger<CopyRecordChangesHandler> _logger;
 
@@ -22,11 +23,12 @@ public sealed class CopyRecordChangesHandler
     // (MEditService.Commands.Composition) rather than the host naming a type it cannot see.
     internal CopyRecordChangesHandler(
         OverrideCopy overrideCopy, NewRecordCopy newRecordCopy, LoadOrderHolder loadOrder, LoadOrderResolution resolution,
-        UnsavedDocuments unsaved, ILogger<CopyRecordChangesHandler> logger) =>
-        (_override, _new, _loadOrder, _resolution, _unsaved, _logger) = (overrideCopy, newRecordCopy, loadOrder, resolution, unsaved, logger);
+        ISourceAdapter source, UnsavedDocuments unsaved, ILogger<CopyRecordChangesHandler> logger) =>
+        (_override, _new, _loadOrder, _resolution, _source, _unsaved, _logger) =
+            (overrideCopy, newRecordCopy, loadOrder, resolution, source, unsaved, logger);
 
     /// <summary>Each record's copy into each destination, containers first, answered as the changes it makes over
-    /// the unsaved documents mEdit holds, written nowhere. Throws <see cref="NoLoadOrderException"/> with no load order held.</summary>
+    /// the unsaved documents mEdit holds, written nowhere. Refuses with <see cref="RecordEditRefusal.NoLoadOrder"/> when none is held.</summary>
     public async Task<SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges>> CopyRecords(
         IReadOnlyList<RecordAt> records, CopyMode mode, IReadOnlyList<PluginAddress> destinations, bool replace)
     {
@@ -36,11 +38,17 @@ public sealed class CopyRecordChangesHandler
                 RecordEditRefusal.InvalidEnvelope, "The replace Option does not apply to a copy as new.");
         }
 
-        _loadOrder.Require();
-        var sessions = new WriteSessions(_unsaved.Current);
+        if (_loadOrder.Held is null)
+        {
+            return SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges>.WholeSelectionRefused(
+                RecordEditRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
+        }
+
+        var sessions = new WriteSessions(_source, _unsaved.Current);
         using var sources = new CopySources(_resolution, sessions);
         var containersFirst = records.OrderBy(record => sources.Of(record.Plugin).ContainmentDepth(record.FormKey));
         return await ItemWrite.Over(
+            _source,
             containersFirst.SelectMany(record => destinations.Select(destination => new CopyItem(record, destination))),
             SameCopy.Instance,
             item => mode switch

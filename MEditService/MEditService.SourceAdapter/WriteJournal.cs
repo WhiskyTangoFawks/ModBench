@@ -155,7 +155,7 @@ internal sealed class WriteJournal(string modFolder)
         return $"{left.RelativePath ?? left.Description} — {phrase}{(left.Detail is null ? "" : $": {left.Detail}")}.";
     }
 
-    internal static bool IsAFailedWrite(Exception cause) =>
+    private static bool IsAFailedWrite(Exception cause) =>
         cause is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception;
 
     private void Undo(IEntry entry, int index, List<Unrestored> unrestored)

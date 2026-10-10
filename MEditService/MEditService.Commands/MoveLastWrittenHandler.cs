@@ -8,26 +8,29 @@ namespace MEditService.Commands;
 public sealed class MoveLastWrittenHandler
 {
     private readonly LoadOrderHolder _loadOrder;
+    private readonly ISourceAdapter _source;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal MoveLastWrittenHandler(LoadOrderHolder loadOrder) => _loadOrder = loadOrder;
+    internal MoveLastWrittenHandler(LoadOrderHolder loadOrder, ISourceAdapter source) => (_loadOrder, _source) = (loadOrder, source);
 
     /// <summary>What Modbench last wrote for the plugin, filed under <paramref name="treeName"/>, becomes
-    /// <paramref name="newName"/>'s. A refusal leaves it where it was. Throws <see cref="NoLoadOrderException"/>
+    /// <paramref name="newName"/>'s. A refusal leaves it where it was. Refuses with <see cref="RenameSourceRefusal.NoLoadOrder"/>
     /// when no load order is held.</summary>
     public MoveLastWrittenResult MoveLastWritten(PluginAddress plugin, string treeName, string newName)
     {
-        var loadOrder = _loadOrder.Require();
+        if (_loadOrder.Held is not { Snapshot: var loadOrder })
+            return new MoveLastWrittenResult(RenameSourceRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
+
         if (!string.Equals(treeName, plugin.Name, StringComparison.OrdinalIgnoreCase))
         {
             return new MoveLastWrittenResult(
                 RenameSourceRefusal.TreeNameNotThePlugins, $"'{treeName}' is not a spelling of {plugin.Name}, so no ref was moved.");
         }
 
-        if (!RenameSourceTarget.Of(loadOrder, plugin, newName, out var target, out var refused))
+        if (!RenameSourceTarget.Of(_source, loadOrder, plugin, newName, out var target, out var refused))
             return new MoveLastWrittenResult(refused.Value.Refusal, refused.Value.Message);
 
-        return SourceRepository.Over(target.Mod, loadOrder.GameRelease).MoveLastWrittenTo(treeName, newName) switch
+        return _source.OverFolder(target.Mod, loadOrder.GameRelease).MoveLastWrittenTo(treeName, newName) switch
         {
             null => new MoveLastWrittenResult(),
             SourceFailure.GitUnavailable unavailable => new MoveLastWrittenResult(RenameSourceRefusal.GitUnavailable, unavailable.Reason),

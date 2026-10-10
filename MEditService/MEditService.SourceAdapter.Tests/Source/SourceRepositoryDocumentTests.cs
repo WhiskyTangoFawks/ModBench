@@ -436,7 +436,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     {
         var repository = Opened();
 
-        Assert.Throws<ArgumentException>(() => repository.Get(TheSameNameFromAnotherMod, NpcFormKey));
+        Assert.Throws<ArgumentException>(() => repository.RecordByFormKey(TheSameNameFromAnotherMod, NpcFormKey));
     }
 
     [Fact]

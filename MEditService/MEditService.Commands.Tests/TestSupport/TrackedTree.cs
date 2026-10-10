@@ -17,7 +17,7 @@ internal static class TrackedTree
     internal static SourceDocument? Document(string modFolder, PluginAddress plugin, string formKey)
     {
         if (SourceRepository.Open(TestMod.Of(plugin, modFolder), GameRelease.Fallout4) is not { } repository) return null;
-        return repository.Get(plugin, formKey).Value();
+        return repository.RecordByFormKey(plugin, formKey).Value();
     }
 
     /// <summary>The document body for a record a fixture just wrote: absent here is a broken
@@ -58,7 +58,7 @@ internal static class TrackedTree
     internal static string? DocumentFile(string modFolder, PluginAddress plugin, string formKey)
     {
         var repository = Repository(modFolder, plugin);
-        return repository.Get(plugin, formKey).Value() is { } held
+        return repository.RecordByFormKey(plugin, formKey).Value() is { } held
             ? repository.RelativePathOf(plugin, held.Identity).Value()
             : null;
     }

@@ -63,13 +63,14 @@ public static class RequireExtensions
         repository.SaveChanges(repository.ChangesToRemove(plugin, identity));
 
     /// <summary>Saves <paramref name="changes"/> under the repository's mod folder as <see cref="EditSaving"/> does,
-    /// or answers why they were not answered. A repository caches what it read, so a read after this takes a new one.</summary>
+    /// or answers why they were not answered.</summary>
     public static SourceFailure? SaveChanges(this SourceRepository repository, Answer<SourceChanges, SourceFailure> changes)
     {
         if (!changes.Holds(out var made, out var failure)) return failure;
         var (moves, deletions, documents) = made.Under(repository);
         EditSaving.Save(
             moves.Select(move => (move.From, move.To)), deletions, documents.Select(document => (document.Path, document.Text)));
+        repository.ForgetWhatItRead();
         return null;
     }
 }

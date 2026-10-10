@@ -10,20 +10,26 @@ namespace MEditService.Commands;
 public sealed class DecompilePluginHandler
 {
     private readonly LoadOrderHolder _loadOrder;
+    private readonly ISourceAdapter _source;
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal DecompilePluginHandler(LoadOrderHolder loadOrder, IPluginAdapter adapter, ILogger<DecompilePluginHandler> logger) =>
-        (_loadOrder, _decompiler) = (loadOrder, new PluginDecompiler(logger, adapter));
+    internal DecompilePluginHandler(LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, ILogger<DecompilePluginHandler> logger) =>
+        (_loadOrder, _source, _decompiler) = (loadOrder, source, new PluginDecompiler(logger, adapter, source));
 
-    /// <summary>Throws <see cref="NoLoadOrderException"/> with nothing written when none is held; git
+    /// <summary>Refuses with <see cref="DecompileRefusal.NoLoadOrder"/>, writing nothing, when none is held; git
     /// missing refuses the whole selection once, before any write (commands.md, A selection is one
     /// gesture).</summary>
     public Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> DecompileAsync(
         IReadOnlyList<PluginAddress> plugins, CancellationToken cancel = default)
     {
-        var loadOrder = _loadOrder.Require();
-        return ItemWrite.OverAsync(plugins, PluginAddress.Comparer, DecompileRefusal.GitUnavailable, plugin =>
+        if (_loadOrder.Held is not { Snapshot: var loadOrder })
+        {
+            return Task.FromResult(SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>.WholeSelectionRefused(
+                DecompileRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage));
+        }
+
+        return ItemWrite.OverAsync(_source, plugins, PluginAddress.Comparer, DecompileRefusal.GitUnavailable, plugin =>
         {
             cancel.ThrowIfCancellationRequested();
             return DecompileOneAsync(loadOrder, plugin, cancel);
@@ -39,13 +45,13 @@ public sealed class DecompilePluginHandler
                 $"{key.Name} from '{key.Origin}' is not in the load order, so there is nothing to decompile.");
         }
 
-        if (plugin.Provider is not PluginProvider.FromMod mod || !SourceRepository.IsTracked(plugin))
+        if (plugin.Provider is not PluginProvider.FromMod mod || !_source.IsTracked(plugin))
         {
             return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.NotInTrackedMod,
                 $"{plugin.Name} is not in a tracked mod, so there is no working tree to decompile it into.");
         }
 
-        var repository = SourceRepository.Over(mod, loadOrder.GameRelease);
+        var repository = _source.OverFolder(mod, loadOrder.GameRelease);
         var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, mod.Folder, onParsed: () => { }, cancel);
         if (decompiled.Source is not { } source) return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(decompiled.Refusal, decompiled.Message);
 

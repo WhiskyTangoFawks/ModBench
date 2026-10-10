@@ -58,4 +58,7 @@ public enum RenameSourceRefusal
 
     /// <summary>git or the file system refused the write, and the source is put back.</summary>
     WriteFailed,
+
+    /// <summary>No load order has been received, so the gesture has nothing to act on.</summary>
+    NoLoadOrder,
 }

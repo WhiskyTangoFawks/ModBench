@@ -6,21 +6,20 @@ using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>Writes to one mod folder's plugin source, answered as the changes they make, written nowhere
-/// (ADR-0001). Its <see cref="Repository"/> reads the held unsaved texts in place of their files, and each change
-/// made through it.</summary>
-public sealed class WriteSession : ISourceFiles
+/// <inheritdoc/>
+public sealed class WriteSession : IWriteSession, ISourceFiles
 {
     private enum Kind { None, File, Directory }
 
     private readonly UnsavedFiles _unsaved;
+    private readonly SourceRepository _repository;
     private bool _writing;
     private SourceFailure? _stopped;
 
     private WriteSession(PluginProvider.FromMod mod, GameRelease release, IEnumerable<DocumentChange> held)
     {
         _unsaved = new UnsavedFiles(held);
-        Repository = SourceRepository.Over(mod, release).Over(this);
+        _repository = SourceRepository.Over(mod, release).Over(this);
     }
 
     /// <summary>A session over <paramref name="mod"/>'s folder, reading each of <paramref name="held"/>'s texts in
@@ -28,24 +27,16 @@ public sealed class WriteSession : ISourceFiles
     public static WriteSession Over(PluginProvider.FromMod mod, GameRelease release, IReadOnlyList<DocumentChange> held) =>
         new(mod, release, held);
 
-    /// <summary>The repository the session's writes are made through. Its verbs that write the disk themselves
-    /// refuse.</summary>
-    public SourceRepository Repository { get; }
+    public ISourceRepository Repository => _repository;
 
-    /// <summary>What the session's writes change, with absolute paths. Applied as moves, then deletions, then
-    /// documents, it leaves the tree as the writes would have one after another.</summary>
     public SourceChanges Changes { get; private set; } = SourceChanges.None;
 
-    /// <summary>What the writes since <paramref name="before"/>, a snapshot of <see cref="Changes"/>, added to it. Moves
-    /// only append, so a move made since is the moves beyond those of <paramref name="before"/>.</summary>
     public SourceChanges ChangesAddedSince(SourceChanges before) =>
         new(
             [.. Changes.Moves.Skip(before.Moves.Count)],
             [.. Changes.Deletions.Except(before.Deletions, StringComparer.Ordinal)],
             [.. Changes.Documents.Except(before.Documents)]);
 
-    /// <summary>Runs <paramref name="write"/>, which applies changes to this session. Changes that failed put back
-    /// what it applied, and the answer is why (commands.md, A failed gesture writes nothing).</summary>
     public SourceFailure? Atomically(Action write) =>
         Atomically(() =>
         {
@@ -55,8 +46,6 @@ public sealed class WriteSession : ISourceFiles
             ? null
             : failure;
 
-    /// <summary><see cref="Atomically(Action)"/>, answering what <paramref name="write"/> answers. A failure it answers
-    /// puts back what it applied too.</summary>
     public Answer<T, SourceFailure> Atomically<T>(Func<Answer<T, SourceFailure>> write)
     {
         if (_writing) throw new InvalidOperationException("Atomically does not nest: the changes inside it already apply all or none.");
@@ -84,7 +73,7 @@ public sealed class WriteSession : ISourceFiles
     private void PutBack(SourceChanges before)
     {
         Changes = before;
-        Repository.Locator.Forget();
+        _repository.Locator.Forget();
     }
 
     /// <summary>Makes each move of <paramref name="changes"/>, then each deletion, then writes each document, over those
@@ -101,7 +90,7 @@ public sealed class WriteSession : ISourceFiles
 
         try
         {
-            Apply(made.Under(Repository));
+            Apply(made.Under(_repository));
         }
         catch (Exception ex) when (SourceFailure.Of(ex) is { } stopped)
         {
@@ -109,7 +98,7 @@ public sealed class WriteSession : ISourceFiles
         }
         finally
         {
-            Repository.Locator.Forget();
+            _repository.Locator.Forget();
         }
     }
 

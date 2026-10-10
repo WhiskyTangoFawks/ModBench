@@ -104,7 +104,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
         var trackedTree = TrackedTree();
         var befores = gestures.Select(g => g.Record.FormKey).Distinct().ToDictionary(formKey => formKey, formKey =>
         {
-            var document = trackedTree.Get(_plugin, formKey).Value()
+            var document = trackedTree.RecordByFormKey(_plugin, formKey).Value()
                 ?? throw new InvalidOperationException($"Expected the tracked tree to hold a document for {formKey}.");
             return (document.Identity, document.Body);
         });

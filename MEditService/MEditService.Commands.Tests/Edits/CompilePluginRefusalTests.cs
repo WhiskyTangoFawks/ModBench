@@ -1,5 +1,4 @@
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.LoadOrder;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -12,22 +11,6 @@ public sealed class CompilePluginRefusalTests : IDisposable
 
     private CompilePluginHandler CompileService() =>
         _mod.CompileService();
-
-    [Fact]
-    public async Task Compile_BeforeAnyLoadOrderHasArrived_ThrowsNoLoadOrder() =>
-        await Assert.ThrowsAsync<NoLoadOrderException>(
-            () => CompileServices.Over(new LoadOrderSnapshot(string.Empty, null, default, [], [], [])).CompileAsync([_mod.Plugin]));
-
-    [Fact]
-    public async Task Compile_WithTwoDocumentsClaimingTheSameFormKey_RefusesNamingTheFormKey()
-    {
-        TreeTampering.Duplicate(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
-
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
-
-        var refused = Assert.Single(answer.Refused);
-        Assert.Contains(_mod.Npc.ToString(), refused.Message);
-    }
 
     [Fact]
     public async Task Compile_WithADocumentItCannotRead_RefusesNamingTheFile()

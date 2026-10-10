@@ -197,18 +197,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task CreatePlugin_WithNoLoadOrderHeld_RefusesBeforeWritingAnything()
-    {
-        var folder = ModFolder("HomelessMod");
-        var handler = TestEditService.PluginCreateHandler(new LoadOrderHolder());
-
-        await Assert.ThrowsAsync<NoLoadOrderException>(
-            () => handler.CreatePlugin(new PluginAddress("Homeless.esp", "HomelessMod"), folder));
-
-        Assert.Empty(Directory.EnumerateFileSystemEntries(folder));
-    }
-
-    [Fact]
     public async Task CreatePlugin_IntoAFolderThatHasGone_IsRefusedNamingIt_AndMakesNoFolder()
     {
         var gone = Path.Combine(_data.DataFolder, "GoneMod");

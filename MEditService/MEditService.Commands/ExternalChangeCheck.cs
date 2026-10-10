@@ -7,7 +7,7 @@ namespace MEditService.Commands;
 
 /// <summary>Each tracked plugin changed outside Modbench (ADR-0003), and each tracked mod's
 /// plugins whose plugin source is unreadable.</summary>
-internal sealed class ExternalChangeCheck(INotificationPublisher notifications, IPluginAdapter adapter)
+internal sealed class ExternalChangeCheck(INotificationPublisher notifications, IPluginAdapter adapter, ISourceAdapter source)
 {
     private readonly Lock _checking = new();
     // A mod whose repository went since is told it names no changed plugin.
@@ -24,7 +24,7 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
             var tracked = new HashSet<string>(StringComparer.Ordinal);
             foreach (var mod in mods)
             {
-                if (SourceRepository.Open(mod.Key, snapshot.GameRelease) is { } repository)
+                if (source.Open(mod.Key, snapshot.GameRelease) is { } repository)
                 {
                     tracked.Add(mod.Key.Folder);
                     Tell(mod.Key.Name, repository, [.. mod]);
@@ -38,9 +38,9 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
         }
     }
 
-    private void Tell(string origin, SourceRepository repository, IReadOnlyList<RegisteredPlugin> plugins)
+    private void Tell(string origin, ISourceRepository repository, IReadOnlyList<RegisteredPlugin> plugins)
     {
-        var sourceReads = plugins.ToLookup(plugin => SourceRepository.SourceReads(plugin));
+        var sourceReads = plugins.ToLookup(plugin => source.SourceReads(plugin));
         notifications.Publish(new ExternalChangeNotification(origin, [.. sourceReads[true]
             .Select(plugin => (plugin.Key, Observed: adapter.HashOf(plugin.Path)))
             .Where(plugin => !MatchesLastWrite(repository, plugin.Key, plugin.Observed))
@@ -49,14 +49,14 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
         if (sourceReads[false].Any())
         {
             notifications.Publish(new PluginSourceUnreadableNotification(origin, [.. sourceReads[false]
-                .SelectMany(plugin => SourceRepository.WhySourceDoesNotRead(plugin) is { } why
+                .SelectMany(plugin => source.WhySourceDoesNotRead(plugin) is { } why
                     ? new[] { new PluginWithUnreadableSource(plugin.Name, new UnreadableSource(why.Reason, why.DecompileRepairs)) }
                     : [])]));
         }
     }
 
     // Bytes that cannot be read, or a last write that cannot, match nothing (ADR-0003).
-    private static bool MatchesLastWrite(SourceRepository repository, PluginAddress plugin, string? observed) =>
+    private static bool MatchesLastWrite(ISourceRepository repository, PluginAddress plugin, string? observed) =>
         observed is not null
         && repository.LastWrittenBinarySha256s(plugin).Holds(out var written, out _)
         && written.Contains(observed, StringComparer.OrdinalIgnoreCase);

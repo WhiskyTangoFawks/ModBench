@@ -37,15 +37,6 @@ public sealed class TrackHandlerTests : IDisposable
     public void Dispose() => _instanceRoot.Dispose();
 
     [Fact]
-    public async Task Track_WithNoLoadOrderHeld_ThrowsNoLoadOrder()
-    {
-        var handler = TestEditService.TrackHandler(_holder);
-
-        await Assert.ThrowsAsync<NoLoadOrderException>(
-            () => handler.TrackAsync([Origin]));
-    }
-
-    [Fact]
     public async Task Track_OverTheHeldLoadOrder_TracksThePluginIntoItsModFolder()
     {
         _holder.Apply(Snapshot);

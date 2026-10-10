@@ -13,4 +13,7 @@ public enum PluginCreateRefusal
 
     /// <summary>The file system refused the write (ADR-0003), and the way out is outside Modbench.</summary>
     WriteFailed,
+
+    /// <summary>No load order has been received, so the gesture has nothing to act on.</summary>
+    NoLoadOrder,
 }

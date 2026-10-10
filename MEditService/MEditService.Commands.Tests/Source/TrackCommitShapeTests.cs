@@ -46,51 +46,43 @@ public sealed class TrackCommitShapeTests : IDisposable
     public async Task Track_ParksTheHashOfTheBytesEachPluginsSourceWasReadFrom()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        var source = new FakeSourceAdapter();
 
-        await Track(new ReadingAs("READ-FROM"));
+        await Track(new ReadingAs("READ-FROM"), source);
 
-        Assert.Equal(
-            ["READ-FROM"],
-            SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4).LastWrittenBinarySha256s(Key("First.esp")).Value());
+        var (_, handedOver) = Assert.Single(source.TrackCalls);
+        Assert.Equal([("First.esp", "READ-FROM")], handedOver.Select(handed => (handed.Plugin.Plugin, handed.Plugin.BinarySha256)));
     }
 
     [Fact]
     public async Task Track_OfAPluginInAModThatAlreadyHasARepository_RefusesTheMod_PointingAtDecompile_AndCommitsNothing()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        await Track();
-        var firstBefore = HeldBy("First.esp");
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
+        var source = new FakeSourceAdapter().Tracking(_modFolder);
 
-        var result = await Track();
+        var result = await Track(TestAdapters.Mutagen(), source);
 
         Assert.Empty(result.Landed);
         var refused = Assert.Single(result.Refused);
         Assert.Equal((ModName, TrackRefusal.AlreadyTracked), (refused.Item, refused.Refusal));
         Assert.Contains("decompile", refused.Message, StringComparison.Ordinal);
-        Assert.Equal(firstBefore, HeldBy("First.esp"));
-        Assert.Empty(HeldBy("Second.esp"));
+        Assert.Empty(source.TrackCalls);
     }
 
     [Fact]
     public async Task Track_IntoAModWhoseRepositoryHasHistoryButNoMain_RefusesTheMod_AndChangesNothingOfTheRepository()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        Git("init", "-q", "-b", "master");
-        File.WriteAllText(Path.Combine(_modFolder, ".gitignore"), "theirs\n");
-        Git("add", ".gitignore");
-        Git("-c", "user.name=Them", "-c", "user.email=them@localhost", "commit", "-q", "-m", "Their own commit");
-        var gitignoreBefore = File.ReadAllBytes(Path.Combine(_modFolder, ".gitignore"));
+        var source = new FakeSourceAdapter().HoldingAnotherRepository(_modFolder);
 
-        var result = await Track();
+        var result = await Track(TestAdapters.Mutagen(), source);
 
         Assert.Empty(result.Landed);
         var refused = Assert.Single(result.Refused);
         Assert.Equal((ModName, TrackRefusal.AlreadyTracked), (refused.Item, refused.Refusal));
         Assert.Contains(_modFolder, refused.Message, StringComparison.Ordinal);
-        Assert.Empty(SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4).FormKeysUsed(Key("First.esp")).Value());
-        Assert.Empty(HeldBy("First.esp"));
-        Assert.Equal(gitignoreBefore, File.ReadAllBytes(Path.Combine(_modFolder, ".gitignore")));
+        Assert.Empty(source.TrackCalls);
     }
 
     [Fact]
@@ -100,15 +92,15 @@ public sealed class TrackCommitShapeTests : IDisposable
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
         WritePluginReturningItsBinarySha256("Third.esp", "ThirdNpc");
 
-        var result = await Track(new RoundTripFailsFor("Second.esp"));
+        var source = new FakeSourceAdapter();
+
+        var result = await Track(new RoundTripFailsFor("Second.esp"), source);
 
         Assert.Empty(result.Landed);
         var refusedMod = Assert.Single(result.Refused);
         Assert.Equal(TrackRefusal.RoundTripFailed, refusedMod.Refusal);
         Assert.Contains("SecondNpc", refusedMod.Message, StringComparison.Ordinal);
-        Assert.False(SourceRepository.IsTracked(_modFolder));
-        Assert.Empty(HeldBy("First.esp"));
-        Assert.Empty(HeldBy("Third.esp"));
+        Assert.Empty(source.TrackCalls);
     }
 
     [Fact]
@@ -131,13 +123,15 @@ public sealed class TrackCommitShapeTests : IDisposable
     {
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
-        var result = await Track(new RoundTripFailsFor("Second.esp"));
+        var source = new FakeSourceAdapter();
+
+        var result = await Track(new RoundTripFailsFor("Second.esp"), source);
 
         Assert.Empty(result.Landed);
         var refusedMod = Assert.Single(result.Refused);
         Assert.Equal(TrackRefusal.RoundTripFailed, refusedMod.Refusal);
         Assert.Contains("SecondNpc", refusedMod.Message, StringComparison.Ordinal);
-        Assert.False(SourceRepository.IsTracked(_modFolder));
+        Assert.Empty(source.TrackCalls);
     }
 
     [Fact]
@@ -160,13 +154,15 @@ public sealed class TrackCommitShapeTests : IDisposable
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WriteLocalizedPluginWithoutItsStrings("Second.esp");
 
-        var result = await Track(new RoundTripFailsFor("First.esp"));
+        var source = new FakeSourceAdapter();
+
+        var result = await Track(new RoundTripFailsFor("First.esp"), source);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal((ModName, TrackRefusal.PluginsRefused), (refused.Item, refused.Refusal));
         Assert.Contains("FirstNpc", refused.Message, StringComparison.Ordinal);
         Assert.Contains("Second_en.STRINGS", refused.Message, StringComparison.Ordinal);
-        Assert.False(SourceRepository.IsTracked(_modFolder));
+        Assert.Empty(source.TrackCalls);
     }
 
     private sealed class RoundTripFailsForEvery(params string[] plugins) : DelegatingPluginAdapter(TestAdapters.Mutagen())
@@ -221,12 +217,10 @@ public sealed class TrackCommitShapeTests : IDisposable
         return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
     }
 
-    private static PluginAddress Key(string plugin) => new(plugin, ModName);
-
     private Task<SelectionResult<string, TrackRefusal, TrackedMod>> Track() => Track(TestAdapters.Mutagen());
 
-    private Task<SelectionResult<string, TrackRefusal, TrackedMod>> Track(IPluginAdapter adapter) =>
-        TrackEveryPluginOf.ModAsync(LoadOrder(), ModName, adapter);
+    private Task<SelectionResult<string, TrackRefusal, TrackedMod>> Track(IPluginAdapter adapter, ISourceAdapter? source = null) =>
+        TrackEveryPluginOf.ModAsync(LoadOrder(), ModName, adapter, source: source);
 
     private LoadOrderSnapshot LoadOrder()
     {
@@ -237,8 +231,4 @@ public sealed class TrackCommitShapeTests : IDisposable
         return SnapshotPlugins.Snapshot(_gameDir, _gameDir, GameRelease.Fallout4, entries);
     }
 
-    private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
-
-    private IReadOnlyList<SourceDocument> HeldBy(string plugin) =>
-        TreeDocuments.Of(SourceRepository.Over(new PluginProvider.FromMod(ModName, _modFolder), GameRelease.Fallout4), Key(plugin));
 }

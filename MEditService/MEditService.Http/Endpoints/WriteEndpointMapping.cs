@@ -35,6 +35,9 @@ internal static class WriteEndpointMapping
     internal static string RequireNewFormKey(RecordEditResult result) =>
         result.NewFormKey ?? throw new InvalidOperationException("Expected an applied result to carry the new FormKey.");
 
+    /// <summary>The answer to a gesture that needs a load order the service does not yet hold: a "not right now".</summary>
+    private static IResult NotReady() => Results.Problem(NoLoadOrderException.DefaultMessage, statusCode: StatusCodes.Status503ServiceUnavailable);
+
     /// <summary>The status code says what kind of problem; the refusal and path extensions say
     /// exactly which (ADR-0019).</summary>
     internal static IResult Refusal(RecordEditResult result) => RecordEditProblem(result.Refusal, result.Message, result.Path);
@@ -44,7 +47,7 @@ internal static class WriteEndpointMapping
 
     /// <summary>Track's own refusal-to-status map, the same posture the record edits' has: the status
     /// says what kind of problem, the refusal extension says exactly which (ADR-0019).</summary>
-    internal static IResult Refusal(SelectionRefusal<TrackRefusal> refusal) => Results.Problem(
+    internal static IResult Refusal(SelectionRefusal<TrackRefusal> refusal) => refusal.Refusal == TrackRefusal.NoLoadOrder ? NotReady() : Results.Problem(
         detail: refusal.Message,
         statusCode: refusal.Refusal switch
         {
@@ -58,7 +61,7 @@ internal static class WriteEndpointMapping
 
     /// <summary>Decompile's refusal of a whole selection: the refusal extension says which cause no
     /// plugin escaped (ADR-0019).</summary>
-    internal static IResult Refusal(SelectionRefusal<DecompileRefusal> refusal) => Results.Problem(
+    internal static IResult Refusal(SelectionRefusal<DecompileRefusal> refusal) => refusal.Refusal == DecompileRefusal.NoLoadOrder ? NotReady() : Results.Problem(
         detail: refusal.Message,
         statusCode: refusal.Refusal switch
         {
@@ -69,7 +72,7 @@ internal static class WriteEndpointMapping
         extensions: new Dictionary<string, object?> { ["refusal"] = refusal.Refusal.ToString() });
 
     /// <summary>Compile's refusal of a whole selection, mapped as Decompile's is (ADR-0019).</summary>
-    internal static IResult Refusal(SelectionRefusal<CompileRefusal> refusal) => Results.Problem(
+    internal static IResult Refusal(SelectionRefusal<CompileRefusal> refusal) => refusal.Refusal == CompileRefusal.NoLoadOrder ? NotReady() : Results.Problem(
         detail: refusal.Message,
         statusCode: refusal.Refusal switch
         {
@@ -81,7 +84,7 @@ internal static class WriteEndpointMapping
 
     /// <summary>Create plugin's own refusal, each leaving the folder as it was: the status says what kind
     /// of problem, the refusal extension says exactly which (ADR-0019).</summary>
-    internal static IResult Refusal(PluginCreateRefusal refusal, string? message) => Results.Problem(
+    internal static IResult Refusal(PluginCreateRefusal refusal, string? message) => refusal == PluginCreateRefusal.NoLoadOrder ? NotReady() : Results.Problem(
         detail: message,
         statusCode: refusal switch
         {
@@ -97,7 +100,7 @@ internal static class WriteEndpointMapping
 
     /// <summary>Rename source's own refusal, each leaving the plugin's source as it was: the status says
     /// what kind of problem, the refusal extension says exactly which (ADR-0019).</summary>
-    internal static IResult Refusal(RenameSourceRefusal refusal, string? message) => Results.Problem(
+    internal static IResult Refusal(RenameSourceRefusal refusal, string? message) => refusal == RenameSourceRefusal.NoLoadOrder ? NotReady() : Results.Problem(
         detail: message,
         statusCode: refusal switch
         {
@@ -159,7 +162,8 @@ internal static class WriteEndpointMapping
     internal static void LogRefusal<TRefusal, TItem>(ILogger logger, string gesture, TRefusal refusal, string? message, TItem item) =>
         logger.LogWarning("Refused {Gesture} of {Item}: {Refusal} — {Message}", gesture, item, refusal, message);
 
-    private static IResult RecordEditProblem(RecordEditRefusal refusal, string message, string? path) => Results.Problem(
+    private static IResult RecordEditProblem(RecordEditRefusal refusal, string message, string? path) =>
+        refusal == RecordEditRefusal.NoLoadOrder ? NotReady() : Results.Problem(
         detail: message,
         statusCode: refusal switch
         {
