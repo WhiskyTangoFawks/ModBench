@@ -25,7 +25,7 @@ internal static class TrackedMods
             .GetAwaiter().GetResult();
         var source = read.Answered();
 
-        SourceRepository.Track(modFolder, [(source.Files, new DecompiledPlugin(pluginName, source.BinarySha256))]);
+        TestAdapters.Source().Track(modFolder, [(source.Files, new DecompiledPlugin(pluginName, source.BinarySha256))]);
     }
 
     internal static void Track(LoadOrderEntry entry, string dataFolder, GameRelease release = GameRelease.Fallout4) =>
@@ -38,8 +38,8 @@ internal static class TrackedMods
         return fixture;
     }
 
-    internal static SourceRepository RepositoryOf(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
-        SourceRepository.Over(new PluginProvider.FromMod(entry.Origin, entry.ModFolderOf()), release);
+    internal static ISourceRepository RepositoryOf(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
+        TestAdapters.Source().OverFolder(new PluginProvider.FromMod(entry.Origin, entry.ModFolderOf()), release);
 
     internal static PluginAddress KeyOf(this LoadOrderEntry entry) => new(entry.Name, entry.Origin);
 

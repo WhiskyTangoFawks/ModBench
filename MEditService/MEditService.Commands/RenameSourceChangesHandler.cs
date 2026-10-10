@@ -43,7 +43,7 @@ public sealed class RenameSourceChangesHandler
                 $"{mod.Name} already holds a plugin source named {newName}, so {plugin.Name}'s source was not renamed.");
         }
 
-        return RenameSourceResult.Landed(changes.Under(session.Repository), session.Repository.TreeNameOf(plugin));
+        return RenameSourceResult.Landed(changes.Under(session.Repository.ModFolder), session.Repository.TreeNameOf(plugin));
     }
 
     private static RenameSourceResult Refused(RenameSourceRefusal refusal, string message) => RenameSourceResult.Refused(refusal, message);

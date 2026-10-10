@@ -77,8 +77,8 @@ public sealed class SourceTreeDocumentsTests : IDisposable
     private static byte[] Serialize(IMajorRecordGetter record) =>
         Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));
 
-    private SourceRepository Repository =>
-        SourceRepository.Open(TestMod.In(_modFolder), Release)
+    private ISourceRepository Repository =>
+        TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private Dictionary<string, PluginDocument> Documents() =>

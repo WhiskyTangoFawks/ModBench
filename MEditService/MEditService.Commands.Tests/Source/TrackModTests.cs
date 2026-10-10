@@ -5,7 +5,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.RepositoriesLib;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -58,7 +57,7 @@ public sealed class TrackModTests
         Assert.Equal(("FixtureMod", TrackRefusal.RoundTripFailed), (refusal.Item, refusal.Refusal));
         Assert.Contains("Locked.esp", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("cannot be read", refusal.Message, StringComparison.Ordinal);
-        Assert.False(SourceRepository.IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsTracked(modFolder));
         Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")));
         Assert.False(Directory.Exists(Path.Combine(modFolder, "plugin-source")));
     }
@@ -88,7 +87,7 @@ public sealed class TrackModTests
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
         await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
-        Assert.True(SourceRepository.IsTracked(modFolder));
+        Assert.True(TestAdapters.Source().IsTracked(modFolder));
 
         var plugin = new PluginAddress("Fixture.esp", "FixtureMod");
         var first = TrackedTree.Document(modFolder, plugin, npc1.FormKey.ToString()).Require();
@@ -100,7 +99,7 @@ public sealed class TrackModTests
         Assert.Equal(npc1.FormKey.ToString(), roundTripped.RootElement.GetProperty("FormKey").GetString());
 
         Assert.DoesNotContain(
-            TreeDocuments.Of(SourceRepository.Open(TestMod.Of(plugin, modFolder), GameRelease.Fallout4).Require(), plugin),
+            TreeDocuments.Of(TestAdapters.Source().Open(TestMod.Of(plugin, modFolder), GameRelease.Fallout4).Require(), plugin),
             document => document.Body.Contains('\r'));
     }
 
@@ -150,8 +149,8 @@ public sealed class TrackModTests
         var result = await TrackEveryPluginOf.ModAsync(loadOrder, "ModA");
 
         Assert.Equal([new PluginAddress("Same.esp", "ModA")], Assert.Single(result.Landed).Outcome.Tracked);
-        Assert.True(SourceRepository.IsTracked(modA));
-        Assert.False(SourceRepository.IsTracked(modB));
+        Assert.True(TestAdapters.Source().IsTracked(modA));
+        Assert.False(TestAdapters.Source().IsTracked(modB));
     }
 
     [Fact]
@@ -215,7 +214,7 @@ public sealed class TrackModTests
 
         Assert.Contains(npc.FormKey.ToString(), result.Message);
         Assert.Contains("OriginalName", result.Message);
-        Assert.False(SourceRepository.IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 
     [Fact]
@@ -251,7 +250,7 @@ public sealed class TrackModTests
         Assert.Contains(npc.FormKey.ToString(), result.Message);
         Assert.Contains("Npc", result.Message);
         Assert.Contains("HeightMin", result.Message);
-        Assert.False(SourceRepository.IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 
     [Fact]
@@ -278,7 +277,7 @@ public sealed class TrackModTests
 
         await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
-        Assert.True(SourceRepository.IsTracked(modFolder));
+        Assert.True(TestAdapters.Source().IsTracked(modFolder));
     }
 
     public static IEnumerable<object[]> HeaderFieldCorruptionsMirroringCodecsOpaqueHeaderFields()
@@ -326,7 +325,7 @@ public sealed class TrackModTests
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains($"TES4 header field '{fieldName}'", result.Message);
-        Assert.False(SourceRepository.IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 
     [Fact]
@@ -353,7 +352,7 @@ public sealed class TrackModTests
         Assert.DoesNotContain("MNAM", result.Message);
         Assert.Contains("Furniture", result.Message);
         Assert.Contains("Flags", result.Message);
-        Assert.False(SourceRepository.IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 
     [Fact]
@@ -372,7 +371,7 @@ public sealed class TrackModTests
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
         await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
-        Assert.True(SourceRepository.IsTracked(modFolder));
+        Assert.True(TestAdapters.Source().IsTracked(modFolder));
 
         var sourceText = TrackedTree.Document(modFolder, new PluginAddress("Fixture.esp", "FixtureMod"), door.FormKey.ToString()).Require().Body;
         Assert.Contains("The Big Door", sourceText);
@@ -398,7 +397,7 @@ public sealed class TrackModTests
 
         const string stringsFileNamedByIsoLanguageCodeNotByLanguageName = "Fixture_en.STRINGS";
         Assert.Contains(stringsFileNamedByIsoLanguageCodeNotByLanguageName, result.Message);
-        Assert.False(SourceRepository.IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 
     private static (string PluginPath, Door Door) WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(string modFolder)

@@ -79,9 +79,9 @@ public sealed class WriteSessionTests : IDisposable
     private static byte[] Serialize(IMajorRecordGetter record) =>
         Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));
 
-    private SourceRepository Repository => SourceRepository.Over(TestMod.In(_modFolder), Release);
+    private ISourceRepository Repository => TestAdapters.Source().OverFolder(TestMod.In(_modFolder), Release);
 
-    private WriteSession Session(params DocumentChange[] held) => WriteSession.Over(TestMod.In(_modFolder), Release, held);
+    private IWriteSession Session(params DocumentChange[] held) => TestAdapters.Source().WriteSessionOver(TestMod.In(_modFolder), Release, held);
 
     private static RecordIdentity Identity(IMajorRecordGetter record, string recordType) =>
         new(record.FormKey.ToString(), recordType, record.EditorID);
@@ -99,7 +99,7 @@ public sealed class WriteSessionTests : IDisposable
         Assert.Contains("\"UnsavedName\"", response.Body, StringComparison.Ordinal);
     }
 
-    private static SourceFailure? Write(WriteSession session, Func<ISourceRepository, Answer<SourceChanges, SourceFailure>> changes) =>
+    private static SourceFailure? Write(IWriteSession session, Func<ISourceRepository, Answer<SourceChanges, SourceFailure>> changes) =>
         session.Atomically(() => session.Apply(changes(session.Repository)));
 
     [Fact]
@@ -147,7 +147,7 @@ public sealed class WriteSessionTests : IDisposable
         PluginBaselines.Track(oneAfterAnother, TheTree());
         foreach (var write in writes)
         {
-            var repository = SourceRepository.Over(TestMod.In(oneAfterAnother), Release);
+            var repository = TestAdapters.Source().OverFolder(TestMod.In(oneAfterAnother), Release);
             repository.SaveChanges(write(repository)).Wrote();
         }
         return TreeSnapshot.Of(oneAfterAnother);

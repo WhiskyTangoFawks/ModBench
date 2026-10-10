@@ -14,12 +14,12 @@ public sealed class SourceRepositoryMintingTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private SourceRepository Tracked()
+    private ISourceRepository Tracked()
     {
         PluginBaselines.Track(
             _modFolder,
             [new TreeFile("plugin-source/Other.esp/Npcs/Other - 000001_Other.esp.json", "{}"u8.ToArray())]);
-        return SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4)
+        return TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to be tracked.");
     }
 

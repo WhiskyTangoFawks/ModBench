@@ -5,6 +5,8 @@ using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
+using MEditService.TestSupport;
+
 namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>Tracked mod folders holding their plugins' documents in memory. A verb the write path's document and
@@ -31,9 +33,9 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         return this;
     }
 
-    internal FakeSourceAdapter TrackingUnreadable(string modFolder, string reason)
+    internal FakeSourceAdapter TrackingUnreadable(string modFolder)
     {
-        _mods[modFolder] = new FakeMod(modFolder, [], new SourceFailure.Unreadable(reason));
+        _mods[modFolder] = new FakeMod(modFolder, [], SourceReads: false);
         return this;
     }
 
@@ -41,10 +43,10 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public bool IsTracked(string modFolder) => _mods.ContainsKey(modFolder);
 
-    public bool SourceReads(RegisteredPlugin plugin) => IsTracked(plugin) && WhySourceDoesNotRead(plugin) is null;
+    public bool SourceReads(RegisteredPlugin plugin) =>
+        plugin.Provider is PluginProvider.FromMod mod && _mods.TryGetValue(mod.Folder, out var tracked) && tracked.SourceReads;
 
-    public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) =>
-        plugin.Provider is PluginProvider.FromMod mod && _mods.TryGetValue(mod.Folder, out var tracked) ? tracked.WhyUnreadable : null;
+    public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => throw Unreached();
 
     public SourceFailure? WhyGitCannotRun() => null;
 
@@ -80,11 +82,11 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     }
 
     public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
-        SourceRepository.ReadBackOf(pluginFileName, tree, gameRelease);
+        TestAdapters.Source().ReadBackOf(pluginFileName, tree, gameRelease);
 
     private static NotSupportedException Unreached() => new("The fake Source adapter does not serve this verb.");
 
-    private sealed record FakeMod(string Folder, Dictionary<string, SourceDocument> Documents, SourceFailure? WhyUnreadable = null);
+    private sealed record FakeMod(string Folder, Dictionary<string, SourceDocument> Documents, bool SourceReads = true);
 
     private sealed class FakeWriteSession(FakeRepository repository) : IWriteSession
     {
@@ -137,7 +139,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
                 return;
             }
 
-            var absolute = made.Under(repository);
+            var absolute = made.Under(repository.ModFolder);
             Changes = Changes with
             {
                 Moves = [.. Changes.Moves, .. absolute.Moves],

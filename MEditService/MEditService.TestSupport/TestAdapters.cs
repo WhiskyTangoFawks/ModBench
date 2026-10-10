@@ -1,4 +1,5 @@
 using MEditService.PluginAdapter;
+using MEditService.SourceAdapter;
 
 namespace MEditService.TestSupport;
 
@@ -7,4 +8,6 @@ namespace MEditService.TestSupport;
 public static class TestAdapters
 {
     public static IPluginAdapter Mutagen() => new MutagenPluginAdapter(TimeProvider.System);
+
+    public static ISourceAdapter Source() => new GitSourceAdapter(new UnsavedDocuments());
 }

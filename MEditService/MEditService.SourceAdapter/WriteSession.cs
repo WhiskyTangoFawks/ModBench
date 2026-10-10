@@ -7,7 +7,7 @@ using Mutagen.Bethesda;
 namespace MEditService.SourceAdapter;
 
 /// <inheritdoc/>
-public sealed class WriteSession : IWriteSession, ISourceFiles
+internal sealed class WriteSession : IWriteSession, ISourceFiles
 {
     private enum Kind { None, File, Directory }
 
@@ -90,7 +90,7 @@ public sealed class WriteSession : IWriteSession, ISourceFiles
 
         try
         {
-            Apply(made.Under(_repository));
+            Apply(made.Under(_repository.ModFolder));
         }
         catch (Exception ex) when (SourceFailure.Of(ex) is { } stopped)
         {

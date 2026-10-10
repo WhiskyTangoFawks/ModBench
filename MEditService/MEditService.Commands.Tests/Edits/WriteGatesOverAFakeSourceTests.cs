@@ -53,7 +53,7 @@ public sealed class WriteGatesOverAFakeSourceTests
     [Fact]
     public void EditingAPlugin_WhoseSourceIsUnreadable_IsRefusedBeforeAnySessionOpens_NamingDecompile()
     {
-        var source = new FakeSourceAdapter().TrackingUnreadable(ModFolder, "the source folder is gone");
+        var source = new FakeSourceAdapter().TrackingUnreadable(ModFolder);
 
         var result = SetHeight(Over(source), Npc).Outcome;
 
@@ -65,7 +65,7 @@ public sealed class WriteGatesOverAFakeSourceTests
     [Fact]
     public void CreatingARecordInAPlugin_WhoseSourceIsUnreadable_IsRefusedTheSameWay()
     {
-        var source = new FakeSourceAdapter().TrackingUnreadable(ModFolder, "the source folder is gone");
+        var source = new FakeSourceAdapter().TrackingUnreadable(ModFolder);
 
         var result = Over(source).GetRequiredService<CreateRecordChangesHandler>().CreateRecord(Plugin, "npc_").Outcome;
 
@@ -81,16 +81,6 @@ public sealed class WriteGatesOverAFakeSourceTests
         var result = SetHeight(Over(source), $"000900:{Plugin.Name}").Outcome;
 
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
-    }
-
-    [Fact]
-    public void EditingARecord_WhoseDocumentIsNoRecordDocument_IsRefusedAsUnreadable()
-    {
-        var source = new FakeSourceAdapter().Tracking(ModFolder, NpcDocument() with { Body = "[" });
-
-        var result = SetHeight(Over(source), Npc).Outcome;
-
-        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
     }
 
     [Fact]

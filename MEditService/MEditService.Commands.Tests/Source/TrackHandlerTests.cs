@@ -1,6 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -45,7 +44,7 @@ public sealed class TrackHandlerTests : IDisposable
         var result = await handler.TrackAsync([Origin]);
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Landed).Outcome.Tracked);
-        Assert.True(SourceRepository.SourceReads(new RegisteredPlugin(PluginName, Origin, "", new PluginProvider.FromMod(Origin, _modFolder), Line: null)));
+        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(PluginName, Origin, "", new PluginProvider.FromMod(Origin, _modFolder), Line: null)));
     }
 
     [Fact]

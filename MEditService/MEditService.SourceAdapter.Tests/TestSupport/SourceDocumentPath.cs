@@ -12,7 +12,7 @@ public static class SourceDocumentPath
         string modFolder, string pluginFileName, string recordType, string formKey, string? editorId,
         GameRelease release)
     {
-        var repository = SourceRepository.Over(TestMod.In(modFolder), release);
+        var repository = TestAdapters.Source().OverFolder(TestMod.In(modFolder), release);
         var relativePath = repository.RelativePathOf(
             new PluginAddress(pluginFileName, TestMod.Name), new RecordIdentity(formKey, recordType, editorId)).Value();
 

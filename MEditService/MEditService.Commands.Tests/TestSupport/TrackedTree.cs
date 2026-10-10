@@ -16,7 +16,7 @@ internal static class TrackedTree
 {
     internal static SourceDocument? Document(string modFolder, PluginAddress plugin, string formKey)
     {
-        if (SourceRepository.Open(TestMod.Of(plugin, modFolder), GameRelease.Fallout4) is not { } repository) return null;
+        if (TestAdapters.Source().Open(TestMod.Of(plugin, modFolder), GameRelease.Fallout4) is not { } repository) return null;
         return repository.RecordByFormKey(plugin, formKey).Value();
     }
 
@@ -120,8 +120,8 @@ internal static class TrackedTree
         GitProbe.Run(gitDirectory, modFolder, "commit", "-q", "-m", "seed");
     }
 
-    internal static SourceRepository Repository(string modFolder, PluginAddress plugin) =>
-        SourceRepository.Open(TestMod.Of(plugin, modFolder), GameRelease.Fallout4).Require();
+    internal static ISourceRepository Repository(string modFolder, PluginAddress plugin) =>
+        TestAdapters.Source().Open(TestMod.Of(plugin, modFolder), GameRelease.Fallout4).Require();
 }
 
 /// <summary>A fixture whose mod folder tracks one plugin: the tree reads below answer for it.</summary>

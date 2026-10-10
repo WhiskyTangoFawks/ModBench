@@ -25,7 +25,7 @@ public abstract record SourceFailure
     /// <summary>A file filed as a record document is not one this reader can read.</summary>
     public sealed record Unreadable : SourceFailure
     {
-        public Unreadable(string reason, UnreadableFile? file = null) : base(reason) => File = file;
+        internal Unreadable(string reason, UnreadableFile? file) : base(reason) => File = file;
 
         /// <summary>The file that could not be read, when one is known.</summary>
         public UnreadableFile? File { get; }

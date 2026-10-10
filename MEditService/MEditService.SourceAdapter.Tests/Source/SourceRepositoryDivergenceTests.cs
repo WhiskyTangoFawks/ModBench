@@ -29,8 +29,8 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private SourceRepository Repository =>
-        SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4)
+    private ISourceRepository Repository =>
+        TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private static string HeaderPath => PluginSourceRoot.HeaderDocument(PluginName);

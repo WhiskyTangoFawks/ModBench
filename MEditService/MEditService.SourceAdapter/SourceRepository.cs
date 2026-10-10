@@ -41,19 +41,19 @@ public sealed class SourceRepository : ISourceRepository
 
     /// <summary>The repository over <paramref name="mod"/>'s folder, or null when the folder is not
     /// tracked and so has no source tree to answer from.</summary>
-    public static SourceRepository? Open(PluginProvider.FromMod mod, GameRelease release) =>
+    internal static SourceRepository? Open(PluginProvider.FromMod mod, GameRelease release) =>
         IsTracked(mod.Folder) ? Over(mod, release) : null;
 
     /// <summary>The repository over a mod's folder, which refuses the last-written record of a plugin
     /// another mod provides (ADR-0012): a repository knows only its folder.</summary>
-    public static SourceRepository Over(PluginProvider.FromMod mod, GameRelease release) =>
+    internal static SourceRepository Over(PluginProvider.FromMod mod, GameRelease release) =>
         new(mod.Folder, release, mod.Name, DiskFiles.Instance);
 
     /// <summary>True exactly when <paramref name="modFolder"/> holds a repository whose <c>main</c>
     /// exists.</summary>
-    public static bool IsTracked(string modFolder) => SourceRepositoryGit.IsTracked(modFolder);
+    internal static bool IsTracked(string modFolder) => SourceRepositoryGit.IsTracked(modFolder);
 
-    public static bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.Folder);
+    internal static bool IsTracked(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.Folder);
 
     /// <summary>The refusal naming the instance root when it is not there; null when it is.</summary>
     public static string? InstanceRootNotFound(string? instanceRoot) =>
@@ -61,7 +61,7 @@ public sealed class SourceRepository : ISourceRepository
 
     /// <summary>Whether the plugin's source reads: its mod is tracked and holds one tree for it. A tracked mod
     /// holds none for a plugin another tool put there or whose source was deleted.</summary>
-    public static bool SourceReads(RegisteredPlugin plugin) =>
+    internal static bool SourceReads(RegisteredPlugin plugin) =>
         plugin.Provider is PluginProvider.FromMod mod && HoldsTreeFor(mod.Folder, plugin.Name);
 
     private static bool HoldsTreeFor(string modFolder, string pluginFileName) =>
@@ -69,7 +69,7 @@ public sealed class SourceRepository : ISourceRepository
 
     /// <summary>Why the plugin's source does not read though its mod is tracked: no folder, twin folders, or a plugin
     /// source that cannot be listed. Null when it reads, and when its mod is not tracked.</summary>
-    public static SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) =>
+    internal static SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) =>
         plugin.Provider is PluginProvider.FromMod mod && IsTracked(mod.Folder)
         && !SourceRepositoryLayout.TreeNameIn(mod.Folder, plugin.Name).Holds(out _, out var why)
             ? why
@@ -77,11 +77,11 @@ public sealed class SourceRepository : ISourceRepository
 
     /// <summary>A <c>.git</c> with no <c>main</c> that Track did not mark as its own: someone else's, which Track never
     /// writes to (ADR-0003).</summary>
-    public static bool HoldsAnotherRepository(string modFolder) => SourceRepositoryGit.HoldsAnotherRepository(modFolder);
+    internal static bool HoldsAnotherRepository(string modFolder) => SourceRepositoryGit.HoldsAnotherRepository(modFolder);
 
     /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="TreeOf"/> answers it once written:
     /// what a round-trip gate compiles, so that it compiles what is written.</summary>
-    public static IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
+    internal static IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
         SourceFailure.Answer(() => SourceRepositoryLayout.DoorTreeOf(
                 pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, tree), gameRelease))
             .Holds(out var readBack, out var failure)
@@ -89,18 +89,15 @@ public sealed class SourceRepository : ISourceRepository
             : throw new InvalidOperationException($"Expected the whole-mod door to write one document per container: {failure.Reason}");
 
     /// <summary>Why git cannot be run here, so no repository can be made or written; null when it can.</summary>
-    public static SourceFailure? WhyGitCannotRun() => SourceFailure.Answer(GitCli.EnsureOnPath);
+    internal static SourceFailure? WhyGitCannotRun() => SourceFailure.Answer(GitCli.EnsureOnPath);
 
     /// <summary>A repository for a mod that has none: one commit, <c>Track &lt;mod&gt;</c>, on <c>main</c>, of
     /// each plugin's door tree. Answers each plugin refused, every one when no repository was made.</summary>
-    public static IReadOnlyList<(string Plugin, string Reason)> Track(
+    internal static IReadOnlyList<(string Plugin, string Reason)> Track(
         string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins) =>
         SourceFailure.Answer(() => GitTracking.Track(modFolder, plugins)).Holds(out var refused, out var failure)
             ? refused
             : [.. plugins.Select(plugin => (plugin.Plugin.Plugin, failure.Reason))];
-
-    /// <summary>Forgets the listings and scans taken so far, for a tree that something else has since changed.</summary>
-    public void ForgetWhatItRead() => Locator.Forget();
 
     /// <summary>The stamp of one document's text, as the UTF-8 the index stores it in: every side hashes
     /// through here, so a file that is not valid UTF-8 stamps alike on disk and in the index.</summary>

@@ -16,7 +16,7 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
     [Fact]
     public void IsTracked_FolderWithNoGitDirectory_IsFalse()
     {
-        Assert.False(SourceRepository.IsTracked(_modFolder));
+        Assert.False(TestAdapters.Source().IsTracked(_modFolder));
     }
 
     [Fact]
@@ -24,7 +24,7 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
     {
         Git("init", "-q", "-b", "main");
 
-        Assert.False(SourceRepository.IsTracked(_modFolder));
+        Assert.False(TestAdapters.Source().IsTracked(_modFolder));
     }
 
     [Fact]
@@ -32,7 +32,7 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
     {
         CommitOnMain();
 
-        Assert.True(SourceRepository.IsTracked(_modFolder));
+        Assert.True(TestAdapters.Source().IsTracked(_modFolder));
     }
 
     [Fact]
@@ -41,13 +41,13 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
         CommitOnMain();
         Git("pack-refs", "--all");
 
-        Assert.True(SourceRepository.IsTracked(_modFolder));
+        Assert.True(TestAdapters.Source().IsTracked(_modFolder));
     }
 
     [Fact]
     public void IsTracked_FolderThatDoesNotExist_IsFalseNotAThrow()
     {
-        Assert.False(SourceRepository.IsTracked(Path.Combine(_modFolder, "Gone")));
+        Assert.False(TestAdapters.Source().IsTracked(Path.Combine(_modFolder, "Gone")));
     }
 
     [Fact]
@@ -55,19 +55,19 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
     {
         CommitOnMain();
 
-        Assert.True(SourceRepository.IsTracked(Registered));
+        Assert.True(TestAdapters.Source().IsTracked(Registered));
     }
 
     [Fact]
     public void IsTracked_PluginOfAModWithNoRepository_IsFalse()
     {
-        Assert.False(SourceRepository.IsTracked(Registered));
+        Assert.False(TestAdapters.Source().IsTracked(Registered));
     }
 
     [Fact]
     public void IsTracked_PluginTheGameProvides_IsFalse()
     {
-        Assert.False(SourceRepository.IsTracked(Registered with { Provider = PluginProvider.Game }));
+        Assert.False(TestAdapters.Source().IsTracked(Registered with { Provider = PluginProvider.Game }));
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
         CommitOnMain();
         MakeTree();
 
-        Assert.True(SourceRepository.SourceReads(Registered));
+        Assert.True(TestAdapters.Source().SourceReads(Registered));
     }
 
     [Fact]
@@ -84,8 +84,8 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
     {
         CommitOnMain();
 
-        Assert.True(SourceRepository.IsTracked(Registered));
-        Assert.False(SourceRepository.SourceReads(Registered));
+        Assert.True(TestAdapters.Source().IsTracked(Registered));
+        Assert.False(TestAdapters.Source().SourceReads(Registered));
     }
 
     [Fact]
@@ -93,13 +93,13 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
     {
         MakeTree();
 
-        Assert.False(SourceRepository.SourceReads(Registered));
+        Assert.False(TestAdapters.Source().SourceReads(Registered));
     }
 
     [Fact]
     public void SourceReads_PluginTheGameProvides_IsFalse()
     {
-        Assert.False(SourceRepository.SourceReads(Registered with { Provider = PluginProvider.Game }));
+        Assert.False(TestAdapters.Source().SourceReads(Registered with { Provider = PluginProvider.Game }));
     }
 
     private void MakeTree() => Directory.CreateDirectory(Path.Combine(_modFolder, "plugin-source", PluginAt.Name));
