@@ -30,7 +30,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     [
         new("records", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true),
         new("form_references", "source_plugin", "source_origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
-        new("form_lookup", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true),
         new("placement", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("cell_location", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("container_child", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
@@ -86,7 +85,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreatePluginDerivationTable(connection);
         CreatePluginDiagnosisTable(connection);
         CreateFormReferencesTable(connection);
-        CreateFormLookupTable(connection);
         CreatePlacementTables(connection);
         CreateContainerChildTable(connection);
         CreateRecordTypeFailureTable(connection);
@@ -139,9 +137,15 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
         var records = PublicViews.Single(relation => relation.Table == "records");
         CreatePublicView(connection, PluginRecordsView, records, RegisteredJoin("t", records.PluginColumn, records.OriginColumn));
+
+        // form_key -> (record type, EditorID): the identity columns of `records`, so a lookup never
+        // reads `body`.
+        CreatePublicView(
+            connection, "form_lookup", records, ActiveJoin("t", records.PluginColumn, records.OriginColumn),
+            columns: "t.form_key, t.plugin, t.origin, t.record_type, t.editor_id");
     }
 
-    private static void CreatePublicView(DuckDBConnection connection, string view, PublicView relation, string scope)
+    private static void CreatePublicView(DuckDBConnection connection, string view, PublicView relation, string scope, string columns = "t.*")
     {
         var loadOrderColumn = relation.DerivesLoadOrder ? ", p.load_order_idx" : "";
         var winnerColumn = relation.DerivesWinner ? ", (w.form_key IS NOT NULL) AS is_winner" : "";
@@ -150,7 +154,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             : "";
         Execute(connection, $"""
             CREATE OR REPLACE VIEW "{view}" AS
-            SELECT t.*{loadOrderColumn}{winnerColumn}
+            SELECT {columns}{loadOrderColumn}{winnerColumn}
             FROM {MirrorSchema}."{relation.Table}" t
             {scope}
             {winnerJoin}
@@ -274,25 +278,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_form_references_target
                 ON {MirrorSchema}.form_references(target_form_key)
-            """);
-    }
-
-    // The form lookup extracted at ingest: form_key -> (record type, EditorID). One row per
-    // (form_key, plugin), so CheckErrorBuilder and the compare resolvers resolve a FormKey in O(1).
-    internal static void CreateFormLookupTable(DuckDBConnection connection)
-    {
-        Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {MirrorSchema}.form_lookup (
-                form_key       VARCHAR {FilenameIdentity} NOT NULL,
-                plugin         VARCHAR {FilenameIdentity} NOT NULL,
-                origin         VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                record_type    VARCHAR NOT NULL,
-                editor_id      VARCHAR
-            )
-            """);
-        Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_form_lookup_form_key
-                ON {MirrorSchema}.form_lookup(form_key)
             """);
     }
 

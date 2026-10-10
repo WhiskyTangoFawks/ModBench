@@ -96,7 +96,7 @@ internal sealed class RecordQueries(
         return reads.Search(query);
     }
 
-    private string? FormKeyOfFormId(string? search, IRecordReads reads) =>
+    private string? FormKeyOfFormId(string? search, RelationReads reads) =>
         search is null ? null : LoadIndex.FormKeyOf(search, _loadOrder.Require(), reads.OpenedPlugins)?.ToString();
 
     public Answer<RecordDetail?, IndexRefused> GetRecord(string formKey) => IndexAnswer.Of(() =>
@@ -161,7 +161,7 @@ internal sealed class RecordQueries(
         columns.Insert(before, overridden);
     }
 
-    private static MissingCopy MissingCopyOf(IRecordReads reads, RecordCopy copy) =>
+    private static MissingCopy MissingCopyOf(RelationReads reads, RecordCopy copy) =>
         reads.IsHeldByAnyPlugin(copy.FormKey)
             ? new MissingCopy(copy, CopyMissingReason.NotInPlugin, $"{copy.FormKey} is not in {copy.Plugin.Name} ({copy.Plugin.Origin}).")
             : new MissingCopy(copy, CopyMissingReason.RecordGone, $"{copy.FormKey} is held by no plugin.");
@@ -201,7 +201,7 @@ internal sealed class RecordQueries(
     // The text is the document carrying the record. A plugin's source tree says which document that is, as it
     // does for an edit; a plugin with no tree has only the record's own.
     private RecordDocument? CopyFromText(
-        IRecordReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string text)
+        RelationReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string text)
     {
         if (TreeOf(plugin) is not { } tree)
             return reads.DocumentFromText(formKey, plugin, loadOrderIndex, text);
@@ -216,11 +216,11 @@ internal sealed class RecordQueries(
             : Unread(reads, formKey, plugin, loadOrderIndex, $"No document in {plugin.Name}'s source tree carries {formKey}.");
     }
 
-    private static RecordDocument? Unread(IRecordReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string why) =>
+    private static RecordDocument? Unread(RelationReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string why) =>
         reads.DocumentFromText(formKey, plugin, loadOrderIndex, CallerText.NoBody) is { } unread ? unread with { ParseDiagnosis = why } : null;
 
     private static CompareOverride ToCompareOverride(
-        RecordDetail o, ConflictThis? state, string? column, LoadOrderSnapshot snapshot, IRecordReads reads) =>
+        RecordDetail o, ConflictThis? state, string? column, LoadOrderSnapshot snapshot, RelationReads reads) =>
         new(o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields, state,
             Origin: o.Origin,
             LoadIndex: LoadIndex.Of(new PluginAddress(o.Plugin, o.Origin), o.LoadOrderIndex, snapshot, reads.OpenedPlugins),
@@ -426,7 +426,7 @@ internal sealed class RecordQueries(
 
     private bool Indexed => _index.Status.State == LoadOrderState.Ready;
 
-    private IRecordReads RequireReads() => _index.RequireReads();
+    private RelationReads RequireReads() => _index.RequireReads();
 
     private IReadOnlyDictionary<string, RecordTableSchema> RequireSchemas() =>
         _schemaReflector.GetSchemas(_loadOrder.Require().GameRelease);

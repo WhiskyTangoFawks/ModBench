@@ -23,7 +23,7 @@ internal sealed class StoreFactory(
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     /// <summary>A null <paramref name="instanceRoot"/> means an in-memory store that dies with this
-    /// object. <paramref name="openedPlugins"/> answers <see cref="IRecordReads.OpenedPlugins"/>;
+    /// object. <paramref name="openedPlugins"/> answers <see cref="RelationReads.OpenedPlugins"/>;
     /// <paramref name="indexed"/> says whether the whole set is read.</summary>
     public Store? Create(
         GameRelease gameRelease, string? instanceRoot,

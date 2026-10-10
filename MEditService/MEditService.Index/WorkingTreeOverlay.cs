@@ -121,9 +121,6 @@ internal sealed class WorkingTreeOverlay
         cmd.Parameters.Add(new DuckDBParameter { Value = body });
         cmd.Parameters.Add(new DuckDBParameter { Value = SourceRepository.ContentStamp(body) });
         cmd.ExecuteNonQuery();
-
-        // form_lookup's insert-if-absent branch in RederiveIndexRowsForRecord reads this row back out
-        // of `records`, which is why the insert above must land first.
     }
 
     private bool IsRegisteredPlugin(PluginAddress key) =>
@@ -151,26 +148,6 @@ internal sealed class WorkingTreeOverlay
             formKey, key.Name, key.Origin);
         if (recordType == null || !_schemas.TryGetValue(recordType, out var schema)) return;
 
-        // form_lookup is *updated*, not delete-then-inserted: record_type cannot change, so editor_id
-        // is the whole delta, and a delete-then-insert would be two statements doing one statement's
-        // work on the hot per-edit path.
-        DuckDbSql.ExecuteFor(_connection, """
-            UPDATE mirror.form_lookup SET editor_id = json_extract_string($4, '$.EditorID')
-            WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """, formKey, key.Name, key.Origin, body);
-
-        // The row is absent when this record was deleted in the working tree and has come back — the
-        // one case where there is nothing to update.
-        DuckDbSql.ExecuteFor(_connection, $"""
-            INSERT INTO mirror.form_lookup (form_key, plugin, origin, record_type, editor_id)
-            SELECT r.form_key, r.plugin, r.origin, r.record_type, r.editor_id
-            FROM mirror.records r
-            WHERE r.form_key = $1 AND r.plugin = $2 AND r.origin = $3
-              AND NOT EXISTS (
-                SELECT 1 FROM mirror.form_lookup l
-                WHERE l.form_key = r.form_key AND l.plugin = r.plugin AND l.origin = r.origin)
-            """, formKey, key.Name, key.Origin);
-
         // The header carries no reference graph (masters are a plugin-dependency list, not FormKey
         // references), and a ModHeader cannot go through the per-record codec below, so this stops
         // after the identity-only update, clearing stale form_references.
@@ -195,7 +172,7 @@ internal sealed class WorkingTreeOverlay
         }
 
         // placement/cell_location/container_child track Effective the same way
-        // form_lookup/form_references do, rebuilt from the child documents this body carries.
+        // form_references does, rebuilt from the child documents this body carries.
         var recordedBefore = ChildrenRecorded(key, formKey, embeddedIn: recordType);
         DeriveEmbeddedChildRows(key, recordType, children, touched);
         RederiveContainmentForRecord(key, formKey, recordType, children);
@@ -344,8 +321,6 @@ internal sealed class WorkingTreeOverlay
 
     private void DeleteDerivationsForRecord(PluginAddress key, string formKey)
     {
-        DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.form_lookup WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
         DeleteFormReferencesForRecord(key, formKey);
         DeleteContainmentForRecord(key, formKey);
     }

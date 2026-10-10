@@ -10,7 +10,7 @@ namespace MEditService.Index.Queries;
 /// failed is answered with the files that stopped it, and the links of rows its tree gave.</summary>
 internal static class ProblemsPanel
 {
-    public static IReadOnlyList<PluginProblems> Of(Indexer index, IRecordReads reads, LoadOrderSnapshot snapshot, ISourceAdapter source)
+    public static IReadOnlyList<PluginProblems> Of(Indexer index, RelationReads reads, LoadOrderSnapshot snapshot, ISourceAdapter source)
     {
         var derivations = reads.GetDerivations();
         var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
