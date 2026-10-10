@@ -90,7 +90,7 @@ internal static class PluginTrees
         try
         {
             var recompiled = await DeserializeTree(
-                await MaterializeTree(files, scratchDir, cancel), cancel);
+                await MaterializeTree(files, Path.Combine(scratchDir, TreeFolder), cancel), cancel);
             await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder);
             return PluginAnswer.Of(destinationPath);
         }
@@ -105,6 +105,11 @@ internal static class PluginTrees
     }
 
     // The files written under baseDirectory, answering the root the door reads from.
+    // Mutagen takes a plugin's ModKey from its folder's name before its header's, and Windows names a temp
+    // folder with a random extension that is now and then .esp, .esm or .esl: a tree is read from a folder
+    // whose name names no plugin.
+    private const string TreeFolder = "tree";
+
     private static async Task<string> MaterializeTree(
         IReadOnlyList<TreeFile> files, string baseDirectory, CancellationToken cancel)
     {
@@ -165,7 +170,8 @@ internal static class PluginTrees
         {
             // Outside the catch below: a scratch folder this filesystem cannot write is not a source
             // defect, and a refusal naming the source would misname it.
-            var treeRoot = await MaterializeTree(files, scratchDir, cancel);
+            var treeBase = Path.Combine(scratchDir, TreeFolder);
+            var treeRoot = await MaterializeTree(files, treeBase, cancel);
 
             // The files carry their own mod-folder-relative paths, so the scratch is a mod folder and
             // every path a read failure names is relative to one.
@@ -175,7 +181,7 @@ internal static class PluginTrees
             }
             catch (Exception ex) when (PluginFailure.StandsFor(ex))
             {
-                return new PluginFailure.Unparsed(PluginDiagnosis.FromSourceReadException(ex, scratchDir), ex);
+                return new PluginFailure.Unparsed(PluginDiagnosis.FromSourceReadException(ex, treeBase), ex);
             }
         }
         finally

@@ -118,10 +118,12 @@ internal sealed class Store : IDisposable
 
     /// <summary>Whether the open failed because another process holds the file, which must never be
     /// answered by rebuilding: deleting an open file succeeds on POSIX and destroys a live index.
-    /// Matched on DuckDB's message, all it offers.</summary>
+    /// Matched on DuckDB's message, all it offers: a conflicting lock on POSIX, a file already open in
+    /// another process on Windows.</summary>
     internal static bool IsAnotherWriter(Exception ex) =>
         ex.Message.Contains("lock on file", StringComparison.OrdinalIgnoreCase)
-        || ex.Message.Contains("Conflicting lock", StringComparison.OrdinalIgnoreCase);
+        || ex.Message.Contains("Conflicting lock", StringComparison.OrdinalIgnoreCase)
+        || ex.Message.Contains("is already open in", StringComparison.OrdinalIgnoreCase);
 
     // DuckDB.NET duplicates in-memory connections only; a file opened again on the same path shares
     // this process's database instance. Either way the read gets its own transaction context.
