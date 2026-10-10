@@ -13,7 +13,7 @@ As a user, I want:
 3. My agent's changes to reach every view as mine do. Source: common, A view, story 2; ADR-0015
 4. To approve my agent's requests to Modbench as I approve any of its tools, in my agent's own way. Modbench adds no approval of its own, and a gesture my agent requests does not confirm: my approval of the request stands in for it. This is an exception to commands.md, Principles, Confirm what destroys. Source: VS Code's interaction; Minimal by default
 5. Modbench to take one port for my agent, the same in every workspace unless I set another for a workspace, so two windows on two instances each have their own. A window that cannot take its port says so, and names the setting.
-6. My agent to learn Modbench from Modbench: what plugin source holds, how each object is named, and which job is a file edit and which a gesture. I set up nothing to teach it. Source: Minimal by default
+6. My agent to learn Modbench from Modbench: what plugin source holds, how each object is named, and which job is a file edit, which a gesture and which a script. I set up nothing to teach it. Source: Minimal by default
 
 ## Names
 
@@ -34,6 +34,7 @@ As a user, I want:
 5. My agent to see the problems I see in the Problems panel for the source it changed. Source: plugin-source.md, In the text editor, story 6
 6. My agent never to edit an untracked plugin. Editing needs tracking, for my agent as for me. Source: ADR-0007
 7. My agent to open a record in an editor tab, to show me what it found. Source: catalog, Record, `open`
+8. My agent to change many records by a rule with a script, as I do, against my window's mEdit. Source: scripts.md
 
 ## Mod management
 
