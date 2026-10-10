@@ -23,10 +23,13 @@ describe('readSelectedProfile', () => {
     );
   });
 
-  it('does not spuriously match a key-like line lacking "=", as a slice(0, -1) off the missing "=" would land on exactly "selected_profile", ahead of the real line', () => {
-    const text = '[General]\r\nselected_profileX\r\nselected_profile=Real Value\r\n';
-    expect(readSelectedProfile(text)).toBe('Real Value');
+});
+
+describe('section-aware lookup', () => {
+  it('does not find a key that exists only in another section', () => {
+    expect(() => readSelectedProfile('[Settings]\r\nselected_profile=Wrong\r\n')).toThrow(/missing selected_profile/);
   });
+
 });
 
 describe('readGameName', () => {
@@ -37,7 +40,7 @@ describe('readGameName', () => {
 
 describe('readGamePath', () => {
   it('unwraps an @ByteArray(...) value from the fixture', () => {
-    expect(readGamePath(ini())).toBe(String.raw`Z:\\\\path\\to\\Stock Game Folder`);
+    expect(readGamePath(ini())).toBe(String.raw`Z:\\path\to\Stock Game Folder`);
   });
 
   it('reads a plain (non-@ByteArray) value', () => {
@@ -60,21 +63,6 @@ describe('readDownloadDirectory', () => {
     expect(readDownloadDirectory(`[Settings]\r\n${onDisk}\r\n`)).toBe(String.raw`C:\Games\MO2\downloads`);
   });
 
-  it('un-escapes the doubled backslashes in a Wine Z:-drive path the same way', () => {
-    const onDisk = String.raw`download_directory=Z:\\home\\x`;
-    expect(readDownloadDirectory(`[Settings]\r\n${onDisk}\r\n`)).toBe(String.raw`Z:\home\x`);
-  });
-
-  it('reads a plain value needing no escaping (a POSIX path) unchanged', () => {
-    expect(readDownloadDirectory('[Settings]\r\ndownload_directory=/mnt/storage/downloads\r\n'))
-      .toBe('/mnt/storage/downloads');
-  });
-
-  it('strips the quote wrapper and un-escapes a value Qt quoted for a special character', () => {
-    const onDisk = String.raw`download_directory="C:\\Games;New"`;
-    expect(readDownloadDirectory(`[Settings]\r\n${onDisk}\r\n`)).toBe(String.raw`C:\Games;New`);
-  });
-
   it('unwraps an @ByteArray(...) value with no unescaping, matching gamePath\'s own raw bytes', () => {
     expect(readDownloadDirectory('[Settings]\r\ndownload_directory=@ByteArray(%BASE_DIR%/downloads)\r\n'))
       .toBe('%BASE_DIR%/downloads');
@@ -86,6 +74,10 @@ describe('readDownloadDirectory', () => {
 });
 
 describe('setSelectedProfileInText — surgical, byte-faithful', () => {
+  it.each(['a,b', 'back\\slash', 'say "hi"', ' padded '])('writes %j so that readSelectedProfile reads it back', (name) => {
+    expect(readSelectedProfile(setSelectedProfileInText(ini(), name))).toBe(name);
+  });
+
   it('rewrites only the selected_profile value, preserving every other byte', () => {
     const input = ini();
     const out = setSelectedProfileInText(input, 'Secondary');

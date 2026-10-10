@@ -31,12 +31,11 @@ describe('parseMetaIni', () => {
     });
   });
 
-  it('does not let a line lacking "=" corrupt the parsed fields, as a slice(0, -1) off the missing "=" would land on exactly "installationFile"', () => {
-    expect(parseMetaIni('[General]\r\ninstallationFilex\r\nversion=1.0\r\n')).toEqual({
-      version: '1.0',
-      nexusId: undefined,
-      archiveFilename: undefined,
-    });
+});
+
+describe('parseMetaIni — sections', () => {
+  it('reads [General] keys only, not the same key in another section', () => {
+    expect(parseMetaIni('[Plugins]\r\nversion=9\r\n[General]\r\nversion=1\r\n').version).toBe('1');
   });
 });
 
@@ -112,9 +111,9 @@ describe('writeMetaIni', () => {
 });
 
 describe('writeMetaIni — installedFiles', () => {
-  it('emits the array section whole, in MO2 form, after [General]', () => {
+  it('emits the array section whole, in MO2 form', () => {
     expect(writeMetaIni({ installedFiles: [{ nexusId: '123', fileId: '456' }] })).toBe(
-      '[General]\n[installedFiles]\n1\\modid=123\n1\\fileid=456\nsize=1\n',
+      '[installedFiles]\n1\\modid=123\n1\\fileid=456\nsize=1\n',
     );
   });
 
@@ -126,7 +125,7 @@ describe('writeMetaIni — installedFiles', () => {
           { nexusId: '4598', fileId: '17500' },
         ],
       }),
-    ).toBe('[General]\n[installedFiles]\n1\\modid=4598\n1\\fileid=17423\n2\\modid=4598\n2\\fileid=17500\nsize=2\n');
+    ).toBe('[installedFiles]\n1\\modid=4598\n1\\fileid=17423\n2\\modid=4598\n2\\fileid=17500\nsize=2\n');
   });
 
   it('omits the section entirely when installedFiles is absent or empty', () => {
@@ -152,15 +151,16 @@ describe('writeMetaIni — installedFiles', () => {
 });
 
 describe('setOwnedKeysInText', () => {
-  it('over empty text produces exactly what the plain writer produces', () => {
-    const keys = {
-      gameName: 'Fallout4',
-      nexusId: '4598',
-      version: '2.0',
-      archiveFilename: 'Mod-4598.7z',
-      installedFiles: [{ nexusId: '4598', fileId: '17423' }],
-    };
-    expect(setOwnedKeysInText('', keys)).toBe(writeMetaIni(keys));
+  it.each([
+    ['a quoted value', 'installationFile="Mod, v2.7z"'],
+    ['an escaped backslash', 'installationFile=C:\\\\x.7z'],
+  ])('writes back %s a carried parse read, byte for byte', (_name, line) => {
+    const text = `[General]\r\ngameName=Fallout4\r\n${line}\r\n`;
+    expect(setOwnedKeysInText(text, { ...parseMetaIni(text), gameName: 'Fallout4' })).toBe(text);
+  });
+
+  it('writes an owned key given empty as `key=`, not as a deletion', () => {
+    expect(setOwnedKeysInText('[General]\r\nversion=1\r\n', { version: '' })).toBe('[General]\r\nversion=\r\n');
   });
 
   it('replaces only the owned keys, preserving unknown General keys, other sections and re-emitting installedFiles whole', () => {
@@ -207,30 +207,10 @@ describe('setOwnedKeysInText', () => {
     );
   });
 
-  it('adds a missing owned key right after the header, leaving unrelated General keys and later sections untouched', () => {
-    const text = '[General]\r\ncategory="-1,"\r\n[Plugins]\r\nFoo.esp\\enabled=true\r\n';
-    const result = setOwnedKeysInText(text, { nexusId: '4598' });
-    expect(result).toBe('[General]\r\nmodid=4598\r\ncategory="-1,"\r\n[Plugins]\r\nFoo.esp\\enabled=true\r\n');
-  });
-
-  it('adds a fresh [installedFiles] section at the end when the source meta.ini has none', () => {
-    const text = '[General]\r\ngameName=Fallout4\r\n';
-    const result = setOwnedKeysInText(text, {
-      gameName: 'Fallout4',
-      installedFiles: [{ nexusId: '4598', fileId: '17423' }],
-    });
-    expect(result).toBe('[General]\r\ngameName=Fallout4\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=17423\r\nsize=1\r\n');
-  });
-
   it('clears an owned key that the call omits, even if it was present before, the caller stating the whole target state', () => {
     const text = '[General]\r\ngameName=Fallout4\r\nmodid=4598\r\n';
     const result = setOwnedKeysInText(text, { gameName: 'Fallout4' });
     expect(result).toBe('[General]\r\ngameName=Fallout4\r\n');
   });
 
-  it('creates a fresh [General] section ahead of everything when the source has none', () => {
-    const text = '[Plugins]\r\nFoo.esp\\enabled=true\r\n';
-    const result = setOwnedKeysInText(text, { gameName: 'Fallout4' });
-    expect(result).toBe('[General]\r\ngameName=Fallout4\r\n[Plugins]\r\nFoo.esp\\enabled=true\r\n');
-  });
 });

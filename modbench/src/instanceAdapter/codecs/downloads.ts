@@ -3,18 +3,13 @@
 // Status, which `uninstalled=true` carries.
 
 import type { DownloadMeta, DownloadStatus } from '../instanceAdapter';
-import { lineRanges } from '../../loadOrderFileCodec/lineScan';
+import { GENERAL_SECTION, readIniSection, setIniValue } from './qSettingsIni';
 
 /** Appended to a download's filename to name its sidecar. */
 export const DOWNLOAD_SIDECAR_SUFFIX = '.meta';
 
 export function parseDownloadMeta(text: string): DownloadMeta {
-  const values = new Map<string, string>();
-  for (const raw of text.split(/\r\n|\r|\n/)) {
-    const eq = raw.indexOf('=');
-    if (eq === -1) continue;
-    values.set(raw.slice(0, eq).trim(), raw.slice(eq + 1).trim());
-  }
+  const values = readIniSection(text, GENERAL_SECTION);
   let status: DownloadStatus = 'Downloaded';
   if (values.get('uninstalled') === 'true') status = 'Uninstalled';
   else if (values.get('installed') === 'true') status = 'Installed';
@@ -36,23 +31,9 @@ export function parseDownloadMeta(text: string): DownloadMeta {
 }
 
 // Writes the value verbatim, so `false` clears rather than deleting the key,
-// matching MO2's `QSettings::setValue`. Empty text yields a minimal `.meta`.
-function setMetaFlag(text: string, key: string, value: boolean): string {
-  const line = `${key}=${value}`;
-  for (const { start, contentEnd } of lineRanges(text)) {
-    if (text.slice(start, contentEnd).startsWith(`${key}=`)) {
-      return text.slice(0, start) + line + text.slice(contentEnd);
-    }
-  }
-  let eol = '\r\n';
-  if (!text.includes('\r\n') && text.includes('\n')) eol = '\n';
-  for (const { start, contentEnd, end } of lineRanges(text)) {
-    if (text.slice(start, contentEnd).trim() === '[General]') {
-      return text.slice(0, end) + `${line}${eol}` + text.slice(end);
-    }
-  }
-  return `[General]${eol}${line}${eol}` + text;
-}
+// matching MO2's `QSettings::setValue`. Empty text yields a minimal `.meta`, in MO2's CRLF.
+const setMetaFlag = (text: string, key: string, value: boolean): string =>
+  setIniValue(text === '' ? `[${GENERAL_SECTION}]\r\n` : text, GENERAL_SECTION, key, String(value));
 
 /** Both keys, as MO2's own markInstalled writes them: a reader resolves `uninstalled` first, so
  *  a download uninstalled and then reinstalled would otherwise still read Uninstalled. */
