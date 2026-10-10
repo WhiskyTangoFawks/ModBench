@@ -123,9 +123,9 @@ internal sealed class RelationReads(
         var cols = $"""
             form_key, plugin, load_order_idx, is_winner, editor_id, origin, r.working_tree_state,
             EXISTS (
-                SELECT 1 FROM {scope.ContainerChild} cc
-                WHERE cc.parent_form_key = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
-                  {filter?.AlsoKeeps("cc", "child_form_key")}
+                SELECT 1 FROM {scope.ContainerChildren} cc
+                WHERE cc.parent = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
+                  {filter?.AlsoKeeps("cc", "child")}
             ) AS has_container_children,
             r.parse_diagnosis,
             r.parse_diagnosis IS NOT NULL OR EXISTS (
@@ -457,13 +457,18 @@ internal sealed class RelationReads(
         return result;
     }
 
-    // Worldspace tree reads (plugins.md, The tree, story 6) from the placement / cell_location side
+    // Worldspace tree reads (plugins.md, The tree, story 6) from the holdings and cell_location
     // tables, in the order xEdit's navigator lists them.
     public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) =>
-        CellLocations(plugin, "cl.parent_worldspace = $3", "cl.block_x, cl.block_y, cl.sub_x, cl.sub_y", [worldspaceFormKey]);
+        CellLocations(plugin, $"EXISTS ({HeldBy("cl", "$3")})", "cl.block_x, cl.block_y, cl.sub_x, cl.sub_y", [worldspaceFormKey]);
 
     public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin) =>
         CellLocations(plugin, "cl.is_interior", "cl.block_x, cl.sub_x", []);
+
+    private static string HeldBy(string cell, string parent) => $"""
+        SELECT 1 FROM holdings h
+        WHERE h.child = {cell}.cell_form_key AND h.plugin = {cell}.plugin AND h.origin = {cell}.origin AND h.parent = {parent}
+        """;
 
     private List<CellLocationSummary> CellLocations(
         PluginAddress plugin, string where, string blockOrder, IEnumerable<string> parameters)
@@ -516,8 +521,9 @@ internal sealed class RelationReads(
         using var connection = store.OpenReadConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"""
-            SELECT DISTINCT cl.parent_worldspace FROM cell_location cl
-            WHERE cl.parent_worldspace IS NOT NULL AND cl.plugin = $1 AND cl.origin = $2{store.Filter.AlsoKeeps("cl", "cell_form_key")}
+            SELECT DISTINCT h.parent FROM holdings h
+            JOIN cell_location cl ON cl.cell_form_key = h.child AND cl.plugin = h.plugin AND cl.origin = h.origin
+            WHERE h.plugin = $1 AND h.origin = $2{store.Filter.AlsoKeeps("cl", "cell_form_key")}
             """;
         DuckDbSql.AddParams(cmd, [plugin.Name, plugin.Origin]);
         using var reader = cmd.ExecuteReader();
@@ -575,23 +581,22 @@ internal sealed class RelationReads(
 
     /// <summary>One cell's own structural parentage, or null when it isn't a cell this plugin
     /// indexed. Ref-invariant: no gesture moves a cell.</summary>
-    public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey)
+    public CellStructure? GetCellLocation(PluginAddress plugin, string cellFormKey)
     {
         using var connection = store.OpenReadConnection();
         return GetCellLocation(connection, cellFormKey, plugin.Name, plugin.Origin);
     }
 
-    /// <summary><paramref name="parentFormKey"/>'s children among the relationships the placement
-    /// reads don't carry (see <see cref="ContainerChildRow"/>), in FormID order; empty when it has
-    /// none. Ref-invariant by construction.</summary>
-    public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey)
+    /// <summary>What <paramref name="parentFormKey"/> holds, in FormID order; empty when it holds
+    /// nothing. Ref-invariant by construction.</summary>
+    public IReadOnlyList<HoldingRow> GetContainerChildren(PluginAddress plugin, string parentFormKey)
     {
         using var connection = store.OpenReadConnection();
         return GetContainerChildren(
-            connection, plugin.Name, plugin.Origin, parentFormKey, store.Filter.AlsoKeeps("cc", "child_form_key"), NavigatorSql.FormIdOrder("cc.child_form_key"));
+            connection, plugin.Name, plugin.Origin, parentFormKey, store.Filter.AlsoKeeps("cc", "child"), NavigatorSql.FormIdOrder("cc.child"));
     }
 
-    // Column 6 is the row's working_tree_state, 7 the correlated container_child EXISTS Search's
+    // Column 6 is the row's working_tree_state, 7 the correlated holdings EXISTS Search's
     // SELECT adds, 8 this record's own diagnosis, 9 the same fact widened to its children and 10
     // its FULL, read positionally.
     private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
@@ -711,15 +716,16 @@ internal sealed class RelationReads(
         return results;
     }
 
-    // ── Worldspace tree reads (plugins.md, The tree, story 6) ───────────────────
-
-    private static CellLocationRow? GetCellLocation(DuckDBConnection connection, string cellFormKey, string plugin, string origin)
+    private static CellStructure? GetCellLocation(DuckDBConnection connection, string cellFormKey, string plugin, string origin)
     {
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            SELECT parent_worldspace, block_x, block_y, sub_x, sub_y, grid_x, grid_y, is_interior
-            FROM cell_location
-            WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3
+            SELECT (SELECT h.parent FROM holdings h
+                    WHERE h.child = cl.cell_form_key AND h.plugin = cl.plugin AND h.origin = cl.origin
+                    LIMIT 1),
+                   cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.is_interior
+            FROM cell_location cl
+            WHERE cl.cell_form_key = $1 AND cl.plugin = $2 AND cl.origin = $3
             """;
         DuckDbSql.AddParams(cmd, [cellFormKey, plugin, origin]);
         using var reader = cmd.ExecuteReader();
@@ -727,32 +733,27 @@ internal sealed class RelationReads(
         int? NullableInt(int i) => reader.IsDBNull(i) ? null : reader.GetInt32(i);
         if (!reader.Read()) return null;
 
-        var parentWorldspace = reader.IsDBNull(0) ? null : reader.GetString(0);
-        return new CellLocationRow(
-            cellFormKey, parentWorldspace,
-            NullableInt(1), NullableInt(2), NullableInt(3), NullableInt(4), NullableInt(5), NullableInt(6),
-            reader.GetBoolean(7));
+        return new CellStructure(
+            reader.IsDBNull(0) ? null : reader.GetString(0),
+            NullableInt(1), NullableInt(2), NullableInt(3), NullableInt(4), reader.GetBoolean(5));
     }
 
-    private static List<ContainerChildRow> GetContainerChildren(
+    private static List<HoldingRow> GetContainerChildren(
         DuckDBConnection connection, string plugin, string origin, string parentFormKey, string inFilter, string order)
     {
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"""
-            SELECT cc.child_form_key, cc.parent_record_type, cc.slot_name, cc.slot_index
-            FROM container_child cc
-            WHERE cc.parent_form_key = $1 AND cc.plugin = $2 AND cc.origin = $3{inFilter}
+            SELECT cc.child, cc.slot, cc.slot_index
+            FROM holdings cc
+            WHERE cc.parent = $1 AND cc.plugin = $2 AND cc.origin = $3{inFilter}
             ORDER BY {order}
             """;
         DuckDbSql.AddParams(cmd, [parentFormKey, plugin, origin]);
         using var reader = cmd.ExecuteReader();
 
-        var result = new List<ContainerChildRow>();
+        var result = new List<HoldingRow>();
         while (reader.Read())
-        {
-            result.Add(new ContainerChildRow(
-                reader.GetString(0), parentFormKey, reader.GetString(1), reader.GetString(2), reader.GetInt32(3)));
-        }
+            result.Add(new HoldingRow(parentFormKey, reader.GetString(0), reader.GetString(1), reader.GetInt32(2)));
         return result;
     }
 

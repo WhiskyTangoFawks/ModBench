@@ -11,19 +11,15 @@ internal static class LinkResolution
     private const int ConstantListLimit = 200;
 
     // form_references lists an inline child's links under the child's own FormKey. A worldspace's top
-    // cell is its one cell_location row with no block. No read walks a placed reference.
+    // cell is its one holding with no block directory. No read walks a placed reference.
     private static readonly string SourceIsTheRecordOrAnInlineChild = $"""
         source_form_key IN (
             WITH RECURSIVE carried(form_key) AS (
                 SELECT $1
                 UNION
-                SELECT inline.child FROM (
-                    SELECT parent_form_key AS parent, child_form_key AS child
-                    FROM {TableDdlBuilder.MirrorSchema}.container_child
-                    UNION ALL
-                    SELECT parent_worldspace, cell_form_key FROM {TableDdlBuilder.MirrorSchema}.cell_location
-                    WHERE parent_worldspace IS NOT NULL AND block_x IS NULL) inline
-                JOIN carried ON inline.parent = carried.form_key)
+                SELECT inline.child FROM {TableDdlBuilder.MirrorSchema}.holdings inline
+                JOIN carried ON inline.parent = carried.form_key
+                WHERE inline.slot NOT IN ({HoldingSlots.Placed}, '{HoldingSlots.ExteriorCell}'))
             SELECT form_key FROM carried)
         """;
 

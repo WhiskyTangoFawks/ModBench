@@ -16,6 +16,7 @@ internal sealed class WorkingTreeOverlay
     private readonly DuckDBConnection _connection;
     private readonly ILogger _logger;
     private readonly ContainerDocuments _containers;
+    private readonly PluginIngest _ingest;
     private readonly IReadOnlyDictionary<string, RecordTableSchema> _schemas;
     private readonly RecordTypes _types;
 
@@ -25,6 +26,7 @@ internal sealed class WorkingTreeOverlay
         _connection = connection;
         _logger = logger;
         _containers = new ContainerDocuments(release);
+        _ingest = new PluginIngest(connection, logger, release);
         _types = RecordTypes.For(release);
         _schemas = schemas;
     }
@@ -157,25 +159,22 @@ internal sealed class WorkingTreeOverlay
             return;
         }
 
-        List<FormReferenceRow> refs;
-        List<ContainerDocuments.ChildDocument> children;
-        var root = Document.Parse(body);
-        refs = PluginIngest.Rows(_containers, root, schema, formKey, root.EditorId.EditorId, recordType);
-        children = [.. _containers.ChildrenOf(recordType, root)];
+        var prepared = _ingest.PrepareRecord(new PluginDocument(recordType, formKey, body), schema);
+        List<ContainerDocuments.ChildDocument> children = [.. _containers.ChildrenOf(recordType, Document.Parse(body))];
 
         DeleteFormReferencesForRecord(key, formKey);
-        if (refs.Count > 0)
+        if (prepared.Refs.Count > 0)
         {
             using var refAppender = _connection.CreateAppender("mirror", "form_references");
-            foreach (var r in refs)
+            foreach (var r in prepared.Refs)
                 PluginIngest.AppendFormReference(refAppender, r, key.Name, key.Origin);
         }
 
-        // placement/cell_location/container_child track Effective the same way
-        // form_references does, rebuilt from the child documents this body carries.
+        // holdings and cell_location track Effective the same way form_references does, rebuilt
+        // from the child documents this body carries.
         var recordedBefore = ChildrenRecorded(key, formKey, embeddedIn: recordType);
         DeriveEmbeddedChildRows(key, recordType, children, touched);
-        RederiveContainmentForRecord(key, formKey, recordType, children);
+        RederiveContainmentForRecord(key, formKey, prepared);
 
         // A child absent from the document is gone at Effective, unless another container's document
         // holds it (a container whose FormID changed re-derives its children under the new identity first).
@@ -200,37 +199,21 @@ internal sealed class WorkingTreeOverlay
     {
         var recorded = new List<string>();
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT form_key, NULL, NULL FROM mirror.placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3
-            UNION ALL
-            SELECT cell_form_key, NULL, block_x FROM mirror.cell_location
-            WHERE parent_worldspace = $1 AND plugin = $2 AND origin = $3
-            UNION ALL
-            SELECT child_form_key, slot_name, NULL FROM mirror.container_child
-            WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3
-            """;
+        cmd.CommandText = "SELECT child, slot FROM mirror.holdings WHERE parent = $1 AND plugin = $2 AND origin = $3";
         DuckDbSql.AddParams(cmd, [parentFormKey, key.Name, key.Origin]);
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
-            var embedded = embeddedIn == null
-                || (reader.IsDBNull(1) || _types.IsEmbeddedSlot(embeddedIn, reader.GetString(1)))
-                    && reader.IsDBNull(2);
-            if (embedded) recorded.Add(reader.GetString(0));
+            if (embeddedIn == null || _types.IsEmbeddedSlot(embeddedIn, reader.GetString(1)))
+                recorded.Add(reader.GetString(0));
         }
         return recorded;
     }
 
     private bool HeldByAnotherContainer(PluginAddress key, string childFormKey, string thisParentFormKey) =>
         DuckDbSql.ScalarString(_connection, """
-            SELECT form_key FROM mirror.placement
-            WHERE form_key = $1 AND parent_cell <> $2 AND plugin = $3 AND origin = $4
-            UNION ALL
-            SELECT cell_form_key FROM mirror.cell_location
-            WHERE cell_form_key = $1 AND parent_worldspace <> $2 AND plugin = $3 AND origin = $4
-            UNION ALL
-            SELECT child_form_key FROM mirror.container_child
-            WHERE child_form_key = $1 AND parent_form_key <> $2 AND plugin = $3 AND origin = $4
+            SELECT child FROM mirror.holdings
+            WHERE child = $1 AND parent <> $2 AND plugin = $3 AND origin = $4
             LIMIT 1
             """, childFormKey, thisParentFormKey, key.Name, key.Origin) != null;
 
@@ -261,62 +244,29 @@ internal sealed class WorkingTreeOverlay
         DuckDbSql.ScalarString(_connection, "SELECT body FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
 
-    // A container's child set and slot order live in its body, so a delete-then-insert per (parent,
-    // table) is correct by construction. An embedded child that is itself a container derives its
-    // own containment through its own row.
-    private void RederiveContainmentForRecord(
-        PluginAddress key, string formKey, string recordType, IReadOnlyList<ContainerDocuments.ChildDocument> children)
+    // A container's child set and slot order live in its body, so a delete-then-insert per parent
+    // is correct by construction. The exterior cells a worldspace holds are not in its body: their
+    // own records say where they sit. An embedded child that is itself a container derives its own
+    // containment through its own row.
+    private void RederiveContainmentForRecord(PluginAddress key, string formKey, PluginIngest.PreparedRecord prepared)
     {
-        var containerChildRows = new List<ContainerChildRow>();
-        var placementRows = new List<PlacementRow>();
-        CellLocationRow? topCellRow = null;
-
-        foreach (var child in children)
+        DuckDbSql.ExecuteFor(_connection,
+            "DELETE FROM mirror.holdings WHERE parent = $1 AND slot <> $4 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin, HoldingSlots.ExteriorCell);
+        if (prepared.Holdings.Count > 0)
         {
-            switch (PlacementWalker.TableFor(_types, recordType, child.SlotName))
-            {
-                case ParentageTable.ContainerChild:
-                    containerChildRows.Add(new ContainerChildRow(
-                        child.FormKey, formKey, recordType, child.SlotName, child.SlotIndex));
-                    break;
-                case ParentageTable.CellLocation:
-                    // No block/sub and never interior, by construction — a worldspace's top cell is
-                    // not part of any exterior grid.
-                    topCellRow = PlacementWalker.CellLocation(
-                        child.FormKey, child.Document,
-                        new CellStructure(formKey, null, null, null, null, IsInterior: false));
-                    break;
-                case ParentageTable.Placement:
-                    placementRows.Add(new PlacementRow(
-                        child.FormKey, formKey, PlacementWalker.PlacementGroupOf(child.SlotName)));
-                    break;
-            }
+            using var appender = _connection.CreateAppender("mirror", "holdings");
+            foreach (var row in prepared.Holdings)
+                PluginIngest.AppendHoldingRow(appender, row, key.Name, key.Origin);
         }
 
-        DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
-        if (containerChildRows.Count > 0)
+        foreach (var row in prepared.CellLocations)
         {
-            using var appender = _connection.CreateAppender("mirror", "container_child");
-            foreach (var row in containerChildRows)
-                PluginIngest.AppendContainerChildRow(appender, row, key.Name, key.Origin);
+            DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
+                row.CellFormKey, key.Name, key.Origin);
+            using var appender = _connection.CreateAppender("mirror", "cell_location");
+            PluginIngest.AppendCellLocationRow(appender, row, key.Name, key.Origin);
         }
-
-        DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
-        if (placementRows.Count > 0)
-        {
-            using var appender = _connection.CreateAppender("mirror", "placement");
-            foreach (var row in placementRows)
-                PluginIngest.AppendPlacementRow(appender, row, key.Name, key.Origin);
-        }
-
-        if (topCellRow is not { } cellRow) return;
-
-        DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
-            cellRow.CellFormKey, key.Name, key.Origin);
-        using var cellLocationAppender = _connection.CreateAppender("mirror", "cell_location");
-        PluginIngest.AppendCellLocationRow(cellLocationAppender, cellRow, key.Name, key.Origin);
     }
 
     private void DeleteDerivationsForRecord(PluginAddress key, string formKey)
@@ -335,15 +285,9 @@ internal sealed class WorkingTreeOverlay
     // children lose their rows via their own deletion.
     private void DeleteContainmentForRecord(PluginAddress key, string formKey)
     {
-        DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.placement WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
-        DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
+        DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.holdings WHERE (child = $1 OR parent = $1) AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
-        DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.container_child WHERE child_form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
-        DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
     }
 }

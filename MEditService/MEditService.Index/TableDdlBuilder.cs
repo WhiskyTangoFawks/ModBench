@@ -30,9 +30,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     [
         new("records", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true),
         new("form_references", "source_plugin", "source_origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
-        new("placement", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
+        new("holdings", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("cell_location", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
-        new("container_child", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("record_type_failure", "plugin", "origin", HoldsRecords: false, DerivesLoadOrder: false, DerivesWinner: false),
         new(PluginDerivationTable, "plugin", "origin", HoldsRecords: false, DerivesLoadOrder: false, DerivesWinner: false),
         new(PluginDiagnosisTable, "plugin", "origin", HoldsRecords: false, DerivesLoadOrder: false, DerivesWinner: false),
@@ -85,8 +84,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreatePluginDerivationTable(connection);
         CreatePluginDiagnosisTable(connection);
         CreateFormReferencesTable(connection);
-        CreatePlacementTables(connection);
-        CreateContainerChildTable(connection);
+        CreateHoldingsTable(connection);
+        CreateCellLocationTable(connection);
         CreateRecordTypeFailureTable(connection);
         CreateSequenceTable(connection);
         Execute(connection, $"CREATE TABLE IF NOT EXISTS {MirrorSchema}.index_version (value VARCHAR NOT NULL)");
@@ -281,30 +280,34 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // Side tables for the worldspace tree. Parentage is structural (GRUP nesting), so it
-    // lives here rather than in the record document, keeping placement read-only by construction.
-    internal static void CreatePlacementTables(DuckDBConnection connection)
+    // GRUP nesting lives here, not in the record document. One row per record a record holds in
+    // the same plugin: a topic in its quest, a placed reference in its cell, a cell in its worldspace.
+    internal static void CreateHoldingsTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {MirrorSchema}.placement (
-                form_key        VARCHAR {FilenameIdentity} NOT NULL,
-                plugin          VARCHAR {FilenameIdentity} NOT NULL,
-                origin          VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                parent_cell     VARCHAR {FilenameIdentity} NOT NULL,
-                placement_group VARCHAR NOT NULL
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.holdings (
+                plugin      VARCHAR {FilenameIdentity} NOT NULL,
+                origin      VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                parent      VARCHAR {FilenameIdentity} NOT NULL,
+                child       VARCHAR {FilenameIdentity} NOT NULL,
+                slot        VARCHAR NOT NULL,
+                slot_index  INTEGER NOT NULL
             )
             """);
         Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_placement_cell
-                ON {MirrorSchema}.placement(parent_cell, plugin)
+            CREATE INDEX IF NOT EXISTS idx_holdings_parent
+                ON {MirrorSchema}.holdings(parent, plugin)
             """);
+    }
 
+    // A cell's grid and block coordinates; the worldspace holding it is its holdings row.
+    internal static void CreateCellLocationTable(DuckDBConnection connection)
+    {
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.cell_location (
                 cell_form_key    VARCHAR {FilenameIdentity} NOT NULL,
                 plugin           VARCHAR {FilenameIdentity} NOT NULL,
                 origin           VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                parent_worldspace VARCHAR {FilenameIdentity},
                 block_x          INTEGER,
                 block_y          INTEGER,
                 sub_x            INTEGER,
@@ -313,35 +316,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 grid_y           INTEGER,
                 is_interior      BOOLEAN NOT NULL DEFAULT FALSE
             )
-            """);
-        Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_cell_location_worldspace
-                ON {MirrorSchema}.cell_location(parent_worldspace, plugin)
-            """);
-        Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_cell_location_region
-                ON {MirrorSchema}.cell_location(parent_worldspace, grid_x, grid_y)
-            """);
-    }
-
-    // The ContainerChildFields relationships placement/cell_location don't already carry — additive
-    // to the tables above, never a replacement for what they already cover.
-    internal static void CreateContainerChildTable(DuckDBConnection connection)
-    {
-        Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {MirrorSchema}.container_child (
-                child_form_key      VARCHAR {FilenameIdentity} NOT NULL,
-                plugin               VARCHAR {FilenameIdentity} NOT NULL,
-                origin               VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                parent_form_key      VARCHAR {FilenameIdentity} NOT NULL,
-                parent_record_type   VARCHAR NOT NULL,
-                slot_name            VARCHAR NOT NULL,
-                slot_index           INTEGER NOT NULL
-            )
-            """);
-        Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_container_child_parent
-                ON {MirrorSchema}.container_child(parent_form_key, plugin)
             """);
     }
 

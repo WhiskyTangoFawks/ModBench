@@ -23,14 +23,6 @@ internal sealed record MissingReference(
 /// binary's record order.</summary>
 internal sealed record PluginDiagnosisRow(PluginAddress Plugin, PluginDiagnosis Diagnosis);
 
-/// <summary>One child's parent slot for the container relationships the placement tables omit;
-/// additive, never a copy. <see cref="SlotIndex"/> is the real GRUP position. Effective only: every
-/// write path re-derives it.</summary>
-internal readonly record struct ContainerChildRow(
-    string ChildFormKey, string ParentFormKey, string ParentRecordType, string SlotName, int SlotIndex);
-// Rejected: having every reader existence-check against records instead, which would make "these
-// tables track Effective" a documented falsehood.
-
 // Flat row for a cell in its blocks. BlockX/Y and SubX/Y are null for a worldspace's TopCell; an
 // interior cell's block and sub-block are one number each, in BlockX and SubX.
 internal sealed record CellLocationSummary(

@@ -25,13 +25,13 @@ internal static class ContainerChildren
     public static IReadOnlyList<ContainerChildSummary> Of(RelationReads repo, PluginAddress plugin, string parentFormKey, GameRelease release)
     {
         var rows = repo.GetContainerChildren(plugin, parentFormKey)
-            .Where(r => SlotRecordTypes.ContainsKey(r.SlotName))
+            .Where(r => SlotRecordTypes.ContainsKey(r.Slot))
             .ToList();
         if (rows.Count == 0) return [];
 
         // One Search per record type present, so hydration shares every other listing's derivation.
         var byFormKey = new Dictionary<string, RecordSummary>(StringComparer.Ordinal);
-        foreach (var recordType in rows.Select(r => SlotRecordTypes[r.SlotName]).Distinct(StringComparer.Ordinal))
+        foreach (var recordType in rows.Select(r => SlotRecordTypes[r.Slot]).Distinct(StringComparer.Ordinal))
         {
             var page = repo.Search(new RecordQuery(
                 RecordQueryScope.Navigator, RecordTypes: [recordType], Plugin: plugin.Name, Origin: plugin.Origin, Limit: UnlimitedRecords, Offset: 0));
@@ -43,12 +43,12 @@ internal static class ContainerChildren
         {
             // The two reads are two snapshots: a child a commit took between them is gone, and that
             // commit's announcement asks for this listing again.
-            if (!byFormKey.TryGetValue(row.ChildFormKey, out var record)) continue;
+            if (!byFormKey.TryGetValue(row.Child, out var record)) continue;
             result.Add(new ContainerChildSummary(
                 record.FormKey, record.EditorId, record.Plugin, record.Origin,
-                record.LoadOrderIndex, record.IsWinner, record.WorkingTreeState, SlotRecordTypes[row.SlotName],
+                record.LoadOrderIndex, record.IsWinner, record.WorkingTreeState, SlotRecordTypes[row.Slot],
                 record.HasContainerChildren, record.ParseDiagnosis, record.HasParseFailure, record.FullName,
-                RecordTypes.For(release).HasChildSlots(SlotRecordTypes[row.SlotName])));
+                RecordTypes.For(release).HasChildSlots(SlotRecordTypes[row.Slot])));
         }
         return result;
     }
