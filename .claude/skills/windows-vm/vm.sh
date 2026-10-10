@@ -18,7 +18,11 @@ case "${1:-}" in
     # A Windows installed afresh answers SSH with a host key of its own.
     [[ -f $VM_HOME/disk/data.img ]] || rm -f "$VM_HOME/known_hosts"
     "${COMPOSE[@]}" up -d
-    until "$0" ssh -o BatchMode=yes exit 2>/dev/null; do sleep 30; done
+    deadline=$((SECONDS + 5400))
+    until "$0" ssh -o BatchMode=yes exit 2>/dev/null; do
+      (( SECONDS < deadline )) || { echo "No SSH after 90 minutes; vm.sh screen shows where the install stopped." >&2; exit 1; }
+      sleep 30
+    done
     exec "$0" run "$HERE/provision.ps1"
     ;;
   down) "${COMPOSE[@]}" down ;;

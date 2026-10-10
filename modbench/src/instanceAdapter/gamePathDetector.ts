@@ -26,8 +26,7 @@ function parseLibraryFoldersVdf(content: string, appId: string): string | null {
 }
 
 /** Takes `platform` explicitly (rather than reading `process.platform` itself) so tests can
- *  exercise both branches directly instead of stubbing global process state. Each branch spells its
- *  paths as its platform does, whatever platform runs it. */
+ *  exercise both branches directly instead of stubbing global process state. */
 export async function detectGamePaths(
   platform: NodeJS.Platform,
   game: GameAutodetect,

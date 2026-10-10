@@ -12,7 +12,7 @@ function Gate($name, $dir, $command) {
 $lock = (Get-FileHash modbench/package-lock.json).Hash
 if (-not (Test-Path modbench/node_modules/.lock-hash) -or (Get-Content modbench/node_modules/.lock-hash) -ne $lock) {
   Gate 'npm ci' modbench 'npm ci'
-  Set-Content modbench/node_modules/.lock-hash $lock
+  if ($LASTEXITCODE -eq 0) { Set-Content modbench/node_modules/.lock-hash $lock }
 }
 Gate 'Backend format' MEditService 'dotnet format --verify-no-changes'
 Gate 'Backend build' MEditService 'dotnet build -v minimal'

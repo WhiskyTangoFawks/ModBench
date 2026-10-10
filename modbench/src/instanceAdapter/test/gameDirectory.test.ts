@@ -30,6 +30,10 @@ describe('normalizeGamePath', () => {
     expect(await normalizeGamePath('C:\\Games\\Fallout4', 'win32', noDetectPrefix)).toBe('C:\\Games\\Fallout4');
   });
 
+  it('spells a Windows path MO2 wrote with forward slashes in its native form, as %BASE_DIR%/downloads reads once substituted', async () => {
+    expect(await normalizeGamePath('C:\\MO2/downloads', 'win32', noDetectPrefix)).toBe('C:\\MO2\\downloads');
+  });
+
   it('leaves a colon that is not a leading drive letter untouched (only the drive-letter prefix is stripped), a colon elsewhere in a path being legal on Linux — a folder named literally "A:B" — and an unanchored strip corrupting it', async () => {
     const path = '/home/user/mods/A:B/Fallout4';
     expect(await normalizeGamePath(path, 'linux', noDetectPrefix)).toBe(path);
