@@ -56,7 +56,7 @@ Dispatch each further lane while the first executor is still implementing, and c
 When an executor reports committed, work through these in order.
 
 1. Run `git merge-base --is-ancestor main <branch> || { echo REFUSED; exit 1; }`. The only exemption is a branch whose `git diff --name-only main...<branch>` lists nothing outside `docs/` and root-level `*.md`.
-2. Compare the test count before and after. A drop stops the merge unless every missing test is named as retired with the member it tested.
+2. Compare the test count before and after. A drop stops the merge unless every missing test is named as retired, with the member it tested or the test that now holds its case.
 3. Run `bash .claude/skills/validate/run-gates.sh --comments` in the branch's worktree: the comment gate alone, seconds. An executor's report is not evidence for this gate, because the editor-time hook does not fire on script-patched files.
 4. Dispatch a reviewer with [`REVIEW.md`](REVIEW.md) as its brief and the breaks the report names. Merge on MERGE. On HOLD, send the blocking findings to the executor, and re-verify with the same reviewer after the fix commit. The executor reverts a change to a maintainer's document, and you quote the reverted diff as a break for the drain. You read the verdict, never the code.
 5. Run the tripwires:
