@@ -19,6 +19,7 @@ As a user, I want:
 9. A copy of a record to open as one document, whichever view or VS Code feature opens it: one tab for one copy, and a tab restored after a restart opens the same copy again. Source: VS Code's interaction; ADR-0012
 10. The record panel and the conflict table to be pages that take VS Code's theme, so they look as the rest of VS Code does. Source: VS Code's interaction
 11. A collapsed row to carry the badges of the rows beneath it, and an expanded row only its own, so each change shows once, on the row I can see.
+12. Ctrl+F in the record panel and the conflict table to find text as in any editor, among the rows the page shows. Source: VS Code's interaction
 
 ## The name filter
 

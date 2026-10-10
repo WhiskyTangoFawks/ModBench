@@ -23,7 +23,7 @@ Gestures Modbench does differently.
 
 | # | Where | Modbench | xEdit | Why |
 |---|---|---|---|---|
-| 1 | FormKey editing | A native QuickPick | A sorted combo box | Limitation: VS Code hosts a searchable thousand-row picker better than a webview can. |
+| 1 | FormKey, enum and kind editing | A native QuickPick | A combo box | Limitation: VS Code hosts a searchable thousand-row picker better than a webview can. |
 | 2 | The extended editor | A VS Code editor tab | A modeless form | Limitation. |
 | 3 | Copy as New Record | Prompts for nothing. The copy lands under a derived EditorID, as the Creation Kit does, and is renamed in the grid. It never mints a duplicate EditorID. | Prompts for an EditorID | Ruling. |
 | 4 | Row painting | NoConflict, OnlyOne and expanded struct rows are unpainted, so a background colour means "something here needs attention" | Tints every row | Ruling. |
