@@ -34,7 +34,7 @@ import {
 } from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { RecordWrite } from '../../drivingLib/writingGesture';
-import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from '../ReferencedByTreeProvider';
+import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from '../referencedByList';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';

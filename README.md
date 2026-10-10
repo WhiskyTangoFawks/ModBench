@@ -23,7 +23,7 @@ The decisions behind this are [ADR-0007](docs/adr/0007-plugin-edits-are-git-work
 | Plugins — `plugins.txt` order and checkboxes, and with mEdit running, every active plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/architecture/surfaces/plugins.md) | Implemented; spec rewritten, code catching up |
 | Record editor — xEdit-style compare grid across the active plugins, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD | [editor.md](docs/architecture/surfaces/editor.md) | Implemented |
 | Version control — Track, compile, native SCM integration, external-change handling | [plugins.md](docs/architecture/surfaces/plugins.md), [plugin-source.md](docs/architecture/surfaces/plugin-source.md) | Implemented; spec rewritten, code catching up |
-| Referenced By — what points at a record | [editor-referenced-by.md](docs/architecture/surfaces/editor-referenced-by.md) | Implemented |
+| Referenced By — what points at a record, as a snapshot in VS Code's References view | [editor-referenced-by.md](docs/architecture/surfaces/editor-referenced-by.md) | Implemented; spec rewritten, code catching up |
 | Toolbox — the instance at a glance: its game and active profile, switch profile, refresh | [toolbox.md](docs/architecture/surfaces/toolbox.md) | Implemented; spec rewritten, code catching up |
 | Record filter — plain `.sql` files against the record index, applied with a Code Lens | [plugins.md](docs/architecture/surfaces/plugins.md) | Implemented |
 | Repair — byte-level repair of malformed plugins the Creation Kit wouldn't have written | [#666](https://github.com/WhiskyTangoFawks/ModBench/issues/666) | Planned |

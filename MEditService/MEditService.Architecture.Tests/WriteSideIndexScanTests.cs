@@ -12,18 +12,18 @@ public sealed class WriteSideIndexScanTests
         Directory.CreateDirectory(Path.Combine(root, "Edits", "obj"));
         File.WriteAllText(
             Path.Combine(root, "Edits", "EditService.cs"),
-            "IRecordReads reads = index.Reads!;\nvar rows = reads.Search(query);\n");
+            "RelationReads reads = index.Reads!;\nvar rows = reads.Search(query);\n");
         File.WriteAllText(Path.Combine(root, "Edits", "Factory.cs"), "new DuckDbRecordIndexFactory();");
         File.WriteAllText(Path.Combine(root, "Edits", "obj", "Generated.cs"), "DuckDbRecordIndex index;");
         File.WriteAllText(Path.Combine(root, "Edits", "Clean.cs"), "repository.Put(plugin, document);");
         Directory.CreateDirectory(Path.Combine(root, "Records"));
         File.WriteAllText(Path.Combine(root, "Records", "Store.cs"), "DuckDbRecordIndex index;");
 
-        var counts = Counts(root, [""], ["Records"], ["IRecordReads", "DuckDbRecordIndex", "DuckDbRecordIndexFactory"]);
+        var counts = Counts(root, [""], ["Records"], ["RelationReads", "DuckDbRecordIndex", "DuckDbRecordIndexFactory"]);
 
         Assert.Equal(
             [
-                "Edits/EditService.cs: IRecordReads: 1",
+                "Edits/EditService.cs: RelationReads: 1",
                 "Edits/Factory.cs: DuckDbRecordIndexFactory: 1",
             ],
             counts);
