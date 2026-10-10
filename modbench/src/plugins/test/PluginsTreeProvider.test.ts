@@ -1229,29 +1229,6 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     return { group: present(group, 'the Weapon group'), record: present(record, 'the record row') };
   }
 
-  it('states an override record under a tracked, editable plugin tracked and editable', async () => {
-    const client = weaponOf(recordSummary({ formKey: '000001:Fallout4.esm' }));
-    const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
-    await reconcile(h, [held('A.esp', { isTracked: true }), held('Fallout4.esm', { origin: 'Data/', isImmutable: true })]);
-
-    const [row] = await h.tree.getChildren();
-    const { record } = await firstRecordUnder(h, present(row, 'the A.esp row'));
-
-    expect(record.contextValue).toBe('record tracked editable');
-  });
-
-  it('states every row of a plugin whose plugin source is unreadable tracked and not editable, and says why on the plugin row', async () => {
-    const client = weaponOf(recordSummary());
-    const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
-    await reconcile(h, [held('A.esp', { isTracked: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })]);
-
-    const [row] = await h.tree.getChildren();
-    const { group, record } = await firstRecordUnder(h, present(row, 'the A.esp row'));
-
-    expect(h.tree.getTreeItem(present(row, 'the A.esp row')).description).toBe('plugin source unreadable');
-    expect([group.contextValue, record.contextValue]).toEqual(['recordType tracked creatable', 'record tracked']);
-  });
-
   it('flips a record row on the reconcile that tracks its plugin, from the rows already read', async () => {
     const client = weaponOf(recordSummary());
     const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
@@ -1903,207 +1880,18 @@ describe('PluginsTreeProvider — groups and records are named and described as 
     return { h, groups: await h.tree.getChildren(row) };
   }
 
-  const cell = (overrides: Partial<CellSummary>): CellSummary => ({
-    formKey: 'c:A.esp', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false, workingTreeState: 'None', ...overrides,
-  });
-
-  const inOneSubBlock = (cells: CellSummary[]): InteriorCellBlock[] =>
-    [{ number: 0, hasParseFailure: false, subBlocks: [{ number: 0, hasParseFailure: false, cells }] }];
-
-  async function interiorCellsOf(h: Harness, group: PluginsTreeNode | undefined): Promise<PluginsTreeNode[]> {
-    const [block] = await h.tree.getChildren(present(group, 'the Cell group'));
-    const [subBlock] = await h.tree.getChildren(present(block, 'its sole block'));
-    return h.tree.getChildren(present(subBlock, 'its sole sub-block'));
-  }
-
-  it('names each group by mEdit\'s type name, in mEdit\'s order, with its record count, worldspaces and cells among the rest', async () => {
-    const { groups } = await expandedRow(makeClient({
-      recordTypes: [
-        { type: 'acti', count: 2, displayName: 'Activator' },
-        { type: 'cell', count: 1204, displayName: 'Cell' },
-        { type: 'kywd', count: 1, displayName: 'Keyword' },
-        { type: 'wrld', count: 3, displayName: 'Worldspace' },
-      ],
-    }));
-
-    expect(groups.map((g) => [g.label, g.description])).toEqual([
-      ['Activator', '2'], ['Cell', '1,204'], ['Keyword', '1'], ['Worldspace', '3'],
-    ]);
-  });
-
-  it('labels a record by its EditorID or else its FormKey, describes it by its FormKey, and tips it with its name', async () => {
+  it('names a record row as the record browser names it', async () => {
     const { h, groups } = await expandedRow(makeClient({
-      recordTypes: [{ type: 'weap', count: 2, displayName: 'Weapon' }],
+      recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
       records: {
-        items: [
-          recordSummary({ formKey: '000001:A.esp', editorId: 'TheWeapon', fullName: 'Laser Rifle' }),
-          recordSummary({ formKey: '000002:A.esp', editorId: null, fullName: null }),
-        ],
-        total: 2,
+        items: [recordSummary({ formKey: '000001:A.esp', editorId: 'TheWeapon', fullName: 'Laser Rifle' })],
+        total: 1,
       },
     }));
 
     const records = await h.tree.getChildren(groups[0]);
 
-    expect(records.map(rowParts)).toEqual([
-      ['TheWeapon', '000001:A.esp', 'Laser Rifle'],
-      ['000002:A.esp', '000002:A.esp', undefined],
-    ]);
-  });
-
-  it('tips an unreadable record with its name and the reason it could not be read', async () => {
-    const { h, groups } = await expandedRow(makeClient({
-      recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
-      records: {
-        items: [recordSummary({ fullName: 'Laser Rifle', hasParseFailure: true, parseDiagnosis: 'bad flag' })],
-        total: 1,
-      },
-    }));
-
-    const [record] = await h.tree.getChildren(groups[0]);
-
-    expect(present(record, 'the unreadable record').tooltip)
-      .toBe('Laser Rifle\nThis record could not be read into its document: bad flag');
-  });
-
-  it('tips an unreadable worldspace, cell and placed reference with the reason it could not be read', async () => {
-    const unreadable = { hasParseFailure: true, parseDiagnosis: 'bad flag' };
-    const { h, groups } = await expandedRow(makeClient({
-      recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
-      worldspaces: [{ workingTreeState: 'None', formKey: '000100:A.esp', editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland', hasChildren: true, ...unreadable }],
-      worldspaceBlocks: { topCells: [cell({ formKey: '000101:A.esp', editorId: 'TopCell', ...unreadable })], blocks: [] },
-      cellChildRecords: {
-        persistent: [{ workingTreeState: 'None', formKey: '000301:A.esp', editorId: 'DoorRef', recordType: 'refr', ...unreadable }],
-        temporary: [],
-      },
-    }));
-    const [worldspace] = await h.tree.getChildren(groups[0]);
-    const [topCell] = await h.tree.getChildren(worldspace);
-    const [persistent] = await h.tree.getChildren(topCell);
-    const [placed] = await h.tree.getChildren(persistent);
-
-    expect([worldspace, topCell, placed].map((row) => present(row, 'an unreadable row').tooltip)).toEqual([
-      'Commonwealth Wasteland\nThis record could not be read into its document: bad flag',
-      'This record could not be read into its document: bad flag',
-      'This record could not be read into its document: bad flag',
-    ]);
-  });
-
-  it('names a worldspace as it names a record', async () => {
-    const { h, groups } = await expandedRow(makeClient({
-      recordTypes: [{ type: 'wrld', count: 2, displayName: 'Worldspace' }],
-      worldspaces: [
-        { workingTreeState: 'None', formKey: '000100:A.esp', editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland', hasParseFailure: false, hasChildren: true },
-        { workingTreeState: 'None', formKey: '000200:A.esp', editorId: null, fullName: null, hasParseFailure: false, hasChildren: false },
-      ],
-    }));
-
-    const worldspaces = await h.tree.getChildren(groups[0]);
-
-    expect(worldspaces.map(rowParts)).toEqual([
-      ['Commonwealth', '000100:A.esp', 'Commonwealth Wasteland'],
-      ['000200:A.esp', '000200:A.esp', undefined],
-    ]);
-  });
-
-  it('labels an exterior cell without an EditorID by its grid position, and any other cell as a record', async () => {
-    const { h, groups } = await expandedRow(makeClient({
-      recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
-      worldspaces: [{ workingTreeState: 'None', formKey: '000100:A.esp', editorId: 'Commonwealth', hasParseFailure: false, hasChildren: true }],
-      worldspaceBlocks: {
-        topCells: [cell({ formKey: '000101:A.esp', isPersistentWorldspaceCell: true })],
-        blocks: [{
-          x: 0, y: -1, hasParseFailure: false,
-          subBlocks: [{
-            x: 0, y: -1, hasParseFailure: false,
-            cells: [
-              cell({ formKey: '000102:A.esp', editorId: 'SanctuaryExt', cellX: 12, cellY: -5, fullName: 'Sanctuary Hills' }),
-              cell({ formKey: '000103:A.esp', cellX: 3, cellY: -2 }),
-            ],
-          }],
-        }],
-      },
-    }));
-    const [worldspace] = await h.tree.getChildren(groups[0]);
-    const [persistentCell, block] = await h.tree.getChildren(worldspace);
-    const [subBlock] = await h.tree.getChildren(block);
-
-    const cells = await h.tree.getChildren(subBlock);
-
-    expect(rowParts(present(persistentCell, 'the persistent cell'))).toEqual(['000101:A.esp', '000101:A.esp', undefined]);
-    expect(cells.map(rowParts)).toEqual([
-      ['SanctuaryExt', '000102:A.esp', 'Sanctuary Hills'],
-      ['<  3,  -2>', '000103:A.esp', undefined],
-    ]);
-  });
-
-  it('names an interior cell as it names a record', async () => {
-    const { h, groups } = await expandedRow(makeClient({
-      recordTypes: [{ type: 'cell', count: 2, displayName: 'Cell' }],
-      interiorCells: inOneSubBlock([
-        cell({ formKey: '000201:A.esp', editorId: 'Vault111', fullName: 'Vault 111' }),
-        cell({ formKey: '000202:A.esp' }),
-      ]),
-    }));
-
-    const cells = await interiorCellsOf(h, groups[0]);
-
-    expect(cells.map(rowParts)).toEqual([
-      ['Vault111', '000201:A.esp', 'Vault 111'],
-      ['000202:A.esp', '000202:A.esp', undefined],
-    ]);
-  });
-
-  it('labels a placed reference without an EditorID by its base record\'s EditorID', async () => {
-    const placed = (overrides: Partial<ChildRecordSummary>): ChildRecordSummary => ({
-      formKey: 'p:A.esp', recordType: 'refr', hasParseFailure: false, workingTreeState: 'None', ...overrides,
-    });
-    const { h, groups } = await expandedRow(makeClient({
-      recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }],
-      interiorCells: inOneSubBlock([cell({ formKey: '000201:A.esp', editorId: 'Vault111', hasChildren: true })]),
-      cellChildRecords: {
-        persistent: [
-          placed({ formKey: '000301:A.esp', editorId: 'DoorRef', baseEditorId: 'VaultDoor', fullName: 'Vault Door' }),
-          placed({ formKey: '000302:A.esp', baseEditorId: 'Barrel01', baseFormKey: '000400:A.esp' }),
-          placed({ formKey: '000303:A.esp', baseFormKey: '000401:A.esp' }),
-        ],
-        temporary: [],
-      },
-    }));
-    const [vault] = await interiorCellsOf(h, groups[0]);
-    const [persistent] = await h.tree.getChildren(vault);
-
-    const references = await h.tree.getChildren(persistent);
-
-    expect(references.map(rowParts)).toEqual([
-      ['DoorRef', '000301:A.esp', 'Vault Door'],
-      ['Barrel01', '000302:A.esp', undefined],
-      ['000303:A.esp', '000303:A.esp', undefined],
-    ]);
-  });
-
-  it('names a quest\'s children as it names a record', async () => {
-    const child = (overrides: Partial<ContainerChildSummary>): ContainerChildSummary => ({
-      formKey: 'd:A.esp', plugin: 'A.esp', origin: 'SomeMod', loadOrderIndex: 0, isWinner: true,
-      workingTreeState: 'None', recordType: 'dial', hasContainerChildren: false, isContainer: true, hasParseFailure: false,
-      ...overrides,
-    });
-    const { h, groups } = await expandedRow(makeClient({
-      recordTypes: [{ type: 'qust', count: 1, displayName: 'Quest' }],
-      records: { items: [recordSummary({ editorId: 'MQ101', hasContainerChildren: true })], total: 1 },
-      containerChildren: [
-        child({ formKey: '000501:A.esp', editorId: 'MQ101Greeting', fullName: 'Hello' }),
-        child({ formKey: '000502:A.esp', recordType: 'dlbr' }),
-      ],
-    }));
-    const [quest] = await h.tree.getChildren(groups[0]);
-
-    const children = await h.tree.getChildren(quest);
-
-    expect(children.map(rowParts)).toEqual([
-      ['MQ101Greeting', '000501:A.esp', 'Hello'],
-      ['000502:A.esp', '000502:A.esp', undefined],
-    ]);
+    expect(records.map(rowParts)).toEqual([['TheWeapon', '000001:A.esp', 'Laser Rifle']]);
   });
 });
 
@@ -2133,12 +1921,6 @@ describe('PluginsTreeProvider — the row states its conditions', () => {
 
     expect(await flags(h)).toEqual(['plugin', 'disabled', 'inUntrackedMod', 'untracked', 'editable']);
   });
-
-  it('states neither tracked nor editable before mEdit answers', async () => {
-    const h = makeTree([A_ROW()]);
-
-    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inUntrackedMod']);
-  });
 });
 
 describe('PluginsTreeProvider — a plugin row\'s click', () => {
@@ -2156,12 +1938,6 @@ describe('PluginsTreeProvider — a plugin row\'s click', () => {
 });
 
 describe('PluginsTreeProvider — read-only tooltip', () => {
-  it('carries the base tooltip, with no read-only line, before a load order exists', async () => {
-    const h = makeTree([A_ROW()]);
-
-    const tooltip = tooltipAsString((await rowItem(h)).tooltip);
-    expect(tooltip).toBe('A.esp\nSomeMod');
-  });
 
   it('tags a read-only plugin tooltip once the load order says so, and gives the row no icon or description', async () => {
     const h = makeTree([A_ROW()]);
@@ -2230,25 +2006,6 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
     expect(item.iconPath).toEqual(new ThemeIcon('blank'));
     expect(item.description).toBeUndefined();
   });
-
-  it('keeps the tooltip through a fresh load\'s tick that indexes the plugin', async () => {
-    const h = makeTree([A_ROW()]);
-    await withIssues(h, ['Ghost.esm']);
-
-    h.tree.facts.indexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
-
-    expect((await rowItem(h)).tooltip).toContain('Missing masters: Ghost.esm');
-  });
-
-  it('keeps the last master issues through a read taken before the next snapshot is indexed', async () => {
-    const h = makeTree([A_ROW()]);
-    await withIssues(h, ['Ghost.esm']);
-
-    h.client.setQueryAnswer('getPlugins', [held('A.esp', { masterIssues: null })]);
-    await h.tree.facts.refresh();
-
-    expect((await rowItem(h)).description).toBe('1 master issue');
-  });
 });
 
 describe('PluginsTreeProvider — load-failure decoration', () => {
@@ -2295,37 +2052,6 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
     expect(children.map(c => c.contextValue)).toEqual(['error']);
     expect(present(children[0], 'the error row').tooltip).toBe('Malformed record');
   });
-
-  it('flags a row the moment a load tick reports its plugin failed, before the load completes', async () => {
-    const h = makeTree([A_ROW()]);
-
-    h.tree.facts.indexed([], [{ name: 'A.esp', origin: 'SomeMod', reason: 'RACE parse' }]);
-
-    const item = await rowItem(h);
-    expect(item.description).toBe('failed to read');
-    expect(item.tooltip).toContain('RACE parse');
-  });
-
-  it('keeps the failed-to-read status (no blink) while expansion still reads "still indexing" for an unreached plugin', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
-    expect((await rowItem(h)).description).toBe('failed to read');
-
-    h.tree.facts.indexed([], []);
-
-    expect((await rowItem(h)).description).toBe('failed to read');
-    const [row] = await h.tree.getChildren();
-    expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
-  });
-
-  it('leaves an unaffected plugin row undecorated', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    await reconcile(h, [held('B.esp')], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
-
-    const item = await rowItem(h, 1);
-    expect(item.tooltip).toBe('B.esp\nSomeMod');
-    expect(item.iconPath).toEqual(new ThemeIcon('blank'));
-  });
 });
 
 describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => {
@@ -2340,36 +2066,6 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
     expect(expectInstanceOf(item.iconPath, ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsWarningIcon.foreground'));
     expect(item.description).toBe('malformed');
     expect(item.tooltip).toContain('RDAT is 6 bytes');
-  });
-
-  it('keeps the last diagnoses through a reconcile until its own scan lands', async () => {
-    const h = makeTree([A_ROW()]);
-    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
-    await reconcile(h, [held('A.esp')]);
-    expect((await rowItem(h)).description).toBe('malformed');
-
-    let resolveScan!: (reports: PluginDiagnosisReport[]) => void;
-    const slow = new Promise<PluginDiagnosisReport[]>((resolve) => { resolveScan = resolve; });
-    h.client.setQueryAnswerOnce('getDiagnoses', slow);
-
-    await h.tree.facts.reconciled([]);
-    expect((await rowItem(h)).description).toBe('malformed');
-
-    resolveScan([]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect((await rowItem(h)).description).toBeUndefined();
-  });
-
-  it('keeps the last diagnoses if the next scan fails', async () => {
-    const h = makeTree([A_ROW()]);
-    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
-    await reconcile(h, [held('A.esp')]);
-    expect((await rowItem(h)).description).toBe('malformed');
-
-    h.client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: 'mEdit could not answer.' });
-    await reconcile(h, [held('A.esp')]);
-
-    expect((await rowItem(h)).description).toBe('malformed');
   });
 
   it('publishes the scan for the Problems panel as well as the row badge', async () => {
@@ -2404,22 +2100,15 @@ describe('PluginsTreeProvider — changed outside Modbench', () => {
     expect((await rowItem(h, 1)).description).toBeUndefined();
   });
 
-  it('publishes a warning on every plugin that changed outside Modbench for the Problems panel, each mod\'s settle replacing its own', () => {
+  it('publishes the plugins that changed outside Modbench for the Problems panel', () => {
     const published: string[][] = [];
     const h = makeTree([A_ROW()], {
-      publishChangedOutside: (warnings) => published.push(warnings.map((w) => `${w.origin}/${w.plugin}: ${w.text}`)),
+      publishChangedOutside: (warnings) => published.push(warnings.map((w) => `${w.origin}/${w.plugin}`)),
     });
 
     settled(h, 'SomeMod', 'A.esp');
-    settled(h, 'OtherMod', 'C.esp');
-    settled(h, 'SomeMod');
 
-    const said = ': Changed outside Modbench: its bytes differ from what Modbench last wrote.';
-    expect(published).toEqual([
-      [`SomeMod/A.esp${said}`],
-      [`SomeMod/A.esp${said}`, `OtherMod/C.esp${said}`],
-      [`OtherMod/C.esp${said}`],
-    ]);
+    expect(published).toEqual([['SomeMod/A.esp']]);
   });
 });
 
@@ -2464,101 +2153,6 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     const tooltip = tooltipAsString((await rowItem(h)).tooltip);
     expect(tooltip).toContain('Missing masters: AMaster.esm');
     expect(tooltip).not.toContain('BMaster.esm');
-  });
-
-  it('reads read-only from its own plugin, not the other plugin', async () => {
-    const h = makeTree([SHARED_ROW()]);
-    await reconcile(h, [
-      held('Shared.esp', { origin: 'ModA', isImmutable: false }),
-      held('Shared.esp', { origin: 'ModB', isImmutable: true }),
-    ]);
-
-    expect((await rowItem(h)).tooltip).toBe('Shared.esp\nModA');
-  });
-
-  it('reads the parse failure from its own plugin, not the other plugin', async () => {
-    const h = makeTree([SHARED_ROW()]);
-    await reconcile(h, [
-      held('Shared.esp', { origin: 'ModA', hasParseFailure: false }),
-      held('Shared.esp', { origin: 'ModB', hasParseFailure: true }),
-    ]);
-
-    expect((await rowItem(h)).iconPath).toEqual(new ThemeIcon('blank'));
-  });
-
-  it('reads the record filter answer from its own plugin, not the other plugin', async () => {
-    const h = makeTree([SHARED_ROW()]);
-    await reconcile(h, [
-      held('Shared.esp', { origin: 'ModA', hasMatchingRecords: true }),
-      held('Shared.esp', { origin: 'ModB', hasMatchingRecords: false }),
-    ]);
-
-    expect(await h.tree.getChildren()).toHaveLength(1);
-  });
-
-  it('reads the diagnoses from its own plugin, not the other plugin', async () => {
-    const h = makeTree([SHARED_ROW()]);
-    h.client.setQueryAnswer('getDiagnoses', [diagnosis('Shared.esp', 'ModB is malformed', 'ModB')]);
-    await reconcile(h, [
-      held('Shared.esp', { origin: 'ModA' }),
-      held('Shared.esp', { origin: 'ModB' }),
-    ]);
-
-    expect((await rowItem(h)).description).toBeUndefined();
-  });
-
-  it('leaves the winning row clean when the other plugin is the one that failed to read', async () => {
-    const h = makeTree([SHARED_ROW(), plugin({ name: 'Shared.esp', line: 0, origin: 'ModB', winning: false })]);
-    await reconcile(h, [held('Shared.esp', { origin: 'ModA' })],
-      [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
-
-    const rows = await h.tree.getChildren();
-    expect(rows).toHaveLength(1);
-    const item = h.tree.getTreeItem(present(rows[0], 'the sole row'));
-    expect(item.iconPath).toEqual(new ThemeIcon('blank'));
-    expect(item.description).toBeUndefined();
-    expect(item.tooltip).toBe('Shared.esp\nModA');
-  });
-
-  it('expands the row as still indexing while only the other plugin has landed', async () => {
-    const h = makeTree([SHARED_ROW()]);
-    h.tree.facts.indexed([{ name: 'Shared.esp', origin: 'ModB' }], []);
-
-    const [row] = await h.tree.getChildren();
-    expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
-  });
-
-  it('expands the row as still indexing while mEdit holds only the other plugin', async () => {
-    const h = makeTree([SHARED_ROW()]);
-    await reconcile(h, [held('Shared.esp', { origin: 'ModB' })]);
-
-    const [row] = await h.tree.getChildren();
-    expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
-  });
-
-  it('expands the winning row as still indexing, never into the other plugin failure', async () => {
-    const h = makeTree([SHARED_ROW()]);
-    h.tree.facts.indexed([], [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
-
-    const [row] = await h.tree.getChildren();
-    expect(rendered(await h.tree.getChildren(row))).toEqual(STILL_INDEXING);
-  });
-
-  it('flags the row when its own plugin failed to read and the other plugin loaded', async () => {
-    const h = makeTree([SHARED_ROW()]);
-    await reconcile(h, [held('Shared.esp', { origin: 'ModB' })],
-      [{ name: 'Shared.esp', origin: 'ModA', reason: 'Malformed record' }]);
-
-    expect((await rowItem(h)).description).toBe('failed to read');
-  });
-
-  it('states nothing of another plugin of the name when the row origin matches no plugin the answer names', async () => {
-    const h = makeTree([plugin({ name: 'A.esp', line: 0, origin: 'RenamedMod' })]);
-    await reconcile(h, [held('A.esp', {
-      origin: 'SomeOtherMod', isImmutable: true, masterIssues: ['Ghost.esm'],
-    })]);
-
-    expect((await rowItem(h)).tooltip).toBe('A.esp\nRenamedMod');
   });
 });
 

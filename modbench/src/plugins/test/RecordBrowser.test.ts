@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   type RecordSummary, type RecordPage, type ContainerChildSummary, type CellSummary, type InteriorCellBlock,
+  type ChildRecordSummary, type WorldspaceSummary,
 } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom, fakeUri } from '../../test/vscodeMock';
@@ -10,7 +11,7 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { childrenOf, recordRow, soleChild, soleGroup } from './browserRows';
+import { cellRow, childrenOf, placedRow, recordRow, soleChild, soleGroup, worldspaceRow } from './browserRows';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import type { PluginConditions } from '../../drivingLib/recordRowContext';
 import { recordResourceUri } from '../recordResourceUri';
@@ -68,6 +69,7 @@ async function containerRowOver(
 }
 
 const FAILED_TO_LOAD = [['error', 'Failed to load: boom']];
+const WORLDSPACE_OF_M = { workingTreeState: 'None' as const, formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true };
 
 function interiorCell(formKey: string, editorId: string | null, overrides: Partial<CellSummary> = {}): CellSummary {
   return {
@@ -291,6 +293,10 @@ describe('a record row', () => {
     expect((await rowOf(record, 'Data/', { tracked: true, editable: true })).contextValue).toBe('record tracked editable');
   });
 
+  it('states a record of a tracked plugin whose plugin source is unreadable tracked and read-only', async () => {
+    expect((await rowOf(makeRecord(0), 'Data/', { tracked: true, editable: false })).contextValue).toBe('record tracked');
+  });
+
   it('states a record of an immutable plugin read-only', async () => {
     expect((await rowOf(makeRecord(0), 'Data/', { tracked: false, editable: false })).contextValue).toBe('record untracked');
   });
@@ -305,6 +311,74 @@ describe('a record row', () => {
     const row = await rowOf(record, 'ModA');
 
     expect(row.resourceUri).toEqual(recordResourceUri({ name: record.plugin, origin: 'ModA' }, record.formKey));
+  });
+});
+
+describe('every row is named as xEdit names it', () => {
+  const A_ESP: PluginAddress = { name: 'A.esp', origin: 'ModA' };
+  const UNREADABLE = 'This record could not be read into its document: bad flag';
+  const unreadable = { hasParseFailure: true, parseDiagnosis: 'bad flag' };
+
+  const record = (overrides: Partial<RecordSummary>) => recordRow({ ...makeRecord(0), plugin: 'A.esp', ...overrides }, 'ModA');
+  const worldspace = (overrides: Partial<WorldspaceSummary>) => worldspaceRow(
+    { workingTreeState: 'None', formKey: '000100:A.esp', hasParseFailure: false, hasChildren: false, ...overrides }, A_ESP,
+  );
+  const cell = (overrides: Partial<CellSummary>) => cellRow(
+    { formKey: '000101:A.esp', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false, workingTreeState: 'None', ...overrides }, A_ESP,
+  );
+  const interior = async (overrides: Partial<CellSummary>) => {
+    const repo = makeClient();
+    return interiorCellRow(repo, new RecordBrowser(repo), interiorCell('000201:A.esp', null, overrides));
+  };
+  const placed = (overrides: Partial<ChildRecordSummary>) => placedRow(
+    { formKey: '000301:A.esp', recordType: 'refr', hasParseFailure: false, workingTreeState: 'None', ...overrides }, A_ESP,
+  );
+  const containerChild = async (overrides: Partial<ContainerChildSummary>) => {
+    const repo = makeClient();
+    repo.setQueryAnswer('getContainerChildren', [{ ...makeContainerChild('000501:A.esp', 'dial'), ...overrides }]);
+    const { provider, row } = await containerRowOver(makeRecord(0, 'None', true), 'Data/', repo);
+    return soleChild(provider, row, 'the container');
+  };
+
+  it.each<[string, () => Promise<RecordBrowserNode>, [unknown, unknown, unknown]]>([
+    ['a record by its EditorID, described by its FormKey, tipped with its name',
+      () => record({ formKey: '000001:A.esp', editorId: 'TheWeapon', fullName: 'Laser Rifle' }), ['TheWeapon', '000001:A.esp', 'Laser Rifle']],
+    ['a record without an EditorID by its FormKey',
+      () => record({ formKey: '000002:A.esp', editorId: null, fullName: null }), ['000002:A.esp', '000002:A.esp', undefined]],
+    ['an unreadable record by its name and the reason',
+      () => record({ formKey: '000003:A.esp', editorId: 'TheWeapon', fullName: 'Laser Rifle', ...unreadable }), ['TheWeapon', '000003:A.esp', `Laser Rifle\n${UNREADABLE}`]],
+    ['a worldspace as a record',
+      () => worldspace({ editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland' }), ['Commonwealth', '000100:A.esp', 'Commonwealth Wasteland']],
+    ['a worldspace without an EditorID by its FormKey',
+      () => worldspace({ editorId: null, fullName: null }), ['000100:A.esp', '000100:A.esp', undefined]],
+    ['an unreadable worldspace by its name and the reason',
+      () => worldspace({ editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland', ...unreadable }), ['Commonwealth', '000100:A.esp', `Commonwealth Wasteland\n${UNREADABLE}`]],
+    ['an exterior cell with an EditorID as a record',
+      () => cell({ editorId: 'SanctuaryExt', cellX: 12, cellY: -5, fullName: 'Sanctuary Hills' }), ['SanctuaryExt', '000101:A.esp', 'Sanctuary Hills']],
+    ['an exterior cell without an EditorID by its grid position',
+      () => cell({ cellX: 3, cellY: -2 }), ['<  3,  -2>', '000101:A.esp', undefined]],
+    ['a persistent worldspace cell by its FormKey',
+      () => cell({ isPersistentWorldspaceCell: true }), ['000101:A.esp', '000101:A.esp', undefined]],
+    ['an unreadable cell by the reason alone',
+      () => cell({ editorId: 'TopCell', ...unreadable }), ['TopCell', '000101:A.esp', UNREADABLE]],
+    ['an interior cell as a record',
+      () => interior({ editorId: 'Vault111', fullName: 'Vault 111' }), ['Vault111', '000201:A.esp', 'Vault 111']],
+    ['an interior cell without an EditorID by its FormKey',
+      () => interior({}), ['000201:A.esp', '000201:A.esp', undefined]],
+    ['a placed reference by its EditorID',
+      () => placed({ editorId: 'DoorRef', baseEditorId: 'VaultDoor', fullName: 'Vault Door' }), ['DoorRef', '000301:A.esp', 'Vault Door']],
+    ['a placed reference without an EditorID by its base record\'s EditorID',
+      () => placed({ baseEditorId: 'Barrel01', baseFormKey: '000400:A.esp' }), ['Barrel01', '000301:A.esp', undefined]],
+    ['an unreadable placed reference by the reason alone',
+      () => placed({ editorId: 'DoorRef', ...unreadable }), ['DoorRef', '000301:A.esp', UNREADABLE]],
+    ['a container\'s child as a record',
+      () => containerChild({ editorId: 'MQ101Greeting', fullName: 'Hello' }), ['MQ101Greeting', '000501:A.esp', 'Hello']],
+    ['a container\'s child without an EditorID by its FormKey',
+      () => containerChild({ editorId: null }), ['000501:A.esp', '000501:A.esp', undefined]],
+  ])('%s', async (_row, build, parts) => {
+    const row = await build();
+
+    expect([row.label, row.description, row.tooltip]).toEqual(parts);
   });
 });
 
@@ -511,7 +585,7 @@ describe('RecordBrowser.refresh', () => {
 describe('RecordBrowser worldspace tree', () => {
   it('expands a worldspace into its persistent cell and blocks, labeled the way xEdit does', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
+    repo.setQueryAnswer('getWorldspaces', [WORLDSPACE_OF_M]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [{ workingTreeState: 'None', formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false }],
       blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }] }] }],
@@ -535,7 +609,7 @@ describe('RecordBrowser worldspace tree', () => {
 
   it('surfaces every block-less cell row under a worldspace, not just the first', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
+    repo.setQueryAnswer('getWorldspaces', [WORLDSPACE_OF_M]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [
         { workingTreeState: 'None', formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false },
@@ -670,136 +744,107 @@ describe('RecordBrowser fetch failures', () => {
     expect(present(record, 'the record row').command).toMatchObject({ command: 'modbench.record.open' });
   });
 
-  it('getPluginChildren: renders an error node when getRecordTypes fails', async () => {
-    const repo = makeClient();
-    repo.setQueryFailure('getRecordTypes', { failed: 'refused', refusal: 'boom' });
-    const provider = new RecordBrowser(repo);
 
-    const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
-
-    expect(children.map(c => [c.contextValue, c.label])).toEqual(FAILED_TO_LOAD);
-  });
-
-  it('fetchRecords: renders an error node when getRecords fails', async () => {
-    const repo = makeClient();
-    repo.setQueryFailure('getRecords', { failed: 'refused', refusal: 'boom' });
-    const provider = new RecordBrowser(repo);
-    const node = await soleGroup(provider, PLUGIN0);
-
-    const children = await provider.getChildren(node);
-
-    expect(children.map(c => [c.contextValue, c.label])).toEqual(FAILED_TO_LOAD);
-  });
-
-  it('fetchWorldspaces: renders an error node when getWorldspaces fails', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryFailure('getWorldspaces', { failed: 'refused', refusal: 'boom' });
-    const provider = new RecordBrowser(repo);
-    const node = await soleGroup(provider, PLUGIN0);
-
-    const children = await provider.getChildren(node);
-
-    expect(children.map(c => [c.contextValue, c.label])).toEqual(FAILED_TO_LOAD);
-  });
-
-  it('fetchWorldspaceChildren: renders an error node when getWorldspaceBlocks fails', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
-    repo.setQueryFailure('getWorldspaceBlocks', { failed: 'refused', refusal: 'boom' });
-    const provider = new RecordBrowser(repo);
-    const node = await soleChild(provider, await soleGroup(provider, PLUGIN0), 'the worldspace group');
-
-    const children = await provider.getChildren(node);
-
-    expect(children.map(c => [c.contextValue, c.label])).toEqual(FAILED_TO_LOAD);
-  });
-
-  it('fetchCellGroups: renders an error node when getCellChildRecords fails', async () => {
-    const repo = makeClient();
-    repo.setQueryFailure('getCellChildRecords', { failed: 'refused', refusal: 'boom' });
-    const provider = new RecordBrowser(repo);
-    const node = await interiorCellRow(repo, provider, interiorCell('c:M.esp', 'TheCell'));
-
-    const children = await provider.getChildren(node);
-
-    expect(children.map(c => [c.contextValue, c.label])).toEqual(FAILED_TO_LOAD);
-  });
-
-  it('fetchInteriorCells: renders an error node when getInteriorCells fails', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'cell', count: 1 }] });
-    repo.setQueryFailure('getInteriorCells', { failed: 'refused', refusal: 'boom' });
-    const provider = new RecordBrowser(repo);
-    const node = await soleGroup(provider, PLUGIN0);
-
-    const children = await provider.getChildren(node);
+  it.each<[string, () => Promise<RecordBrowserNode[]>]>([
+    ['getRecordTypes', async () => {
+      const repo = makeClient();
+      repo.setQueryFailure('getRecordTypes', { failed: 'refused', refusal: 'boom' });
+      return new RecordBrowser(repo).getPluginChildren(PLUGIN0);
+    }],
+    ['getRecords', async () => {
+      const repo = makeClient();
+      repo.setQueryFailure('getRecords', { failed: 'refused', refusal: 'boom' });
+      const provider = new RecordBrowser(repo);
+      return provider.getChildren(await soleGroup(provider, PLUGIN0));
+    }],
+    ['getWorldspaces', async () => {
+      const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
+      repo.setQueryFailure('getWorldspaces', { failed: 'refused', refusal: 'boom' });
+      const provider = new RecordBrowser(repo);
+      return provider.getChildren(await soleGroup(provider, PLUGIN0));
+    }],
+    ['getWorldspaceBlocks', async () => {
+      const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
+      repo.setQueryAnswer('getWorldspaces', [WORLDSPACE_OF_M]);
+      repo.setQueryFailure('getWorldspaceBlocks', { failed: 'refused', refusal: 'boom' });
+      const provider = new RecordBrowser(repo);
+      return provider.getChildren(await soleChild(provider, await soleGroup(provider, PLUGIN0), 'the worldspace group'));
+    }],
+    ['getCellChildRecords', async () => {
+      const repo = makeClient();
+      repo.setQueryFailure('getCellChildRecords', { failed: 'refused', refusal: 'boom' });
+      const provider = new RecordBrowser(repo);
+      return provider.getChildren(await interiorCellRow(repo, provider, interiorCell('c:M.esp', 'TheCell')));
+    }],
+    ['getInteriorCells', async () => {
+      const repo = makeClient({ recordTypes: [{ type: 'cell', count: 1 }] });
+      repo.setQueryFailure('getInteriorCells', { failed: 'refused', refusal: 'boom' });
+      const provider = new RecordBrowser(repo);
+      return provider.getChildren(await soleGroup(provider, PLUGIN0));
+    }],
+  ])('renders an error node when %s fails', async (_query, expand) => {
+    const children = await expand();
 
     expect(children.map(c => [c.contextValue, c.label])).toEqual(FAILED_TO_LOAD);
   });
 });
 
 describe('RecordBrowser spatial origin threading', () => {
-  it('fetchWorldspaces: asks the repository for the node\'s own plugin, and the worldspace rows it builds carry that origin forward', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
-    const provider = new RecordBrowser(repo);
-    const node = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModB' });
+  const SHARED_B: PluginAddress = { name: 'Shared.esp', origin: 'ModB' };
+  type Walk = { repo: InMemoryMEditClient; opened: RecordBrowserNode[] };
+  const openedAs = (formKey: string) => [{ argument: { kind: 'record', formKey, plugin: SHARED_B } }];
 
-    const wsNode = await soleChild(provider, node, 'the worldspace group');
+  it.each<[string, () => Promise<Walk>, { method: string; args: unknown[] }[], unknown[]]>([
+    ['getWorldspaces', async () => {
+      const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
+      repo.setQueryAnswer('getWorldspaces', [WORLDSPACE_OF_M]);
+      const provider = new RecordBrowser(repo);
+      return { repo, opened: [await soleChild(provider, await soleGroup(provider, SHARED_B), 'the worldspace group')] };
+    }, [{ method: 'getWorldspaces', args: [SHARED_B] }], [openedAs('wrld:M.esp')]],
+    ['getWorldspaceBlocks', async () => {
+      const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
+      repo.setQueryAnswer('getWorldspaces', [WORLDSPACE_OF_M]);
+      repo.setQueryAnswer('getWorldspaceBlocks', {
+        topCells: [{ workingTreeState: 'None', formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false }],
+        blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: true, hasParseFailure: false }] }] }],
+      });
+      repo.setQueryAnswer('getCellChildRecords', { persistent: [], temporary: [] });
+      const provider = new RecordBrowser(repo);
+      const worldspace = await soleChild(provider, await soleGroup(provider, SHARED_B), 'the worldspace group');
+      const [topCellNode, blockNode] = await provider.getChildren(worldspace);
+      const [subBlockNode] = await childrenOf(provider, blockNode, 'the block');
+      const cellNode = await soleChild(provider, subBlockNode, 'the sub-block');
+      await provider.getChildren(cellNode);
+      return { repo, opened: [present(topCellNode, 'the top cell'), cellNode] };
+    }, [
+      { method: 'getWorldspaceBlocks', args: [SHARED_B, 'wrld:M.esp'] }, { method: 'getCellChildRecords', args: [SHARED_B, 'c:M.esp'] },
+    ], [openedAs('top:M.esp'), openedAs('c:M.esp')]],
+    ['getCellChildRecords', async () => {
+      const repo = makeClient();
+      repo.setQueryAnswer('getCellChildRecords', {
+        persistent: [{ workingTreeState: 'None', formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
+        temporary: [],
+      });
+      const provider = new RecordBrowser(repo);
+      const node = await interiorCellRow(repo, provider, interiorCell('c:M.esp', 'TheCell'), SHARED_B);
+      const groupNode = await soleChild(provider, node, 'the cell');
+      return { repo, opened: [await soleChild(provider, groupNode, 'the placed group')] };
+    }, [{ method: 'getCellChildRecords', args: [SHARED_B, 'c:M.esp'] }], [openedAs('b:M.esp')]],
+    ['getInteriorCells', async () => {
+      const repo = makeClient({ recordTypes: [{ type: 'cell', count: 1 }] });
+      repo.setQueryAnswer('getInteriorCells', oneSubBlock([interiorCell('i:M.esp', 'IntCell', { hasChildren: true })]));
+      const provider = new RecordBrowser(repo);
+      const [cellNode] = await interiorCellsBeneath(provider, await soleGroup(provider, SHARED_B));
+      await provider.getChildren(present(cellNode, 'the sole cell'));
+      return { repo, opened: [present(cellNode, 'the sole cell')] };
+    }, [
+      { method: 'getInteriorCells', args: [SHARED_B] }, { method: 'getCellChildRecords', args: [SHARED_B, 'i:M.esp'] },
+    ], [openedAs('i:M.esp')]],
+  ])('%s: asks for the node\'s own plugin, and the rows it builds carry that origin forward', async (_query, walk, calls, openedArgs) => {
+    const { repo, opened } = await walk();
 
-    expect(repo.calls).toContainEqual({ method: 'getWorldspaces', args: [{ name: 'Shared.esp', origin: 'ModB' }] });
-    expect(openedArguments(wsNode)).toEqual([{ argument: { kind: 'record', formKey: 'wrld:M.esp', plugin: { name: 'Shared.esp', origin: 'ModB' } } }]);
-  });
-
-  it('fetchWorldspaceChildren: asks the repository for the node\'s own plugin, and its TopCell/Block children carry that origin forward', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
-    repo.setQueryAnswer('getWorldspaceBlocks', {
-      topCells: [{ workingTreeState: 'None', formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false }],
-      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: true, hasParseFailure: false }] }] }],
-    });
-    repo.setQueryAnswer('getCellChildRecords', { persistent: [], temporary: [] });
-    const provider = new RecordBrowser(repo);
-    const worldspace = await soleChild(provider, await soleGroup(provider, { name: 'Shared.esp', origin: 'ModB' }), 'the worldspace group');
-
-    const [topCellNode, blockNode] = await provider.getChildren(worldspace);
-    const [subBlockNode] = await childrenOf(provider, blockNode, 'the block');
-    const cellNode = await soleChild(provider, subBlockNode, 'the sub-block');
-    await provider.getChildren(cellNode);
-
-    expect(repo.calls).toContainEqual({ method: 'getWorldspaceBlocks', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'wrld:M.esp'] });
-    expect(openedArguments(present(topCellNode, 'the top cell'))).toMatchObject([{ argument: { plugin: { name: 'Shared.esp', origin: 'ModB' } } }]);
-    expect(openedArguments(cellNode)).toMatchObject([{ argument: { plugin: { name: 'Shared.esp', origin: 'ModB' } } }]);
-    expect(repo.calls).toContainEqual({ method: 'getCellChildRecords', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'c:M.esp'] });
-  });
-
-  it('fetchCellGroups: asks the repository for the node\'s own plugin, and its PlacedGroup/Placed children carry that origin forward', async () => {
-    const repo = makeClient();
-    repo.setQueryAnswer('getCellChildRecords', {
-      persistent: [{ workingTreeState: 'None', formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
-      temporary: [],
-    });
-    const provider = new RecordBrowser(repo);
-    const node = await interiorCellRow(repo, provider, interiorCell('c:M.esp', 'TheCell'), { name: 'Shared.esp', origin: 'ModB' });
-
-    const groupNode = await soleChild(provider, node, 'the cell');
-    const placedNode = await soleChild(provider, groupNode, 'the placed group');
-
-    expect(repo.calls).toContainEqual({ method: 'getCellChildRecords', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'c:M.esp'] });
-    expect(openedArguments(placedNode)).toMatchObject([{ argument: { plugin: { name: 'Shared.esp', origin: 'ModB' } } }]);
-  });
-
-  it('fetchInteriorCells: asks the repository for the node\'s own plugin, and the rows it builds carry that origin forward', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'cell', count: 1 }] });
-    repo.setQueryAnswer('getInteriorCells', oneSubBlock([interiorCell('i:M.esp', 'IntCell', { hasChildren: true })]));
-    const provider = new RecordBrowser(repo);
-    const node = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModB' });
-
-    const [cellNode] = await interiorCellsBeneath(provider, node);
-    await provider.getChildren(present(cellNode, 'the sole cell'));
-
-    expect(repo.calls).toContainEqual({ method: 'getInteriorCells', args: [{ name: 'Shared.esp', origin: 'ModB' }] });
-    expect(openedArguments(present(cellNode, 'the sole cell'))).toMatchObject([{ argument: { plugin: { name: 'Shared.esp', origin: 'ModB' } } }]);
-    expect(repo.calls).toContainEqual({ method: 'getCellChildRecords', args: [{ name: 'Shared.esp', origin: 'ModB' }, 'i:M.esp'] });
+    expect(repo.calls).toEqual(expect.arrayContaining(calls));
+    expect(opened.map(openedArguments)).toEqual(openedArgs);
   });
 
   it('caches each plugin\'s cell references separately, so one plugin\'s page is never served for the other', async () => {
@@ -829,7 +874,7 @@ describe('RecordBrowser spatial origin threading', () => {
 
   it('a cell row and a placed-reference row of a shared filename, expanded concurrently, read their own plugin\'s tracked/read-only facts, not the other plugin\'s', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }] });
-    repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
+    repo.setQueryAnswer('getWorldspaces', [WORLDSPACE_OF_M]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: true, fullName: null, hasParseFailure: false }],
       blocks: [],

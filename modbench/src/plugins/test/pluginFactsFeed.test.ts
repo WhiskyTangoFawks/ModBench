@@ -132,6 +132,20 @@ describe('PluginFactsFeed', () => {
     expect(diagnoses.items).toEqual([]);
   });
 
+  it('keeps the last diagnoses on the rows when the next scan fails', async () => {
+    const { feed, client, logged } = feedOver();
+    client.setQueryAnswer('getPlugins', [held()]);
+    client.setQueryAnswer('getDiagnoses', [diagnosis('first')]);
+    await feed.reconciled([]);
+    client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: '503' });
+    const warned = logged.next();
+
+    await feed.reconciled([]);
+    await warned;
+
+    expect(feed.rows.description(A)).toBe('malformed');
+  });
+
   it('drops a scan answer that lands after a newer event', async () => {
     const { feed, client, diagnoses } = feedOver();
     const slowScan = deferred<PluginDiagnosisReport[]>();
