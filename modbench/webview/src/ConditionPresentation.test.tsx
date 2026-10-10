@@ -412,6 +412,55 @@ describe('collapsedReading of a condition', () => {
   });
 });
 
+describe('collapsedReading of a condition whose function is its kind', () => {
+  const kinds = [
+    ['GetStageDoneConditionData', 'GetStageDone'], ['GetIsIDConditionData', 'GetIsID'], ['GetEventDataConditionData', 'GetEventData'],
+  ];
+  const own = (name: string, type: FieldMetadata['type'], kind: string, extra: Partial<FieldMetadata> = {}) =>
+    leaf(name, type, { allowsNull: true, variants: { [kind]: leaf(name, type, extra) } });
+  const kindPerFunctionData = fieldMeta({
+    name: 'Data', type: 'struct', leafTypeName: 'ConditionData',
+    fields: [
+      leaf('RunOnType', 'enum', { default: 'Subject', enumMembers: [{ value: 'Subject', bitValue: null, label: null }] }),
+      leaf('UseAliases', 'bool'),
+      own('Quest', 'formKey', 'GetStageDoneConditionData', { indexWhen: ['UseAliases'] }),
+      own('Stage', 'int', 'GetStageDoneConditionData'),
+      own('Object', 'formKey', 'GetIsIDConditionData', { indexWhen: ['UseAliases'] }),
+      own('Function', 'enum', 'GetEventDataConditionData', { enumMembers: [{ value: 'GetValue', bitValue: null, label: null }] }),
+      own('VariableName', 'string', 'GetEventDataConditionData'),
+      leaf('MutagenObjectType', 'enum', {
+        displayLabel: 'Function', isDiscriminator: true,
+        enumMembers: kinds.map(([value, label]) => ({ value: value ?? '', bitValue: null, label: label ?? null })),
+      }),
+    ],
+  });
+  const meta: FieldMetadata = {
+    ...conditionsMeta,
+    elementType: { ...conditionsElementType, fields: conditionsElementTypeFields.map(f => (f.name === 'Data' ? kindPerFunctionData : f)) },
+  };
+  const condition = (data: Condition): Condition => ({
+    MutagenObjectType: 'ConditionFloat', CompareOperator: 'EqualTo', Flags: [], ComparisonValue: 1, Data: data,
+  });
+  const readingOf = (data: Condition, resolutions: Record<string, string> = {}) => {
+    const [conditionDiff] = required(oneColumn([condition(data)], resolutions, meta).diffs[0]?.children, 'the condition rows');
+    return collapsedReading(required(conditionDiff, 'the condition row'), meta.elementType ?? undefined, PLUGIN, true).text;
+  };
+
+  it('names the function as its kind reads, then the parameters that kind holds', () => {
+    expect(readingOf({ MutagenObjectType: 'GetStageDoneConditionData', Quest: '00000F1E:MyMod.esp', Stage: 10 }, { '00000F1E:MyMod.esp': 'MyQuest' }))
+      .toBe('Subject.GetStageDone(MyQuest, 10) = 1.000000');
+  });
+
+  it('reads a parameter that names an alias as its number', () => {
+    expect(readingOf({ MutagenObjectType: 'GetIsIDConditionData', UseAliases: true, Object: 3 })).toBe('Subject.GetIsID(3) = 1.000000');
+  });
+
+  it('reads a kind\'s own Function member as a parameter, leaving out a string', () => {
+    expect(readingOf({ MutagenObjectType: 'GetEventDataConditionData', Function: 'GetValue', VariableName: 'x' }))
+      .toBe('Subject.GetEventData(GetValue) = 1.000000');
+  });
+});
+
 describe('a condition shows one row per parameter slot in use', () => {
   it('a record-slot function renders ParameterOneRecord and neither of its aliases', async () => {
     currentCompare = oneColumn([documentSpelledCondition({}, {

@@ -13,15 +13,6 @@ internal static class Fallout4ConditionAnnotations
             name => name,
             name => (IReadOnlyList<string>)SlotsUsedBy(Enum.Parse<Condition.Function>(name)));
 
-    /// <summary>The <c>Reference</c> member carries a target only for the one Run On value that
-    /// names one; under every other value it is unread, and xEdit shows no reference row.</summary>
-    public static IReadOnlyDictionary<string, IReadOnlyList<string>> RunOnReference { get; } =
-        Enum.GetNames<Condition.RunOnType>().ToDictionary(
-            name => name,
-            name => name == nameof(Condition.RunOnType.Reference)
-                ? (IReadOnlyList<string>)[nameof(ConditionData.Reference)]
-                : []);
-
     private static List<string> SlotsUsedBy(Condition.Function function)
     {
         var (one, two, _) = Condition.GetParameterTypes(function);

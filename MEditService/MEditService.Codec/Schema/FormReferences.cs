@@ -106,7 +106,7 @@ public static class FormReferences
         HashSet<string>? idle = null;
         foreach (var governing in fields)
         {
-            if (governing.SiblingsInUse is not { } byValue) continue;
+            if (DocumentNodes.VariantFor(governing, obj).SiblingsInUse is not { } byValue) continue;
 
             var inUse = obj.TryGetProperty(governing.Name, out var current)
                 && current.ValueKind == JsonValueKind.String

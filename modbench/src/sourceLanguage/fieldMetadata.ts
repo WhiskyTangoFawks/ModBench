@@ -1,5 +1,6 @@
 import type { CompareResult } from '../client';
 import type { Segment } from './sourceText';
+import { shapeUnderOwner } from '../wire/indexShape';
 
 type Field = CompareResult['overrides'][number]['fields'][number];
 type FieldMetadata = Field['metadata'];
@@ -11,7 +12,8 @@ function memberOf(owner: Pick<FieldMetadata, 'fields'>, ownerValue: unknown, nam
   const member = owner.fields?.find((candidate) => candidate.name === name);
   const discriminator = owner.fields?.find((candidate) => candidate.isDiscriminator)?.name;
   const leaf = discriminator && valueAt(ownerValue, [discriminator]);
-  return (typeof leaf === 'string' && member?.variants?.[leaf]) || member;
+  const shape = (typeof leaf === 'string' && member?.variants?.[leaf]) || member;
+  return shape && shapeUnderOwner(shape, ownerValue);
 }
 
 /** The metadata of the field at `path` of a record, from the fields mEdit answers for it; an object's

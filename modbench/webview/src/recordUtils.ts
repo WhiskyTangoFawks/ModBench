@@ -1,6 +1,7 @@
 import { recordLabel as wireRecordLabel } from '../../src/wire/recordLabel';
 import { isString } from '../../src/wire/messages';
 import { isFieldType } from '../../src/wire/fieldType';
+import { shapeUnderOwner } from '../../src/wire/indexShape';
 import type { ColumnKey, CompareOverride, FieldMetadata, FieldValue, PathHop, PathSegment } from './types';
 import { copyColumnKey } from '../../src/wire/columnKey';
 import { pluginAddressOf } from '../../src/wire/pluginAddress';
@@ -191,13 +192,14 @@ export function declaresMember(meta: FieldMetadata, owner: unknown, ownerMeta: F
 export const discriminatorOf = (meta: FieldMetadata | undefined): string | undefined =>
   meta?.fields?.find(f => f.isDiscriminator)?.name;
 
-/** The shape a member has under the object holding it: its own, or the variant the object's
- *  discriminator names when the member's type varies by leaf. */
+/** The shape a member has under the object holding it: the variant its discriminator names, and
+ *  a number where the object says a link names an alias or package data. */
 export function variantFor(meta: FieldMetadata, owner: unknown, ownerMeta: FieldMetadata | undefined): FieldMetadata {
+  if (owner == null || typeof owner !== 'object') return meta;
+  const held = owner as Record<string, unknown>;
   const discriminator = discriminatorOf(ownerMeta);
-  if (!meta.variants || discriminator == null || owner == null || typeof owner !== 'object') return meta;
-  const leaf = (owner as Record<string, unknown>)[discriminator];
-  return isString(leaf) ? meta.variants[leaf] ?? meta : meta;
+  const leaf = discriminator == null ? undefined : held[discriminator];
+  return shapeUnderOwner(meta.variants && isString(leaf) ? meta.variants[leaf] ?? meta : meta, owner);
 }
 
 // `fieldMetaMap[rootField].elementType` is the right element type only when the array is the

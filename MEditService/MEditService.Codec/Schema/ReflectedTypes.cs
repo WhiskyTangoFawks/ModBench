@@ -56,6 +56,9 @@ internal static class ReflectedTypes
     internal static bool IsFormLink(Type type) =>
         typeof(IFormLinkGetter).IsAssignableFrom(type);
 
+    internal static bool IsFormLinkOrIndex(Type type) =>
+        type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IFormLinkOrIndexGetter<>);
+
     // A getter interface exposes a non-nullable FormLink as the base IFormLinkGetter<T>; only an
     // explicitly nullable one gets IFormLinkNullableGetter<T>, the one type-level signal to trust.
     internal static bool IsNullableFormLink(Type type) =>
