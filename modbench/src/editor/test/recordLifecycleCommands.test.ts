@@ -34,7 +34,8 @@ import {
 } from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { RecordWrite } from '../../drivingLib/writingGesture';
-import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from '../referencedByList';
+import { readReferencedBy } from '../referencedByList';
+import { SILENT_LOG } from '../../ports/log';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -54,18 +55,29 @@ const selections = { focused: () => viewSelection, of: (view: string) => selecti
 const RECORD_IDENTITY = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
 const RECORD_NODE = carrying(RECORD_IDENTITY);
 
-function recordingWrite(): { write: RecordWrite; writing: string[]; viewsAskedFor: (string | undefined)[] } {
+function recordingWrite(): { write: RecordWrite; writing: string[] } {
   const writing: string[] = [];
-  const viewsAskedFor: (string | undefined)[] = [];
   return {
-    writing, viewsAskedFor,
-    write: async (command, invokedFrom) => {
-      viewsAskedFor.push(invokedFrom);
+    writing,
+    write: async (command) => {
       writing.push('opens');
       await command();
       writing.push('ends');
     },
   };
+}
+
+async function referencedByCopy(record: RecordAddress, editorId: string) {
+  const client = new InMemoryMEditClient();
+  client.setQueryAnswer('getChildRecordTypes', []);
+  client.setQueryAnswer('getReferences', [{
+    formKey: record.formKey, plugin: record.plugin, origin: record.origin, fieldPath: 'Keywords[0]',
+    recordType: 'npc_', recordTypeName: 'Non-Player Character', editorId,
+  }]);
+  const { provider } = await readReferencedBy(client, SILENT_LOG, '000001:A.esp', 'a list', () => ({ tracked: true, editable: true }));
+  const [referrer] = provider.getChildren();
+  const [copy] = provider.getChildren(present(referrer, 'the referrer'));
+  return present(copy, 'its plugin copy');
 }
 
 const changes = (record: RecordAddress) => ({ record, moves: [], deletions: [], documents: [] });
@@ -74,11 +86,11 @@ describe('registerRecordLifecycleCommands', () => {
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    const { write, writing, viewsAskedFor } = recordingWrite();
+    const { write, writing } = recordingWrite();
     const serially = vi.fn();
     const source = { applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve()), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
     registerRecordLifecycleCommands(client, reporter, ask, selections, write, source);
-    return { reporter, ask, writing, viewsAskedFor, source };
+    return { reporter, ask, writing, source };
   }
 
   describe('from the palette, handed no row, taking the Plugins selection', () => {
@@ -165,7 +177,7 @@ describe('registerRecordLifecycleCommands', () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('getDeleteChanges', { applied: [SECOND].map(changes), refused: [] });
       const { ask } = invoke(client, 'Delete');
-      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'TestNPC', { name: SECOND.plugin, origin: SECOND.origin }, []);
+      const holder = await referencedByCopy(SECOND, 'TestNPC');
 
       await deleteRecords(holder);
 
@@ -365,18 +377,6 @@ describe('registerRecordLifecycleCommands', () => {
       expect(writing).toEqual(['opens', 'delete', 'ends']);
     });
 
-    it('runs under Referenced By\'s bar when the rows are Referenced By\'s, and under the default bar for a Plugins row', async () => {
-      const client = new InMemoryMEditClient();
-      client.setCommandResult('getDeleteChanges', { applied: [].map(changes), refused: [] });
-      const { viewsAskedFor } = invoke(client, 'Delete', 'Delete');
-      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'SecondNpc', { name: 'MyPatch.esp', origin: 'ModA' }, []);
-
-      await deleteRecords(holder);
-      await deleteRecords(SECOND_NODE);
-
-      expect(viewsAskedFor).toEqual([REFERENCED_BY_VIEW, undefined]);
-    });
-
     it('opens no write when the question is declined', async () => {
       const client = new InMemoryMEditClient();
       const { writing } = invoke(client, undefined);
@@ -418,11 +418,11 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    const { write, writing, viewsAskedFor } = recordingWrite();
+    const { write, writing } = recordingWrite();
     const serially = vi.fn();
     const source = { applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve()), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
     registerRecordCopyCommands(client, reporter, ask, selections, write, source);
-    return { reporter, ask, writing, viewsAskedFor, source };
+    return { reporter, ask, writing, source };
   }
 
   const copy = (...args: unknown[]) =>
@@ -711,20 +711,6 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     await copy(RECORD_NODE);
 
     expect(writing).toEqual(['opens', 'copy', 'ends']);
-  });
-
-  it.each(['Override', 'New'] as const)('runs a copy as %s under Referenced By\'s bar when the rows are Referenced By\'s', async (mode) => {
-    const client = new InMemoryMEditClient();
-    destinations(client);
-    client.setCommandResult('getCopyChanges', { applied: [], refused: [] });
-    client.setQueryAnswer('getRecordHolders', []);
-    pick(mode, [PATCH]);
-    const { viewsAskedFor } = invoke(client);
-    const holder = new ReferencedByHolderNode('000001:A.esp', SOURCE.formKey, undefined, { name: 'MyPatch.esp', origin: 'ModA' }, []);
-
-    await copy(holder);
-
-    expect(viewsAskedFor).toEqual([REFERENCED_BY_VIEW]);
   });
 
   it('opens no write when the pick is left with Esc', async () => {

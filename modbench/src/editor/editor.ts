@@ -16,6 +16,7 @@ type EditorDeps = Omit<EditorCommandDeps,
   /** The other views whose selected rows carry a record Argument. */
   recordViewIds: readonly string[];
   locateRecord: LocateRecord;
+  conditionsOf: ReferencedByDeps['conditionsOf'];
 };
 
 export interface Editor extends vscode.Disposable {
@@ -38,6 +39,7 @@ export function createEditor(deps: EditorDeps): Editor {
   own(registerReferencedBy({
     client: deps.meditClient, log: deps.outputChannel, reporter: deps.reporterFor('referencedBy'),
     locateRecord: deps.locateRecord, recordInFocus: () => tabs.activeTab()?.formKey,
+    conditionsOf: deps.conditionsOf,
   }));
 
   registerEditorCommands({
