@@ -111,9 +111,9 @@ internal sealed class Indexer : IDisposable
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
     /// the Index has opened no store to read.</summary>
-    public IRecordReads RequireReads() => RequireScope().Store.Reads;
+    public RelationReads RequireReads() => RequireScope().Store.Reads;
 
-    public IRecordReads RequireWholeSetReads()
+    public RelationReads RequireWholeSetReads()
     {
         var status = Status;
         if (status.State == LoadOrderState.Ready) return RequireReads();

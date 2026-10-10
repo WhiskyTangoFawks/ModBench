@@ -11,9 +11,7 @@ namespace MEditService.Index;
 /// <c>RecordData.json</c> as its body.</summary>
 internal static class HeaderIndexer
 {
-    /// <summary>Appends the header row and returns its <c>form_lookup</c> row rather than writing it,
-    /// so the one-lookup-row-per-record-row invariant is a property of a single flush.</summary>
-    public static (string FormKey, string RecordType, string? EditorId) Index(
+    public static void Index(
         PluginDocument header, string plugin, string origin, DuckDBAppender documentAppender)
     {
         var row = documentAppender.CreateRow();
@@ -27,7 +25,5 @@ internal static class HeaderIndexer
         row.AppendValue(SourceRepository.ContentStamp(header.Text));
         row.AppendNullValue();    // parse_diagnosis: the header is written from what already parsed
         row.EndRow();
-
-        return (header.FormKey, PluginHeader.RecordType, null);
     }
 }

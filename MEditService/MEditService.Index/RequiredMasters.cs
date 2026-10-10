@@ -15,7 +15,7 @@ internal static class RequiredMasters
     private const string InLoadOrder = $"""
         WITH linked AS (
             SELECT split_part(form_key, ':', 2) AS master
-            FROM {TableDdlBuilder.MirrorSchema}.form_lookup WHERE plugin = $1 AND origin = $2
+            FROM {TableDdlBuilder.MirrorSchema}.records WHERE plugin = $1 AND origin = $2
             UNION ALL
             SELECT split_part(target_form_key, ':', 2)
             FROM {TableDdlBuilder.MirrorSchema}.form_references WHERE source_plugin = $1 AND source_origin = $2),

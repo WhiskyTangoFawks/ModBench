@@ -48,7 +48,6 @@ internal sealed class PluginIngest
         using var documentAppender = _connection.CreateAppender("mirror", "records");
 
         var refs = new List<FormReferenceRow>();
-        var lookupRows = new List<(string FormKey, string RecordType, string? EditorId)>();
         var containerChildRows = new List<ContainerChildRow>();
         var placementRows = new List<PlacementRow>();
         var cellLocationRows = new List<CellLocationRow>();
@@ -59,17 +58,15 @@ internal sealed class PluginIngest
         {
             AppendBatch(
                 batch, schemas, plugin, origin, documentAppender, counters,
-                refs, lookupRows, containerChildRows, placementRows, cellLocationRows);
+                refs, containerChildRows, placementRows, cellLocationRows);
         }
         var documentsMs = phaseTimer.ElapsedMilliseconds;
 
         phaseTimer.Restart();
         WritePlacement(plugin, origin, placementRows, cellLocationRows);
 
-        // Before the form_lookup flush, so the header's row and lookup row go through the same two
-        // flushes as every record's: one lookup row per record row, by construction.
         if (schemas.ContainsKey(PluginHeader.RecordType))
-            lookupRows.Add(HeaderIndexer.Index(documents.Header, plugin, origin, documentAppender));
+            HeaderIndexer.Index(documents.Header, plugin, origin, documentAppender);
 
         DeleteFormReferencesForPlugin(plugin, origin);
         if (refs.Count > 0)
@@ -77,27 +74,6 @@ internal sealed class PluginIngest
             using var refAppender = _connection.CreateAppender("mirror", "form_references");
             foreach (var r in refs)
                 AppendFormReference(refAppender, r, plugin, origin);
-        }
-
-        // One form_lookup row per indexed record, with no second indexing pass over the
-        // plugin.
-        DeleteExistingForOrigin("form_lookup", plugin, origin);
-        if (lookupRows.Count > 0)
-        {
-            using var lookupAppender = _connection.CreateAppender("mirror", "form_lookup");
-            foreach (var (formKey, recordType, editorId) in lookupRows)
-            {
-                var row = lookupAppender.CreateRow();
-                row.AppendValue(formKey);
-                row.AppendValue(plugin);
-                row.AppendValue(origin);
-                row.AppendValue(recordType);
-                if (editorId is { } eid)
-                    row.AppendValue(eid);
-                else
-                    row.AppendNullValue();
-                row.EndRow();
-            }
         }
 
         DeleteExistingForOrigin("container_child", plugin, origin);
@@ -119,7 +95,6 @@ internal sealed class PluginIngest
     public void DeleteAllRowsFor(string plugin, string origin)
     {
         DeleteExistingForOrigin("records", plugin, origin);
-        DeleteExistingForOrigin("form_lookup", plugin, origin);
         DeleteFormReferencesForPlugin(plugin, origin);
         DeleteExistingForOrigin("placement", plugin, origin);
         DeleteExistingForOrigin("cell_location", plugin, origin);
@@ -141,7 +116,6 @@ internal sealed class PluginIngest
         PluginDocument[] batch, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         string plugin, string origin, DuckDBAppender documentAppender, PhaseCounters counters,
         List<FormReferenceRow> refs,
-        List<(string FormKey, string RecordType, string? EditorId)> lookupRows,
         List<ContainerChildRow> containerChildRows,
         List<PlacementRow> placementRows,
         List<CellLocationRow> cellLocationRows)
@@ -188,7 +162,6 @@ internal sealed class PluginIngest
             containerChildRows.AddRange(p.ChildRows);
             placementRows.AddRange(p.Placements);
             if (p.CellLocation is { } cellLocation) cellLocationRows.Add(cellLocation);
-            lookupRows.Add((p.FormKey, p.RecordType, p.EditorId));
             if (_logger.IsEnabled(LogLevel.Trace))
             {
                 _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",

@@ -44,7 +44,7 @@ internal sealed class Store : IDisposable
         _connection ?? throw new InvalidOperationException("The store is not open.");
 
     /// <summary>Every read the index answers.</summary>
-    public IRecordReads Reads { get; }
+    public RelationReads Reads { get; }
 
     public RecordFilter Filter { get; }
 
@@ -59,7 +59,7 @@ internal sealed class Store : IDisposable
     private WorkingTreeOverlay Overlay =>
         _workingTreeOverlay ?? throw new InvalidOperationException("Call Initialize before using the repository.");
 
-    /// <summary><paramref name="openedPlugins"/> answers <see cref="IRecordReads.OpenedPlugins"/>, as the store
+    /// <summary><paramref name="openedPlugins"/> answers <see cref="RelationReads.OpenedPlugins"/>, as the store
     /// holds no header flag, master list or record count. The gate and the filter outlive the store,
     /// which a rebuild swaps beneath them.</summary>
     public Store(
@@ -643,7 +643,7 @@ internal sealed class Store : IDisposable
         tx.Commit();
         // Per-phase load timing — "documents" spans record enumeration plus every per-record
         // cost (serialize, hash, form/VMAD/condition refs, container children, append); "extracted"
-        // spans placement/header and the form_references/form_lookup/container_child flushes.
+        // spans placement/header and the form_references/container_child flushes.
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug(
@@ -818,9 +818,7 @@ internal sealed class Store : IDisposable
     {
         Execute($"DELETE FROM {TableDdlBuilder.WinnersRelation}");
 
-        // form_lookup gets no branch: ingest keeps one lookup row per `records` row, so `records`'
-        // winners are form_lookup's. QUALIFY and the (plugin, origin) tiebreak make a load_order_idx
-        // tie deterministic.
+        // QUALIFY and the (plugin, origin) tiebreak make a load_order_idx tie deterministic.
         Execute($"""
             INSERT INTO {TableDdlBuilder.WinnersRelation} (form_key, plugin, origin)
             SELECT r.form_key, r.plugin, r.origin

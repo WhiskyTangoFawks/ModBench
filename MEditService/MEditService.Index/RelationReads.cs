@@ -9,16 +9,22 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>Every read the index answers, over the Store's relations (ADR-0010).</summary>
+/// <summary>Every read the index answers, over the Store's relations (ADR-0010). A record read sees
+/// only the active plugins (ADR-0012), unless it names one plugin and returns that plugin's copy.</summary>
 internal sealed class RelationReads(
-    Store store, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed) : IRecordReads
+    Store store, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed)
 {
+    /// <summary>What the Index read out of each plugin it has open, keyed by identity. A plugin it has
+    /// not reached, or could not open, is absent, so this is also "which plugins are open?".
+    /// </summary>
     public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => openedPlugins();
 
     // A SELECT COUNT(*) always answers exactly one row with a non-null count.
     private static long ExecuteCount(DuckDBCommand cmd) =>
         (long)(cmd.ExecuteScalar() ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
 
+    /// <summary>The winning override of <paramref name="formKey"/>, across every active
+    /// plugin. Null if the FormKey isn't indexed.</summary>
     public RecordDocument? GetDocument(string formKey)
     {
         using var connection = store.OpenReadConnection();
@@ -26,6 +32,8 @@ internal sealed class RelationReads(
         return tableName == null ? null : ReadDocument(connection, tableName, formKey, plugin: null, origin: null, winnerOnly: true);
     }
 
+    /// <summary>One specific plugin's copy of <paramref name="formKey"/>, winner or not. Null if
+    /// that plugin never indexed this FormKey.</summary>
     public RecordDocument? GetDocument(string formKey, PluginAddress plugin)
     {
         using var connection = store.OpenReadConnection();
@@ -33,6 +41,9 @@ internal sealed class RelationReads(
         return tableName == null ? null : ReadDocument(connection, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
     }
 
+    /// <summary>The copy <paramref name="plugin"/> would hold were its document <paramref name="text"/>,
+    /// active or not. Null if no plugin indexes the FormKey. Text that is no record document gives
+    /// a copy with a <c>ParseDiagnosis</c>.</summary>
     public RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text)
     {
         using var connection = store.OpenReadConnection();
@@ -44,6 +55,8 @@ internal sealed class RelationReads(
             store.Schemas[tableName], LinkResolution.ForLinksOf(connection, formKey, Resolve), parseDiagnosis);
     }
 
+    /// <summary>What <paramref name="plugin"/> holds <paramref name="formKey"/> as, and its document as
+    /// the index stores it, active or not. Null if that plugin never indexed it.</summary>
     public (RecordIdentity Identity, string Body)? GetCopyText(string formKey, PluginAddress plugin)
     {
         using var connection = store.OpenReadConnection();
@@ -55,6 +68,7 @@ internal sealed class RelationReads(
         return (new RecordIdentity(formKey, reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1)), reader.GetString(2));
     }
 
+    /// <summary>Whether any registered plugin, active or not, holds <paramref name="formKey"/>.</summary>
     public bool IsHeldByAnyPlugin(string formKey)
     {
         using var connection = store.OpenReadConnection();
@@ -65,6 +79,8 @@ internal sealed class RelationReads(
         return reader.Read();
     }
 
+    /// <summary>Every plugin's copy of <paramref name="formKey"/>, in load order. Null if the
+    /// FormKey isn't indexed anywhere.</summary>
     public OverrideStack? GetOverrideStack(string formKey)
     {
         using var connection = store.OpenReadConnection();
@@ -162,9 +178,8 @@ internal sealed class RelationReads(
         return conditions.Count == 0 ? "" : "WHERE " + string.Join(" AND ", conditions);
     }
 
-    // The filter narrows counts the same way it narrows listings (invariant: SetFilter affects
-    // Search/counts/plugin-highlight, never a point read), routed through the same BuildWhere
-    // every other filterable query here uses.
+    /// <summary>Row count per record type for one plugin, narrowed by the filter as Search is
+    /// (SetFilter never affects a point read).</summary>
     public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin)
     {
         using var connection = store.OpenReadConnection();
@@ -272,6 +287,9 @@ internal sealed class RelationReads(
         return LinkResolution.Resolve(connection, formKey);
     }
 
+    /// <summary>One response's FormKey → (record type, EditorID) lookup against the winning override,
+    /// about <paramref name="formKey"/>, each distinct FormKey asked once. The store resolves the
+    /// links its copies carry in one query up front.</summary>
     public Func<string, RecordLookupEntry?> LinkResolver(string formKey)
     {
         using var connection = store.OpenReadConnection();
@@ -289,7 +307,7 @@ internal sealed class RelationReads(
             {TableDdlBuilder.RegisteredJoin("fr", "source_plugin", "source_origin")}
             WHERE NOT EXISTS (SELECT 1 FROM form_lookup l WHERE l.form_key = fr.target_form_key)
               AND NOT EXISTS (
-                  SELECT 1 FROM {TableDdlBuilder.MirrorSchema}.form_lookup own
+                  SELECT 1 FROM {TableDdlBuilder.MirrorSchema}.records own
                   WHERE own.form_key = fr.target_form_key
                     AND own.plugin = fr.source_plugin AND own.origin = fr.source_origin)
             ORDER BY fr.source_plugin, fr.source_origin, fr.source_form_key, fr.field_path
@@ -309,6 +327,9 @@ internal sealed class RelationReads(
         return missing;
     }
 
+    /// <summary>Every link an active plugin's record carries to a FormKey no active plugin holds
+    /// (engine-defined FormIds exempt), with its referrer's file in the source
+    /// <paramref name="sourceOf"/> answers.</summary>
     public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(
         Func<PluginAddress, ISourceRepositoryReads?> sourceOf)
     {
@@ -342,12 +363,16 @@ internal sealed class RelationReads(
           ON d.plugin = fr.source_plugin AND d.origin = fr.source_origin
         """;
 
+    /// <summary>The same read over the active plugins and the inactive tracked ones (ADR-0012).</summary>
     public IReadOnlyList<ReferenceRow> GetReferencedByInActiveOrTrackedPlugins(string targetFormKey)
     {
         using var connection = store.OpenReadConnection();
         return GetReferences(connection, ActiveOrTrackedReferrers, $"AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')", targetFormKey);
     }
 
+    /// <summary>Every plugin at least one filtered record matches, restricted to
+    /// <paramref name="tableNames"/> (plugins.md). Empty when no filter is active: every plugin
+    /// already has matches.</summary>
     public IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
     {
         var types = tableNames.ToList();
@@ -370,6 +395,8 @@ internal sealed class RelationReads(
         return result;
     }
 
+    /// <summary>Every Kind B diagnosis the registered plugins' binaries prove, projected when each
+    /// binary was hashed and gone with its rows: the malformed-plugin read.</summary>
     public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses()
     {
         using var connection = store.OpenReadConnection();
@@ -395,6 +422,7 @@ internal sealed class RelationReads(
         return rows;
     }
 
+    /// <summary>What each registered plugin's rows were derived from. A plugin with no rows is absent.</summary>
     public IReadOnlyDictionary<PluginAddress, DerivedFrom> GetDerivations()
     {
         using var connection = store.OpenReadConnection();
@@ -408,8 +436,8 @@ internal sealed class RelationReads(
         return derivations;
     }
 
-    /// <summary>Both halves of "could not be read": a record whose own document failed, and a
-    /// record type whose enumeration did.</summary>
+    /// <summary>Every plugin holding a record whose document failed or a record type whose
+    /// enumeration did: the tree's "has a failure below it" for a plugin row.</summary>
     public IReadOnlySet<PluginAddress> GetPluginsWithParseFailures()
     {
         using var connection = store.OpenReadConnection();
@@ -429,6 +457,8 @@ internal sealed class RelationReads(
         return result;
     }
 
+    // Worldspace tree reads (plugins.md, The tree, story 6) from the placement / cell_location side
+    // tables, in the order xEdit's navigator lists them.
     public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) =>
         CellLocations(plugin, "cl.parent_worldspace = $3", "cl.block_x, cl.block_y, cl.sub_x, cl.sub_y", [worldspaceFormKey]);
 
@@ -543,12 +573,17 @@ internal sealed class RelationReads(
         return new CellChildRecords(persistent, temporary);
     }
 
+    /// <summary>One cell's own structural parentage, or null when it isn't a cell this plugin
+    /// indexed. Ref-invariant: no gesture moves a cell.</summary>
     public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey)
     {
         using var connection = store.OpenReadConnection();
         return GetCellLocation(connection, cellFormKey, plugin.Name, plugin.Origin);
     }
 
+    /// <summary><paramref name="parentFormKey"/>'s children among the relationships the placement
+    /// reads don't carry (see <see cref="ContainerChildRow"/>), in FormID order; empty when it has
+    /// none. Ref-invariant by construction.</summary>
     public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey)
     {
         using var connection = store.OpenReadConnection();
