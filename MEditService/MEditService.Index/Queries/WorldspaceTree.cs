@@ -10,7 +10,7 @@ internal static class WorldspaceTree
 {
     private const int WorldspaceListLimit = 5000;
 
-    public static IReadOnlyList<WorldspaceSummary> WorldspacesOf(IRecordReads repo, PluginAddress plugin, GameRelease release)
+    public static IReadOnlyList<WorldspaceSummary> WorldspacesOf(RelationReads repo, PluginAddress plugin, GameRelease release)
     {
         // Without an origin filter, two same-filename plugins' worldspace lists silently merge
         // into one under this plugin name.

@@ -22,7 +22,7 @@ internal static class ContainerChildren
         ["Responses"] = "info",
     };
 
-    public static IReadOnlyList<ContainerChildSummary> Of(IRecordReads repo, PluginAddress plugin, string parentFormKey, GameRelease release)
+    public static IReadOnlyList<ContainerChildSummary> Of(RelationReads repo, PluginAddress plugin, string parentFormKey, GameRelease release)
     {
         var rows = repo.GetContainerChildren(plugin, parentFormKey)
             .Where(r => SlotRecordTypes.ContainsKey(r.SlotName))
