@@ -18,17 +18,21 @@ internal static class TestEditService
     /// so two holders get two independent write sides.</summary>
     internal static IServiceProvider Over(
         LoadOrderHolder holder, Action<ILoggingBuilder>? logging = null, IPluginAdapter? adapter = null,
-        INotificationPublisher? notifications = null, UnsavedDocuments? unsaved = null) =>
-        new ServiceCollection()
+        INotificationPublisher? notifications = null, UnsavedDocuments? unsaved = null, ISourceAdapter? source = null)
+    {
+        var documents = unsaved ?? new UnsavedDocuments();
+        return new ServiceCollection()
             .AddLogging(logging ?? (_ => { }))
             .AddSingleton(holder)
-            .AddSingleton(unsaved ?? new UnsavedDocuments())
+            .AddSingleton(documents)
+            .AddSingleton(source ?? new GitSourceAdapter(documents))
             .AddSingleton(TimeProvider.System)
             .AddSingleton(notifications ?? new InMemoryNotificationPublisher())
             .AddSingleton(adapter ?? TestAdapters.Mutagen())
             .AddSingleton(SharedSchemaReflector.Instance)
             .AddCommandHandlers()
             .BuildServiceProvider();
+    }
 
     internal static TestEditor EditHandler(LoadOrderHolder holder) =>
         new(Over(holder).GetRequiredService<EditRecordChangesHandler>());
@@ -46,8 +50,9 @@ internal static class TestEditService
         Over(holder, adapter: adapter).GetRequiredService<CompilePluginHandler>();
 
     internal static TrackHandler TrackHandler(
-        LoadOrderHolder holder, IPluginAdapter? adapter = null, INotificationPublisher? notifications = null) =>
-        Over(holder, adapter: adapter, notifications: notifications).GetRequiredService<TrackHandler>();
+        LoadOrderHolder holder, IPluginAdapter? adapter = null, INotificationPublisher? notifications = null,
+        ISourceAdapter? source = null) =>
+        Over(holder, adapter: adapter, notifications: notifications, source: source).GetRequiredService<TrackHandler>();
 
     internal static DecompilePluginHandler DecompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<DecompilePluginHandler>();

@@ -33,4 +33,7 @@ public enum DecompileRefusal
 
     /// <summary>git is not on PATH (ADR-0007).</summary>
     GitUnavailable,
+
+    /// <summary>No load order has been received, so the gesture has nothing to act on.</summary>
+    NoLoadOrder,
 }

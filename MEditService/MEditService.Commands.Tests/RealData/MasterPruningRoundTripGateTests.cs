@@ -1,6 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -20,7 +19,7 @@ public sealed class MasterPruningRoundTripGateTests
 
         await scratch.TrackAsync();
 
-        Assert.True(SourceRepository.IsTracked(scratch.ModFolder));
+        Assert.True(TestAdapters.Source().IsTracked(scratch.ModFolder));
     }
 
     [Fact]
@@ -37,7 +36,7 @@ public sealed class MasterPruningRoundTripGateTests
         Assert.Contains(StructListLinkPlugin.QuestEditorId, result.Message);
         Assert.Contains(StructListLinkPlugin.Master, result.Message);
         Assert.Contains("Mutagen #688", result.Message);
-        Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
+        Assert.False(TestAdapters.Source().IsTracked(scratch.ModFolder));
     }
 
     private sealed class PrunedMasterScratch : IDisposable

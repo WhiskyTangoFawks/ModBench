@@ -30,7 +30,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private SourceRepository Repository => SourceRepository.Over(TestMod.In(_modFolder), GameRelease.Fallout4);
+    private ISourceRepository Repository => TestAdapters.Source().OverFolder(TestMod.In(_modFolder), GameRelease.Fallout4);
 
     private RegisteredPlugin Registered(PluginAddress plugin) =>
         new(plugin.Name, plugin.Origin, "", TestMod.In(_modFolder), Line: null);
@@ -38,7 +38,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     [Fact]
     public void SourceReads_ATreeItsFolderSpellsInAnotherCase_IsTrue()
     {
-        Assert.True(SourceRepository.SourceReads(Registered(Recased)));
+        Assert.True(TestAdapters.Source().SourceReads(Registered(Recased)));
     }
 
     [PosixFact]
@@ -48,7 +48,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         FileModes.Set(sources, "000");
         try
         {
-            Assert.False(SourceRepository.SourceReads(Registered(AsTreeNamesIt)));
+            Assert.False(TestAdapters.Source().SourceReads(Registered(AsTreeNamesIt)));
         }
         finally
         {
@@ -63,7 +63,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Directory.Delete(sources, recursive: true);
         File.WriteAllText(sources, "");
 
-        Assert.False(SourceRepository.SourceReads(Registered(AsTreeNamesIt)));
+        Assert.False(TestAdapters.Source().SourceReads(Registered(AsTreeNamesIt)));
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         Repository.SaveChanges(SourceAnswer.Of(changes)).Wrote();
 
         Assert.Equal(2, TreeDocuments.Of(Repository, renamed).Count);
-        Assert.False(SourceRepository.SourceReads(Registered(AsTreeNamesIt)));
+        Assert.False(TestAdapters.Source().SourceReads(Registered(AsTreeNamesIt)));
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     {
         MakeTwinOfTheTreeIn(Recased.Name);
 
-        Assert.True(SourceRepository.SourceReads(Registered(AsTreeNamesIt)));
+        Assert.True(TestAdapters.Source().SourceReads(Registered(AsTreeNamesIt)));
         Assert.Equal([HeaderBody, NpcBody], TreeDocuments.Of(Repository, AsTreeNamesIt).Select(document => document.Body));
     }
 
@@ -169,7 +169,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     {
         MakeTwinOfTheTreeIn(Recased.Name);
 
-        Assert.False(SourceRepository.SourceReads(Registered(new PluginAddress("fixture.esp", TestMod.Name))));
+        Assert.False(TestAdapters.Source().SourceReads(Registered(new PluginAddress("fixture.esp", TestMod.Name))));
     }
 
     [PosixFact]

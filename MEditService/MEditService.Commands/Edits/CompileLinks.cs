@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands.Edits;
 
 internal sealed record LinkCheckScope(
-    PluginAddress Address, RegisteredPlugin Registered, LoadOrderSnapshot LoadOrder, SourceRepository Repository);
+    PluginAddress Address, RegisteredPlugin Registered, LoadOrderSnapshot LoadOrder, ISourceRepository Repository);
 
 internal sealed record SourceRecord(
     string RecordType, RecordTableSchema Schema, PluginDocument Document, string? EditorId);
@@ -79,13 +79,13 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
 
     // A plugin-level problem is the header record's: it is the one source unit that stands for the
     // whole plugin, so the Problems entry lands on a file the author can open.
-    internal static CompileDiagnostic PluginDiagnostic(PluginAddress plugin, SourceRepository repository, string message)
+    internal static CompileDiagnostic PluginDiagnostic(PluginAddress plugin, ISourceRepository repository, string message)
     {
         var header = PluginHeader.IdentityOf(plugin.Name);
         return new(header.FormKey, PathOf(repository, plugin, header), message);
     }
 
-    private static string PathOf(SourceRepository repository, PluginAddress plugin, RecordIdentity identity) =>
+    private static string PathOf(ISourceRepository repository, PluginAddress plugin, RecordIdentity identity) =>
         repository.RelativePathOf(plugin, identity).Holds(out var path, out var failure) && path is not null
             ? path
             : throw new InvalidOperationException(

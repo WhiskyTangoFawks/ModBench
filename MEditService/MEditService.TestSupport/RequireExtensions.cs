@@ -55,19 +55,19 @@ public static class RequireExtensions
         failure ?? throw new InvalidOperationException("Expected the source write to answer a failure here.");
 
     /// <summary>Saves the changes that put the document in the tree, or answers why the repository answered none.</summary>
-    public static SourceFailure? Put(this SourceRepository repository, PluginAddress plugin, SourceDocument document) =>
+    public static SourceFailure? Put(this ISourceRepository repository, PluginAddress plugin, SourceDocument document) =>
         repository.SaveChanges(repository.ChangesToPut(plugin, document));
 
     /// <summary>Saves the changes that take the record out of the tree, or answers why the repository answered none.</summary>
-    public static SourceFailure? Remove(this SourceRepository repository, PluginAddress plugin, RecordIdentity identity) =>
+    public static SourceFailure? Remove(this ISourceRepository repository, PluginAddress plugin, RecordIdentity identity) =>
         repository.SaveChanges(repository.ChangesToRemove(plugin, identity));
 
     /// <summary>Saves <paramref name="changes"/> under the repository's mod folder as <see cref="EditSaving"/> does,
-    /// or answers why they were not answered. A repository caches what it read, so a read after this takes a new one.</summary>
-    public static SourceFailure? SaveChanges(this SourceRepository repository, Answer<SourceChanges, SourceFailure> changes)
+    /// or answers why they were not answered.</summary>
+    public static SourceFailure? SaveChanges(this ISourceRepository repository, Answer<SourceChanges, SourceFailure> changes)
     {
         if (!changes.Holds(out var made, out var failure)) return failure;
-        var (moves, deletions, documents) = made.Under(repository);
+        var (moves, deletions, documents) = made.Under(repository.ModFolder);
         EditSaving.Save(
             moves.Select(move => (move.From, move.To)), deletions, documents.Select(document => (document.Path, document.Text)));
         return null;

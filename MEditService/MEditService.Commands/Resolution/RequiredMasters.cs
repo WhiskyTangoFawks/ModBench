@@ -16,7 +16,7 @@ internal sealed class RequiredMasters(PluginAddress plugin)
 
     /// <summary>The masters <paramref name="plugin"/>'s working tree requires (ADR-0008).</summary>
     internal static Answer<IReadOnlySet<string>, SourceFailure> InTheTree(
-        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        ISourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         repository.ReadDocuments(plugin, documents =>
         {
             var required = new RequiredMasters(plugin);

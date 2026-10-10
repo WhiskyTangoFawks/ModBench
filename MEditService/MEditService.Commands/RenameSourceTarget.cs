@@ -12,11 +12,11 @@ internal sealed record RenameSourceTarget(RegisteredPlugin Plugin, PluginProvide
 
     /// <summary>The target, or why renaming the plugin's source to <paramref name="newName"/> is refused before any write.</summary>
     internal static bool Of(
-        LoadOrderSnapshot loadOrder, PluginAddress plugin, string newName,
+        ISourceAdapter source, LoadOrderSnapshot loadOrder, PluginAddress plugin, string newName,
         [NotNullWhen(true)] out RenameSourceTarget? target, [NotNullWhen(false)] out (RenameSourceRefusal Refusal, string Message)? refusal)
     {
         (target, refusal) = (null, null);
-        if (SourceRepository.WhyGitCannotRun() is { } gitMissing)
+        if (source.WhyGitCannotRun() is { } gitMissing)
             refusal = (RenameSourceRefusal.GitUnavailable, gitMissing.Reason);
         else if (!ModKey.TryFromFileName(newName, out _))
             refusal = (RenameSourceRefusal.NotAPluginFile, NotAPluginFile.Message(newName, loadOrder.GameRelease));

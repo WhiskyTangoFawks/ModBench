@@ -38,8 +38,8 @@ public sealed class SourceRepositoryTreeOfTests : IDisposable
     private string Git(params string[] args) =>
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 
-    private SourceRepository Repository =>
-        SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4)
+    private ISourceRepository Repository =>
+        TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private string NpcRelativePath =>
@@ -61,7 +61,7 @@ public sealed class SourceRepositoryTreeOfTests : IDisposable
     [Fact]
     public void TreeOf_AfterAPutThroughTheSameSession_AnswersTheTreeAsItNowStands_NotFromAMemoOfBeforeTheWrite()
     {
-        var session = WriteSession.Over(TestMod.In(_modFolder), GameRelease.Fallout4, []);
+        var session = TestAdapters.Source().WriteSessionOver(TestMod.In(_modFolder), GameRelease.Fallout4, []);
         var repository = session.Repository;
         var before = repository.TreeOf(Plugin).Value().Files.Count;
 

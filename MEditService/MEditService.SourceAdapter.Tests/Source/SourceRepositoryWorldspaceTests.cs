@@ -19,7 +19,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private SourceRepository Repository => SourceRepository.Over(TestMod.In(_modFolder), Release);
+    private ISourceRepository Repository => TestAdapters.Source().OverFolder(TestMod.In(_modFolder), Release);
 
     private static string Body(string formKey, string? grid = null) =>
         grid == null

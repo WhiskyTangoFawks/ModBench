@@ -14,6 +14,7 @@ internal sealed class PluginCompileService(
     LoadOrderHolder loadOrderHolder,
     SchemaReflector schemaReflector,
     IPluginAdapter adapter,
+    ISourceAdapter source,
     ILogger<PluginCompileService> logger)
 {
     private readonly CompileLinks _links = new(adapter, logger);
@@ -26,10 +27,10 @@ internal sealed class PluginCompileService(
         var loadOrder = loadOrderHolder.Current;
         if (loadOrder.Plugin(plugin) is not { } registered)
             return CompileResult.Refused(CompileRefusal.PluginNotInLoadOrder, $"{plugin.Name} is not in the load order.");
-        if (registered.Provider is not PluginProvider.FromMod mod || !SourceRepository.IsTracked(registered))
+        if (registered.Provider is not PluginProvider.FromMod mod || !source.IsTracked(registered))
             return CompileResult.Refused(CompileRefusal.PluginNotTracked, $"{plugin.Name} is not tracked, so there is no source to compile.");
 
-        if (SourceRepository.WhySourceDoesNotRead(registered) is { } why)
+        if (source.WhySourceDoesNotRead(registered) is { } why)
         {
             return CompileResult.Refused(
                 CompileRefusal.PluginSourceUnreadable,
@@ -38,7 +39,7 @@ internal sealed class PluginCompileService(
         }
 
         // One repository for the whole pass, so the tree it answers from is read once.
-        var repository = SourceRepository.Over(mod, loadOrder.GameRelease);
+        var repository = source.OverFolder(mod, loadOrder.GameRelease);
         if (!repository.TreeOf(plugin).Holds(out var sourceFiles, out var unread)) return SourceDoesNotParse(plugin, unread);
 
         // A document the read could not open is content this compile does not have, and compiling the
@@ -163,7 +164,7 @@ internal sealed class PluginCompileService(
     }
 
     private async Task<(CompiledTree? Tree, string? RefusalReason)> DeserializeSource(
-        IReadOnlyList<TreeFile> files, PluginAddress plugin, SourceRepository repository, GameRelease release)
+        IReadOnlyList<TreeFile> files, PluginAddress plugin, ISourceRepository repository, GameRelease release)
     {
         if ((await adapter.ReadTreeAsync(files, release)).Holds(out var tree, out var failure)) return (tree, null);
 

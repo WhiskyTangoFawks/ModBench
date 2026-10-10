@@ -46,7 +46,7 @@ public sealed class CompileFixture : TestInstance, ITrackedPlugin
 
     private string PluginPath => Path.Combine(ModFolder, PluginName);
 
-    private SourceRepository Repository => RepositoryOf(Plugin).Require();
+    private ISourceRepository Repository => RepositoryOf(Plugin).Require();
 
     public CompilePluginHandler CompileService() => CompileServices.Over(LoadOrder);
 

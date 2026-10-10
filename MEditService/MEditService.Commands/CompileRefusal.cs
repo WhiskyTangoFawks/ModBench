@@ -46,4 +46,7 @@ public enum CompileRefusal
 
     /// <summary>git is not on PATH (ADR-0007), a cause no plugin of a selection escapes.</summary>
     GitUnavailable,
+
+    /// <summary>No load order has been received, so the gesture has nothing to act on.</summary>
+    NoLoadOrder,
 }

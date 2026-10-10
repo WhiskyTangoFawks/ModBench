@@ -1,7 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -262,7 +261,7 @@ public sealed class CompilePluginContainerTests : IDisposable
     public async Task Compile_AfterDeletingTheMiddleOfThreeDialogTopics_Succeeds_KeepingSurvivorsInOrder()
     {
         SourceEdits.Rewrite<Quest>(
-            SourceRepository.Open(TestMod.Of(_plugin, _modFolder), GameRelease.Fallout4).Require(), _plugin,
+            TestAdapters.Source().Open(TestMod.Of(_plugin, _modFolder), GameRelease.Fallout4).Require(), _plugin,
             new RecordIdentity(_questC.ToString(), QuestRecordType, "QuestC"), GameRelease.Fallout4,
             quest => quest.DialogTopics.Remove(quest.DialogTopics.Single(t => t.FormKey == _topicC2)));
 

@@ -138,6 +138,9 @@ public enum RecordEditRefusal
     /// <summary>git cannot be run (ADR-0007), a cause no record of a selection escapes
     /// (commands.md, A selection is one gesture).</summary>
     GitUnavailable,
+
+    /// <summary>No load order has been received, so the gesture has nothing to act on.</summary>
+    NoLoadOrder,
 }
 
 /// <summary><see cref="Message"/> names the way out; a refusal the user cannot act on is dead UI.
@@ -157,7 +160,7 @@ public sealed record RecordEditResult(
 
     /// <summary>The edit that lands as <paramref name="outcome"/> by making <paramref name="writes"/> in
     /// <paramref name="session"/> all together, or why they could not be made.</summary>
-    internal static Answer<RecordEditResult, SourceFailure> Making(RecordEditResult outcome, WriteSession session, Action writes) =>
+    internal static Answer<RecordEditResult, SourceFailure> Making(RecordEditResult outcome, IWriteSession session, Action writes) =>
         session.Atomically(writes) is { } failure ? failure : outcome;
 
     public static implicit operator Answer<RecordEditChanges, SourceFailure>(RecordEditResult outcome) =>

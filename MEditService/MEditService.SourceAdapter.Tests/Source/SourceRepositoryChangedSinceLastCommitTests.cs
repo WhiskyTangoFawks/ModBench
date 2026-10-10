@@ -29,16 +29,16 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private SourceRepository Tracked(params TreeFile[] extraFiles)
+    private ISourceRepository Tracked(params TreeFile[] extraFiles)
     {
         var files = new[] { new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody)) }.Concat(extraFiles).ToArray();
         PluginBaselines.Track(
             _modFolder, files);
-        return SourceRepository.Open(TestMod.In(_modFolder), Release)
+        return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
 
-    private static IReadOnlyDictionary<string, RecordChange> ChangesIn(SourceRepository repository) =>
+    private static IReadOnlyDictionary<string, RecordChange> ChangesIn(ISourceRepository repository) =>
         repository.ChangedSinceLastCommit(Plugin).Value();
 
     [Fact]
@@ -62,7 +62,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         var oldFolder = Directory.CreateDirectory(Path.Combine(_modFolder, lookalikeFolderName, PluginName)).FullName;
         File.WriteAllText(Path.Combine(oldFolder, "notes.txt"), "notes");
         PluginBaselines.Track(_modFolder, [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
-        var repository = SourceRepository.Open(TestMod.In(_modFolder), Release)
+        var repository = TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
         var gitDir = Path.Combine(_modFolder, ".git");
         GitProbe.Run(gitDir, _modFolder, "add", "-f", $"{lookalikeFolderName}/{PluginName}/notes.txt");
@@ -153,7 +153,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(path).Require());
         File.WriteAllText(path, NpcBody);
 
-        var only = Assert.Single(ChangesIn(SourceRepository.Over(TestMod.In(_modFolder), Release)));
+        var only = Assert.Single(ChangesIn(TestAdapters.Source().OverFolder(TestMod.In(_modFolder), Release)));
 
         Assert.Equal((NpcFormKey, RecordChange.Added), (only.Key, only.Value));
     }

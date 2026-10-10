@@ -1,6 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.RealData;
@@ -26,7 +25,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
         Assert.Contains("fixed-size-subrecord-short", result.Message);
         Assert.Contains("repairable (lossless)", result.Message);
         Assert.Contains("RDAT is 6 bytes; a REGN RDAT is always 8", result.Message);
-        Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
+        Assert.False(TestAdapters.Source().IsTracked(scratch.ModFolder));
     }
 
     private sealed class ShortRdatScratch : IDisposable

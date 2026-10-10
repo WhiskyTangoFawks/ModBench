@@ -65,7 +65,7 @@ public sealed class DeleteRecordChangesHandlerTests
         Assert.Equal(npc, refused.Item);
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
         Assert.Contains(mod.Npc.ToString(), refused.Message, StringComparison.Ordinal);
-        Assert.IsType<SourceFailure.Ambiguous>(TrackedTree.Repository(mod.ModFolder, mod.Plugin).Get(mod.Plugin, mod.Npc.ToString()).Stopped());
+        Assert.IsType<SourceFailure.Ambiguous>(TrackedTree.Repository(mod.ModFolder, mod.Plugin).RecordByFormKey(mod.Plugin, mod.Npc.ToString()).Stopped());
     }
 
     [Fact]

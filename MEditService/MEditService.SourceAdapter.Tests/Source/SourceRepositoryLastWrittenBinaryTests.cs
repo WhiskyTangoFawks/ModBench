@@ -13,9 +13,9 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
 
     private const string OthersTrackedBinary = "TRACKED-FOR-OTHER";
 
-    private static SourceRepository TrackedOver(ScratchDirectory modFolder)
+    private static ISourceRepository TrackedOver(ScratchDirectory modFolder)
     {
-        SourceRepository.Track(
+        TestAdapters.Source().Track(
             modFolder,
             [
                 ([new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
@@ -23,7 +23,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
                 ([new TreeFile("plugin-source/Other.esp/npc_/Other.esp/000002.json", "{}"u8.ToArray())],
                     new DecompiledPlugin("Other.esp", OthersTrackedBinary)),
             ]);
-        return SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4);
+        return TestAdapters.Source().OverFolder(TestMod.In(modFolder), GameRelease.Fallout4);
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
 
-        Assert.Empty(SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4).LastWrittenBinarySha256s(Test).Value());
+        Assert.Empty(TestAdapters.Source().OverFolder(TestMod.In(modFolder), GameRelease.Fallout4).LastWrittenBinarySha256s(Test).Value());
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
         TrackedOver(modFolder);
-        var repository = SourceRepository.Over(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
+        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
 
         Assert.Throws<ArgumentException>(() => repository.WriteBinary(new PluginAddress("Test.esp", "OtherMod"), "ABC", () => { }).Value());
         Assert.Empty(repository.LastWrittenBinarySha256s(Test).Value());
@@ -144,7 +144,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
         TrackedOver(modFolder);
-        var repository = SourceRepository.Over(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
+        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
 
         Assert.Throws<ArgumentException>(() => repository.LastWrittenBinarySha256s(new PluginAddress("Test.esp", "OtherMod")).Value());
     }
@@ -154,7 +154,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
         TrackedOver(modFolder);
-        var repository = SourceRepository.Over(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
+        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder), GameRelease.Fallout4);
 
         Assert.Throws<ArgumentException>(() => repository.ReplaceSourceFrom(new PluginAddress("Test.esp", "OtherMod"), [], "ABC"));
         Assert.Empty(repository.LastWrittenBinarySha256s(Test).Value());
@@ -165,7 +165,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
         TrackedOver(modFolder);
-        var repository = SourceRepository.Over(new PluginProvider.FromMod("TESTMOD", modFolder), GameRelease.Fallout4);
+        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TESTMOD", modFolder), GameRelease.Fallout4);
 
         repository.WriteBinary(Test, "ABC", () => { }).Value();
 
@@ -186,7 +186,7 @@ public sealed class SourceRepositoryLastWrittenBinaryWithoutGitTests : IDisposab
     [Fact]
     public void TheLastWrittenBinaries_WithGitGoneFromPath_AnswerGitUnavailable()
     {
-        var repository = SourceRepository.Over(TestMod.In(_modFolder), GameRelease.Fallout4);
+        var repository = TestAdapters.Source().OverFolder(TestMod.In(_modFolder), GameRelease.Fallout4);
         var path = Environment.GetEnvironmentVariable("PATH");
         Environment.SetEnvironmentVariable("PATH", string.Empty);
         try
@@ -202,7 +202,7 @@ public sealed class SourceRepositoryLastWrittenBinaryWithoutGitTests : IDisposab
     [Fact]
     public void AWrite_AfterWhichGitIsGoneFromPath_AnswersTheRecordUnfinished_ForTheBinaryIsWritten()
     {
-        var repository = SourceRepository.Over(TestMod.In(_modFolder), GameRelease.Fallout4);
+        var repository = TestAdapters.Source().OverFolder(TestMod.In(_modFolder), GameRelease.Fallout4);
         var path = Environment.GetEnvironmentVariable("PATH");
         try
         {

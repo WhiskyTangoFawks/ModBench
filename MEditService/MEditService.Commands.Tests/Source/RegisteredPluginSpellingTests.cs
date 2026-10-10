@@ -1,6 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -23,7 +22,7 @@ public sealed class RegisteredPluginSpellingTests
         var result = await TrackEveryPluginOf.ModAsync(scratch.LoadOrder, Origin);
 
         Assert.Empty(result.Refused);
-        var repository = SourceRepository.Open(TestMod.Of(scratch.Plugin, scratch.ModFolder), Release).Require();
+        var repository = TestAdapters.Source().Open(TestMod.Of(scratch.Plugin, scratch.ModFolder), Release).Require();
         Assert.NotEmpty(repository.FormKeysUsed(scratch.Plugin).Value());
         Assert.Empty(repository.ChangedSinceLastCommit(scratch.Plugin).Value());
     }

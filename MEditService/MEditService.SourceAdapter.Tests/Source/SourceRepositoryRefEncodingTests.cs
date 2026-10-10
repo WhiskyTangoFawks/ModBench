@@ -40,7 +40,7 @@ public sealed class SourceRepositoryRefEncodingTests
     {
         using var modFolder = new ScratchDirectory("medit-refencoding-");
         PluginBaselines.Track(modFolder, [.. FilesOf("A B.esp"), .. FilesOf("A_B.esp")]);
-        var repository = SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4);
+        var repository = TestAdapters.Source().OverFolder(TestMod.In(modFolder), GameRelease.Fallout4);
         var spaced = new PluginAddress("A B.esp", "TestMod");
         var underscored = new PluginAddress("A_B.esp", "TestMod");
 
@@ -63,10 +63,10 @@ public sealed class SourceRepositoryRefEncodingTests
     private static TreeFile[] FilesOf(string plugin) =>
         [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())];
 
-    private static SourceRepository TrackedOver(ScratchDirectory modFolder, string plugin)
+    private static ISourceRepository TrackedOver(ScratchDirectory modFolder, string plugin)
     {
         PluginBaselines.Track(modFolder, FilesOf(plugin));
-        return SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4);
+        return TestAdapters.Source().OverFolder(TestMod.In(modFolder), GameRelease.Fallout4);
     }
 
     private static string GitProbeSubject(string modFolder) =>

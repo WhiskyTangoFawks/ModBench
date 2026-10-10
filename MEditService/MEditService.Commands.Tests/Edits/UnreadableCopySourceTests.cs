@@ -1,7 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -17,7 +16,7 @@ public sealed class UnreadableCopySourceTests : IDisposable
     private void MakeNoJsonDocument(FormKey formKey)
     {
         var document = _mod.Document(_mod.SourcePlugin, formKey.ToString()).Require();
-        SourceRepository.Open(TestMod.Of(_mod.SourcePlugin, _mod.SourceModFolder), GameRelease.Fallout4).Require()
+        TestAdapters.Source().Open(TestMod.Of(_mod.SourcePlugin, _mod.SourceModFolder), GameRelease.Fallout4).Require()
             .Put(_mod.SourcePlugin, document with { Body = document.Body.Replace('{', '[') }).Wrote();
     }
 
