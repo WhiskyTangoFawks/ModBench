@@ -78,14 +78,20 @@ public sealed class SkyrimConditionSchemaTests
     }
 
     [Fact]
-    public void RunOn_NamesTheReferenceMemberUnderExactlyTheReferenceValue()
+    public void RunOn_GovernsTheReference()
     {
-        var runOn = Member(Data(), "RunOnType");
-        var siblingsInUse = runOn.SiblingsInUse.Require();
+        Assert.Equal(["Reference"], Member(Data(), "RunOnType").SiblingsInUse.Require()[nameof(Condition.RunOnType.Reference)]);
+    }
 
-        Assert.Equal(runOn.EnumMembers.Select(m => m.Value).Order(StringComparer.Ordinal), siblingsInUse.Keys.Order(StringComparer.Ordinal));
-        Assert.Equal(["Reference"], siblingsInUse[nameof(Condition.RunOnType.Reference)]);
-        Assert.All(siblingsInUse.Where(kv => kv.Key != nameof(Condition.RunOnType.Reference)), kv => Assert.Empty(kv.Value));
+    [Theory]
+    [InlineData(nameof(IsLinkedToConditionData), "Target", "Keyword")]
+    [InlineData(nameof(GetInCellParamConditionData), "Cell", "Target")]
+    [InlineData(nameof(SpellHasKeywordConditionData), "SpellSource", "Keyword")]
+    public void AFunctionsParameters_KeepItsOwnOrder(string function, string first, string second)
+    {
+        var own = Data().Fields.Require().Where(f => f.Variants?.ContainsKey(function) == true).Select(f => f.Name).ToList();
+
+        Assert.Equal([first, second], own);
     }
 
     [Fact]

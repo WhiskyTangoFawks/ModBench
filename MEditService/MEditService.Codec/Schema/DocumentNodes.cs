@@ -102,9 +102,7 @@ public static class DocumentNodes
         var shape = obj.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var leaf) && leaf.ValueKind == JsonValueKind.String
             ? Variant(member, leaf.GetString())
             : member;
-        return shape.IndexWhen is { } flags && flags.Any(f => obj.TryGetProperty(f, out var set) && set.ValueKind == JsonValueKind.True)
-            ? AsIndex(shape)
-            : shape;
+        return ShapeUnderOwner(shape, flag => obj.TryGetProperty(flag, out var set) && set.ValueKind == JsonValueKind.True);
     }
 
     /// <summary>The same question over the write path's mutable tree.</summary>
@@ -114,13 +112,13 @@ public static class DocumentNodes
         var shape = obj[LoquiUnions.UnionTypeDiscriminator] is JsonValue leaf && leaf.TryGetValue<string>(out var name)
             ? Variant(member, name)
             : member;
-        return shape.IndexWhen is { } flags && flags.Any(f => obj[f] is JsonValue set && set.TryGetValue<bool>(out var on) && on)
-            ? AsIndex(shape)
-            : shape;
+        return ShapeUnderOwner(shape, flag => obj[flag] is JsonValue set && set.TryGetValue<bool>(out var on) && on);
     }
 
-    private static FieldMetadata AsIndex(FieldMetadata link) =>
-        link with { Type = "int", ValidFormKeyTypes = LeafSpec.NoFormKeyTypes, AllowsNull = false, IndexWhen = null };
+    private static FieldMetadata ShapeUnderOwner(FieldMetadata shape, Func<string, bool> ownerSets) =>
+        shape.IndexWhen?.Any(ownerSets) == true
+            ? shape with { Type = "int", ValidFormKeyTypes = LeafSpec.NoFormKeyTypes, AllowsNull = false, IndexWhen = null }
+            : shape;
 
     /// <summary>The shape a member has under a named union leaf; its own where no variant
     /// answers to that name.</summary>

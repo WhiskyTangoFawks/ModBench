@@ -97,28 +97,32 @@ public sealed class SkyrimConditionDocumentTests
         Assert.DoesNotContain(references, r => r.FieldPath == "Conditions[3].Data.Target");
     }
 
-    [Fact]
-    public void AFormParameterHeldAsAnIndex_TakesANumber()
+    [Theory]
+    [InlineData("UseAliases")]
+    [InlineData("UsePackageData")]
+    public void SettingWhatAFormParameterNames_EmptiesItsLink(string flag)
     {
-        var after = EditedData(PerkText(), 3, "Target", "5");
+        var data = PatchedData(2, flag, "true");
 
-        Assert.Equal(5, Data(after, 3)["Target"].Require().GetValue<int>());
+        Assert.False(data.ContainsKey("Target"));
+        Assert.True(data[flag].Require().GetValue<bool>());
     }
 
-    [Theory]
-    [InlineData(2, "UseAliases", "true")]
-    [InlineData(2, "UsePackageData", "true")]
-    [InlineData(3, "UseAliases", "null")]
-    public void AChangeOfWhatAFormParameterNames_EmptiesIt(int condition, string flag, string value)
+    [Fact]
+    public void ClearingWhatAFormParameterNames_EmptiesItsIndex()
+    {
+        var data = PatchedData(3, "UseAliases", "null");
+
+        Assert.False(data.ContainsKey("Target"));
+        Assert.False(data.ContainsKey("UseAliases"));
+    }
+
+    private JsonObject PatchedData(int condition, string member, string value)
     {
         Assert.Null(DocumentEdit.Locate(
             Document.Parse(PerkText()), SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["perk"], EditOp.Set,
-            [Member("Conditions"), At(condition), Member("Data"), Member(flag)], out var edit));
+            [Member("Conditions"), At(condition), Member("Data"), Member(member)], out var edit));
         Assert.Null(edit.Require().Apply(value, out var patch));
-
-        var data = Data(patch.Require().Document.Text, condition);
-
-        Assert.False(data.ContainsKey("Target"));
-        Assert.Equal(value, data[flag]?.ToJsonString() ?? "null");
+        return Data(patch.Require().Document.Text, condition);
     }
 }

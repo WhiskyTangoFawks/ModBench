@@ -274,8 +274,6 @@ public sealed class DocumentEdit
         return null;
     }
 
-    // Each held member's type under its owner, which a sibling can decide: a link names an alias
-    // while its owner says so, and then holds a number.
     private static Dictionary<string, string> ShapesHeld(JsonObject owner, FieldMetadata ownerMeta) =>
         (ownerMeta.Fields ?? []).Where(f => owner.ContainsKey(f.Name))
             .ToDictionary(f => f.Name, f => DocumentNodes.VariantFor(f, owner).Type, StringComparer.Ordinal);

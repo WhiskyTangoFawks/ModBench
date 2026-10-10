@@ -54,6 +54,7 @@ export const WEBVIEW_TO_EXTENSION = {
 export type UnreadableSource = components['schemas']['UnreadableSource'];
 export type ConflictThis = components['schemas']['ConflictThis'];
 export type ConflictAll = components['schemas']['ConflictAll'];
+export type FieldMetadata = components['schemas']['FieldMetadata'];
 
 
 export type WebviewToExtension =

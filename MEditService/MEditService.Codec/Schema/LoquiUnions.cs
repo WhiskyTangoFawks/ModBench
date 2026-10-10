@@ -157,16 +157,34 @@ public static class LoquiUnions
     {
         var byName = leaves
             .SelectMany(l => l.Members.Select(m => (l.ClassName, Member: m)))
-            .GroupBy(d => name(d.Member), StringComparer.Ordinal);
-        foreach (var group in byName)
+            .ToLookup(d => name(d.Member), StringComparer.Ordinal);
+        foreach (var memberName in OrderKeptByEveryLeaf([.. leaves.Select(l => l.Members.Select(name).ToList())]))
         {
-            var declaring = group.ToList();
+            var declaring = byName[memberName].ToList();
             var alike = declaring.Count == leaves.Count
                 && declaring.Select(d => JsonSerializer.Serialize(shape(d.Member))).Distinct(StringComparer.Ordinal).Count() == 1;
             // Mutagen lists a union's leaves in no fixed order.
             var face = declaring.FirstOrDefault(d => shape(d.Member).SiblingsInUse != null, declaring[0]);
             yield return (face.Member, alike ? null : declaring.ToDictionary(d => d.ClassName, d => d.Member, StringComparer.Ordinal));
         }
+    }
+
+    // Every leaf's members keep its own order, so a function's parameters read as xEdit's Parameter
+    // 1, then 2. Where leaves order members both ways (Fallout 4's object-mod properties), first seen wins.
+    private static List<string> OrderKeptByEveryLeaf(List<List<string>> leaves)
+    {
+        var names = leaves.SelectMany(l => l).Distinct(StringComparer.Ordinal).ToList();
+        var placed = new HashSet<string>(StringComparer.Ordinal);
+        var order = new List<string>();
+        while (order.Count < names.Count)
+        {
+            var unplaced = names.Where(n => !placed.Contains(n)).ToList();
+            var next = unplaced.FirstOrDefault(n => leaves.All(l => l.IndexOf(n) is var at && (at < 0 || l.Take(at).All(placed.Contains))))
+                ?? unplaced[0];
+            placed.Add(next);
+            order.Add(next);
+        }
+        return order;
     }
 
     /// <summary>The document's own discriminator member: the first key of every union element the

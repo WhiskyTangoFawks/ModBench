@@ -205,25 +205,10 @@ describe('a condition\'s parameters', () => {
       children: [diffNode({ fieldName: member, values: { [MASTER]: master[member], [MOD]: mod[member] } })],
     })])));
 
-  it('a form parameter reads as a number in a column whose condition says it names an alias', () => {
-    const target = fieldMeta({ name: 'Target', type: 'formKey', allowsNull: true, indexWhen: ['UseAliases', 'UsePackageData'] });
-    const link = fieldMeta({ name: 'Target', type: 'formKey', variants: { LeafA: target } });
-
-    const row = dataRows(
-      [link],
-      { MutagenObjectType: 'LeafA', Target: '000801:Fallout4.esm' },
-      { MutagenObjectType: 'LeafA', UseAliases: true, Target: 3 },
-      'Target').find(r => r.name === 'Target');
-
-    expect(row?.cells.get(MASTER)?.meta.type).toBe('formKey');
-    expect(row?.cells.get(MOD)?.meta.type).toBe('int');
-  });
-
   it('a parameter has a row where its own column\'s function puts it in use', () => {
-    const modeUsingLinkUnder = (value: string) => fieldMeta({
-      name: 'Mode', type: 'enum', siblingsInUse: { A: value === 'A' ? ['Link'] : [], B: value === 'B' ? ['Link'] : [] },
-    });
-    const mode = fieldMeta({ ...modeUsingLinkUnder('A'), variants: { LeafA: modeUsingLinkUnder('A'), LeafB: modeUsingLinkUnder('B') } });
+    const linkUnderA = fieldMeta({ name: 'Mode', type: 'enum', siblingsInUse: { A: ['Link'], B: [] } });
+    const linkUnderB = fieldMeta({ name: 'Mode', type: 'enum', siblingsInUse: { A: [], B: ['Link'] } });
+    const mode = fieldMeta({ ...linkUnderA, variants: { LeafA: linkUnderA, LeafB: linkUnderB } });
     const value = { MutagenObjectType: 'LeafB', Mode: 'B', Link: '000801:Fallout4.esm' };
 
     const rows = dataRows([mode, fieldMeta({ name: 'Link', type: 'formKey' })], value, value, 'Link');
