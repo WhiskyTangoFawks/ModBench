@@ -130,6 +130,15 @@ describe('PluginFacts — which statuses stay and which land (plugins.md, A row,
     expect(facts.tooltipLines(A).slice(2)).toEqual(line === undefined ? [] : [line]);
   });
 
+  it('keeps the last master issues through a tick that indexes the plugin', () => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ masterIssues: ['Ghost.esm'] })], []);
+
+    facts.indexed([A], []);
+
+    expect(facts.tooltipLines(A)).toContain('Missing masters: Ghost.esm');
+  });
+
   it('forgets the last master issues of a plugin a re-read omits', () => {
     const facts = new PluginFacts();
     facts.reconciled([held({ masterIssues: ['Ghost.esm'] })], []);
@@ -342,6 +351,41 @@ describe('PluginFacts — what a row expands into (plugins.md, States, stories 2
     facts.indexed([], []);
 
     expect(facts.expansion(B)).toEqual(INDEXING);
+  });
+});
+
+describe('PluginFacts — a name under two origins reads its own plugin', () => {
+  const MOD_A = { name: 'Shared.esp', origin: 'ModA' };
+  const MOD_B = { name: 'Shared.esp', origin: 'ModB' };
+  const sharedAt = (origin: string, overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name: 'Shared.esp', origin, ...overrides });
+  const bothHeld = (modB: Partial<PluginMetadata>): Scene => (facts) => facts.reconciled([sharedAt('ModA'), sharedAt('ModB', modB)], []);
+  const CLEAN = {
+    description: undefined, icon: undefined, tooltipLines: ['Shared.esp', 'ModA'], editable: true, hiddenByRecordFilter: false, expansion: RECORDS,
+  };
+
+  it.each<[string, Scene, Record<string, unknown>]>([
+    ['master issues', bothHeld({ masterIssues: ['BMaster.esm'] }), {}],
+    ['read-only', bothHeld({ isImmutable: true }), {}],
+    ['unreadable records', bothHeld({ hasParseFailure: true }), {}],
+    ['no matching records', bothHeld({ hasMatchingRecords: false }), {}],
+    ['a diagnosis', scenes(bothHeld({}), (facts) => facts.diagnosed([diagnosis('ModB is malformed', MOD_B)])), {}],
+    ['a failure to read', (facts) => facts.reconciled([sharedAt('ModA')], [failure('Malformed record', MOD_B)]), {}],
+    ['a change outside Modbench', scenes(bothHeld({}), (facts) => changedOutside(facts, 'ModB', 'Shared.esp')), {}],
+    ['its own failure to read, the other plugin loaded', (facts) => facts.reconciled([sharedAt('ModB')], [failure('Malformed record', MOD_A)]),
+      { description: 'failed to read', icon: 'error', tooltipLines: ['Shared.esp', 'ModA', 'Failed to read: Malformed record'], editable: false, expansion: errorOf('Malformed record') }],
+    ['only the other plugin held', (facts) => facts.reconciled([sharedAt('ModB')], []), { editable: false, expansion: INDEXING }],
+    ['read-only and master issues, held under a third origin',
+      (facts) => facts.reconciled([sharedAt('SomeOtherMod', { isImmutable: true, masterIssues: ['Ghost.esm'] })], []), { editable: false, expansion: INDEXING }],
+    ['only the other plugin indexed', (facts) => facts.indexed([MOD_B], []), { editable: false, expansion: INDEXING }],
+    ['only the other plugin failed in a tick', (facts) => facts.indexed([], [failure('Malformed record', MOD_B)]), { editable: false, expansion: INDEXING }],
+  ])('is not touched by the other plugin\'s %s', (_label, scene, own) => {
+    const facts = new PluginFacts();
+    scene(facts);
+
+    expect({
+      description: facts.description(MOD_A), icon: facts.icon(MOD_A), tooltipLines: facts.tooltipLines(MOD_A),
+      editable: facts.conditions(MOD_A).editable, hiddenByRecordFilter: facts.hiddenByRecordFilter(MOD_A), expansion: facts.expansion(MOD_A),
+    }).toEqual({ ...CLEAN, ...own });
   });
 });
 
