@@ -381,7 +381,7 @@ internal sealed class Store : IDisposable
             INSERT INTO {PluginDerivationRelation} (plugin, origin, derived_from) VALUES ($1, $2, $3)
             """, plugin, origin, derivedFrom.ToString());
         if (filePath == null) return;
-        if (!_plugins.ClaimOf(filePath).Holds(out var claim, out var unread))
+        if (!_plugins.ClaimOf(filePath, Release).Holds(out var claim, out var unread))
         {
             _logger.LogWarning(unread.Error, "Could not read {Path} to hash it, so nothing vouches for its rows: {Reason}", filePath, unread.Reason);
             return;

@@ -16,6 +16,7 @@ public sealed class GameNamespaceScanTests
     private static readonly string[] ExemptFolders =
     [
         "MEditService.Codec.Fallout4",
+        "MEditService.Codec.Skyrim",
     ];
 
     private static readonly Regex Identifier = new(@"\b[A-Za-z_][A-Za-z0-9_]*\b", RegexOptions.Compiled);
@@ -28,6 +29,7 @@ public sealed class GameNamespaceScanTests
         Assert.Contains("Fallout4", GameNames);
         Assert.Contains("Fallout4Mod", GameTypeNames);
         Assert.Contains("IFallout4ModGetter", GameTypeNames);
+        Assert.Contains("ISkyrimModGetter", GameTypeNames);
 
         var sites = Sites(ServiceProjects.SolutionDirectory(), ScannedRoots, ExemptFolders);
 
@@ -77,6 +79,7 @@ public sealed class GameNamespaceScanTests
     private static IReadOnlySet<string> GameConcreteTypeNames()
     {
         _ = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+        _ = SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE);
         return AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => GameNamespaces.Contains(a.GetName().Name, StringComparer.Ordinal))
             .SelectMany(a => a.GetExportedTypes())

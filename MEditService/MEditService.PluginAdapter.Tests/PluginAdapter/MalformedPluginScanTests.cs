@@ -1,6 +1,7 @@
 using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 using static MEditService.TestSupport.RawPlugin;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
@@ -144,12 +145,26 @@ public sealed class MalformedPluginScanTests
         Assert.Empty(Scan(record));
     }
 
-    private static List<PluginDiagnosis> Scan(byte[] bytes)
+    [Fact]
+    public void TheDetectors_AreFallout4s_SoASkyrimPluginsVanillaFunction14WithEpft2MakesNoClaim()
+    {
+        var record = Record("PERK", 0x000A725C,
+            Subrecord("PRKE", [2, 0, 0]),
+            Subrecord("DATA", [0, 14, 0]),
+            Subrecord("EPFT", [2]),
+            Subrecord("EPFD", new byte[4]),
+            Subrecord("PRKF", []));
+
+        Assert.NotEmpty(Scan(record, GameRelease.Fallout4));
+        Assert.Empty(Scan(record, GameRelease.SkyrimSE));
+    }
+
+    private static List<PluginDiagnosis> Scan(byte[] bytes, GameRelease release = GameRelease.Fallout4)
     {
         using var folder = new ScratchDirectory("malformed-scan");
         var path = Path.Combine(folder.Path, "scanned.esp");
         File.WriteAllBytes(path, bytes);
-        return [.. TestAdapters.Mutagen().ClaimOf(path).Answered().Diagnoses.Answered()];
+        return [.. TestAdapters.Mutagen().ClaimOf(path, release).Answered().Diagnoses.Answered()];
     }
 
     [Fact]

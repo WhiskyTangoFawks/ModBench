@@ -6,11 +6,11 @@ namespace MEditService.Codec.Game;
 /// <summary>What the shared codec source asks each game's project to answer.</summary>
 internal static class GameSpecifics
 {
-    public static SiblingsInUseRows SiblingsInUse { get; } = new()
+    public static SiblingsInUseRows SiblingsInUse { get; } = new(new Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>>
     {
         [("IFunctionConditionDataGetter", "Function")] = Fallout4ConditionAnnotations.FunctionParameterSlots,
         [("IConditionDataGetter", "RunOnType")] = Fallout4ConditionAnnotations.RunOnReference,
-    };
+    });
 
     public static IReadOnlyList<string> TransientTypes(IGameModGetter plugin) =>
     [

@@ -58,14 +58,13 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
-            gameRelease = "SkyrimSE",
+            gameRelease = "Oblivion",
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
         AssertIsProblemDetails(resp, 400);
         var body = await resp.Content.ReadAsStringAsync();
-        Assert.Contains("SkyrimSE", body);
-        Assert.Contains("Mutagen.Bethesda.Skyrim", body);
+        Assert.Contains("mEdit does not support Oblivion: it has no codec to read its plugins.", body);
     }
 
     [Theory]

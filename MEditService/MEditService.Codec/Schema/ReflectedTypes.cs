@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Reflection;
 using Loqui;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Assets;
 using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Codec.Schema;
@@ -48,6 +49,9 @@ internal static class ReflectedTypes
 
     internal static bool IsTranslatedString(Type type) =>
         typeof(ITranslatedStringGetter).IsAssignableFrom(type);
+
+    internal static bool IsAssetLink(Type type) =>
+        typeof(IAssetLinkGetter).IsAssignableFrom(type);
 
     internal static bool IsFormLink(Type type) =>
         typeof(IFormLinkGetter).IsAssignableFrom(type);

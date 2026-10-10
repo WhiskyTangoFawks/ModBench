@@ -128,9 +128,6 @@ internal sealed record SchemaAnnotations(
         new("IMajorRecordGetter", "FormVersion", "Form Version", IgnoredInConflicts: true),
     ];
 
-    // The game's codec project supplies the real rows (SchemaReflector).
-    private static readonly SiblingsInUseRows NoSiblingsInUse = [];
-
     private static string ModHeaderGetter(GameCategory game) => $"I{game}ModHeaderGetter";
 
     private static string MajorRecordGetter(GameCategory game) => $"I{game}MajorRecordGetter";
@@ -165,7 +162,7 @@ internal sealed record SchemaAnnotations(
     private static readonly string[] VectorStructTypesInEveryGame =
     [
         "Noggog.P3Int16", "Noggog.P3Float",
-        "Noggog.P2Int", "Noggog.P2UInt8", "Noggog.P2Int16",
+        "Noggog.P2Int", "Noggog.P2Int16",
         "Noggog.P3UInt8", "Noggog.P3UInt16", "Noggog.P2Float",
     ];
 
@@ -194,7 +191,7 @@ internal sealed record SchemaAnnotations(
             "Mutagen RecordType signature — 7 fields; candidate atomic value, presentation undecided"),
     ];
 
-    // wbFileHeader in wbDefinitionsFO4.pas spells the master and light-master bits ESM and ESL.
+    // wbFileHeader in wbDefinitionsFO4.pas and wbDefinitionsTES5.pas spells the master and light-master bits ESM and ESL.
     // Localized is already xEdit's own spelling, so it carries no label.
     private static readonly Dictionary<string, string> XEditModHeaderFlagNames = new(StringComparer.Ordinal)
     {
@@ -241,7 +238,7 @@ internal sealed record SchemaAnnotations(
                 .. EmptySubSchemaTypesInEveryGame,
                 "IASceneActionTypeGetter",      // deliberately not abstract upstream; see KnownDefects
             ],
-            VectorStructTypes: [.. VectorStructTypesInEveryGame],
+            VectorStructTypes: [.. VectorStructTypesInEveryGame, "Noggog.P2UInt8"],
             RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
             EnumMemberLabels: new()
             {
@@ -253,7 +250,7 @@ internal sealed record SchemaAnnotations(
                     "SceneActionTypicalType's binary-overlay Type getter is an unimplemented throw upstream, so the "
                     + "leaves under ASceneActionType cannot be read; the member is named as the document holds it and never written"),
             ],
-            SiblingsInUse: NoSiblingsInUse,
+            SiblingsInUse: SiblingsInUseRows.None,
             KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4KeyedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
             ExtendedKeys: Fallout4KeyedArrayAnnotations.ExtendedKeys.ToDictionary(
@@ -285,21 +282,45 @@ internal sealed record SchemaAnnotations(
 
         [GameCategory.Skyrim] = new(
             ExcludedColumns: [.. GrupTimestampColumns],
-            ExcludedMembers: [.. PlumbingMembers, ("IGlobalGetter", "TypeChar")],
+            ExcludedMembers:
+            [
+                .. PlumbingMembers,
+                ("IGlobalGetter", "TypeChar"),
+                ("IGlobalUnknownGetter", "TypeChar"),
+                // Mutagen's untyped view over each condition function's own typed members: not record
+                // data, and the abstract ConditionData's implementation throws.
+                ("IConditionParametersGetter", "StringParameter1"),
+                ("IConditionParametersGetter", "StringParameter2"),
+                ("IConditionParametersGetter", "Parameter1"),
+                ("IConditionParametersGetter", "Parameter2"),
+                ("IConditionParametersGetter", "Parameter1Type"),
+                ("IConditionParametersGetter", "Parameter2Type"),
+            ],
             ExcludedUnions: [],
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
             VectorStructTypes: [.. VectorStructTypesInEveryGame],
-            RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
-            // This build references no Skyrim assembly, so Validate checks these rows only once one
-            // loads. A label, defect, condition or keyed-array row is found from a built schema.
-            EnumMemberLabels: [],
+            RefusedShapes: new(
+            [
+                .. RefusedShapesInEveryGame,
+                KeyValuePair.Create("IFormLinkOrIndexGetter`1",
+                    "a condition function's form parameter, held as a link or as a parameter index — presentation undecided"),
+            ], StringComparer.Ordinal),
+            EnumMemberLabels: new()
+            {
+                [(ModHeaderGetter(GameCategory.Skyrim), "Flags")] = XEditModHeaderFlagNames,
+            },
             KnownDefects: [],
-            SiblingsInUse: NoSiblingsInUse,
-            KeyedArrays: [],
-            ExtendedKeys: [],
+            SiblingsInUse: SiblingsInUseRows.None,
+            KeyedArrays: SkyrimKeyedArrayAnnotations.KeyedArrays.ToDictionary(
+                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
+            ExtendedKeys: SkyrimKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
+                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
             PermittedNullFormLinks: [],
-            SyntheticFlagMembers: [],
+            SyntheticFlagMembers: new()
+            {
+                [(ModHeaderGetter(GameCategory.Skyrim), "IsSmallMaster")] = ("Flags", "Small"),
+            },
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
@@ -333,12 +354,13 @@ internal sealed record SchemaAnnotations(
             // lifted VMAD exclusion fails generation naming the chain rather than truncating silently.
             CycleTruncations: [],
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
-            VectorStructTypes: [.. VectorStructTypesInEveryGame],
+            VectorStructTypes: [.. VectorStructTypesInEveryGame, "Noggog.P2UInt8"],
             RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
-            // Empty for the same reason as Skyrim's above.
+            // This build references no Starfield assembly, so Validate checks these rows only once one
+            // loads. A label, defect, condition or keyed-array row is found from a built schema.
             EnumMemberLabels: [],
             KnownDefects: [],
-            SiblingsInUse: NoSiblingsInUse,
+            SiblingsInUse: SiblingsInUseRows.None,
             KeyedArrays: [],
             ExtendedKeys: [],
             PermittedNullFormLinks: [],

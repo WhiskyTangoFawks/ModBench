@@ -8,7 +8,11 @@ namespace MEditService.TestSupport;
 /// rather than inside whichever tests start first on each thread.</summary>
 public class SchemaWarmedTestFramework(IMessageSink messageSink) : GamesRegisteredTestFramework(messageSink)
 {
-    public static void WarmSchemas() => _ = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+    public static void WarmSchemas()
+    {
+        _ = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+        _ = SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE);
+    }
 
     protected virtual void Warm() => WarmSchemas();
 

@@ -34,8 +34,8 @@ internal static class ModelIdentity
 
         // FindFirst never reaches ModHeader (not an IMajorRecordGetter); this is the header's own check,
         // scoped to OpaqueHeaderFields' allow-list — a blanket sweep would refuse legitimate divergence.
-        return HeaderOf(original) is not null && HeaderOf(recompiled) is not null
-               && FindFirstHeaderFieldDivergence(original, recompiled) is { } field
+        return HeaderOf(original) is { } originalHeader && HeaderOf(recompiled) is { } recompiledHeader
+               && FindFirstHeaderFieldDivergence(original, originalHeader, recompiled, recompiledHeader) is { } field
             ? new Divergence(
                 PluginHeader.RecordType, FormKey.Null, null,
                 $"TES4 header field '{field}' changed after being recompiled from its own tracked source.")
@@ -99,13 +99,10 @@ internal static class ModelIdentity
 
     // The first OpaqueHeaderFields member the mask disagrees on, or null. The allow-list is shared
     // across games; the game's codec answers the transient types.
-    private static string? FindFirstHeaderFieldDivergence(IModGetter original, IModGetter recompiled)
+    private static string? FindFirstHeaderFieldDivergence(
+        IModGetter original, ILoquiObjectGetter originalHeader, IModGetter recompiled, ILoquiObjectGetter recompiledHeader)
     {
-        if (HeaderOf(original) is { } originalHeader && HeaderOf(recompiled) is { } recompiledHeader
-            && FailingFields(originalHeader, recompiledHeader).FirstOrDefault(OpaqueHeaderFields.Contains) is { } field)
-        {
-            return field;
-        }
+        if (FailingFields(originalHeader, recompiledHeader).FirstOrDefault(OpaqueHeaderFields.Contains) is { } field) return field;
 
         // The mask reports a TransientTypes item against the nested leaf's type and ignores a count
         // difference, so it is compared by plain values here.

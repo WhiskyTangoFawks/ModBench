@@ -34,7 +34,7 @@ public sealed class SchemaReflector
     {
         var category = release.ToCategory();
         var assembly = ResolveAssembly(release, category)
-            ?? throw new UnsupportedGameReleaseException(release, AssemblyNameFor(category));
+            ?? throw new UnsupportedGameReleaseException(release);
         return GetCache(category, assembly).Schemas;
     }
 
@@ -169,7 +169,7 @@ public sealed class UnsupportedGameReleaseException : Exception
 {
     // RCS1194: the three standard exception constructors, for well-behaved rethrow/serialization
     // callers generally — not how SchemaReflector itself throws this (see the release-based
-    // constructor below), which builds a specific, actionable message naming the missing assembly.
+    // constructor below).
     internal UnsupportedGameReleaseException()
     {
     }
@@ -182,11 +182,9 @@ public sealed class UnsupportedGameReleaseException : Exception
     {
     }
 
-    internal UnsupportedGameReleaseException(GameRelease release, string assemblyName)
-        : base($"Game release '{release}' is not supported by this build: the Mutagen assembly '{assemblyName}' is not referenced.")
+    // A view shows this as its error row's reason (common.md § States, story 2).
+    internal UnsupportedGameReleaseException(GameRelease release)
+        : base($"mEdit does not support {release}: it has no codec to read its plugins.")
     {
-        Release = release;
     }
-
-    internal GameRelease Release { get; }
 }

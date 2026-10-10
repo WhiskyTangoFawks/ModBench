@@ -1,6 +1,7 @@
 using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using Mutagen.Bethesda;
 
 namespace MEditService.PluginAdapter;
 
@@ -9,6 +10,10 @@ namespace MEditService.PluginAdapter;
 /// binaries, not a reference's comments.</summary>
 internal static class MalformedPluginScan
 {
+    // Every table and detector below is proven over this game's vanilla binaries; another game's
+    // vanilla breaks them (Skyrim.esm's function-14 entry points write EPFT 2), so its plugins get no claim.
+    private const GameCategory ProvenOver = GameCategory.Fallout4;
+
     // (record type, subrecord) → the payload size the CK always writes; a shorter one is zero-padded, losslessly.
     private static readonly Dictionary<(string RecordType, string Sig), int> FixedSizeTable = new()
     {
@@ -62,9 +67,10 @@ internal static class MalformedPluginScan
     /// <summary>Every Kind B diagnosis the plugin's own bytes prove, in record order. A record
     /// whose compressed payload cannot be inflated is skipped — an unreadable stream is a
     /// different failure than the classes this scan names.</summary>
-    internal static List<PluginDiagnosis> Scan(byte[] pluginBytes)
+    internal static List<PluginDiagnosis> Scan(byte[] pluginBytes, GameRelease gameRelease)
     {
         var diagnoses = new List<PluginDiagnosis>();
+        if (gameRelease.ToCategory() != ProvenOver) return diagnoses;
         foreach (var record in PluginBinaryWalk.WalkRecords(pluginBytes))
         {
             if (record.IsGrup || !HasDetector(record.Type)) continue;

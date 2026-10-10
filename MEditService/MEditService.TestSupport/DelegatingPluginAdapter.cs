@@ -31,7 +31,7 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
 
     public virtual void KeepHashesOf(IReadOnlySet<string> pluginPaths) => inner.KeepHashesOf(pluginPaths);
 
-    public virtual Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath) => inner.ClaimOf(pluginPath);
+    public virtual Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => inner.ClaimOf(pluginPath, gameRelease);
 
     public virtual bool GameFolderExists(string gameFolder) => inner.GameFolderExists(gameFolder);
 
@@ -57,8 +57,8 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         inner.DivergenceFrom(pluginFileName, pluginFilePath, recompiledPath, gameRelease, strings);
 
     public virtual Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
-        string originalPath, string recompiledPath, CancellationToken cancel = default) =>
-        inner.CompareBytesAsync(originalPath, recompiledPath, cancel);
+        string originalPath, string recompiledPath, GameRelease gameRelease, CancellationToken cancel = default) =>
+        inner.CompareBytesAsync(originalPath, recompiledPath, gameRelease, cancel);
 
     public virtual Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease) =>
         inner.CreateAndWriteAsync(modKey, folder, gameRelease);

@@ -43,6 +43,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.Architecture.T
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.Codec.Fallout4", "MEditService.Codec.Fallout4\MEditService.Codec.Fallout4.csproj", "{C958D3C9-14B1-4F60-81A0-21E1858D5975}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MEditService.Codec.Skyrim", "MEditService.Codec.Skyrim\MEditService.Codec.Skyrim.csproj", "{4021A579-0B85-420E-B98B-7A0A1EA4C384}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -293,6 +295,18 @@ Global
 		{C958D3C9-14B1-4F60-81A0-21E1858D5975}.Release|x64.Build.0 = Release|Any CPU
 		{C958D3C9-14B1-4F60-81A0-21E1858D5975}.Release|x86.ActiveCfg = Release|Any CPU
 		{C958D3C9-14B1-4F60-81A0-21E1858D5975}.Release|x86.Build.0 = Release|Any CPU
+		{4021A579-0B85-420E-B98B-7A0A1EA4C384}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4021A579-0B85-420E-B98B-7A0A1EA4C384}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4021A579-0B85-420E-B98B-7A0A1EA4C384}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4021A579-0B85-420E-B98B-7A0A1EA4C384}.Debug|x64.Build.0 = Debug|Any CPU
+		{4021A579-0B85-420E-B98B-7A0A1EA4C384}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4021A579-0B85-420E-B98B-7A0A1EA4C384}.Debug|x86.Build.0 = Debug|Any CPU
+		{4021A579-0B85-420E-B98B-7A0A1EA4C384}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4021A579-0B85-420E-B98B-7A0A1EA4C384}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4021A579-0B85-420E-B98B-7A0A1EA4C384}.Release|x64.ActiveCfg = Release|Any CPU
+		{4021A579-0B85-420E-B98B-7A0A1EA4C384}.Release|x64.Build.0 = Release|Any CPU
+		{4021A579-0B85-420E-B98B-7A0A1EA4C384}.Release|x86.ActiveCfg = Release|Any CPU
+		{4021A579-0B85-420E-B98B-7A0A1EA4C384}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
