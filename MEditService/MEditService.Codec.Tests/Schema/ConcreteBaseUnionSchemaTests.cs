@@ -115,7 +115,7 @@ public sealed class ConcreteBaseUnionSchemaTests
         var assembly = typeof(Fallout4Mod).Assembly;
         var version = assembly.GetName().Version
             ?? throw new InvalidOperationException("Expected the pinned Fallout4 assembly to report a version.");
-        Assert.Equal("0.53.1.0", version.ToString());
+        Assert.Equal("0.54.4.0", version.ToString());
 
         static bool IsLoquiClass(Type t) =>
             t.IsClass && !t.IsAbstract && !t.ContainsGenericParameters && !t.Name.EndsWith("BinaryOverlay", StringComparison.Ordinal)
