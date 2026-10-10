@@ -28,7 +28,7 @@ internal sealed class PluginIngest
         _types = RecordTypes.For(release);
     }
 
-    internal readonly record struct IndexTiming(long DocumentsMs, long PrepareMs, long AppendMs);
+    internal readonly record struct IndexTiming(long IngestMs, long PrepareMs, long AppendMs);
 
     // Everything the index derives from one document, computed off the appender thread; only writing
     // it is sequential. ParseDiagnosis is null for a record whose document was produced.
@@ -74,22 +74,6 @@ internal sealed class PluginIngest
     {
         public long PrepareMs;
         public long AppendMs;
-    }
-
-    private sealed class Appenders(DuckDBConnection connection) : IDisposable
-    {
-        public DuckDBAppender Records { get; } = connection.CreateAppender(TableDdlBuilder.MirrorSchema, "records");
-        public DuckDBAppender FormReferences { get; } = connection.CreateAppender(TableDdlBuilder.MirrorSchema, "form_references");
-        public DuckDBAppender Holdings { get; } = connection.CreateAppender(TableDdlBuilder.MirrorSchema, "holdings");
-        public DuckDBAppender CellLocations { get; } = connection.CreateAppender(TableDdlBuilder.MirrorSchema, "cell_location");
-
-        public void Dispose()
-        {
-            Records.Dispose();
-            FormReferences.Dispose();
-            Holdings.Dispose();
-            CellLocations.Dispose();
-        }
     }
 
     // Large enough to keep eight cores busy on cheap records. A master's cell documents run to a
@@ -140,7 +124,10 @@ internal sealed class PluginIngest
 
     private void Append(List<PreparedRecord> prepared, string plugin, string origin)
     {
-        using var appenders = new Appenders(_connection);
+        using var records = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "records");
+        using var formReferences = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "form_references");
+        using var holdings = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "holdings");
+        using var cellLocations = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "cell_location");
         foreach (var p in prepared)
         {
             if (p.ParseDiagnosis is { } diagnosis && _logger.IsEnabled(LogLevel.Warning))
@@ -152,7 +139,7 @@ internal sealed class PluginIngest
 
             try
             {
-                AppendPrepared(appenders.Records, p, plugin, origin);
+                AppendPrepared(records, p, plugin, origin);
             }
             catch (Exception ex)
             {
@@ -162,11 +149,11 @@ internal sealed class PluginIngest
                 throw;
             }
             foreach (var r in p.Refs)
-                AppendFormReference(appenders.FormReferences, r, plugin, origin);
+                AppendFormReference(formReferences, r, plugin, origin);
             foreach (var row in p.Holdings)
-                AppendHoldingRow(appenders.Holdings, row, plugin, origin);
+                AppendHoldingRow(holdings, row, plugin, origin);
             foreach (var row in p.CellLocations)
-                AppendCellLocationRow(appenders.CellLocations, row, plugin, origin);
+                AppendCellLocationRow(cellLocations, row, plugin, origin);
             if (_logger.IsEnabled(LogLevel.Trace))
             {
                 _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
@@ -240,7 +227,7 @@ internal sealed class PluginIngest
     {
         if (failures.Count == 0) return;
 
-        using var failureAppender = _connection.CreateAppender("mirror", "record_type_failure");
+        using var failureAppender = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "record_type_failure");
         foreach (var failure in failures)
         {
             _logger.LogWarning(

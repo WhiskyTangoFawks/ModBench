@@ -15,7 +15,7 @@ public sealed class IngestRetentionTests : IDisposable
 {
     private const string Plugin = "Streamed.esp";
     private const string Target = "000800:Streamed.esp";
-    private const int RecordsAsLargeAsAMastersCells = 40;
+    private const int MegabyteRecordCount = 40;
     private const int MegabyteEditorId = 1 << 20;
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("streamed-ingest").WithPlugin(Plugin).Build();
@@ -29,7 +29,7 @@ public sealed class IngestRetentionTests : IDisposable
 
         using var index = Indexes.Reconciled(_fixture, adapter: new StreamedAdapter(documents));
 
-        Assert.Equal(RecordsAsLargeAsAMastersCells, index.Queries.GetReferences(Target).Value().Count);
+        Assert.Equal(MegabyteRecordCount, index.Queries.GetReferences(Target).Value().Count);
         Assert.False(documents.FirstHeldAtTheLast);
     }
 
@@ -66,9 +66,9 @@ public sealed class IngestRetentionTests : IDisposable
             get
             {
                 var first = new WeakReference(null);
-                for (var i = 0; i < RecordsAsLargeAsAMastersCells; i++)
+                for (var i = 0; i < MegabyteRecordCount; i++)
                 {
-                    if (i == RecordsAsLargeAsAMastersCells - 1)
+                    if (i == MegabyteRecordCount - 1)
                     {
                         FirstHeldAtTheLast = IsHeld(first);
                         if (fileIndexedUnder is { } root) DuckDbBytesAtTheLast = DuckDbBytes(root);

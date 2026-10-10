@@ -620,8 +620,8 @@ internal sealed class Store : IDisposable
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug(
-                "Index {Plugin}: documents {DocumentsMs} ms (prepare {PrepareMs} ms, append {AppendMs} ms), commit {CommitMs} ms",
-                plugin, timing.DocumentsMs, timing.PrepareMs, timing.AppendMs, commitTimer.ElapsedMilliseconds);
+                "Index {Plugin}: ingest {IngestMs} ms (prepare {PrepareMs} ms, append {AppendMs} ms), commit {CommitMs} ms",
+                plugin, timing.IngestMs, timing.PrepareMs, timing.AppendMs, commitTimer.ElapsedMilliseconds);
         }
     }
 
