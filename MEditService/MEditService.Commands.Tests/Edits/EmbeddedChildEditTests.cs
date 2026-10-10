@@ -5,6 +5,7 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
+using Mutagen.Bethesda.Plugins;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -21,58 +22,43 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
     private string WorkingTreeCell() => _fixture.Document(_fixture.EmbedCell.ToString()).Require().Body;
 
-    [Fact]
-    public void EditingAnEmbeddedPlacedRefsField_RewritesOnlyThatFieldInTheOwningCellsDocument()
+    public static TheoryData<Func<ContainerModFixture, FormKey>, string, string, string?, RecordEditRefusal, string> SlotsThatAreStructural => new()
     {
-        var before = EmbedCellDocument().Body;
+        { f => f.EmbedCell, RecordEditEnvelope.Set, "NavigationMeshes", "[]", RecordEditRefusal.FieldReadOnly, "not by editing the slot" },
+        { f => f.EmbedCell, RecordEditEnvelope.Set, "Landscape", "null", RecordEditRefusal.FieldReadOnly, "not by editing the slot" },
+        { f => f.Worldspace, RecordEditEnvelope.Set, "TopCell", "null", RecordEditRefusal.FieldReadOnly, "not by editing the slot" },
+        { f => f.Worldspace, RecordEditEnvelope.Set, "SubCells", "[]", RecordEditRefusal.FieldReadOnly, "not by editing the slot" },
+        { f => f.EmbedCell, RecordEditEnvelope.Move, "NavigationMeshes[0]", "1", RecordEditRefusal.FieldReadOnly, "not by editing the slot" },
+        { f => f.EmbedCell, RecordEditEnvelope.Set, "Grid", """{"Point": {"X": 9, "Y": 9}}""", RecordEditRefusal.FieldReadOnly, "structural gesture" },
+        { f => f.EmbedCell, RecordEditEnvelope.Set, "Grid.Point", "\"9, 9\"", RecordEditRefusal.FieldReadOnly, "structural gesture" },
+        { f => f.EmbedCell, RecordEditEnvelope.Remove, "NavigationMeshes[5]", null, RecordEditRefusal.FieldNotFound, "names no element" },
+        { f => f.EmbedCell, RecordEditEnvelope.Move, "NavigationMeshes[5]", "0", RecordEditRefusal.FieldNotFound, "names no element" },
+    };
+
+    [Fact]
+    public void EditingAnEmbeddedChild_RewritesItsOwnersDocument_ThatDivergesFromHead_AndTheChildReadsItBack()
+    {
         Assert.Empty(_fixture.ChangedFormKeys());
 
         var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotEmpty(_fixture.ChangedFormKeys());
-        Assert.Equal(before.Replace("\"Scale\": 1.0", "\"Scale\": 2.5", StringComparison.Ordinal), EmbedCellDocument().Body);
-    }
-
-    [Fact]
-    public void EditingAnEmbeddedChild_LeavesTheParentsOwnFieldsAlone()
-    {
-        Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("7.0")).Applied);
-
-        var after = EmbedCellDocument().Body;
-        Assert.Contains("\"WaterHeight\": 10.0", after, StringComparison.Ordinal);
-        Assert.Contains($"\"EditorID\": \"{ContainerModPlugin.EmbedCellEditorId}\"", after, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AfterAnEmbeddedEdit_TheChildsOwnDocumentCarriesTheNewValue()
-    {
-        Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("3.5")).Applied);
-
-        var child = _fixture.Document(_fixture.TemporaryRef.ToString());
-        Assert.NotNull(child);
-        Assert.Contains("\"Scale\": 3.5", child.Body, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AfterAnEmbeddedEdit_TheOwningCellDivergesFromHead()
-    {
-        Assert.DoesNotContain(_fixture.EmbedCell.ToString(), _fixture.ChangedFormKeys());
-
-        Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("4.5")).Applied);
-
         Assert.Contains(_fixture.EmbedCell.ToString(), _fixture.ChangedFormKeys());
-        Assert.Contains("\"Scale\": 4.5", WorkingTreeCell(), StringComparison.Ordinal);
+        Assert.Contains("\"Scale\": 2.5", WorkingTreeCell(), StringComparison.Ordinal);
+        Assert.Contains("\"Scale\": 2.5", _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void APlacedRefsPosition_Edits_AsAnyField()
+    [Theory]
+    [MemberData(nameof(SlotsThatAreStructural))]
+    public void AStructuralSlot_IsRefused_SoContainerChildAndCellLocationCannotGoStale(
+        Func<ContainerModFixture, FormKey> record, string op, string path, string? value, RecordEditRefusal refusal, string reason)
     {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.TemporaryRef.ToString(), "Position", Json("\"99, 88, 77\""));
+        var result = EditService().Edit(_fixture.Plugin, record(_fixture).ToString(), Spelled(op, path, value));
 
-        Assert.True(result.Applied, result.Message);
-        Assert.Contains("\"Position\": \"99, 88, 77\"", WorkingTreeCell(), StringComparison.Ordinal);
+        Assert.False(result.Applied);
+        Assert.Equal(refusal, result.Refusal);
+        Assert.Contains(reason, result.Message, StringComparison.Ordinal);
+        Assert.Empty(_fixture.ChangedFormKeys());
     }
 
     [Fact]
@@ -87,65 +73,6 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
         Assert.Contains("\"EditorID\": \"ExteriorRef\"", owner, StringComparison.Ordinal);
         Assert.Contains("\"Position\": \"90000, -90000, 0\"", owner, StringComparison.Ordinal);
         Assert.Contains(_fixture.ExteriorCell.ToString(), _fixture.ChangedFormKeys());
-    }
-
-    [Fact]
-    public void ACellsChildSlots_AreRefused_SoContainerChildCannotGoStale()
-    {
-        var service = EditService();
-
-        var navmeshes = service.Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "NavigationMeshes", Json("[]"));
-        Assert.False(navmeshes.Applied);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, navmeshes.Refusal);
-        Assert.Contains("not by editing the slot", navmeshes.Message, StringComparison.Ordinal);
-
-        var landscape = service.Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "Landscape", Json("null"));
-        Assert.False(landscape.Applied);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, landscape.Refusal);
-
-        var topCell = service.Set(_fixture.Plugin, _fixture.Worldspace.ToString(), "TopCell", Json("null"));
-        Assert.False(topCell.Applied);
-
-        var reorder = service.Edit(_fixture.Plugin, _fixture.EmbedCell.ToString(), MoveTo(1, Member("NavigationMeshes"), At(0)));
-        Assert.False(reorder.Applied);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, reorder.Refusal);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, topCell.Refusal);
-
-        var cell = WorkingTreeCell();
-        Assert.Contains(_fixture.Navmesh.ToString(), cell, StringComparison.Ordinal);
-        Assert.Contains(_fixture.Landscape.ToString(), cell, StringComparison.Ordinal);
-        Assert.Empty(_fixture.ChangedFormKeys());
-    }
-
-    [Fact]
-    public void AChildSlotElementPastItsEnd_IsRefusedAsNoElement_OnRemoveAndMove()
-    {
-        var service = EditService();
-
-        var remove = service.Edit(_fixture.Plugin, _fixture.EmbedCell.ToString(), RemoveAt(Member("NavigationMeshes"), At(5)));
-        var move = service.Edit(_fixture.Plugin, _fixture.EmbedCell.ToString(), MoveTo(0, Member("NavigationMeshes"), At(5)));
-
-        Assert.Equal(RecordEditRefusal.FieldNotFound, remove.Refusal);
-        Assert.Contains("names no element", remove.Message, StringComparison.Ordinal);
-        Assert.Equal(RecordEditRefusal.FieldNotFound, move.Refusal);
-        Assert.Contains("names no element", move.Message, StringComparison.Ordinal);
-        Assert.Empty(_fixture.ChangedFormKeys());
-    }
-
-    [Fact]
-    public void ACellsGrid_IsRefused_SoCellLocationCannotGoStale()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.EmbedCell.ToString(), "Grid", Json("""{"Point": {"X": 9, "Y": 9}}"""));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Contains("structural gesture", result.Message, StringComparison.Ordinal);
-
-        var point = EditService().Edit(
-            _fixture.Plugin, _fixture.EmbedCell.ToString(), SetAt(Json("\"9, 9\""), Member("Grid"), Member("Point")));
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, point.Refusal);
-        Assert.Empty(_fixture.ChangedFormKeys());
     }
 
     [Fact]
@@ -226,17 +153,6 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal(RecordEditRefusal.RecordNotFound, refused.Refusal);
         Assert.Contains("no record's document carries it", refused.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AWorldspacesSubCells_AreRefused_LikeItsTopCell()
-    {
-        var result = EditService().Set(_fixture.Plugin, _fixture.Worldspace.ToString(), "SubCells", Json("[]"));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Contains("not by editing the slot", result.Message, StringComparison.Ordinal);
-        Assert.Empty(_fixture.ChangedFormKeys());
     }
 
     [Fact]

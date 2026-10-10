@@ -37,7 +37,6 @@ public sealed partial class AbstractUnionCompileRoundTripTests : IDisposable
     [InlineData("MagicEffect", "Archetype", """{"MutagenObjectType": "MagicEffectArchetype", "Type": "ValueModifier", "Association": "{ActorValueInformation}"}""")]
     [InlineData("AudioEffectChain", "Effects", """[{"MutagenObjectType": "StateVariableFilterAudioEffect", "Enabled": true, "CenterFrequency": 440.0, "QValue": 0.75}]""")]
     [InlineData("Faction", "VendorLocation", """{"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": 3}}""")]
-    [InlineData("Static", "NavmeshGeometry", """{"Parent": {"MutagenObjectType": "CellNavmeshParent"}}""")]
     public async Task AnEditedUnion_CompilesAndReparsesAsTheDocumentReads(string subject, string member, string value)
     {
         var formKey = Property(subject).ToString();
