@@ -34,8 +34,7 @@ function instanceOver(wrap: (adapter: InstanceAdapter) => InstanceAdapter = (ada
   const instance = new Instance({
     adapter: wrap(adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND, downloadedFiles: NO_DOWNLOADS })),
     window: STEADY_WINDOW,
-    log: () => {},
-    logReadFailure: () => {},
+    log: { info: () => {}, warn: () => {}, error: () => {} },
   });
   instances.push(instance);
   return { root, instance };

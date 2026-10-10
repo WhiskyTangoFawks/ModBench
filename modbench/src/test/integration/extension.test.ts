@@ -1148,7 +1148,7 @@ describe('an edit in a tracked copy\'s grid', () => {
 
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(TRACKED_FILE));
     assert.deepStrictEqual(shown(document), { text: savedText, unsaved: false });
-    await waitFor('the refusal in the Modbench log', () => modbenchLog().includes('warning: Edits: Tracked.esp is not tracked, so it is read-only.'));
+    await waitFor('the refusal in the Modbench log', () => modbenchLog().includes('Edits: Tracked.esp is not tracked, so it is read-only.'));
   });
 
   it('moves the file where mEdit answers, and the tab goes with it, reading the record it moved to from the document', async () => {

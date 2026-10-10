@@ -69,7 +69,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   const instance = new Instance({
     window: STEADY_WINDOW,
     adapter: adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } }),
-    log: () => {}, logReadFailure: () => {},
+    log: { info: () => {}, warn: () => {}, error: () => {} },
   });
   instances.push(instance);
 
@@ -193,7 +193,7 @@ describe('the game folder not found, across the whole instance', () => {
     const channel = { error: write, warn: write, info: write };
     const instance = new Instance({
       window: STEADY_WINDOW,
-      adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }), log: write, logReadFailure: write,
+      adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }), log: channel,
     });
     instances.push(instance);
     toolboxes.push(new ToolboxProvider({ instance, channel }));

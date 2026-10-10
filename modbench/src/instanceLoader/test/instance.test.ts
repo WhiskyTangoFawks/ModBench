@@ -46,6 +46,7 @@ function realInstance(hooks: Hooks = {}): {
   root: string;
   instance: Instance;
   logs: string[];
+  warnings: string[];
   readFailureLines: string[];
   settingsReads: { count: number };
   setResolver: (resolve: ResolveGameFolder) => void;
@@ -54,17 +55,17 @@ function realInstance(hooks: Hooks = {}): {
   roots.push(root);
   const logs: string[] = [];
   const readFailureLines: string[] = [];
+  const warnings: string[] = [];
   const settingsReads = { count: 0 };
   let resolve = hooks.resolveGameFolder ?? resolvesDataFolder;
   const instance = new Instance({
     window: STEADY_WINDOW,
     adapter: countingSettings(adapterOver(root, { gameFolder: () => resolve() }), settingsReads),
-    log: (msg) => logs.push(msg),
-    logReadFailure: (line) => readFailureLines.push(line),
+    log: { info: (msg) => logs.push(msg), warn: (msg) => warnings.push(msg), error: (line) => readFailureLines.push(line) },
   });
   instances.push(instance);
   return {
-    root, instance, logs, readFailureLines, settingsReads,
+    root, instance, logs, warnings, readFailureLines, settingsReads,
     setResolver: (next) => { resolve = next; },
   };
 }
@@ -93,7 +94,7 @@ function signalledInstance(): {
       },
     },
     window,
-    log: () => {}, logReadFailure: () => {},
+    log: { info: () => {}, warn: () => {}, error: () => {} },
   });
   instances.push(instance);
   return {
@@ -768,7 +769,7 @@ describe('Instance — a value that survives a bad read', () => {
   });
 
   it('keeps recomputing after a subscriber throws', async () => {
-    const { instance, logs } = realInstance();
+    const { instance, readFailureLines } = realInstance();
     const seen: number[] = [];
     instance.subscribe(() => {
       throw new Error('subscriber exploded');
@@ -779,7 +780,7 @@ describe('Instance — a value that survives a bad read', () => {
     await instance.refresh();
 
     expect(seen).toEqual([1, 2]);
-    expect(logs.filter((m) => m.includes('subscriber threw'))).toHaveLength(2);
+    expect(readFailureLines.filter((m) => m.includes('subscriber threw'))).toHaveLength(2);
   });
 
   it('corrects the value on refresh after a watcher event that never arrived', async () => {
@@ -1022,7 +1023,7 @@ describe('Instance — downloads, profile and game directory', () => {
 
   it('names the mod manager and its mod-order file as the adapter does rather than as the value spells them, before the first read too', () => {
     const adapter = { ...adapterOver('/an/instance', { gameFolder: resolvesNotFound }), names: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' } };
-    const instance = new Instance({ window: STEADY_WINDOW, adapter, log: () => {}, logReadFailure: () => {} });
+    const instance = new Instance({ window: STEADY_WINDOW, adapter, log: { info: () => {}, warn: () => {}, error: () => {} } });
     instances.push(instance);
 
     expect(instance.value.managerNames).toEqual({ manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' });
@@ -1032,7 +1033,7 @@ describe('Instance — downloads, profile and game directory', () => {
     const instance = new Instance({
       window: STEADY_WINDOW,
       adapter: adapterOver('/an/instance', { gameFolder: resolvesNotFound }),
-      log: () => {}, logReadFailure: () => {},
+      log: { info: () => {}, warn: () => {}, error: () => {} },
     });
     instances.push(instance);
 
@@ -1042,7 +1043,7 @@ describe('Instance — downloads, profile and game directory', () => {
 });
 
 async function minimalInstanceWithoutCorpusMasters(): Promise<{
-  root: string; instance: Instance; logs: string[]; readFailureLines: string[];
+  root: string; instance: Instance; logs: string[]; warnings: string[]; readFailureLines: string[];
   setResolver: (resolve: ResolveGameFolder) => void;
 }> {
   const root = await mkdtemp(join(tmpdir(), 'medit-instance-status-'));
@@ -1054,15 +1055,15 @@ async function minimalInstanceWithoutCorpusMasters(): Promise<{
   await mkdir(join(root, 'mods', 'Consumer'), { recursive: true });
   const logs: string[] = [];
   const readFailureLines: string[] = [];
+  const warnings: string[] = [];
   let resolve: ResolveGameFolder = resolvesNotFound;
   const instance = new Instance({
     window: STEADY_WINDOW,
     adapter: adapterOver(root, { gameFolder: () => resolve() }),
-    log: (msg) => logs.push(msg),
-    logReadFailure: (line) => readFailureLines.push(line),
+    log: { info: (msg) => logs.push(msg), warn: (msg) => warnings.push(msg), error: (line) => readFailureLines.push(line) },
   });
   instances.push(instance);
-  return { root, instance, logs, readFailureLines, setResolver: (next) => { resolve = next; } };
+  return { root, instance, logs, warnings, readFailureLines, setResolver: (next) => { resolve = next; } };
 }
 
 describe('Instance — Overwrite\'s files', () => {
@@ -1174,7 +1175,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
   });
 
   it('tells an unresolved game directory from a folder that resolved and could not be read, an unreadable folder not being an empty set that would prune every plugins.txt line', async () => {
-    const { instance, logs, setResolver } = await minimalInstanceWithoutCorpusMasters();
+    const { instance, warnings, setResolver } = await minimalInstanceWithoutCorpusMasters();
 
     await instance.refresh();
     expect(instance.value.dataFolderPlugins).toEqual({ kind: 'unresolved' });
@@ -1184,7 +1185,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
 
     expect(instance.value.dataFolderPlugins).toMatchObject({ kind: 'unreadable' });
     expect(instance.sequence).toBe(2);
-    expect(logs.filter((m) => m.includes('Data folder could not be listed'))).toHaveLength(1);
+    expect(warnings.filter((m) => m.includes('Data folder could not be listed'))).toHaveLength(1);
   });
 
   it('carries the plugins the game loads with no line: its masters from the per-release table, then its Creation Club plugins from the game folder\'s list, each only where the game can load it from', async () => {

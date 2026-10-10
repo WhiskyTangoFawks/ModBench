@@ -123,13 +123,18 @@ interface FocusWindow {
   onDidChangeWindowState(listener: (state: { readonly focused: boolean }) => void): Subscription;
 }
 
+interface InstanceLog {
+  info(line: string): void;
+  warn(line: string): void;
+  error(line: string): void;
+}
+
 interface InstanceOptions {
   /** The one reader of the instance; each recompute reads its settings once. */
   adapter: InstanceAdapter;
   window: FocusWindow;
-  log: (msg: string) => void;
-  /** The failed read's one Output line, written at error level however many views show it. */
-  logReadFailure: (line: string) => void;
+  /** A failure logs at warn or error; a note that is not a failure logs at info. */
+  log: InstanceLog;
 }
 
 // Each listed mod's folder is matched as the manager matches names.
@@ -298,7 +303,7 @@ export class Instance implements Subscription {
     const folders = await this.options.adapter.modFolders((name, reason) => skipped.set(name, reason));
     for (const [name, reason] of skipped) {
       if (!this.linksTold.has(name)) {
-        this.options.log(`[instance] mods/${name} is a link Modbench cannot follow, so it is not a mod folder: ${reason}`);
+        this.options.log.info(`[instance] mods/${name} is a link Modbench cannot follow, so it is not a mod folder: ${reason}`);
       }
     }
     this.linksTold = new Set(skipped.keys());
@@ -309,7 +314,7 @@ export class Instance implements Subscription {
   // go stale over a folder outside the instance.
   private async readGameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins> {
     const plugins = await this.options.adapter.gameFolderPlugins(gameFolder);
-    if (plugins.kind === 'unreadable') this.options.log(`[instance] the game's Data folder could not be listed: ${plugins.reason}`);
+    if (plugins.kind === 'unreadable') this.options.log.warn(`[instance] the game's Data folder could not be listed: ${plugins.reason}`);
     return plugins;
   }
 
@@ -334,7 +339,7 @@ export class Instance implements Subscription {
     } catch (err) {
       if (epoch !== this.quietEpoch || this.quiets > 0) return;
       const failure = errorMessage(err);
-      this.options.logReadFailure(`[instance] Failed to read the instance: ${failure}`);
+      this.options.log.error(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
       this.notify(this.failureListeners, (listener) => listener());
       return;
@@ -353,7 +358,7 @@ export class Instance implements Subscription {
       try {
         call(listener);
       } catch (err) {
-        this.options.log(`[instance] subscriber threw at sequence ${this.seq}: ${errorMessage(err)}`);
+        this.options.log.error(`[instance] subscriber threw at sequence ${this.seq}: ${errorMessage(err)}`);
       }
     }
   }
@@ -373,7 +378,7 @@ export class Instance implements Subscription {
     await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
     const confirmed = await this.readModOrder(profile);
     if (confirmed.length > 0) {
-      this.options.log(`[instance] mod order read as empty mid-write; the re-read found ${confirmed.length} entries`);
+      this.options.log.info(`[instance] mod order read as empty mid-write; the re-read found ${confirmed.length} entries`);
     }
     return confirmed;
   }
@@ -405,7 +410,7 @@ export class Instance implements Subscription {
     const entries = await this.readMods(profile);
     const runtimeOutputRead = adapter.originFiles({ kind: 'runtimeOutput' });
     const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game, trackedMods] = await Promise.all([
-      runtimeOutputRead.then((output) => buildFileConflictIndex(entries, output.files, adapter, log)),
+      runtimeOutputRead.then((output) => buildFileConflictIndex(entries, output.files, adapter, (line) => log.info(line))),
       adapter.pluginOrder(profile),
       // Both answers come from the settings read above, so a rewrite cannot land two generations
       // in one value.
@@ -420,7 +425,7 @@ export class Instance implements Subscription {
       })),
       Promise.all(entries.map(async (entry) => (entry.kind === 'mod' && await adapter.modTracked(entry.name) ? [entry.name] : []))),
     ]);
-    for (const note of runtimeOutput.notes) log(`[instance] ${runtimeOutput.origin}: ${note}`);
+    for (const note of runtimeOutput.notes) log.info(`[instance] ${runtimeOutput.origin}: ${note}`);
     const { gameFolder, dataFolderPlugins, creationClub } = game;
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
     const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins);
