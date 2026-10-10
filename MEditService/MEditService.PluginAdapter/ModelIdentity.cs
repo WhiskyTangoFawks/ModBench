@@ -151,27 +151,13 @@ internal static class ModelIdentity
                 // Keyed comparison needs BOTH the {Key, Value} shape and a reflected dictionary property name:
                 // NpcMorph is an ordered list whose elements are also exactly {Key, Value}.
                 if (aItems.Count > 0 && propertyName != null && dictionaryProperties.Contains(propertyName)
-                    && aItems.All(IsKeyValueEntry) && bItems.All(IsKeyValueEntry))
+                    && aItems.All(IsEntryOf("Key", "Value")) && bItems.All(IsEntryOf("Key", "Value")))
                 {
-                    // A duplicated key on either side is not a dictionary any more — unequal
-                    // rather than a thrown error or a guessed pairing.
-                    var byKey = new Dictionary<string, System.Text.Json.JsonElement>(StringComparer.Ordinal);
-                    foreach (var entry in bItems)
-                    {
-                        if (!byKey.TryAdd(entry.GetProperty("Key").GetRawText(), entry)) return path;
-                    }
-                    var seenKeys = new HashSet<string>(StringComparer.Ordinal);
-                    foreach (var entry in aItems)
-                    {
-                        var key = entry.GetProperty("Key").GetRawText();
-                        var keyPath = $"{path}[{key}]";
-                        if (!seenKeys.Add(key) || !byKey.TryGetValue(key, out var match)) return keyPath;
-                        if (FirstModelDifference(entry.GetProperty("Value"), match.GetProperty("Value"), keyPath, propertyName, dictionaryProperties)
-                            is { } difference)
-                            return difference;
-                    }
-                    return null;
+                    return FirstKeyedDifference(aItems, bItems, "Key", "Value", path, propertyName, dictionaryProperties);
                 }
+                // A translated string's languages, which Mutagen holds as a dictionary and the codec writes as Values.
+                if (propertyName == "Values" && aItems.All(IsEntryOf("Language", "String")) && bItems.All(IsEntryOf("Language", "String")))
+                    return FirstKeyedDifference(aItems, bItems, "Language", "String", path, propertyName, dictionaryProperties);
                 return aItems.Zip(bItems)
                     .Select((pair, i) => FirstModelDifference(pair.First, pair.Second, $"{path}[{i}]", propertyName, dictionaryProperties))
                     .FirstOrDefault(difference => difference != null);
@@ -215,12 +201,36 @@ internal static class ModelIdentity
             return names;
         });
 
-    private static bool IsKeyValueEntry(System.Text.Json.JsonElement element)
+    // A duplicated key on either side is not a dictionary any more — unequal rather than a thrown error
+    // or a guessed pairing.
+    private static string? FirstKeyedDifference(
+        List<System.Text.Json.JsonElement> aItems, List<System.Text.Json.JsonElement> bItems, string keyName, string valueName,
+        string path, string propertyName, IReadOnlySet<string> dictionaryProperties)
+    {
+        var byKey = new Dictionary<string, System.Text.Json.JsonElement>(StringComparer.Ordinal);
+        foreach (var entry in bItems)
+        {
+            if (!byKey.TryAdd(entry.GetProperty(keyName).GetRawText(), entry)) return path;
+        }
+        var seenKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in aItems)
+        {
+            var key = entry.GetProperty(keyName).GetRawText();
+            var keyPath = $"{path}[{key}]";
+            if (!seenKeys.Add(key) || !byKey.TryGetValue(key, out var match)) return keyPath;
+            if (FirstModelDifference(entry.GetProperty(valueName), match.GetProperty(valueName), keyPath, propertyName, dictionaryProperties)
+                is { } difference)
+                return difference;
+        }
+        return null;
+    }
+
+    private static Func<System.Text.Json.JsonElement, bool> IsEntryOf(string keyName, string valueName) => element =>
     {
         if (element.ValueKind != System.Text.Json.JsonValueKind.Object) return false;
         var names = element.EnumerateObject().Select(p => p.Name).ToList();
-        return names.Count == 2 && names.Contains("Key") && names.Contains("Value");
-    }
+        return names.Count == 2 && names.Contains(keyName) && names.Contains(valueName);
+    };
 
     // A standalone -0 token becomes 0; the lookbehind keeps a -0 inside an identifier ("Mk-0") untouched.
     private static string NormalizeNegativeZeros(string text) =>
