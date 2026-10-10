@@ -44,6 +44,8 @@ export interface EditorCommandDeps {
   // The rows selected in the view `view` names, which a key bound in that view acts on.
   selectionOf: (view: string) => readonly unknown[];
   recordWrite: RecordWrite;
+  // Told what each open was handed, so a view another extension owns can say which row it opened.
+  opening: (invocation: unknown) => void;
   sourceEditing: SourceEditing;
   // The instance's mods, which a column header reads for its mod's repository state.
   modFacts: ModFacts;
@@ -110,6 +112,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     ...registerRecordCopyCommands(
       meditClient, deps.reporterFor('recordCopy'), deps.ask, selections, deps.recordWrite, deps.sourceEditing),
     vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {
+      deps.opening(argument);
       const plan = recordOpenPlan(argument, deps.focusedViewSelection());
       const reporter = deps.reporterFor('recordOpen');
       if (plan.addresses.length > 0) return openRecords(meditClient, reporter, recordEditorProvider, plan);

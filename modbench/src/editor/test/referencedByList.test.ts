@@ -9,6 +9,7 @@ import {
   readReferencedBy,
   ReferencedByHolderNode,
   referencedByCopyValueText,
+  openedRow,
 } from '../referencedByList';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { expectInstancesOf } from '../../test/expectInstanceOf';
@@ -121,11 +122,9 @@ describe('the Referenced By list — a referrer', () => {
 
   it('opens its winning copy on a click, carrying its record with no plugin as its Argument', async () => {
     const [referrer] = await referrersOver([reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC' })]);
-    expect(present(referrer, 'the referrer').command).toEqual({
-      command: 'modbench.record.open',
-      title: 'Open Record',
-      arguments: [{ argument: { kind: 'record', formKey: '000002:Fallout4.esm' } }],
-    });
+    const { command } = present(referrer, 'the referrer');
+    expect(command?.command).toBe('modbench.record.open');
+    expect(command?.arguments).toMatchObject([{ argument: { kind: 'record', formKey: '000002:Fallout4.esm' }, row: referrer }]);
     expect(recordOpenPlan(referrer, []).addresses).toEqual([{ formKey: '000002:Fallout4.esm' }]);
   });
 
@@ -155,7 +154,7 @@ describe('the Referenced By list — where a referrer is held', () => {
     return expectInstancesOf(provider.getChildren(present(referrer, 'the referrer')), ReferencedByHolderNode);
   }
 
-  it('is one row per plugin, in the order mEdit answers, each naming its fields, with no click', async () => {
+  it('is one row per plugin, in the order mEdit answers, each naming its fields', async () => {
     const holders = await holdersOver([
       reference({ formKey: '000002:Fallout4.esm', plugin: 'Fallout4.esm', fieldPath: 'Keywords[0]' }),
       reference({ formKey: '000002:Fallout4.esm', plugin: 'Fallout4.esm', fieldPath: 'Keywords[1]' }),
@@ -165,7 +164,16 @@ describe('the Referenced By list — where a referrer is held', () => {
       ['Fallout4.esm', 'Keywords[0], Keywords[1]'],
       ['MyMod.esp', 'Template'],
     ]);
-    expect(holders[0]?.command).toBeUndefined();
+  });
+
+  it('opens its plugin copy on a click, handing the open command itself as the row opened', async () => {
+    const [holder] = await holdersOver([
+      reference({ formKey: '000002:Fallout4.esm', plugin: 'MyMod.esp', origin: 'MyMod' }),
+    ]);
+    const [invocation] = present(holder?.command?.arguments, 'the click\'s arguments');
+    expect(holder?.command?.command).toBe('modbench.record.open');
+    expect(invocation).toMatchObject({ argument: holder?.argument });
+    expect(openedRow(invocation)).toBe(holder);
   });
 
   it('keeps two plugins of one file name apart by their origins', async () => {
@@ -187,8 +195,9 @@ describe('the Referenced By list — where a referrer is held', () => {
   });
 });
 
-describe('referencedByCopyValueText — the text of the selected referrers', () => {
-  const copiedFrom = (selected: readonly unknown[]) => referencedByCopyValueText(selected[0], selected);
+describe('referencedByCopyValueText — the text of the selected rows', () => {
+  const noSelection = () => [];
+  const copiedFrom = (selected: readonly unknown[]) => referencedByCopyValueText(noSelection)(selected[0], selected);
 
   it('copies a referrer as EditorID [FormKey], or its FormKey alone with no EditorID', async () => {
     expect(copiedFrom(await referrersOver([reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC' })])))
@@ -196,7 +205,7 @@ describe('referencedByCopyValueText — the text of the selected referrers', () 
     expect(copiedFrom(await referrersOver([reference({ formKey: '000002:Fallout4.esm' })]))).toBe('000002:Fallout4.esm');
   });
 
-  it('joins several selected referrers one per line, in selection order', async () => {
+  it('joins several selected rows one per line, in selection order', async () => {
     const [first, second] = await referrersOver([
       reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC' }),
       reference({ formKey: '000003:Fallout4.esm', editorId: 'OtherNPC', fieldPath: 'Template' }),
@@ -205,22 +214,29 @@ describe('referencedByCopyValueText — the text of the selected referrers', () 
       .toBe('TestNPC [000002:Fallout4.esm]\nOtherNPC [000003:Fallout4.esm]');
   });
 
-  it('adds nothing for a selected row beneath a referrer', async () => {
+  it('copies a row beneath a referrer as the record it holds', async () => {
     const { provider, referrers: [referrer] } = await listOf(indexed([
       reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC' }),
     ]));
-    const [copy] = provider.getChildren(present(referrer, 'the referrer'));
-    expect(copiedFrom([present(referrer, 'the referrer'), present(copy, 'its plugin copy')])).toBe('TestNPC [000002:Fallout4.esm]');
+    const [holder] = provider.getChildren(present(referrer, 'the referrer'));
+    expect(copiedFrom([present(holder, 'its plugin copy')])).toBe('TestNPC [000002:Fallout4.esm]');
   });
 
-  it('falls back to the clicked referrer alone with nothing else selected', async () => {
+  it('falls back to the clicked row alone with nothing else selected', async () => {
     const [referrer] = await referrersOver([reference({ formKey: '000002:Fallout4.esm', editorId: 'Named' })]);
-    expect(referencedByCopyValueText(referrer, undefined)).toBe('Named [000002:Fallout4.esm]');
+    expect(referencedByCopyValueText(noSelection)(referrer, undefined)).toBe('Named [000002:Fallout4.esm]');
+  });
+
+  it('copies the selection of the References view for its key', async () => {
+    const referrers = await referrersOver([reference({ formKey: '000002:Fallout4.esm', editorId: 'Named' })]);
+    expect(referencedByCopyValueText(() => referrers)({ view: 'references-view.tree' }, undefined))
+      .toBe('Named [000002:Fallout4.esm]');
   });
 
   it('defers on an invocation of another surface, so an adapter after it can run', () => {
-    expect(referencedByCopyValueText(undefined, undefined)).toBeUndefined();
-    expect(referencedByCopyValueText({ kind: 'mod' }, undefined)).toBeUndefined();
-    expect(referencedByCopyValueText({ view: 'modbench.modList' }, undefined)).toBeUndefined();
+    const text = referencedByCopyValueText(noSelection);
+    expect(text(undefined, undefined)).toBeUndefined();
+    expect(text({ kind: 'mod' }, undefined)).toBeUndefined();
+    expect(text({ view: 'modbench.modList' }, undefined)).toBeUndefined();
   });
 });

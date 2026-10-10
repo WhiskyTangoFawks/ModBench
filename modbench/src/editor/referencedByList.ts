@@ -5,7 +5,13 @@ import { errorMessage } from '../ports/errorMessage';
 import { ErrorNode } from '../drivingLib/errorNode';
 import type { RecordArgument } from '../drivingLib/recordArgument';
 import { recordLabel } from '../wire/recordLabel';
+import { isKeyArgs, type CopyValueAdapter } from '../drivingLib/copyValue';
+import { REFERENCES_VIEW_ID } from './referencesView';
 import { failureReason, isReadFailed, localFailure } from '../wire/readFailed';
+
+function openCommand(row: { readonly argument: RecordArgument }): vscode.Command {
+  return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: row.argument, row }] };
+}
 
 /** One plugin's copy of a referrer, with the fields that hold the reference. */
 export class ReferencedByHolderNode extends vscode.TreeItem {
@@ -13,6 +19,7 @@ export class ReferencedByHolderNode extends vscode.TreeItem {
   readonly plugin: PluginAddress;
   /** What confirmations call the record this copy holds. */
   readonly name: string;
+  readonly copyText: string;
 
   constructor(
     list: string,
@@ -24,10 +31,12 @@ export class ReferencedByHolderNode extends vscode.TreeItem {
     super(address.name, vscode.TreeItemCollapsibleState.None);
     this.plugin = address;
     this.name = editorId ?? formKey;
+    this.copyText = recordLabel(editorId, formKey);
     this.argument = { kind: 'record', plugin: address, formKey };
     this.id = JSON.stringify([list, formKey, address.origin, address.name]);
     this.description = fieldPaths.join(', ');
     this.contextValue = 'referencedByHolder';
+    this.command = openCommand(this);
   }
 }
 
@@ -53,25 +62,33 @@ class ReferencedByReferrerNode extends vscode.TreeItem {
     this.description = holders.length > 1 ? `${recordTypeName} · ${holders.length} plugins` : recordTypeName;
     this.tooltip = [this.copyText, recordTypeName, holders.map(h => h.plugin.name).join(', ')].join('\n');
     this.contextValue = 'referencedByReferrer';
-    this.command = {
-      command: 'modbench.record.open',
-      title: 'Open Record',
-      arguments: [{ argument: this.argument }],
-    };
+    this.command = openCommand(this);
   }
 }
 
-type ReferencedByTreeNode = ReferencedByReferrerNode | ReferencedByHolderNode | ErrorNode;
+export type ReferencedByRow = ReferencedByReferrerNode | ReferencedByHolderNode;
 
-export const REFERENCED_BY_VIEW = 'modbench.referencedByTree';
+type ReferencedByTreeNode = ReferencedByRow | ErrorNode;
 
 const isReferrer = (node: unknown): node is ReferencedByReferrerNode => node instanceof ReferencedByReferrerNode;
 
-/** Referenced By's own text for copy value, or `undefined` unless the invocation is a referrer row. */
-export function referencedByCopyValueText(clicked: unknown, allSelected: readonly unknown[] | undefined): string | undefined {
-  if (!isReferrer(clicked)) return undefined;
-  const selected = allSelected?.filter(isReferrer) ?? [];
-  return (selected.length ? selected : [clicked]).map(n => n.copyText).join('\n');
+export const isReferencedByRow = (node: unknown): node is ReferencedByRow => isReferrer(node) || node instanceof ReferencedByHolderNode;
+
+/** The row that an open command was handed by a click or Enter on it. */
+export const openedRow = (invocation: unknown): ReferencedByRow | undefined => {
+  const row: unknown = typeof invocation === 'object' && invocation !== null ? Reflect.get(invocation, 'row') : undefined;
+  return isReferencedByRow(row) ? row : undefined;
+};
+
+/** Referenced By's own text for copy value, or `undefined` unless the invocation is one of its rows or its view's key. */
+export function referencedByCopyValueText(selection: () => readonly unknown[]): CopyValueAdapter['text'] {
+  const lines = (rows: readonly ReferencedByRow[]) => rows.map((row) => row.copyText).join('\n');
+  return (clicked, allSelected) => {
+    if (isKeyArgs(clicked, REFERENCES_VIEW_ID)) return lines(selection().filter(isReferencedByRow));
+    if (!isReferencedByRow(clicked)) return undefined;
+    const selected = allSelected?.filter(isReferencedByRow) ?? [];
+    return lines(selected.length ? selected : [clicked]);
+  };
 }
 
 function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): T[][] {

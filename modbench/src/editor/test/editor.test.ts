@@ -339,9 +339,9 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
     }]);
     const anchor = inItsDocument();
     const locateRecord = vi.fn((_record: object) => Promise.resolve<vscode.Location | { refused: string } | undefined>(anchor));
-    makeEditor(client, [], NO_MODS, locateRecord);
+    const { focusedView } = makeEditor(client, [], NO_MODS, locateRecord);
     const referencesAsked = () => client.calls.filter(({ method }) => method === 'getReferences').map(({ args }) => args);
-    return { client, anchor, locateRecord, referencesAsked };
+    return { client, anchor, locateRecord, referencesAsked, focusedView };
   }
   const rowsOf = async (input: ReferencesViewInput | undefined) => (await present(input, 'the list shown').resolve()).provider.getChildren();
   const labelsOf = async (input: ReferencesViewInput | undefined) => (await rowsOf(input)).map((row) => row.label);
@@ -356,6 +356,25 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
     expect(locateRecord).toHaveBeenCalledWith({ kind: 'record', formKey: GUN, plugin: COPY_PLUGIN });
     expect(input?.location).toBe(anchor);
     expect(await labelsOf(input)).toEqual(['Rifle']);
+  });
+
+  it('selects the row a click opened for the keys of the References view, until the next list is asked for', async () => {
+    const { focusedView } = asking();
+    const { provider } = await present(await askReferencedBy(recordRow), 'the list shown').resolve();
+    const [referrer] = provider.getChildren();
+    const [holder] = provider.getChildren(present(referrer, 'the referrer'));
+    const click = async (row: typeof holder) => { await h.commands.get('modbench.record.open')?.(...(row?.command?.arguments ?? [])); };
+
+    await click(referrer);
+    expect(focusedView.selectionOf('references-view.tree')).toEqual([referrer]);
+    expect(h.contextKeys.get('modbench.referencedBy.allHolders')).toBe(false);
+
+    await click(holder);
+    expect(focusedView.selectionOf('references-view.tree')).toEqual([holder]);
+    expect(h.contextKeys.get('modbench.referencedBy.allHolders')).toBe(true);
+
+    await askReferencedBy(recordRow);
+    expect(focusedView.selectionOf('references-view.tree')).toEqual([]);
   });
 
   it('titles the list by the FormKey of a record with no EditorID', async () => {

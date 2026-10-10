@@ -96,7 +96,7 @@ export function requires(when: string | undefined, term: string): boolean {
  *  or a key, true when set and not `false`. */
 export function holds(when: string, context: Readonly<Record<string, string | boolean | undefined>>): boolean {
   const termHolds = (text: string): boolean => {
-    const match = /^([\w.]+)\s*(==|!=|=~)\s*(.+)$/.exec(text);
+    const match = /^([\w.-]+)\s*(==|!=|=~)\s*(.+)$/.exec(text);
     if (!match) return Boolean(context[text]);
     const [, key = '', op, operand = ''] = match;
     const value = String(context[key] ?? '');

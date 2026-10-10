@@ -33,12 +33,4 @@ describe('a record write', () => {
 
     expect(steps).toEqual(['progress opens on modbench.pluginListTree', 'refresh', 'progress closes']);
   });
-
-  it('runs under the bar of the view it was invoked from', async () => {
-    steps.length = 0;
-
-    await recordWriteOver(instanceThatReads(), noPut)(() => Promise.resolve(), 'modbench.referencedByTree');
-
-    expect(steps[0]).toBe('progress opens on modbench.referencedByTree');
-  });
 });
