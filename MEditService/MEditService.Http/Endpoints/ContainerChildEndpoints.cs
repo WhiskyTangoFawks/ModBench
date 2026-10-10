@@ -18,7 +18,7 @@ internal static class ContainerChildEndpoints
             }
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
             var address = WriteEndpointMapping.PluginAddressOf(plugin, origin);
-            return Results.Ok(svc.GetChildren(address, Uri.UnescapeDataString(formKey)));
+            return QueryEndpointMapping.Ok(svc.GetChildren(address, Uri.UnescapeDataString(formKey)));
         })
         .WithName("GetContainerChildren")
         .WithTags("Records")

@@ -61,7 +61,7 @@ public sealed class LinkResolutionTests
 
         Assert.Equal(ExpectedKeywordErrors, KeywordErrors(index.DocumentOf(linker, OverKey)));
         Assert.Equal(ExpectedKeywordErrors, KeywordErrors(Assert.Single(index.StackOf(linker))));
-        Assert.Equal(ExpectedKeywordErrors, KeywordErrors(index.Records.GetRecord(linker)
+        Assert.Equal(ExpectedKeywordErrors, KeywordErrors(index.Records.GetRecord(linker).Value()
             ?? throw new InvalidOperationException("Expected the linker to have a winner.")));
 
         Assert.Equal(
@@ -90,7 +90,7 @@ public sealed class LinkResolutionTests
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
         var plugin = fixture.Plugins.Single();
-        var asker = index.Records.GetRecords(["npc_"], plugin.KeyOf(), search: null, limit: 1, offset: 0).Items.Single().FormKey;
+        var asker = index.Records.GetRecords(["npc_"], plugin.KeyOf(), search: null, limit: 1, offset: 0).Value().Items.Single().FormKey;
         Assert.Equal(found ? "Before" : null, index.ResolutionOf(asker, plugin.KeyOf(), late.ToString()).EditorId);
 
         PluginBinaries.Rewrite(plugin.Path, mod =>

@@ -46,7 +46,7 @@ public sealed class WinnerSelectionTests : IDisposable
         _index.Reconcile(_holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4);
 
     private PluginAddress? WinnerOf(string formKey) =>
-        _index.Records.GetRecord(formKey) is { } winner ? new PluginAddress(winner.Plugin, winner.Origin) : null;
+        _index.Records.GetRecord(formKey).Value() is { } winner ? new PluginAddress(winner.Plugin, winner.Origin) : null;
 
     [Fact]
     public void TheLatestParticipatingPlugin_IsTheWinner_OncePerFormKey_AndAgainAfterAReconcileOfTheSameSnapshot()

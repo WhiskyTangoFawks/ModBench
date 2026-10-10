@@ -34,7 +34,7 @@ public sealed class DiagnosedContainerTests : IDisposable
 
     private static (WorldspaceBlockDto Block, WorldspaceSubBlockDto SubBlock, CellSummary Cell) TheCellOf(OpenedIndex index)
     {
-        var block = Assert.Single(index.Worldspaces.GetWorldspaceBlocks(Key, Worldspace).Blocks);
+        var block = Assert.Single(index.Worldspaces.GetWorldspaceBlocks(Key, Worldspace).Value().Blocks);
         var subBlock = Assert.Single(block.SubBlocks);
         return (block, subBlock, Assert.Single(subBlock.Cells, c => c.FormKey == CellFormKey));
     }
@@ -48,7 +48,7 @@ public sealed class DiagnosedContainerTests : IDisposable
 
         Assert.Equal((3, 4, 1, 2), (block.X, block.Y, subBlock.X, subBlock.Y));
         Assert.Null(cell.CellX);
-        Assert.Empty(index.Worldspaces.GetInteriorCells(Key));
+        Assert.Empty(index.Worldspaces.GetInteriorCells(Key).Value());
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public sealed class DiagnosedContainerTests : IDisposable
     {
         using var index = Indexed(cellDiagnosis: "the codec refused this cell");
 
-        var temporary = index.Worldspaces.GetCellChildRecords(Key, CellFormKey).Temporary;
+        var temporary = index.Worldspaces.GetCellChildRecords(Key, CellFormKey).Value().Temporary;
 
         Assert.Equal(
             [(TemporaryRef, "refr", null), (Landscape, "land", null), (Navmesh, "navm", NavmeshDiagnosis)],
@@ -77,15 +77,15 @@ public sealed class DiagnosedContainerTests : IDisposable
     {
         using var index = Indexed(cellDiagnosis: null);
 
-        Assert.Equal([Topic], index.Containers.GetChildren(Key, Quest).Select(c => c.FormKey));
-        Assert.DoesNotContain(index.Records.GetPluginRecordTypes(Key), group => group.Type == "dial");
+        Assert.Equal([Topic], index.Containers.GetChildren(Key, Quest).Value().Select(c => c.FormKey));
+        Assert.DoesNotContain(index.Records.GetPluginRecordTypes(Key).Value(), group => group.Type == "dial");
     }
 
     private RecordSummary SearchedInAPluginThatIsNotActive(string formKey)
     {
         var inactive = _fixture.Plugins.Select(p => p with { Enabled = false }).ToList();
         using var index = Indexes.Reconciled(_fixture.DataFolder, inactive, adapter: new StubbedDocumentsAdapter(null));
-        return Assert.Single(index.Records.GetRecords(types: null, Key, search: formKey, limit: 50, offset: 0).Items);
+        return Assert.Single(index.Records.GetRecords(types: null, Key, search: formKey, limit: 50, offset: 0).Value().Items);
     }
 
     [Fact]

@@ -10,7 +10,7 @@ public sealed class AbstractUnionRealDataTests(CutDownPluginFixture fixture)
 {
     private JsonElement? Field(string type, string editorId, string column)
     {
-        var summary = fixture.Index.Records.GetRecords([type], CutDownPluginFixture.Plugin, editorId, limit: 1, offset: 0).Items.Single();
+        var summary = fixture.Index.Records.GetRecords([type], CutDownPluginFixture.Plugin, editorId, limit: 1, offset: 0).Value().Items.Single();
         return FieldOf(summary.FormKey, column);
     }
 
@@ -20,7 +20,7 @@ public sealed class AbstractUnionRealDataTests(CutDownPluginFixture fixture)
     [Fact]
     public void Level_EveryFixtureNpc_NamesItsLeafInTheDocument()
     {
-        var npcs = fixture.Index.Records.GetRecords(["npc_"], CutDownPluginFixture.Plugin, search: null, limit: 5000, offset: 0).Items;
+        var npcs = fixture.Index.Records.GetRecords(["npc_"], CutDownPluginFixture.Plugin, search: null, limit: 5000, offset: 0).Value().Items;
         Assert.NotEmpty(npcs);
         foreach (var npc in npcs)
         {

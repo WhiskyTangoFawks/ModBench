@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.Index.Queries;
 
@@ -30,7 +31,10 @@ public sealed class ContainerChildQueryService
         ["Responses"] = "info",
     };
 
-    public IReadOnlyList<ContainerChildSummary> GetChildren(PluginAddress plugin, string parentFormKey)
+    public Answer<IReadOnlyList<ContainerChildSummary>, IndexRefused> GetChildren(PluginAddress plugin, string parentFormKey) =>
+        IndexAnswer.Of<IReadOnlyList<ContainerChildSummary>>(() => ChildrenOf(plugin, parentFormKey));
+
+    private List<ContainerChildSummary> ChildrenOf(PluginAddress plugin, string parentFormKey)
     {
         var repo = _index.RequireReads();
 

@@ -61,7 +61,7 @@ public sealed class CellLandscapeAndNavmeshChildrenTests : IDisposable
     [Fact]
     public void ACellsTemporaryChildrenHoldItsLandscapeAndNavmeshesWithItsPlacedObjects()
     {
-        var references = _index.Worldspaces.GetCellChildRecords(Key, _landed);
+        var references = _index.Worldspaces.GetCellChildRecords(Key, _landed).Value();
 
         Assert.Empty(references.Persistent);
         Assert.Equal(
@@ -72,7 +72,7 @@ public sealed class CellLandscapeAndNavmeshChildrenTests : IDisposable
     [Fact]
     public void ACellHoldingOnlyALandscapeHasChildren()
     {
-        var cells = _index.Worldspaces.GetInteriorCells(Key).SelectMany(block => block.SubBlocks).SelectMany(sub => sub.Cells).ToList();
+        var cells = _index.Worldspaces.GetInteriorCells(Key).Value().SelectMany(block => block.SubBlocks).SelectMany(sub => sub.Cells).ToList();
 
         Assert.True(cells.Single(c => c.FormKey == _landOnly).HasChildren);
         Assert.False(cells.Single(c => c.FormKey == _bare).HasChildren);
@@ -94,11 +94,11 @@ public sealed class CellLandscapeAndNavmeshChildrenTests : IDisposable
         Assert.Equal(
             ["land"],
             index.WithWinner(holder, plugins.GameDirectory, plugins.Plugins, first.Origin)
-                .Worldspaces.GetCellChildRecords(first, cellKey).Temporary.Select(t => t.RecordType));
+                .Worldspaces.GetCellChildRecords(first, cellKey).Value().Temporary.Select(t => t.RecordType));
         Assert.Equal(
             ["land", "navm"],
             index.WithWinner(holder, plugins.GameDirectory, plugins.Plugins, second.Origin)
-                .Worldspaces.GetCellChildRecords(second, cellKey).Temporary.Select(t => t.RecordType));
+                .Worldspaces.GetCellChildRecords(second, cellKey).Value().Temporary.Select(t => t.RecordType));
     }
 
     private static string TwinCell(Fallout4Mod mod, bool withNavmesh)

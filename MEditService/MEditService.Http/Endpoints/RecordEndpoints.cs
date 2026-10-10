@@ -4,6 +4,7 @@ using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
@@ -32,8 +33,7 @@ internal static class RecordEndpoints
                 address = new PluginAddress(plugin, origin);
             else if (!string.IsNullOrWhiteSpace(plugin) || !string.IsNullOrWhiteSpace(origin))
                 return Results.Problem("Name a plugin with both plugin and origin, or neither to browse every plugin.", statusCode: 400);
-            var result = svc.GetRecords(type is { Length: > 0 } ? type : null, address, search, limit, offset);
-            return Results.Ok(result);
+            return QueryEndpointMapping.Ok(svc.GetRecords(type is { Length: > 0 } ? type : null, address, search, limit, offset));
         })
         .WithName("GetRecords")
         .WithTags("Records")
@@ -48,8 +48,7 @@ internal static class RecordEndpoints
                 logger.LogInformation("Received GetRecord for {FormKey}", formKey);
             }
             var decoded = Uri.UnescapeDataString(formKey);
-            var detail = svc.GetRecord(decoded);
-            return detail is null ? Results.NotFound() : Results.Ok(detail);
+            return QueryEndpointMapping.Answered(svc.GetRecord(decoded), detail => detail is null ? Results.NotFound() : Results.Ok(detail));
         })
         .WithName("GetRecord")
         .WithTags("Records")
@@ -64,8 +63,7 @@ internal static class RecordEndpoints
                 logger.LogInformation("Received CompareRecord for {FormKey}", formKey);
             }
             var decoded = Uri.UnescapeDataString(formKey);
-            var result = svc.GetCompare(decoded);
-            return result is null ? Results.NotFound() : Results.Ok(result);
+            return QueryEndpointMapping.Answered(svc.GetCompare(decoded), result => result is null ? Results.NotFound() : Results.Ok(result));
         })
         .WithName("CompareRecord")
         .WithTags("Records")
@@ -104,13 +102,13 @@ internal static class RecordEndpoints
         {
             if (path is null || !Path.IsPathFullyQualified(path))
                 return Results.Problem("Name the file by its absolute path.", statusCode: 400);
-            return svc.GetRecordOfFile(path) switch
+            return QueryEndpointMapping.Answered(svc.GetRecordOfFile(path), file => file switch
             {
                 RecordOfFileAnswer.Holds holds => Results.Ok(Addressed(holds.Record)),
                 RecordOfFileAnswer.HoldsNone => Results.NoContent(),
                 RecordOfFileAnswer.Refused refused => Results.Problem(refused.Why, statusCode: 422),
                 _ => throw new UnreachableException(),
-            };
+            });
         })
         .WithName("GetRecordOfFile")
         .WithDescription(
@@ -314,7 +312,7 @@ internal static class RecordEndpoints
     private static RecordAddress Addressed(RecordAt record) =>
         new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);
 
-    private static CopyMissing Wire(MissingCopy missing) =>
+    internal static CopyMissing Wire(MissingCopy missing) =>
         new(missing.Copy.FormKey, missing.Copy.Plugin, missing.Reason, missing.Message);
 
     internal static IResult CompareRecords(IReadOnlyList<RecordCopy> copies, IRecordQueryService svc)
@@ -324,32 +322,26 @@ internal static class RecordEndpoints
         if (copies.Any(c => string.IsNullOrWhiteSpace(c.FormKey)
                 || string.IsNullOrWhiteSpace(c.Plugin.Name) || string.IsNullOrWhiteSpace(c.Plugin.Origin)))
             return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
-        try
-        {
-            return Results.Ok(new CompareRecordsResponse(svc.GetCompareRecords(copies), []));
-        }
-        catch (RecordCopiesMissingException refusal)
-        {
-            return Results.Ok(new CompareRecordsResponse(null, [.. refusal.Missing.Select(Wire)]));
-        }
+        return QueryEndpointMapping.Answered(
+            svc.GetCompareRecords(copies), compared => Results.Ok(new CompareRecordsResponse(compared, [])));
     }
 
     internal static IResult CompareRecord(string formKey, CopyText copy, IRecordQueryService svc)
     {
         if (copy.DocumentText is null || string.IsNullOrWhiteSpace(copy.Plugin.Name) || string.IsNullOrWhiteSpace(copy.Plugin.Origin))
             return Results.Problem("A plugin name, an origin and a document text are required.", statusCode: 400);
-        return svc.GetCompare(formKey, copy) is { } result
-            ? Results.Ok(result)
-            : Results.Problem("No plugin indexes this record.", statusCode: 404);
+        return QueryEndpointMapping.Answered(
+            svc.GetCompare(formKey, copy),
+            result => result is not null ? Results.Ok(result) : Results.Problem("No plugin indexes this record.", statusCode: 404));
     }
 
     internal static IResult GetReferences(
-        string operation, string formKey, Func<string, IReadOnlyList<ReferenceResult>> read, ILogger logger)
+        string operation, string formKey, Func<string, Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> read, ILogger logger)
     {
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Received {Operation} for {FormKey}", operation, formKey);
         }
-        return Results.Ok(read(Uri.UnescapeDataString(formKey)));
+        return QueryEndpointMapping.Ok(read(Uri.UnescapeDataString(formKey)));
     }
 }

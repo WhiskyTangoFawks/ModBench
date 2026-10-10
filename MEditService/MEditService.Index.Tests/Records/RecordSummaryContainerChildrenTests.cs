@@ -29,7 +29,7 @@ public sealed class RecordSummaryContainerChildrenTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var page = index.Records.GetRecords(["qust"], Key, search: null, limit: 50, offset: 0);
+        var page = index.Records.GetRecords(["qust"], Key, search: null, limit: 50, offset: 0).Value();
 
         Assert.True(SummaryFor(page, withChildren.ToString()).HasContainerChildren);
         Assert.False(SummaryFor(page, withoutChildren.ToString()).HasContainerChildren);
@@ -50,7 +50,7 @@ public sealed class RecordSummaryContainerChildrenTests
         using var index = Indexes.Reconciled(fixture);
         index.SetFilter($"SELECT '{quest}' AS form_key", "filter.sql");
 
-        var page = index.Records.GetRecords(["qust"], plugin: null, search: "QuestWithChildren", limit: 50, offset: 0);
+        var page = index.Records.GetRecords(["qust"], plugin: null, search: "QuestWithChildren", limit: 50, offset: 0).Value();
 
         Assert.True(SummaryFor(page, quest.ToString()).HasContainerChildren);
     }

@@ -21,7 +21,7 @@ public sealed class WorkingTreeRenamedCellReadsTests : IDisposable
         var topCell = _fixture.TopCell;
         RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(topCell, ContainerModPlugin.TopCellEditorId, "RenamedTopCell");
 
-        var effective = _fixture.Index.Worldspaces.GetWorldspaceBlocks(_fixture.Plugin, _fixture.Worldspace)
+        var effective = _fixture.Index.Worldspaces.GetWorldspaceBlocks(_fixture.Plugin, _fixture.Worldspace).Value()
             .TopCells.Single(c => c.FormKey == topCell);
 
         Assert.Equal("RenamedTopCell", effective.EditorId);
@@ -33,7 +33,7 @@ public sealed class WorkingTreeRenamedCellReadsTests : IDisposable
         var cell = _fixture.Cell;
         RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(cell, ContainerModPlugin.CellEditorId, "RenamedCell");
 
-        var effective = _fixture.Index.Worldspaces.GetInteriorCells(_fixture.Plugin)
+        var effective = _fixture.Index.Worldspaces.GetInteriorCells(_fixture.Plugin).Value()
             .SelectMany(block => block.SubBlocks).SelectMany(subBlock => subBlock.Cells)
             .Single(c => c.FormKey == cell);
 
@@ -46,7 +46,7 @@ public sealed class WorkingTreeRenamedCellReadsTests : IDisposable
         var temporaryRef = _fixture.TemporaryRef;
         RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(temporaryRef, ContainerModPlugin.TemporaryRefEditorId, "RenamedTempRef");
 
-        var effective = _fixture.Index.Worldspaces.GetCellChildRecords(_fixture.Plugin, _fixture.EmbedCell)
+        var effective = _fixture.Index.Worldspaces.GetCellChildRecords(_fixture.Plugin, _fixture.EmbedCell).Value()
             .Temporary.Single(p => p.FormKey == temporaryRef);
 
         Assert.Equal("RenamedTempRef", effective.EditorId);

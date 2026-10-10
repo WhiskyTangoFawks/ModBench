@@ -32,7 +32,7 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = Scratch.Misshaped();
 
-        var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin);
+        var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin).Value();
 
         Assert.True(counts.Sum(c => c.Count) > 1,
             "the plugin's readable records must still index; a single unreadable record is not a plugin-wide failure");
@@ -57,7 +57,7 @@ public sealed class ParseFailedRecordTests
             new ModPath(ModKey.FromFileName(MisshapedPerkPlugin.FileName), scratch.PluginPath), Fallout4Release.Fallout4);
         var inThePlugin = overlay.EnumerateMajorRecords().Count();
 
-        var listed = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin).Sum(c => c.Count);
+        var listed = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin).Value().Sum(c => c.Count);
 
         Assert.Equal(inThePlugin, listed);
     }
@@ -67,7 +67,7 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = Scratch.Misshaped();
 
-        var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin);
+        var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin).Value();
 
         Assert.True(counts.Single(t => t.Type == "perk").HasParseFailure);
         Assert.All(counts.Where(t => t.Type != "perk"), t => Assert.False(t.HasParseFailure));
@@ -78,7 +78,7 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = Scratch.Misshaped();
 
-        var plugins = scratch.Index.Records.GetPlugins();
+        var plugins = scratch.Index.Records.GetPlugins().Value();
 
         Assert.Equal([scratch.Plugin], plugins.Where(p => p.HasParseFailure).Select(p => p.Plugin.Key));
         var stubMastersIndexedBesideItSoOnlyHasSomethingToExclude = plugins.Count;
@@ -131,7 +131,7 @@ public sealed class ParseFailedRecordTests
         using var sources = new ScratchDirectory("medit-parsefail-source-");
         using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(sources), CorruptGroupFixture.PluginName);
 
-        var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin);
+        var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin).Value();
 
         Assert.Equal(1, counts.Single(t => t.Type == "weap").Count);
         Assert.DoesNotContain(scratch.Index.Status.Failures, f => f.Name == CorruptGroupFixture.PluginName);
@@ -143,7 +143,7 @@ public sealed class ParseFailedRecordTests
         using var sources = new ScratchDirectory("medit-parsefail-source-");
         using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(sources), CorruptGroupFixture.PluginName);
 
-        var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin);
+        var counts = scratch.Index.Records.GetPluginRecordTypes(scratch.Plugin).Value();
 
         Assert.True(counts.Single(t => t.Type == "npc_").HasParseFailure);
         Assert.False(counts.Single(t => t.Type == "weap").HasParseFailure);
@@ -182,7 +182,7 @@ public sealed class ParseFailedRecordTests
     }
 
     private static IReadOnlyList<RecordSummary> Perks(Scratch scratch) =>
-        scratch.Index.Records.GetRecords(["perk"], scratch.Plugin, search: null, limit: 1000, offset: 0).Items;
+        scratch.Index.Records.GetRecords(["perk"], scratch.Plugin, search: null, limit: 1000, offset: 0).Value().Items;
 
     private static class CorruptGroupFixture
     {

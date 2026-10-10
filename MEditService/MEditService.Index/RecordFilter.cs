@@ -1,3 +1,5 @@
+using DuckDB.NET.Data;
+
 namespace MEditService.Index;
 
 /// <summary>The record filter: the matches of one SQL query, and the records holding a match in the
@@ -22,30 +24,29 @@ internal sealed class RecordFilter(Store store)
                     WHERE fh.form_key = {alias}.{formKeyColumn} AND fh.plugin = {alias}.plugin AND fh.origin = {alias}.origin))
         """;
 
-    public void Set(string? sql)
+    /// <summary>Why the SQL cannot be a filter, or null once it is the filter in force; null clears it.</summary>
+    public string? Set(string? sql)
     {
         if (sql is null)
         {
             Active = false;
-            return;
+            return null;
         }
 
         var connection = store.Connection;
         if (SqlDoor.RefusalOf(connection, sql) is { } refusal)
-            throw new ArgumentException(refusal);
+            return refusal;
 
         store.CreateRecordTypeViews();
-        using var probeCmd = connection.CreateCommand();
-        // The newline keeps a trailing line comment in the filter from swallowing the wrapper.
-        probeCmd.CommandText = $"SELECT * FROM ({sql}\n) __probe LIMIT 0";
-        using var probeReader = probeCmd.ExecuteReader();
-        bool hasFormKey = Enumerable.Range(0, probeReader.FieldCount)
-            .Any(i => string.Equals(probeReader.GetName(i), "form_key", StringComparison.OrdinalIgnoreCase));
-
-        if (!hasFormKey)
-            throw new ArgumentException("Filter SQL must return a form_key column");
-
-        DuckDbSql.ExecuteFor(connection, $"CREATE OR REPLACE TABLE {Matches} AS ({sql}\n)");
+        try
+        {
+            if (!ReturnsFormKey(connection, sql)) return "Filter SQL must return a form_key column";
+            DuckDbSql.ExecuteFor(connection, $"CREATE OR REPLACE TABLE {Matches} AS ({sql}\n)");
+        }
+        catch (DuckDBException ex) when (IsTheSqlsOwn(ex))
+        {
+            return ex.Message;
+        }
         DuckDbSql.ExecuteFor(connection, $"""
             CREATE OR REPLACE TABLE {Holders} AS
             WITH RECURSIVE held AS (SELECT plugin, origin, parent, child FROM ({NavigatorSql.Held}) h),
@@ -59,5 +60,26 @@ internal sealed class RecordFilter(Store store)
             SELECT plugin, origin, form_key FROM holders
             """);
         Active = true;
+        return null;
+    }
+
+    // DuckDB reports a binder error as ErrorType.Invalid, so the kind is read from the message's own prefix.
+    private static readonly string[] SqlFaultKinds =
+    [
+        "Parser Error", "Syntax Error", "Binder Error", "Catalog Error", "Conversion Error",
+        "Invalid Input Error", "Invalid Type Error", "Mismatch Type Error", "Out of Range Error",
+    ];
+
+    private static bool IsTheSqlsOwn(DuckDBException ex) =>
+        SqlFaultKinds.Any(kind => ex.Message.StartsWith(kind, StringComparison.Ordinal));
+
+    private static bool ReturnsFormKey(DuckDBConnection connection, string sql)
+    {
+        using var probeCmd = connection.CreateCommand();
+        // The newline keeps a trailing line comment in the filter from swallowing the wrapper.
+        probeCmd.CommandText = $"SELECT * FROM ({sql}\n) __probe LIMIT 0";
+        using var probeReader = probeCmd.ExecuteReader();
+        return Enumerable.Range(0, probeReader.FieldCount)
+            .Any(i => string.Equals(probeReader.GetName(i), "form_key", StringComparison.OrdinalIgnoreCase));
     }
 }

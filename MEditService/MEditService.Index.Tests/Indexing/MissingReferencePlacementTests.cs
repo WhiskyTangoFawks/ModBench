@@ -29,7 +29,7 @@ public sealed class MissingReferencePlacementTests : IDisposable
     }
 
     private PluginProblems Problems() =>
-        Assert.Single(_index.Problems.GetProblems() ?? throw new InvalidOperationException("Expected the index to be ready."));
+        Assert.Single(_index.Problems.GetProblems().Value() ?? throw new InvalidOperationException("Expected the index to be ready."));
 
     [Fact]
     public void ReportingMissingReferences_ATrackedReferrer_NamesItsDocumentRelativeToTheModFolder()
