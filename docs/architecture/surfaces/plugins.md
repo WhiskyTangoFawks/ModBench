@@ -128,7 +128,7 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Plugin menu | reveal · enable or disable · rename… (tracked) · create record… · track (in a mod with no repository) · decompile (in a tracked mod) · compile (tracked) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
-| Record menu, on every record row, worldspaces, cells and placed references included | open to the side · create record… (on a container record) · copy… · copy value · delete |
+| Record menu, on every record row, worldspaces, cells and placed references included | open to the side · referenced by · create record… (on a container record) · copy… · copy value · delete |
 | Check box | enable or disable |
 | Keys | Space: enable or disable. Enter: open, as a click does. F2: rename a tracked plugin. Delete: delete records. Ctrl+C: copy value. |
 

@@ -17,7 +17,7 @@ interface InFlight { writes: number; reported: Set<string>; refreshed: boolean }
 
 interface Move { plugin: PluginAddress; from: string; to: string; toldToRead: boolean; readAnsweredAt: number | undefined }
 
-interface TabEvents { retargeted(tab: RecordTab): void; closed(tab: RecordTab): void }
+interface TabEvents { closed(tab: RecordTab): void }
 
 /** One open record tab, and the one place it reads again: with an edit in flight, a read waits for
  *  the answer, then reads once under the FormKey the tab then shows. Closed, it acts on nothing. */
@@ -195,7 +195,6 @@ export class RecordTab {
     if (this.shown?.formKey !== target.formKey) return;
     this.shown = { ...this.shown, formKey: newFormKey };
     if (this.panel.title === target.formKey) this.panel.title = newFormKey;
-    this.events.retargeted(this);
   }
 
   private readWhatWasHeld(entry: InFlight): void {
