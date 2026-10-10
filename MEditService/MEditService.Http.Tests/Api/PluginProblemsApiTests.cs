@@ -76,7 +76,8 @@ public sealed class PluginProblemsApiTests : HostedTests
         await Client.NextSnapshot(fx);
 
         var problems = await ProblemsOnceTheyAre(
-            problems => problems.Any(p => PathOf(p) == Path.GetRelativePath(modFolder, stray)), "the unreadable file");
+            problems => problems.Length == 1 && PathOf(problems[0]) == Path.GetRelativePath(modFolder, stray),
+            "the unreadable file alone");
         var problem = Assert.Single(problems);
         Assert.Equal(JsonValueKind.Null, problem.GetProperty("formKey").ValueKind);
         Assert.Equal(JsonValueKind.Null, problem.GetProperty("targetFormKey").ValueKind);

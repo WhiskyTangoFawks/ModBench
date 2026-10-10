@@ -19,7 +19,7 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
 
     /// <summary>Materializes <paramref name="filter"/> in <paramref name="index"/> and holds it for
     /// <paramref name="scope"/>; null clears both. Answers why the SQL cannot be a filter, leaving the one in
-    /// force as it was; throws what the index's door throws.</summary>
+    /// force; throws what the index's door throws.</summary>
     public string? Set(DuckDbRecordIndex index, IndexScope scope, (string Sql, string Source)? filter)
     {
         lock (_lock)
