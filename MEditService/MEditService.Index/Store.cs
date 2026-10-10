@@ -617,14 +617,11 @@ internal sealed class Store : IDisposable
 
         var commitTimer = Stopwatch.StartNew();
         tx.Commit();
-        // Per-phase load timing — "documents" spans record enumeration plus every per-record
-        // cost (serialize, hash, form/VMAD/condition refs, container children, append); "extracted"
-        // spans the holdings/header and form_references flushes.
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug(
-                "Index {Plugin}: documents {DocumentsMs} ms (prepare {PrepareMs} ms, append {AppendMs} ms), extracted tables {ExtractedMs} ms, commit {CommitMs} ms",
-                plugin, timing.DocumentsMs, timing.PrepareMs, timing.AppendMs, timing.ExtractedMs, commitTimer.ElapsedMilliseconds);
+                "Index {Plugin}: documents {DocumentsMs} ms (prepare {PrepareMs} ms, append {AppendMs} ms), commit {CommitMs} ms",
+                plugin, timing.DocumentsMs, timing.PrepareMs, timing.AppendMs, commitTimer.ElapsedMilliseconds);
         }
     }
 

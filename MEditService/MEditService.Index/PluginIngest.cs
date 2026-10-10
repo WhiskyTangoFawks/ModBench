@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
-using System.Text;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -29,54 +28,35 @@ internal sealed class PluginIngest
         _types = RecordTypes.For(release);
     }
 
-    internal readonly record struct IndexTiming(long DocumentsMs, long PrepareMs, long AppendMs, long ExtractedMs);
+    internal readonly record struct IndexTiming(long DocumentsMs, long PrepareMs, long AppendMs);
 
     // Everything the index derives from one document, computed off the appender thread; only writing
     // it is sequential. ParseDiagnosis is null for a record whose document was produced.
     internal sealed record PreparedRecord(
-        string RecordType, string FormKey, byte[] Body, string ContentHash, List<FormReferenceRow> Refs,
+        string RecordType, string FormKey, string Body, string ContentHash, List<FormReferenceRow> Refs,
         List<HoldingRow> Holdings, List<CellLocationRow> CellLocations,
         string? EditorId, string? ParseDiagnosis);
 
-    // ADR-0005, from the one stream that carries the documents. A DuckDB appender writes its rows
-    // when disposed, so each is disposed here, inside the caller's transaction.
+    // ADR-0005, from the one stream that carries the documents. A DuckDB appender holds its rows
+    // outside DuckDB's memory limit until it is disposed, so each batch disposes its own, inside the
+    // caller's transaction.
     public IndexTiming IndexPlugin(
         IPluginDocuments documents, string plugin, string origin,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
-        DeleteExistingForOrigin("records", plugin, origin);
-        using var documentAppender = _connection.CreateAppender("mirror", "records");
-
-        var refs = new List<FormReferenceRow>();
-        var holdings = new List<HoldingRow>();
-        var cellLocationRows = new List<CellLocationRow>();
-
-        var phaseTimer = Stopwatch.StartNew();
+        DeleteAllRowsFor(plugin, origin);
+        var timer = Stopwatch.StartNew();
         var counters = new PhaseCounters();
-        foreach (var batch in documents.Records.Chunk(PrepareBatchSize))
-        {
-            AppendBatch(batch, schemas, plugin, origin, documentAppender, counters, refs, holdings, cellLocationRows);
-        }
-        var documentsMs = phaseTimer.ElapsedMilliseconds;
-
-        phaseTimer.Restart();
-        WriteHoldings(plugin, origin, holdings, cellLocationRows);
+        foreach (var batch in Batches(documents.Records))
+            AppendBatch(batch, schemas, plugin, origin, counters);
 
         if (schemas.ContainsKey(PluginHeader.RecordType))
-            HeaderIndexer.Index(documents.Header, plugin, origin, documentAppender);
-
-        DeleteFormReferencesForPlugin(plugin, origin);
-        if (refs.Count > 0)
         {
-            using var refAppender = _connection.CreateAppender("mirror", "form_references");
-            foreach (var r in refs)
-                AppendFormReference(refAppender, r, plugin, origin);
+            using var headerAppender = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "records");
+            HeaderIndexer.Index(documents.Header, plugin, origin, headerAppender);
         }
-
         WriteTypeFailures(plugin, origin, documents.Failures);
-
-        var extractedMs = phaseTimer.ElapsedMilliseconds;
-        return new IndexTiming(documentsMs, counters.PrepareMs, counters.AppendMs, extractedMs);
+        return new IndexTiming(timer.ElapsedMilliseconds, counters.PrepareMs, counters.AppendMs);
     }
 
     // The inverse of IndexPlugin, table for table, built from the same per-plugin delete helper so a
@@ -96,16 +76,46 @@ internal sealed class PluginIngest
         public long AppendMs;
     }
 
-    // Large enough to keep eight cores busy on cheap records; small enough that a batch of the
-    // largest cell documents stays inside a few hundred MB.
+    private sealed class Appenders(DuckDBConnection connection) : IDisposable
+    {
+        public DuckDBAppender Records { get; } = connection.CreateAppender(TableDdlBuilder.MirrorSchema, "records");
+        public DuckDBAppender FormReferences { get; } = connection.CreateAppender(TableDdlBuilder.MirrorSchema, "form_references");
+        public DuckDBAppender Holdings { get; } = connection.CreateAppender(TableDdlBuilder.MirrorSchema, "holdings");
+        public DuckDBAppender CellLocations { get; } = connection.CreateAppender(TableDdlBuilder.MirrorSchema, "cell_location");
+
+        public void Dispose()
+        {
+            Records.Dispose();
+            FormReferences.Dispose();
+            Holdings.Dispose();
+            CellLocations.Dispose();
+        }
+    }
+
+    // Large enough to keep eight cores busy on cheap records. A master's cell documents run to a
+    // megabyte apiece, so a batch also closes at a size.
     private const int PrepareBatchSize = 2048;
+    private const long PrepareBatchChars = 16 * 1024 * 1024;
+
+    private static IEnumerable<List<PluginDocument>> Batches(IEnumerable<PluginDocument> documents)
+    {
+        List<PluginDocument> batch = [];
+        long chars = 0;
+        foreach (var document in documents)
+        {
+            batch.Add(document);
+            chars += document.Text.Length;
+            if (batch.Count < PrepareBatchSize && chars < PrepareBatchChars) continue;
+            yield return batch;
+            batch = [];
+            chars = 0;
+        }
+        if (batch.Count > 0) yield return batch;
+    }
 
     private void AppendBatch(
-        PluginDocument[] batch, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        string plugin, string origin, DuckDBAppender documentAppender, PhaseCounters counters,
-        List<FormReferenceRow> refs,
-        List<HoldingRow> holdings,
-        List<CellLocationRow> cellLocationRows)
+        List<PluginDocument> batch, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        string plugin, string origin, PhaseCounters counters)
     {
         // Per-document work is CPU-bound and independent, so it runs in parallel; only the appender
         // writes stay sequential.
@@ -124,7 +134,13 @@ internal sealed class PluginIngest
         }
         counters.PrepareMs += batchTimer.ElapsedMilliseconds;
         batchTimer.Restart();
+        Append(prepared, plugin, origin);
+        counters.AppendMs += batchTimer.ElapsedMilliseconds;
+    }
 
+    private void Append(List<PreparedRecord> prepared, string plugin, string origin)
+    {
+        using var appenders = new Appenders(_connection);
         foreach (var p in prepared)
         {
             if (p.ParseDiagnosis is { } diagnosis && _logger.IsEnabled(LogLevel.Warning))
@@ -136,7 +152,7 @@ internal sealed class PluginIngest
 
             try
             {
-                AppendPrepared(documentAppender, p, plugin, origin);
+                AppendPrepared(appenders.Records, p, plugin, origin);
             }
             catch (Exception ex)
             {
@@ -145,22 +161,23 @@ internal sealed class PluginIngest
                     p.RecordType, p.FormKey, p.EditorId, plugin);
                 throw;
             }
-            refs.AddRange(p.Refs);
-            holdings.AddRange(p.Holdings);
-            cellLocationRows.AddRange(p.CellLocations);
+            foreach (var r in p.Refs)
+                AppendFormReference(appenders.FormReferences, r, plugin, origin);
+            foreach (var row in p.Holdings)
+                AppendHoldingRow(appenders.Holdings, row, plugin, origin);
+            foreach (var row in p.CellLocations)
+                AppendCellLocationRow(appenders.CellLocations, row, plugin, origin);
             if (_logger.IsEnabled(LogLevel.Trace))
             {
                 _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
                     p.RecordType, p.FormKey, p.EditorId, plugin);
             }
         }
-        counters.AppendMs += batchTimer.ElapsedMilliseconds;
     }
 
     internal PreparedRecord PrepareRecord(
         PluginDocument document, RecordTableSchema schema, List<ContainerDocuments.ChildDocument>? childDocuments = null)
     {
-        var body = Encoding.UTF8.GetBytes(document.Text);
         var root = Document.Parse(document.Text);
         var editorId = root.EditorId.EditorId;
 
@@ -199,7 +216,7 @@ internal sealed class PluginIngest
         }
 
         return new PreparedRecord(
-            document.RecordType, document.FormKey, body, SourceRepository.ContentStamp(document.Text), refs,
+            document.RecordType, document.FormKey, document.Text, SourceRepository.ContentStamp(document.Text), refs,
             holdings, cellLocations, editorId, document.ParseDiagnosis);
     }
 
@@ -213,34 +230,14 @@ internal sealed class PluginIngest
         row.AppendValue(prepared.RecordType);
         row.AppendValue(prepared.EditorId);
         row.AppendValue(WorkingTreeState.None.Stored());
-        row.AppendValue(Encoding.UTF8.GetString(prepared.Body));
+        row.AppendValue(prepared.Body);
         row.AppendValue(prepared.ContentHash);
         row.AppendValue(prepared.ParseDiagnosis);
         row.EndRow();
     }
 
-    private void WriteHoldings(
-        string plugin, string origin, List<HoldingRow> holdings, List<CellLocationRow> cellLocationRows)
-    {
-        DeleteExistingForOrigin("holdings", plugin, origin);
-        DeleteExistingForOrigin("cell_location", plugin, origin);
-
-        if (cellLocationRows.Count > 0)
-        {
-            using var cellAppender = _connection.CreateAppender("mirror", "cell_location");
-            foreach (var row in cellLocationRows)
-                AppendCellLocationRow(cellAppender, row, plugin, origin);
-        }
-
-        if (holdings.Count == 0) return;
-        using var holdingAppender = _connection.CreateAppender("mirror", "holdings");
-        foreach (var row in holdings)
-            AppendHoldingRow(holdingAppender, row, plugin, origin);
-    }
-
     private void WriteTypeFailures(string plugin, string origin, IReadOnlyList<RecordTypeFailure> failures)
     {
-        DeleteExistingForOrigin("record_type_failure", plugin, origin);
         if (failures.Count == 0) return;
 
         using var failureAppender = _connection.CreateAppender("mirror", "record_type_failure");
