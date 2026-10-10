@@ -25,8 +25,7 @@ public sealed class DeleteRecordChangesHandler
         (_targets, _loadOrder, _source, _unsaved, _logger) = (targets, loadOrder, source, unsaved, logger);
 
     /// <summary>Each record's deletion answered as the changes it makes over the held unsaved documents, written
-    /// nowhere (ADR-0001). Each item sees the ones before it. Refuses with <see cref="RecordEditRefusal.NoLoadOrder"/> when no
-    /// load order is held (ADR-0013).</summary>
+    /// nowhere (ADR-0001). Each item sees the ones before it. No load order held refuses (ADR-0013).</summary>
     public Task<SelectionResult<RecordAt, RecordEditRefusal, SourceChanges>> DeleteRecords(IReadOnlyList<RecordAt> records)
     {
         if (_loadOrder.Held is null)

@@ -35,7 +35,7 @@ internal static class WriteEndpointMapping
     internal static string RequireNewFormKey(RecordEditResult result) =>
         result.NewFormKey ?? throw new InvalidOperationException("Expected an applied result to carry the new FormKey.");
 
-    /// <summary>The answer to a gesture that needs a load order the service does not yet hold: a "not right now".</summary>
+    // A gesture that needs a load order the service does not yet hold is a "not right now".
     private static IResult NotReady() => Results.Problem(NoLoadOrderException.DefaultMessage, statusCode: StatusCodes.Status503ServiceUnavailable);
 
     /// <summary>The status code says what kind of problem; the refusal and path extensions say
