@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decodeIniValue, encodeIniValue, readIniSection, readIniValue, replaceIniSection, setIniValue } from '../../codecs/qSettingsIni';
+import { decodeIniValue, readIniSection, readIniValue, replaceIniSection, setIniValue } from '../../codecs/qSettingsIni';
 
 describe('readIniValue', () => {
   it('reads the key in the named section, not the same key in another', () => {
@@ -60,7 +60,7 @@ describe('decodeIniValue', () => {
   });
 });
 
-describe('encodeIniValue', () => {
+describe('values written by setIniValue', () => {
   it.each([
     ['a comma', 'a,b'],
     ['a backslash', 'C:\\Mod\\x'],
@@ -69,16 +69,17 @@ describe('encodeIniValue', () => {
     ['leading and trailing spaces', ' padded '],
     ['a newline', 'a\nb'],
     ['plain text', 'My Profile'],
-  ])('writes %s so that decoding reads it back', (_name, value) => {
-    expect(decodeIniValue(encodeIniValue(value))).toBe(value);
+  ])('read back as written: %s', (_name, value) => {
+    const text = setIniValue('[A]\n', 'A', 'k', value);
+    expect(decodeIniValue(readIniValue(text, 'A', 'k') ?? '')).toBe(value);
   });
 
-  it('quotes a comma, as Qt writes category="-1,"', () => {
-    expect(encodeIniValue('-1,')).toBe('"-1,"');
+  it('quote a comma, as Qt writes category="-1,"', () => {
+    expect(setIniValue('[A]\n', 'A', 'k', '-1,')).toBe('[A]\nk="-1,"\n');
   });
 
-  it('leaves plain text bare', () => {
-    expect(encodeIniValue('My Profile')).toBe('My Profile');
+  it('leave plain text bare', () => {
+    expect(setIniValue('[A]\n', 'A', 'k', 'My Profile')).toBe('[A]\nk=My Profile\n');
   });
 });
 
@@ -94,11 +95,6 @@ describe('setIniValue', () => {
 
   it('adds an absent section ahead of everything', () => {
     expect(setIniValue('[B]\r\nx=1\r\n', 'A', 'k', '9')).toBe('[A]\r\nk=9\r\n[B]\r\nx=1\r\n');
-  });
-
-  it('writes a value as Qt would, so a comma stays one string', () => {
-    const text = setIniValue('[A]\n', 'A', 'k', 'a,b');
-    expect(decodeIniValue(readIniValue(text, 'A', 'k') ?? '')).toBe('a,b');
   });
 
   it('writes an empty value as an empty key rather than deleting it', () => {

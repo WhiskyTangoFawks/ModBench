@@ -68,7 +68,7 @@ export function decodeIniValue(raw: string): string {
 }
 
 /** The raw value Qt writes for `value`; `decodeIniValue` reads it back. */
-export function encodeIniValue(value: string): string {
+function encodeIniValue(value: string): string {
   const escaped = value.replace(/[\\"\n\r\t]/g, (ch) => ESCAPES[ch] ?? ch);
   return /[,;=]|^ | $/.test(value) ? `"${escaped}"` : escaped;
 }
