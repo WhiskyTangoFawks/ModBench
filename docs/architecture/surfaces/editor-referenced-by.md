@@ -1,6 +1,6 @@
 # Editor: Referenced By
 
-Referenced By lists the records that reference a record, so I can see what a change to it would reach before I make it. Its template is xEdit's Referenced By tab ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs, [xedit.md](../../out-of-scope/xedit.md) says why. Its gesture is `referenced by` in [commands.md](../commands.md) under Record. The list shows in VS Code's References view, which gives its history, navigation, Find, refresh and clear. It is a list, so [common.md](common.md) applies to it, except where a story here names an exception.
+Referenced By lists the records that reference a record, so I can see what a change to it would reach before I make it. Its template is xEdit's Referenced By tab ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs, [xedit.md](../../out-of-scope/xedit.md) says why. Its gesture is `referenced by` in [commands.md](../commands.md) under Record. The list shows in VS Code's References view, which gives its history, Find, refresh and clear. It is a list, so [common.md](common.md) applies to it, except where a story here names an exception.
 
 Each story cites its source. A story with no source is owned here.
 
@@ -63,13 +63,15 @@ A row is a record, so it offers what a record offers in Plugins ([plugins.md](pl
 |---|---|
 | Referrer menu | open to the side · referenced by · copy value |
 | Where it is held | the record menu of Plugins |
-| Keys | as on a record row in Plugins. Delete acts only on a row beneath a referrer. |
+| Keys | none: VS Code's References view does not share its selection. |
+
+This is an exception to common.md, A view, stories 5, 6 and 8: the view is VS Code's, so a key cannot name the row it acts on, and its rows are selected one at a time.
 
 As a user, I want:
 
 1. A click on a referrer to open its winning copy as a preview editor. Source: catalog `open`; editor.md, Opening, stories 1 and 8
 2. A click on a row beneath a referrer to open that plugin's copy as a preview editor. Source: catalog `open`; editor.md, Opening, story 1
-3. Copy value to copy each selected row as `EditorID [FormKey]`. Source: catalog `copy value`; plugins.md, Menus and keys, story 5
+3. Copy value to copy the row as `EditorID [FormKey]`. Source: catalog `copy value`; plugins.md, Menus and keys, story 5
 
 ## Test seam
 

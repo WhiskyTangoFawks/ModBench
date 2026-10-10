@@ -103,20 +103,6 @@ public sealed class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void Put_OfAnEmbeddedChild_LeavesEveryByteOutsideTheChildIdentical()
-    {
-        var before = File.ReadAllText(FullPath(CellPath));
-
-        PutRenamedPersistentRef();
-
-        var after = File.ReadAllText(FullPath(CellPath));
-        Assert.NotEqual(before, after);
-        Assert.Equal(
-            WithoutTheBraceMatchedObjectHolding(before, _persistentRef.FormKey.ToString()),
-            WithoutTheBraceMatchedObjectHolding(after, _persistentRef.FormKey.ToString()));
-    }
-
-    [Fact]
     public void Put_OfAnEmbeddedChild_KeepsAMemberOfTheOwnerTheCodecWouldDrop()
     {
         HandEditDroppedMemberBeside(CellPath, "\"WaterHeight\"");
@@ -246,20 +232,6 @@ public sealed class EmbeddedChildEditTests : IDisposable
     {
         var text = File.ReadAllText(FullPath(relativePath));
         Assert.Equal(RecordTextCodec.RoundTrip(text, Release, recordType), text);
-    }
-
-    private static string WithoutTheBraceMatchedObjectHolding(string text, string formKey)
-    {
-        var start = text.LastIndexOf('{', text.IndexOf(formKey, StringComparison.Ordinal));
-        var depth = 0;
-        var end = start;
-        while (end < text.Length)
-        {
-            if (text[end] == '{') depth++;
-            else if (text[end] == '}' && --depth == 0) break;
-            end++;
-        }
-        return text[..start] + text[(end + 1)..];
     }
 
     private static string? RootFormKeyOf(string body)

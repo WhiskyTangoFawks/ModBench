@@ -61,13 +61,14 @@ modbench/          VS Code extension (TypeScript) + React webview for the compar
   src/instanceAdapter/  the Instance adapter — the one reader and writer of the instance; MO2's
                         implementation holds its layout, its watch and its file codecs
 MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172), one project
-                   per box of docs/architecture/
+                   per box of docs/architecture/, and the codec one more per game
   MEditService.Http/          the endpoints, the SSE notification adapter, OpenAPI via
                               Swashbuckle, and mEdit's composition root
   MEditService.Commands/      one handler per gesture: edit, create, track, compile, put load order
   MEditService.Queries/       compare, references, children — the read model's face
   MEditService.LoadOrder/     the kernel: every plugin in the instance, and the active plugins
   MEditService.Codec/         the kernel: record text to document and back, and the schema
+  MEditService.Codec.Fallout4/ the codec compiled against Fallout 4's types; one such project per game
   MEditService.Ports/         the kernel: the notification port and its payloads
   MEditService.Index/         DuckDB as an index over the record documents
   MEditService.SourceAdapter/ the source tree and its git layer
