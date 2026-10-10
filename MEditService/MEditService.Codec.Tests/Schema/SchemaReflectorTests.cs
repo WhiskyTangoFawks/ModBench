@@ -352,10 +352,12 @@ public class SchemaReflectorTests
         Assert.Equal("string", col.ApiType);
     }
 
-    [Fact]
-    public void GetSchemas_Header_FlagsColumn_CarriesMutagensNamesLabelledWithXEdits_XEditsVocabularyIsTheLabelNeverTheValueSincePresentationNeverRewritesAValue()
+    [Theory]
+    [InlineData(GameRelease.Fallout4)]
+    [InlineData(GameRelease.SkyrimSE)]
+    public void GetSchemas_Header_FlagsColumn_CarriesMutagensNamesLabelledWithXEdits_XEditsVocabularyIsTheLabelNeverTheValueSincePresentationNeverRewritesAValue(GameRelease release)
     {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var schemas = _reflector.GetSchemas(release);
         var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "Flags");
         Assert.NotNull(col);
         Assert.Equal("flags", col.ApiType);
@@ -363,6 +365,16 @@ public class SchemaReflectorTests
         Assert.Equal("ESL", col.Field.EnumMembers.Single(m => m.Value == "Small").Label);
         Assert.Null(col.Field.EnumMembers.Single(m => m.Value == "Localized").Label);
         Assert.DoesNotContain(col.Field.EnumMembers, m => m.Value is "ESM" or "ESL");
+    }
+
+    [Theory]
+    [InlineData(GameRelease.Fallout4)]
+    [InlineData(GameRelease.SkyrimSE)]
+    public void GetSchemas_Header_PresentsTheLightMasterFlagAsAMemberOfItsOwn(GameRelease release)
+    {
+        var header = _reflector.GetSchemas(release)["header"];
+
+        Assert.Equal("bool", header.RecordColumns.Single(c => c.Name == "IsSmallMaster").ApiType);
     }
 
     [Fact]

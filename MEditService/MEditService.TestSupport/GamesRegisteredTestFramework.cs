@@ -1,5 +1,6 @@
 using MEditService.Codec.Fallout4;
 using MEditService.Codec.Serialization;
+using MEditService.Codec.Skyrim;
 using Mutagen.Bethesda;
 using Xunit.Abstractions;
 using Xunit.Sdk;
@@ -14,5 +15,6 @@ public class GamesRegisteredTestFramework : XunitTestFramework
         GameCodecs.Register(new Dictionary<GameCategory, IGameCodec>
         {
             [GameCategory.Fallout4] = Fallout4Codec.Instance,
+            [GameCategory.Skyrim] = SkyrimCodec.Instance,
         });
 }

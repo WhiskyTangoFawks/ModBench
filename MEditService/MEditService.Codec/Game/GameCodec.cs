@@ -29,6 +29,8 @@ internal sealed class GameCodec : IGameCodec
     public SiblingsInUseRows SiblingsInUse =>
         GameSpecifics.SiblingsInUse;
 
+    public CreationKitShapes CreationKitShapes => GameSpecifics.CreationKitShapes;
+
     public IReadOnlyList<string> TransientTypes(IModGetter plugin) => GameSpecifics.TransientTypes((IGameModGetter)plugin);
 
     public uint NextObjectIdDefault => ModStats.NextFormIDDefault;

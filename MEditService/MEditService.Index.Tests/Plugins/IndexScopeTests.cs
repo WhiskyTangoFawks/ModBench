@@ -22,10 +22,10 @@ public class IndexScopeTests(TestPluginFixture fixture)
         var holder = new LoadOrderHolder();
         using var index = OpenIndex(holder);
 
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.SkyrimSE);
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Oblivion);
 
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
-        Assert.Contains("SkyrimSE", index.Status.Message);
+        Assert.Contains("Oblivion", index.Status.Message);
     }
 
     [Fact]

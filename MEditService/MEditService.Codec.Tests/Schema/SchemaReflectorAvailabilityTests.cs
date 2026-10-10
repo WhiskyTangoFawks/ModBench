@@ -23,10 +23,9 @@ public sealed class SchemaReflectorAvailabilityTests
     {
         var reflector = new SchemaReflector();
 
-        var ex = Assert.Throws<UnsupportedGameReleaseException>(() => reflector.GetSchemas(GameRelease.SkyrimSE));
+        var ex = Assert.Throws<UnsupportedGameReleaseException>(() => reflector.GetSchemas(GameRelease.Oblivion));
 
-        Assert.Contains("SkyrimSE", ex.Message);
-        Assert.Contains("Mutagen.Bethesda.Skyrim", ex.Message);
+        Assert.Equal("mEdit does not support Oblivion: it has no codec to read its plugins.", ex.Message);
     }
 
     [Fact]
@@ -36,11 +35,11 @@ public sealed class SchemaReflectorAvailabilityTests
         using var _ = loggerFactory;
         var reflector = new SchemaReflector(loggerFactory.CreateLogger<SchemaReflector>());
 
-        Assert.Throws<UnsupportedGameReleaseException>(() => reflector.GetSchemas(GameRelease.SkyrimSE));
-        Assert.Throws<UnsupportedGameReleaseException>(() => reflector.GetSchemas(GameRelease.SkyrimSE));
+        Assert.Throws<UnsupportedGameReleaseException>(() => reflector.GetSchemas(GameRelease.Oblivion));
+        Assert.Throws<UnsupportedGameReleaseException>(() => reflector.GetSchemas(GameRelease.Oblivion));
 
         var warnings = entries.Where(e =>
-            e.Level == LogLevel.Warning && e.Message.Contains("SkyrimSE") && e.Message.Contains("Mutagen.Bethesda.Skyrim"))
+            e.Level == LogLevel.Warning && e.Message.Contains("Oblivion") && e.Message.Contains("Mutagen.Bethesda.Oblivion"))
             .ToList();
         Assert.Single(warnings);
     }

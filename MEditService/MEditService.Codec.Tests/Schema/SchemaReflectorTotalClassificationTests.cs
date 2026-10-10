@@ -7,22 +7,25 @@ namespace MEditService.Codec.Tests.Indexing;
 
 public class SchemaReflectorTotalClassificationTests
 {
-    private static List<LogEntry> BuildAndCollect_PrivateBecauseTheSharedReflectorIsNullLoggedAndCached_DebugBecauseTheDefaultFloorDropsTheseLines()
+    private static List<LogEntry> BuildAndCollect_PrivateBecauseTheSharedReflectorIsNullLoggedAndCached_DebugBecauseTheDefaultFloorDropsTheseLines(
+        GameRelease release = GameRelease.Fallout4)
     {
         var entries = new List<LogEntry>();
         using var factory = LoggerFactory.Create(b => b
             .SetMinimumLevel(LogLevel.Debug)
             .AddProvider(new CollectingLoggerProvider(entries)));
-        new SchemaReflector(factory.CreateLogger<SchemaReflector>()).GetSchemas(GameRelease.Fallout4);
+        new SchemaReflector(factory.CreateLogger<SchemaReflector>()).GetSchemas(release);
         return entries;
     }
 
     private const string UnclassifiedAnomalyPrefix = "SchemaReflector: unclassified";
 
-    [Fact]
-    public void EveryPropertyTheWalkReaches_IsClassifiedOrExplicitlyExcluded_ByAskingTheReflectorWhatItFailedToClassifyNotByReDerivingClassification()
+    [Theory]
+    [InlineData(GameRelease.Fallout4)]
+    [InlineData(GameRelease.SkyrimSE)]
+    public void EveryPropertyTheWalkReaches_IsClassifiedOrExplicitlyExcluded_ByAskingTheReflectorWhatItFailedToClassifyNotByReDerivingClassification(GameRelease release)
     {
-        var entries = BuildAndCollect_PrivateBecauseTheSharedReflectorIsNullLoggedAndCached_DebugBecauseTheDefaultFloorDropsTheseLines();
+        var entries = BuildAndCollect_PrivateBecauseTheSharedReflectorIsNullLoggedAndCached_DebugBecauseTheDefaultFloorDropsTheseLines(release);
         Assert.True(entries.Count > 0, "Expected the collector to receive the walk's own trace; a collector wired to nothing would find zero anomalies too.");
 
         var anomalies = entries

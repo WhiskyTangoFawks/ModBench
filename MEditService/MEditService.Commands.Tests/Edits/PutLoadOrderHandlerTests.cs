@@ -56,11 +56,11 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     [Fact]
     public void Put_UnsupportedGameRelease_RefusesWithoutApplying()
     {
-        var result = Put(GameRelease.SkyrimSE, [Plugin("A.esp")]);
+        var result = Put(GameRelease.Oblivion, [Plugin("A.esp")]);
 
         Assert.False(result.Applied);
         Assert.Equal(PutLoadOrderRefusal.UnsupportedGameRelease, result.Refusal);
-        Assert.Contains("SkyrimSE", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Oblivion", result.Message, StringComparison.Ordinal);
         Assert.Null(_holder.Held);
     }
 
@@ -102,7 +102,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     {
         var gone = Path.Combine(_dataFolder, "no-such-data");
 
-        var result = Handler.Put(gone, _instanceRoot, GameRelease.SkyrimSE, [Plugin("A.esp")], [], []);
+        var result = Handler.Put(gone, _instanceRoot, GameRelease.Oblivion, [Plugin("A.esp")], [], []);
 
         Assert.Equal(PutLoadOrderRefusal.GameDirectoryNotFound, result.Refusal);
     }

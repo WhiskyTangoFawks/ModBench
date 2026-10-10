@@ -82,7 +82,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public void KeepHashesOf(IReadOnlySet<string> pluginPaths) => _hashes.Keep(pluginPaths);
 
-    public Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath) => PluginBinaryHash.ClaimOfFile(pluginPath);
+    public Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => PluginBinaryHash.ClaimOfFile(pluginPath, gameRelease);
 
     public Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
@@ -145,7 +145,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, gameRelease, strings)?.Describe());
 
     public Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
-        string originalPath, string recompiledPath, CancellationToken cancel = default) =>
+        string originalPath, string recompiledPath, GameRelease gameRelease, CancellationToken cancel = default) =>
         PluginFailure.AnswerAsync(async () =>
         {
             var originalBytes = await File.ReadAllBytesAsync(originalPath, cancel);
@@ -156,7 +156,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             if (PluginBinaryWalk.FindFirstSubrecordLoss(originalBytes, recompiledBytes) is not { } loss)
                 return new PluginByteComparison(Identical: false);
 
-            var cause = MalformedPluginScan.Scan(originalBytes).FirstOrDefault(d =>
+            var cause = MalformedPluginScan.Scan(originalBytes, gameRelease).FirstOrDefault(d =>
                 d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
             return new PluginByteComparison(Identical: false, loss, cause);
         });
