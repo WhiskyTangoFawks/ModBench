@@ -53,6 +53,12 @@ function selectionOutcome<L, R>(
   return { landed: answer.applied, refused: itemRefusals(answer.refused) };
 }
 
+function appliedWithRefusals<A, R>(
+  answer: { applied: A[]; refused: { item: R; message: string }[] },
+): { applied: A[]; refused: ItemRefusal<R>[] } {
+  return { applied: answer.applied, refused: itemRefusals(answer.refused) };
+}
+
 // The backend's typed discriminator, off the ProblemDetails extension rather than re-derived from the
 // status: only it tells "not tracked" from "no folder", whose ways out differ.
 function editRefused(
@@ -194,6 +200,21 @@ class HttpMEditClient implements MEditClient {
       this.log.error(`[HttpMEditClient] ${spec.op} threw: ${errorMessage(e)}`);
       return { refused: true, message: `${spec.failMsg} — ${failureReason(UNREACHABLE)}` };
     }
+  }
+
+  // A write over a selection: each item lands or is refused on its own, and the counted phrase
+  // ("3 plugins") names the selection in the log line and the refusal.
+  private async mutateEach<T extends { refused: { item: unknown; message: string }[] }, O>(spec: {
+    verb: string;
+    noun: string;
+    items: readonly unknown[];
+    op: (counted: string) => string;
+    post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
+    outcome: (answer: T) => O;
+  }): Promise<O | WriteRefused> {
+    const counted = spec.items.length === 1 ? `1 ${spec.noun}` : `${spec.items.length} ${spec.noun}s`;
+    const answer = await this.mutate({ op: spec.op(counted), failMsg: `Could not ${spec.verb} ${counted}`, post: spec.post });
+    return isRefused(answer) ? answer : spec.outcome(answer);
   }
 
   async createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused> {
@@ -364,19 +385,17 @@ class HttpMEditClient implements MEditClient {
   async track(
     mods: readonly string[], options: { onProgress?: (status: TrackStatus) => void } = {},
   ): Promise<TrackOutcome | WriteRefused> {
-    const counted = mods.length === 1 ? '1 mod' : `${mods.length} mods`;
     // The POST stays blocking, so progress rides the track-progress notification alongside it.
     const unsubscribe = options.onProgress ? this.notifications.onNotification('track-progress', options.onProgress) : () => {};
     try {
-      const answer = await this.mutate({
-        op: `track(${counted})`,
-        failMsg: `Could not track ${counted}`,
+      return await this.mutateEach({
+        verb: 'track', noun: 'mod', items: mods,
+        op: (counted) => `track(${counted})`,
         post: () => this.apiClient.POST('/plugins/track', { body: { mods: [...mods] } }),
-      });
-      if (isRefused(answer)) return answer;
-      return selectionOutcome({
-        applied: answer.applied.map((m) => ({ mod: m.mod, tracked: m.tracked })),
-        refused: answer.refused,
+        outcome: (answer) => selectionOutcome({
+          applied: answer.applied.map((m) => ({ mod: m.mod, tracked: m.tracked })),
+          refused: answer.refused,
+        }),
       });
     } finally {
       unsubscribe();
@@ -400,52 +419,46 @@ class HttpMEditClient implements MEditClient {
   async getDeleteChanges(
     records: readonly RecordAddress[],
   ): Promise<DeleteChangesOutcome | WriteRefused> {
-    const counted = records.length === 1 ? '1 record' : `${records.length} records`;
-    const answer = await this.mutate({
-      op: `getDeleteChanges(${counted})`,
-      failMsg: `Could not delete ${counted}`,
+    return this.mutateEach({
+      verb: 'delete', noun: 'record', items: records,
+      op: (counted) => `getDeleteChanges(${counted})`,
       post: () => this.apiClient.POST('/records/delete-changes', { body: { records: [...records] } }),
+      outcome: appliedWithRefusals,
     });
-    return isRefused(answer) ? answer : { applied: answer.applied, refused: itemRefusals(answer.refused) };
   }
 
   async getCopyChanges(
     records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
   ): Promise<CopyChangesOutcome | WriteRefused> {
-    const counted = records.length === 1 ? '1 record' : `${records.length} records`;
-    const answer = await this.mutate({
-      op: `getCopyChanges(${counted}, ${mode})`,
-      failMsg: `Could not copy ${counted}`,
+    return this.mutateEach({
+      verb: 'copy', noun: 'record', items: records,
+      op: (counted) => `getCopyChanges(${counted}, ${mode})`,
       post: () => this.apiClient.POST('/records/copy-changes', {
         body: { records: [...records], mode, destinations: [...destinations], replace },
       }),
+      outcome: appliedWithRefusals,
     });
-    return isRefused(answer) ? answer : { applied: answer.applied, refused: itemRefusals(answer.refused) };
   }
 
   async decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
-    const counted = plugins.length === 1 ? '1 plugin' : `${plugins.length} plugins`;
-    const answer = await this.mutate({
-      op: `decompile(${counted})`,
-      failMsg: `Could not decompile ${counted}`,
+    return this.mutateEach({
+      verb: 'decompile', noun: 'plugin', items: plugins,
+      op: (counted) => `decompile(${counted})`,
       post: () => this.apiClient.POST('/plugins/decompile', { body: { plugins: [...plugins] } }),
+      outcome: selectionOutcome,
     });
-    return isRefused(answer) ? answer : selectionOutcome(answer);
   }
 
   /** Each plugin compiles or is refused on its own. A cause no plugin escapes, no load order,
    *  refuses the whole selection. Never refreshes the tree: a compiled binary changes only bytes on
    *  disk. */
   async compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused> {
-    const counted = plugins.length === 1 ? '1 plugin' : `${plugins.length} plugins`;
-    const answer = await this.mutate({
-      op: `compile(${counted})`,
-      failMsg: `Could not compile ${counted}`,
-      post: () => this.apiClient.POST('/plugins/compile', {
-        body: { plugins: [...plugins] },
-      }),
+    return this.mutateEach({
+      verb: 'compile', noun: 'plugin', items: plugins,
+      op: (counted) => `compile(${counted})`,
+      post: () => this.apiClient.POST('/plugins/compile', { body: { plugins: [...plugins] } }),
+      outcome: selectionOutcome,
     });
-    return isRefused(answer) ? answer : selectionOutcome(answer);
   }
 
   /** A refusal (untracked plugin, a link that would dangle) comes back typed (ADR-0014); only a

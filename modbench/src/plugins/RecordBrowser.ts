@@ -87,26 +87,37 @@ class RecordTypeNode extends vscode.TreeItem {
 const recordArgument = (plugin: string, origin: string, formKey: string): RecordArgument =>
   ({ kind: 'record', plugin: { name: plugin, origin }, formKey });
 
-class RecordNode extends vscode.TreeItem {
-  readonly kind = 'record' as const;
+abstract class RecordRowNode extends vscode.TreeItem {
   readonly argument: RecordArgument;
+  readonly origin: string;
+  constructor(
+    contextKind: string, label: string, collapsibleState: vscode.TreeItemCollapsibleState,
+    { name: plugin, origin }: PluginAddress, row: RecordRowFacts, conditions: PluginConditions, isContainer = false,
+  ) {
+    super(label, collapsibleState);
+    this.origin = origin;
+    this.argument = recordArgument(plugin, origin, row.formKey);
+    this.contextValue = conditionedContextValue(contextKind, conditions, isContainer);
+    this.command = openCopyCommand(row.formKey, { name: plugin, origin });
+    // RecordDecorationProvider's keying identity: the row's own copy's owning plugin (which an
+    // override stack row can differ from the RecordTypeNode's) paired with origin.
+    this.resourceUri = recordResourceUri({ name: plugin, origin }, row.formKey);
+    describeRecordRow(this, row);
+  }
+}
+
+class RecordNode extends RecordRowNode {
+  readonly kind = 'record' as const;
   constructor(
     public readonly record: RecordSummary,
-    public readonly origin: string,
+    origin: string,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
     public readonly isContainer = false,
     // From the same bulk listing `record` came from, never a per-row follow-up call.
     public readonly hasContainerChildren = false,
   ) {
-    const label = record.editorId ?? record.formKey;
-    super(label, collapsibleWhen(isContainer && hasContainerChildren));
-    this.argument = recordArgument(record.plugin, origin, record.formKey);
-    this.contextValue = conditionedContextValue('record', conditions, isContainer);
-    this.command = openCopyCommand(record.formKey, { name: record.plugin, origin });
-    // RecordDecorationProvider's keying identity — record.plugin (this row's own copy's owning
-    // plugin, which an override stack row can differ from the RecordTypeNode's) paired with origin.
-    this.resourceUri = recordResourceUri({ name: record.plugin, origin }, record.formKey);
-    describeRecordRow(this, record);
+    super('record', record.editorId ?? record.formKey, collapsibleWhen(isContainer && hasContainerChildren),
+      { name: record.plugin, origin }, record, conditions, isContainer);
   }
 }
 
@@ -114,24 +125,18 @@ class RecordNode extends vscode.TreeItem {
 
 // Every node in the spatial chain carries its plugin's `origin` (ADR-0012) and conditions down to
 // its leaves: each hop's repository call needs the one, each record row beneath the other.
-class WorldspaceNode extends vscode.TreeItem {
+class WorldspaceNode extends RecordRowNode {
   readonly kind = 'worldspace' as const;
-  readonly argument: RecordArgument;
   readonly formKey: string;
   readonly editorId?: string;
   constructor(
-    public readonly plugin: string, public readonly worldspace: WorldspaceSummary, public readonly origin: string,
+    public readonly plugin: string, public readonly worldspace: WorldspaceSummary, origin: string,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
-    const label = worldspace.editorId ?? worldspace.formKey;
-    super(label, collapsibleWhen(worldspace.hasChildren));
+    super('worldspace', worldspace.editorId ?? worldspace.formKey, collapsibleWhen(worldspace.hasChildren),
+      { name: plugin, origin }, worldspace, conditions, true);
     this.formKey = worldspace.formKey;
     this.editorId = worldspace.editorId ?? undefined;
-    this.argument = recordArgument(plugin, origin, worldspace.formKey);
-    this.contextValue = conditionedContextValue('worldspace', conditions, true);
-    this.command = openCopyCommand(worldspace.formKey, { name: plugin, origin });
-    this.resourceUri = recordResourceUri({ name: plugin, origin }, worldspace.formKey);
-    describeRecordRow(this, worldspace);
   }
 }
 
@@ -139,45 +144,27 @@ class WorldspaceNode extends vscode.TreeItem {
 // label, one number for an interior level (types 2/3) and "Hi, Lo" for an exterior one (types 4/5).
 const BLOCK_LEVEL_WORDS = { block: 'Block', subBlock: 'Sub-Block' } as const;
 
-abstract class BlockLevelNode extends vscode.TreeItem {
+type BlockSource = WorldspaceBlock | WorldspaceSubBlock | InteriorCellBlock | InteriorCellSubBlock;
+
+const BLOCK_LEVEL_OF = { block: 'block', subBlock: 'subBlock', interiorBlock: 'block', interiorSubBlock: 'subBlock' } as const;
+
+type BlockLevelKind = keyof typeof BLOCK_LEVEL_OF;
+
+const blockId = (source: BlockSource): string => 'x' in source ? `${source.x},${source.y}` : String(source.number);
+const blockLabel = (source: BlockSource): string => 'x' in source ? `${source.x}, ${source.y}` : String(source.number);
+
+class BlockLevelNode extends vscode.TreeItem {
   constructor(
-    level: keyof typeof BLOCK_LEVEL_WORDS, label: string, hasParseFailure: boolean,
+    public readonly kind: BlockLevelKind, public readonly source: BlockSource,
     public readonly plugin: string, public readonly origin: string, public readonly conditions: PluginConditions,
     /** The row's place beneath its plugin: what its URI and its children's are built from. */
     public readonly path: readonly string[],
   ) {
-    super(`${BLOCK_LEVEL_WORDS[level]} ${label}`, vscode.TreeItemCollapsibleState.Collapsed);
+    const level = BLOCK_LEVEL_OF[kind];
+    super(`${BLOCK_LEVEL_WORDS[level]} ${blockLabel(source)}`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = level;
     this.iconPath = blankIcon();
-    if (hasParseFailure) markFailure(this, failureNote(`This ${BLOCK_LEVEL_WORDS[level].toLowerCase()}`, null));
-  }
-}
-
-class BlockNode extends BlockLevelNode {
-  readonly kind = 'block' as const;
-  constructor(plugin: string, public readonly block: WorldspaceBlock, origin: string, conditions: PluginConditions, path: readonly string[]) {
-    super('block', `${block.x}, ${block.y}`, block.hasParseFailure, plugin, origin, conditions, path);
-  }
-}
-
-class SubBlockNode extends BlockLevelNode {
-  readonly kind = 'subBlock' as const;
-  constructor(plugin: string, public readonly subBlock: WorldspaceSubBlock, origin: string, conditions: PluginConditions, path: readonly string[]) {
-    super('subBlock', `${subBlock.x}, ${subBlock.y}`, subBlock.hasParseFailure, plugin, origin, conditions, path);
-  }
-}
-
-class InteriorBlockNode extends BlockLevelNode {
-  readonly kind = 'interiorBlock' as const;
-  constructor(plugin: string, public readonly block: InteriorCellBlock, origin: string, conditions: PluginConditions, path: readonly string[]) {
-    super('block', String(block.number), block.hasParseFailure, plugin, origin, conditions, path);
-  }
-}
-
-class InteriorSubBlockNode extends BlockLevelNode {
-  readonly kind = 'interiorSubBlock' as const;
-  constructor(plugin: string, public readonly subBlock: InteriorCellSubBlock, origin: string, conditions: PluginConditions, path: readonly string[]) {
-    super('subBlock', String(subBlock.number), subBlock.hasParseFailure, plugin, origin, conditions, path);
+    if (source.hasParseFailure) markFailure(this, failureNote(`This ${BLOCK_LEVEL_WORDS[level].toLowerCase()}`, null));
   }
 }
 
@@ -188,25 +175,19 @@ function strRight3(n: number | null | undefined): string {
   return String(n).padStart(3, ' ');
 }
 
-class CellNode extends vscode.TreeItem {
+class CellNode extends RecordRowNode {
   readonly kind = 'cell' as const;
-  readonly argument: RecordArgument;
   readonly formKey: string;
   readonly editorId?: string;
   constructor(
-    public readonly plugin: string, public readonly cell: CellSummary, public readonly origin: string,
+    public readonly plugin: string, public readonly cell: CellSummary, origin: string,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
     const label = cell.editorId
       ?? (cell.cellX != null ? `<${strRight3(cell.cellX)}, ${strRight3(cell.cellY)}>` : cell.formKey);
-    super(label, collapsibleWhen(cell.hasChildren));
+    super('cell', label, collapsibleWhen(cell.hasChildren), { name: plugin, origin }, cell, conditions, true);
     this.formKey = cell.formKey;
     this.editorId = cell.editorId ?? undefined;
-    this.argument = recordArgument(plugin, origin, cell.formKey);
-    this.contextValue = conditionedContextValue('cell', conditions, true);
-    this.command = openCopyCommand(cell.formKey, { name: plugin, origin });
-    this.resourceUri = recordResourceUri({ name: plugin, origin }, cell.formKey);
-    describeRecordRow(this, cell);
   }
 }
 
@@ -232,26 +213,20 @@ class ChildRecordGroupNode extends vscode.TreeItem {
   }
 }
 
-class ChildRecordNode extends vscode.TreeItem {
+class ChildRecordNode extends RecordRowNode {
   readonly kind = 'placed' as const;
-  readonly argument: RecordArgument;
   readonly formKey: string;
   readonly editorId?: string;
   constructor(
     public readonly plugin: string,
     public readonly child: ChildRecordSummary,
-    public readonly origin: string,
+    origin: string,
     conditions: PluginConditions = NOT_EDITABLE,
   ) {
-    const label = child.editorId ?? child.baseEditorId ?? child.formKey;
-    super(label, vscode.TreeItemCollapsibleState.None);
+    super('placed', child.editorId ?? child.baseEditorId ?? child.formKey, vscode.TreeItemCollapsibleState.None,
+      { name: plugin, origin }, child, conditions);
     this.formKey = child.formKey;
     this.editorId = child.editorId ?? undefined;
-    this.argument = recordArgument(plugin, origin, child.formKey);
-    this.contextValue = conditionedContextValue('placed', conditions);
-    this.command = openCopyCommand(child.formKey, { name: plugin, origin });
-    this.resourceUri = recordResourceUri({ name: plugin, origin }, child.formKey);
-    describeRecordRow(this, child);
   }
 }
 
@@ -268,9 +243,8 @@ export class IndexingNode extends vscode.TreeItem {
 }
 
 export type RecordBrowserNode =
-  | RecordTypeNode | RecordNode
-  | WorldspaceNode | BlockNode | SubBlockNode | CellNode
-  | ChildRecordGroupNode | ChildRecordNode | InteriorBlockNode | InteriorSubBlockNode
+  | RecordTypeNode | RecordNode | WorldspaceNode | BlockLevelNode | CellNode
+  | ChildRecordGroupNode | ChildRecordNode
   | ErrorNode | IndexingNode;
 
 export const CELL_RECORD_TYPE = 'cell';
@@ -467,26 +441,23 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   // so neither dispatch ladder exceeds the complexity budget.
   private getSpatialChildren(element: RecordBrowserNode): Promise<RecordBrowserNode[]> | RecordBrowserNode[] {
     if (element instanceof WorldspaceNode) return this.fetchWorldspaceChildren(element);
-    if (element instanceof BlockNode) {
-      return element.block.subBlocks.map(s => this.folded(
-        new SubBlockNode(element.plugin, s, element.origin, element.conditions, [...element.path, `${s.x},${s.y}`]), s.cells));
-    }
-    if (element instanceof SubBlockNode) {
-      return element.subBlock.cells.map(c => new CellNode(element.plugin, c, element.origin, element.conditions));
-    }
+    if (element instanceof BlockLevelNode) return this.blockLevelChildren(element);
     if (element instanceof CellNode) return this.fetchCellGroups(element);
     if (element instanceof ChildRecordGroupNode) {
       return element.children.map(p =>
         new ChildRecordNode(element.plugin, p, element.origin, element.conditions));
     }
-    if (element instanceof InteriorBlockNode) {
-      return element.block.subBlocks.map(s => this.folded(
-        new InteriorSubBlockNode(element.plugin, s, element.origin, element.conditions, [...element.path, String(s.number)]), s.cells));
-    }
-    if (element instanceof InteriorSubBlockNode) {
-      return element.subBlock.cells.map(c => new CellNode(element.plugin, c, element.origin, element.conditions));
-    }
     return [];
+  }
+
+  private blockLevelChildren(node: BlockLevelNode): RecordBrowserNode[] {
+    const { source } = node;
+    if (!('subBlocks' in source)) {
+      return source.cells.map(c => new CellNode(node.plugin, c, node.origin, node.conditions));
+    }
+    const kind = 'x' in source ? 'subBlock' : 'interiorSubBlock';
+    return source.subBlocks.map(s => this.folded(
+      new BlockLevelNode(kind, s, node.plugin, node.origin, node.conditions, [...node.path, blockId(s)]), s.cells));
   }
 
   private err(e: unknown): string {
@@ -553,7 +524,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
       this.readRows(generation, cells.map(c => ({ ...c, plugin: pluginAddressOf(node) })));
       const nodes: RecordBrowserNode[] = data.topCells.map(c => new CellNode(node.plugin, c, node.origin, node.conditions));
       nodes.push(...data.blocks.map(b => this.folded(
-        new BlockNode(node.plugin, b, node.origin, node.conditions, [node.formKey, `${b.x},${b.y}`]), b.subBlocks.flatMap(s => s.cells))));
+        new BlockLevelNode('block', b, node.plugin, node.origin, node.conditions, [node.formKey, blockId(b)]), b.subBlocks.flatMap(s => s.cells))));
       return nodes;
     });
   }
@@ -592,7 +563,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
         async () => answerOf(await this.repository.getInteriorCells(pluginAddressOf(node))));
       this.readRows(generation, blocks.flatMap(b => b.subBlocks.flatMap(s => s.cells)).map(c => ({ ...c, plugin: pluginAddressOf(node) })));
       return blocks.map(b => this.folded(
-        new InteriorBlockNode(node.plugin, b, node.origin, node.conditions, [node.recordType, String(b.number)]), b.subBlocks.flatMap(s => s.cells)));
+        new BlockLevelNode('interiorBlock', b, node.plugin, node.origin, node.conditions, [node.recordType, blockId(b)]), b.subBlocks.flatMap(s => s.cells)));
     });
   }
 
