@@ -118,7 +118,7 @@ public sealed class DependantsTests
         using var fixture = Fixture(Base, new Plugin("Child.esp", Masters: "Base.esm"));
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
-        index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.SkyrimSE);
+        index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Oblivion);
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
 
         Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetDependants(Renamed).Refused().Refusal);

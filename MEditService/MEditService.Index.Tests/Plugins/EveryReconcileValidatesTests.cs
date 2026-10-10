@@ -164,7 +164,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     public void AnEqualSnapshot_OfABinaryWhoseStampHolds_ReadsNothing()
     {
         using var held = new FileStream(_untracked.Path, FileMode.Open, FileAccess.Read, FileShare.None);
-        Assert.IsType<PluginFailure.Inaccessible>(_disk.ClaimOf(_untracked.Path).Failure());
+        Assert.IsType<PluginFailure.Inaccessible>(_disk.ClaimOf(_untracked.Path, GameRelease.Fallout4).Failure());
 
         var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _tracked.RenamedByHand(_index));
 

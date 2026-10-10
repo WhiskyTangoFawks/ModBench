@@ -86,7 +86,7 @@ internal static class LeafClassification
         if (game.Annotations.IsVectorStructType(core))
             return TextLeaf("vector", declared == null ? null : ReflectedTypes.VectorText(declared));
 
-        if (ReflectedTypes.IsModKey(core) || ReflectedTypes.IsFormKey(core))
+        if (ReflectedTypes.IsModKey(core) || ReflectedTypes.IsFormKey(core) || ReflectedTypes.IsAssetLink(core))
             return new("string", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
 
         if (core.IsEnum)

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
+using Mutagen.Bethesda;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -30,7 +31,7 @@ public sealed class PluginFileHashesTests : IDisposable
         SpinWait.SpinUntil(() => Environment.TickCount64 != tick);
     }
 
-    private static Answer<FileClaim, PluginFailure> ClaimOf(string path) => TestAdapters.Mutagen().ClaimOf(path);
+    private static Answer<FileClaim, PluginFailure> ClaimOf(string path) => TestAdapters.Mutagen().ClaimOf(path, GameRelease.Fallout4);
 
     private FileStream HeldAgainstReaders()
     {

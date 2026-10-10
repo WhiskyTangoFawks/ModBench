@@ -55,11 +55,11 @@ public sealed class ReconcileDoorTests
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, notifications: notifications);
 
-        var version = index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.SkyrimSE, data.Plugins));
+        var version = index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, data.Plugins));
 
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
         Assert.Equal(version, index.Status.Version);
-        Assert.Contains("SkyrimSE", index.Status.Message, StringComparison.Ordinal);
+        Assert.Contains("Oblivion", index.Status.Message, StringComparison.Ordinal);
         Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)).Status.State);
     }
 
@@ -93,12 +93,12 @@ public sealed class ReconcileDoorTests
         var holder = new LoadOrderHolder();
         using var opens = new GatedPluginAdapter();
         using var index = Indexes.Open(holder, opens, notifications: notifications);
-        var snapshot = LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.SkyrimSE, data.Plugins);
+        var snapshot = LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, data.Plugins);
         index.Receive(holder, snapshot);
         var before = StatusesPublished(notifications).Length;
 
         index.NextSnapshotUnsettledUntil(() => StatusesPublished(notifications).Length > before, "the retried reconcile's failed status");
-        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.SkyrimSE, []));
+        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, []));
 
         var retried = StatusesPublished(notifications)[before..];
         Assert.Equal(2, retried.Length);

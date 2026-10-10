@@ -33,6 +33,8 @@ public interface IGameCodec
     /// <summary>The schema rows that make a member govern which of its siblings are in use, empty for a game with none.</summary>
     SiblingsInUseRows SiblingsInUse { get; }
 
+    CreationKitShapes CreationKitShapes { get; }
+
     /// <summary>The header's transient types as comparable values, empty for a game whose header has none.</summary>
     IReadOnlyList<string> TransientTypes(IModGetter plugin);
 

@@ -6,22 +6,24 @@ namespace MEditService.PluginAdapter.Tests.RealData;
 
 public sealed class VanillaMalformedScanProofTests
 {
-    [SmokeFact("run the vanilla-proof scan")]
-    public void VanillaPlugins_TripNoDetector()
+    public static TheoryData<GameRelease, string> InstalledVanillaPlugins()
     {
-        if (!new GameLocator().TryGetDataDirectory(GameRelease.Fallout4, out var dataDir))
-            return;
-
-        var falsePositives = new List<string>();
-        foreach (var path in Directory.EnumerateFiles(dataDir.Path)
-                     .Where(p => Path.GetExtension(p) is ".esm" or ".esp" or ".esl"))
+        var rows = new TheoryData<GameRelease, string>();
+        foreach (var release in new[] { GameRelease.Fallout4, GameRelease.SkyrimSE })
         {
-            foreach (var d in TestAdapters.Mutagen().ClaimOf(path).Answered().Diagnoses.Answered())
-                falsePositives.Add($"{Path.GetFileName(path)}: {d.Anchor} — {d.DefectClass}: {d.Message}");
+            if (!new GameLocator().TryGetDataDirectory(release, out var dataDir)) continue;
+            foreach (var path in Directory.EnumerateFiles(dataDir.Path).Where(p => Path.GetExtension(p) is ".esm" or ".esp" or ".esl"))
+                rows.Add(release, path);
         }
+        return rows;
+    }
 
-        Assert.True(falsePositives.Count == 0,
-            "MalformedPluginScan flagged vanilla data — the table row is wrong, not the game:\n"
-            + string.Join('\n', falsePositives));
+    [SmokeTheory("run the vanilla-proof scan")]
+    [MemberData(nameof(InstalledVanillaPlugins))]
+    public void AVanillaPlugin_TripsNoDetector_ElseTheTableRowIsWrongNotTheGame(GameRelease release, string path)
+    {
+        var diagnoses = TestAdapters.Mutagen().ClaimOf(path, release).Answered().Diagnoses.Answered();
+
+        Assert.Empty(diagnoses.Select(d => $"{d.Anchor} — {d.DefectClass}: {d.Message}"));
     }
 }

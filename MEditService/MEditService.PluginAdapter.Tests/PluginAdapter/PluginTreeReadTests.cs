@@ -55,7 +55,7 @@ public sealed class PluginTreeReadTests
     {
         var header = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), "{ \"ModKey\": \"Tree.esp\" }"u8.ToArray());
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => Adapter.ReadTreeAsync([header], GameRelease.SkyrimSE));
+        await Assert.ThrowsAsync<NotSupportedException>(() => Adapter.ReadTreeAsync([header], GameRelease.Oblivion));
     }
 
     [Fact]

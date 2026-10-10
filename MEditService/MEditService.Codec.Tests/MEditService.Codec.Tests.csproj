@@ -33,6 +33,7 @@
          MEditService.Codec's own ProjectReference list. -->
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
     <ProjectReference Include="..\MEditService.Codec.Fallout4\MEditService.Codec.Fallout4.csproj" />
+    <ProjectReference Include="..\MEditService.Codec.Skyrim\MEditService.Codec.Skyrim.csproj" />
     <ProjectReference Include="..\MEditService.TestSupport\MEditService.TestSupport.csproj" />
   </ItemGroup>
 

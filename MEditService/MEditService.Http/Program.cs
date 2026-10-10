@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using MEditService.Codec.Fallout4;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Codec.Skyrim;
 using MEditService.Commands.Composition;
 using MEditService.Http;
 using MEditService.Http.Endpoints;
@@ -28,6 +29,7 @@ try
     GameCodecs.Register(new Dictionary<GameCategory, IGameCodec>
     {
         [GameCategory.Fallout4] = Fallout4Codec.Instance,
+        [GameCategory.Skyrim] = SkyrimCodec.Instance,
     });
 
     var builder = WebApplication.CreateBuilder(new WebApplicationOptions

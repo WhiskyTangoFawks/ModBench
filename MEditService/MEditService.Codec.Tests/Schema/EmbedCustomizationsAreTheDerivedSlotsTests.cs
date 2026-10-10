@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Reflection;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
@@ -8,28 +9,30 @@ namespace MEditService.Codec.Tests.Schema;
 
 public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
 {
-    [Fact]
-    public void TheCustomizationsEmbedExactlyTheDerivedSlots_BecauseACustomizationTheDerivationDoesNotNamePutsAChildInADocumentNoEditCanReach()
+    [Theory]
+    [InlineData(GameRelease.Fallout4)]
+    [InlineData(GameRelease.SkyrimSE)]
+    public void TheCustomizationsEmbedExactlyTheDerivedSlots_BecauseACustomizationTheDerivationDoesNotNamePutsAChildInADocumentNoEditCanReach(GameRelease release)
     {
-        var customized = ReplayEveryCustomizeOfTheSerializationFolderThroughARecordingBuilder().Order().ToList();
+        var customized = ReplayEveryCustomizeOfTheSerializationFolderThroughARecordingBuilder(release).Order().ToList();
 
         Assert.True(customized.Count > 0, "Expected the replay to discover customizations; an empty replay would agree with an empty derivation.");
-        Assert.Equal(DerivedEmbeddedSlots().Order().ToList(), customized);
+        Assert.Equal(DerivedEmbeddedSlots(release).Order().ToList(), customized);
     }
 
-    private static IEnumerable<(string ParentType, string Slot)> DerivedEmbeddedSlots()
+    private static IEnumerable<(string ParentType, string Slot)> DerivedEmbeddedSlots(GameRelease release)
     {
-        var types = RecordTypes.For(GameRelease.Fallout4);
-        return typeof(Mutagen.Bethesda.Fallout4.Fallout4Mod).Assembly.GetTypes()
+        var types = RecordTypes.For(release);
+        return Assembly.Load($"Mutagen.Bethesda.{release.ToCategory()}").GetTypes()
             .Where(type => type is { IsClass: true, IsAbstract: false, IsPublic: true } && typeof(IMajorRecord).IsAssignableFrom(type))
             .SelectMany(type => type.GetProperties()
                 .Where(property => types.IsEmbeddedSlot(type.Name, property.Name))
                 .Select(property => (type.Name, property.Name)));
     }
 
-    private static IEnumerable<(string ParentType, string Slot)> ReplayEveryCustomizeOfTheSerializationFolderThroughARecordingBuilder()
+    private static IEnumerable<(string ParentType, string Slot)> ReplayEveryCustomizeOfTheSerializationFolderThroughARecordingBuilder(GameRelease release)
     {
-        foreach (var found in GameCodecs.For(GameRelease.Fallout4).GeneratedSerializers.GetTypes()
+        foreach (var found in GameCodecs.For(release).GeneratedSerializers.GetTypes()
                      .Where(type => type is { IsClass: true, IsAbstract: false })
                      .Select(type => (Type: type, Customized: CustomizedType(type)))
                      .Where(found => found.Customized != null))
@@ -80,7 +83,7 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
                 .Where(t => t.IsInterface && t != typeof(TObject) && typeof(TObject).IsAssignableFrom(t))
                 .ToList();
             return derived.Count > 0 && derived.All(t =>
-                t.GetProperty(member, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly) != null);
+                t.GetProperty(member, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly) != null);
         }
 
         private ICustomizationBuilder<TObject> Record(LambdaExpression field)
