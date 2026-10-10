@@ -4,6 +4,7 @@ import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { ByPluginAddress } from './pluginAddress';
+import type { PluginConditions } from '../drivingLib/recordRowContext';
 
 /** A warning on one plugin's file, as the Problems panel shows it. */
 export type PluginWarning = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
@@ -19,11 +20,6 @@ export interface PluginStatus {
 export type StatusIcon = 'error' | 'warning';
 
 export type PluginPlace = 'inTrackedMod' | 'inUntrackedMod' | 'inOverwrite';
-
-export interface PluginConditions {
-  readonly tracked: boolean;
-  readonly editable: boolean;
-}
 
 /** The instance value's two facts about where a mod's plugins live. */
 export interface PlaceFacts {

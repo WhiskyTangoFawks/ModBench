@@ -13,6 +13,7 @@ import { reportSyncFailures, type Sync, type SyncChannel, type SyncFailureReport
 import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider';
 import { type PluginsTreeNode } from './pluginRows';
 import type { PluginFactsClient } from './pluginFactsFeed';
+import type { PluginConditions } from '../drivingLib/recordRowContext';
 import type { RecordBrowser } from './RecordBrowser';
 import { publishPluginWarnings } from './loadDiagnostics';
 import { pluginsKeyContext } from './gestureEntry';
@@ -81,6 +82,8 @@ export interface PluginsView extends vscode.Disposable {
   /** The load order Editing could not put: its refusal is this view's message line too. */
   loadOrderPut: SyncFailureReport;
   copyValue: CopyValueAdapter;
+  /** What mEdit has told the view of a plugin's tracking and editability. */
+  conditionsOf: (plugin: PluginAddress) => PluginConditions;
   progress: PluginsViewProgress;
   narrator: ReconcileNarrator;
 }
@@ -111,12 +114,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     showCollapseAll: true,
   });
   const selected = survivingSelection(view, (row) => tree.shownRow(row));
-  const showKeyContext = () => {
-    for (const [name, value] of Object.entries(pluginsKeyContext(selected.rows(), (row) => tree.isEnabled(row)))) {
-      void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
-    }
-    void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', tree.facts.rows.anyCompilable());
-  };
+  const showKeyContext = () => { publishKeyContext(selected.rows(), tree); };
   showKeyContext();
   const keyContextSubscriptions = [view.onDidChangeSelection(showKeyContext), tree.onDidChangeTreeData(showKeyContext)];
   const nameFilter = registerPluginsNameFilter(view, tree, joinSyncMessages(pluginSync, loadOrderPut, recordBrowser.beneathFailure));
@@ -164,9 +162,17 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     view, nameFilter,
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
+    conditionsOf: (plugin) => tree.facts.rows.conditions(plugin),
     progress, narrator: indexStatus.narrator,
     dispose: () => { disposable.dispose(); },
   };
+}
+
+function publishKeyContext(selection: readonly PluginsTreeNode[], tree: PluginsTreeProvider): void {
+  for (const [name, value] of Object.entries(pluginsKeyContext(selection, (row) => tree.isEnabled(row)))) {
+    void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
+  }
+  void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', tree.facts.rows.anyCompilable());
 }
 
 function registerPluginGestures(

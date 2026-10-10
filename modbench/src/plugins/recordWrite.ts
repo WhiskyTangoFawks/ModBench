@@ -13,5 +13,5 @@ export function recordWriteOver(
       await client.latestLoadOrder();
     },
   };
-  return (command, invokedFrom = PLUGINS_KEY_ARGS.view) => runWritingGesture(invokedFrom, untilIndexShows, command);
+  return (command) => runWritingGesture(PLUGINS_KEY_ARGS.view, untilIndexShows, command);
 }

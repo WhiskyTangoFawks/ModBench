@@ -10,7 +10,7 @@ import { parseRecordResourceUri, parseRowResourceUri, recordResourceUri, rowReso
 import type { RecordArgument } from '../drivingLib/recordArgument';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { pluginAddressKey, pluginAddressOf, type PluginAddress } from '../wire/pluginAddress';
-import type { PluginConditions } from './pluginFacts';
+import { conditionedContextValue, type PluginConditions } from '../drivingLib/recordRowContext';
 import { errorMessage } from '../ports/errorMessage';
 import type { SyncMessage } from '../drivingLib/nameFilter';
 import { blankIcon } from '../drivingLib/blankIcon';
@@ -58,12 +58,6 @@ const NOT_EDITABLE: PluginConditions = { tracked: false, editable: false };
 // A row opens its own plugin's copy (commands.md, Argument: "Singular means the clicked row").
 function openCopyCommand(formKey: string, plugin: PluginAddress): vscode.Command {
   return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey, plugin } }] };
-}
-
-// The contextValues state, on the row, refusals the backend would otherwise reach only after
-// walking the whole gesture (plugins.md, Menus and keys, story 4).
-function conditionedContextValue(kind: string, conditions: PluginConditions, isContainer = false): string {
-  return `${kind} ${conditions.tracked ? 'tracked' : 'untracked'}${conditions.editable ? ' editable' : ''}${isContainer ? ' container' : ''}`;
 }
 
 class RecordTypeNode extends vscode.TreeItem {
