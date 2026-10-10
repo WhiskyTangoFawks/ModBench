@@ -1,11 +1,9 @@
-using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Records;
-using Mutagen.Bethesda.Serialization.Exceptions;
 using Noggog.WorkEngine;
 
 namespace MEditService.PluginAdapter;
@@ -78,14 +76,15 @@ internal static class PluginTrees
     /// <paramref name="destinationPath"/>, in place with no rename: a scratch verification, never a
     /// replacement of the real plugin.</summary>
     internal static async Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
-        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
+        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, GameRelease gameRelease,
         CancellationToken cancel = default)
     {
+        var game = GameCodecs.For(gameRelease);
         var scratchDir = Directory.CreateTempSubdirectory("medit-writetree-").FullName;
         try
         {
             var recompiled = await DeserializeTree(
-                await MaterializeTree(files, Path.Combine(scratchDir, TreeFolder), cancel), cancel);
+                game, await MaterializeTree(files, Path.Combine(scratchDir, TreeFolder), cancel), cancel);
             await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder);
             return PluginAnswer.Of(destinationPath);
         }
@@ -135,27 +134,10 @@ internal static class PluginTrees
         return shared;
     }
 
-    private static async Task<IMod> DeserializeTree(string treeRoot, CancellationToken cancel)
-    {
-        var rootPath = Path.Combine(treeRoot, DocumentFileNames.Root);
-        var rootDocument = await File.ReadAllBytesAsync(rootPath, cancel);
-        return HeaderDocument.RestoreOmittedNextObjectId(
-            await GameNamedBy(rootDocument, rootPath).DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel),
-            rootDocument);
-    }
-
-    // Read ahead of the door, so a failure names the file as the door's own failures do.
-    private static IGameCodec GameNamedBy(byte[] rootDocument, string rootPath)
-    {
-        try
-        {
-            return HeaderDocument.GameOf(rootDocument);
-        }
-        catch (Exception ex) when (ex is JsonException or InvalidDataException)
-        {
-            throw FilePathedException.Enrich(ex, rootPath);
-        }
-    }
+    private static async Task<IMod> DeserializeTree(IGameCodec game, string treeRoot, CancellationToken cancel) =>
+        HeaderDocument.RestoreOmittedNextObjectId(
+            await game.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel),
+            await File.ReadAllBytesAsync(Path.Combine(treeRoot, DocumentFileNames.Root), cancel));
 
     /// <summary>The codec's verdict on the plugin written at <paramref name="recompiledPath"/> against
     /// the one at <paramref name="modPath"/>; null when they are model-identical. Both are
@@ -178,6 +160,8 @@ internal static class PluginTrees
         IReadOnlyList<TreeFile> files, GameRelease gameRelease,
         CancellationToken cancel = default)
     {
+        // Outside the catch below: a game the service was not wired for is no source defect.
+        var game = GameCodecs.For(gameRelease);
         var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
         try
         {
@@ -190,7 +174,7 @@ internal static class PluginTrees
             // every path a read failure names is relative to one.
             try
             {
-                return PluginAnswer.Of(new CompiledTree(await DeserializeTree(treeRoot, cancel), gameRelease));
+                return PluginAnswer.Of(new CompiledTree(await DeserializeTree(game, treeRoot, cancel), gameRelease));
             }
             catch (Exception ex) when (PluginFailure.StandsFor(ex))
             {

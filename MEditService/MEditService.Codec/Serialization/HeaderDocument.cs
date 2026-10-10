@@ -36,26 +36,18 @@ public static class HeaderDocument
     /// <summary>The inverse, through the same door. Both a filesystem and a stream creator are
     /// required: <c>SerializationHelper.ExtractMetaInternal</c> guards on <c>File.Exists</c> before
     /// consulting the stream creator, so the creator alone fails outright.</summary>
-    public static IModGetter Read(byte[] body)
+    public static IModGetter Read(byte[] body, GameRelease release)
     {
         var folder = ScratchFolder();
         var rootPath = Path.Combine(folder, DocumentFileNames.Root);
 
         var mod = InlineSerialization.Finished(
-            () => GameOf(body).DeserializeWholeMod(
+            () => GameCodecs.For(release).DeserializeWholeMod(
                 folder, InlineWorkDropoff.Instance, CancellationToken.None,
                 fileSystem: new OnlyTheRootDocumentExists(rootPath),
                 streamCreator: new SupplyRootDocument(rootPath, body)));
         return RestoreOmittedNextObjectId(mod, body);
     }
-
-    /// <summary>The codec of the game a root document names.</summary>
-    public static IGameCodec GameOf(byte[] rootDocument) =>
-        JsonNode.Parse(rootDocument)?["GameRelease"] is JsonValue named
-        && named.TryGetValue<string>(out var name)
-        && Enum.TryParse<GameRelease>(name, out var release)
-            ? GameCodecs.For(release)
-            : throw new InvalidDataException("A root document names its GameRelease, and this one names none.");
 
     /// <summary>Mutagen's serializer omits a Next Object ID equal to its default, which a new mod does not start at.</summary>
     public static IMod RestoreOmittedNextObjectId(IMod mod, byte[] rootDocument)
@@ -65,19 +57,19 @@ public static class HeaderDocument
         return mod;
     }
 
-    public static uint NextObjectId(byte[] body) => Read(body).NextFormID;
+    public static uint NextObjectId(byte[] body, GameRelease release) => Read(body, release).NextFormID;
 
     /// <summary>The document with its header's Next Object ID set to <paramref name="nextObjectId"/>.</summary>
-    public static byte[] WithNextObjectId(byte[] body, uint nextObjectId)
+    public static byte[] WithNextObjectId(byte[] body, GameRelease release, uint nextObjectId)
     {
-        var mod = (IMod)Read(body);
+        var mod = (IMod)Read(body, release);
         mod.NextFormID = nextObjectId;
         return Write(mod);
     }
 
     /// <summary>Whether the document's header carries the ESL flag — read through <see cref="Read"/>,
     /// never string-matched out of the JSON, so the answer is the door's own.</summary>
-    public static bool IsLight(byte[] body) => Read(body) is IModFlagsGetter flags && flags.IsSmallMaster;
+    public static bool IsLight(byte[] body, GameRelease release) => Read(body, release) is IModFlagsGetter flags && flags.IsSmallMaster;
 
     // The GUID segment: the door resolves group folders against the real filesystem, so the folder
     // must not exist; and ExtractMetaInternal prefers a ModKey parsed from the last segment, so it

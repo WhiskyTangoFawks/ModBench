@@ -450,7 +450,7 @@ public sealed class WriteSessionTests : IDisposable
         var header = session.Repository.RecordOf(Plugin, PluginHeader.IdentityOf(PluginName)).Value().Require();
         var movedPast = header with
         {
-            Body = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), 0x900)),
+            Body = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), GameRelease.Fallout4, 0x900)),
         };
 
         Assert.Null(session.Atomically(() =>
@@ -460,7 +460,7 @@ public sealed class WriteSessionTests : IDisposable
         }));
 
         var headerRead = session.Repository.RecordOf(Plugin, PluginHeader.IdentityOf(PluginName)).Value().Require();
-        Assert.Equal(0x900u, HeaderDocument.NextObjectId(Encoding.UTF8.GetBytes(headerRead.Body)));
+        Assert.Equal(0x900u, HeaderDocument.NextObjectId(Encoding.UTF8.GetBytes(headerRead.Body), GameRelease.Fallout4));
         Assert.Contains(created.FormKey, session.Repository.FormKeysUsed(Plugin).Value());
     }
 

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 
 namespace MEditService.Architecture.Tests;
 
@@ -8,16 +9,16 @@ public class GameCodecSeedTests
     private const string PluginBinaryAndTreeDoor = "PluginTrees.cs";
     private const string HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter = "HeaderDocument.cs";
 
+    private static readonly Regex AnyGamesWholeModMixin = new(@"MutagenJsonConverter\w+ModMixIns", RegexOptions.Compiled);
+
     [Fact]
-    public void CoreSources_NameTheWholeModMixinOnlyInTheDesignatedDoorFiles()
+    public void CoreSources_NameNoGamesWholeModMixin()
     {
-        const string mixinTypeName = "MutagenJsonConverterFallout4ModMixIns";
         var sourceFiles = ProductionSources();
         Assert.NotEmpty(sourceFiles);
 
         var offendingFiles = sourceFiles
-            .Where(f => Path.GetFileName(f) != CompileTimeSeedDoor)
-            .Where(f => File.ReadAllText(f).Contains(mixinTypeName, StringComparison.Ordinal))
+            .Where(f => AnyGamesWholeModMixin.IsMatch(File.ReadAllText(f)))
             .Select(Path.GetFileName)
             .ToList();
 

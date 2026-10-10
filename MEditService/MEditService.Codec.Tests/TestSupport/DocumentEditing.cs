@@ -51,6 +51,6 @@ internal static class DocumentEditing
 
     private static string WrittenBack(string patched, RecordTableSchema schema) =>
         schema.IsHeader
-            ? Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
+            ? Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched), GameRelease.Fallout4)))
             : RecordTextCodec.RoundTrip(patched, GameRelease.Fallout4, schema.TableName);
 }

@@ -6,6 +6,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Serialization.Exceptions;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
 
 namespace MEditService.Codec.Tests.Serialization;
@@ -62,8 +63,8 @@ public sealed class HeaderDocumentTests
 
         var body = HeaderDocument.Write(mod);
 
-        Assert.Equal(0u, HeaderDocument.NextObjectId(body));
-        Assert.Equal(body, HeaderDocument.Write(HeaderDocument.Read(body)));
+        Assert.Equal(0u, HeaderDocument.NextObjectId(body, GameRelease.Fallout4));
+        Assert.Equal(body, HeaderDocument.Write(HeaderDocument.Read(body, GameRelease.Fallout4)));
     }
 
     [Fact]
@@ -93,7 +94,7 @@ public sealed class HeaderDocumentTests
     {
         var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
 
-        Assert.Equal(0x900u, HeaderDocument.NextObjectId(body));
+        Assert.Equal(0x900u, HeaderDocument.NextObjectId(body, GameRelease.Fallout4));
     }
 
     [Fact]
@@ -101,9 +102,9 @@ public sealed class HeaderDocumentTests
     {
         var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
 
-        var moved = HeaderDocument.WithNextObjectId(body, 0xA42);
+        var moved = HeaderDocument.WithNextObjectId(body, GameRelease.Fallout4, 0xA42);
 
-        Assert.Equal(0xA42u, HeaderDocument.NextObjectId(moved));
+        Assert.Equal(0xA42u, HeaderDocument.NextObjectId(moved, GameRelease.Fallout4));
         Assert.Equal(
             Encoding.UTF8.GetString(body).Replace("2304", "2626", StringComparison.Ordinal),
             Encoding.UTF8.GetString(moved));
@@ -115,7 +116,7 @@ public sealed class HeaderDocumentTests
         var mod = PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords();
         var body = HeaderDocument.Write(mod);
 
-        var readBack = (IFallout4ModGetter)HeaderDocument.Read(body);
+        var readBack = (IFallout4ModGetter)HeaderDocument.Read(body, GameRelease.Fallout4);
 
         Assert.Equal(mod.ModKey, readBack.ModKey);
         Assert.Equal(mod.GameRelease, readBack.GameRelease);
@@ -128,20 +129,18 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public void Read_TakesTheGameTheDocumentNames()
+    public void Read_RefusesADocumentThatNamesAnotherGame()
     {
         var fallout4 = Encoding.UTF8.GetString(HeaderDocument.Write(new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4)));
         var skyrim = fallout4.Replace("\"GameRelease\": \"Fallout4\"", "\"GameRelease\": \"SkyrimSE\"", StringComparison.Ordinal);
 
-        var refusal = Assert.Throws<NotSupportedException>(() => HeaderDocument.Read(Encoding.UTF8.GetBytes(skyrim)));
-
-        Assert.Contains("Skyrim", refusal.Message, StringComparison.Ordinal);
+        Assert.Throws<FilePathedException>(() => HeaderDocument.Read(Encoding.UTF8.GetBytes(skyrim), GameRelease.Fallout4));
     }
 
     [Fact]
     public void Read_YieldsAModWithNoRecords()
     {
-        var readBack = HeaderDocument.Read(HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords()));
+        var readBack = HeaderDocument.Read(HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords()), GameRelease.Fallout4);
 
         Assert.Empty(readBack.EnumerateMajorRecords());
     }
@@ -152,7 +151,7 @@ public sealed class HeaderDocumentTests
         var before = Directory.EnumerateFileSystemEntries(Path.GetTempPath(), "medit-header-*").ToHashSet(StringComparer.Ordinal);
 
         var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
-        HeaderDocument.Read(body);
+        HeaderDocument.Read(body, GameRelease.Fallout4);
 
         var after = Directory.EnumerateFileSystemEntries(Path.GetTempPath(), "medit-header-*").ToHashSet(StringComparer.Ordinal);
         Assert.Empty(after.Except(before, StringComparer.Ordinal));

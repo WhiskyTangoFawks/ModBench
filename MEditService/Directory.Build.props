@@ -11,9 +11,9 @@
       exemption is needed. The code-quality Stop hook (.claude/hooks/code-quality.py) surfaces them,
       scoped to changed files, for per-instance triage.
     -->
-    <!-- One project per box (ADR-0014): a box reaches only the boxes its own reference list draws
-         in docs/architecture/target-architecture-references.d2, so a box two hops down is a compile
-         error rather than a line nobody noticed arriving. -->
+    <!-- A box's references are its project file's (ADR-0014; target-architecture.md § The rule is
+         the reference list), so a box two hops down is a compile error rather than a line nobody
+         noticed arriving. -->
     <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
   </PropertyGroup>
 

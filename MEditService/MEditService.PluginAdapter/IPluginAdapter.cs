@@ -63,7 +63,7 @@ public interface IPluginAdapter
     /// <summary>The tree in <paramref name="files"/> compiled to <paramref name="destinationPath"/>,
     /// its masters in <paramref name="masterOrder"/> (ADR-0008). Answers the path it wrote.</summary>
     Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
-        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
+        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, GameRelease gameRelease,
         CancellationToken cancel = default);
 
     /// <summary>A plugin's binary read as the source tree it would commit.</summary>
