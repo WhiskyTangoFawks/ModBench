@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease, pluginCompanionRule, type PluginCompanionRule,
+  creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
@@ -14,6 +14,7 @@ describe('gameReleaseForGame', () => {
     expect(gameReleaseForGame('Skyrim VR')).toBe('SkyrimVR');
     expect(gameReleaseForGame('Enderal')).toBe('EnderalLE');
     expect(gameReleaseForGame('Oblivion')).toBe('Oblivion');
+    expect(gameReleaseForGame('Starfield')).toBe('Starfield');
   });
 
   it('maps MO2\'s bare "Skyrim" to the Legendary Edition, not to "Skyrim", the one name whose vocabularies disagree beyond spacing, so a whitespace strip would answer a release that does not exist', () => {
@@ -39,6 +40,7 @@ describe('nexusSlugFor', () => {
     expect(nexusSlugFor('SkyrimLE', 'Skyrim')).toBe('skyrim');
     expect(nexusSlugFor('EnderalLE', 'Enderal')).toBe('enderal');
     expect(nexusSlugFor('Oblivion', 'Oblivion')).toBe('oblivion');
+    expect(nexusSlugFor('Starfield', 'Starfield')).toBe('starfield');
   });
 
   it('maps VR variants to their non-VR Nexus domain', () => {
@@ -78,6 +80,12 @@ describe('gamePathInfoForRelease', () => {
   });
 });
 
+describe('SCRIPT_EXTENDER_FOLDERS', () => {
+  it('holds the script-extender folder of Starfield', () => {
+    expect(SCRIPT_EXTENDER_FOLDERS.has('sfse')).toBe(true);
+  });
+});
+
 describe('dataFolderFile', () => {
   it('names a file at the root of the Data folder of a game folder found', () => {
     const found = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
@@ -103,6 +111,11 @@ describe('gameMastersOf', () => {
     ]);
     expect(gameMastersOf('SkyrimSE')).toEqual(['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm']);
     expect(gameMastersOf('Oblivion')).toEqual(['Oblivion.esm']);
+    expect(gameMastersOf('Starfield')).toEqual([
+      'Starfield.esm', 'Constellation.esm', 'OldMars.esm', 'BlueprintShips-Starfield.esm', 'ShatteredSpace.esm',
+      'SFBGS006.esm', 'SFBGS007.esm', 'SFBGS003.esm', 'SFBGS008.esm', 'SFBGS004.esm', 'SFBGS00D.esm', 'SFBGS047.esm',
+      'SFBGS050.esm', 'BlueprintShips-SFBGS050.esm',
+    ]);
   });
 
   it('answers none for a release the table holds no row for', () => {
@@ -115,6 +128,7 @@ describe('creationClubListFile', () => {
   it('names the release\'s Creation Club list in the game folder', () => {
     expect(creationClubListFile('/game', 'Fallout4')).toBe(join('/game', 'Fallout4.ccc'));
     expect(creationClubListFile('/game', 'SkyrimSE')).toBe(join('/game', 'Skyrim.ccc'));
+    expect(creationClubListFile('/game', 'Starfield')).toBe(join('/game', 'Starfield.ccc'));
   });
 
   it('names none for a release with no Creation Club, or no release', () => {
@@ -138,6 +152,8 @@ describe('pluginCompanionRule', () => {
     expect(rule('Fallout4').inRoot('Foo.esp', 'Foo - Main.bsa')).toBe(false);
     expect(rule('SkyrimSE').inRoot('Foo.esp', 'Foo - Main.bsa')).toBe(true);
     expect(rule('Fallout4').inRoot('Foo.esp', 'Foobar.ba2')).toBe(false);
+    expect(rule('Starfield').inRoot('Foo.esp', 'Foo - Main.ba2')).toBe(true);
+    expect(rule('Starfield').inStringsFolder('Foo.esp', 'Foo_en.STRINGS')).toBe(true);
   });
 
   it('takes the ini of the plugin\'s name for a release that ties one to its plugins', () => {
