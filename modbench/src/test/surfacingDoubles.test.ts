@@ -41,7 +41,7 @@ describe('the recording reporter, given a selection\'s outcome', () => {
       { severity: 'error', message: MESSAGE, detail: '"ModB/A.esp" (gone from disk)' },
     ]);
     expect(showErrorMessage.mock.calls).toEqual([
-      ['Modbench: Could not delete 1 record. — "ModB/A.esp" (gone from disk)'],
+      ['Could not delete 1 record. — "ModB/A.esp" (gone from disk)'],
     ]);
   });
 });

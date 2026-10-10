@@ -100,7 +100,7 @@ describe('a file mEdit answers holds no record', () => {
 
   async function opened(meditClient: InMemoryMEditClient, inAGroup = true) {
     const warn = vi.fn();
-    await register({ meditClient, outputChannel: { debug: vi.fn(), info: vi.fn(), warn } });
+    await register({ meditClient, outputChannel: { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() } });
     const provider = registerCustomEditorProvider.mock.calls.at(-1)?.[1];
     const document = { uri, getText: () => '{}', isDirty: false };
     const { panel } = webviewPanel();
@@ -182,7 +182,7 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
 
   async function childTabShown(meditClient: InMemoryMEditClient, inAGroup = true) {
     const warn = vi.fn();
-    await register({ meditClient, outputChannel: { debug: vi.fn(), info: vi.fn(), warn } });
+    await register({ meditClient, outputChannel: { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() } });
     const provider = registerCustomEditorProvider.mock.calls.at(-1)?.[1];
     if (!isProvider(provider) || !isUri(childUri)) throw new Error('no record grid registered');
     await showChild(provider, PLACED);

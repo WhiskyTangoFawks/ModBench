@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+import { leveledLog } from '../../test/leveledLog';
 import { createMEditClient } from '../HttpMEditClient';
 import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
 import { Readable } from 'node:stream';
@@ -229,20 +230,24 @@ describe('HttpMEditClient — deleting records answers the changes per record', 
 
   it('resolves a WriteRefused carrying the count and the server text on a non-ok response', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(400, 'Bad Request')));
-    const client = makeClient(fetch);
+    const log = leveledLog();
+    const client = makeClient(fetch, { log });
 
     const result = await client.getDeleteChanges([kept, gone]);
 
     expect(result).toEqual({ refused: true, message: 'Could not delete 2 records — Bad Request' });
+    expect(log.lines.error).toEqual([expect.stringContaining('failed (400)')]);
   });
 
   it('resolves a thrown request the same way', async () => {
     const fetch = vi.fn(() => Promise.reject(new Error('socket hang up')));
-    const client = makeClient(fetch);
+    const log = leveledLog();
+    const client = makeClient(fetch, { log });
 
     const result = await client.getDeleteChanges([kept]);
 
     expect(result).toEqual({ refused: true, message: 'Could not delete 1 record — mEdit could not be reached.' });
+    expect(log.lines.error).toEqual([expect.stringContaining('socket hang up')]);
   });
 
   it('refuses a success with no body, and a thrown create or copy', async () => {
@@ -409,12 +414,12 @@ describe('HttpMEditClient — getComparison', () => {
   });
 
   it('fails on any other non-OK answer with mEdit\'s reason alone, and files the verb and status in the log', async () => {
-    const log = vi.fn();
+    const log = leveledLog();
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(500, { detail: 'boom' })));
     const client = makeClient(fetch, { log });
 
     await expect(client.getComparison('000801:Broken.esp')).resolves.toEqual({ failed: 'refused', refusal: 'boom' });
-    expect(log).toHaveBeenCalledWith(expect.stringMatching(/getComparison.*failed \(500\): boom/));
+    expect(log.lines.error).toEqual([expect.stringMatching(/getComparison.*failed \(500\): boom/)]);
   });
 });
 
@@ -581,9 +586,12 @@ describe('HttpMEditClient — an edit answered as its source changes', () => {
       refusal: 'PluginNotTracked', detail: 'MyPatch.esp is not tracked, so it is read-only.',
     })));
 
-    const outcome = await makeClient(fetch).getEditChanges('000800:MyPatch.esp', plugin, renamed);
+    const log = leveledLog();
+    const outcome = await makeClient(fetch, { log }).getEditChanges('000800:MyPatch.esp', plugin, renamed);
 
     expect(outcome).toEqual({ applied: false, refusal: 'PluginNotTracked', message: 'MyPatch.esp is not tracked, so it is read-only.' });
+    expect(log.lines.warn).toEqual([expect.stringContaining('PluginNotTracked')]);
+    expect(log.lines.error).toEqual([]);
   });
 });
 
@@ -1157,11 +1165,11 @@ describe('HttpMEditClient — the problems in each tracked plugin\'s source', ()
 
 describe('HttpMEditClient — a read the request never reaches mEdit with', () => {
   it('fails as unreachable, and files the fetch error in the log alone', async () => {
-    const log = vi.fn();
+    const log = leveledLog();
     const client = makeClient(vi.fn(() => Promise.reject(new Error('fetch failed'))), { log });
 
     await expect(client.getPlugins()).resolves.toEqual({ failed: 'unreachable' });
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('fetch failed'));
+    expect(log.lines.error).toEqual([expect.stringContaining('fetch failed')]);
   });
 });
 

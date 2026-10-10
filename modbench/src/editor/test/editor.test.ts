@@ -177,7 +177,7 @@ function makeEditor(
   client = new InMemoryMEditClient(), recordViewIds = [] as readonly string[], modFacts = NO_MODS,
 ) {
   const focusedView = createFocusedView();
-  const outputChannel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn() };
+  const outputChannel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
   const editor = createEditor({
     context: { extensionUri: fakeUri('/ext') },
     meditClient: client,

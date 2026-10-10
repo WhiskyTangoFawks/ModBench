@@ -36,7 +36,7 @@ export function createEditor(deps: EditorDeps): Editor {
   };
   const tabs = new RecordTabs((cell) => { publishFocusedCell(cell, setContext); }, () => focusedView.enter(GRID_VIEW));
 
-  const referencedBy = own(createReferencedByView(deps.meditClient, (msg) => deps.outputChannel.info(msg), registerNameFilter));
+  const referencedBy = own(createReferencedByView(deps.meditClient, deps.outputChannel, registerNameFilter));
   const { provider: referencedByTree, view: referencedByView } = referencedBy;
   own(focusedView.follow(REFERENCED_BY_VIEW, referencedByView));
   own(referencedByView.onDidChangeSelection(() => {

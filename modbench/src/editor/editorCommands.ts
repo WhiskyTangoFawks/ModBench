@@ -47,7 +47,7 @@ export interface EditorCommandDeps {
   sourceEditing: SourceEditing;
   // The instance's mods, which a column header reads for its mod's repository state.
   modFacts: ModFacts;
-  outputChannel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
+  outputChannel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn' | 'error'>;
   // Kernel ports the composition root implements (target-architecture.d2, Ports).
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
