@@ -312,7 +312,7 @@ internal static class RecordEndpoints
     private static RecordAddress Addressed(RecordAt record) =>
         new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);
 
-    private static CopyMissing Wire(MissingCopy missing) =>
+    internal static CopyMissing Wire(MissingCopy missing) =>
         new(missing.Copy.FormKey, missing.Copy.Plugin, missing.Reason, missing.Message);
 
     internal static IResult CompareRecords(IReadOnlyList<RecordCopy> copies, IRecordQueryService svc)
@@ -322,11 +322,8 @@ internal static class RecordEndpoints
         if (copies.Any(c => string.IsNullOrWhiteSpace(c.FormKey)
                 || string.IsNullOrWhiteSpace(c.Plugin.Name) || string.IsNullOrWhiteSpace(c.Plugin.Origin)))
             return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
-        if (svc.GetCompareRecords(copies).Holds(out var compared, out var refused))
-            return Results.Ok(new CompareRecordsResponse(compared, []));
-        return refused is CopiesMissing copiesMissing
-            ? Results.Ok(new CompareRecordsResponse(null, [.. copiesMissing.Missing.Select(Wire)]))
-            : QueryEndpointMapping.Refusal(refused);
+        return QueryEndpointMapping.Answered(
+            svc.GetCompareRecords(copies), compared => Results.Ok(new CompareRecordsResponse(compared, [])));
     }
 
     internal static IResult CompareRecord(string formKey, CopyText copy, IRecordQueryService svc)

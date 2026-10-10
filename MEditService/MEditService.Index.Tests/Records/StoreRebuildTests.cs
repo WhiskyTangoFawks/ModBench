@@ -240,7 +240,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Equal(bytesBeforeHold, File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex));
     }
 
-    private static bool ScopeClosedUnderTheReadSoTheAnswerIsNoStore(Exception ex) =>
+    private static bool ReadMetAClosedScopeOrARefusal(Exception ex) =>
         ex is ObjectDisposedException or InvalidOperationException;
 
     [Fact]
@@ -257,7 +257,7 @@ public sealed class StoreRebuildTests : IDisposable
                 {
                     if (_index.ListedIn(Key) is { Count: > 0 }) Interlocked.Increment(ref answered);
                 }
-                catch (Exception ex) when (ScopeClosedUnderTheReadSoTheAnswerIsNoStore(ex))
+                catch (Exception ex) when (ReadMetAClosedScopeOrARefusal(ex))
                 {
                 }
             }

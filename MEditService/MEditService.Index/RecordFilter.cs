@@ -1,5 +1,5 @@
-using System.Data.Common;
 using DuckDB.NET.Data;
+
 namespace MEditService.Index;
 
 /// <summary>The record filter: the matches of one SQL query, and the records holding a match in the
@@ -43,7 +43,7 @@ internal sealed class RecordFilter(Store store)
             if (!ReturnsFormKey(connection, sql)) return "Filter SQL must return a form_key column";
             DuckDbSql.ExecuteFor(connection, $"CREATE OR REPLACE TABLE {Matches} AS ({sql}\n)");
         }
-        catch (DbException ex)
+        catch (DuckDBException ex) when (IsTheSqlsOwn(ex))
         {
             return ex.Message;
         }
@@ -62,6 +62,16 @@ internal sealed class RecordFilter(Store store)
         Active = true;
         return null;
     }
+
+    // DuckDB reports a binder error as ErrorType.Invalid, so the kind is read from the message's own prefix.
+    private static readonly string[] SqlFaultKinds =
+    [
+        "Parser Error", "Syntax Error", "Binder Error", "Catalog Error", "Conversion Error",
+        "Invalid Input Error", "Invalid Type Error", "Mismatch Type Error", "Out of Range Error",
+    ];
+
+    private static bool IsTheSqlsOwn(DuckDBException ex) =>
+        SqlFaultKinds.Any(kind => ex.Message.StartsWith(kind, StringComparison.Ordinal));
 
     private static bool ReturnsFormKey(DuckDBConnection connection, string sql)
     {

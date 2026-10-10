@@ -466,8 +466,7 @@ internal sealed class DuckDbRecordIndex : IDisposable
     public IRecordReads Reads => _store.Reads;
 
     /// <summary>Materializes <paramref name="sql"/>'s matches and the records holding them (null
-    /// clears both), the one door SQL crosses. Throws if the SQL returns no <c>form_key</c>
-    /// column.</summary>
+    /// clears both), the one door SQL crosses. Answers why the SQL is not a filter.</summary>
     public string? SetFilter(string? sql) => _store.Filter.Set(sql);
 
     private void Execute(string sql)

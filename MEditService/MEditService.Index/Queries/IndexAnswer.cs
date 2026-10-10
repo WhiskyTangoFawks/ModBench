@@ -8,17 +8,7 @@ namespace MEditService.Index.Queries;
 /// or not ready throws; here it becomes the answer.</summary>
 internal static class IndexAnswer
 {
-    public static Answer<T, IndexRefused> Of<T>(Func<T> read)
-    {
-        try
-        {
-            return read();
-        }
-        catch (Exception ex) when (RefusalOf(ex) is { } refused)
-        {
-            return refused;
-        }
-    }
+    public static Answer<T, IndexRefused> Of<T>(Func<T> read) => Flat<T>(() => read());
 
     public static Answer<T, IndexRefused> Flat<T>(Func<Answer<T, IndexRefused>> read)
     {
@@ -36,20 +26,15 @@ internal static class IndexAnswer
         Flat<T>(() =>
         {
             if (read().Holds(out var value, out var failure)) return value;
-            return new SourceStopped(failure);
+            return new IndexRefused(IndexRefusal.SourceStopped, failure.Reason);
         });
 
-    public static IndexRefused? Refusing(Func<IndexRefused?> act)
-    {
-        try
+    public static IndexRefused? Refusing(Func<IndexRefused?> act) =>
+        Flat<bool>(() =>
         {
-            return act();
-        }
-        catch (Exception ex) when (RefusalOf(ex) is { } refused)
-        {
-            return refused;
-        }
-    }
+            if (act() is { } refused) return refused;
+            return true;
+        }).Holds(out _, out var unwound) ? null : unwound;
 
     private static IndexRefused? RefusalOf(Exception ex) => ex switch
     {
