@@ -13,6 +13,17 @@ public sealed class CompilePluginRefusalTests : IDisposable
         _mod.CompileService();
 
     [Fact]
+    public async Task Compile_WithTwoDocumentsClaimingTheSameFormKey_RefusesNamingTheFormKey()
+    {
+        TreeTampering.Duplicate(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
+
+        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+
+        var refused = Assert.Single(answer.Refused);
+        Assert.Contains(_mod.Npc.ToString(), refused.Message);
+    }
+
+    [Fact]
     public async Task Compile_WithADocumentItCannotRead_RefusesNamingTheFile()
     {
         var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);

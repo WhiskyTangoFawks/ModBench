@@ -19,8 +19,12 @@ public interface ISourceRepository : ISourceRepositoryReads
     /// for a record with a document of its own.</summary>
     Answer<DocumentContainment?, SourceFailure> ContainerOf(PluginAddress plugin, RecordIdentity identity);
 
+    /// <summary>The worldspace above the cell <paramref name="identity"/> names; null for one the plugin does not hold.
+    /// A cell filed under neither a cell group nor a worldspace is unreadable.</summary>
     Answer<string?, SourceFailure> WorldspaceOf(PluginAddress plugin, RecordIdentity identity);
 
+    /// <summary>Where the GRUP hierarchy puts the cell <paramref name="identity"/> names; null for one the plugin
+    /// does not hold. A cell filed under neither a cell group nor a worldspace is unreadable.</summary>
     Answer<CellStructure?, SourceFailure> CellStructureOf(PluginAddress plugin, RecordIdentity identity);
 
     /// <summary>The exterior cell this plugin's tree holds at grid (<paramref name="x"/>,
@@ -43,7 +47,8 @@ public interface ISourceRepository : ISourceRepositoryReads
     /// named as this tree holds it, relative to the mod folder.</summary>
     Answer<PluginDiagnosis, SourceFailure> InSourceNames(PluginAddress plugin, PluginDiagnosis diagnosis);
 
-    /// <summary>Which of <paramref name="formKeys"/> more than one document claims.</summary>
+    /// <summary>Which of <paramref name="formKeys"/> more than one document claims. Asked of the files, not of the
+    /// compiled mod: Mutagen's FormKey-keyed RecordCache collapses two documents in one group folder to the last read.</summary>
     Answer<IReadOnlyList<string>, SourceFailure> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys);
 
     /// <summary>Where the source and <paramref name="serialized"/>, the whole-mod door's tree, first part ways,

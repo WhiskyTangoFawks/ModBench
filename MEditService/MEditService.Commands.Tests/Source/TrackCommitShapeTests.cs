@@ -43,7 +43,7 @@ public sealed class TrackCommitShapeTests : IDisposable
     }
 
     [Fact]
-    public async Task Track_ParksTheHashOfTheBytesEachPluginsSourceWasReadFrom()
+    public async Task Track_HandsTheAdapterTheHashOfTheBytesEachPluginsSourceWasReadFrom()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         var source = new FakeSourceAdapter();
