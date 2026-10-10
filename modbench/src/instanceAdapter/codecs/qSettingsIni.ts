@@ -67,7 +67,7 @@ export function decodeIniValue(raw: string): string {
   return /^@ByteArray\((.*)\)$/s.exec(unescaped)?.[1] ?? unescaped;
 }
 
-/** The raw value Qt writes for `value`; `decodeIniValue` reads it back. */
+// The raw value Qt writes for `value`; `decodeIniValue` reads it back.
 function encodeIniValue(value: string): string {
   const escaped = value.replace(/[\\"\n\r\t]/g, (ch) => ESCAPES[ch] ?? ch);
   return /[,;=]|^ | $/.test(value) ? `"${escaped}"` : escaped;

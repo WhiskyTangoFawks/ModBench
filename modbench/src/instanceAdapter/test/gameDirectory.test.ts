@@ -6,7 +6,6 @@ import {
   gameDirectoryResolver, normalizeGamePath, type GameDetectors,
 } from '../gameDirectory';
 import type { GameDirectoryOverrides } from '../instanceAdapter';
-import { setIniValue } from '../codecs/qSettingsIni';
 
 const noDetectPrefix = () => Promise.resolve(null);
 
@@ -15,10 +14,8 @@ const NO_DETECTORS: GameDetectors = {
   winePrefix: () => Promise.resolve(null),
 };
 
-const iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts = (gamePath?: string): string => {
-  const ini = '[General]\r\ngameName=Fallout 4\r\n';
-  return gamePath === undefined ? ini : setIniValue(ini, 'General', 'gamePath', `@ByteArray(${gamePath})`);
-};
+const iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts = (gamePath?: string): string =>
+  `[General]\r\ngameName=Fallout 4\r\n${gamePath === undefined ? '' : `gamePath=@ByteArray(${gamePath.replaceAll('\\', '\\\\')})\r\n`}`;
 
 const SETTING_PLACE = 'the game folder setting, modbench.mods.gameDirectory';
 const GAME_PATH_PLACE = "ModOrganizer.ini's gamePath";
