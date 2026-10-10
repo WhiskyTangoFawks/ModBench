@@ -29,9 +29,17 @@ const tree: ConflictRow[] = [
   copyFile('c.ini'),
 ];
 
-const rowNames = (): string[] => Array.from(document.querySelectorAll('tbody tr')).map((row) => row.querySelector('td')?.textContent ?? '');
+const nameOf = (cell: Element | null): string => {
+  const arrow = cell?.querySelector('button');
+  const state = arrow ? (arrow.getAttribute('aria-expanded') === 'true' ? '▼' : '▶') : '';
+  return state + (cell?.textContent ?? '');
+};
+const rowNames = (): string[] => Array.from(document.querySelectorAll('tbody tr')).map((row) => nameOf(row.querySelector('td')));
 const rowOf = (name: string): HTMLElement => required(screen.getByText(name).closest('tr'), `${name}'s row`);
-const focusedRow = (): string | undefined => document.querySelector('tbody tr[aria-selected="true"] td')?.textContent ?? undefined;
+const focusedRow = (): string | undefined => {
+  const cell = document.querySelector('tbody tr[aria-selected="true"] td');
+  return cell ? nameOf(cell) : undefined;
+};
 const press = (key: string) => fireEvent.keyDown(required(document.querySelector('tbody'), 'the table body'), { key });
 
 beforeEach(() => {

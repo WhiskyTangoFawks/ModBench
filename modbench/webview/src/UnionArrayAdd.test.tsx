@@ -73,7 +73,7 @@ describe('RecordPanel — Add on an abstract-union array, whose default element 
     await waitFor(() => screen.getByText('aliases'));
     const aliasesRow = screen.getByText('aliases').closest('tr');
     if (!aliasesRow) throw new Error('the row of the aliases array');
-    fireEvent.click(within(aliasesRow).getByText('▼'));
+    fireEvent.click(within(aliasesRow).getByRole('button', { expanded: true }));
     const cell = aliasesRow.querySelectorAll('td')[1];
     if (!cell) throw new Error("the aliases row's MyMod.esp cell");
 

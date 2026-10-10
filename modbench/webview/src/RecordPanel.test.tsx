@@ -443,7 +443,7 @@ describe('RecordPanel — the file\'s column', () => {
     expect(headerOf('MyMod.esp')).toHaveAttribute('aria-current', 'true');
     expect(headerOf('MyMod.esp').querySelector('.codicon.codicon-edit')).not.toBeNull();
     expect(headerOf('Other.esp')).not.toHaveAttribute('aria-current');
-    expect(headerOf('Other.esp').querySelector('.codicon')).toBeNull();
+    expect(headerOf('Other.esp').querySelector('.codicon-edit')).toBeNull();
   });
 
   it('opens another column\'s copy on Enter or Space on its focused header, and nothing on another key or on its own header', async () => {
@@ -706,11 +706,11 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
     await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(4));
     const flagsRow = () => required(screen.getByText('Flags').closest('tr'), "the Flags row");
 
-    fireEvent.click(within(flagsRow()).getByRole('button', { name: '▼' }));
+    fireEvent.click(within(flagsRow()).getByRole('button', { expanded: true }));
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getAllByText('A, B')).toHaveLength(2);
 
-    fireEvent.click(within(flagsRow()).getByRole('button', { name: '▶' }));
+    fireEvent.click(within(flagsRow()).getByRole('button', { expanded: false }));
     expect(screen.getAllByRole('checkbox')).toHaveLength(4);
   });
 
@@ -943,18 +943,18 @@ describe('RecordPanel — struct sub-rows', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
 
-  it('a struct row opens expanded, its children shown beneath a ▼ arrow', async () => {
+  it('a struct row opens expanded, its children shown beneath an expanded arrow', async () => {
     renderPanel(structCompareResult);
     await waitFor(() => expect(screen.getByText('X')).toBeInTheDocument());
     expect(screen.getByText('Y')).toBeInTheDocument();
-    expect(within(required(screen.getByText('Bounds').closest('tr'), 'the Bounds row')).getByText('▼')).toBeInTheDocument();
+    expect(within(required(screen.getByText('Bounds').closest('tr'), 'the Bounds row')).getByRole('button', { expanded: true })).toBeInTheDocument();
   });
 
   it('a click on a row\'s arrow focuses its label as it collapses the row, as a tree\'s twistie selects its row', async () => {
     renderPanel(structCompareResult);
     await waitFor(() => screen.getByText('X'));
 
-    fireEvent.click(within(required(screen.getByText('Bounds').closest('tr'), 'the Bounds row')).getByText('▼'));
+    fireEvent.click(within(required(screen.getByText('Bounds').closest('tr'), 'the Bounds row')).getByRole('button', { expanded: true }));
 
     expect(screen.queryByText('X')).not.toBeInTheDocument();
     expect(screen.getByText('Bounds').closest('td')).toHaveAttribute('data-focused-cell');
@@ -982,11 +982,11 @@ describe('RecordPanel — struct sub-rows', () => {
     await waitFor(() => screen.getByText('X'));
     const boundsRow = () => required(screen.getByText('Bounds').closest('tr'), "the Bounds row");
 
-    fireEvent.click(within(boundsRow()).getByText('▼'));
+    fireEvent.click(within(boundsRow()).getByRole('button', { expanded: true }));
     expect(screen.queryByText('X')).not.toBeInTheDocument();
     expect(screen.getAllByText('{…}').length).toBeGreaterThan(0);
 
-    fireEvent.click(within(boundsRow()).getByText('▶'));
+    fireEvent.click(within(boundsRow()).getByRole('button', { expanded: false }));
     expect(screen.getByText('X')).toBeInTheDocument();
   });
 
@@ -994,7 +994,7 @@ describe('RecordPanel — struct sub-rows', () => {
     renderPanel(structCompareResult);
     await waitFor(() => screen.getByText('X'));
 
-    const arrow = within(required(screen.getByText('Bounds').closest('tr'), 'the Bounds row')).getByText('▼');
+    const arrow = within(required(screen.getByText('Bounds').closest('tr'), 'the Bounds row')).getByRole('button', { expanded: true });
     fireEvent.click(arrow);
     fireEvent.click(arrow);
     fireEvent.doubleClick(arrow);
@@ -1308,7 +1308,7 @@ describe('RecordPanel — states', () => {
     renderPanel(structCompareResult, { load });
     await waitFor(() => screen.getByText('Bounds'));
     const boundsRow = required(screen.getByText('Bounds').closest('tr'), 'the Bounds row');
-    fireEvent.click(within(boundsRow).getByText('▼'));
+    fireEvent.click(within(boundsRow).getByRole('button', { expanded: true }));
 
     loadRecord();
 
@@ -1316,7 +1316,7 @@ describe('RecordPanel — states', () => {
     expect(screen.getByText('Bounds').closest('tr')).toBe(boundsRow);
     expect(screen.queryByText('X')).not.toBeInTheDocument();
     pending.resolve(loaded(structCompareResult));
-    await waitFor(() => screen.getByText('▶', { selector: 'button' }));
+    await waitFor(() => screen.getByRole('button', { expanded: false }));
     expect(screen.queryByText('X')).not.toBeInTheDocument();
   });
 
@@ -2331,9 +2331,9 @@ describe('RecordPanel — the Record Header', () => {
 
   const rows = (container: HTMLElement) => Array.from(container.querySelectorAll('tbody tr'));
   const rowLabels = (container: HTMLElement) =>
-    rows(container).map(tr => tr.querySelector('td')?.textContent.replace(/^[▶▼]/, ''));
+    rows(container).map(tr => tr.querySelector('td')?.textContent);
   const cellOf = (container: HTMLElement, label: string) =>
-    required(rows(container).find(tr => tr.querySelector('td')?.textContent.replace(/^[▶▼]/, '') === label)?.querySelectorAll('td')[1],
+    required(rows(container).find(tr => tr.querySelector('td')?.textContent === label)?.querySelectorAll('td')[1],
       `the ${label} cell`);
   const formIdCell = (container: HTMLElement) => cellOf(container, 'FormID');
 

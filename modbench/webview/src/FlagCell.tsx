@@ -39,6 +39,7 @@ export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCel
         <label key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
           <input
             type="checkbox"
+            className="vscode-checkbox"
             checked={names.includes(name)}
             onChange={() => toggle(name)}
           />

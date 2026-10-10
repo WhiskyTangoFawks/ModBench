@@ -142,6 +142,7 @@ export function ScalarCell({
       <input
         {...editorProps}
         type="checkbox"
+        className="vscode-checkbox"
         checked={draft === 'True'}
         onChange={e => { setDraft(modelValue(e.target.checked, meta)); commitIfChanged(e.target.checked); }}
       />
