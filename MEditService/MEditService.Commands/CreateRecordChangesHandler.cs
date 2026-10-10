@@ -18,6 +18,7 @@ public sealed class CreateRecordChangesHandler
     private readonly LoadOrderResolution _resolution;
     private readonly LoadOrderHolder _loadOrder;
     private readonly SchemaReflector _schemaReflector;
+    private readonly ISourceAdapter _source;
     private readonly UnsavedDocuments _unsaved;
     private readonly ILogger<CreateRecordChangesHandler> _logger;
 
@@ -28,11 +29,12 @@ public sealed class CreateRecordChangesHandler
         LoadOrderResolution resolution,
         LoadOrderHolder loadOrder,
         SchemaReflector schemaReflector,
+        ISourceAdapter source,
         UnsavedDocuments unsaved,
         ILogger<CreateRecordChangesHandler> logger)
     {
-        (_targets, _resolution, _loadOrder, _schemaReflector, _unsaved, _logger) =
-            (targets, resolution, loadOrder, schemaReflector, unsaved, logger);
+        (_targets, _resolution, _loadOrder, _schemaReflector, _source, _unsaved, _logger) =
+            (targets, resolution, loadOrder, schemaReflector, source, unsaved, logger);
     }
 
     /// <summary>The changes creating the record makes over the unsaved documents mEdit holds, which stand in for their
@@ -50,9 +52,9 @@ public sealed class CreateRecordChangesHandler
 
     private Answer<RecordEditChanges, SourceFailure> MintRecord(PluginAddress plugin, string recordType, string? container, GridPosition? position)
     {
-        if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
+        if (ItemWrite.RefuseWithoutGit(_source) is { } gitMissing) return gitMissing;
         if (_targets.RefuseUnlessEditable(plugin) is { } blocked) return blocked;
-        var sessions = new WriteSessions(_unsaved.Current);
+        var sessions = new WriteSessions(_source, _unsaved.Current);
         var session = _targets.SessionOf(plugin, sessions);
         var repository = session.Repository;
 
@@ -96,11 +98,11 @@ public sealed class CreateRecordChangesHandler
         return Landed(session, targetFormKey);
     }
 
-    private static Answer<RecordEditChanges, SourceFailure> Landed(WriteSession session, string formKey) =>
+    private static Answer<RecordEditChanges, SourceFailure> Landed(IWriteSession session, string formKey) =>
         SourceAnswer.Of(new RecordEditChanges(RecordEditResult.Success(formKey), session.Changes));
 
     private Answer<RecordEditChanges, SourceFailure> MintChild(
-        WriteSession session, WriteSessions sessions, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
+        IWriteSession session, WriteSessions sessions, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
         string container, GridPosition? position)
     {
         var repository = session.Repository;
@@ -146,7 +148,7 @@ public sealed class CreateRecordChangesHandler
     }
 
     private Answer<RecordEditChanges, SourceFailure> CreateCellAt(
-        WriteSession session, WriteSessions sessions, PluginAddress plugin, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        IWriteSession session, WriteSessions sessions, PluginAddress plugin, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         GameRelease release, string worldspace, (int X, int Y) grid)
     {
         var repository = session.Repository;
@@ -195,7 +197,7 @@ public sealed class CreateRecordChangesHandler
     private sealed record Landing(RecordIdentity Container, Document Root, string Slot);
 
     private Answer<RecordEditChanges, SourceFailure> AppendChild(
-        WriteSession session, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
+        IWriteSession session, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
         Landing landing)
     {
         var repository = session.Repository;

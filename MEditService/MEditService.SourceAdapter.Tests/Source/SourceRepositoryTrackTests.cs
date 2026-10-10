@@ -56,14 +56,14 @@ public sealed class SourceRepositoryTrackTests : IDisposable
     [Fact]
     public void Track_ParksEachPluginsBinaryOnItsOwnRef()
     {
-        SourceRepository.Track(
+        TestAdapters.Source().Track(
             _modFolder,
             [
                 (SourceOf("First.esp"), new DecompiledPlugin("First.esp", "AAAA")),
                 (SourceOf("Second.esp"), new DecompiledPlugin("Second.esp", "BBBB")),
             ]);
 
-        var repository = SourceRepository.Over(TestMod.In(_modFolder), GameRelease.Fallout4);
+        var repository = TestAdapters.Source().OverFolder(TestMod.In(_modFolder), GameRelease.Fallout4);
         Assert.Equal(["AAAA"], repository.LastWrittenBinarySha256s(new PluginAddress("First.esp", TestMod.Name)).Value());
         Assert.Equal(["BBBB"], repository.LastWrittenBinarySha256s(new PluginAddress("Second.esp", TestMod.Name)).Value());
     }

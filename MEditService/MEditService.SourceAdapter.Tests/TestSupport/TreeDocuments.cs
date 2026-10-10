@@ -10,7 +10,7 @@ namespace MEditService.SourceAdapter.Tests.TestSupport;
 internal static class TreeDocuments
 {
 
-    internal static IReadOnlyList<SourceDocument> Of(SourceRepository repository, PluginAddress plugin) =>
+    internal static IReadOnlyList<SourceDocument> Of(ISourceRepository repository, PluginAddress plugin) =>
         repository.ReadDocuments(plugin, RootsOf).Value();
 
     private static IReadOnlyList<SourceDocument> RootsOf(IPluginDocuments documents)

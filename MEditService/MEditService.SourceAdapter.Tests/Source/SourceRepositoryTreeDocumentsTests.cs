@@ -29,12 +29,12 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     private static readonly string NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk =
         Path.Combine("plugin-source", PluginName, "Npcs", $"{NpcEditorId} - 000800_{PluginName}.json");
 
-    private SourceRepository Tracked()
+    private ISourceRepository Tracked()
     {
         PluginBaselines.Track(
             _modFolder,
             [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
-        return SourceRepository.Open(TestMod.In(_modFolder), Release)
+        return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
 
@@ -48,13 +48,13 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
 
     private static string HeaderFormKey => PluginHeader.FormKeyFor(ModKey.FromFileName(PluginName));
 
-    private SourceRepository TrackedWithHeader()
+    private ISourceRepository TrackedWithHeader()
     {
         PluginBaselines.Track(
             _modFolder,
             [new TreeFile(HeaderRelativePath, Encoding.UTF8.GetBytes(HeaderBody)),
              new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
-        return SourceRepository.Open(TestMod.In(_modFolder), Release)
+        return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
 

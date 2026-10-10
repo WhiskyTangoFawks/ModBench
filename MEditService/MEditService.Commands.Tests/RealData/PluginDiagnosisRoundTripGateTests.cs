@@ -1,7 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.RealData;
@@ -22,7 +21,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
         Assert.Contains(MisshapedPerkPlugin.FormKey, result.Message);
         Assert.Contains(MisshapedPerkPlugin.EditorId, result.Message);
         Assert.Contains(PluginDiagnosis.UnknownClass, result.Message);
-        Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
+        Assert.False(TestAdapters.Source().IsTracked(scratch.ModFolder));
     }
 
     [Fact]

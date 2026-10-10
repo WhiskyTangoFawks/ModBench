@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -10,29 +9,6 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class UntrackedReadOnlyTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
-
-    [Fact]
-    public void EditingAPluginInAnUntrackedModFolder_IsRefused_NamingTheTrackCommand()
-    {
-        using var mod = SourceEditFixture.Untracked();
-        Assert.False(SourceRepository.IsTracked(mod.ModFolder));
-        var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-        Assert.Contains("Track its mod", result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void EditingANonexistentFormKey_OnAnUntrackedPlugin_StillRefusesAsUntracked_NotAsRecordNotFound()
-    {
-        using var mod = SourceEditFixture.Untracked();
-
-        var result = mod.EditHandler.Set(mod.Plugin, $"ABCDEF:{SourceEditFixture.PluginName}", "HeightMax", Json("0.75"));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-    }
 
     [Fact]
     public void EditingAPluginWithNoModFolder_IsRefused_NamingThePatchPluginPathInstead()

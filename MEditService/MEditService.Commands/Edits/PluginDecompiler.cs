@@ -15,7 +15,7 @@ internal sealed record Decompiled(PluginSource? Source, DecompileRefusal Refusal
 
 /// <summary>Track and decompile both read a plugin into its plugin source through this one gate.
 /// </summary>
-internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
+internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, ISourceAdapter sourceAdapter)
 {
     internal async Task<Decompiled> DecompileAsync(
         LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, string modFolder, Action onParsed, CancellationToken cancel)
@@ -58,7 +58,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
     {
         using var scratch = ScratchPlugin.For(pluginName);
         if (!(await adapter.WriteFromTreeAsync(
-                    SourceRepository.ReadBackOf(pluginName, source.Files, gameRelease), scratch.PluginPath, source.Masters, cancel))
+                    sourceAdapter.ReadBackOf(pluginName, source.Files, gameRelease), scratch.PluginPath, source.Masters, cancel))
                 .Holds(out var recompiledPath, out var failure)
             || !(await adapter.CompareBytesAsync(originalPluginPath, recompiledPath, cancel)).Holds(out var comparison, out failure))
         {

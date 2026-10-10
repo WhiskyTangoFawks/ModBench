@@ -67,8 +67,8 @@ public sealed class CompilePluginLinkTests : IDisposable
         _gameDirectory.Dispose();
     }
 
-    private SourceRepository HostRepository() =>
-        SourceRepository.Open(TestMod.Of(_host, _hostFolder), GameRelease.Fallout4)
+    private ISourceRepository HostRepository() =>
+        TestAdapters.Source().Open(TestMod.Of(_host, _hostFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected {_hostFolder} to already be a tracked repository.");
 
     private void PointTheNpcAt(FormKey keyword) =>

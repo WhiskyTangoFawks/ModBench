@@ -18,11 +18,11 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     [Fact]
     public void Track_APluginWhoseFilesCannotAllBeWritten_IsRefused_LeavingNoRepositoryAndNoSourceOfThePluginsAroundIt()
     {
-        var refused = SourceRepository.Track(
+        var refused = TestAdapters.Source().Track(
             _modFolder, [Baseline("A.esp"), BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp"), Baseline("C.esp")]);
 
         Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
-        Assert.False(SourceRepository.IsTracked(_modFolder));
+        Assert.False(TestAdapters.Source().IsTracked(_modFolder));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
         Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
@@ -31,11 +31,11 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     [Fact]
     public void Track_WhenEveryPluginIsRefused_LeavesNoRepositoryAndNoGitignore()
     {
-        var refused = SourceRepository.Track(
+        var refused = TestAdapters.Source().Track(
             _modFolder, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
 
         Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
-        Assert.False(SourceRepository.IsTracked(_modFolder));
+        Assert.False(TestAdapters.Source().IsTracked(_modFolder));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
         Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
@@ -47,7 +47,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         CrashATrackAfterItMadeTheRepository();
         var before = GitDirContents();
 
-        SourceRepository.Track(
+        TestAdapters.Source().Track(
             _modFolder, [BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp")]);
 
         Assert.Equal(before, GitDirContents());
@@ -98,7 +98,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var nulInPath = new TreeFile("npc_/\0.json", "{}"u8.ToArray());
 
         Assert.ThrowsAny<ArgumentException>(
-            () => SourceRepository.Track(_modFolder, [Baseline("A.esp"), ([nulInPath], new DecompiledPlugin("Bad.esp", null))]));
+            () => TestAdapters.Source().Track(_modFolder, [Baseline("A.esp"), ([nulInPath], new DecompiledPlugin("Bad.esp", null))]));
 
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
@@ -147,7 +147,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
 
     private string TrackRefused(string plugin)
     {
-        var (refused, reason) = Assert.Single(SourceRepository.Track(_modFolder, [Baseline(plugin)]));
+        var (refused, reason) = Assert.Single(TestAdapters.Source().Track(_modFolder, [Baseline(plugin)]));
         Assert.Equal(plugin, refused);
         return reason;
     }
@@ -170,11 +170,11 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.Equal([asset], Directory.GetFiles(Path.Combine(_modFolder, "plugin-source"), "*", SearchOption.AllDirectories));
         File.Delete(asset);
 
-        var refused = SourceRepository.Track(_modFolder, [Baseline("A.esp")]);
+        var refused = TestAdapters.Source().Track(_modFolder, [Baseline("A.esp")]);
 
         Assert.Empty(refused);
         Assert.Equal(["Track SomeMod"], SubjectsOnMain());
-        Assert.True(SourceRepository.IsTracked(_modFolder));
+        Assert.True(TestAdapters.Source().IsTracked(_modFolder));
         Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
     }
 
@@ -188,9 +188,9 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         var logBefore = Git("log", "--all", "--format=%H %s");
         var configBefore = File.ReadAllBytes(Path.Combine(_modFolder, ".git", "config"));
 
-        Assert.True(SourceRepository.HoldsAnotherRepository(_modFolder));
+        Assert.True(TestAdapters.Source().HoldsAnotherRepository(_modFolder));
         Assert.Throws<InvalidOperationException>(
-            () => SourceRepository.Track(_modFolder, [Baseline("A.esp")]));
+            () => TestAdapters.Source().Track(_modFolder, [Baseline("A.esp")]));
 
         Assert.Equal(logBefore, Git("log", "--all", "--format=%H %s"));
         Assert.Equal("theirs\n", File.ReadAllText(Path.Combine(_modFolder, ".gitignore")));
@@ -204,9 +204,9 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Git("init", "-q", "-b", "main");
         var before = GitDirContents();
 
-        Assert.True(SourceRepository.HoldsAnotherRepository(_modFolder));
+        Assert.True(TestAdapters.Source().HoldsAnotherRepository(_modFolder));
         Assert.Throws<InvalidOperationException>(
-            () => SourceRepository.Track(_modFolder, [Baseline("A.esp")]));
+            () => TestAdapters.Source().Track(_modFolder, [Baseline("A.esp")]));
 
         Assert.Equal(before, GitDirContents());
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
@@ -221,7 +221,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
             () => File.WriteAllText(theirs, "theirs"));
 
         var failure = Assert.Throws<AggregateException>(
-            () => SourceRepository.Track(_modFolder, [(files, new DecompiledPlugin("A.esp", null))]));
+            () => TestAdapters.Source().Track(_modFolder, [(files, new DecompiledPlugin("A.esp", null))]));
 
         Assert.IsType<InvalidCastException>(failure.InnerException);
         Assert.Contains("plugin-source/A.esp \u2014 holds something this change did not write", failure.Message.Replace('\\', '/'));
@@ -249,8 +249,8 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     {
         CrashATrackAfterItMadeTheRepository();
 
-        Assert.False(SourceRepository.HoldsAnotherRepository(_modFolder));
-        var refused = SourceRepository.Track(_modFolder, [Baseline("A.esp")]);
+        Assert.False(TestAdapters.Source().HoldsAnotherRepository(_modFolder));
+        var refused = TestAdapters.Source().Track(_modFolder, [Baseline("A.esp")]);
 
         Assert.Empty(refused);
         Assert.Equal(["Track SomeMod"], SubjectsOnMain());

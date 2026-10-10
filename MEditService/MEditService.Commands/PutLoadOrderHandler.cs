@@ -14,12 +14,14 @@ public sealed class PutLoadOrderHandler
     private readonly IPluginAdapter _plugins;
     private readonly LoadOrderHolder _holder;
     private readonly SchemaReflector _schemaReflector;
+    private readonly ISourceAdapter _source;
     private readonly ExternalChangeCheck _externalChanges;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal PutLoadOrderHandler(
-        IPluginAdapter plugins, LoadOrderHolder holder, SchemaReflector schemaReflector, ExternalChangeCheck externalChanges) =>
-        (_plugins, _holder, _schemaReflector, _externalChanges) = (plugins, holder, schemaReflector, externalChanges);
+        IPluginAdapter plugins, LoadOrderHolder holder, SchemaReflector schemaReflector, ISourceAdapter source,
+        ExternalChangeCheck externalChanges) =>
+        (_plugins, _holder, _schemaReflector, _source, _externalChanges) = (plugins, holder, schemaReflector, source, externalChanges);
 
     public PutLoadOrderResult Put(
         string dataFolder, string? instanceRoot, GameRelease gameRelease,
@@ -27,7 +29,7 @@ public sealed class PutLoadOrderHandler
     {
         if (!_plugins.GameFolderExists(dataFolder))
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.GameDirectoryNotFound, $"Game directory not found: {dataFolder}");
-        if (SourceRepository.InstanceRootNotFound(instanceRoot) is { } notFound)
+        if (_source.InstanceRootNotFound(instanceRoot) is { } notFound)
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InstanceRootNotFound, notFound);
 
         // Discovered here, synchronously, never inside a reconcile the caller cannot see — the

@@ -15,7 +15,7 @@ namespace MEditService.Commands.Edits;
 /// draws all its keys from one allocator and writes <see cref="HeaderChanges"/> with them.</summary>
 internal sealed class FormKeyAllocator
 {
-    private readonly SourceRepository _repository;
+    private readonly ISourceRepository _repository;
     private readonly PluginAddress _plugin;
     private readonly GameRelease _release;
     private readonly SourceDocument? _header;
@@ -26,7 +26,7 @@ internal sealed class FormKeyAllocator
     private uint _nextObjectId;
 
     private FormKeyAllocator(
-        SourceRepository repository, PluginAddress plugin, GameRelease release, SourceDocument? header, IReadOnlySet<string> used)
+        ISourceRepository repository, PluginAddress plugin, GameRelease release, SourceDocument? header, IReadOnlySet<string> used)
     {
         (_repository, _plugin, _release, _header) = (repository, plugin, release, header);
         var headerBody = header is null ? null : Encoding.UTF8.GetBytes(header.Body);
@@ -39,7 +39,7 @@ internal sealed class FormKeyAllocator
         _used = used;
     }
 
-    internal static Answer<FormKeyAllocator, SourceFailure> Over(SourceRepository repository, PluginAddress plugin, GameRelease release) =>
+    internal static Answer<FormKeyAllocator, SourceFailure> Over(ISourceRepository repository, PluginAddress plugin, GameRelease release) =>
         repository.RecordOf(plugin, PluginHeader.IdentityOf(plugin.Name)).Then(header =>
             repository.FormKeysUsed(plugin).Then(used => SourceAnswer.Of(new FormKeyAllocator(repository, plugin, release, header, used))));
 

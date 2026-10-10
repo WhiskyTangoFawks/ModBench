@@ -36,7 +36,7 @@ public static class CutDownPluginFixture
     public static Dictionary<string, byte[]> ReadSourceTree(string modFolder) =>
         DocumentsOf(TrackedTree.Repository(modFolder, Plugin));
 
-    private static Dictionary<string, byte[]> DocumentsOf(SourceRepository repository) =>
+    private static Dictionary<string, byte[]> DocumentsOf(ISourceRepository repository) =>
         TreeDocuments.Of(repository, Plugin).ToDictionary(document => document.FormKey, document => Encoding.UTF8.GetBytes(document.Body));
 
     // The library's whole-mod writer alone, not Track's own door: identical production code on
@@ -58,7 +58,7 @@ public static class CutDownPluginFixture
             Path.Combine(root, "RecordData.json"),
             Path.Combine(scratch, PluginSourceRoot.HeaderDocument(PluginFileName)));
 
-        return DocumentsOf(SourceRepository.Over(TestMod.Of(Plugin, scratch), GameRelease.Fallout4))
+        return DocumentsOf(TestAdapters.Source().OverFolder(TestMod.Of(Plugin, scratch), GameRelease.Fallout4))
             .ToDictionary(document => document.Key, document => StripCarriageReturns(document.Value));
     }
 

@@ -14,12 +14,12 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
 
     private readonly ScratchDirectory _modFolder = new("medit-stamps-");
-    private readonly SourceRepository _repository;
+    private readonly ISourceRepository _repository;
 
     public SourceRepositoryStampsTests()
     {
         PluginBaselines.TrackWithNoRecords(_modFolder);
-        _repository = SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4)
+        _repository = TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to be tracked.");
         _repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody)).Wrote();
     }

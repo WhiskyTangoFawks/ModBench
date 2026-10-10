@@ -1,5 +1,7 @@
 using MEditService.Codec.Serialization;
 
+using MEditService.TestSupport;
+
 namespace MEditService.SourceAdapter.Tests.TestSupport;
 
 /// <summary>A fixture's placed files as the plugins Track commits: one per plugin whose source
@@ -9,7 +11,7 @@ internal static class PluginBaselines
 {
     internal static void Track(string modFolder, IEnumerable<TreeFile> files)
     {
-        if (SourceRepository.Track(modFolder, Of(files)) is [var (plugin, reason), ..])
+        if (TestAdapters.Source().Track(modFolder, Of(files)) is [var (plugin, reason), ..])
             throw new InvalidOperationException($"Expected the fixture to track, and {plugin} was refused: {reason}");
     }
 

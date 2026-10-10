@@ -12,10 +12,10 @@ internal sealed record HeldIn(SourceDocument Container, string Slot, HeldIn? Con
 {
     /// <summary>Where <paramref name="record"/> sits as <paramref name="repository"/> reads it; null for a record
     /// no container holds.</summary>
-    internal static Answer<HeldIn?, SourceFailure> Of(SourceRepository repository, PluginAddress plugin, RecordIdentity record) =>
+    internal static Answer<HeldIn?, SourceFailure> Of(ISourceRepository repository, PluginAddress plugin, RecordIdentity record) =>
         repository.ContainerOf(plugin, record).Then(held => held is not { } slot
             ? SourceAnswer.Of<HeldIn?>(null)
-            : repository.Get(plugin, slot.ParentFormKey).Then(found =>
+            : repository.RecordByFormKey(plugin, slot.ParentFormKey).Then(found =>
             {
                 var container = found
                     ?? throw new InvalidOperationException($"Expected the container {slot.ParentFormKey} that holds {record.FormKey} to be held.");

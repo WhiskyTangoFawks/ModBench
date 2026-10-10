@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -161,7 +160,7 @@ public sealed class FormIdEditTests
     }
 
     private static IReadOnlyList<string> ReferencerState(TwoModReferenceFixture two) =>
-        SourceRepository.IsTracked(two.ReferencerModFolder)
+        TestAdapters.Source().IsTracked(two.ReferencerModFolder)
             ? TrackedTree.Records(two.ReferencerModFolder, two.ReferencerPlugin)
             : [Convert.ToHexString(File.ReadAllBytes(Path.Combine(two.ReferencerModFolder, two.ReferencerPlugin.Name)))];
 

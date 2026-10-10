@@ -27,7 +27,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
         File.SetLastWriteTimeUtc(Path.Combine(modFolder, Document), new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         var before = File.ReadAllBytes(IndexOf(modFolder));
 
-        var repository = SourceRepository.Open(TestMod.In(modFolder), GameRelease.Fallout4)
+        var repository = TestAdapters.Source().Open(TestMod.In(modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{modFolder}' to be tracked.");
         Assert.Empty(repository.ChangedSinceLastCommit(
             new PluginAddress(Plugin, "TestMod")).Value());
@@ -45,7 +45,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
         var usersLock = IndexOf(modFolder) + ".lock";
         File.WriteAllText(usersLock, "");
 
-        var repository = SourceRepository.Over(TestMod.In(modFolder), GameRelease.Fallout4);
+        var repository = TestAdapters.Source().OverFolder(TestMod.In(modFolder), GameRelease.Fallout4);
         var address = new PluginAddress(Plugin, "TestMod");
         repository.WriteBinary(address, "DEADBEEF", () => { }).Value();
         Assert.Equal(["DEADBEEF"], repository.LastWrittenBinarySha256s(address).Value());

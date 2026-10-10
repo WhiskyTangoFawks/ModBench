@@ -17,7 +17,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private SourceRepository RepositoryOverATreeWithNoGit => SourceRepository.Over(TestMod.In(_modFolder), Release);
+    private ISourceRepository RepositoryOverATreeWithNoGit => TestAdapters.Source().OverFolder(TestMod.In(_modFolder), Release);
 
     private IReadOnlyList<string> TreeAfterPutting(string recordType, string? editorId, string formKey = FormKey)
     {

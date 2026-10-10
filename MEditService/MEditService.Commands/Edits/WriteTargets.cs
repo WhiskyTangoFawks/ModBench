@@ -9,9 +9,12 @@ namespace MEditService.Commands.Edits;
 /// <summary>The write side's target gate (target-architecture.d2 medit_core.commands): which plugin and record a gesture may write, and its pre-write refusals.
 /// An internal seam, tested through the gestures.</summary>
 internal sealed class WriteTargets(
-    LoadOrderHolder loadOrder)
+    LoadOrderHolder loadOrder, ISourceAdapter source)
 {
-    internal readonly record struct EditTarget(GameRelease Release, RecordIdentity Identity, WriteSession Session);
+    internal readonly record struct EditTarget(GameRelease Release, RecordIdentity Identity, IWriteSession Session)
+    {
+        internal ISourceRepository Repository => Session.Repository;
+    }
 
     internal RecordEditResult? ResolveEditTarget(PluginAddress plugin, string formKey, WriteSessions sessions, out EditTarget target)
     {
@@ -31,11 +34,11 @@ internal sealed class WriteTargets(
             $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document carries it.");
 
     internal static RecordEditResult? ResolveInTheTree(
-        PluginAddress plugin, string formKey, WriteSession session, GameRelease release, out EditTarget target,
+        PluginAddress plugin, string formKey, IWriteSession session, GameRelease release, out EditTarget target,
         out SourceDocument? found)
     {
         target = default;
-        if (!session.Repository.Get(plugin, formKey).Holds(out found, out var failure)) return RefuseUnresolved(formKey, failure);
+        if (!session.Repository.RecordByFormKey(plugin, formKey).Holds(out found, out var failure)) return RefuseUnresolved(formKey, failure);
         if (found is not { } document) return RecordNotFound(plugin, formKey);
 
         target = new EditTarget(release, document.Identity, session);
@@ -43,7 +46,7 @@ internal sealed class WriteTargets(
     }
 
     /// <summary>The session over the mod folder of <paramref name="plugin"/>, which is editable.</summary>
-    internal WriteSession SessionOf(PluginAddress plugin, WriteSessions sessions) =>
+    internal IWriteSession SessionOf(PluginAddress plugin, WriteSessions sessions) =>
         sessions.Over(
             loadOrder.Current.Plugin(plugin)?.Provider as PluginProvider.FromMod
                 ?? throw new InvalidOperationException($"Expected {plugin.Name}, once editable, to be provided by a mod."),
@@ -101,8 +104,8 @@ internal sealed class WriteTargets(
                 $"{plugin.Name} from '{plugin.Origin}' is not in the load order, so nothing can be written to it.");
         }
 
-        if (!SourceRepository.IsTracked(registered)) return RefuseUntracked(plugin, registered.Provider);
-        return SourceRepository.SourceReads(registered) ? null : RefuseSourceUnreadable(plugin);
+        if (!source.IsTracked(registered)) return RefuseUntracked(plugin, registered.Provider);
+        return source.SourceReads(registered) ? null : RefuseSourceUnreadable(plugin);
     }
 
     // Two refusals, because there are two different ways out and a message that named neither

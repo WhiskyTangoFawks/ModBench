@@ -24,7 +24,7 @@ internal sealed class FormKeyChange(ILogger logger)
         PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, EditValue? value)
     {
         var (release, identity, session) = editTarget;
-        var repository = session.Repository;
+        var repository = editTarget.Repository;
         if (identity.RecordType == PluginHeader.RecordType)
         {
             return RecordTextEdit.ReadOnlyRefusal(Member, Member, PluginHeader.FormIdReadOnly);

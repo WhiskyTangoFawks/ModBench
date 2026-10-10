@@ -14,7 +14,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     private readonly ScratchDirectory _modFolder = new("medit-replace-source-");
 
     public SourceRepositoryReplaceSourceTests() =>
-        SourceRepository.Track(_modFolder, [([File("npc_/A.esp/000001.json", "{\"was\":1}")], new DecompiledPlugin(Plugin, null))]);
+        TestAdapters.Source().Track(_modFolder, [([File("npc_/A.esp/000001.json", "{\"was\":1}")], new DecompiledPlugin(Plugin, null))]);
 
     public void Dispose() => _modFolder.Dispose();
 
@@ -198,8 +198,8 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.Contains(_modFolder, failure.Reason, StringComparison.Ordinal);
     }
 
-    private SourceRepository Repository =>
-        SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
+    private ISourceRepository Repository =>
+        TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
 
     private string Root => PluginSourceRoot.In(_modFolder, Plugin);
 
@@ -228,7 +228,7 @@ public sealed class SourceRepositoryReplaceSourceWithoutGitTests : IDisposable
     [Fact]
     public void ReplaceSourceFrom_WithGitGoneFromPathAfterTheUpFrontCheck_AnswersGitUnavailable_AndLeavesTheSourceAsItWas()
     {
-        var repository = SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
+        var repository = TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
         var path = Environment.GetEnvironmentVariable("PATH");
         Environment.SetEnvironmentVariable("PATH", string.Empty);
         try

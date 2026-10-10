@@ -3,6 +3,7 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Tests;
 
@@ -10,11 +11,12 @@ namespace MEditService.Commands.Tests;
 internal static class TrackEveryPluginOf
 {
     internal static Task<SelectionResult<string, TrackRefusal, TrackedMod>> ModAsync(
-        LoadOrderSnapshot loadOrder, string mod, IPluginAdapter? adapter = null, INotificationPublisher? notifications = null)
+        LoadOrderSnapshot loadOrder, string mod, IPluginAdapter? adapter = null, INotificationPublisher? notifications = null,
+        ISourceAdapter? source = null)
     {
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
-        return TestEditService.TrackHandler(holder, adapter, notifications).TrackAsync([mod]);
+        return TestEditService.TrackHandler(holder, adapter, notifications, source).TrackAsync([mod]);
     }
 
     /// <summary>Every reason something of the selection did not track, whole mods and single plugins alike.</summary>

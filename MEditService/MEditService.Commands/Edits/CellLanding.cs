@@ -19,10 +19,10 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
     private sealed record CellIn(SourceDocument Cell, Answer<SourceChanges, SourceFailure> HeaderChanges);
 
     private sealed record Move(
-        PluginAddress Plugin, WriteSession Session, GameRelease Release, RecordIdentity Moved, string Worldspace,
+        PluginAddress Plugin, IWriteSession Session, GameRelease Release, RecordIdentity Moved, string Worldspace,
         string CellType, string Spelled, WriteSessions Sessions)
     {
-        internal SourceRepository Repository => Session.Repository;
+        internal ISourceRepository Repository => Session.Repository;
     }
 
     // One step of a landing: the value it yields, or the refusal or source failure that ends the landing.
@@ -73,7 +73,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
         WriteSessions sessions)
     {
         var (release, _, session) = edit;
-        var repository = session.Repository;
+        var repository = edit.Repository;
         if (!repository.WorldspaceOf(plugin, from.Container.Identity).Holds(out var worldspace, out var unread)) return unread;
         if (worldspace is null)
             return CellGroupMove.Unknown(spelled, moved.FormKey, $"{plugin.Name} holds no worldspace above its cell {from.Container.FormKey}");
@@ -91,7 +91,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
 
     private Step<Landed> IntoPersistentCell(Move move)
     {
-        if (!move.Repository.Get(move.Plugin, move.Worldspace).Holds(out var held, out var unread)) return new Step<Landed>.Stopped(unread);
+        if (!move.Repository.RecordByFormKey(move.Plugin, move.Worldspace).Holds(out var held, out var unread)) return new Step<Landed>.Stopped(unread);
         if (held is not { } worldspace)
         {
             return new Step<Landed>.Refused(CellGroupMove.Unknown(

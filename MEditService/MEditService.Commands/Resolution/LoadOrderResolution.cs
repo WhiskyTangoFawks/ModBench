@@ -11,21 +11,21 @@ namespace MEditService.Commands.Resolution;
 /// <summary>What the load order says about a record (target-architecture.d2 medit_core.commands).
 /// An internal module of Commands, tested through the gestures.</summary>
 internal sealed class LoadOrderResolution(
-    LoadOrderHolder loadOrder, IPluginAdapter adapter, SchemaReflector schemaReflector)
+    LoadOrderHolder loadOrder, IPluginAdapter adapter, SchemaReflector schemaReflector, ISourceAdapter source)
 {
     internal CopySource SourceOf(PluginAddress plugin, WriteSessions sessions) => SourceIn(loadOrder.Current, plugin, sessions);
 
     private CopySource SourceIn(LoadOrderSnapshot snapshot, PluginAddress plugin, WriteSessions sessions) =>
-        new(plugin, snapshot, adapter, schemaReflector, sessions);
+        new(plugin, snapshot, adapter, schemaReflector, source, sessions);
 
     /// <summary>The walk to the left among the masters <paramref name="plugin"/>'s source tree requires,
     /// over the load order held now, whole, each master read over <paramref name="sessions"/>.</summary>
     internal MastersWalk WalkAmongMastersOf(
-        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas, WriteSessions sessions) =>
+        ISourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas, WriteSessions sessions) =>
         WalkIn(loadOrder.Current, repository, plugin, schemas, sessions);
 
     private MastersWalk WalkIn(
-        LoadOrderSnapshot snapshot, SourceRepository repository, PluginAddress plugin,
+        LoadOrderSnapshot snapshot, ISourceRepository repository, PluginAddress plugin,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, WriteSessions sessions) =>
         new(this, snapshot, plugin, sessions, new Lazy<Answer<IReadOnlySet<string>, SourceFailure>>(() => RequiredMasters.InTheTree(repository, plugin, schemas)));
 
@@ -51,7 +51,7 @@ internal sealed class LoadOrderResolution(
     /// or a master of the destination loads after it. <paramref name="text"/> is that master's copy,
     /// null when the source's stands.</summary>
     internal RecordEditResult? HighestOverrideVisibleToTheDestination(
-        CopySource source, RecordIdentity identity, SourceRepository destinationRepository, PluginAddress destinationPlugin,
+        CopySource source, RecordIdentity identity, ISourceRepository destinationRepository, PluginAddress destinationPlugin,
         out string? text)
     {
         text = null;
@@ -77,7 +77,7 @@ internal sealed class LoadOrderResolution(
     /// <summary>Who holds the cell at <paramref name="grid"/>: the plugin, then its masters (xEdit's
     /// AllVisibleForFile, ADR-0018). A refusal is spelled at <paramref name="spelled"/>, naming <paramref name="subject"/>.</summary>
     internal GridCellHolder HolderOfCell(
-        SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        ISourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         string worldspace, (int X, int Y) grid, string spelled, string subject, WriteSessions sessions)
     {
         if (!repository.GetCellAt(plugin, worldspace, grid.X, grid.Y).Holds(out var held, out var failure))
@@ -90,7 +90,7 @@ internal sealed class LoadOrderResolution(
                     left.Refusal(spelled, $"{subject} is read from the nearest of {plugin.Name}'s masters"));
             case LeftCopy.Found found:
                 var formKey = GridCellHolder.FormKeyOf(Document.Parse(found.Text));
-                if (!repository.Get(plugin, formKey).Holds(out var copy, out failure)) return Unreadable(failure);
+                if (!repository.RecordByFormKey(plugin, formKey).Holds(out var copy, out failure)) return Unreadable(failure);
                 return copy is not null ? new GridCellHolder.Plugins(copy) : new GridCellHolder.Masters(found, formKey);
             default:
                 return new GridCellHolder.Nobody();
