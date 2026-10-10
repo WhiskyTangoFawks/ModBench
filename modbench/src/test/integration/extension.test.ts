@@ -798,6 +798,13 @@ describe('a child record of a tracked plugin', () => {
     answerEdit = () => refusedAsUntracked;
   });
 
+  const openLoaded = async (record: RecordToOpen) => {
+    const asked = requestLog.length;
+    await openRecord(record);
+    await waitFor(`${record.formKey}'s page loaded, asking its read`,
+      () => requestLog.slice(asked).includes(`GET /records/${encodeURIComponent(record.formKey)}/compare`));
+  };
+
   const reportChanged = (formKey: string) => {
     for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: plugin.name, origin: plugin.origin, keys: [formKey] });
   };
@@ -818,12 +825,6 @@ describe('a child record of a tracked plugin', () => {
   it('follows, in each child\'s tab of a moved container, its own record, the tab in the background staying there and the focus where it was', async () => {
     writeFileSync(OTHER_CELL, containerText);
     heldIn.set(vscode.Uri.file(OTHER_CELL).fsPath, '000803:Tracked.esp');
-    const openLoaded = async (record: RecordToOpen) => {
-      const asked = requestLog.length;
-      await openRecord(record);
-      await waitFor(`${record.formKey}'s page loaded, asking its read`,
-        () => requestLog.slice(asked).includes(`GET /records/${encodeURIComponent(record.formKey)}/compare`));
-    };
     for (const formKey of [CHILD_FORM_KEY, SECOND_CHILD_FORM_KEY]) {
       await openLoaded({ formKey, plugin });
       await vscode.commands.executeCommand('workbench.action.keepEditor');
@@ -971,7 +972,9 @@ describe('a child record of a tracked plugin', () => {
     });
 
     it('keeps every key typed in quick succession in its container\'s text editor, and saves them all', async () => {
-      await openRecord({ ...childCopy, placement: 'beside' });
+      // A webview takes the focus as its frame loads, before its page asks its read, and a key types only
+      // into the focused editor.
+      await openLoaded({ ...childCopy, placement: 'beside' });
       const child = await childDocument();
       const editor = await vscode.window.showTextDocument(await containerDocument(), vscode.ViewColumn.One);
       editor.selection = new vscode.Selection(0, 1, 0, 1);
