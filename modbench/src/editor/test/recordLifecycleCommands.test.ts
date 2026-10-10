@@ -34,7 +34,8 @@ import {
 } from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { RecordWrite } from '../../drivingLib/writingGesture';
-import { ReferencedByHolderNode } from '../referencedByList';
+import { readReferencedBy } from '../referencedByList';
+import { SILENT_LOG } from '../../ports/log';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -64,6 +65,19 @@ function recordingWrite(): { write: RecordWrite; writing: string[] } {
       writing.push('ends');
     },
   };
+}
+
+async function referencedByCopy(record: RecordAddress, editorId: string) {
+  const client = new InMemoryMEditClient();
+  client.setQueryAnswer('getRecordTypes', []);
+  client.setQueryAnswer('getReferences', [{
+    formKey: record.formKey, plugin: record.plugin, origin: record.origin, fieldPath: 'Keywords[0]',
+    recordType: 'npc_', recordTypeName: 'Non-Player Character', editorId,
+  }]);
+  const { provider } = await readReferencedBy(client, SILENT_LOG, '000001:A.esp', 'a list', () => ({ tracked: true, editable: true }));
+  const [referrer] = provider.getChildren();
+  const [copy] = provider.getChildren(present(referrer, 'the referrer'));
+  return present(copy, 'its plugin copy');
 }
 
 const changes = (record: RecordAddress) => ({ record, moves: [], deletions: [], documents: [] });
@@ -163,7 +177,7 @@ describe('registerRecordLifecycleCommands', () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('getDeleteChanges', { applied: [SECOND].map(changes), refused: [] });
       const { ask } = invoke(client, 'Delete');
-      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'TestNPC', { name: SECOND.plugin, origin: SECOND.origin }, [], { tracked: true, editable: true, container: false });
+      const holder = await referencedByCopy(SECOND, 'TestNPC');
 
       await deleteRecords(holder);
 

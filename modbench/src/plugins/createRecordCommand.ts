@@ -28,11 +28,9 @@ type Target =
   | { plugin: PluginAddress; recordType: string }
   | { plugin: PluginAddress; container?: string; choices: () => Promise<RecordTypeChoice[]> };
 
-/** What the Argument is created beneath: the clicked row's name, and whether a cell chosen beneath it is placed by grid position. */
 interface Subject {
   readonly label: string;
   readonly placesCells: boolean;
-  /** The row the new record is selected beneath; none for a row outside the Plugins tree. */
   readonly row?: CreateRow;
 }
 

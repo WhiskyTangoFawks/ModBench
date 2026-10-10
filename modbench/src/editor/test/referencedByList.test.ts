@@ -7,15 +7,16 @@ vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, EventEmitter, The
 
 import {
   readReferencedBy,
-  ReferencedByHolderNode,
   referencedByCopyValueText,
   type ConditionsOf,
 } from '../referencedByList';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { expectInstancesOf } from '../../test/expectInstanceOf';
 import type { ReferenceResult } from '../../client';
 import { present } from '../../ports/present';
 import { recordOpenPlan } from '../recordOpenPlan';
+
+type Node = ReturnType<Awaited<ReturnType<typeof readReferencedBy>>['provider']['getChildren']>[number];
+const isHolder = (node: Node): node is Extract<Node, { plugin: unknown }> => 'plugin' in node;
 
 const TARGET = '000001:Fallout4.esm';
 
@@ -153,7 +154,7 @@ describe('the Referenced By list — a referrer', () => {
 describe('the Referenced By list — where a referrer is held', () => {
   async function holdersOver(references: ReferenceResult[]) {
     const { provider, referrers: [referrer] } = await listOf(indexed(references));
-    return expectInstancesOf(provider.getChildren(present(referrer, 'the referrer')), ReferencedByHolderNode);
+    return provider.getChildren(present(referrer, 'the referrer')).filter(isHolder);
   }
 
   it('is one row per plugin, in the order mEdit answers, each naming its fields', async () => {

@@ -13,7 +13,7 @@ function openCommand(row: { readonly argument: RecordArgument }): vscode.Command
 }
 
 /** What a plugin's copy of a record offers, as a Plugins record row states it (plugins.md, Menus and keys, story 4). */
-export interface HolderOffers {
+interface HolderOffers {
   readonly tracked: boolean;
   readonly editable: boolean;
   readonly container: boolean;
@@ -26,7 +26,7 @@ const holderContextValue = ({ tracked, editable, container }: HolderOffers): str
   `referencedByHolder ${tracked ? 'tracked' : 'untracked'}${editable ? ' editable' : ''}${container ? ' container' : ''}`;
 
 /** One plugin's copy of a referrer, with the fields that hold the reference. */
-export class ReferencedByHolderNode extends vscode.TreeItem {
+class ReferencedByHolderNode extends vscode.TreeItem {
   readonly argument: RecordArgument;
   readonly plugin: PluginAddress;
   /** What confirmations call the record this copy holds. */
@@ -79,7 +79,7 @@ class ReferencedByReferrerNode extends vscode.TreeItem {
   }
 }
 
-export type ReferencedByRow = ReferencedByReferrerNode | ReferencedByHolderNode;
+type ReferencedByRow = ReferencedByReferrerNode | ReferencedByHolderNode;
 
 type ReferencedByTreeNode = ReferencedByRow | ErrorNode;
 
