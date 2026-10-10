@@ -393,3 +393,39 @@ describe('modbench.record.create ends when the write does', () => {
     expect(writing).toEqual(['opens', 'ends']);
   });
 });
+
+describe('modbench.record.create on a row that is no Plugins row but carries a record Argument', () => {
+  const referencedCopy = (formKey: string) => Object.assign(new TreeItem('MyPatch.esp'), {
+    argument: { kind: 'record', formKey, plugin: MY_PATCH },
+  });
+
+  it('creates beneath the record in its plugin\'s copy, picking from the types that record can hold, and selects nothing', async () => {
+    const { steps, create } = harness();
+    showQuickPick.mockImplementation((items) => Promise.resolve(items[0]));
+
+    await create(referencedCopy('000801:MyPatch.esp'));
+
+    expect(showQuickPick.mock.calls[0]?.[0].map((item) => item.description)).toEqual(['dlbr', 'dial', 'scen']);
+    expect(steps).toEqual([
+      'watch MyPatch.esp ModA', 'create MyPatch.esp ModA dlbr {"container":"000801:MyPatch.esp"}', 'forget',
+    ]);
+  });
+
+  it('asks for a grid position when the record can hold a cell', async () => {
+    const { client, steps, create } = harness();
+    client.setQueryAnswer('getChildRecordTypes', [{ type: 'cell', displayName: 'Cell' }]);
+    showInputBox.mockResolvedValue('1, 2');
+
+    await create(referencedCopy('000803:MyPatch.esp'));
+
+    expect(steps).toContain('create MyPatch.esp ModA cell {"container":"000803:MyPatch.esp","position":{"x":1,"y":2}}');
+  });
+
+  it('creates nothing for a row that names no plugin', async () => {
+    const { steps, create } = harness();
+
+    await create(Object.assign(new TreeItem('Referrer'), { argument: { kind: 'record', formKey: '000801:MyPatch.esp' } }));
+
+    expect(steps).toEqual([]);
+  });
+});

@@ -9,7 +9,7 @@ import {
   readReferencedBy,
   ReferencedByHolderNode,
   referencedByCopyValueText,
-  openedRow,
+  type ConditionsOf,
 } from '../referencedByList';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { expectInstancesOf } from '../../test/expectInstanceOf';
@@ -42,8 +42,10 @@ function indexed(references: ReferenceResult[]): InMemoryMEditClient {
   return client;
 }
 
-async function listOf(client: InMemoryMEditClient, list = 'a list') {
-  const read = await readReferencedBy(client, leveledLog(), TARGET, list);
+const NOTHING_EDITABLE: ConditionsOf = () => ({ tracked: false, editable: false });
+
+async function listOf(client: InMemoryMEditClient, list = 'a list', conditionsOf: ConditionsOf = NOTHING_EDITABLE) {
+  const read = await readReferencedBy(client, leveledLog(), TARGET, list, conditionsOf);
   return { ...read, referrers: read.provider.getChildren() };
 }
 
@@ -72,7 +74,7 @@ describe('the Referenced By list — states', () => {
     const log = leveledLog();
     const client = indexed([]);
     client.setQueryFailure('getReferences', { failed: 'refused', refusal: 'boom' });
-    const [error, ...rest] = (await readReferencedBy(client, log, TARGET, 'a list')).provider.getChildren();
+    const [error, ...rest] = (await readReferencedBy(client, log, TARGET, 'a list', NOTHING_EDITABLE)).provider.getChildren();
     expect(rest).toEqual([]);
     expect(error?.label).toBe('Failed to load: boom');
     expect(error?.tooltip).toBe('boom');
@@ -81,7 +83,7 @@ describe('the Referenced By list — states', () => {
 
   it('is a snapshot: mEdit is asked once, however often the view asks for rows and whatever changes after', async () => {
     const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
-    const { provider } = await readReferencedBy(client, leveledLog(), TARGET, 'a list');
+    const { provider } = await readReferencedBy(client, leveledLog(), TARGET, 'a list', NOTHING_EDITABLE);
     client.emit({ kind: 'rows-changed', plugin: '', origin: '', keys: [], sequence: 0 });
     provider.getChildren();
     provider.getChildren();
@@ -124,7 +126,7 @@ describe('the Referenced By list — a referrer', () => {
     const [referrer] = await referrersOver([reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC' })]);
     const { command } = present(referrer, 'the referrer');
     expect(command?.command).toBe('modbench.record.open');
-    expect(command?.arguments).toMatchObject([{ argument: { kind: 'record', formKey: '000002:Fallout4.esm' }, row: referrer }]);
+    expect(command?.arguments).toEqual([{ argument: { kind: 'record', formKey: '000002:Fallout4.esm' } }]);
     expect(recordOpenPlan(referrer, []).addresses).toEqual([{ formKey: '000002:Fallout4.esm' }]);
   });
 
@@ -166,14 +168,12 @@ describe('the Referenced By list — where a referrer is held', () => {
     ]);
   });
 
-  it('opens its plugin copy on a click, handing the open command itself as the row opened', async () => {
+  it('opens its plugin copy on a click', async () => {
     const [holder] = await holdersOver([
       reference({ formKey: '000002:Fallout4.esm', plugin: 'MyMod.esp', origin: 'MyMod' }),
     ]);
-    const [invocation] = present<unknown[]>(holder?.command?.arguments, 'the click\'s arguments');
     expect(holder?.command?.command).toBe('modbench.record.open');
-    expect(invocation).toMatchObject({ argument: holder?.argument });
-    expect(openedRow(invocation)).toBe(holder);
+    expect(holder?.command?.arguments).toEqual([{ argument: holder?.argument }]);
   });
 
   it('keeps two plugins of one file name apart by their origins', async () => {
@@ -195,9 +195,64 @@ describe('the Referenced By list — where a referrer is held', () => {
   });
 });
 
+describe('the Referenced By list — what a plugin copy offers', () => {
+  const EDITABLE_MOD = 'EditableMod';
+  const conditions: ConditionsOf = ({ origin }) =>
+    origin === EDITABLE_MOD ? { tracked: true, editable: true } : { tracked: origin === 'TrackedMod', editable: false };
+
+  async function offersOver(references: ReferenceResult[], types: { type: string; isContainer: boolean }[] = []) {
+    const client = indexed(references);
+    client.setQueryAnswer('getRecordTypes', types.map(({ type, isContainer }) =>
+      ({ type, count: 1, displayName: type, hasParseFailure: false, isCreatable: true, isContainer })));
+    const { provider, referrers: [referrer] } = await listOf(client, 'a list', conditions);
+    return provider.getChildren(present(referrer, 'the referrer')).map((holder) => holder.contextValue);
+  }
+
+  it.each([
+    ['an editable tracked plugin', EDITABLE_MOD, 'referencedByHolder tracked editable'],
+    ['a tracked plugin that is not editable', 'TrackedMod', 'referencedByHolder tracked'],
+    ['a plugin of neither kind', 'Fallout4.esm', 'referencedByHolder untracked'],
+  ])('is stated as Plugins states it for %s', async (_, origin, expected) => {
+    expect(await offersOver([reference({ formKey: '000002:Fallout4.esm', origin })])).toEqual([expected]);
+  });
+
+  it('adds container for a record of a type that holds children, in an editable tracked plugin', async () => {
+    expect(await offersOver(
+      [reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD, recordType: 'quest' })],
+      [{ type: 'quest', isContainer: true }, { type: 'npc_', isContainer: false }],
+    )).toEqual(['referencedByHolder tracked editable container']);
+    expect(await offersOver(
+      [reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD, recordType: 'npc_' })],
+      [{ type: 'quest', isContainer: true }, { type: 'npc_', isContainer: false }],
+    )).toEqual(['referencedByHolder tracked editable']);
+  });
+
+  it('asks for the record types of an editable tracked plugin only, and once however many of its records are listed', async () => {
+    const client = indexed([
+      reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD, plugin: 'E.esp', recordType: 'quest' }),
+      reference({ formKey: '000003:Fallout4.esm', origin: EDITABLE_MOD, plugin: 'E.esp', recordType: 'quest' }),
+      reference({ formKey: '000004:Fallout4.esm', origin: 'Fallout4.esm' }),
+    ]);
+    client.setQueryAnswer('getRecordTypes', []);
+    await listOf(client, 'a list', conditions);
+    expect(client.calls.filter((c) => c.method === 'getRecordTypes')).toEqual([
+      { method: 'getRecordTypes', args: [{ name: 'E.esp', origin: EDITABLE_MOD }] },
+    ]);
+  });
+
+  it('offers no create where the plugin\'s record types cannot be read, and logs it', async () => {
+    const client = indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD, recordType: 'quest' })]);
+    client.setQueryFailure('getRecordTypes', { failed: 'refused', refusal: 'boom' });
+    const log = leveledLog();
+    const { provider } = await readReferencedBy(client, log, TARGET, 'a list', conditions);
+    const [referrer] = provider.getChildren();
+    expect(provider.getChildren(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder tracked editable']);
+    expect(log.lines.warn).toHaveLength(1);
+  });
+});
+
 describe('referencedByCopyValueText — the text of the selected rows', () => {
-  const noSelection = () => [];
-  const copiedFrom = (selected: readonly unknown[]) => referencedByCopyValueText(noSelection)(selected[0], selected);
+  const copiedFrom = (selected: readonly unknown[]) => referencedByCopyValueText(selected[0], selected);
 
   it('copies a referrer as EditorID [FormKey], or its FormKey alone with no EditorID', async () => {
     expect(copiedFrom(await referrersOver([reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC' })])))
@@ -224,19 +279,12 @@ describe('referencedByCopyValueText — the text of the selected rows', () => {
 
   it('falls back to the clicked row alone with nothing else selected', async () => {
     const [referrer] = await referrersOver([reference({ formKey: '000002:Fallout4.esm', editorId: 'Named' })]);
-    expect(referencedByCopyValueText(noSelection)(referrer, undefined)).toBe('Named [000002:Fallout4.esm]');
-  });
-
-  it('copies the selection of the References view for its key', async () => {
-    const referrers = await referrersOver([reference({ formKey: '000002:Fallout4.esm', editorId: 'Named' })]);
-    expect(referencedByCopyValueText(() => referrers)({ view: 'references-view.tree' }, undefined))
-      .toBe('Named [000002:Fallout4.esm]');
+    expect(referencedByCopyValueText(referrer, undefined)).toBe('Named [000002:Fallout4.esm]');
   });
 
   it('defers on an invocation of another surface, so an adapter after it can run', () => {
-    const text = referencedByCopyValueText(noSelection);
-    expect(text(undefined, undefined)).toBeUndefined();
-    expect(text({ kind: 'mod' }, undefined)).toBeUndefined();
-    expect(text({ view: 'modbench.modList' }, undefined)).toBeUndefined();
+    expect(referencedByCopyValueText(undefined, undefined)).toBeUndefined();
+    expect(referencedByCopyValueText({ kind: 'mod' }, undefined)).toBeUndefined();
+    expect(referencedByCopyValueText({ view: 'modbench.modList' }, undefined)).toBeUndefined();
   });
 });

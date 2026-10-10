@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import type { ReferencedByList } from './referencedByList';
 
 export const REFERENCES_VIEW_EXTENSION = 'vscode.references-view';
-export const REFERENCES_VIEW_ID = 'references-view.tree';
 
 // The slice of the built-in extension's exports Referenced By drives; @types/vscode does not declare it.
 export interface ReferencesViewInput {

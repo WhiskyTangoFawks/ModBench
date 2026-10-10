@@ -163,7 +163,7 @@ describe('registerRecordLifecycleCommands', () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('getDeleteChanges', { applied: [SECOND].map(changes), refused: [] });
       const { ask } = invoke(client, 'Delete');
-      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'TestNPC', { name: SECOND.plugin, origin: SECOND.origin }, []);
+      const holder = new ReferencedByHolderNode('000001:A.esp', SECOND.formKey, 'TestNPC', { name: SECOND.plugin, origin: SECOND.origin }, [], { tracked: true, editable: true, container: false });
 
       await deleteRecords(holder);
 

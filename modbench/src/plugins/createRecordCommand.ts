@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { isRefused, type GridPosition, type MEditClient, type PluginAddress, type RecordTypeChoice } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
-import { registerGesture, singularArgument, type RowOf } from '../drivingLib/gestureEntry';
+import { registerGesture, singularArgument, type GestureEntry, type RowOf } from '../drivingLib/gestureEntry';
 import type { PluginsTreeNode } from './pluginRows';
 import type { CreatedRecordWatch, RecordPlace } from './createdRecordSelection';
 import type { RecordWrite } from '../drivingLib/writingGesture';
@@ -11,6 +11,7 @@ import { applyAnswered } from '../drivingLib/applyAnswered';
 import { CREATE_ROW_KINDS, isContainerRow } from './gestureEntry';
 import { CELL_RECORD_TYPE } from './RecordBrowser';
 import { pluginAddressOf } from '../wire/pluginAddress';
+import { recordArgumentOf } from '../drivingLib/recordArgument';
 import { answerOf } from '../wire/readFailed';
 
 export interface RecordCreateDeps {
@@ -26,6 +27,32 @@ type CreateRow = RowOf<PluginsTreeNode, typeof CREATE_ROW_KINDS[number]>;
 type Target =
   | { plugin: PluginAddress; recordType: string }
   | { plugin: PluginAddress; container?: string; choices: () => Promise<RecordTypeChoice[]> };
+
+/** What the Argument is created beneath: the clicked row's name, and whether a cell chosen beneath it is placed by grid position. */
+interface Subject {
+  readonly label: string;
+  readonly placesCells: boolean;
+  /** The row the new record is selected beneath; none for a row outside the Plugins tree. */
+  readonly row?: CreateRow;
+}
+
+function createdBeneath(entry: GestureEntry<PluginsTreeNode>, client: RecordCreateDeps['client']): { subject: Subject; target: Target | undefined } | undefined {
+  const row = singularArgument(entry, ...CREATE_ROW_KINDS);
+  if (row === undefined) return containerOf(entry.clicked ?? entry.focused, client);
+  return { subject: { label: labelOf(row), placesCells: row.kind === 'worldspace', row }, target: targetOf(row, client) };
+}
+
+// A row of another view that carries a record Argument stands for the container record in its plugin's copy;
+// only a worldspace holds a cell.
+function containerOf(clicked: unknown, client: RecordCreateDeps['client']): { subject: Subject; target: Target } | undefined {
+  const argument = recordArgumentOf(clicked);
+  if (argument?.plugin === undefined || !(clicked instanceof vscode.TreeItem)) return undefined;
+  const { plugin, formKey } = argument;
+  return {
+    subject: { label: labelOf(clicked), placesCells: true },
+    target: { plugin, container: formKey, choices: async () => answerOf(await client.getChildRecordTypes(plugin, formKey)) },
+  };
+}
 
 function targetOf(row: CreateRow, client: RecordCreateDeps['client']): Target | undefined {
   if (row.kind === 'plugin') return { plugin: { name: row.plugin.name, origin: row.origin }, choices: async () => answerOf(await client.getCreatableRecordTypes()) };
@@ -85,17 +112,17 @@ async function askGridPosition(): Promise<GridPosition | undefined> {
 }
 
 async function chosenOptions(
-  row: CreateRow, target: Target, option: unknown, reporter: Reporter,
+  subject: Subject, target: Target, option: unknown, reporter: Reporter,
 ): Promise<{ recordType: string; typeName: string; position?: GridPosition } | undefined> {
   const given = optionsOf(option);
   const chosen = 'recordType' in target
-    ? { type: target.recordType, name: labelOf(row) }
+    ? { type: target.recordType, name: subject.label }
     : given.recordType === undefined
-      ? await pickRecordType(target.choices, labelOf(row), reporter)
+      ? await pickRecordType(target.choices, subject.label, reporter)
       : { type: given.recordType, name: given.recordType };
   if (chosen === undefined) return undefined;
   const { type: recordType, name: typeName } = chosen;
-  if (row.kind !== 'worldspace' || recordType !== CELL_RECORD_TYPE) return { recordType, typeName };
+  if (!subject.placesCells || recordType !== CELL_RECORD_TYPE) return { recordType, typeName };
   const position = given.position ?? await askGridPosition();
   return position && { recordType, typeName, position };
 }
@@ -105,16 +132,15 @@ export function registerRecordCreateCommand(
   deps: RecordCreateDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   return registerGesture('modbench.record.create', viewSelection, async (entry, option) => {
-    const row = singularArgument(entry, ...CREATE_ROW_KINDS);
-    const target = row && targetOf(row, deps.client);
-    if (row === undefined || target === undefined) return;
-    const chosen = await chosenOptions(row, target, option, deps.reporter);
+    const { subject, target } = createdBeneath(entry, deps.client) ?? {};
+    if (subject === undefined || target === undefined) return;
+    const chosen = await chosenOptions(subject, target, option, deps.reporter);
     if (chosen === undefined) return;
 
     const { plugin } = target;
     const { recordType, typeName, position } = chosen;
     const container = 'container' in target ? target.container : undefined;
-    const place: RecordPlace<PluginsTreeNode> = container === undefined ? { plugin, recordType } : { container: row };
+    const place: RecordPlace<PluginsTreeNode> | undefined = container === undefined ? { plugin, recordType } : subject.row && { container: subject.row };
     const created = deps.createdRecords.watch(plugin);
     const answer: { formKey?: string } = {};
     try {
@@ -134,6 +160,7 @@ export function registerRecordCreateCommand(
       }));
     } finally {
       if (answer.formKey === undefined) created.forget();
+      else if (place === undefined) created.forget();
       else created.select(place, answer.formKey);
     }
   });

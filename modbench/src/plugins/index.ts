@@ -10,6 +10,8 @@ import { noticeExternalChanges } from './externalChangeNotice';
 import { recordWriteOver } from './recordWrite';
 import { editingView } from './editingView';
 import { createPluginsView, type PluginsView, type PluginsViewDeps } from './pluginsView';
+import type { PluginConditions } from './pluginFacts';
+import type { PluginAddress } from '../client';
 import type { ReconcileNarrator } from './reconcileNarrator';
 
 type PluginsClient = PluginsViewDeps['client'] & ConstructorParameters<typeof RecordBrowser>[0]
@@ -42,6 +44,8 @@ interface PluginsOnInstance extends vscode.Disposable {
 export interface Plugins extends vscode.Disposable {
   /** What a record gesture runs under: the index must show the write before it lands. */
   recordWrite: RecordWrite;
+  /** What the Plugins view knows of a plugin's tracking and editability; nothing is editable while no Instance is open. */
+  conditionsOf(plugin: PluginAddress): PluginConditions;
   /** The Plugins view, over an Instance that was found. */
   onInstance(deps: PluginsInstanceDeps): PluginsOnInstance;
 }
@@ -52,25 +56,31 @@ export function createPlugins(deps: PluginsDeps): Plugins {
   const externalChanges = noticeExternalChanges(reporterFor('externalChange'), client);
   const recordBrowser = new RecordBrowser(client, channel);
   const recordWrite = recordWriteOver(deps.facts, client);
+  let shown: PluginsView | undefined;
   return {
     recordWrite,
+    conditionsOf: (plugin) => shown?.conditionsOf(plugin) ?? { tracked: false, editable: false },
     onInstance: ({ instanceRoot, ...instanceDeps }) => {
       const view = createPluginsView({
         ...instanceDeps, recordBrowser, client, statusBar, channel, registerRepositories: deps.registerRepositories, reporterFor,
         ask: deps.ask, recordWrite, sourceEditing: deps.sourceEditing,
         log: (level, msg) => channel[level](msg),
       });
-      const shown = editingView({
+      shown = view;
+      const editingShown = editingView({
         narrator: view.narrator, progress: view.progress, log: channel, revealLog: () => channel.show(true), loadOrderPut: view.loadOrderPut,
         reporterFor,
       });
       const editing = editingFlow({
-        client, instanceRoot, around: shown.around, onPut: shown.onPut, reporterFor, log: (line) => channel.error(line),
+        client, instanceRoot, around: editingShown.around, onPut: editingShown.onPut, reporterFor, log: (line) => channel.error(line),
       });
       return {
         followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, editing,
         nextRefill: () => view.narrator.nextRefill(),
-        dispose: () => { vscode.Disposable.from(editing, view).dispose(); },
+        dispose: () => {
+          if (shown === view) shown = undefined;
+          vscode.Disposable.from(editing, view).dispose();
+        },
       };
     },
     dispose: () => { externalChanges(); statusBar.dispose(); },

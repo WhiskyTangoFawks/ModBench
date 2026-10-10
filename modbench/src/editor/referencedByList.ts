@@ -5,13 +5,25 @@ import { errorMessage } from '../ports/errorMessage';
 import { ErrorNode } from '../drivingLib/errorNode';
 import type { RecordArgument } from '../drivingLib/recordArgument';
 import { recordLabel } from '../wire/recordLabel';
-import { isKeyArgs, type CopyValueAdapter } from '../drivingLib/copyValue';
-import { REFERENCES_VIEW_ID } from './referencesView';
+import { pluginAddressKey } from '../wire/pluginAddress';
 import { failureReason, isReadFailed, localFailure } from '../wire/readFailed';
 
 function openCommand(row: { readonly argument: RecordArgument }): vscode.Command {
-  return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: row.argument, row }] };
+  return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: row.argument }] };
 }
+
+/** What a plugin's copy of a record offers, as a Plugins record row states it (plugins.md, Menus and keys, story 4). */
+export interface HolderOffers {
+  readonly tracked: boolean;
+  readonly editable: boolean;
+  readonly container: boolean;
+}
+
+/** The facts Plugins holds about a plugin, which decide whether its records can be edited. */
+export type ConditionsOf = (plugin: PluginAddress) => Pick<HolderOffers, 'tracked' | 'editable'>;
+
+const holderContextValue = ({ tracked, editable, container }: HolderOffers): string =>
+  `referencedByHolder ${tracked ? 'tracked' : 'untracked'}${editable ? ' editable' : ''}${container ? ' container' : ''}`;
 
 /** One plugin's copy of a referrer, with the fields that hold the reference. */
 export class ReferencedByHolderNode extends vscode.TreeItem {
@@ -27,6 +39,7 @@ export class ReferencedByHolderNode extends vscode.TreeItem {
     editorId: string | undefined,
     address: PluginAddress,
     fieldPaths: readonly string[],
+    offers: HolderOffers,
   ) {
     super(address.name, vscode.TreeItemCollapsibleState.None);
     this.plugin = address;
@@ -35,7 +48,7 @@ export class ReferencedByHolderNode extends vscode.TreeItem {
     this.argument = { kind: 'record', plugin: address, formKey };
     this.id = JSON.stringify([list, formKey, address.origin, address.name]);
     this.description = fieldPaths.join(', ');
-    this.contextValue = 'referencedByHolder';
+    this.contextValue = holderContextValue(offers);
     this.command = openCommand(this);
   }
 }
@@ -74,21 +87,11 @@ const isReferrer = (node: unknown): node is ReferencedByReferrerNode => node ins
 
 const isReferencedByRow = (node: unknown): node is ReferencedByRow => isReferrer(node) || node instanceof ReferencedByHolderNode;
 
-/** The row that an open command was handed by a click or Enter on it. */
-export const openedRow = (invocation: unknown): ReferencedByRow | undefined => {
-  const row: unknown = typeof invocation === 'object' && invocation !== null ? Reflect.get(invocation, 'row') : undefined;
-  return isReferencedByRow(row) ? row : undefined;
-};
-
-/** Referenced By's own text for copy value, or `undefined` unless the invocation is one of its rows or its view's key. */
-export function referencedByCopyValueText(selection: () => readonly unknown[]): CopyValueAdapter['text'] {
-  const lines = (rows: readonly ReferencedByRow[]) => rows.map((row) => row.copyText).join('\n');
-  return (clicked, allSelected) => {
-    if (isKeyArgs(clicked, REFERENCES_VIEW_ID)) return lines(selection().filter(isReferencedByRow));
-    if (!isReferencedByRow(clicked)) return undefined;
-    const selected = allSelected?.filter(isReferencedByRow) ?? [];
-    return lines(selected.length ? selected : [clicked]);
-  };
+/** Referenced By's own text for copy value, or `undefined` unless the invocation is one of its rows. */
+export function referencedByCopyValueText(clicked: unknown, allSelected: readonly unknown[] | undefined): string | undefined {
+  if (!isReferencedByRow(clicked)) return undefined;
+  const selected = allSelected?.filter(isReferencedByRow) ?? [];
+  return (selected.length ? selected : [clicked]).map(row => row.copyText).join('\n');
 }
 
 function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): T[][] {
@@ -102,16 +105,45 @@ function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): T[][] {
   return [...groups.values()];
 }
 
-function referrerNode(list: string, copies: readonly ReferenceResult[]): ReferencedByReferrerNode | undefined {
+type ContainerTypes = (plugin: PluginAddress) => Promise<ReadonlySet<string>>;
+
+function containerTypesOver(client: Pick<MEditClient, 'getRecordTypes'>, log: Log): ContainerTypes {
+  const read = new Map<string, Promise<ReadonlySet<string>>>();
+  return (plugin) => {
+    const key = pluginAddressKey(plugin);
+    const held = read.get(key);
+    if (held) return held;
+    const fresh = client.getRecordTypes(plugin).catch((error: unknown) => localFailure(errorMessage(error))).then((types) => {
+      if (!isReadFailed(types)) return new Set(types.filter(t => t.isContainer).map(t => t.type));
+      log.warn(`[ReferencedBy] getRecordTypes(${plugin.name}) failed: ${failureReason(types)}`);
+      return new Set<string>();
+    });
+    read.set(key, fresh);
+    return fresh;
+  };
+}
+
+interface Lookups {
+  readonly list: string;
+  readonly conditionsOf: ConditionsOf;
+  readonly containerTypes: ContainerTypes;
+}
+
+async function referrerNode({ list, conditionsOf, containerTypes }: Lookups, copies: readonly ReferenceResult[]): Promise<ReferencedByReferrerNode | undefined> {
   const [first] = copies;
   if (!first) return undefined;
   const editorId = first.editorId ?? undefined;
-  const holders = groupBy(copies, r => JSON.stringify([r.origin, r.plugin])).flatMap(fields => {
+  const holders = await Promise.all(groupBy(copies, r => JSON.stringify([r.origin, r.plugin])).flatMap(fields => {
     const [held] = fields;
-    return held
-      ? [new ReferencedByHolderNode(list, first.formKey, editorId, { name: held.plugin, origin: held.origin }, fields.map(r => r.fieldPath))]
-      : [];
-  });
+    if (!held) return [];
+    const address = { name: held.plugin, origin: held.origin };
+    return [(async () => {
+      const { tracked, editable } = conditionsOf(address);
+      const container = tracked && editable && (await containerTypes(address)).has(held.recordType);
+      return new ReferencedByHolderNode(
+        list, first.formKey, editorId, address, fields.map(r => r.fieldPath), { tracked, editable, container });
+    })()];
+  }));
   return new ReferencedByReferrerNode(list, first.formKey, editorId, first.recordTypeName, holders);
 }
 
@@ -143,10 +175,12 @@ export interface ReferencedByList {
   message: string | undefined;
 }
 
-export type ReferencedByClient = Pick<MEditClient, 'getReferences' | 'loadOrderStatus'>;
+export type ReferencedByClient = Pick<MEditClient, 'getReferences' | 'getRecordTypes' | 'loadOrderStatus'>;
 
 /** What references `target`, read once (editor-referenced-by.md, Asking, story 4); `list` tells this list from every other asked for. */
-export async function readReferencedBy(client: ReferencedByClient, log: Log, target: string, list: string): Promise<ReferencedByList> {
+export async function readReferencedBy(
+  client: ReferencedByClient, log: Log, target: string, list: string, conditionsOf: ConditionsOf,
+): Promise<ReferencedByList> {
   const read = await client.getReferences(target).catch((error: unknown) => localFailure(errorMessage(error)));
   const indexing = client.loadOrderStatus?.conflictsComputed ? undefined : INDEXING_MESSAGE;
   if (isReadFailed(read)) {
@@ -154,7 +188,9 @@ export async function readReferencedBy(client: ReferencedByClient, log: Log, tar
     log.error(`[ReferencedBy] getReferences(${target}) failed: ${reason}`);
     return { provider: new ReferencedByTreeProvider([new ErrorNode(reason)]), message: indexing };
   }
-  const referrers = groupBy(read, r => r.formKey).flatMap(copies => referrerNode(list, copies) ?? []).sort(byTypeThenLabel);
+  const lookups = { list, conditionsOf, containerTypes: containerTypesOver(client, log) };
+  const referrers = (await Promise.all(groupBy(read, r => r.formKey).map(copies => referrerNode(lookups, copies))))
+    .flatMap(referrer => referrer ?? []).sort(byTypeThenLabel);
   return {
     provider: new ReferencedByTreeProvider(referrers),
     message: messageLine(referrers.length === 0 ? NO_REFERENCES_MESSAGE : undefined, indexing),
