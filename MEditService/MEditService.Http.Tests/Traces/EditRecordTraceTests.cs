@@ -251,7 +251,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single(plugin => plugin.Origin == OtherOrigin).Path).Require();
         var headerFile = Path.Combine(modFolder, "plugin-source", OtherPlugin, $"000000_{OtherPlugin}.json");
-        var unsavedHeader = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(await File.ReadAllBytesAsync(headerFile), 0xA00));
+        var unsavedHeader = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(await File.ReadAllBytesAsync(headerFile), GameRelease.Fallout4, 0xA00));
 
         await Client.HandUnsaved((headerFile, unsavedHeader));
 

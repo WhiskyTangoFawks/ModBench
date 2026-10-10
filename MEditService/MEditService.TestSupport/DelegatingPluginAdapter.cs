@@ -44,9 +44,9 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         inner.ReadTreeAsync(files, gameRelease, cancel);
 
     public virtual Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
-        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
+        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, GameRelease gameRelease,
         CancellationToken cancel = default) =>
-        inner.WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
+        inner.WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel);
 
     public virtual Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
         RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>

@@ -4,7 +4,6 @@ using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
-using Noggog.WorkEngine;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -39,8 +38,6 @@ public static class SourceEdits
             File.WriteAllBytes(path, file.Content);
         }
 
-        return RecordTextCodecGeneratorSeed.DeserializeWholeMod(
-                scratch, InlineWorkDropoff.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        return Fallout4WholeMod.Deserialize(scratch).GetAwaiter().GetResult();
     }
 }

@@ -12,7 +12,6 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
-using Noggog.WorkEngine;
 
 namespace MEditService.Commands.Tests.Source;
 
@@ -169,14 +168,14 @@ public sealed class TrackCommitShapeTests : IDisposable
     {
         public override Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
-            IReadOnlyList<string> masterOrder, CancellationToken cancel = default) =>
+            IReadOnlyList<string> masterOrder, GameRelease gameRelease, CancellationToken cancel = default) =>
             plugins.Contains(Path.GetFileName(destinationPath))
-                ? new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, masterOrder, cancel)
-                : TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
+                ? new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel)
+                : TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel);
 
         private static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken cancel)
         {
-            var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, cancel);
+            var deserialized = await Fallout4WholeMod.Deserialize(folder, cancel);
             deserialized.Npcs.First().EditorID += "Corrupted";
             return deserialized;
         }
@@ -195,14 +194,14 @@ public sealed class TrackCommitShapeTests : IDisposable
     {
         public override Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
             IReadOnlyList<TreeFile> files, string destinationPath,
-            IReadOnlyList<string> masterOrder, CancellationToken cancel = default) =>
+            IReadOnlyList<string> masterOrder, GameRelease gameRelease, CancellationToken cancel = default) =>
             Path.GetFileName(destinationPath) == plugin
-                ? new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, masterOrder, cancel)
-                : TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
+                ? new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel)
+                : TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel);
 
         private static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken cancel)
         {
-            var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, cancel);
+            var deserialized = await Fallout4WholeMod.Deserialize(folder, cancel);
             deserialized.Npcs.First().EditorID += "Corrupted";
             return deserialized;
         }

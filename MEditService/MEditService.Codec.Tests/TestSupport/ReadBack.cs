@@ -4,7 +4,6 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins.Records;
-using Noggog.WorkEngine;
 
 namespace MEditService.Codec.Tests.TestSupport;
 
@@ -23,8 +22,8 @@ public static class ReadBack
         where T : IMajorRecordGetter
     {
         using var folder = new ScratchDirectory("medit-readback-");
-        await RecordTextCodecGeneratorSeed.SerializeWholeMod(mod, folder.Path, InlineWorkDropoff.Instance, CancellationToken.None);
-        var read = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder.Path, InlineWorkDropoff.Instance, CancellationToken.None);
+        await Fallout4WholeMod.Serialize(mod, folder.Path, CancellationToken.None);
+        var read = await Fallout4WholeMod.Deserialize(folder.Path, CancellationToken.None);
         return read.EnumerateMajorRecords().OfType<T>().Single(candidate => candidate.FormKey == record.FormKey);
     }
 }

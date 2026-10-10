@@ -1,11 +1,9 @@
-using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Noggog.WorkEngine;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
@@ -25,8 +23,7 @@ public sealed class BlockLevelNameParityTests
     public async Task TheDirectoriesTheWholeModSerializerWrites_AreNamedAsAPutPlacesThem()
     {
         using var scratch = new ScratchDirectory("medit-block-name-parity-");
-        await RecordTextCodecGeneratorSeed.SerializeWholeMod(
-            OneExteriorCell(), scratch, InlineWorkDropoff.Instance, CancellationToken.None);
+        await Fallout4WholeMod.Serialize(OneExteriorCell(), scratch);
 
         var writtenWorldspace = Directory.EnumerateDirectories(Path.Combine(scratch, "Worldspaces")).Single();
         var writtenBlock = Directory.EnumerateDirectories(writtenWorldspace).Single();
