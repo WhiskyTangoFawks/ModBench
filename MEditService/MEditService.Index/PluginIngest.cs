@@ -33,9 +33,9 @@ internal sealed class PluginIngest
 
     // Everything the index derives from one document, computed off the appender thread; only writing
     // it is sequential. ParseDiagnosis is null for a record whose document was produced.
-    private sealed record PreparedRecord(
+    internal sealed record PreparedRecord(
         string RecordType, string FormKey, byte[] Body, string ContentHash, List<FormReferenceRow> Refs,
-        List<ContainerChildRow> ChildRows, List<PlacementRow> Placements, CellLocationRow? CellLocation,
+        List<HoldingRow> Holdings, List<CellLocationRow> CellLocations,
         string? EditorId, string? ParseDiagnosis);
 
     // ADR-0005, from the one stream that carries the documents. A DuckDB appender writes its rows
@@ -48,22 +48,19 @@ internal sealed class PluginIngest
         using var documentAppender = _connection.CreateAppender("mirror", "records");
 
         var refs = new List<FormReferenceRow>();
-        var containerChildRows = new List<ContainerChildRow>();
-        var placementRows = new List<PlacementRow>();
+        var holdings = new List<HoldingRow>();
         var cellLocationRows = new List<CellLocationRow>();
 
         var phaseTimer = Stopwatch.StartNew();
         var counters = new PhaseCounters();
         foreach (var batch in documents.Records.Chunk(PrepareBatchSize))
         {
-            AppendBatch(
-                batch, schemas, plugin, origin, documentAppender, counters,
-                refs, containerChildRows, placementRows, cellLocationRows);
+            AppendBatch(batch, schemas, plugin, origin, documentAppender, counters, refs, holdings, cellLocationRows);
         }
         var documentsMs = phaseTimer.ElapsedMilliseconds;
 
         phaseTimer.Restart();
-        WritePlacement(plugin, origin, placementRows, cellLocationRows);
+        WriteHoldings(plugin, origin, holdings, cellLocationRows);
 
         if (schemas.ContainsKey(PluginHeader.RecordType))
             HeaderIndexer.Index(documents.Header, plugin, origin, documentAppender);
@@ -74,14 +71,6 @@ internal sealed class PluginIngest
             using var refAppender = _connection.CreateAppender("mirror", "form_references");
             foreach (var r in refs)
                 AppendFormReference(refAppender, r, plugin, origin);
-        }
-
-        DeleteExistingForOrigin("container_child", plugin, origin);
-        if (containerChildRows.Count > 0)
-        {
-            using var containerChildAppender = _connection.CreateAppender("mirror", "container_child");
-            foreach (var row in containerChildRows)
-                AppendContainerChildRow(containerChildAppender, row, plugin, origin);
         }
 
         WriteTypeFailures(plugin, origin, documents.Failures);
@@ -96,9 +85,8 @@ internal sealed class PluginIngest
     {
         DeleteExistingForOrigin("records", plugin, origin);
         DeleteFormReferencesForPlugin(plugin, origin);
-        DeleteExistingForOrigin("placement", plugin, origin);
+        DeleteExistingForOrigin("holdings", plugin, origin);
         DeleteExistingForOrigin("cell_location", plugin, origin);
-        DeleteExistingForOrigin("container_child", plugin, origin);
         DeleteExistingForOrigin("record_type_failure", plugin, origin);
     }
 
@@ -116,8 +104,7 @@ internal sealed class PluginIngest
         PluginDocument[] batch, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         string plugin, string origin, DuckDBAppender documentAppender, PhaseCounters counters,
         List<FormReferenceRow> refs,
-        List<ContainerChildRow> containerChildRows,
-        List<PlacementRow> placementRows,
+        List<HoldingRow> holdings,
         List<CellLocationRow> cellLocationRows)
     {
         // Per-document work is CPU-bound and independent, so it runs in parallel; only the appender
@@ -159,9 +146,8 @@ internal sealed class PluginIngest
                 throw;
             }
             refs.AddRange(p.Refs);
-            containerChildRows.AddRange(p.ChildRows);
-            placementRows.AddRange(p.Placements);
-            if (p.CellLocation is { } cellLocation) cellLocationRows.Add(cellLocation);
+            holdings.AddRange(p.Holdings);
+            cellLocationRows.AddRange(p.CellLocations);
             if (_logger.IsEnabled(LogLevel.Trace))
             {
                 _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
@@ -171,7 +157,8 @@ internal sealed class PluginIngest
         counters.AppendMs += batchTimer.ElapsedMilliseconds;
     }
 
-    private PreparedRecord PrepareRecord(PluginDocument document, RecordTableSchema schema)
+    internal PreparedRecord PrepareRecord(
+        PluginDocument document, RecordTableSchema schema, List<ContainerDocuments.ChildDocument>? childDocuments = null)
     {
         var body = Encoding.UTF8.GetBytes(document.Text);
         var root = Document.Parse(document.Text);
@@ -181,11 +168,6 @@ internal sealed class PluginIngest
         // hierarchy, so a container whose document the codec refused still lists and still holds
         // its children. A refused cell loses only its grid.
         var refused = document.ParseDiagnosis is not null;
-        Document? carried = refused ? null : root;
-        var placements = PlacementRowsOf(document);
-        CellLocationRow? cellLocation = document.Cell is { } structure
-            ? PlacementWalker.CellLocation(document.FormKey, carried, structure)
-            : null;
 
         // References are read off the document, never a live object: the document is the model, and
         // what Referenced-By answers is what the source file holds. A refused document holds none.
@@ -193,26 +175,33 @@ internal sealed class PluginIngest
             ? []
             : Rows(_containers, root, schema, document.FormKey, editorId, document.RecordType);
 
-        // A refused document holds no children either, so the GRUP answers for it.
+        if (!refused) childDocuments?.AddRange(_containers.ChildrenOf(document.RecordType, root));
         var children = refused
-            ? (document.Contents ?? []).Select(c => (c.FormKey, c.SlotName, c.SlotIndex))
-            : _containers.ChildrenOf(document.RecordType, root).Select(c => (c.FormKey, c.SlotName, c.SlotIndex));
-        List<ContainerChildRow> childRows = [.. children
-            .Where(c => PlacementWalker.TableFor(_types, document.RecordType, c.SlotName) == ParentageTable.ContainerChild)
-            .Select(c => new ContainerChildRow(c.FormKey, document.FormKey, document.RecordType, c.SlotName, c.SlotIndex))];
+            ? (document.Contents ?? []).Select(c => (c.FormKey, c.SlotName, c.SlotIndex, Child: (Document?)null))
+            : (childDocuments ?? [.. _containers.ChildrenOf(document.RecordType, root)])
+                .Select(c => (c.FormKey, c.SlotName, c.SlotIndex, Child: (Document?)c.Document));
+        var holdings = new List<HoldingRow>();
+        var cellLocations = new List<CellLocationRow>();
+        foreach (var (formKey, slot, index, childDocument) in children)
+        {
+            holdings.Add(new HoldingRow(document.FormKey, formKey, slot, index));
+            if (slot == PlacedCell.WorldspacePersistentCellMember && _types.IsWorldspace(document.RecordType))
+            {
+                cellLocations.Add(CellLocations.Of(formKey, childDocument, structure: null));
+            }
+        }
+
+        if (document.Cell is { Place: not CellPlace.PersistentWorldspaceCell } structure)
+        {
+            cellLocations.Add(CellLocations.Of(document.FormKey, refused ? null : root, structure));
+            if (structure.ParentWorldspace is { } worldspace)
+                holdings.Add(new HoldingRow(worldspace, document.FormKey, HoldingSlots.ExteriorCell, 0));
+        }
 
         return new PreparedRecord(
-            document.RecordType, document.FormKey, body, SourceRepository.ContentStamp(document.Text), refs, childRows,
-            placements, cellLocation, editorId, document.ParseDiagnosis);
+            document.RecordType, document.FormKey, body, SourceRepository.ContentStamp(document.Text), refs,
+            holdings, cellLocations, editorId, document.ParseDiagnosis);
     }
-
-    // One row per placed record the cell's groups hold, parentage from beside the document.
-    private List<PlacementRow> PlacementRowsOf(PluginDocument document) =>
-    [
-        .. (document.Contents ?? [])
-            .Where(c => PlacementWalker.TableFor(_types, document.RecordType, c.SlotName) == ParentageTable.Placement)
-            .Select(c => new PlacementRow(c.FormKey, document.FormKey, PlacementWalker.PlacementGroupOf(c.SlotName))),
-    ];
 
     private static void AppendPrepared(
         DuckDBAppender documentAppender, PreparedRecord prepared, string plugin, string origin)
@@ -236,12 +225,10 @@ internal sealed class PluginIngest
         row.EndRow();
     }
 
-    // The worldspace-tree side tables.
-    private void WritePlacement(
-        string plugin, string origin,
-        List<PlacementRow> placementRows, List<CellLocationRow> cellLocationRows)
+    private void WriteHoldings(
+        string plugin, string origin, List<HoldingRow> holdings, List<CellLocationRow> cellLocationRows)
     {
-        DeleteExistingForOrigin("placement", plugin, origin);
+        DeleteExistingForOrigin("holdings", plugin, origin);
         DeleteExistingForOrigin("cell_location", plugin, origin);
 
         if (cellLocationRows.Count > 0)
@@ -251,10 +238,10 @@ internal sealed class PluginIngest
                 AppendCellLocationRow(cellAppender, row, plugin, origin);
         }
 
-        if (placementRows.Count == 0) return;
-        using var placeAppender = _connection.CreateAppender("mirror", "placement");
-        foreach (var row in placementRows)
-            AppendPlacementRow(placeAppender, row, plugin, origin);
+        if (holdings.Count == 0) return;
+        using var holdingAppender = _connection.CreateAppender("mirror", "holdings");
+        foreach (var row in holdings)
+            AppendHoldingRow(holdingAppender, row, plugin, origin);
     }
 
     private void WriteTypeFailures(string plugin, string origin, IReadOnlyList<RecordTypeFailure> failures)
@@ -312,27 +299,15 @@ internal sealed class PluginIngest
     private void DeleteExistingForOrigin(string tableName, string plugin, string origin) =>
         DuckDbSql.ExecuteFor(_connection, $"DELETE FROM mirror.\"{tableName}\" WHERE plugin = $1 AND origin = $2", plugin, origin);
 
-    internal static void AppendContainerChildRow(DuckDBAppender appender, ContainerChildRow row, string plugin, string origin)
+    internal static void AppendHoldingRow(DuckDBAppender appender, HoldingRow row, string plugin, string origin)
     {
         var r = appender.CreateRow();
-        r.AppendValue(row.ChildFormKey);
         r.AppendValue(plugin);
         r.AppendValue(origin);
-        r.AppendValue(row.ParentFormKey);
-        r.AppendValue(row.ParentRecordType);
-        r.AppendValue(row.SlotName);
+        r.AppendValue(row.Parent);
+        r.AppendValue(row.Child);
+        r.AppendValue(row.Slot);
         r.AppendValue(row.SlotIndex);
-        r.EndRow();
-    }
-
-    internal static void AppendPlacementRow(DuckDBAppender appender, PlacementRow row, string plugin, string origin)
-    {
-        var r = appender.CreateRow();
-        r.AppendValue(row.FormKey);
-        r.AppendValue(plugin);
-        r.AppendValue(origin);
-        r.AppendValue(row.ParentCell);
-        r.AppendValue(row.PlacementGroup);
         r.EndRow();
     }
 
@@ -342,14 +317,12 @@ internal sealed class PluginIngest
         r.AppendValue(row.CellFormKey);
         r.AppendValue(plugin);
         r.AppendValue(origin);
-        DuckDbAppend.Nullable(r, row.ParentWorldspace);
         DuckDbAppend.Nullable(r, row.BlockX);
         DuckDbAppend.Nullable(r, row.BlockY);
         DuckDbAppend.Nullable(r, row.SubX);
         DuckDbAppend.Nullable(r, row.SubY);
         DuckDbAppend.Nullable(r, row.GridX);
         DuckDbAppend.Nullable(r, row.GridY);
-        r.AppendValue(row.IsInterior);
         r.EndRow();
     }
 }

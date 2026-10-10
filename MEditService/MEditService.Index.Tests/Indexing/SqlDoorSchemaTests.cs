@@ -69,7 +69,7 @@ public sealed class SqlDoorSchemaTests : IDisposable
     [Theory]
     [InlineData("records", true)]
     [InlineData("form_lookup", true)]
-    [InlineData("container_child", false)]
+    [InlineData("holdings", false)]
     public void ARelation_ExposesWinner_OnlyWhereAReaderAsksForIt(string relation, bool exposesWinner)
     {
         var sql = $"SELECT form_key FROM {relation} WHERE is_winner";

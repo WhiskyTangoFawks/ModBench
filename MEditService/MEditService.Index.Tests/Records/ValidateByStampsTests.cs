@@ -3,7 +3,9 @@ using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Noggog;
 
 namespace MEditService.Index.Tests.Records;
 
@@ -20,7 +22,17 @@ public sealed class ValidateByStampsTests : IDisposable
     {
         FormKey npc = default;
         _fixture = new PluginFixtureBuilder("validate-by-stamps")
-            .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
+            .WithPlugin("Fixture.esp", mod =>
+            {
+                npc = mod.Npcs.AddNew("FixtureNpc").FormKey;
+                var subBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                subBlock.Items.Add(new Cell(mod) { EditorID = "ExteriorCell", Grid = new CellGrid { Point = new P2Int(3, 4) } });
+                var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                block.Items.Add(subBlock);
+                var world = new Worldspace(mod) { EditorID = "FixtureWorld" };
+                world.SubCells.Add(block);
+                mod.Worldspaces.Add(world);
+            }, origin: "FixtureMod")
             .WithPlugin("Partner.esp", mod => mod.Npcs.AddNew("PartnerNpc"), origin: "PartnerMod")
             .BuildScattered()
             .Tracked();
@@ -68,6 +80,14 @@ public sealed class ValidateByStampsTests : IDisposable
         var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
 
         Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
+        Assert.DoesNotContain(announced, Announcements.PluginChanged(_mod));
+    }
+
+    [Fact]
+    public void AnExteriorCellsDocument_IsADocumentTheRowsWereDerivedFrom_SoAQuietValidationLeavesItsPluginAlone()
+    {
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
+
         Assert.DoesNotContain(announced, Announcements.PluginChanged(_mod));
     }
 

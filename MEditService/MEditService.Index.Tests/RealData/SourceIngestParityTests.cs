@@ -115,10 +115,9 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     }
 
     [Theory]
-    [InlineData("placement")]
+    [InlineData("holdings")]
     [InlineData("cell_location")]
     [InlineData("form_references")]
-    [InlineData("container_child")]
     public void ASideTablesRows_AreIdentical_TrackedAndUntracked(string relation)
     {
         var binary = RowsOf(fixture.BinaryInstanceRoot, relation);

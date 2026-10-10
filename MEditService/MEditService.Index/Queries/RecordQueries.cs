@@ -282,9 +282,7 @@ internal sealed class RecordQueries(
         var reads = RequireReads();
         if (reads.GetDocument(formKey, plugin) is not { Body: { } body } container) return null;
         var schemas = RequireSchemas();
-        var place = reads.GetCellLocation(plugin, formKey) is { } cell
-            ? new CellStructure(cell.ParentWorldspace, cell.BlockX, cell.BlockY, cell.SubX, cell.SubY, cell.IsInterior).Place
-            : (CellPlace?)null;
+        var place = reads.GetCellLocation(plugin, formKey)?.Place;
         return Choices(ChildRecordTypes.Of(container.RecordType, body, place, _loadOrder.Require().GameRelease), schemas);
     }
 

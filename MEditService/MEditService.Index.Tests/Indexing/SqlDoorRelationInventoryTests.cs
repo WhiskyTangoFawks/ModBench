@@ -11,7 +11,7 @@ public sealed class SqlDoorRelationInventoryTests(SqlDoorFixture fixture) : ICla
     [InlineData("records")]
     [InlineData("form_lookup")]
     [InlineData("form_references")]
-    [InlineData("placement")]
+    [InlineData("holdings")]
     [InlineData("header")]
     [InlineData("npc_")]
     [InlineData("weap")]
