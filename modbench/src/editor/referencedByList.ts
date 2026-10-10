@@ -72,7 +72,7 @@ type ReferencedByTreeNode = ReferencedByRow | ErrorNode;
 
 const isReferrer = (node: unknown): node is ReferencedByReferrerNode => node instanceof ReferencedByReferrerNode;
 
-export const isReferencedByRow = (node: unknown): node is ReferencedByRow => isReferrer(node) || node instanceof ReferencedByHolderNode;
+const isReferencedByRow = (node: unknown): node is ReferencedByRow => isReferrer(node) || node instanceof ReferencedByHolderNode;
 
 /** The row that an open command was handed by a click or Enter on it. */
 export const openedRow = (invocation: unknown): ReferencedByRow | undefined => {
