@@ -13,7 +13,7 @@ public static class GameCodecs
 
     public static IGameCodec For(GameRelease release) => For(release.ToCategory());
 
-    public static IGameCodec For(GameCategory category) =>
+    internal static IGameCodec For(GameCategory category) =>
         _registered.TryGetValue(category, out var game)
             ? game
             : throw new NotSupportedException(
