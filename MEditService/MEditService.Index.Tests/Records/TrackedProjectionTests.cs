@@ -32,7 +32,11 @@ public sealed class TrackedProjectionTests : IDisposable
             .Tracked();
         _mod = _fixture.Plugins.Single();
         (_npc, _otherNpc) = (npc.ToString(), otherNpc.ToString());
-        _index = Indexes.Reconciled(_fixture, notifications: new Observing(_notifications, SeenNow));
+        _notifications.OnPublish = n =>
+        {
+            if (n is RowsChangedNotification) SeenNow();
+        };
+        _index = Indexes.Reconciled(_fixture, notifications: _notifications);
     }
 
     public void Dispose()
@@ -88,14 +92,5 @@ public sealed class TrackedProjectionTests : IDisposable
         Assert.Equal(before + 2, _index.Sequence);
         var announced = _notifications.Notifications.OfType<RowsChangedNotification>().Select(n => n.Sequence);
         Assert.Equal([before + 1, before + 2], announced);
-    }
-
-    private sealed class Observing(INotificationPublisher inner, Action onRowsChanged) : INotificationPublisher
-    {
-        public void Publish(INotification notification)
-        {
-            if (notification is RowsChangedNotification) onRowsChanged();
-            inner.Publish(notification);
-        }
     }
 }

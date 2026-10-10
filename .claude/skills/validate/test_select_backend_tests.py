@@ -92,10 +92,10 @@ class SolutionFilter(unittest.TestCase):
 
 
 class RealRepoGraph(unittest.TestCase):
-    def test_a_commands_change_selects_the_commands_and_http_tests(self):
+    def test_a_commands_change_selects_the_commands_http_and_architecture_tests(self):
         service = pathlib.Path(__file__).resolve().parents[3] / 'MEditService'
         self.assertEqual(sbt.select(service, ['MEditService/MEditService.Commands/Edits/a.cs']),
-                         ['MEditService.Commands.Tests', 'MEditService.Http.Tests'])
+                         ['MEditService.Architecture.Tests', 'MEditService.Commands.Tests', 'MEditService.Http.Tests'])
 
 
 if __name__ == '__main__':

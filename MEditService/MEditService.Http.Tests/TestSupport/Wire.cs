@@ -130,18 +130,6 @@ internal static class Wire
         return response;
     }
 
-    /// <summary>The text of the file holding the plugin's copy of the record; empty when it has none.</summary>
-    internal static async Task<string> CopyDocumentText(this HttpClient client, string formKey, string plugin, string origin)
-    {
-        var file = await client.GetAsync(
-            $"/plugins/{Uri.EscapeDataString(plugin)}/records/{Uri.EscapeDataString(formKey)}/document?origin={Uri.EscapeDataString(origin)}");
-        var document = file.IsSuccessStatusCode ? await file.Content.ReadFromJsonAsync<JsonElement>() : default;
-        var path = document.ValueKind == JsonValueKind.Object && document.GetProperty("kind").GetString() != "Rendered"
-            ? document.GetProperty("location").GetString()
-            : null;
-        return path is null ? "" : await File.ReadAllTextAsync(path);
-    }
-
     internal static Task<HttpResponseMessage> EditChanges(
         this HttpClient client, string formKey, string plugin, string origin, string member, object value, string op = "set") =>
         client.PostAsJsonAsync(

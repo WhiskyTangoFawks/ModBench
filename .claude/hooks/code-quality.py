@@ -38,6 +38,7 @@ CS_PROJECTS = {
     "MEditService/MEditService.PluginAdapter": "MEditService.PluginAdapter",
     "MEditService/MEditService.Ports": "MEditService.Ports",
     "MEditService/MEditService.SourceAdapter": "MEditService.SourceAdapter",
+    "MEditService/MEditService.Architecture.Tests": "MEditService.Architecture.Tests",
     "MEditService/MEditService.Codec.Tests": "MEditService.Codec.Tests",
     "MEditService/MEditService.Commands.Tests": "MEditService.Commands.Tests",
     "MEditService/MEditService.Http.Tests": "MEditService.Http.Tests",

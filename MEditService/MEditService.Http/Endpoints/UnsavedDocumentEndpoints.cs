@@ -20,10 +20,7 @@ internal static class UnsavedDocumentEndpoints
 
     internal static IResult PutUnsavedDocuments(UnsavedDocumentsRequest request, SourceAdapter.UnsavedDocuments unsaved)
     {
-        if (WriteEndpointMapping.MissingDocuments(request.Documents) is { } missing) return missing;
-        if (request.Documents.Any(document => !Path.IsPathFullyQualified(document.Path)))
-            return Results.Problem("Name each document by its absolute path.", statusCode: 400);
-        unsaved.Apply(WriteEndpointMapping.Unsaved(request.Documents));
+        if (unsaved.Apply(request.Documents) is { } refused) return Results.Problem(refused.Message, statusCode: 400);
         return Results.NoContent();
     }
 }

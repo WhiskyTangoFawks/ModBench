@@ -35,7 +35,7 @@ internal static class LoadOrderEndpoints
         {
             logger.LogInformation("Received PutLoadOrder for {InstanceRoot} ({Count} plugins)", req.InstanceRoot, req.Plugins?.Count ?? 0);
         }
-        if (WriteEndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
+        if (EndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
         if (RegisteredPluginsOf(req.Plugins) is not { } registered)
         {
@@ -48,7 +48,7 @@ internal static class LoadOrderEndpoints
         var result = handler.Put(
             req.GameDirectory, req.InstanceRoot, gameRelease,
             registered, active, loadedWithNoLine);
-        return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : WriteEndpointMapping.Refusal(result);
+        return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : EndpointMapping.Refusal(result);
     }
 
     private static List<RegisteredPlugin>? RegisteredPluginsOf(IReadOnlyList<LoadOrderPlugin>? plugins)

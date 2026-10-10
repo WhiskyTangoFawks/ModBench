@@ -103,7 +103,7 @@ echo "=== Gate runner tests ==="
 (cd "$ROOT" && python3 -m unittest discover -q -s .claude/skills/validate -p 'test_*.py') \
   || { echo "--- GATE RUNNER TESTS FAILED ---"; FAILED=true; }
 
-ARCHITECTURE_SCANS=(MEditService.Http.Tests --filter "FullyQualifiedName~MEditService.Http.Tests.Architecture.")
+ARCHITECTURE_SCANS=(MEditService.Architecture.Tests)
 
 backend_tests() {
   local results="/tmp/medit-test-results.$(basename "$ROOT")" changed selected
@@ -117,7 +117,7 @@ backend_tests() {
     (cd "$ROOT/MEditService" && "${dotnet_test[@]}" "$results/selected.slnf") || return
   fi
   # The architecture scans read every project's source, so a change to any project can fail one.
-  if { [[ -n $selected ]] || $DOCS; } && ! grep -qx MEditService.Http.Tests <<< "$selected"; then
+  if { [[ -n $selected ]] || $DOCS; } && ! grep -qx MEditService.Architecture.Tests <<< "$selected"; then
     (cd "$ROOT/MEditService" && "${dotnet_test[@]}" "${ARCHITECTURE_SCANS[@]}") || return
   fi
   echo "=== Gate 3: Backend test times ==="
