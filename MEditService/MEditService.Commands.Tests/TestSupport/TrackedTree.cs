@@ -93,7 +93,7 @@ internal static class TrackedTree
 
     internal static uint NextObjectId(string modFolder, PluginAddress plugin) =>
         HeaderDocument.NextObjectId(Encoding.UTF8.GetBytes(
-            Document(modFolder, plugin, PluginHeader.IdentityOf(plugin.Name).FormKey).Require().Body));
+            Document(modFolder, plugin, PluginHeader.IdentityOf(plugin.Name).FormKey).Require().Body), GameRelease.Fallout4);
 
     internal static string HeaderDocumentFile(string modFolder, PluginAddress plugin) =>
         DocumentFile(modFolder, plugin, PluginHeader.IdentityOf(plugin.Name).FormKey).Require();
@@ -104,7 +104,7 @@ internal static class TrackedTree
         var repository = Repository(modFolder, plugin);
         var header = repository.RecordOf(plugin, PluginHeader.IdentityOf(plugin.Name)).Value()
             ?? throw new InvalidOperationException($"Expected {plugin.Name}'s tree to hold its header document.");
-        var moved = HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), nextObjectId);
+        var moved = HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), GameRelease.Fallout4, nextObjectId);
         repository.Put(plugin, header with { Body = Encoding.UTF8.GetString(moved) }).Wrote();
     }
 

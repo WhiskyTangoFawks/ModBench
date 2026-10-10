@@ -65,7 +65,7 @@ public sealed class CodecFixedPointTests(ITestOutputHelper output)
     }
 
     private static string RoundTripHeader(string stored) =>
-        Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(stored))));
+        Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(stored), GameRelease.Fallout4)));
 
     private static string FirstDifference(string expected, string actual)
     {

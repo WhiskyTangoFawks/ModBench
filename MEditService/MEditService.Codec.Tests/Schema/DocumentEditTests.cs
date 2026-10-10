@@ -442,7 +442,7 @@ public sealed class DocumentEditTests
         var before = HeaderText();
 
         var set = Edited(before, PluginHeader.RecordType, EditOp.Set, "true", Member("IsSmallMaster"));
-        Assert.True(HeaderDocument.IsLight(Encoding.UTF8.GetBytes(set)));
+        Assert.True(HeaderDocument.IsLight(Encoding.UTF8.GetBytes(set), GameRelease.Fallout4));
         AssertOnlyChanged(before, set, "ModHeader.Flags");
 
         var cleared = Edited(set, PluginHeader.RecordType, EditOp.Set, "false", Member("IsSmallMaster"));

@@ -259,7 +259,7 @@ public sealed class ModelIdentityTests
     }
 
     [Fact]
-    public async Task DivergenceFrom_WhenOnlyAGenderedItemSubFieldDiffers_ReportsTheDivergence_BecauseMutagensEqualsAndGetEqualsMaskEachMissRealDivergenceAt0531SoTheVerdictMayNeverDependOnThemAlone()
+    public async Task DivergenceFrom_WhenOnlyAGenderedItemSubFieldDiffers_ReportsTheDivergence()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var armor = mod.Armors.AddNew("GenderedArmor");
@@ -282,7 +282,7 @@ public sealed class ModelIdentityTests
     }
 
     [Fact]
-    public async Task DivergenceFrom_WhenOnlyAPackageDataIntValueDiffers_ReportsTheDivergence_BecauseMutagensEqualsAndGetEqualsMaskEachMissRealDivergenceAt0531SoTheVerdictMayNeverDependOnThemAlone()
+    public async Task DivergenceFrom_WhenOnlyAPackageDataIntValueDiffers_ReportsTheDivergence()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var package = mod.Packages.AddNew("IntPackage");

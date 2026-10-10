@@ -7,21 +7,22 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Each game's project compiles these against its own types (MEditService.Codec.<Game>). -->
+    <Compile Remove="Game/**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Pinned with MEditService.PluginAdapter's Mutagen reference. Serialization stays at 1.37.1 until
          a release of its source generator emits code for a whole-mod seed. -->
     <PackageReference Include="Mutagen.Bethesda.Fallout4" Version="0.54.4" />
     <!-- Library-level integration of Mutagen.Bethesda.Serialization (ADR-0004), not the Spriggit tool
-         itself: avoids its exe-per-version machinery and its exact Mutagen pin. Serialization 1.37.1 depends on Mutagen.Bethesda.Core >= 0.51.3 (a floor),
-         so it builds against 0.54.4.
-         The JSON kernel (ADR-0005) is the Newtonsoft
-         translation package, not a package literally named ".Json" — confirmed on nuget.org; it
-         exists at this exact 1.37.1 version, matching the other two pins here. -->
+         itself: avoids its exe-per-version machinery and its exact Mutagen pin. Serialization 1.37.1
+         depends on Mutagen.Bethesda.Core >= 0.51.3 (a floor), so it builds against 0.54.4.
+         The JSON kernel (ADR-0005) is the Newtonsoft translation package, not a package literally
+         named ".Json" — confirmed on nuget.org; it exists at this exact 1.37.1 version, matching the
+         other pin here. -->
     <PackageReference Include="Mutagen.Bethesda.Serialization" Version="1.37.1" />
     <PackageReference Include="Mutagen.Bethesda.Serialization.Newtonsoft" Version="1.37.1" />
-    <PackageReference Include="Mutagen.Bethesda.Serialization.SourceGenerator" Version="1.37.1">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
     <!-- Not a new dependency — Mutagen.Bethesda.Serialization already resolves this exact
          version transitively, and SerializationMetaData takes an IFileSystem from it. Referenced
          explicitly because RecordTextCodec names those types in production code (it suppresses

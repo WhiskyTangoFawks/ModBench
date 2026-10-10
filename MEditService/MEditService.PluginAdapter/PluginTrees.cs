@@ -1,7 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Records;
@@ -53,13 +52,7 @@ internal static class PluginTrees
         {
             // Always the inline dropoff, explicitly: MajorRecordListParallelHelper has a real upstream race
             // under a genuinely parallel dropoff (nested-list containers writing into each other's folders).
-            await RecordTextCodecGeneratorSeed.SerializeWholeMod(
-                // FO4-typed: the generated whole-mod mixin is itself seeded from an FO4 mod type — the existing
-                // generalization boundary.
-                (IFallout4ModGetter)mod,
-                scratchDir,
-                InlineWorkDropoff.Instance,
-                cancel);
+            await GameCodecs.For(mod.GameRelease).SerializeWholeMod(mod, scratchDir, InlineWorkDropoff.Instance, cancel);
 
             // Newtonsoft's JsonTextWriter has no reachable NewLine to pin, so line endings are canonicalized
             // after the write, as the per-record codec does.
@@ -83,14 +76,15 @@ internal static class PluginTrees
     /// <paramref name="destinationPath"/>, in place with no rename: a scratch verification, never a
     /// replacement of the real plugin.</summary>
     internal static async Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
-        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
+        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, GameRelease gameRelease,
         CancellationToken cancel = default)
     {
+        var game = GameCodecs.For(gameRelease);
         var scratchDir = Directory.CreateTempSubdirectory("medit-writetree-").FullName;
         try
         {
             var recompiled = await DeserializeTree(
-                await MaterializeTree(files, Path.Combine(scratchDir, TreeFolder), cancel), cancel);
+                game, await MaterializeTree(files, Path.Combine(scratchDir, TreeFolder), cancel), cancel);
             await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder);
             return PluginAnswer.Of(destinationPath);
         }
@@ -140,9 +134,9 @@ internal static class PluginTrees
         return shared;
     }
 
-    private static async Task<IMod> DeserializeTree(string treeRoot, CancellationToken cancel) =>
+    private static async Task<IMod> DeserializeTree(IGameCodec game, string treeRoot, CancellationToken cancel) =>
         HeaderDocument.RestoreOmittedNextObjectId(
-            await RecordTextCodecGeneratorSeed.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel),
+            await game.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel),
             await File.ReadAllBytesAsync(Path.Combine(treeRoot, DocumentFileNames.Root), cancel));
 
     /// <summary>The codec's verdict on the plugin written at <paramref name="recompiledPath"/> against
@@ -166,6 +160,8 @@ internal static class PluginTrees
         IReadOnlyList<TreeFile> files, GameRelease gameRelease,
         CancellationToken cancel = default)
     {
+        // Outside the catch below: a game the service was not wired for is no source defect.
+        var game = GameCodecs.For(gameRelease);
         var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
         try
         {
@@ -178,7 +174,7 @@ internal static class PluginTrees
             // every path a read failure names is relative to one.
             try
             {
-                return PluginAnswer.Of(new CompiledTree(await DeserializeTree(treeRoot, cancel), gameRelease));
+                return PluginAnswer.Of(new CompiledTree(await DeserializeTree(game, treeRoot, cancel), gameRelease));
             }
             catch (Exception ex) when (PluginFailure.StandsFor(ex))
             {

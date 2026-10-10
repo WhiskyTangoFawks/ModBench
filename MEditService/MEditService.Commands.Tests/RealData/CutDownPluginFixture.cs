@@ -1,5 +1,4 @@
 using System.Text;
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
@@ -8,7 +7,6 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
-using Noggog.WorkEngine;
 
 namespace MEditService.Commands.Tests.RealData;
 
@@ -51,9 +49,7 @@ public static class CutDownPluginFixture
         using var scratch = new ScratchDirectory("medit-compile-derived-");
         var root = Path.Combine(scratch, PluginSourceRoot.For(PluginFileName));
         Directory.CreateDirectory(root);
-        RecordTextCodecGeneratorSeed
-            .SerializeWholeMod((IFallout4ModGetter)mod, root, InlineWorkDropoff.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        Fallout4WholeMod.Serialize((IFallout4ModGetter)mod, root).GetAwaiter().GetResult();
         File.Move(
             Path.Combine(root, "RecordData.json"),
             Path.Combine(scratch, PluginSourceRoot.HeaderDocument(PluginFileName)));

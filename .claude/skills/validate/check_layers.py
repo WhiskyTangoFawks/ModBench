@@ -161,14 +161,15 @@ def modbench_projects(root: Path):
 
 
 def medit_projects(root: Path):
-    """(project file, box name, [referenced box names]) for every production csproj."""
+    """(project file, box name, [referenced box names]) for every production csproj. A box is a
+    project name's second segment, so a game project of the codec is the codec."""
     projects = []
     for path in sorted((root / 'MEditService').glob('MEditService.*/MEditService.*.csproj')):
         segments = path.stem.split('.')
         if any(s in ('Tests', 'TestSupport') for s in segments):
             continue
-        name = segments[-1].lower()
-        refs = [Path(p.replace('\\', '/')).stem.split('.')[-1].lower() for p in CS_REFERENCE_RE.findall(path.read_text())]
+        name = segments[1].lower()
+        refs = [Path(p.replace('\\', '/')).stem.split('.')[1].lower() for p in CS_REFERENCE_RE.findall(path.read_text())]
         projects.append((path, name, refs))
     return projects
 

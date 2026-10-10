@@ -1,7 +1,6 @@
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Serialization.Customizations;
 
-namespace MEditService.Codec.Serialization;
+namespace MEditService.Codec.Game;
 
 /// <summary>Every region data entry redeclares these two members its base declares, and the
 /// generated serializer writes both declarations, so the base's copy is the one left out: each

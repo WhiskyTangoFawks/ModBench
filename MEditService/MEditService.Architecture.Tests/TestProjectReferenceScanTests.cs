@@ -57,7 +57,7 @@ public sealed class TestProjectReferenceScanTests
     private static SortedSet<string>? Required(string solution, string project)
     {
         if (project == TestSupport)
-            return [.. Kernel, .. Repositories];
+            return [.. Kernel.Concat(Repositories).SelectMany(box => ProjectsOfBox(solution, box))];
         if (project == Scans)
             return [.. ServiceProjects.Production(solution)];
         if (!project.EndsWith(".Tests", StringComparison.Ordinal))
@@ -67,6 +67,10 @@ public sealed class TestProjectReferenceScanTests
         if (!File.Exists(ServiceProjects.Csproj(solution, box)))
             return null;
 
-        return [box, .. ServiceProjects.ProjectReferences(solution, box)];
+        var boxProjects = ProjectsOfBox(solution, box).ToList();
+        return [.. boxProjects, .. boxProjects.SelectMany(p => ServiceProjects.ProjectReferences(solution, p))];
     }
+
+    private static IEnumerable<string> ProjectsOfBox(string solution, string box) =>
+        ServiceProjects.Production(solution).Where(p => p == box || p.StartsWith(box + ".", StringComparison.Ordinal));
 }

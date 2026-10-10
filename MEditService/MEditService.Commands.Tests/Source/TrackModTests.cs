@@ -11,7 +11,6 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
-using Noggog.WorkEngine;
 
 namespace MEditService.Commands.Tests.Source;
 
@@ -200,7 +199,7 @@ public sealed class TrackModTests
 
         static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken ct)
         {
-            var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
+            var deserialized = await Fallout4WholeMod.Deserialize(folder, ct);
             deserialized.Npcs.First().EditorID += "Corrupted";
             return deserialized;
         }
@@ -235,7 +234,7 @@ public sealed class TrackModTests
 
         static async Task<IMod> DeserializeThenMutateTheFloat(string folder, CancellationToken ct)
         {
-            var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
+            var deserialized = await Fallout4WholeMod.Deserialize(folder, ct);
             deserialized.Npcs.First().HeightMin += 1.0f;
             return deserialized;
         }
@@ -312,7 +311,7 @@ public sealed class TrackModTests
 
         async Task<IMod> DeserializeThenCorrupt(string folder, CancellationToken ct)
         {
-            var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
+            var deserialized = await Fallout4WholeMod.Deserialize(folder, ct);
             corrupt(deserialized.ModHeader);
             return deserialized;
         }

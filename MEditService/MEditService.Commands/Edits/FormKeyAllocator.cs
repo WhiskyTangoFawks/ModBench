@@ -30,11 +30,11 @@ internal sealed class FormKeyAllocator
     {
         (_repository, _plugin, _release, _header) = (repository, plugin, release, header);
         var headerBody = header is null ? null : Encoding.UTF8.GetBytes(header.Body);
-        _nextObjectIdHeld = _nextObjectId = headerBody is null ? 0 : HeaderDocument.NextObjectId(headerBody);
+        _nextObjectIdHeld = _nextObjectId = headerBody is null ? 0 : HeaderDocument.NextObjectId(headerBody, release);
         // The working tree's header document decides (ADR-0007), so a flag flipped this session caps
         // minting immediately.
         var lightByExtension = plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
-        _lightByFlagAlone = !lightByExtension && headerBody is not null && HeaderDocument.IsLight(headerBody);
+        _lightByFlagAlone = !lightByExtension && headerBody is not null && HeaderDocument.IsLight(headerBody, release);
         _isLight = lightByExtension || _lightByFlagAlone;
         _used = used;
     }
@@ -82,7 +82,7 @@ internal sealed class FormKeyAllocator
         _header is { } header && _nextObjectId > _nextObjectIdHeld
             ? _repository.ChangesToRewrite(_plugin, header with
             {
-                Body = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), _nextObjectId)),
+                Body = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), _release, _nextObjectId)),
             })
             : SourceChanges.None;
 
