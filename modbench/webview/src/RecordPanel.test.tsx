@@ -13,7 +13,7 @@ import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
 import {
-  compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, lastToldCell, member, panelClient,
+  compareOverride, compareResultFixture, diffNode, fieldMeta, hostPickingEnum, lastPostedEnvelope, lastToldCell, member, panelClient,
   parseJsonRecord, required,
   type PanelOpts,
 } from './test/fixtures';
@@ -1835,25 +1835,27 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field, a Muta
     expect(screen.queryByText('NpcLevel')).not.toBeInTheDocument();
   });
 
-  it('opens a dropdown of the union\'s leaves, listed by label', async () => {
+  it('asks the host to pick among the union\'s leaves, listed by label', async () => {
     await renderLevel();
+    vi.mocked(vscode.postMessage).mockClear();
 
     fireEvent.doubleClick(screen.getByText('Npc Level'));
 
-    const options = within(screen.getByRole('combobox')).getAllByRole('option');
-    expect(options.map(o => o.textContent)).toEqual(['Npc Level', 'Pc Level Mult']);
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.OPEN_ENUM_PICKER,
+      choices: [{ value: 'NpcLevel', label: 'Npc Level' }, { value: 'PcLevelMult', label: 'Pc Level Mult' }],
+      current: 'NpcLevel',
+    }));
   });
 
   it('posts set of the discriminator member carrying the chosen leaf\'s own wire value, not its label, a discriminator switch being the Kind row\'s own set while the backend switches the leaf', async () => {
     await renderLevel();
-    fireEvent.doubleClick(screen.getByText('Npc Level'));
+    vi.mocked(vscode.postMessage).mockImplementation(hostPickingEnum(() => 'PcLevelMult'));
     vi.mocked(vscode.postMessage).mockClear();
 
-    const select = screen.getByRole('combobox');
-    fireEvent.change(select, { target: { value: 'PcLevelMult' } });
-    fireEvent.blur(select);
+    fireEvent.doubleClick(screen.getByText('Npc Level'));
 
-    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
@@ -1862,7 +1864,7 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field, a Muta
         path: [{ kind: 'member', name: 'Level' }, { kind: 'member', name: 'MutagenObjectType' }],
         value: 'PcLevelMult',
       },
-    }));
+    })));
   });
 });
 

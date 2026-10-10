@@ -9,6 +9,8 @@ export const EXTENSION_TO_WEBVIEW = {
   // A reply to the one panel that asked (`requestId`), never a broadcast: the QuickPick existed
   // only for that request. `formKey: null` is a dismissal, leaving the field unchanged.
   FORM_KEY_PICKED: 'formKeyPicked',
+  // The reply to OPEN_ENUM_PICKER; `value: null` is a dismissal.
+  ENUM_PICKED: 'enumPicked',
   // The host's answer to REQUEST_RECORD_LOAD: the comparison, the plugin list and whether the
   // winner sweep has run, posted untransformed, so the webview names no port.
   RECORD_LOAD_ANSWERED: 'recordLoadAnswered',
@@ -31,6 +33,9 @@ export const WEBVIEW_TO_EXTENSION = {
   // Native QuickPick: only the extension host can call `vscode.window.createQuickPick`. `seed` is
   // the current reference (empty when there is none), which pre-selects the matching item.
   OPEN_FORM_KEY_PICKER: 'openFormKeyPicker',
+  // The same native pick for an enum: `choices` are the names to list, `current` the value the
+  // pick opens on.
+  OPEN_ENUM_PICKER: 'openEnumPicker',
   // commands.md, Record: a field gesture from the palette acts on the focused cell, which only the
   // panel knows. `context` is what its right-click hands a command; `null` is no focused cell.
   FOCUS_CELL: 'focusCell',
@@ -62,6 +67,7 @@ export type WebviewToExtension =
     }
   | { type: typeof WEBVIEW_TO_EXTENSION.ADD_ELEMENT; context: Record<string, unknown>; value?: unknown }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_ENUM_PICKER; requestId: string; choices: EnumChoice[]; current: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: FocusedCellContext | null; entered: boolean }
   | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string; columns: ColumnCopy[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_COLUMNS; records: ColumnCopy[] }
@@ -252,6 +258,7 @@ export type RecordRead =
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ENUM_PICKED; requestId: string; value: string | null }
   | ({ type: typeof EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED; requestId: string } & RecordLoadAnswer)
   | { type: typeof EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR }
   | { type: typeof EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL; text: string }
@@ -284,7 +291,7 @@ type WebviewToExtensionWitness = {
   type?: unknown; formKey?: unknown; level?: unknown; message?: unknown; value?: unknown;
   plugin?: unknown; origin?: unknown; envelope?: unknown;
   requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown; entered?: unknown; columns?: unknown;
-  records?: unknown; state?: unknown;
+  records?: unknown; state?: unknown; choices?: unknown; current?: unknown;
 };
 
 function parseEditField(w: WebviewToExtensionWitness): WebviewToExtension {
@@ -309,6 +316,23 @@ function parseOpenFormKeyPicker(w: WebviewToExtensionWitness): WebviewToExtensio
     throw new Error('Expected "openFormKeyPicker" to carry a string array validTypes.');
   }
   return { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: w.requestId, seed: w.seed, validTypes: w.validTypes };
+}
+
+export interface EnumChoice { value: string; label: string }
+
+function isEnumChoice(c: unknown): c is EnumChoice {
+  if (typeof c !== 'object' || c === null) return false;
+  const { value, label } = c as Partial<Record<keyof EnumChoice, unknown>>;
+  return isString(value) && isString(label);
+}
+
+function parseOpenEnumPicker(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isString(w.requestId)) throw new Error('Expected "openEnumPicker" to carry a string requestId.');
+  if (!Array.isArray(w.choices) || !w.choices.every(isEnumChoice)) {
+    throw new Error('Expected "openEnumPicker" to carry choices with a string value and label.');
+  }
+  if (!isString(w.current)) throw new Error('Expected "openEnumPicker" to carry a string current.');
+  return { type: WEBVIEW_TO_EXTENSION.OPEN_ENUM_PICKER, requestId: w.requestId, choices: w.choices, current: w.current };
 }
 
 function isContextObject(value: unknown): value is Record<string, unknown> {
@@ -373,6 +397,7 @@ export function parseWebviewToExtension(value: unknown): WebviewToExtension {
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return parseEditField(w);
     case WEBVIEW_TO_EXTENSION.ADD_ELEMENT: return parseAddElement(w);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return parseOpenFormKeyPicker(w);
+    case WEBVIEW_TO_EXTENSION.OPEN_ENUM_PICKER: return parseOpenEnumPicker(w);
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return parseFocusCell(w);
     case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return parseRequestRecordLoad(w);
     case WEBVIEW_TO_EXTENSION.OPEN_COLUMNS: return parseOpenColumns(w);
@@ -407,6 +432,12 @@ function parseFormKeyPicked(w: { requestId?: unknown; formKey?: unknown }): Exte
     throw new Error('Expected "formKeyPicked" to carry a string or null formKey.');
   }
   return { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: w.requestId, formKey: w.formKey };
+}
+
+function parseEnumPicked(w: { requestId?: unknown; value?: unknown }): ExtensionToWebview {
+  if (!isString(w.requestId)) throw new Error('Expected "enumPicked" to carry a string requestId.');
+  if (w.value !== null && !isString(w.value)) throw new Error('Expected "enumPicked" to carry a string or null value.');
+  return { type: EXTENSION_TO_WEBVIEW.ENUM_PICKED, requestId: w.requestId, value: w.value };
 }
 
 function parseRecordLoadAnswer(w: {
@@ -477,6 +508,7 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
       if (!isModsByOrigin(w.modsByOrigin)) throw new Error('Expected "modsChanged" to carry its mods by origin.');
       return { type: w.type, modsByOrigin: w.modsByOrigin };
     case EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED: return parseFormKeyPicked(w);
+    case EXTENSION_TO_WEBVIEW.ENUM_PICKED: return parseEnumPicked(w);
     case EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED: return { type: w.type, ...parseRecordLoadAnswer(w) };
     default: return parseFocusedCellMessage(w);
   }
