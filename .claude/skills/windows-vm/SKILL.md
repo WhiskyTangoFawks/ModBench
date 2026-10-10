@@ -16,6 +16,8 @@ A Windows 11 guest runs in Docker through [dockur/windows](https://github.com/do
 
 ## Gates
 
+The gates need the VM up. Start it with `vm.sh up` when it is down, and stop it with `vm.sh down` once the run that started it is done: it holds 6 GB of the host's memory. A VM already up when you came is someone's, and stays up.
+
 `gates.sh` runs root CLAUDE.md's Tools commands natively in the VM, in PowerShell, against this worktree with its uncommitted files. It prints `All Windows gates passed` or the gates that failed, and exits non-zero on a failure. The comment and diagram gates stay on Linux: they read text, the same on every platform.
 
 `vm.sh sync` copies the worktree to `C:\work\modbench` alone, for a narrower run: `vm.sh ssh 'cd C:\work\modbench\MEditService; dotnet test <project> --filter <name>'`. Dependencies and build output stay in the VM between syncs.
