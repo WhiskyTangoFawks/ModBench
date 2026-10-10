@@ -175,20 +175,36 @@ public sealed class ReconcileDoorTests
     }
 
     [Fact]
-    public void AnArrivalsStatus_IsPublishedBeforeItsVersionIsAnswered()
+    public async Task AnArrivalsStatus_IsPublishedBeforeItsVersionIsAnswered()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("status-before-version").WithPlugin("A.esp").Build();
         var notifications = new InMemoryNotificationPublisher();
+        using var index = Indexes.Open(holder, notifications: notifications);
+        var answered = index.Status.Version;
+        var publishing = false;
+        var release = new TaskCompletionSource();
         notifications.OnPublish = n =>
         {
-            if (n is LoadOrderStatusNotification) Thread.Sleep(300);
+            if (n is not LoadOrderStatusNotification status || status.Status.Version <= answered) return;
+            Volatile.Write(ref publishing, true);
+            release.Task.Wait();
         };
-        using var index = Indexes.Open(holder, notifications: notifications);
 
-        var version = index.Receive(holder, LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
+        try
+        {
+            var version = holder.Apply(LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
+            Waits.Reached(() => Volatile.Read(ref publishing), "the arrival's status being published");
+            var read = Task.Run(() => index.Status.Version);
 
-        Assert.Contains(StatusesPublished(notifications), n => n.Status.Version == version);
+            Assert.False(await Waits.CompletesWithin(read, TimeSpan.FromMilliseconds(300)));
+            release.TrySetResult();
+            Assert.Equal(version, await read);
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
     }
 
     [Fact]
