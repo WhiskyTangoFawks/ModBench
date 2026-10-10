@@ -15,7 +15,6 @@ import { gestureEntry, isClickedRow } from '../drivingLib/gestureEntry';
 import { rowLabelOf, rowNameOf } from '../drivingLib/argument';
 import { recordArgumentOf } from '../drivingLib/recordArgument';
 import { pluginAddressOf } from '../wire/pluginAddress';
-import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from './referencedByList';
 import { answerOf } from '../wire/readFailed';
 
 function recordName(formKey: string, label: string | undefined): string {
@@ -47,8 +46,6 @@ interface Selection {
   records: RecordAddress[];
   unreadable: ItemRefusal<string>[];
   labels: ReadonlyMap<string, string | undefined>;
-  /** The bar a write runs under: Referenced By's when its rows were the gesture's, else the write's own default. */
-  invokedFrom: string | undefined;
 }
 
 /** The selections a gesture falls back on when it is handed no row. */
@@ -78,10 +75,7 @@ function selectedRecords(nodes: readonly unknown[]): Selection {
     records.push({ formKey: argument.formKey, plugin: argument.plugin.name, origin: argument.plugin.origin });
     labels.set(argument.formKey, rowLabelOf(node));
   }
-  return {
-    records, unreadable, labels,
-    invokedFrom: nodes.some((node) => node instanceof ReferencedByHolderNode) ? REFERENCED_BY_VIEW : undefined,
-  };
+  return { records, unreadable, labels };
 }
 
 type RecordLifecycleClient = Pick<MEditClient, 'getDeleteChanges'>;
@@ -95,7 +89,7 @@ export function registerRecordLifecycleCommands(
   return [
     // Asked once for the whole selection and naming each record, so the user confirms the right thing.
     vscode.commands.registerCommand('modbench.record.delete', async (clicked?: unknown, selected?: readonly unknown[]) => {
-      const { records, unreadable, labels, invokedFrom } = selectedRecords(rowsOf(clicked, selected, selections));
+      const { records, unreadable, labels } = selectedRecords(rowsOf(clicked, selected, selections));
       const label = (item: RecordAddress | string) => (typeof item === 'string' ? item : addressLabel(item, labels));
       if (records.length > 0 && await askToDelete(records.map(label), ask) !== 'Delete') return;
 
@@ -111,7 +105,7 @@ export function registerRecordLifecycleCommands(
           'Could not delete the records.');
         outcome(applied ? touched : []);
       });
-      await (records.length > 0 ? write(reportOutcome, invokedFrom) : reportOutcome());
+      await (records.length > 0 ? write(reportOutcome) : reportOutcome());
     }),
   ];
 }
@@ -206,7 +200,7 @@ export function registerRecordCopyCommands(
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.record.copy', async (clicked?: unknown, selected?: readonly unknown[]) => {
-      const { records, unreadable, labels, invokedFrom } = selectedRecords(rowsOf(clicked, selected, selections));
+      const { records, unreadable, labels } = selectedRecords(rowsOf(clicked, selected, selections));
       const reportUnreadable = () => reporter.selectionOutcome(
         `Could not copy ${unreadable.length} of ${records.length + unreadable.length} records.`,
         { landed: [], refused: unreadable }, (name) => name);
@@ -237,7 +231,7 @@ export function registerRecordCopyCommands(
           `Could not make ${answer.refused.length} of ${attempted} copies.`,
           { landed, refused: answer.refused }, into);
         reportUnreadable();
-      }), invokedFrom);
+      }));
     }),
   ];
 }

@@ -778,7 +778,7 @@ describe('package.json Downloads row menu order', () => {
 });
 
 describe('package.json view keys', () => {
-  const VIEW_SCOPES = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads', 'modbench.referencedByTree']
+  const VIEW_SCOPES = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
     .map((view) => `focusedView == ${view}`);
   const RECORD_TAB_SCOPE = "activeCustomEditorId == 'modbench.record'";
   const ON_THE_TREE = ['listFocus', '!inputFocus'];
@@ -813,7 +813,7 @@ describe('package.json Downloads keys', () => {
 
 describe('package.json Ctrl+C keys', () => {
   const COPY_KEYS = [
-    'modbench.modList', 'modbench.pluginListTree', 'modbench.downloads', 'modbench.referencedByTree',
+    'modbench.modList', 'modbench.pluginListTree', 'modbench.downloads',
   ] as const;
   const copyKeys: { command: string; key: string; mac?: string; when: string; args?: unknown }[] =
     pkg.contributes.keybindings.filter((k: { command: string }) => k.command === 'modbench.copyValue');
@@ -1032,7 +1032,7 @@ describe('package.json Plugins palette entries', () => {
   ]);
 
   it.each(['modbench.record.delete', 'modbench.record.copy'])('%s is not in the palette on a record selection made in another view', (command) => {
-    const facts = { 'modbench.plugin.allDeletableRecords': true, 'modbench.plugin.allRecords': true, 'modbench.record.selectionIn': 'modbench.referencedByTree' };
+    const facts = { 'modbench.plugin.allDeletableRecords': true, 'modbench.plugin.allRecords': true, 'modbench.record.selectionIn': 'modbench.modList' };
     expect(paletteOffers(command, { focusedView: 'modbench.pluginListTree', ...inInstance, ...facts })).toBe(false);
   });
 });
@@ -1336,31 +1336,48 @@ describe('package.json Delete keys', () => {
   it('each passes its own view as args, since a key cannot name the rows it deletes', () => {
     const deleteKeys = pkg.contributes.keybindings.filter((k) => k.command === 'modbench.record.delete');
     expect(deleteKeys.map((k) => [k.key, k.args])).toEqual([
-      ['Delete', { view: 'modbench.referencedByTree' }],
       ['Delete', { view: 'modbench.pluginListTree' }],
     ]);
   });
 });
 
-describe('package.json Referenced By menus and keys', () => {
-  const menuOf = (viewItem: string) =>
+describe('package.json Referenced By menus', () => {
+  const inItsList = { 'reference-list.source': 'modbench.referencedBy' };
+  const menuOf = (viewItem: string, facts: Context = inItsList) =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
-      .filter((e) => holds(e.when, { view: 'modbench.referencedByTree', viewItem }))
+      .filter((e) => holds(e.when, { view: 'references-view.tree', viewItem, ...facts }))
       .map((e) => [e.command, e.group]);
 
-  it('offers a referrer open to the side then copy value, and a plugin copy copy… then delete', () => {
-    expect([menuOf('referencedByReferrer'), menuOf('referencedByHolder')]).toEqual([
-      [[OPEN_TO_THE_SIDE, '1_open@1'], ['modbench.copyValue', '5_copy@1']],
-      [['modbench.record.copy', '5_copy@1'], ['modbench.record.delete', '6_destroy@1']],
+  it('offers a referrer open to the side, referenced by, then copy value', () => {
+    expect(menuOf('referencedByReferrer')).toEqual([
+      [OPEN_TO_THE_SIDE, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.copyValue', '5_copy@1'],
     ]);
   });
 
-  it('binds Delete in the view only while every selected row is a plugin copy', () => {
-    const onTheTree = { focusedView: 'modbench.referencedByTree', listFocus: true, ...inInstance };
-    const copy = { key: 'ctrl+c', mac: 'cmd+c', command: 'modbench.copyValue' };
-    expectKeysFiring({ ...onTheTree, 'modbench.referencedBy.allHolders': true }, [
-      copy, { key: 'Delete', mac: 'cmd+backspace', command: 'modbench.record.delete' },
-    ]);
-    expectKeysFiring(onTheTree, [copy]);
+  it.each([
+    ['an editable tracked container', 'referencedByHolder tracked editable container', [
+      [OPEN_TO_THE_SIDE, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.create', '3_create@1'],
+      ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'], ['modbench.record.delete', '6_destroy@1'],
+    ]],
+    ['an editable tracked record', 'referencedByHolder tracked editable', [
+      [OPEN_TO_THE_SIDE, '1_open@1'], [REFERENCED_BY, '1_open@2'],
+      ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'], ['modbench.record.delete', '6_destroy@1'],
+    ]],
+    ['a record in a tracked plugin that is not editable', 'referencedByHolder tracked', [
+      [OPEN_TO_THE_SIDE, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'],
+    ]],
+    ['a record in an untracked plugin', 'referencedByHolder untracked', [
+      [OPEN_TO_THE_SIDE, '1_open@1'], [REFERENCED_BY, '1_open@2'], ['modbench.record.copy', '5_copy@1'], ['modbench.copyValue', '5_copy@2'],
+    ]],
+  ])('offers a plugin copy that is %s what a Plugins record row offers', (_, viewItem, expected) => {
+    expect(menuOf(viewItem)).toEqual(expected);
+  });
+
+  it.each(['referencedByReferrer', 'referencedByHolder tracked editable container'])('offers a %s row nothing in a list another extension filled', (viewItem) => {
+    expect(menuOf(viewItem, { 'reference-list.source': 'typescript' })).toEqual([]);
+  });
+
+  it('binds no key in the References view, whose selection a key cannot read', () => {
+    expect(pkg.contributes.keybindings.filter((k) => k.when.includes('references-view'))).toEqual([]);
   });
 });

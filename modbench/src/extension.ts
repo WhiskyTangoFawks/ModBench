@@ -236,6 +236,7 @@ export function activate(context: vscode.ExtensionContext): void {
     sourceEditing,
     modFacts: opened.facts,
     locateRecord: formKeyLocation(meditClient),
+    conditionsOf: (plugin) => plugins.conditionsOf(plugin),
   });
   const views = buildViews(opened, ownedByViews, {
     outputChannel, client: meditClient,

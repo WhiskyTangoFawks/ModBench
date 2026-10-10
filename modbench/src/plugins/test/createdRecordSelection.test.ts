@@ -59,6 +59,17 @@ describe('createdRecordSelection', () => {
     expect(opened()).toEqual([OPEN_NEW]);
   });
 
+  it('opens the new record without selecting a row when the gesture came from outside the Plugins tree', async () => {
+    const { stream, asked, selection, revealed, settle, opened } = harness();
+    selection.watch(PLUGIN).select(undefined, NEW);
+
+    stream.emit(rowsChanged([NEW]));
+    await settle();
+
+    expect([asked, revealed]).toEqual([[], []]);
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
+
   it('selects at once when the change named the record before mEdit answered the create', async () => {
     const { stream, selection, revealed, settle, opened } = harness();
     const watch = selection.watch(PLUGIN);
