@@ -141,7 +141,9 @@ internal static class PluginTrees
     }
 
     private static async Task<IMod> DeserializeTree(string treeRoot, CancellationToken cancel) =>
-        await RecordTextCodecGeneratorSeed.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel);
+        HeaderDocument.RestoreOmittedNextObjectId(
+            await RecordTextCodecGeneratorSeed.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel),
+            await File.ReadAllBytesAsync(Path.Combine(treeRoot, DocumentFileNames.Root), cancel));
 
     /// <summary>The codec's verdict on the plugin written at <paramref name="recompiledPath"/> against
     /// the one at <paramref name="modPath"/>; null when they are model-identical. Both are

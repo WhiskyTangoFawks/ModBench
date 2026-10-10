@@ -55,6 +55,18 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
+    public void ANextObjectIdOfZero_SurvivesTheRoundTripThroughItsDocument()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("ZeroNext.esp"), Fallout4Release.Fallout4);
+        mod.ModHeader.Stats.NextFormID = 0;
+
+        var body = HeaderDocument.Write(mod);
+
+        Assert.Equal(0u, HeaderDocument.NextObjectId(body));
+        Assert.Equal(body, HeaderDocument.Write(HeaderDocument.Read(body)));
+    }
+
+    [Fact]
     public void Write_ProducesCanonicalBytes_NoCarriageReturnNoTrailingNewlineNoBom()
     {
         var produced = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());

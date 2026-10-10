@@ -15,7 +15,7 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
     private const string AffectedWeaponEditorId = "VRWorkshopShared_AlienBlaster_NonPlayable";
 
     [Fact]
-    public void OverlayAndDeepParse_SerializeToIdenticalText_OnARealWeaponAtThe0531PinWhere0540OverlayRegressionSplitsItsObjectTemplatesFrom2To3()
+    public void OverlayAndDeepParse_SerializeToIdenticalText_OnARealWeaponWhoseObjectTemplatesTheOverlayMustNotSplit()
     {
         using var overlayImport = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
