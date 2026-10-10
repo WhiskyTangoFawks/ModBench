@@ -18,11 +18,11 @@ public sealed class FailedStatusPublicationTests : IDisposable
     [Fact]
     public async Task AFailedState_IsNeverReadBeforeTheStatusAnsweringItsVersion()
     {
-        var faults = new PluginChangedFaults();
+        var faults = new InMemoryNotificationPublisher();
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, notifications: faults);
         index.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        faults.Armed = true;
+        faults.FaultsOn = n => n is PluginChangedNotification;
         PluginBinaries.Rewrite(_fixture.Plugins[0].Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
         var versionAnswered = index.Status.Version;
         var stopped = false;
@@ -44,15 +44,5 @@ public sealed class FailedStatusPublicationTests : IDisposable
 
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
         Assert.False(readEarly);
-    }
-
-    private sealed class PluginChangedFaults : INotificationPublisher
-    {
-        public bool Armed { get; set; }
-
-        public void Publish(INotification notification)
-        {
-            if (Armed && notification is PluginChangedNotification) throw new InvalidOperationException("the stream could not take the push");
-        }
     }
 }

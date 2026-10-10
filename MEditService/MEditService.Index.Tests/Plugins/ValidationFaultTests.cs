@@ -44,23 +44,13 @@ public sealed class ValidationFaultTests : IDisposable
     [Fact]
     public void AValidationThatFaultsOutright_ReachesTheOutput_AndFailsTheStatus()
     {
-        using var index = Subscribed(notifications: new PluginChangedFaults());
+        using var index = Subscribed(notifications: new InMemoryNotificationPublisher { FaultsOn = n => n is PluginChangedNotification });
         RewriteThePlugin();
 
         index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Failed, "the failed status");
 
         lock (_log)
-            Assert.Contains(_log, e => e.Level == LogLevel.Error && e.Exception?.Message == PluginChangedFaults.Reason);
-        Assert.Contains(PluginChangedFaults.Reason, index.Status.Message, StringComparison.Ordinal);
-    }
-
-    private sealed class PluginChangedFaults : INotificationPublisher
-    {
-        public const string Reason = "the stream could not take the push";
-
-        public void Publish(INotification notification)
-        {
-            if (notification is PluginChangedNotification) throw new InvalidOperationException(Reason);
-        }
+            Assert.Contains(_log, e => e.Level == LogLevel.Error && e.Exception?.Message == InMemoryNotificationPublisher.FaultReason);
+        Assert.Contains(InMemoryNotificationPublisher.FaultReason, index.Status.Message, StringComparison.Ordinal);
     }
 }
