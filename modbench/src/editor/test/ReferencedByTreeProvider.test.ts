@@ -1,4 +1,5 @@
 import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
+import { leveledLog } from '../../test/leveledLog';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon } from '../../test/vscodeMock';
 
@@ -80,7 +81,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
   beforeEach(() => vi.resetAllMocks());
 
   it('shows one error row naming the reason, with no count, when the first read fails, and logs it once', async () => {
-    const log = vi.fn();
+    const log = leveledLog();
     const client = makeClient();
     client.setQueryFailure('getReferences', { failed: 'refused', refusal: 'boom' });
     const provider = new ReferencedByTreeProvider(client, log);
@@ -90,12 +91,12 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     expect(error?.label).toBe('Failed to load: boom');
     expect(error?.tooltip).toBe('boom');
     expect(provider.count()).toBeUndefined();
-    expect(log).toHaveBeenCalledTimes(1);
+    expect(log.lines.error).toHaveLength(1);
   });
 
   it('keeps the rows and says it is the last good read when a later read fails', async () => {
     const client = makeClient([reference({ formKey: '000002:Fallout4.esm' })]);
-    const provider = new ReferencedByTreeProvider(client, vi.fn());
+    const provider = new ReferencedByTreeProvider(client, leveledLog());
     client.emit(loadOrderStatus(true));
     provider.showFor('000001:Fallout4.esm');
     await provider.getChildren();

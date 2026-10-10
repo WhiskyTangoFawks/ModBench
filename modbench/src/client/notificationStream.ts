@@ -1,4 +1,5 @@
 import { toLoadOrderStatus, type NotificationEvent } from './apiClient';
+import { SILENT_LOG, type Log } from '../ports/log';
 import { isNotificationKind, type NotificationKind, type NotificationPayloads } from './MEditClient';
 import { isString, isStringArray } from '../wire/messages';
 import { errorMessage } from '../ports/errorMessage';
@@ -66,7 +67,7 @@ interface SseNotificationSubscriberDeps {
   /** Opens one connection attempt, fresh per (re)connect. Injected so reconnect is exercised with
    *  a double, never a live backend. */
   openStream: (signal: AbortSignal) => Promise<Response>;
-  log?: (msg: string) => void;
+  log?: Log;
   /** How long to wait before retrying after the stream drops or ends. */
   reconnectDelayMs?: number;
 }
@@ -139,7 +140,7 @@ function delay(ms: number): Promise<void> {
  *  idempotent and follow the backend's status; a dropped or ended stream reconnects on its
  *  own, on `reconnectDelayMs`, until `stop()` ends the loop. */
 export class SseNotificationSubscriber extends NotificationListenerRegistry {
-  private readonly log: (msg: string) => void;
+  private readonly log: Log;
   private readonly reconnectDelayMs: number;
   private abortController: AbortController | undefined;
   private stopped = true;
@@ -153,7 +154,7 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
 
   constructor(private readonly deps: SseNotificationSubscriberDeps) {
     super();
-    this.log = deps.log ?? (() => {});
+    this.log = deps.log ?? SILENT_LOG;
     this.reconnectDelayMs = deps.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS;
   }
 
@@ -223,10 +224,10 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
         const event = parseFrame(frame);
         if (event) this.dispatch(event);
       }
-      if (!this.isStopped()) this.log('[notifications] stream ended; reconnecting');
+      if (!this.isStopped()) this.log.info('[notifications] stream ended; reconnecting');
     } catch (e) {
       if (this.isStopped()) return;
-      this.log(`[notifications] stream dropped: ${errorMessage(e)}`);
+      this.log.warn(`[notifications] stream dropped: ${errorMessage(e)}`);
     } finally {
       // A failed attempt releases the waiting caller too: no stream is a degraded load, not a
       // stalled one.

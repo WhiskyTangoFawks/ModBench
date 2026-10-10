@@ -27,30 +27,30 @@ describe('makeReporter', () => {
   it('logs an error severity to the channel\'s .error() and shows an error toast saying why', () => {
     const channel = fakeChannelOfEveryLevel();
     makeReporter(channel, 'deploy').report('error', 'Deploy failed.', 'disk full');
-    expect(channel.error).toHaveBeenCalledWith('[deploy] error: Deploy failed. — disk full');
+    expect(channel.error).toHaveBeenCalledWith('[deploy] Deploy failed. — disk full');
     expect(channel.warn).not.toHaveBeenCalled();
-    expect(showErrorMessage).toHaveBeenCalledWith('Modbench: Deploy failed. — disk full');
+    expect(showErrorMessage).toHaveBeenCalledWith('Deploy failed. — disk full');
   });
 
   it('shows a warning toast saying why when the warning carries a reason', () => {
     const channel = fakeChannelOfEveryLevel();
     makeReporter(channel, 'install').report('warning', 'Installed, but not recorded.', 'meta locked');
-    expect(channel.warn).toHaveBeenCalledWith('[install] warning: Installed, but not recorded. — meta locked');
-    expect(showWarningMessage).toHaveBeenCalledWith('Modbench: Installed, but not recorded. — meta locked');
+    expect(channel.warn).toHaveBeenCalledWith('[install] Installed, but not recorded. — meta locked');
+    expect(showWarningMessage).toHaveBeenCalledWith('Installed, but not recorded. — meta locked');
   });
 
   it('logs a warning severity to the channel\'s .warn() and shows a warning toast', () => {
     const channel = fakeChannelOfEveryLevel();
     makeReporter(channel, 'modList').report('warning', 'Could not read the mod list.');
-    expect(channel.warn).toHaveBeenCalledWith('[modList] warning: Could not read the mod list.');
+    expect(channel.warn).toHaveBeenCalledWith('[modList] Could not read the mod list.');
     expect(channel.error).not.toHaveBeenCalled();
-    expect(showWarningMessage).toHaveBeenCalledWith('Modbench: Could not read the mod list.');
+    expect(showWarningMessage).toHaveBeenCalledWith('Could not read the mod list.');
   });
 
   it('shows a landed gesture as an information toast and writes nothing to the log', () => {
     const channel = fakeChannelOfEveryLevel();
     makeReporter(channel, 'deploy').landed('Mods deployed.');
-    expect(showInformationMessage).toHaveBeenCalledWith('Modbench: Mods deployed.');
+    expect(showInformationMessage).toHaveBeenCalledWith('Mods deployed.');
     expect(channelWrites(channel)).toEqual([]);
     expect(showWarningMessage).not.toHaveBeenCalled();
     expect(showErrorMessage).not.toHaveBeenCalled();
@@ -60,7 +60,7 @@ describe('makeReporter', () => {
     const channel = fakeChannelOfEveryLevel();
     makeReporter(channel, 'recordLifecycle').shownOnSurface('warning', 'Could not fetch a suggested FormKey.', 'backend down');
     expect(channelWrites(channel)).toEqual([
-      ['[recordLifecycle] warning: Could not fetch a suggested FormKey. — backend down'],
+      ['[recordLifecycle] Could not fetch a suggested FormKey. — backend down'],
     ]);
     expect(showWarningMessage).not.toHaveBeenCalled();
     expect(showErrorMessage).not.toHaveBeenCalled();
@@ -85,10 +85,10 @@ describe('makeReporter', () => {
       makeReporter(channel, 'downloads.delete').selectionOutcome('Could not delete 2 downloads.', outcome, nameOf);
 
       expect(showErrorMessage.mock.calls).toEqual([
-        ['Modbench: Could not delete 2 downloads. — "D.7z" (in use), "E.7z" (gone from disk)'],
+        ['Could not delete 2 downloads. — "D.7z" (in use), "E.7z" (gone from disk)'],
       ]);
       expect(channelWrites(channel)).toEqual([
-        ['[downloads.delete] error: Could not delete 2 downloads. — "D.7z" (in use), "E.7z" (gone from disk)'],
+        ['[downloads.delete] Could not delete 2 downloads. — "D.7z" (in use), "E.7z" (gone from disk)'],
       ]);
       expect(showWarningMessage).not.toHaveBeenCalled();
       expect(showInformationMessage).not.toHaveBeenCalled();

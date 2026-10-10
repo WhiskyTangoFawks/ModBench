@@ -56,7 +56,7 @@ describe('a rename while a recompute is reading', () => {
     let filesRead!: () => void;
     const filesReadBeforeRename = new Promise<void>((resolve) => { filesRead = resolve; });
     instance = new Instance({
-      window: STEADY_WINDOW, log: () => {}, logReadFailure: () => {},
+      window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} },
       adapter: {
         ...reader,
         originFiles: async (origin) => {

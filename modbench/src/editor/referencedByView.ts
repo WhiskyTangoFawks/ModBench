@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { Log } from '../ports/log';
 import {
   ReferencedByTreeProvider, type ReferencedByTreeNode, type ReferrerDirection,
 } from './ReferencedByTreeProvider';
@@ -45,7 +46,7 @@ export interface ReferencedByView extends vscode.Disposable {
 }
 
 export function createReferencedByView(
-  client: ConstructorParameters<typeof ReferencedByTreeProvider>[0], log: (msg: string) => void,
+  client: ConstructorParameters<typeof ReferencedByTreeProvider>[0], log: Log,
   registerNameFilter: (deps: ReferencedByFilterDeps) => ReferencedByFilter,
 ): ReferencedByView {
   const provider = new ReferencedByTreeProvider(client, log);
