@@ -6,7 +6,7 @@ interface TestUri {
   with(change: Partial<Pick<TestUri, 'scheme' | 'query'>>): TestUri;
   toString(): string;
 }
-interface TestDocument { uri: TestUri; getText?(): string }
+interface TestDocument { uri: TestUri; getText?(): string; isDirty?: boolean }
 interface Replacement { uri: TestUri; range: { start: number; end: number }; text: string }
 
 const h = vi.hoisted(() => {
@@ -181,6 +181,22 @@ describe('a child record\'s document', () => {
     for (const listener of h.saved) listener({ uri: h.uri('file', CELL_FILE), getText: () => 'x'.repeat(12) });
 
     expect([afterWrite, await sizeStated()]).toEqual([9, 13]);
+  });
+
+  it('keeps the size it read past a stat its unsaved document\'s save takes while a sibling\'s save is writing the file', async () => {
+    const { files } = childDocuments();
+    const child: TestDocument = { uri: PLACED_URI, isDirty: false };
+    h.textDocuments.push(child);
+    const sizeStated = async () => (await files.stat(PLACED_URI)).size;
+    await sizeStated();
+    child.isDirty = true;
+
+    h.disk = { mtime: 5, size: 0 };
+    const midWrite = await sizeStated();
+    h.disk = { mtime: 6, size: 12 };
+    for (const listener of h.saved) listener({ uri: h.uri('file', CELL_FILE), getText: () => 'x'.repeat(12) });
+
+    expect([midWrite, await sizeStated()]).toEqual([0, 3]);
   });
 
   it('forgets what its document read once it closes, so one opened again reads the file afresh', async () => {

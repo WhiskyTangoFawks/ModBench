@@ -40,7 +40,8 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
     const own = await read?.ownWrite;
     const stat = await vscode.workspace.fs.stat(containerFileOf(uri));
     const size = read && stat.mtime === own ? read.size : stat.size;
-    this.reads.set(key, { ...read, size });
+    // VS Code reads a document again only while it is saved. An unsaved one's stat checks its save, and can land mid-write.
+    if (!vscode.workspace.textDocuments.some((document) => document.uri.toString() === key && document.isDirty)) this.reads.set(key, { ...read, size });
     return { ...stat, size };
   }
   // A save writes back what it read.
