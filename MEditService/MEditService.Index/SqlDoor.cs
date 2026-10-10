@@ -13,10 +13,8 @@ internal static class SqlDoor
     /// <summary>Why <paramref name="sql"/> may not pass the door, or null when it may.</summary>
     internal static string? RefusalOf(DuckDBConnection connection, string sql)
     {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT json_serialize_sql($1::VARCHAR)";
-        cmd.Parameters.Add(new DuckDBParameter { Value = sql });
-        using var parsed = JsonDocument.Parse((string)(cmd.ExecuteScalar() ?? "{}"));
+        using var parsed = JsonDocument.Parse(
+            DuckDbSql.ScalarString(connection, "SELECT json_serialize_sql($1::VARCHAR)", sql) ?? "{}");
         var root = parsed.RootElement;
 
         if (root.GetProperty("error").GetBoolean())

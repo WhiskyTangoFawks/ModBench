@@ -1,6 +1,5 @@
 using System.Data;
 using System.Diagnostics;
-using System.Globalization;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -196,8 +195,8 @@ internal sealed class Store : IDisposable
         _pluginIngest = new PluginIngest(Connection, _logger, release);
         _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _schemas, release);
         TableDdlBuilder.CreateTables(Connection);
-        DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {IndexVersionRelation}");
-        DuckDbSql.ExecuteFor(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
+        DuckDbSql.Execute(Connection, $"DELETE FROM {IndexVersionRelation}");
+        DuckDbSql.Execute(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
     }
 
     public void CreateRecordTypeViews()
@@ -242,10 +241,8 @@ internal sealed class Store : IDisposable
 
     private bool IndexedFilesTableExists()
     {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText =
-            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'mirror' AND table_name = 'files'";
-        return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
+        return DuckDbSql.Scalar<long>(
+            Connection, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'mirror' AND table_name = 'files'") > 0;
     }
 
     // Only reachable once the file has already been opened, so it can never race the second-writer
@@ -312,13 +309,9 @@ internal sealed class Store : IDisposable
 
     private List<(PluginAddress Key, string FilePath, string ContentHash)> IndexedFiles()
     {
-        var rows = new List<(PluginAddress Key, string FilePath, string ContentHash)>();
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"SELECT plugin, origin, file_path, content_hash FROM {FilesRelation}";
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-            rows.Add((new PluginAddress(reader.GetString(0), reader.GetString(1)), reader.GetString(2), reader.GetString(3)));
-        return rows;
+        return DuckDbSql.Rows(
+            Connection, $"SELECT plugin, origin, file_path, content_hash FROM {FilesRelation}",
+            reader => (DuckDbSql.ReadPluginAddress(reader), reader.GetString(2), reader.GetString(3)));
     }
 
     // Null when the file cannot be read (mid-write, permissions) counts as a mismatch: an unreadable
@@ -341,11 +334,9 @@ internal sealed class Store : IDisposable
     /// rows were built under.</summary>
     public (string FilePath, string ContentHash)? IndexedFile(PluginAddress key)
     {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"SELECT file_path, content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2";
-        DuckDbSql.AddParams(cmd, [key.Name, key.Origin]);
-        using var reader = cmd.ExecuteReader();
-        return reader.Read() ? (reader.GetString(0), reader.GetString(1)) : null;
+        return DuckDbSql.Rows(
+            Connection, $"SELECT file_path, content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2",
+            reader => (reader.GetString(0), reader.GetString(1)), key.Name, key.Origin) is [var claim] ? claim : null;
     }
 
     /// <summary>Which truth <paramref name="key"/>'s rows were derived from, or null when the store
@@ -363,11 +354,11 @@ internal sealed class Store : IDisposable
     public void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom)
     {
         using var tx = Connection.BeginTransaction();
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText =
-            $"UPDATE {PluginDerivationRelation} SET derived_from = $1 WHERE plugin = $2 AND origin = $3 AND derived_from <> $1";
-        DuckDbSql.AddParams(cmd, [derivedFrom.ToString(), key.Name, key.Origin]);
-        if (cmd.ExecuteNonQuery() > 0) BumpSequence();
+        var restamped = DuckDbSql.Execute(
+            Connection,
+            $"UPDATE {PluginDerivationRelation} SET derived_from = $1 WHERE plugin = $2 AND origin = $3 AND derived_from <> $1",
+            derivedFrom.ToString(), key.Name, key.Origin);
+        if (restamped > 0) BumpSequence();
         tx.Commit();
     }
 
@@ -386,7 +377,7 @@ internal sealed class Store : IDisposable
     public void StampPluginFacts(string plugin, string origin, string? filePath, DerivedFrom derivedFrom)
     {
         DeletePluginFacts(plugin, origin);
-        DuckDbSql.ExecuteFor(Connection, $"""
+        DuckDbSql.Execute(Connection, $"""
             INSERT INTO {PluginDerivationRelation} (plugin, origin, derived_from) VALUES ($1, $2, $3)
             """, plugin, origin, derivedFrom.ToString());
         if (filePath == null) return;
@@ -396,7 +387,7 @@ internal sealed class Store : IDisposable
             return;
         }
 
-        DuckDbSql.ExecuteFor(Connection, $"""
+        DuckDbSql.Execute(Connection, $"""
             INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash)
             VALUES ($1, $2, $3, $4)
             """, plugin, origin, Path.GetFullPath(filePath), claim.Hash);
@@ -415,33 +406,24 @@ internal sealed class Store : IDisposable
         for (var ordinal = 0; ordinal < diagnoses.Count; ordinal++)
         {
             var d = diagnoses[ordinal];
-            using var cmd = Connection.CreateCommand();
-            cmd.CommandText = $"""
+            DuckDbSql.Execute(Connection, $"""
                 INSERT INTO {PluginDiagnosisRelation} (plugin, origin, ordinal, anchor, defect_class, tail, message)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                """;
-            cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-            cmd.Parameters.Add(new DuckDBParameter { Value = origin });
-            cmd.Parameters.Add(new DuckDBParameter { Value = ordinal });
-            cmd.Parameters.Add(new DuckDBParameter { Value = (object?)d.Anchor ?? DBNull.Value });
-            cmd.Parameters.Add(new DuckDBParameter { Value = d.DefectClass });
-            cmd.Parameters.Add(new DuckDBParameter { Value = (object?)d.Tail ?? DBNull.Value });
-            cmd.Parameters.Add(new DuckDBParameter { Value = d.Message });
-            cmd.ExecuteNonQuery();
+                """, plugin, origin, ordinal, d.Anchor, d.DefectClass, d.Tail, d.Message);
         }
     }
 
     public void PointFileClaimAt(PluginAddress plugin, string filePath) =>
-        DuckDbSql.ExecuteFor(Connection, $"UPDATE {FilesRelation} SET file_path = $3 WHERE plugin = $1 AND origin = $2",
+        DuckDbSql.Execute(Connection, $"UPDATE {FilesRelation} SET file_path = $3 WHERE plugin = $1 AND origin = $2",
             plugin.Name, plugin.Origin, Path.GetFullPath(filePath));
 
     /// <summary>The file claim, the derivation and the diagnoses go together: every one of them is
     /// about the rows this plugin holds, and Unindex is the verb that drops those.</summary>
     public void DeletePluginFacts(string plugin, string origin)
     {
-        DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {FilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
-        DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {PluginDerivationRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
-        DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {PluginDiagnosisRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
+        DuckDbSql.Execute(Connection, $"DELETE FROM {FilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
+        DuckDbSql.Execute(Connection, $"DELETE FROM {PluginDerivationRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
+        DuckDbSql.Execute(Connection, $"DELETE FROM {PluginDiagnosisRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
     }
 
     // ADR-0015: one advance per logical projection, not per transaction inside it. A whole-plugin
@@ -484,7 +466,7 @@ internal sealed class Store : IDisposable
     }
 
     private void Advance() =>
-        DuckDbSql.ExecuteFor(Connection, $"UPDATE {SequenceRelation} SET value = value + 1");
+        DuckDbSql.Execute(Connection, $"UPDATE {SequenceRelation} SET value = value + 1");
 
     // A transaction that rolled back inside the scope still leaves the advance owed, so this can
     // over-signal — a re-read finding nothing changed — but never under-signal.
@@ -544,9 +526,7 @@ internal sealed class Store : IDisposable
             lock (_projectionLock)
             {
                 using var connection = OpenReadConnection();
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = $"SELECT value FROM {SequenceRelation}";
-                return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+                return DuckDbSql.Scalar<long>(connection, $"SELECT value FROM {SequenceRelation}");
             }
         }
     }
@@ -555,11 +535,7 @@ internal sealed class Store : IDisposable
     // must never regress within one process across a rebuild.
     internal void SeedSequence(long atLeast)
     {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"UPDATE {SequenceRelation} SET value = $1 WHERE value < $2";
-        cmd.Parameters.Add(new DuckDBParameter { Value = atLeast });
-        cmd.Parameters.Add(new DuckDBParameter { Value = atLeast });
-        cmd.ExecuteNonQuery();
+        DuckDbSql.Execute(Connection, $"UPDATE {SequenceRelation} SET value = $1 WHERE value < $1", atLeast);
     }
 
     /// <summary>The one way the rows change (ADR-0015). Once the outermost commit's writes are in,
@@ -685,17 +661,10 @@ internal sealed class Store : IDisposable
     private void UpsertRegistration(PluginMetadata registered)
     {
         DeleteRegistration(registered.Name, registered.Origin);
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText =
-            $"INSERT INTO {TableDdlBuilder.RegistrationsRelation} (plugin, origin, load_order_idx, is_light) VALUES ($1, $2, $3, $4)";
-        cmd.Parameters.Add(new DuckDBParameter { Value = registered.Name });
-        cmd.Parameters.Add(new DuckDBParameter { Value = registered.Origin });
-        cmd.Parameters.Add(new DuckDBParameter
-        {
-            Value = registered.LoadOrderIndex is { } loadOrderIndex ? (object)loadOrderIndex : DBNull.Value,
-        });
-        cmd.Parameters.Add(new DuckDBParameter { Value = registered.IsLight });
-        cmd.ExecuteNonQuery();
+        DuckDbSql.Execute(
+            Connection,
+            $"INSERT INTO {TableDdlBuilder.RegistrationsRelation} (plugin, origin, load_order_idx, is_light) VALUES ($1, $2, $3, $4)",
+            registered.Name, registered.Origin, registered.LoadOrderIndex, registered.IsLight);
     }
 
     /// <summary>Upserts the plugin's <c>registrations</c> row: its indexed facts answer with no re-index
@@ -713,18 +682,14 @@ internal sealed class Store : IDisposable
     // belong to the plugin; they are renamed to the file's spelling now, with no re-read.
     private void Respell(PluginAddress now, string path)
     {
-        using (var cmd = Connection.CreateCommand())
-        {
-            cmd.CommandText = $"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2";
-            cmd.Parameters.Add(new DuckDBParameter { Value = now.Name });
-            cmd.Parameters.Add(new DuckDBParameter { Value = now.Origin });
-            using var reader = cmd.ExecuteReader();
-            if (!reader.Read() || new PluginAddress(reader.GetString(0), reader.GetString(1)) == now) return;
-        }
+        var registered = DuckDbSql.Rows(
+            Connection, $"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2",
+            DuckDbSql.ReadPluginAddress, now.Name, now.Origin);
+        if (registered is not [var spelled] || spelled == now) return;
 
         foreach (var (relation, pluginColumn, originColumn) in TableDdlBuilder.MirroredPluginNames)
         {
-            DuckDbSql.ExecuteFor(Connection, $"""
+            DuckDbSql.Execute(Connection, $"""
                 UPDATE {relation} SET {pluginColumn} = $1, {originColumn} = $2
                 WHERE {pluginColumn} = $1 AND {originColumn} = $2
                 """, now.Name, now.Origin);
@@ -751,23 +716,16 @@ internal sealed class Store : IDisposable
     /// registrations.</summary>
     public IReadOnlyList<PluginAddress> RegisteredPlugins()
     {
-        var keys = new List<PluginAddress>();
         using var connection = OpenReadConnection();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation}";
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-            keys.Add(new PluginAddress(reader.GetString(0), reader.GetString(1)));
-        return keys;
+        return DuckDbSql.Rows(
+            connection, $"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation}",
+            DuckDbSql.ReadPluginAddress);
     }
 
     private void DeleteRegistration(string plugin, string origin)
     {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"DELETE FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2";
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
-        cmd.ExecuteNonQuery();
+        DuckDbSql.Execute(
+            Connection, $"DELETE FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
     }
 
     /// <summary>Wholesale rather than incremental because there is no smaller correct unit:
@@ -800,15 +758,12 @@ internal sealed class Store : IDisposable
     // Replaced whole, never diffed (ADR-0013).
     private void ReplaceActive(IReadOnlyList<RegisteredPlugin> active)
     {
-        Execute($"DELETE FROM {TableDdlBuilder.ActiveRelation}");
+        DuckDbSql.Execute(Connection, $"DELETE FROM {TableDdlBuilder.ActiveRelation}");
         foreach (var (plugin, loadOrderIndex) in active.Select((plugin, index) => (plugin, index)))
         {
-            using var cmd = Connection.CreateCommand();
-            cmd.CommandText = $"INSERT INTO {TableDdlBuilder.ActiveRelation} (plugin, origin, load_order_idx) VALUES ($1, $2, $3)";
-            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
-            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
-            cmd.Parameters.Add(new DuckDBParameter { Value = loadOrderIndex });
-            cmd.ExecuteNonQuery();
+            DuckDbSql.Execute(
+                Connection, $"INSERT INTO {TableDdlBuilder.ActiveRelation} (plugin, origin, load_order_idx) VALUES ($1, $2, $3)",
+                plugin.Name, plugin.Origin, loadOrderIndex);
         }
     }
 
@@ -816,10 +771,10 @@ internal sealed class Store : IDisposable
     // below) calls this directly, since DuckDB refuses a second BeginTransaction on one connection.
     private void UpdateWinnersCore()
     {
-        Execute($"DELETE FROM {TableDdlBuilder.WinnersRelation}");
+        DuckDbSql.Execute(Connection, $"DELETE FROM {TableDdlBuilder.WinnersRelation}");
 
         // QUALIFY and the (plugin, origin) tiebreak make a load_order_idx tie deterministic.
-        Execute($"""
+        DuckDbSql.Execute(Connection, $"""
             INSERT INTO {TableDdlBuilder.WinnersRelation} (form_key, plugin, origin)
             SELECT r.form_key, r.plugin, r.origin
             FROM mirror.records r
@@ -858,7 +813,7 @@ internal sealed class Store : IDisposable
         using var tx = Connection.BeginTransaction();
         foreach (var (formKey, state) in moved)
         {
-            DuckDbSql.ExecuteFor(Connection, $"""
+            DuckDbSql.Execute(Connection, $"""
                 UPDATE {EffectiveRows} SET working_tree_state = $4
                 WHERE form_key = $1 AND plugin = $2 AND origin = $3
                 """, formKey, key.Name, key.Origin, state.Stored());
@@ -869,16 +824,10 @@ internal sealed class Store : IDisposable
 
     public Dictionary<string, WorkingTreeState> HeldWorkingTreeStates(PluginAddress key)
     {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"""
+        return LastWins(DuckDbSql.Rows(Connection, $"""
             SELECT form_key, working_tree_state FROM {EffectiveRows}
             WHERE plugin = $1 AND origin = $2 AND working_tree_state <> '{WorkingTreeState.None.Stored()}'
-            """;
-        DuckDbSql.AddParams(cmd, [key.Name, key.Origin]);
-        using var reader = cmd.ExecuteReader();
-        var held = new Dictionary<string, WorkingTreeState>(StringComparer.Ordinal);
-        while (reader.Read()) held[reader.GetString(0)] = WorkingTreeStates.FromStored(reader.GetString(1));
-        return held;
+            """, reader => KeyValuePair.Create(reader.GetString(0), WorkingTreeStates.FromStored(reader.GetString(1))), key.Name, key.Origin));
     }
 
     // --- What the rows hold ---
@@ -886,23 +835,17 @@ internal sealed class Store : IDisposable
     // The projection reads the plugin's rows whether it is active or not (ADR-0012).
     public (string RecordType, string? EditorId, string Body)? StoredRow(PluginAddress key, string formKey)
     {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"SELECT record_type, editor_id, body FROM {EffectiveRows} WHERE form_key = $1 AND plugin = $2 AND origin = $3";
-        DuckDbSql.AddParams(cmd, [formKey, key.Name, key.Origin]);
-        using var reader = cmd.ExecuteReader();
-        if (!reader.Read()) return null;
-        return (reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1), reader.GetString(2));
+        return DuckDbSql.Rows(
+            Connection, $"SELECT record_type, editor_id, body FROM {EffectiveRows} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            reader => (reader.GetString(0), reader.GetStringOrNull(1), reader.GetString(2)),
+            formKey, key.Name, key.Origin) is [var row, ..] ? row : null;
     }
 
     public Dictionary<string, string> EffectiveContentHashes(PluginAddress key)
     {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"SELECT form_key, content_hash FROM {EffectiveRows} WHERE plugin = $1 AND origin = $2";
-        DuckDbSql.AddParams(cmd, [key.Name, key.Origin]);
-        using var reader = cmd.ExecuteReader();
-        var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
-        while (reader.Read()) hashes[reader.GetString(0)] = reader.GetString(1);
-        return hashes;
+        return LastWins(DuckDbSql.Rows(
+            Connection, $"SELECT form_key, content_hash FROM {EffectiveRows} WHERE plugin = $1 AND origin = $2",
+            reader => KeyValuePair.Create(reader.GetString(0), reader.GetString(1)), key.Name, key.Origin));
     }
 
     // One row per source document: every Effective record no document embeds. A worldspace's TopCell
@@ -921,20 +864,16 @@ internal sealed class Store : IDisposable
     /// the record it files.</summary>
     public Dictionary<string, string> HeldDocumentStamps(PluginAddress key)
     {
-        var stamps = new Dictionary<string, string>(StringComparer.Ordinal);
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = DocumentStamps;
-        DuckDbSql.AddParams(cmd, [key.Name, key.Origin]);
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-            stamps[reader.GetString(0)] = reader.GetString(1);
-        return stamps;
+        return LastWins(DuckDbSql.Rows(
+            Connection, DocumentStamps, reader => KeyValuePair.Create(reader.GetString(0), reader.GetString(1)), key.Name, key.Origin));
     }
 
-    private void Execute(string sql)
+    // A plugin can hold one FormKey twice and the rows carry no key, so the last row speaks.
+    private static Dictionary<string, T> LastWins<T>(IEnumerable<KeyValuePair<string, T>> rows)
     {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
+        var byKey = new Dictionary<string, T>(StringComparer.Ordinal);
+        foreach (var (key, value) in rows) byKey[key] = value;
+        return byKey;
     }
+
 }

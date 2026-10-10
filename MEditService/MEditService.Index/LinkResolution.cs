@@ -35,14 +35,10 @@ internal static class LinkResolution
         DuckDBConnection connection, string formKey, Func<string, RecordLookupEntry?> resolveAlone) =>
         Prefetched(connection, resolveAlone, SourceIsTheRecordOrAnInlineChild, formKey);
 
-    internal static RecordLookupEntry? Resolve(DuckDBConnection connection, string formKey)
-    {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT record_type, editor_id FROM form_lookup WHERE form_key = $1 AND is_winner LIMIT 1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        using var reader = cmd.ExecuteReader();
-        return reader.Read() ? Entry(reader) : null;
-    }
+    internal static RecordLookupEntry? Resolve(DuckDBConnection connection, string formKey) =>
+        DuckDbSql.Rows(
+            connection, "SELECT record_type, editor_id FROM form_lookup WHERE form_key = $1 AND is_winner LIMIT 1",
+            reader => Entry(reader), formKey) is [var entry] ? entry : null;
 
     private static Func<string, RecordLookupEntry?> Prefetched(
         DuckDBConnection connection, Func<string, RecordLookupEntry?> resolveAlone, string sourceFilter, params string[] values)
@@ -51,16 +47,11 @@ internal static class LinkResolution
         return FormKeyResolutionCache.Memoize(formKey => linked.TryGetValue(formKey, out var entry) ? entry : resolveAlone(formKey));
     }
 
-    private static List<string> LinkTargets(DuckDBConnection connection, string sourceFilter, string[] values)
-    {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"SELECT DISTINCT target_form_key FROM {TableDdlBuilder.MirrorSchema}.form_references WHERE {sourceFilter}";
-        foreach (var value in values) cmd.Parameters.Add(new DuckDBParameter { Value = value });
-        using var reader = cmd.ExecuteReader();
-        var targets = new List<string>();
-        while (reader.Read()) targets.Add(reader.GetString(0));
-        return targets;
-    }
+    private static List<string> LinkTargets(DuckDBConnection connection, string sourceFilter, string[] values) =>
+        DuckDbSql.Rows(
+            connection,
+            $"SELECT DISTINCT target_form_key FROM {TableDdlBuilder.MirrorSchema}.form_references WHERE {sourceFilter}",
+            reader => reader.GetString(0), values);
 
     // Keyed by the FormKey as asked, not as the lookup row spells it: the join ignores filename case.
     private static Dictionary<string, RecordLookupEntry?> Resolve(DuckDBConnection connection, List<string> formKeys)
@@ -68,27 +59,27 @@ internal static class LinkResolution
         var resolved = new Dictionary<string, RecordLookupEntry?>(StringComparer.Ordinal);
         if (formKeys.Count == 0) return resolved;
 
-        using var cmd = connection.CreateCommand();
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKeys });
         var candidates = "SELECT unnest($1)";
+        object?[] args = [formKeys];
         if (formKeys.Count <= ConstantListLimit)
         {
-            foreach (var formKey in formKeys) cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+            args = [formKeys, .. formKeys];
             candidates = string.Join(", ", formKeys.Select((_, i) => $"${i + 2}"));
         }
-        cmd.CommandText = $"""
+        var sql = $"""
             SELECT k.form_key, l.record_type, l.editor_id
             FROM unnest($1::VARCHAR[]) k(form_key)
             LEFT JOIN (SELECT form_key, record_type, editor_id FROM form_lookup
                        WHERE is_winner AND form_key IN ({candidates})) l
                    ON l.form_key = k.form_key
             """;
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-            resolved[reader.GetString(0)] = reader.IsDBNull(1) ? null : Entry(reader, 1);
+        foreach (var (formKey, entry) in DuckDbSql.Rows(
+            connection, sql,
+            reader => (FormKey: reader.GetString(0), Entry: reader.IsDBNull(1) ? (RecordLookupEntry?)null : Entry(reader, 1)), args))
+            resolved[formKey] = entry;
         return resolved;
     }
 
     private static RecordLookupEntry Entry(DuckDBDataReader reader, int first = 0) =>
-        new(reader.GetString(first), reader.IsDBNull(first + 1) ? null : reader.GetString(first + 1));
+        new(reader.GetString(first), reader.GetStringOrNull(first + 1));
 }

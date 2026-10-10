@@ -15,9 +15,7 @@ internal static class RecordViewBuilder
         // is in the column's own PropertyName, so Projection needs nothing special.
         foreach (var (tableName, schema) in schemas)
         {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = BuildViewSql(tableName, schema);
-            cmd.ExecuteNonQuery();
+            DuckDbSql.Execute(connection, BuildViewSql(tableName, schema));
         }
     }
 

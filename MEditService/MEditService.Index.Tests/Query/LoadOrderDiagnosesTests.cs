@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -52,6 +53,17 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
             $"{ShortRdatRegionPlugin.Anchor} — fixed-size-subrecord-short, repairable (lossless): "
             + "RDAT is 6 bytes; a REGN RDAT is always 8",
             report.Text);
+    }
+
+    [Fact]
+    public void GetLoadOrderDiagnoses_ADiagnosisWithNoAnchorAndNoTail_ReadsBackWithNone()
+    {
+        var adapter = new DiagnosisClaimingAdapter(new PluginDiagnosis(null, "unknown", null, "boom"));
+        using var index = Indexes.Reconciled(GameDirectory, [Clean("Clean.esp")], adapter: adapter);
+
+        var report = Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
+
+        Assert.Equal(("unknown", null, null, "boom"), (report.DefectClass, report.Anchor, report.Tail, report.Message));
     }
 
     [Fact]
