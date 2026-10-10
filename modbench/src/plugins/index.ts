@@ -20,7 +20,7 @@ type PluginsClient = PluginsViewDeps['client'] & ConstructorParameters<typeof Re
 export interface PluginsDeps {
   client: PluginsClient;
   facts: Pick<Instance, 'refresh'>;
-  channel: vscode.LogOutputChannel;
+  channel: Pick<vscode.LogOutputChannel, 'error' | 'info' | 'warn' | 'show'>;
   reporterFor: (tag: string) => Reporter;
   /** Registers the tracked mods' repositories: a reconcile reached Ready, or a track landed. */
   registerRepositories: () => Promise<void>;

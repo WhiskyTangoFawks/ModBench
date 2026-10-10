@@ -277,7 +277,7 @@ describe('the Plugins view says what it knows of a plugin\'s tracking and editab
     function box(client: InMemoryMEditClient) {
       const value = withThePlugin();
       const plugins = createPlugins({
-        client, facts: new FakeInstance(value), channel: { ...silentChannel, warn: vi.fn(), show: vi.fn() } as unknown as vscode.LogOutputChannel,
+        client, facts: new FakeInstance(value), channel: { ...silentChannel, warn: vi.fn(), show: vi.fn() },
         reporterFor: () => recordingReporter(), registerRepositories: () => Promise.resolve(), ask: scriptedDialog(),
         sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
       });
