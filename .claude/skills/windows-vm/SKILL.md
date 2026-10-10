@@ -15,4 +15,12 @@ A Windows 11 guest runs in Docker through [dockur/windows](https://github.com/do
 - `vm.sh down` stops the VM. The disk stays. Delete `disk/` to rebuild Windows from nothing.
 - `vm.sh screen [file.png]` saves a screenshot of the VM's display, default `/tmp/modbench-windows.png`. http://127.0.0.1:8006 shows it live.
 
+## Gates
+
+`gates.sh` runs root CLAUDE.md's Tools commands natively in the VM, in PowerShell, against this worktree with its uncommitted files. It prints `All Windows gates passed` or the gates that failed, and exits non-zero on a failure. The comment and diagram gates stay on Linux: they read text, the same on every platform.
+
+`vm.sh sync` copies the worktree to `C:\work\modbench` alone, for a narrower run: `vm.sh ssh 'cd C:\work\modbench\MEditService; dotnet test <project> --filter <name>'`. Dependencies and build output stay in the VM between syncs.
+
+A command over SSH runs in session 0, which has no desktop. The VM signs `modbench` in to the console, session 1.
+
 A shell that started before its user joined the `docker` group gets permission denied from `docker`. Run `sg docker -c 'bash vm.sh up'` there.
