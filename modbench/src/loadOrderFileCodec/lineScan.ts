@@ -1,6 +1,3 @@
-// The error-prone parts of a byte-faithful text transform: the CRLF lookahead, the leading-BOM
-// convention, and the splice arithmetic.
-
 export interface LineRange {
   start: number;
   /** Index just past the line content, before any EOL. */
@@ -25,41 +22,26 @@ export function* lineRanges(text: string): Generator<LineRange> {
   if (start < text.length) yield { start, contentEnd: text.length, end: text.length };
 }
 
-/** Safe only on a `lineRanges` slice: such a line holds no `\r`/`\n` but its own
- *  trailing terminator, so anchoring the alternation would be redundant. */
-export const lineContent = (line: string): string => line.replace(/\r\n$|\r$|\n$/, '');
-
-/** Lines each INCLUDING their trailing EOL (last may lack one); join('') is exact. */
-export const splitLinesKeepEol = (text: string): string[] =>
-  [...lineRanges(text)].map((r) => text.slice(r.start, r.end));
-
-const BOM = '﻿';
+const BOM = '\uFEFF';
 
 export const stripBom = (text: string): string => (text.startsWith(BOM) ? text.slice(BOM.length) : text);
 
-/** The BOM is a whole-file property at position 0, never a line's, so it is
- *  stripped and re-prepended around every edit — it stays pinned even when the
- *  line that carried it moves or is removed. */
-export function withBomPreserved(text: string, edit: (bomless: string) => string): string {
-  if (!text.startsWith(BOM)) return edit(text);
-  return BOM + edit(stripBom(text));
+/** Applies `edit` to the lines. The file keeps its BOM and whether its last line has a
+ *  terminator, and is written whole with the one line ending `detectEol` names. */
+export function editLines(text: string, edit: (lines: string[]) => readonly string[]): string {
+  const bom = text.startsWith(BOM) ? BOM : '';
+  const body = text.slice(bom.length);
+  const lines = body === '' ? [] : body.split(/\r\n|\r|\n/);
+  const terminated = lines.at(-1) === '' || body === '';
+  if (lines.at(-1) === '') lines.pop();
+  const edited = edit(lines);
+  const eol = detectEol(text);
+  return bom + edited.join(eol) + (terminated && edited.length > 0 ? eol : '');
 }
 
-/** `lines` must already have the moved line(s) spliced out, since `toIndex`
- *  counts only the `isEntry` lines present. Out-of-range clamps to the last
- *  entry slot, or to the end of `lines` when there are no entries. */
-export function insertIndexAmongEntries(
-  lines: readonly string[],
-  isEntry: (line: string) => boolean,
-  toIndex: number,
-): number {
-  const entryLineIdx = [...lines.entries()].filter(([, line]) => isEntry(line)).map(([i]) => i);
-  const clamped = Math.max(0, Math.min(toIndex, entryLineIdx.length));
-  const atClamped = entryLineIdx[clamped];
-  if (atClamped !== undefined) return atClamped;
-  const last = entryLineIdx.at(-1);
-  return last !== undefined ? last + 1 : lines.length;
-}
+/** The positions of the lines `isEntry` accepts. */
+export const entryLineIndices = (lines: readonly string[], isEntry: (line: string) => boolean): number[] =>
+  [...lines.entries()].filter(([, line]) => isEntry(line)).map(([i]) => i);
 
 /** Whole-file presence, never a one-line sniff, which could name a bare `\r` the
  *  terminator when it is a partial write. Accepted cost: one stray CRLF line

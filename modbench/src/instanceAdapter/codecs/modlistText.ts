@@ -1,9 +1,9 @@
 // MO2's modlist.txt: `+`/`-` prefix an enabled/disabled mod, a `_separator`
 // suffix marks a separator, and `*` (DLC/CC) and `#` lines are never surfaced.
-// The top of the file is the winning end. Mutations splice the raw string.
+// The top of the file is the winning end. Mutations edit the lines.
 
 import type { EntryRef, ModlistEntry, MovePlace, OrderEnd, SeparatorsPlace } from '../instanceAdapter';
-import { detectEol, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from '../../loadOrderFileCodec/lineScan';
+import { editLines, entryLineIndices, stripBom } from '../../loadOrderFileCodec/lineScan';
 
 /** The per-profile mod list, one line per mod in Mod override order. */
 export const MODLIST_FILE_NAME = 'modlist.txt';
@@ -33,15 +33,13 @@ export const entryNamed = (modName: string): EntryRef => (modName.endsWith(SEPAR
 
 // Deliberately state-insensitive: both prefixes match, and a caller that needs to
 // know which one did reads the prefix itself.
-const matchesModLine = (line: string, name: string): boolean =>
-  lineContent(line) === '+' + name || lineContent(line) === '-' + name;
+const matchesModLine = (line: string, name: string): boolean => line === '+' + name || line === '-' + name;
 
 /** File order, so the winning end comes first. Only `+`/`-` lines are surfaced;
  *  the rest carry no meaning here and are preserved on write. */
 export function parseModlist(text: string): ModlistEntry[] {
   const entries: ModlistEntry[] = [];
-  const withoutBom = stripBom(text); // model view only; write path preserves the BOM byte
-  for (const raw of withoutBom.split(/\r\n|\r|\n/)) {
+  for (const raw of stripBom(text).split(/\r\n|\r|\n/)) {
     const prefix = raw[0];
     if (prefix !== '+' && prefix !== '-') continue; // comment, *, blank
     entries.push({ ...entryNamed(raw.slice(1)), enabled: prefix === '+' });
@@ -49,72 +47,36 @@ export function parseModlist(text: string): ModlistEntry[] {
   return entries;
 }
 
-function findModPrefixIndex(text: string, modName: string): number {
-  for (const { start, contentEnd } of lineRanges(text)) {
-    if (matchesModLine(text.slice(start, contentEnd), modName)) return start;
-  }
-  return -1;
-}
+const isEntryLine = (line: string): boolean => line[0] === '+' || line[0] === '-';
+
+const isSeparatorLine = (line: string): boolean => isEntryLine(line) && line.endsWith(SEPARATOR_SUFFIX);
 
 /** Throws if the mod is absent. */
 export function setEnabledInText(text: string, modName: string, enabled: boolean): string {
-  return withBomPreserved(text, (bomless) => {
-    const idx = findModPrefixIndex(bomless, modName);
-    if (idx === -1) throw new Error(`Mod not found in modlist: ${modName}`);
-    const desired = enabled ? '+' : '-';
-    if (bomless[idx] === desired) return bomless;
-    return bomless.slice(0, idx) + desired + bomless.slice(idx + 1);
+  return editLines(text, (lines) => {
+    const idx = modLineAt(lines, modName);
+    lines[idx] = (enabled ? '+' : '-') + (lines[idx] ?? '').slice(1);
+    return lines;
   });
 }
 
-const isEntryLine = (line: string): boolean => {
-  const c = lineContent(line)[0];
-  return c === '+' || c === '-';
-};
-
-const isSeparatorLine = (line: string): boolean => {
-  const c = lineContent(line);
-  return (c.startsWith('+') || c.startsWith('-')) && c.endsWith(SEPARATOR_SUFFIX);
-};
-
 /** `afterIndex` is 0-based among entry lines, and clamps to the last one. `-1` inserts before the
  *  first entry line, the one position "after index i" cannot reach. */
-export function insertSeparatorAtIndexInText(
-  text: string,
-  name: string,
-  afterIndex: number,
-): string {
-  return withBomPreserved(text, (bomless) => {
-    const lines = splitLinesKeepEol(bomless);
-    const entryLineIdx = [...lines.entries()].filter(([, line]) => isEntryLine(line)).map(([i]) => i);
-    const newLine = `+${separatorModName(name)}${detectEol(bomless)}`;
-    let insertAt: number;
-    if (entryLineIdx.length === 0) {
-      insertAt = lines.length;
-    } else if (afterIndex < 0) {
-      insertAt = entryLineIdx[0] ?? lines.length;
-    } else {
-      const clamped = Math.min(afterIndex, entryLineIdx.length - 1);
-      const atClamped = entryLineIdx[clamped];
-      insertAt = atClamped !== undefined ? atClamped + 1 : lines.length;
-    }
-    lines.splice(insertAt, 0, newLine);
-    return lines.join('');
+export function insertSeparatorAtIndexInText(text: string, name: string, afterIndex: number): string {
+  return editLines(text, (lines) => {
+    const entryLineIdx = entryLineIndices(lines, isEntryLine);
+    const anchor = entryLineIdx[Math.max(0, Math.min(afterIndex, entryLineIdx.length - 1))];
+    const insertAt = anchor === undefined ? lines.length : afterIndex < 0 ? anchor : anchor + 1;
+    lines.splice(insertAt, 0, `+${separatorModName(name)}`);
+    return lines;
   });
 }
 
 export function renameModLineInText(text: string, oldModName: string, newModName: string): string {
-  return withBomPreserved(text, (bomless) => {
-    for (const { start, end, contentEnd } of lineRanges(bomless)) {
-      const content = bomless.slice(start, contentEnd);
-      if (matchesModLine(content, oldModName)) {
-        const eol = bomless.slice(contentEnd, end);
-        // content matched `+`/`-` above, so its first character is that prefix, never absent.
-        const prefix = content.slice(0, 1);
-        return bomless.slice(0, start) + prefix + newModName + eol + bomless.slice(end);
-      }
-    }
-    throw new Error(`Mod not found in modlist: ${oldModName}`);
+  return editLines(text, (lines) => {
+    const idx = modLineAt(lines, oldModName);
+    lines[idx] = (lines[idx] ?? '').slice(0, 1) + newModName;
+    return lines;
   });
 }
 
@@ -123,41 +85,26 @@ export const renameSeparatorInText = (text: string, oldName: string, newName: st
 
 /** Removes the separator line only; the mods it wrapped join the section above. */
 export function deleteSeparatorInText(text: string, name: string): string {
-  return withBomPreserved(text, (bomless) => {
-    const lines = splitLinesKeepEol(bomless);
-    const idx = lines.findIndex((l) => matchesModLine(l, separatorModName(name)));
-    if (idx === -1) throw new Error(`Separator not found in modlist: ${name}`);
-    lines.splice(idx, 1);
-    return lines.join('');
+  return editLines(text, (lines) => {
+    lines.splice(separatorLineAt(lines, name), 1);
+    return lines;
   });
 }
 
 /** The winning end is where MO2 puts a freshly installed mod. Inserted disabled,
  *  so it cannot silently change what the game sees before the user enables it. */
 export function insertModAtWinningEnd(text: string, modName: string): string {
-  return withBomPreserved(text, (bomless) => {
-    const eol = detectEol(bomless);
-    const newLine = `-${modName}${eol}`;
-    const lines = splitLinesKeepEol(bomless);
-    const firstEntry = lines.findIndex(isEntryLine);
-    const insertAt = firstEntry === -1 ? lines.length : firstEntry;
-    const prevLine = lines[insertAt - 1];
-    if (insertAt > 0 && prevLine !== undefined && !/\r\n$|\r$|\n$/.test(prevLine)) {
-      lines[insertAt - 1] = prevLine + eol; // EOL-terminate the line we insert after
-    }
-    lines.splice(insertAt, 0, newLine);
-    return lines.join('');
+  return editLines(text, (lines) => {
+    lines.splice(firstEntryLineAt(lines), 0, `-${modName}`);
+    return lines;
   });
 }
 
 /** Throws if the name is absent, or resolves to a separator. */
 export function removeModFromText(text: string, modName: string): string {
-  return withBomPreserved(text, (bomless) => {
-    const lines = splitLinesKeepEol(bomless);
-    const idx = lines.findIndex((l) => matchesModLine(l, modName));
-    if (idx === -1) throw new Error(`Mod not found in modlist: ${modName}`);
-    lines.splice(idx, 1);
-    return lines.join('');
+  return editLines(text, (lines) => {
+    lines.splice(modLineAt(lines, modName), 1);
+    return lines;
   });
 }
 
@@ -192,16 +139,13 @@ const lineBlockStartAt = (lines: readonly string[], sepIdx: number): number =>
 const separatorBlockStartAt = (lines: readonly string[], separatorName: string): number =>
   lineBlockStartAt(lines, separatorLineAt(lines, separatorName));
 
-// Only the file's last line may lack an EOL, so every other line gets one.
 function moveBlock(
-  bomless: string, isMoved: (line: string, index: number) => boolean, at: (rest: readonly string[]) => number,
-): string {
-  const lines = splitLinesKeepEol(bomless);
+  lines: readonly string[], isMoved: (line: string, index: number) => boolean, at: (rest: readonly string[]) => number,
+): string[] {
   const block = lines.filter((line, i) => isMoved(line, i));
   const rest = lines.filter((line, i) => !isMoved(line, i));
   rest.splice(at(rest), 0, ...block);
-  const eol = detectEol(bomless);
-  return rest.map((line, i) => (i < rest.length - 1 && lineContent(line) === line ? line + eol : line)).join('');
+  return rest;
 }
 
 function modLineAt(lines: readonly string[], modName: string): number {
@@ -228,8 +172,8 @@ function modsInsertAt(lines: readonly string[], place: MovePlace, end: OrderEnd)
 /** The mods land as one block, in their own order, at the `end` of the place's mods, or on the
  *  `end` side of the place's mod. Throws if the separator or the mod is absent. */
 export function moveModsInText(text: string, modNames: readonly string[], place: MovePlace, end: OrderEnd): string {
-  return withBomPreserved(text, (bomless) => moveBlock(
-    bomless,
+  return editLines(text, (lines) => moveBlock(
+    lines,
     (line) => modNames.some((name) => matchesModLine(line, name)),
     (rest) => modsInsertAt(rest, place, end),
   ));
@@ -257,8 +201,8 @@ function separatorsInsertAt(lines: readonly string[], place: SeparatorsPlace, en
 export function moveSeparatorsInText(
   text: string, separatorNames: readonly string[], place: SeparatorsPlace, end: OrderEnd,
 ): string {
-  return withBomPreserved(text, (bomless) => {
-    const inBlock = separatorBlockLineIndices(splitLinesKeepEol(bomless), separatorNames);
-    return moveBlock(bomless, (_line, i) => inBlock.has(i), (rest) => separatorsInsertAt(rest, place, end));
+  return editLines(text, (lines) => {
+    const inBlock = separatorBlockLineIndices(lines, separatorNames);
+    return moveBlock(lines, (_line, i) => inBlock.has(i), (rest) => separatorsInsertAt(rest, place, end));
   });
 }

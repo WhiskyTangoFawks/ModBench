@@ -1,8 +1,8 @@
 // The game's plugins.txt: a leading `*` marks enabled, `#` lines and blanks carry no
-// meaning, and the bottom of the file is winning-most. Mutations splice the raw
-// string, so EOLs, BOM and unmodelled lines survive untouched.
+// meaning, and the bottom of the file is winning-most. Mutations edit the lines, so
+// comment and blank lines survive untouched.
 
-import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
+import { editLines, entryLineIndices, stripBom } from './lineScan';
 
 /** The plugin order, one line per plugin file. */
 export const PLUGINS_FILE_NAME = 'plugins.txt';
@@ -19,20 +19,17 @@ export interface PluginEntry {
 }
 
 // A hand-edited plugins.txt can pad a line, so reads trim.
-// Writes cannot use this: it collapses away the marker's real byte offset.
-const trimmedEntryContent = (line: string): string => lineContent(line).trim();
-
 const isEntryLine = (line: string): boolean => {
-  const c = trimmedEntryContent(line);
+  const c = line.trim();
   return c.length > 0 && !c.startsWith('#');
 };
 
-const isEnabledEntry = (line: string): boolean => trimmedEntryContent(line).startsWith('*');
+const isEnabledEntry = (line: string): boolean => line.trim().startsWith('*');
 
 // `PluginEntry.name` is a matching key, so a hand-padded line must resolve to the
 // same name as a clean one — neither the padding nor the `*` may leak into it.
 const pluginNameOf = (line: string): string => {
-  const c = trimmedEntryContent(line);
+  const c = line.trim();
   return c.startsWith('*') ? c.slice(1) : c;
 };
 
@@ -47,79 +44,56 @@ export function parsePlugins(text: string): PluginEntry[] {
   return entries;
 }
 
-// Lands at the winning end but before any trailing comment/blank lines, matching
-// where `movePluginsInText` puts a block moved to the end. Caller has already
-// established the name has no entry line.
-function appendEntryLine(bomless: string, pluginName: string): string {
-  const eol = detectEol(bomless);
-  const line = `${pluginName}${eol}`;
-  if (bomless.length === 0) return line;
+const entryLineAt = (lines: readonly string[], pluginName: string): number =>
+  lines.findIndex((l) => isEntryLine(l) && pluginNameOf(l) === pluginName);
 
-  const lines = splitLinesKeepEol(bomless);
-  const last = lines.at(-1);
-  if (last !== undefined && !/\r\n$|\r$|\n$/.test(last)) lines[lines.length - 1] = last + eol;
+const notFound = (pluginName: string): Error => new Error(`Plugin not found in plugins.txt: ${pluginName}`);
 
-  const entryLineIdx = [...lines.entries()].filter(([, line]) => isEntryLine(line)).map(([i]) => i);
-  const lastEntry = entryLineIdx.at(-1);
-  const insertAt = lastEntry !== undefined ? lastEntry + 1 : lines.length;
-  lines.splice(insertAt, 0, line);
-  return lines.join('');
-}
+const paddingOf = (line: string): number => line.length - line.trimStart().length;
 
 /** A name with no entry line has no marker to toggle, and leaves the text
  *  untouched rather than throwing. */
 export function setPluginEnabledInText(text: string, pluginName: string, enabled: boolean): string {
-  return withBomPreserved(text, (bomless) => {
-    for (const { start, contentEnd } of lineRanges(bomless)) {
-      const content = bomless.slice(start, contentEnd);
-      if (!isEntryLine(content) || pluginNameOf(content) !== pluginName) continue;
-      const isEnabled = isEnabledEntry(content);
-      if (isEnabled === enabled) return bomless; // already in the requested state
-      // The marker is at the first non-whitespace character, not at `start`: a
-      // hand-padded line would otherwise be spliced in its padding.
-      const markerAt = start + (content.length - content.trimStart().length);
-      if (enabled) return bomless.slice(0, markerAt) + '*' + bomless.slice(markerAt);
-      return bomless.slice(0, markerAt) + bomless.slice(markerAt + 1); // drop the leading *
-    }
-    return bomless;
+  return editLines(text, (lines) => {
+    const idx = entryLineAt(lines, pluginName);
+    const line = lines[idx];
+    if (line === undefined || isEnabledEntry(line) === enabled) return lines;
+    const markerAt = paddingOf(line);
+    lines[idx] = line.slice(0, markerAt) + (enabled ? '*' + line.slice(markerAt) : line.slice(markerAt + 1));
+    return lines;
   });
 }
 
-/** Disabled, as plugin sync adds a plugin it found on disk. Throws if the name is already
- *  present. */
+/** Disabled, as plugin sync adds a plugin it found on disk, at the winning end but before any
+ *  trailing comment or blank lines. Throws if the name is already present. */
 export function appendPluginInText(text: string, pluginName: string): string {
-  return withBomPreserved(text, (bomless) => {
-    for (const { start, contentEnd } of lineRanges(bomless)) {
-      const content = bomless.slice(start, contentEnd);
-      if (isEntryLine(content) && pluginNameOf(content) === pluginName) {
-        throw new Error(`Plugin already in plugins.txt: ${pluginName}`);
-      }
-    }
-    return appendEntryLine(bomless, pluginName);
+  return editLines(text, (lines) => {
+    if (entryLineAt(lines, pluginName) !== -1) throw new Error(`Plugin already in plugins.txt: ${pluginName}`);
+    const lastEntry = entryLineIndices(lines, isEntryLine).at(-1);
+    lines.splice(lastEntry === undefined ? lines.length : lastEntry + 1, 0, pluginName);
+    return lines;
   });
 }
 
 /** Throws if the name has no entry line. */
 export function removePluginFromText(text: string, pluginName: string): string {
-  return withBomPreserved(text, (bomless) => {
-    const lines = splitLinesKeepEol(bomless);
-    const idx = lines.findIndex((l) => isEntryLine(l) && pluginNameOf(l) === pluginName);
-    if (idx === -1) throw new Error(`Plugin not found in plugins.txt: ${pluginName}`);
+  return editLines(text, (lines) => {
+    const idx = entryLineAt(lines, pluginName);
+    if (idx === -1) throw notFound(pluginName);
     lines.splice(idx, 1);
-    return lines.join('');
+    return lines;
   });
 }
 
 /** The line keeps its place, its enabled mark and its padding. Throws if the name has no entry line. */
 export function renamePluginInText(text: string, pluginName: string, newName: string): string {
-  return withBomPreserved(text, (bomless) => {
-    for (const { start, contentEnd } of lineRanges(bomless)) {
-      const content = bomless.slice(start, contentEnd);
-      if (!isEntryLine(content) || pluginNameOf(content) !== pluginName) continue;
-      const nameAt = start + content.indexOf(pluginName, content.length - content.trimStart().length);
-      return bomless.slice(0, nameAt) + newName + bomless.slice(nameAt + pluginName.length);
-    }
-    throw new Error(`Plugin not found in plugins.txt: ${pluginName}`);
+  return editLines(text, (lines) => {
+    const idx = entryLineAt(lines, pluginName);
+    if (idx === -1) throw notFound(pluginName);
+    const line = lines[idx] ?? '';
+    const nameAt = line.indexOf(pluginName, paddingOf(line));
+    lines[idx] = line.slice(0, nameAt) + newName + line.slice(nameAt + pluginName.length);
+    return lines;
   });
 }
 
@@ -127,23 +101,19 @@ export function renamePluginInText(text: string, pluginName: string, newName: st
  *  the last slot. The block keeps its source order, whatever order the names came
  *  in; comment and blank lines keep their positions. */
 export function movePluginsInText(text: string, pluginNames: string[], toIndex: number): string {
-  return withBomPreserved(text, (bomless) => {
-    const lines = splitLinesKeepEol(bomless);
+  return editLines(text, (lines) => {
     const wanted = new Set(pluginNames);
-
-    // Collect the moved lines in *source* order (not argument order).
-    const moveEntries = [...lines.entries()].filter(
-      ([, line]) => isEntryLine(line) && wanted.has(pluginNameOf(line)),
-    );
-    const found = new Set(moveEntries.map(([, line]) => pluginNameOf(line)));
+    const isMoved = (line: string): boolean => isEntryLine(line) && wanted.has(pluginNameOf(line));
+    const found = new Set(lines.filter(isMoved).map(pluginNameOf));
     const missing = pluginNames.find((n) => !found.has(n));
-    if (missing !== undefined) throw new Error(`Plugin not found in plugins.txt: ${missing}`);
+    if (missing !== undefined) throw notFound(missing);
 
-    const block = moveEntries.map(([, line]) => line);
-    for (const [i] of [...moveEntries].reverse()) lines.splice(i, 1); // remove high→low to keep indices valid
-
-    const insertAt = insertIndexAmongEntries(lines, isEntryLine, toIndex);
-    lines.splice(insertAt, 0, ...block);
-    return lines.join('');
+    const block = lines.filter(isMoved);
+    const rest = lines.filter((line) => !isMoved(line));
+    const entries = entryLineIndices(rest, isEntryLine);
+    const atEntry = entries[Math.min(Math.max(0, toIndex), entries.length)];
+    const lastEntry = entries.at(-1);
+    rest.splice(atEntry ?? (lastEntry === undefined ? rest.length : lastEntry + 1), 0, ...block);
+    return rest;
   });
 }

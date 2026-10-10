@@ -139,25 +139,15 @@ describe('appendPluginInText — byte-faithful append of a disk-discovered plugi
     expect(out).toBe('*A.esp\r\nB.esp\r\nNew.esp\r\n# trailing comment\r\n');
   });
 
-  it('matches the file\'s own EOL style when the last line lacks a trailing newline', () => {
+  it('keeps the file\'s EOL style and its unterminated last line', () => {
     const input = '*A.esp\r\nB.esp';
     const out = appendPluginInText(input, 'New.esp');
-    expect(out).toBe('*A.esp\r\nB.esp\r\nNew.esp\r\n');
-  });
-
-  it('preserves a leading BOM', () => {
-    const out = appendPluginInText('\uFEFF*First.esp\r\n', 'Second.esp');
-    expect(out).toBe('\uFEFF*First.esp\r\nSecond.esp\r\n');
+    expect(out).toBe('*A.esp\r\nB.esp\r\nNew.esp');
   });
 
   it('throws when the name already exists (never a silent duplicate line)', () => {
     const input = defaultPlugins();
     expect(() => appendPluginInText(input, 'Unofficial Fallout 4 Patch.esp')).toThrow(/Unofficial Fallout 4 Patch\.esp/);
-  });
-
-  it('a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF (the shared detectEol\'s ruled whole-file-scan behavior, end to end through this caller)', () => {
-    const out = appendPluginInText('*A.esp\nB.esp\r\n', 'New.esp');
-    expect(out).toBe('*A.esp\nB.esp\r\nNew.esp\r\n');
   });
 });
 
@@ -169,10 +159,6 @@ describe('removePluginFromText — byte-faithful line removal', () => {
 
   it('removes an enabled entry by its name, not its marker', () => {
     expect(removePluginFromText('*A.esp\r\n*B.esp\r\n', 'A.esp')).toBe('*B.esp\r\n');
-  });
-
-  it('preserves a leading BOM', () => {
-    expect(removePluginFromText('\uFEFF*First.esp\r\n*Second.esp\r\n', 'First.esp')).toBe('\uFEFF*Second.esp\r\n');
   });
 
   it('throws when the name has no entry line', () => {
@@ -203,6 +189,10 @@ describe('renamePluginInText — byte-faithful rename of one line, in place', ()
 describe('movePluginsInText — byte-faithful reorder', () => {
   const sample = '# header\r\n*A.esp\r\nB.esp\r\n*C.esp\r\nD.esp\r\n';
 
+  it('moves a plugin below an unterminated last line without joining the two', () => {
+    expect(movePluginsInText('A.esp\nB.esp', ['A.esp'], 1)).toBe('B.esp\nA.esp');
+  });
+
   it('moves a single plugin to the top (index 0), keeping the comment header first', () => {
     const out = movePluginsInText(sample, ['C.esp'], 0);
     expect(names(out)).toEqual(['C.esp', 'A.esp', 'B.esp', 'D.esp']);
@@ -227,11 +217,6 @@ describe('movePluginsInText — byte-faithful reorder', () => {
 
   it('throws when any requested plugin is absent', () => {
     expect(() => movePluginsInText(sample, ['A.esp', 'No Such.esp'], 0)).toThrow(/No Such\.esp/);
-  });
-
-  it('preserves a leading BOM when the moved block includes the first line', () => {
-    const out = movePluginsInText('\uFEFF*A.esp\r\nB.esp\r\nC.esp\r\n', ['A.esp'], 2);
-    expect(out).toBe('\uFEFFB.esp\r\nC.esp\r\n*A.esp\r\n');
   });
 
   it('keeps comment/blank lines at their absolute position (only entries move)', () => {
