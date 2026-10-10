@@ -744,7 +744,6 @@ describe('RecordBrowser fetch failures', () => {
     expect(present(record, 'the record row').command).toMatchObject({ command: 'modbench.record.open' });
   });
 
-
   it.each<[string, () => Promise<RecordBrowserNode[]>]>([
     ['getRecordTypes', async () => {
       const repo = makeClient();
