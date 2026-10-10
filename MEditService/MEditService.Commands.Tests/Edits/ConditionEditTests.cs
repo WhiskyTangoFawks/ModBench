@@ -78,7 +78,7 @@ public sealed class ConditionEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var appended = JsonNode.Parse(after.Require()).Require()["Conditions"].Require().AsArray()[2].Require();
         Assert.Equal(
-            SharedSchemaReflector.FirstArrayElementLeafSubField("cobj", "Conditions", "Data", "MutagenObjectType"),
+            nameof(FunctionConditionData),
             appended["Data"].Require()["MutagenObjectType"].Require().GetValue<string>());
     }
 }

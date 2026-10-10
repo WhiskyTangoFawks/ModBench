@@ -1,4 +1,5 @@
 using System.IO.Abstractions;
+using System.Text.Json.Nodes;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins.Records;
@@ -47,11 +48,22 @@ public static class HeaderDocument
         var folder = ScratchFolder();
         var rootPath = Path.Combine(folder, DocumentFileNames.Root);
 
-        return InlineSerialization.Finished(
+        var mod = InlineSerialization.Finished(
             () => RecordTextCodecGeneratorSeed.DeserializeWholeMod(
                 folder, InlineWorkDropoff.Instance, CancellationToken.None,
                 fileSystem: new OnlyTheRootDocumentExists(rootPath),
                 streamCreator: new SupplyRootDocument(rootPath, body)));
+        return RestoreOmittedNextObjectId(mod, body);
+    }
+
+    /// <summary>A document omits a Next Object ID equal to Mutagen's default, which a new mod does
+    /// not start at, so a mod read from a document that omits it is put back to that default. Every
+    /// reader of a root document applies this; the Codec reads no file, so the gateway cannot.</summary>
+    public static IMod RestoreOmittedNextObjectId(IMod mod, byte[] rootDocument)
+    {
+        if (JsonNode.Parse(rootDocument)?["ModHeader"]?["Stats"]?["NextFormID"] is null)
+            mod.NextFormID = ModStats.NextFormIDDefault;
+        return mod;
     }
 
     public static uint NextObjectId(byte[] body) => Read(body).NextFormID;
