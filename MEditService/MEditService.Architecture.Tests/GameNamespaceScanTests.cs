@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -15,9 +16,7 @@ public sealed class GameNamespaceScanTests
 
     private static readonly string[] ExemptFolders =
     [
-        "MEditService.Codec/Serialization",
-        "MEditService.Codec/Schema",
-        "MEditService.PluginAdapter",
+        "MEditService.Codec.Fallout4",
     ];
 
     private static readonly Regex Identifier = new(@"\b[A-Za-z_][A-Za-z0-9_]*\b", RegexOptions.Compiled);
@@ -25,7 +24,7 @@ public sealed class GameNamespaceScanTests
     private static readonly IReadOnlySet<string> GameTypeNames = GameConcreteTypeNames();
 
     [Fact]
-    public void TheStackOutsideTheCodecAndTheAdapter_NamesNoGameNamespace()
+    public void TheStackOutsideTheCodecGameProjects_NamesNoGameNamespace()
     {
         Assert.Contains("Fallout4", GameNames);
         Assert.Contains("Fallout4Mod", GameTypeNames);
@@ -35,10 +34,25 @@ public sealed class GameNamespaceScanTests
 
         Assert.True(
             sites.Count == 0,
-            "Game-concrete Mutagen names outside the codec and the Plugin adapter — a record is a Mutagen "
-            + "object only while it is being read from bytes or written to them, so ask the codec or the "
-            + "adapter instead of naming a game here:\n"
+            "Game-concrete Mutagen names outside the codec's game projects — a record is a Mutagen "
+            + "object only while it is being read from bytes or written to them, so ask the codec "
+            + "instead of naming a game here:\n"
             + string.Join("\n", sites));
+    }
+
+    [Fact]
+    public void NoProductionProjectButACodecGameProject_ReferencesAGamePackage()
+    {
+        var solution = ServiceProjects.SolutionDirectory();
+        var offenders = ServiceProjects.Production(solution)
+            .Where(project => !ExemptFolders.Contains(project))
+            .Where(project => XDocument.Load(ServiceProjects.Csproj(solution, project))
+                .Descendants("PackageReference")
+                .Select(reference => reference.Attribute("Include")?.Value)
+                .Any(package => GameNamespaces.Contains(package)))
+            .ToList();
+
+        Assert.Empty(offenders);
     }
 
     [Fact]

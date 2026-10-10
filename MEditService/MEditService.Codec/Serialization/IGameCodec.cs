@@ -27,6 +27,14 @@ public interface IGameCodec
         string folder, IWorkDropoff workDropoff, CancellationToken cancel,
         IFileSystem? fileSystem = null, ICreateStream? streamCreator = null);
 
+    /// <summary>The Next Object ID the game's serializer omits from a header document.</summary>
+    uint NextObjectIdDefault { get; }
+
+    /// <summary>A copy of <paramref name="record"/> without the encoding a rewrite is entitled to
+    /// change: group-header-derived fields zeroed, and a worldspace's block levels in one canonical
+    /// order (ADR-0006).</summary>
+    IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record);
+
     /// <summary>A mod holding <paramref name="plugin"/>'s header and no record, which the whole-mod
     /// door writes as the header document alone.</summary>
     IModGetter HeaderOnly(IModGetter plugin);

@@ -14,7 +14,6 @@
   <ItemGroup>
     <!-- Pinned with MEditService.PluginAdapter's Mutagen reference. Serialization stays at 1.37.1 until
          a release of its source generator emits code for a whole-mod seed. -->
-    <PackageReference Include="Mutagen.Bethesda.Fallout4" Version="0.54.4" />
     <!-- Library-level integration of Mutagen.Bethesda.Serialization (ADR-0004), not the Spriggit tool
          itself: avoids its exe-per-version machinery and its exact Mutagen pin. Serialization 1.37.1
          depends on Mutagen.Bethesda.Core >= 0.51.3 (a floor), so it builds against 0.54.4.
