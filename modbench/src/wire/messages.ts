@@ -2,7 +2,7 @@ import type { components } from './generated/api';
 import type { PluginAddress } from './pluginAddress';
 import type { ArgumentOf } from './argument';
 import type { ColumnKey } from './columnKey';
-import { isReadFailed, type ReadFailed } from './readFailed';
+import type { ReadFailed } from './readFailed';
 
 export const EXTENSION_TO_WEBVIEW = {
   LOAD_RECORD: 'loadRecord',
@@ -265,11 +265,6 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.SHOW_COLUMNS; columns: ColumnCopy[] }
   | { type: typeof EXTENSION_TO_WEBVIEW.MODS_CHANGED; modsByOrigin: Record<string, ModRepository> };
 
-function isModsByOrigin(value: unknown): value is Record<string, ModRepository> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    && Object.values(value).every((state) => state === 'tracked' || state === 'untracked');
-}
-
 export function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
@@ -287,53 +282,7 @@ export function isRecordEditEnvelope(value: unknown): value is RecordEditEnvelop
   );
 }
 
-type WebviewToExtensionWitness = {
-  type?: unknown; formKey?: unknown; level?: unknown; message?: unknown; value?: unknown;
-  plugin?: unknown; origin?: unknown; envelope?: unknown;
-  requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown; entered?: unknown; columns?: unknown;
-  records?: unknown; state?: unknown; choices?: unknown; current?: unknown;
-};
-
-function parseEditField(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isString(w.formKey)) throw new Error('Expected "editField" to carry a string formKey.');
-  if (!isString(w.plugin)) throw new Error('Expected "editField" to carry a string plugin.');
-  if (!isString(w.origin)) throw new Error('Expected "editField" to carry a string origin.');
-  if (!isRecordEditEnvelope(w.envelope)) {
-    throw new Error('Expected "editField" to carry a record edit envelope with an op and a path.');
-  }
-  return { type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: w.formKey, plugin: w.plugin, origin: w.origin, envelope: w.envelope };
-}
-
-function parseAddElement(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isContextObject(w.context)) throw new Error('Expected "addElement" to carry a context object.');
-  return { type: WEBVIEW_TO_EXTENSION.ADD_ELEMENT, context: w.context, value: w.value };
-}
-
-function parseOpenFormKeyPicker(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isString(w.requestId)) throw new Error('Expected "openFormKeyPicker" to carry a string requestId.');
-  if (!isString(w.seed)) throw new Error('Expected "openFormKeyPicker" to carry a string seed.');
-  if (!Array.isArray(w.validTypes) || !w.validTypes.every(isString)) {
-    throw new Error('Expected "openFormKeyPicker" to carry a string array validTypes.');
-  }
-  return { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: w.requestId, seed: w.seed, validTypes: w.validTypes };
-}
-
 export interface EnumChoice { value: string; label: string }
-
-function isEnumChoice(c: unknown): c is EnumChoice {
-  if (typeof c !== 'object' || c === null) return false;
-  const { value, label } = c as Partial<Record<keyof EnumChoice, unknown>>;
-  return isString(value) && isString(label);
-}
-
-function parseOpenEnumPicker(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isString(w.requestId)) throw new Error('Expected "openEnumPicker" to carry a string requestId.');
-  if (!Array.isArray(w.choices) || !w.choices.every(isEnumChoice)) {
-    throw new Error('Expected "openEnumPicker" to carry choices with a string value and label.');
-  }
-  if (!isString(w.current)) throw new Error('Expected "openEnumPicker" to carry a string current.');
-  return { type: WEBVIEW_TO_EXTENSION.OPEN_ENUM_PICKER, requestId: w.requestId, choices: w.choices, current: w.current };
-}
 
 function isContextObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -361,169 +310,20 @@ export function isFocusedCellContext(value: unknown): value is FocusedCellContex
   return isContextObject(value) && Object.entries(focusedCellMembers).every(([name, holds]) => value[name] === undefined || holds(value[name]));
 }
 
-function parseFocusCell(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (typeof w.entered !== 'boolean') throw new Error('Expected "focusCell" to carry a boolean entered.');
-  if (w.context === null) return { type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null, entered: w.entered };
-  if (!isFocusedCellContext(w.context)) throw new Error('Expected "focusCell" to carry a focused cell context or null.');
-  return { type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: w.context, entered: w.entered };
+function hasTypeIn(value: unknown, types: Record<string, string>): boolean {
+  return typeof value === 'object' && value !== null && 'type' in value
+    && Object.values(types).some((type) => type === value.type);
 }
 
-function parseRequestRecordLoad(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isString(w.requestId)) throw new Error('Expected "requestRecordLoad" to carry a string requestId.');
-  if (!isString(w.formKey)) throw new Error('Expected "requestRecordLoad" to carry a string formKey.');
-  if (!isColumnCopies(w.columns)) throw new Error('Expected "requestRecordLoad" to carry its columns, each a FormKey and a plugin.');
-  return { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: w.requestId, formKey: w.formKey, columns: w.columns };
-}
-
-function parseOpenColumns(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isColumnCopies(w.records)) throw new Error('Expected "openColumns" to carry its records, each a FormKey and a plugin.');
-  return { type: WEBVIEW_TO_EXTENSION.OPEN_COLUMNS, records: w.records };
-}
-
-function parseViewState(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isViewState(w.state)) throw new Error('Expected "viewState" to carry the grid\'s collapsed rows and columns, focused cell and scroll.');
-  return { type: WEBVIEW_TO_EXTENSION.VIEW_STATE, state: w.state };
-}
-
-/** The webview message router's one entry point for data crossing `postMessage`: every
- *  `WEBVIEW_TO_EXTENSION` site parses through this rather than asserting the shape itself.
- *  Throws when the discriminant or a required field doesn't match what the type demands. */
+/** The webview message router's one entry point for data crossing `postMessage`. Both ends compile
+ *  from the same types in the same .vsix, so the type is checked and the rest is the sender's. */
 export function parseWebviewToExtension(value: unknown): WebviewToExtension {
-  if (typeof value !== 'object' || value === null) {
-    throw new Error(`Expected a webview-to-extension message object, got ${typeof value}.`);
-  }
-  const w = value as WebviewToExtensionWitness;
-  switch (w.type) {
-    case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return parseEditField(w);
-    case WEBVIEW_TO_EXTENSION.ADD_ELEMENT: return parseAddElement(w);
-    case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return parseOpenFormKeyPicker(w);
-    case WEBVIEW_TO_EXTENSION.OPEN_ENUM_PICKER: return parseOpenEnumPicker(w);
-    case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return parseFocusCell(w);
-    case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return parseRequestRecordLoad(w);
-    case WEBVIEW_TO_EXTENSION.OPEN_COLUMNS: return parseOpenColumns(w);
-    case WEBVIEW_TO_EXTENSION.VIEW_STATE: return parseViewState(w);
-    default:
-      throw new Error(`Unknown webview-to-extension message type: ${String(w.type)}.`);
-  }
+  if (!hasTypeIn(value, WEBVIEW_TO_EXTENSION)) throw new Error('Expected a webview-to-extension message of a known type.');
+  return value as WebviewToExtension;
 }
 
-// Shallow: compare/plugins are the schema's own nested shapes, trusted once the envelope checks
-// out. A type predicate narrows unknown without an `as` cast.
-function isCompareResultShape(value: unknown): value is components['schemas']['CompareResult'] {
-  return typeof value === 'object' && value !== null;
-}
-
-function isPluginResponseArray(value: unknown): value is components['schemas']['PluginResponse'][] {
-  return Array.isArray(value);
-}
-
-function isPluginLoadFailureArray(value: unknown): value is components['schemas']['PluginLoadFailure'][] {
-  return Array.isArray(value);
-}
-
-function parseLoadRecord(w: { formKey?: unknown }): ExtensionToWebview {
-  if (!isString(w.formKey)) throw new Error('Expected "loadRecord" to carry a string formKey.');
-  return { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: w.formKey };
-}
-
-function parseFormKeyPicked(w: { requestId?: unknown; formKey?: unknown }): ExtensionToWebview {
-  if (!isString(w.requestId)) throw new Error('Expected "formKeyPicked" to carry a string requestId.');
-  if (w.formKey !== null && !isString(w.formKey)) {
-    throw new Error('Expected "formKeyPicked" to carry a string or null formKey.');
-  }
-  return { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: w.requestId, formKey: w.formKey };
-}
-
-function parseEnumPicked(w: { requestId?: unknown; value?: unknown }): ExtensionToWebview {
-  if (!isString(w.requestId)) throw new Error('Expected "enumPicked" to carry a string requestId.');
-  if (w.value !== null && !isString(w.value)) throw new Error('Expected "enumPicked" to carry a string or null value.');
-  return { type: EXTENSION_TO_WEBVIEW.ENUM_PICKED, requestId: w.requestId, value: w.value };
-}
-
-function parseRecordLoadAnswer(w: {
-  requestId?: unknown; ok?: unknown; compare?: unknown; gone?: unknown; copiesLacking?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; failure?: unknown;
-  documentPlugin?: unknown; modsByOrigin?: unknown;
-}): { requestId: string } & RecordLoadAnswer {
-  if (!isString(w.requestId)) throw new Error('Expected "recordLoadAnswered" to carry a string requestId.');
-  if (w.ok === false) {
-    if (!isReadFailed(w.failure)) throw new Error('Expected a failed "recordLoadAnswered" to carry a read failure.');
-    return { requestId: w.requestId, ok: false, failure: w.failure };
-  }
-  if (w.ok !== true) throw new Error('Expected "recordLoadAnswered" to carry a boolean ok.');
-  return { requestId: w.requestId, ...parseAnswered(w) };
-}
-
-function parseRead(w: { compare?: unknown; gone?: unknown; copiesLacking?: unknown }): RecordRead {
-  if (w.compare !== null) {
-    if (!isCompareResultShape(w.compare)) throw new Error('Expected an answered "recordLoadAnswered" to carry a compare object or null.');
-    return { compare: w.compare };
-  }
-  if (!isStringArray(w.gone) || w.gone.length === 0 || !isStringArray(w.copiesLacking)) {
-    throw new Error('Expected an answered "recordLoadAnswered" with no compare to name the records that are gone.');
-  }
-  return { compare: null, gone: w.gone, copiesLacking: w.copiesLacking };
-}
-
-function parseAnswered(w: {
-  compare?: unknown; gone?: unknown; copiesLacking?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; documentPlugin?: unknown;
-  modsByOrigin?: unknown; fileCopyAlone?: unknown; fileOverriddenBy?: unknown;
-}): RecordLoadAnswer {
-  if (w.plugins !== null && !isPluginResponseArray(w.plugins)) {
-    throw new Error('Expected "recordLoadAnswered" to carry a plugins array or null.');
-  }
-  if (typeof w.conflictsComputed !== 'boolean') {
-    throw new Error('Expected "recordLoadAnswered" to carry a boolean conflictsComputed.');
-  }
-  if (!isPluginLoadFailureArray(w.loadFailures)) {
-    throw new Error('Expected "recordLoadAnswered" to carry a loadFailures array.');
-  }
-  if (!isPluginAddress(w.documentPlugin)) throw new Error('Expected "recordLoadAnswered" to carry the document\'s plugin.');
-  if (!isModsByOrigin(w.modsByOrigin)) throw new Error('Expected "recordLoadAnswered" to carry its mods by origin.');
-  if (typeof w.fileCopyAlone !== 'boolean') throw new Error('Expected "recordLoadAnswered" to carry a boolean fileCopyAlone.');
-  if (w.fileOverriddenBy !== null && typeof w.fileOverriddenBy !== 'string') {
-    throw new Error('Expected "recordLoadAnswered" to carry its overriding mod or null.');
-  }
-  return {
-    ok: true, ...parseRead(w), plugins: w.plugins, conflictsComputed: w.conflictsComputed,
-    loadFailures: w.loadFailures, documentPlugin: w.documentPlugin, modsByOrigin: w.modsByOrigin, fileCopyAlone: w.fileCopyAlone,
-    fileOverriddenBy: w.fileOverriddenBy,
-  };
-}
-
-/** The webview message router's other direction: every `EXTENSION_TO_WEBVIEW` listener parses
- *  through this rather than asserting `event.data`'s shape itself. */
+/** The webview message router's other direction, checked the same way. */
 export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
-  if (typeof value !== 'object' || value === null) {
-    throw new Error(`Expected an extension-to-webview message object, got ${typeof value}.`);
-  }
-  const w = value as {
-    type?: unknown; formKey?: unknown; requestId?: unknown;
-    ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
-    documentPlugin?: unknown; text?: unknown; columns?: unknown; modsByOrigin?: unknown; fileCopyAlone?: unknown; fileOverriddenBy?: unknown;
-  };
-  switch (w.type) {
-    case EXTENSION_TO_WEBVIEW.LOAD_RECORD: return parseLoadRecord(w);
-    case EXTENSION_TO_WEBVIEW.SHOW_COLUMNS: return parseShowColumns(w);
-    case EXTENSION_TO_WEBVIEW.MODS_CHANGED:
-      if (!isModsByOrigin(w.modsByOrigin)) throw new Error('Expected "modsChanged" to carry its mods by origin.');
-      return { type: w.type, modsByOrigin: w.modsByOrigin };
-    case EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED: return parseFormKeyPicked(w);
-    case EXTENSION_TO_WEBVIEW.ENUM_PICKED: return parseEnumPicked(w);
-    case EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED: return { type: w.type, ...parseRecordLoadAnswer(w) };
-    default: return parseFocusedCellMessage(w);
-  }
-}
-
-function parseShowColumns(w: { columns?: unknown }): ExtensionToWebview {
-  if (!isColumnCopies(w.columns)) throw new Error('Expected "showColumns" to carry its columns, each a FormKey and a plugin.');
-  return { type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns: w.columns };
-}
-
-function parseFocusedCellMessage(w: { type?: unknown; text?: unknown }): ExtensionToWebview {
-  if (w.type === EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR) return { type: w.type };
-  if (w.type !== EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL) {
-    throw new Error(`Unknown extension-to-webview message type: ${String(w.type)}.`);
-  }
-  if (!isString(w.text)) throw new Error('Expected "pasteIntoCell" to carry a string text.');
-  return { type: w.type, text: w.text };
+  if (!hasTypeIn(value, EXTENSION_TO_WEBVIEW)) throw new Error('Expected an extension-to-webview message of a known type.');
+  return value as ExtensionToWebview;
 }

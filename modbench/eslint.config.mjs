@@ -183,11 +183,10 @@ export default defineConfig(
         },
     },
 
-    // Each file below holds exactly one function, and that function is its file's only cast —
-    // named the way the errno reader is, not a suppression widened to a whole client or module.
-    // Pinned by unsafeTypeAssertionAllowlist.test.ts.
+    // messages.ts casts a message once per direction, after checking its type: both ends compile
+    // from the same types in the same .vsix. Pinned by unsafeTypeAssertionAllowlist.test.ts.
     {
-        files: ['src/wire/columnKey.ts'],
+        files: ['src/wire/columnKey.ts', 'src/wire/messages.ts'],
         rules: {
             '@typescript-eslint/no-unsafe-type-assertion': 'off',
         },

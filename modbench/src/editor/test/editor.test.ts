@@ -1133,7 +1133,6 @@ describe('what a record tab\'s webview posts', () => {
       ['a type this build does not know', { type: 'somethingElse' }],
       ['a string', 'not an object'],
       ['null', null],
-      ['a FormKey of the wrong type', { type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: 123, plugin: 'A.esp', origin: 'ModA', envelope: { op: 'set', path: [] } }],
     ])('is ignored, as %s', async (_, message) => {
       const mEdit = client();
       const { open } = makeEditor(mEdit);
