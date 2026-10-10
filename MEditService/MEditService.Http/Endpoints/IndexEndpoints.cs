@@ -96,7 +96,7 @@ internal static class IndexEndpoints
         if (string.IsNullOrWhiteSpace(req.Source))
             return Results.Problem("The filter's source is required.", statusCode: 400);
         return svc.SetFilter(req.Sql, req.Source) is { } refused
-            ? QueryEndpointMapping.Refusal(refused)
+            ? EndpointMapping.Refusal(refused)
             : Results.Ok(new FilterResponse(req.Sql, req.Source));
     }
 
@@ -112,7 +112,7 @@ internal static class IndexEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received GetFilter");
-        return QueryEndpointMapping.Answered(svc.GetFilter(), filter => Results.Ok(new FilterResponse(filter?.Sql, filter?.Source)));
+        return EndpointMapping.Answered(svc.GetFilter(), filter => Results.Ok(new FilterResponse(filter?.Sql, filter?.Source)));
     }
 
     private static IResult PostRebuildIndex(RebuildIndexRequest req, IQueries svc, ILoggerFactory loggerFactory)
@@ -122,11 +122,11 @@ internal static class IndexEndpoints
         {
             logger.LogInformation("Received PostRebuildIndex for {InstanceRoot}", req.InstanceRoot);
         }
-        if (WriteEndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
+        if (EndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
         // Answered once the store is empty again; the refill reports through the index status.
         return svc.RebuildStore(gameRelease, req.InstanceRoot) is { } refusal
-            ? WriteEndpointMapping.Refusal(refusal)
+            ? EndpointMapping.Refusal(refusal)
             : Results.NoContent();
     }
 }

@@ -23,10 +23,9 @@ internal static class WorldspaceEndpoints
             {
                 logger.LogInformation("Received GetWorldspaceBlocks for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             }
-            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            var address = WriteEndpointMapping.PluginAddressOf(plugin, origin);
+            if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
             var decodedFk = Uri.UnescapeDataString(formKey);
-            return QueryEndpointMapping.Ok(svc.GetWorldspaceBlocks(address, decodedFk));
+            return EndpointMapping.Ok(svc.GetWorldspaceBlocks(address, decodedFk));
         })
         .WithName("GetWorldspaceBlocks")
         .WithTags("Worldspaces")
@@ -41,10 +40,9 @@ internal static class WorldspaceEndpoints
             {
                 logger.LogInformation("Received GetCellChildRecords for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             }
-            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            var address = WriteEndpointMapping.PluginAddressOf(plugin, origin);
+            if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
             var decodedFk = Uri.UnescapeDataString(formKey);
-            return QueryEndpointMapping.Ok(svc.GetCellChildRecords(address, decodedFk));
+            return EndpointMapping.Ok(svc.GetCellChildRecords(address, decodedFk));
         })
         .WithName("GetCellChildRecords")
         .WithTags("Worldspaces")
@@ -59,9 +57,8 @@ internal static class WorldspaceEndpoints
             {
                 logger.LogInformation("Received GetInteriorCells for {Plugin} ({Origin})", plugin, origin);
             }
-            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            var address = WriteEndpointMapping.PluginAddressOf(plugin, origin);
-            return QueryEndpointMapping.Ok(svc.GetInteriorCells(address));
+            if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
+            return EndpointMapping.Ok(svc.GetInteriorCells(address));
         })
         .WithName("GetInteriorCells")
         .WithTags("Worldspaces")
@@ -79,8 +76,7 @@ internal static class WorldspaceEndpoints
         {
             logger.LogInformation("Received GetWorldspaces for {Plugin} ({Origin})", plugin, origin);
         }
-        if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-        var address = WriteEndpointMapping.PluginAddressOf(plugin, origin);
-        return QueryEndpointMapping.Ok(svc.GetWorldspaces(address));
+        if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
+        return EndpointMapping.Ok(svc.GetWorldspaces(address));
     }
 }

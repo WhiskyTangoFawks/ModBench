@@ -16,9 +16,8 @@ internal static class ContainerChildEndpoints
             {
                 logger.LogInformation("Received GetContainerChildren for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             }
-            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            var address = WriteEndpointMapping.PluginAddressOf(plugin, origin);
-            return QueryEndpointMapping.Ok(svc.GetContainerChildren(address, Uri.UnescapeDataString(formKey)));
+            if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
+            return EndpointMapping.Ok(svc.GetContainerChildren(address, Uri.UnescapeDataString(formKey)));
         })
         .WithName("GetContainerChildren")
         .WithTags("Records")

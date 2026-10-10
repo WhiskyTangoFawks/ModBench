@@ -161,6 +161,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [InlineData("deleteRecordChanges")]
     [InlineData("renameSourceChanges")]
     [InlineData("moveLastWritten")]
+    [InlineData("creatableExtensions")]
     public async Task AWriteGestureWithNoLoadOrder_Answers503_WithTheExactNoLoadOrderProblem(string gesture)
     {
         await using var app = new MEditHost();
@@ -181,6 +182,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             }),
             "renameSourceChanges" => await client.PostAsJsonAsync("/plugins/rename-source-changes", new { plugin.origin, plugin.name, newName = "Renamed.esp" }),
             "moveLastWritten" => await client.PostAsJsonAsync("/plugins/move-last-written", new { plugin.origin, plugin.name, treeName = plugin.name, newName = "Renamed.esp" }),
+            "creatableExtensions" => await client.GetAsync("/plugins/creatable-extensions"),
             _ => throw new ArgumentOutOfRangeException(nameof(gesture), gesture, "Unknown gesture"),
         };
 

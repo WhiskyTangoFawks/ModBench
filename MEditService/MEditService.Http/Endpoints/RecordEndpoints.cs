@@ -32,7 +32,7 @@ internal static class RecordEndpoints
                 address = new PluginAddress(plugin, origin);
             else if (!string.IsNullOrWhiteSpace(plugin) || !string.IsNullOrWhiteSpace(origin))
                 return Results.Problem("Name a plugin with both plugin and origin, or neither to browse every plugin.", statusCode: 400);
-            return QueryEndpointMapping.Ok(svc.GetRecords(type is { Length: > 0 } ? type : null, address, search, limit, offset));
+            return EndpointMapping.Ok(svc.GetRecords(type is { Length: > 0 } ? type : null, address, search, limit, offset));
         })
         .WithName("GetRecords")
         .WithTags("Records")
@@ -47,7 +47,7 @@ internal static class RecordEndpoints
                 logger.LogInformation("Received GetRecord for {FormKey}", formKey);
             }
             var decoded = Uri.UnescapeDataString(formKey);
-            return QueryEndpointMapping.Answered(svc.GetRecord(decoded), detail => detail is null ? Results.NotFound() : Results.Ok(detail));
+            return EndpointMapping.Answered(svc.GetRecord(decoded), detail => detail is null ? Results.NotFound() : Results.Ok(detail));
         })
         .WithName("GetRecord")
         .WithTags("Records")
@@ -62,7 +62,7 @@ internal static class RecordEndpoints
                 logger.LogInformation("Received CompareRecord for {FormKey}", formKey);
             }
             var decoded = Uri.UnescapeDataString(formKey);
-            return QueryEndpointMapping.Answered(svc.GetCompare(decoded), result => result is null ? Results.NotFound() : Results.Ok(result));
+            return EndpointMapping.Answered(svc.GetCompare(decoded), result => result is null ? Results.NotFound() : Results.Ok(result));
         })
         .WithName("CompareRecord")
         .WithTags("Records")
@@ -101,7 +101,7 @@ internal static class RecordEndpoints
         {
             if (path is null || !Path.IsPathFullyQualified(path))
                 return Results.Problem("Name the file by its absolute path.", statusCode: 400);
-            return QueryEndpointMapping.Answered(svc.GetRecordOfFile(path), file => file switch
+            return EndpointMapping.Answered(svc.GetRecordOfFile(path), file => file switch
             {
                 RecordOfFileAnswer.Holds holds => Results.Ok(Addressed(holds.Record)),
                 RecordOfFileAnswer.HoldsNone => Results.NoContent(),
@@ -207,7 +207,7 @@ internal static class RecordEndpoints
         // A body missing its edit binds it as null, whatever the type says; validation answers that.
         RecordEditRequest? edit = request.Edit;
         var spelled = RecordEditEnvelope.Spell(edit?.Path ?? []);
-        return WriteEndpointMapping.Execute(
+        return EndpointMapping.Execute(
             "EditChanges", logger,
             logReceived: () =>
             {
@@ -245,15 +245,13 @@ internal static class RecordEndpoints
         }
         return OverRecords(records, validateOptions: () => null, answer: addressed =>
         {
-            return WriteEndpointMapping.Answered(
+            return EndpointMapping.Answered(
                 "Delete", logger,
                 edits.DeleteRecords(addressed),
-                WriteEndpointMapping.Refusal,
+                EndpointMapping.Refusal,
                 landed => new RecordDeleteChanges(
                     Addressed(landed.Item),
-                    [.. landed.Outcome.Moves.Select(move => new SourceMove(move.From, move.To))],
-                    landed.Outcome.Deletions,
-                    [.. landed.Outcome.Documents.Select(document => new DocumentChange(document.Path, document.Text))]),
+                    landed.Outcome.Moves, landed.Outcome.Deletions, landed.Outcome.Documents),
                 refused => new RecordAddressRefusal(Addressed(refused.Item), refused.Refusal, refused.Message),
                 (applied, refused) => new RecordDeleteChangesResponse(applied, refused));
         });
@@ -278,15 +276,13 @@ internal static class RecordEndpoints
             return null;
         }, answer: addressed =>
         {
-            return WriteEndpointMapping.Answered(
+            return EndpointMapping.Answered(
                 "Copy", logger,
                 edits.CopyRecords(addressed, request.Mode, destinations, request.Replace),
-                WriteEndpointMapping.Refusal,
+                EndpointMapping.Refusal,
                 landed => new RecordCopyChanges(
                     Addressed(landed.Item.Record), landed.Item.Destination,
-                    [.. landed.Outcome.Changes.Moves.Select(move => new SourceMove(move.From, move.To))],
-                    landed.Outcome.Changes.Deletions,
-                    [.. landed.Outcome.Changes.Documents.Select(document => new DocumentChange(document.Path, document.Text))]),
+                    landed.Outcome.Changes.Moves, landed.Outcome.Changes.Deletions, landed.Outcome.Changes.Documents),
                 refused => new RecordCopyRefusal(
                     new RecordCopyItem(Addressed(refused.Item.Record), refused.Item.Destination), refused.Refusal, refused.Message),
                 (applied, refused) => new RecordCopyChangesResponse(applied, refused));
@@ -321,7 +317,7 @@ internal static class RecordEndpoints
         if (copies.Any(c => string.IsNullOrWhiteSpace(c.FormKey)
                 || string.IsNullOrWhiteSpace(c.Plugin.Name) || string.IsNullOrWhiteSpace(c.Plugin.Origin)))
             return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
-        return QueryEndpointMapping.Answered(
+        return EndpointMapping.Answered(
             svc.GetCompareRecords(copies), compared => Results.Ok(new CompareRecordsResponse(compared, [])));
     }
 
@@ -329,7 +325,7 @@ internal static class RecordEndpoints
     {
         if (copy.DocumentText is null || string.IsNullOrWhiteSpace(copy.Plugin.Name) || string.IsNullOrWhiteSpace(copy.Plugin.Origin))
             return Results.Problem("A plugin name, an origin and a document text are required.", statusCode: 400);
-        return QueryEndpointMapping.Answered(
+        return EndpointMapping.Answered(
             svc.GetCompare(formKey, copy),
             result => result is not null ? Results.Ok(result) : Results.Problem("No plugin indexes this record.", statusCode: 404));
     }
@@ -341,6 +337,6 @@ internal static class RecordEndpoints
         {
             logger.LogInformation("Received {Operation} for {FormKey}", operation, formKey);
         }
-        return QueryEndpointMapping.Ok(read(Uri.UnescapeDataString(formKey)));
+        return EndpointMapping.Ok(read(Uri.UnescapeDataString(formKey)));
     }
 }
