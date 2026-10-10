@@ -139,10 +139,10 @@ describe('appendPluginInText — byte-faithful append of a disk-discovered plugi
     expect(out).toBe('*A.esp\r\nB.esp\r\nNew.esp\r\n# trailing comment\r\n');
   });
 
-  it('matches the file\'s own EOL style when the last line lacks a trailing newline', () => {
+  it('keeps the file\'s EOL style and its unterminated last line', () => {
     const input = '*A.esp\r\nB.esp';
     const out = appendPluginInText(input, 'New.esp');
-    expect(out).toBe('*A.esp\r\nB.esp\r\nNew.esp\r\n');
+    expect(out).toBe('*A.esp\r\nB.esp\r\nNew.esp');
   });
 
   it('preserves a leading BOM', () => {
@@ -155,9 +155,9 @@ describe('appendPluginInText — byte-faithful append of a disk-discovered plugi
     expect(() => appendPluginInText(input, 'Unofficial Fallout 4 Patch.esp')).toThrow(/Unofficial Fallout 4 Patch\.esp/);
   });
 
-  it('a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF (the shared detectEol\'s ruled whole-file-scan behavior, end to end through this caller)', () => {
+  it('a file with both LF- and CRLF-terminated lines is written whole with CRLF, as MO2 writes it', () => {
     const out = appendPluginInText('*A.esp\nB.esp\r\n', 'New.esp');
-    expect(out).toBe('*A.esp\nB.esp\r\nNew.esp\r\n');
+    expect(out).toBe('*A.esp\r\nB.esp\r\nNew.esp\r\n');
   });
 });
 

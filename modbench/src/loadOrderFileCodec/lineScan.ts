@@ -1,5 +1,4 @@
-// The error-prone parts of a byte-faithful text transform: the CRLF lookahead, the leading-BOM
-// convention, and the splice arithmetic.
+// Line-based edits of the load-order files, and the line scan the ini codecs still splice with.
 
 export interface LineRange {
   start: number;
@@ -25,40 +24,22 @@ export function* lineRanges(text: string): Generator<LineRange> {
   if (start < text.length) yield { start, contentEnd: text.length, end: text.length };
 }
 
-/** Safe only on a `lineRanges` slice: such a line holds no `\r`/`\n` but its own
- *  trailing terminator, so anchoring the alternation would be redundant. */
-export const lineContent = (line: string): string => line.replace(/\r\n$|\r$|\n$/, '');
-
-/** Lines each INCLUDING their trailing EOL (last may lack one); join('') is exact. */
-export const splitLinesKeepEol = (text: string): string[] =>
-  [...lineRanges(text)].map((r) => text.slice(r.start, r.end));
-
-const BOM = '﻿';
+const BOM = '\uFEFF';
 
 export const stripBom = (text: string): string => (text.startsWith(BOM) ? text.slice(BOM.length) : text);
 
-/** The BOM is a whole-file property at position 0, never a line's, so it is
- *  stripped and re-prepended around every edit — it stays pinned even when the
- *  line that carried it moves or is removed. */
-export function withBomPreserved(text: string, edit: (bomless: string) => string): string {
-  if (!text.startsWith(BOM)) return edit(text);
-  return BOM + edit(stripBom(text));
-}
-
-/** `lines` must already have the moved line(s) spliced out, since `toIndex`
- *  counts only the `isEntry` lines present. Out-of-range clamps to the last
- *  entry slot, or to the end of `lines` when there are no entries. */
-export function insertIndexAmongEntries(
-  lines: readonly string[],
-  isEntry: (line: string) => boolean,
-  toIndex: number,
-): number {
-  const entryLineIdx = [...lines.entries()].filter(([, line]) => isEntry(line)).map(([i]) => i);
-  const clamped = Math.max(0, Math.min(toIndex, entryLineIdx.length));
-  const atClamped = entryLineIdx[clamped];
-  if (atClamped !== undefined) return atClamped;
-  const last = entryLineIdx.at(-1);
-  return last !== undefined ? last + 1 : lines.length;
+/** Parses `text` into its BOM, line ending and lines, applies `edit` to the lines and joins them
+ *  back. The file keeps the BOM and line ending it was read with, and whether its last line ends
+ *  in a terminator. */
+export function editLines(text: string, edit: (lines: string[]) => readonly string[]): string {
+  const bom = text.startsWith(BOM) ? BOM : '';
+  const body = text.slice(bom.length);
+  const lines = body === '' ? [] : body.split(/\r\n|\r|\n/);
+  const terminated = lines.at(-1) === '' || body === '';
+  if (lines.at(-1) === '') lines.pop();
+  const edited = edit(lines);
+  const eol = detectEol(text);
+  return bom + edited.join(eol) + (terminated && edited.length > 0 ? eol : '');
 }
 
 /** Whole-file presence, never a one-line sniff, which could name a bare `\r` the

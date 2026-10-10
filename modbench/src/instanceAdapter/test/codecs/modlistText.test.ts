@@ -155,9 +155,9 @@ describe('insertSeparatorAtIndexInText', () => {
     expect(out).toBe('# header\n+FirstSep_separator\n');
   });
 
-  it('a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF (the shared detectEol\'s ruled whole-file-scan behavior, end to end through this caller)', () => {
+  it('a file with both LF- and CRLF-terminated lines is written whole with CRLF, as MO2 writes it', () => {
     const out = insertSeparatorAtIndexInText('+A\n+B\r\n', 'Sep', 1);
-    expect(out).toBe('+A\n+B\r\n+Sep_separator\r\n');
+    expect(out).toBe('+A\r\n+B\r\n+Sep_separator\r\n');
   });
 
   it('inserts before the first entry line when afterIndex is -1, leaving the comment header above it', () => {
@@ -356,14 +356,14 @@ describe('moveModsInText', () => {
     expect(out).toHaveLength(input.length);
   });
 
-  it('ends a CRLF file\'s last line with CRLF once a mod lands below it', () => {
-    expect(moveModsInText('+A\r\n+B', ['A'], { kind: 'modOrder' }, 'losing')).toBe('+B\r\n+A\r\n');
+  it('leaves an unterminated last line unterminated once a mod lands below it', () => {
+    expect(moveModsInText('+A\r\n+B', ['A'], { kind: 'modOrder' }, 'losing')).toBe('+B\r\n+A');
   });
 
-  it('terminates a last line that had no EOL once it is moved above another', () => {
+  it('leaves a file without a final terminator without one when its last line moves above another', () => {
     const out = moveModsInText('+A\n+Sep_separator\n+B', ['B'], { kind: 'separator', name: 'Sep' }, 'losing');
 
-    expect(out).toBe('+A\n+B\n+Sep_separator\n');
+    expect(out).toBe('+A\n+B\n+Sep_separator');
   });
 
 });
@@ -401,10 +401,10 @@ describe('moveSeparatorsInText', () => {
       .toThrow(/No Such Sep/);
   });
 
-  it('terminates a last line that had no EOL once a block lands below it', () => {
+  it('leaves a file without a final terminator without one when a block lands below its last line', () => {
     const out = moveSeparatorsInText('+A\n+S1_separator\n+B\n+S2_separator', ['S1'], { kind: 'separator', name: 'S2' }, 'losing');
 
-    expect(out).toBe('+B\n+S2_separator\n+A\n+S1_separator\n');
+    expect(out).toBe('+B\n+S2_separator\n+A\n+S1_separator');
   });
 
   it('keeps a leading BOM at the start of the file when the first block moves', () => {
@@ -424,10 +424,10 @@ describe('moveSeparatorsInText', () => {
     expect(out).toHaveLength(input.length);
   });
 
-  it('ends a CRLF file\'s last line with CRLF once a block lands below it', () => {
+  it('keeps CRLF and an unterminated last line once a block lands below it', () => {
     const out = moveSeparatorsInText('+A\r\n+S1_separator\r\n+B\r\n+S2_separator', ['S1'], { kind: 'separator', name: 'S2' }, 'losing');
 
-    expect(out).toBe('+B\r\n+S2_separator\r\n+A\r\n+S1_separator\r\n');
+    expect(out).toBe('+B\r\n+S2_separator\r\n+A\r\n+S1_separator');
   });
 
 });
@@ -455,18 +455,18 @@ describe('insertModAtWinningEnd — add a disabled mod at the winning end (first
     expect(insertModAtWinningEnd('', 'C')).toBe('-C\n');
   });
 
-  it('EOL-terminates a header line that lacks its own trailing newline when there are no entries yet, the new mod landing right after the header', () => {
-    expect(insertModAtWinningEnd('# header', 'C')).toBe('# header\n-C\n');
+  it('lands right after an unterminated header when there are no entries yet, and the file stays unterminated', () => {
+    expect(insertModAtWinningEnd('# header', 'C')).toBe('# header\n-C');
   });
 
-  it('does not add a spurious EOL to an unrelated line when inserting after an already-terminated one, only the file\'s own trailing line (here, the unmanaged * line) possibly lacking one', () => {
+  it('keeps an unterminated last line unterminated', () => {
     const out = insertModAtWinningEnd('# header\r\n+A\r\n*DLC: Foo', 'New');
     expect(out).toBe('# header\r\n-New\r\n+A\r\n*DLC: Foo');
   });
 
-  it('a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF (the shared detectEol\'s ruled whole-file-scan behavior, end to end through this caller)', () => {
+  it('a file with both LF- and CRLF-terminated lines is written whole with CRLF, as MO2 writes it', () => {
     const out = insertModAtWinningEnd('+A\n+B\r\n', 'New');
-    expect(out).toBe('-New\r\n+A\n+B\r\n');
+    expect(out).toBe('-New\r\n+A\r\n+B\r\n');
   });
 });
 
