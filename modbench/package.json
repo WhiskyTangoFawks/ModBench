@@ -122,13 +122,6 @@
           "title": "Modbench",
           "icon": "images/medit.svg"
         }
-      ],
-      "panel": [
-        {
-          "id": "modbenchReferencedBy",
-          "title": "Referenced By",
-          "icon": "images/medit.svg"
-        }
       ]
     },
     "views": {
@@ -149,12 +142,6 @@
           "id": "modbench.downloads",
           "name": "Downloads",
           "visibility": "collapsed"
-        }
-      ],
-      "modbenchReferencedBy": [
-        {
-          "id": "modbench.referencedByTree",
-          "name": "Referenced By"
         }
       ]
     },
@@ -204,6 +191,11 @@
       {
         "command": "modbench.record.openToSide",
         "title": "Open to the Side",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.record.referencedBy",
+        "title": "Referenced By Record",
         "category": "Modbench"
       },
       {
@@ -351,30 +343,6 @@
         "command": "modbench.downloads.clearFilterHere",
         "title": "Clear Filter",
         "icon": "$(clear-all)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.referencedByTree.filterHere",
-        "title": "Filter…",
-        "icon": "$(search)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.referencedByTree.clearFilterHere",
-        "title": "Clear Filter",
-        "icon": "$(clear-all)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.referrer.sortDescending",
-        "title": "Sort Referrers Descending",
-        "icon": "$(triangle-down)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.referrer.sortAscending",
-        "title": "Sort Referrers Ascending",
-        "icon": "$(triangle-up)",
         "category": "Modbench"
       },
       {
@@ -797,14 +765,6 @@
           "when": "false"
         },
         {
-          "command": "modbench.referencedByTree.filterHere",
-          "when": "false"
-        },
-        {
-          "command": "modbench.referencedByTree.clearFilterHere",
-          "when": "false"
-        },
-        {
           "command": "modbench.downloads.clearFilterHere",
           "when": "false"
         },
@@ -869,11 +829,7 @@
           "when": "modbench.folder == instance"
         },
         {
-          "command": "modbench.referrer.sortAscending",
-          "when": "modbench.folder == instance"
-        },
-        {
-          "command": "modbench.referrer.sortDescending",
+          "command": "modbench.record.referencedBy",
           "when": "modbench.folder == instance"
         },
         {
@@ -960,26 +916,6 @@
           "command": "modbench.mod.createEmpty",
           "when": "view == modbench.modList && modbench.folder == instance",
           "group": "3_create@2"
-        },
-        {
-          "command": "modbench.referencedByTree.filterHere",
-          "when": "view == modbench.referencedByTree && !modbench.referrer.filterActive && modbench.folder == instance",
-          "group": "navigation@1"
-        },
-        {
-          "command": "modbench.referencedByTree.clearFilterHere",
-          "when": "view == modbench.referencedByTree && modbench.referrer.filterActive && modbench.folder == instance",
-          "group": "navigation@1"
-        },
-        {
-          "command": "modbench.referrer.sortDescending",
-          "when": "view == modbench.referencedByTree && !modbench.referrer.descending && modbench.folder == instance",
-          "group": "navigation@2"
-        },
-        {
-          "command": "modbench.referrer.sortAscending",
-          "when": "view == modbench.referencedByTree && modbench.referrer.descending && modbench.folder == instance",
-          "group": "navigation@2"
         },
         {
           "command": "modbench.downloads.filterHere",
@@ -1262,6 +1198,11 @@
           "command": "modbench.record.openToSide",
           "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
           "group": "1_open@1"
+        },
+        {
+          "command": "modbench.record.referencedBy",
+          "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
+          "group": "1_open@2"
         },
         {
           "command": "modbench.record.create",

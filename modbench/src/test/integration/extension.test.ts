@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { before, after, afterEach, beforeEach, describe, it } from 'mocha';
 import type { CompareResult, PluginMetadata, PluginProblems } from '../../client';
 import { present } from '../../ports/present';
+import type { ReferencesViewInput } from '../../editor/referencesView';
 import { PLUGIN_SOURCE_GLOB } from '../../instanceAdapter/instanceAdapter';
 import { comparisonOf, fieldOf } from '../comparison';
 import { isRecord, requires } from '../manifest';
@@ -1361,6 +1362,31 @@ describe('an untracked copy of a record', () => {
     }
 
     await waitFor('the document to change', () => document.getText() === untrackedText);
+  });
+});
+describe('Referenced By, as VS Code\'s References view takes it', () => {
+  const shown = async (formKey: string, title: string) => {
+    const referencesView = await present(
+      vscode.extensions.getExtension<{ getInput(): ReferencesViewInput | undefined }>('vscode.references-view'), 'VS Code\'s References view',
+    ).activate();
+    await vscode.commands.executeCommand('modbench.record.referencedBy', { argument: { kind: 'record', formKey } });
+    return waitFor(`the References view showing ${title}`, () => referencesView.getInput()?.title === title && referencesView.getInput());
+  };
+  const anchoredAt = async ({ uri, range }: vscode.Location) =>
+    [uri.toString(true), (await vscode.workspace.openTextDocument(uri)).offsetAt(range.start)];
+
+  it('takes a tracked record\'s list, anchored at its FormKey in its file', async () => {
+    const input = await shown(TRACKED_FORM_KEY, 'Referenced By: TrackedGun');
+
+    assert.deepStrictEqual(await anchoredAt(input.location),
+      [vscode.Uri.file(TRACKED_FILE).toString(true), readFileSync(TRACKED_FILE, 'utf8').indexOf(`"${TRACKED_FORM_KEY}"`)]);
+  });
+
+  it('takes an untracked record\'s list, anchored at its FormKey in mEdit\'s rendering of it', async () => {
+    const input = await shown(HELD_FORM_KEY, 'Referenced By: NewGun');
+
+    assert.deepStrictEqual(await anchoredAt(input.location),
+      [renderedUri(HELD_FORM_KEY), renderedText(HELD_FORM_KEY).indexOf(`"${HELD_FORM_KEY}"`)]);
   });
 });
 

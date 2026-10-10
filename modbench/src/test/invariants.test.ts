@@ -65,14 +65,13 @@ describe('the createTreeView sites', () => {
 
   it('reads every createTreeView site', () => {
     expect(sites.map((s) => s.id).sort()).toEqual([
-      'modbench.downloads', 'modbench.modList', 'modbench.pluginListTree',
-      'modbench.referencedByTree', 'modbench.toolbox',
+      'modbench.downloads', 'modbench.modList', 'modbench.pluginListTree', 'modbench.toolbox',
     ]);
   });
 
-  it('collapse-all views are the trees: Mods, the merged Plugins tree and Referenced By', () => {
+  it('collapse-all views are the trees: Mods and the merged Plugins tree', () => {
     const collapsible = new Set(sites.filter((s) => /showCollapseAll:\s*true/.test(s.options)).map((s) => s.id));
-    expect([...collapsible].sort()).toEqual(['modbench.modList', 'modbench.pluginListTree', 'modbench.referencedByTree']);
+    expect([...collapsible].sort()).toEqual(['modbench.modList', 'modbench.pluginListTree']);
   });
 
   it('every view but the Toolbox selects several rows', () => {

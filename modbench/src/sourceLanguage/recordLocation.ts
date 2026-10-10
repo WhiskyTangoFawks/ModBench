@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { errorMessage } from '../ports/errorMessage';
-import { copyDocument, type RecordCopy, type RecordDocumentClient } from '../drivingLib/recordDocument';
+import { copyDocument, recordDocument, type RecordCopy, type RecordDocumentClient } from '../drivingLib/recordDocument';
 import type { TextSpan } from './sourceText';
 
 export interface RecordLocationDeps<Document> {
@@ -12,6 +12,20 @@ export interface RecordLocation<Document> extends TextSpan { uri: vscode.Uri; do
 
 export const locationOf = ({ uri, document, start, end }: RecordLocation<vscode.TextDocument>): vscode.Location =>
   new vscode.Location(uri, new vscode.Range(document.positionAt(start), document.positionAt(end)));
+
+/** The span `spanIn` finds of a record in the document it opens as; a copy when it names its plugin,
+ *  else its winning copy. */
+export async function locateRecord<Document extends { getText(): string }>(
+  { client, open }: RecordLocationDeps<Document>,
+  record: Pick<RecordCopy, 'formKey'> & Partial<RecordCopy>,
+  spanIn: (text: string, formKey: string) => TextSpan | undefined,
+): Promise<RecordLocation<Document> | { refused: string } | undefined> {
+  const opened = await recordDocument(client, record);
+  if (!opened || 'refused' in opened) return opened;
+  const document = await open(opened.uri);
+  const span = spanIn(document.getText(), record.formKey);
+  return span ? { uri: opened.uri, document, ...span } : { refused: `${opened.uri.path} states no ${record.formKey} member.` };
+}
 
 interface LocatedCopies<T> { found: T[]; leftOut: string[] }
 

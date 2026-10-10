@@ -6,7 +6,8 @@ import type { RecordDocumentClient } from '../drivingLib/recordDocument';
 import { hoverAt } from './formKeyHover';
 import { definitionsOf } from './formKeyDefinition';
 import { referencesOf } from './formKeyReferences';
-import { locationOf } from './recordLocation';
+import { locateRecord, locationOf } from './recordLocation';
+import { formKeyValue } from './sourceText';
 import { completionsAt } from './completion';
 import { workspaceSymbolsOf, type RecordSymbol } from './workspaceSymbols';
 import { handUnsavedPluginSource } from './handUnsaved';
@@ -47,6 +48,15 @@ function sourceProblems(deps: SourceLanguageDeps): vscode.Disposable {
   const readText = async (file: string) => (await vscode.workspace.openTextDocument(vscode.Uri.file(file))).getText();
   const unsubscribe = feedSourceProblems({ ...deps, readText, publish, languageStatus });
   return new vscode.Disposable(() => { unsubscribe(); collection.dispose(); status?.dispose(); });
+}
+
+/** A record's FormKey in its document, where Referenced By anchors its list. */
+export function formKeyLocation(client: RecordDocumentClient) {
+  const open = (uri: vscode.Uri) => vscode.workspace.openTextDocument(uri);
+  return async (record: Parameters<typeof locateRecord>[1]): Promise<vscode.Location | { refused: string } | undefined> => {
+    const found = await locateRecord({ client, open }, record, formKeyValue);
+    return found && ('refused' in found ? found : locationOf(found));
+  };
 }
 
 export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposable {

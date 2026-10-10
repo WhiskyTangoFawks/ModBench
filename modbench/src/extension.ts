@@ -9,7 +9,7 @@ import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, trackedRepositoriesOver, type Editor } from './editor';
-import { createSourceLanguage } from './sourceLanguage';
+import { createSourceLanguage, formKeyLocation } from './sourceLanguage';
 import { savePluginSource } from './sourceLanguage/dirtyPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
@@ -62,7 +62,7 @@ interface ViewsDeps {
   extensionId: string;
   extensionUri: vscode.Uri;
   focusedView: FocusedView;
-  editor: Pick<Editor, 'nameFilters' | 'copyValue'>;
+  editor: Pick<Editor, 'copyValue'>;
 }
 
 interface InstanceSide {
@@ -157,7 +157,6 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     () => deps.focusedView.id(),
     new Map([
       ['modbench.modList', mods.nameFilter], ['modbench.pluginListTree', plugins.nameFilter], ['modbench.downloads', downloadsFilter],
-      ...deps.editor.nameFilters,
     ]),
     () => vscode.window.setStatusBarMessage('Focus a list to filter it.', 5000)));
   own(registerRefreshCommand({
@@ -236,6 +235,7 @@ export function activate(context: vscode.ExtensionContext): void {
     recordWrite: plugins.recordWrite,
     sourceEditing,
     modFacts: opened.facts,
+    locateRecord: formKeyLocation(meditClient),
   });
   const views = buildViews(opened, ownedByViews, {
     outputChannel, client: meditClient,
