@@ -103,7 +103,7 @@ const HANDLERS: {
   [WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER]: (deps, m) => replyFormKeyPicked(deps.formKeyPicker, m),
   [WEBVIEW_TO_EXTENSION.OPEN_ENUM_PICKER]: async (deps, m) => {
     const value = await pickEnumValue(m.choices, m.current);
-    deps.formKeyPicker.reply({ type: EXTENSION_TO_WEBVIEW.ENUM_PICKED, requestId: m.requestId, value });
+    deps.reply({ type: EXTENSION_TO_WEBVIEW.ENUM_PICKED, requestId: m.requestId, value });
   },
   [WEBVIEW_TO_EXTENSION.FOCUS_CELL]: (deps, m) => { deps.focusCell(m.context ?? undefined, m.entered); },
   [WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD]: answerRecordLoad,

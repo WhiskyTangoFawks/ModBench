@@ -74,7 +74,7 @@ describe('RecordPanel — a scalar row', () => {
   it('offers no expand toggle when the field has no children', async () => {
     renderPanel(scalar);
     await screen.findByText('Level');
-    expect(within(rowOf('Level')).queryByRole('button', { name: /[▶▼]/ })).not.toBeInTheDocument();
+    expect(rowOf('Level').querySelector('[aria-expanded]')).toBeNull();
   });
 
   it('opens no editor from a click, a second click or a double click in a read-only column', async () => {
@@ -107,10 +107,10 @@ describe('RecordPanel — a row that has children', () => {
     await screen.findByText('X');
     fireEvent.doubleClick(cellAt('Bounds', 0));
     expect(screen.queryByText('X')).not.toBeInTheDocument();
-    expect(within(rowOf('Bounds')).getByText('▶')).toBeInTheDocument();
+    expect(within(rowOf('Bounds')).getByRole('button', { expanded: false })).toBeInTheDocument();
     fireEvent.click(toggleOf('Bounds'));
     expect(screen.getByText('X')).toBeInTheDocument();
-    expect(within(rowOf('Bounds')).getByText('▼')).toBeInTheDocument();
+    expect(within(rowOf('Bounds')).getByRole('button', { expanded: true })).toBeInTheDocument();
   });
 
   it('a double click on the label of a row with no children does nothing', async () => {
@@ -237,7 +237,7 @@ describe('RecordPanel — the check error is the diff node\'s own, per column', 
       })]));
     await screen.findByText('Reference');
     expect(within(cellAt('Reference', 1)).getByTitle(error)).toBeInTheDocument();
-    expect(within(cellAt('Reference', 2)).queryByText('⚠')).not.toBeInTheDocument();
+    expect(within(cellAt('Reference', 2)).queryByRole('img', { name: 'warning' })).not.toBeInTheDocument();
   });
 
   it('shows an array element its own error, so an element hop does not suppress it', async () => {

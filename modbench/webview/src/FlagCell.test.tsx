@@ -21,6 +21,12 @@ const flagMeta = fieldMeta({
 });
 
 describe('FlagCell — the checkbox list is the cell: always visible, one checkbox per flag, no gesture to reveal it', () => {
+  it('draws its checkboxes in the theme\'s checkbox style', () => {
+    render(<FlagCell value={[]} meta={flagMeta} editable onCommit={vi.fn()} />);
+
+    for (const box of screen.getAllByRole('checkbox')) expect(box).toHaveClass('vscode-checkbox');
+  });
+
   it('renders one checkbox per member, checked where the document names it', () => {
     render(<FlagCell value={['A', 'C']} meta={flagMeta} editable onCommit={vi.fn()} />);
     const boxes = screen.getAllByRole('checkbox');

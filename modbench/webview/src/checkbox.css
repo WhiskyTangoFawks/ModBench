@@ -1,0 +1,30 @@
+input[type="checkbox"].vscode-checkbox {
+  appearance: none;
+  position: relative;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: none;
+  background: var(--vscode-checkbox-background);
+  border: 1px solid var(--vscode-checkbox-border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+input[type="checkbox"].vscode-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--vscode-checkbox-foreground);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"].vscode-checkbox:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}

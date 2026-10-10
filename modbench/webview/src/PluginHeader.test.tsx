@@ -127,7 +127,7 @@ describe('PluginHeader', () => {
 
   it('shows its button as a restore control while collapsed', () => {
     const { header } = renderHeader({}, { collapsed: true });
-    expect(within(header).getByRole('button')).toHaveTextContent('▶');
+    expect(within(header).getByRole('button')).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('shows only its label while collapsed', () => {
