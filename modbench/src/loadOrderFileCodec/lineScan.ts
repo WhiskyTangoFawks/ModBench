@@ -26,9 +26,8 @@ const BOM = '\uFEFF';
 
 export const stripBom = (text: string): string => (text.startsWith(BOM) ? text.slice(BOM.length) : text);
 
-/** Parses `text` into its BOM, line ending and lines, applies `edit` to the lines and joins them
- *  back. The file keeps its BOM and whether its last line ends in a terminator, and is written
- *  whole with the one line ending `detectEol` names. */
+/** Applies `edit` to the lines. The file keeps its BOM and whether its last line has a
+ *  terminator, and is written whole with the one line ending `detectEol` names. */
 export function editLines(text: string, edit: (lines: string[]) => readonly string[]): string {
   const bom = text.startsWith(BOM) ? BOM : '';
   const body = text.slice(bom.length);
