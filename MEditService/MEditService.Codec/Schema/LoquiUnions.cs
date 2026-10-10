@@ -151,9 +151,7 @@ public static class LoquiUnions
         return columns;
     }
 
-    // One field per member name, carried as the face that governs its siblings (else the first leaf's), with a variant per leaf wherever the
-    // leaves disagree or one lacks it. Shape is the whole wire description, compared as JSON since
-    // FieldMetadata's collections compare by reference.
+    // FieldMetadata's collections compare by reference, so shapes are compared as JSON.
     private static IEnumerable<(T Face, IReadOnlyDictionary<string, T>? Variants)> UnionMembers<T>(
         IReadOnlyList<(string ClassName, IReadOnlyList<T> Members)> leaves, Func<T, string> name, Func<T, FieldMetadata> shape)
     {

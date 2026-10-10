@@ -56,9 +56,7 @@ public static class HeaderDocument
         return RestoreOmittedNextObjectId(mod, body);
     }
 
-    /// <summary>A document omits a Next Object ID equal to Mutagen's default, which a new mod does
-    /// not start at, so a mod read from a document that omits it is put back to that default. Every
-    /// reader of a root document applies this; the Codec reads no file, so the gateway cannot.</summary>
+    /// <summary>Mutagen's serializer omits a Next Object ID equal to its default, which a new mod does not start at.</summary>
     public static IMod RestoreOmittedNextObjectId(IMod mod, byte[] rootDocument)
     {
         if (JsonNode.Parse(rootDocument)?["ModHeader"]?["Stats"]?["NextFormID"] is null)
