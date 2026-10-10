@@ -1,3 +1,4 @@
+import { leveledLog } from '../../test/leveledLog';
 import { describe, it, expect, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon } from '../../test/vscodeMock';
 
@@ -42,7 +43,7 @@ function makeView(client = new InMemoryMEditClient()) {
   type RegisterNameFilter = Parameters<typeof createReferencedByView>[2];
   const filter = { setBaseDescription: vi.fn(), refresh: vi.fn(), open: vi.fn(), clear: vi.fn(), dispose: vi.fn() } satisfies ReturnType<RegisterNameFilter>;
   let deps: Parameters<RegisterNameFilter>[0] | undefined;
-  const made = createReferencedByView(client, vi.fn(), (given) => { deps = given; return filter; });
+  const made = createReferencedByView(client, leveledLog(), (given) => { deps = given; return filter; });
   return { ...made, filter, deps: () => deps };
 }
 

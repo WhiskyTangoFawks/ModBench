@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+import { leveledLog } from '../../test/leveledLog';
 import { createMEditClient } from '../HttpMEditClient';
 import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
 import { Readable } from 'node:stream';
@@ -409,12 +410,12 @@ describe('HttpMEditClient — getComparison', () => {
   });
 
   it('fails on any other non-OK answer with mEdit\'s reason alone, and files the verb and status in the log', async () => {
-    const log = vi.fn();
+    const log = leveledLog();
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(500, { detail: 'boom' })));
     const client = makeClient(fetch, { log });
 
     await expect(client.getComparison('000801:Broken.esp')).resolves.toEqual({ failed: 'refused', refusal: 'boom' });
-    expect(log).toHaveBeenCalledWith(expect.stringMatching(/getComparison.*failed \(500\): boom/));
+    expect(log.lines.error).toEqual([expect.stringMatching(/getComparison.*failed \(500\): boom/)]);
   });
 });
 
@@ -1157,11 +1158,11 @@ describe('HttpMEditClient — the problems in each tracked plugin\'s source', ()
 
 describe('HttpMEditClient — a read the request never reaches mEdit with', () => {
   it('fails as unreachable, and files the fetch error in the log alone', async () => {
-    const log = vi.fn();
+    const log = leveledLog();
     const client = makeClient(vi.fn(() => Promise.reject(new Error('fetch failed'))), { log });
 
     await expect(client.getPlugins()).resolves.toEqual({ failed: 'unreachable' });
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('fetch failed'));
+    expect(log.lines.error).toEqual([expect.stringContaining('fetch failed')]);
   });
 });
 

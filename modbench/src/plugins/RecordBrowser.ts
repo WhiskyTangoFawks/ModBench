@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { SILENT_LOG, type Log } from '../ports/log';
 import { ErrorNode } from '../drivingLib/errorNode';
 import type {
   RecordSummary, RecordPage,
@@ -335,10 +336,10 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   private reopening = new Set<string>();
   // Bumped by each refresh, so a read answered before mEdit's rows changed caches nothing.
   private generation = 0;
-  private readonly log: (msg: string) => void;
+  private readonly log: Log;
 
-  constructor(private readonly repository: RecordBrowserClient, log?: (msg: string) => void) {
-    this.log = log ?? (() => {});
+  constructor(private readonly repository: RecordBrowserClient, log?: Log) {
+    this.log = log ?? SILENT_LOG;
   }
 
   refresh(): void {
@@ -397,7 +398,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
     }, (e: unknown) => {
       if (generation !== this.generation) return;
       const reason = this.err(e);
-      this.log(`[RecordBrowser] getWorkingTreeStatesBeneath(${plugin.name}) failed: ${reason}`);
+      this.log.error(`[RecordBrowser] getWorkingTreeStatesBeneath(${plugin.name}) failed: ${reason}`);
       const message = this.beneath.has(key) ? `Showing the last good read: ${reason}` : `Failed to load: ${reason}`;
       if (this.beneathFailures.get(key) !== message) {
         this.beneathFailures.set(key, message);
@@ -505,7 +506,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
       return await build();
     } catch (e) {
       const message = this.err(e);
-      this.log(`[RecordBrowser] ${op} failed: ${message}`);
+      this.log.error(`[RecordBrowser] ${op} failed: ${message}`);
       return [new ErrorNode(message)];
     }
   }

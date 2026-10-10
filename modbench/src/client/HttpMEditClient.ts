@@ -1,4 +1,5 @@
 import type { RecordEditEnvelope } from '../wire/messages';
+import { SILENT_LOG, type Log } from '../ports/log';
 import {
   createApiClient, errorText, isTerminalLoadOrderStatusFor, openNotificationStream,
   toLoadOrderStatus, type ApiClient, type LoadOrderStatus, type CompareResult, type CompareRecordsResponse, type RecordCopy, type CopyText,
@@ -37,7 +38,7 @@ interface HttpMEditClientDeps {
   /** Overrides the production fetch (undici, unlimited timeouts) — a test scripts the backend's
    *  HTTP responses through this. */
   fetch?: (input: Request) => Promise<Response>;
-  log?: (msg: string) => void;
+  log?: Log;
   timeoutMs?: number;
   reconnectDelayMs?: number;
 }
@@ -79,7 +80,7 @@ function backendOptions(deps: HttpMEditClientDeps): BackendLifecycleOptions {
 class HttpMEditClient implements MEditClient {
   private api?: { port: number; client: ApiClient };
   private readonly fetchImpl: (input: Request) => Promise<Response>;
-  private readonly log: (msg: string) => void;
+  private readonly log: Log;
   private readonly timeoutMs: number;
   private readonly lifecycle: BackendLifecycle;
   private readonly notifications: SseNotificationSubscriber;
@@ -87,7 +88,7 @@ class HttpMEditClient implements MEditClient {
   private readonly loadOrderStatusKept: LoadOrderStatusKeeper;
   private readonly handOver: UnsavedHandOver;
   constructor(deps: HttpMEditClientDeps) {
-    this.log = deps.log ?? (() => {});
+    this.log = deps.log ?? SILENT_LOG;
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
     this.fetchImpl = deps.fetch ?? createUnlimitedFetch();
     this.notifications = new SseNotificationSubscriber({
@@ -185,12 +186,12 @@ class HttpMEditClient implements MEditClient {
       const { data, error, response } = await spec.post();
       if (!response.ok) {
         const text = errorText(error);
-        this.log(`[HttpMEditClient] ${spec.op} failed (${response.status}): ${text}`);
+        this.log.error(`[HttpMEditClient] ${spec.op} failed (${response.status}): ${text}`);
         return { refused: true, message: `${spec.failMsg} — ${text}` };
       }
       return data ?? spec.noContent ?? { refused: true, message: `${spec.failMsg} — no answer` };
     } catch (e) {
-      this.log(`[HttpMEditClient] ${spec.op} threw: ${errorMessage(e)}`);
+      this.log.error(`[HttpMEditClient] ${spec.op} threw: ${errorMessage(e)}`);
       return { refused: true, message: `${spec.failMsg} — ${failureReason(UNREACHABLE)}` };
     }
   }
@@ -233,13 +234,13 @@ class HttpMEditClient implements MEditClient {
       const { error, response } = await this.apiClient.POST('/index/rebuild', { body: { instanceRoot, gameRelease } });
       if (!response.ok) {
         const text = errorText(error);
-        this.log(`[HttpMEditClient] rebuildIndex failed (${response.status}): ${text}`);
+        this.log.error(`[HttpMEditClient] rebuildIndex failed (${response.status}): ${text}`);
         if (response.status === 423) return { rebuilt: false, heldElsewhere: true };
         return { rebuilt: false, heldElsewhere: false, detail: text };
       }
       return { rebuilt: true };
     } catch (e) {
-      this.log(`[HttpMEditClient] rebuildIndex threw: ${errorMessage(e)}`);
+      this.log.error(`[HttpMEditClient] rebuildIndex threw: ${errorMessage(e)}`);
       return { rebuilt: false, heldElsewhere: false, detail: failureReason(UNREACHABLE) };
     }
   }
@@ -278,7 +279,7 @@ class HttpMEditClient implements MEditClient {
     if (!response.ok || !data) {
       unsubscribe();
       const text = errorText(error);
-      this.log(`[HttpMEditClient] putLoadOrder failed (${response.status}): ${text}`);
+      this.log.error(`[HttpMEditClient] putLoadOrder failed (${response.status}): ${text}`);
       return { outcome: 'failed', message: `Failed to send the load order — ${text}` };
     }
 
@@ -324,7 +325,7 @@ class HttpMEditClient implements MEditClient {
       const { data } = await this.apiClient.GET('/load-order/status', {});
       return data ? toLoadOrderStatus(data) : undefined;
     } catch (e) {
-      this.log(`[HttpMEditClient] reading the load order status threw: ${errorMessage(e)}`);
+      this.log.error(`[HttpMEditClient] reading the load order status threw: ${errorMessage(e)}`);
       return undefined;
     }
   }
@@ -355,7 +356,7 @@ class HttpMEditClient implements MEditClient {
   // An abort is the one rejection that is not a failure: the teardown is already underway.
   private wasDeliberatelyAborted(signal: AbortSignal): boolean {
     if (!signal.aborted) return false;
-    this.log('[HttpMEditClient] putLoadOrder was aborted — mEdit was closed while it reconciled');
+    this.log.info('[HttpMEditClient] putLoadOrder was aborted — mEdit was closed while it reconciled');
     return true;
   }
 
@@ -460,7 +461,7 @@ class HttpMEditClient implements MEditClient {
         body: { edit: { plugin, origin, ...envelope } },
       });
     } catch (e) {
-      this.log(`[HttpMEditClient] getEditChanges(${formKey}) threw: ${errorMessage(e)}`);
+      this.log.error(`[HttpMEditClient] getEditChanges(${formKey}) threw: ${errorMessage(e)}`);
       throw new Error(failureReason(UNREACHABLE));
     }
     const { data, error, response } = result;
@@ -470,7 +471,7 @@ class HttpMEditClient implements MEditClient {
     }
 
     const outcome = editRefused(error);
-    this.log(`[HttpMEditClient] getEditChanges(${formKey} ${envelope.op} ${JSON.stringify(envelope.path)}) refused: ${outcome.refusal} — ${outcome.message}`);
+    this.log.warn(`[HttpMEditClient] getEditChanges(${formKey} ${envelope.op} ${JSON.stringify(envelope.path)}) refused: ${outcome.refusal} — ${outcome.message}`);
     return outcome;
   }
 
@@ -490,14 +491,14 @@ class HttpMEditClient implements MEditClient {
       if (absent && response.status === absent.status) return absent.answers;
       if (!response.ok) {
         const text = errorText(error);
-        this.log(`[HttpMEditClient] ${what} failed (${response.status})${text ? `: ${text}` : ''}`);
+        this.log.error(`[HttpMEditClient] ${what} failed (${response.status})${text ? `: ${text}` : ''}`);
         return text ? { failed: 'refused', refusal: text } : NO_ANSWER;
       }
       const answered = answer(data);
-      if (isReadFailed(answered)) this.log(`[HttpMEditClient] ${what}: mEdit answered with no body`);
+      if (isReadFailed(answered)) this.log.error(`[HttpMEditClient] ${what}: mEdit answered with no body`);
       return answered;
     }, (e: unknown): ReadFailed => {
-      this.log(`[HttpMEditClient] ${what} threw: ${errorMessage(e)}`);
+      this.log.error(`[HttpMEditClient] ${what} threw: ${errorMessage(e)}`);
       return UNREACHABLE;
     });
     if (!timed) return settled;
@@ -507,7 +508,7 @@ class HttpMEditClient implements MEditClient {
     const deadline = new Promise<ReadFailed>((resolve) => {
       timer = setTimeout(() => {
         controller.abort();
-        this.log(`[HttpMEditClient] ${what} timed out after ${this.timeoutMs}ms`);
+        this.log.error(`[HttpMEditClient] ${what} timed out after ${this.timeoutMs}ms`);
         resolve({ failed: 'timed-out' });
       }, this.timeoutMs);
     });
@@ -634,12 +635,12 @@ class HttpMEditClient implements MEditClient {
       const { error, response } = await this.apiClient.POST('/load-order/filter', { body: filter });
       if (!response.ok) {
         const text = errorText(error);
-        this.log(`[HttpMEditClient] setFilter failed (${response.status}): ${text}`);
+        this.log.error(`[HttpMEditClient] setFilter failed (${response.status}): ${text}`);
         return text;
       }
       return null;
     } catch (e) {
-      this.log(`[HttpMEditClient] setFilter failed: ${errorMessage(e)}`);
+      this.log.error(`[HttpMEditClient] setFilter failed: ${errorMessage(e)}`);
       return failureReason(UNREACHABLE);
     }
   }
@@ -649,12 +650,12 @@ class HttpMEditClient implements MEditClient {
       const { error, response } = await this.apiClient.DELETE('/load-order/filter', {});
       if (!response.ok) {
         const text = errorText(error);
-        this.log(`[HttpMEditClient] clearFilter failed (${response.status}): ${text}`);
+        this.log.error(`[HttpMEditClient] clearFilter failed (${response.status}): ${text}`);
         return text;
       }
       return null;
     } catch (e) {
-      this.log(`[HttpMEditClient] clearFilter failed: ${errorMessage(e)}`);
+      this.log.error(`[HttpMEditClient] clearFilter failed: ${errorMessage(e)}`);
       return failureReason(UNREACHABLE);
     }
   }

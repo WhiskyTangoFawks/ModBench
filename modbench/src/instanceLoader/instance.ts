@@ -1,5 +1,6 @@
 // The instance value (ADR-0015).
 
+import type { Log } from '../ports/log';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
   buildLoadOrderRows, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin,
@@ -123,18 +124,11 @@ interface FocusWindow {
   onDidChangeWindowState(listener: (state: { readonly focused: boolean }) => void): Subscription;
 }
 
-interface InstanceLog {
-  info(line: string): void;
-  warn(line: string): void;
-  error(line: string): void;
-}
-
 interface InstanceOptions {
   /** The one reader of the instance; each recompute reads its settings once. */
   adapter: InstanceAdapter;
   window: FocusWindow;
-  /** A failure logs at warn or error; a note that is not a failure logs at info. */
-  log: InstanceLog;
+  log: Log;
 }
 
 // Each listed mod's folder is matched as the manager matches names.

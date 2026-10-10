@@ -1,4 +1,5 @@
 import * as http from 'node:http';
+import { SILENT_LOG, type Log } from '../ports/log';
 import * as net from 'node:net';
 import * as readline from 'node:readline';
 import type { BackendStatus } from './MEditClient';
@@ -27,7 +28,7 @@ export interface BackendLifecycleOptions {
   freePort?: () => Promise<number>;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
-  log?: (msg: string) => void;
+  log?: Log;
   /** Receives each line the spawned backend writes, with the stream it came from.
    *  Levelling lives in the caller's forwarder, not here. */
   onOutput?: (line: string, source: BackendStream) => void;
@@ -54,7 +55,7 @@ export class BackendLifecycle {
   private readonly pollIntervalMs: number;
   private readonly pollTimeoutMs: number;
   private readonly stopGracePeriodMs: number;
-  private readonly log: (msg: string) => void;
+  private readonly log: Log;
   private readonly onOutput: (line: string, source: BackendStream) => void;
   private readonly spawnFn?: SpawnFn;
   private readonly executablePath?: string;
@@ -78,7 +79,7 @@ export class BackendLifecycle {
     this.pollIntervalMs = opts.pollIntervalMs ?? 500;
     this.pollTimeoutMs = opts.pollTimeoutMs ?? 30_000;
     this.stopGracePeriodMs = opts.stopGracePeriodMs ?? 5_000;
-    this.log = opts.log ?? (() => {});
+    this.log = opts.log ?? SILENT_LOG;
     this.onOutput = opts.onOutput ?? (() => {});
     this.spawnFn = opts.spawn;
     this.executablePath = opts.executablePath;
@@ -166,7 +167,7 @@ export class BackendLifecycle {
       child.on('exit', onExit);
       child.kill('SIGTERM');
       escalateTimer.current = setTimeout(() => {
-        this.log(`[backend] did not exit within ${this.stopGracePeriodMs}ms of SIGTERM — sending SIGKILL`);
+        this.log.warn(`[backend] did not exit within ${this.stopGracePeriodMs}ms of SIGTERM — sending SIGKILL`);
         child.kill('SIGKILL');
       }, this.stopGracePeriodMs);
     });
@@ -176,7 +177,7 @@ export class BackendLifecycle {
     this.child = undefined;
     if (!this.expectedAlive) return; // stop() already handled it
     this.expectedAlive = false;
-    this.log(`[backend] mEdit ${why}`);
+    this.log.error(`[backend] mEdit ${why}`);
     this.setStatus('stopped');
   }
 
@@ -198,7 +199,7 @@ export class BackendLifecycle {
         }
 
         if (Date.now() >= deadline) {
-          this.log(`[backend] Timed out waiting for backend on port ${this.port}`);
+          this.log.error(`[backend] Timed out waiting for backend on port ${this.port}`);
           this.setStatus('disconnected');
           resolve();
           return;
@@ -216,7 +217,7 @@ export class BackendLifecycle {
       const req = http.get(`http://localhost:${this.port}/health`, (res) => {
         resolve(res.statusCode === 200);
       });
-      req.on('error', (err) => { this.log(`[backend] Health check error: ${err.message}`); resolve(false); });
+      req.on('error', (err) => { this.log.warn(`[backend] Health check error: ${err.message}`); resolve(false); });
     });
   }
 

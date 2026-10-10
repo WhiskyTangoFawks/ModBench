@@ -47,25 +47,25 @@ function realInstance(hooks: Hooks = {}): {
   instance: Instance;
   logs: string[];
   warnings: string[];
-  readFailureLines: string[];
+  errorLines: string[];
   settingsReads: { count: number };
   setResolver: (resolve: ResolveGameFolder) => void;
 } {
   const root = cloneCorpusFixture();
   roots.push(root);
   const logs: string[] = [];
-  const readFailureLines: string[] = [];
+  const errorLines: string[] = [];
   const warnings: string[] = [];
   const settingsReads = { count: 0 };
   let resolve = hooks.resolveGameFolder ?? resolvesDataFolder;
   const instance = new Instance({
     window: STEADY_WINDOW,
     adapter: countingSettings(adapterOver(root, { gameFolder: () => resolve() }), settingsReads),
-    log: { info: (msg) => logs.push(msg), warn: (msg) => warnings.push(msg), error: (line) => readFailureLines.push(line) },
+    log: { info: (msg) => logs.push(msg), warn: (msg) => warnings.push(msg), error: (line) => errorLines.push(line) },
   });
   instances.push(instance);
   return {
-    root, instance, logs, warnings, readFailureLines, settingsReads,
+    root, instance, logs, warnings, errorLines, settingsReads,
     setResolver: (next) => { resolve = next; },
   };
 }
@@ -286,14 +286,14 @@ describe('Instance — the value', () => {
   });
 
   it('skips a mod folder link whose target cannot be checked as MO2 does, without failing the recompute, and tells it once rather than on every watched change', async () => {
-    const { root, instance, logs, readFailureLines } = realInstance();
+    const { root, instance, logs, errorLines } = realInstance();
     await mkdir(join(root, 'mods', 'Real Mod'));
     await symlink(join(root, 'mods', 'Loop'), join(root, 'mods', 'Loop'));
 
     await instance.refresh();
     await instance.refresh();
 
-    expect(readFailureLines).toEqual([]);
+    expect(errorLines).toEqual([]);
     expect(instance.value.modFolders?.map((f) => f.name)).toContain('Real Mod');
     expect(instance.value.modFolders?.map((f) => f.name)).not.toContain('Loop');
     expect(logs.filter((line) => line.includes('Loop'))).toHaveLength(1);
@@ -601,7 +601,7 @@ describe('Instance — a write that changes several files', () => {
   });
 
   it('reports only the failure of the read after it, not of one inside it that fails on a file the write is half-way through', async () => {
-    const { root, instance, readFailureLines } = realInstance();
+    const { root, instance, errorLines } = realInstance();
     await instance.refresh();
     const heard = vi.fn();
     instance.onReadFailure(heard);
@@ -612,13 +612,13 @@ describe('Instance — a write that changes several files', () => {
     });
 
     expect(heard).toHaveBeenCalledTimes(1);
-    expect(readFailureLines).toHaveLength(1);
+    expect(errorLines).toHaveLength(1);
   });
 });
 
 describe('Instance — a value that survives a bad read', () => {
   it('keeps the previous value and logs when a file is half-written', async () => {
-    const { root, instance, readFailureLines } = realInstance();
+    const { root, instance, errorLines } = realInstance();
     await readUntilNoArmedReadIsLeft(instance);
     const value = instance.value;
     const before = instance.sequence;
@@ -628,12 +628,12 @@ describe('Instance — a value that survives a bad read', () => {
 
     expect(instance.value).toBe(value);
     expect(instance.sequence).toBe(before);
-    expect(readFailureLines).toHaveLength(1);
-    expect(readFailureLines[0]).toContain('ModOrganizer.ini');
+    expect(errorLines).toHaveLength(1);
+    expect(errorLines[0]).toContain('ModOrganizer.ini');
   });
 
   it('keeps the value when a mod\'s meta.ini is present but unreadable — never silently "no metadata"', async () => {
-    const { root, instance, readFailureLines } = realInstance();
+    const { root, instance, errorLines } = realInstance();
     await readUntilNoArmedReadIsLeft(instance);
     const value = instance.value;
     const before = instance.sequence;
@@ -644,11 +644,11 @@ describe('Instance — a value that survives a bad read', () => {
 
     expect(instance.value).toBe(value);
     expect(instance.sequence).toBe(before);
-    expect(readFailureLines).toHaveLength(1);
+    expect(errorLines).toHaveLength(1);
   });
 
   it('keeps the value when a folder inside overwrite/ is unreadable, simulated through a mocked readdir as chmod denial is bypassed when the runner is root — never silently a smaller count', async () => {
-    const { root, instance, readFailureLines } = realInstance();
+    const { root, instance, errorLines } = realInstance();
     const nested = join(root, 'overwrite', 'SKSE');
     await mkdir(nested, { recursive: true });
     await writeFile(join(nested, 'skse.log'), '');
@@ -669,7 +669,7 @@ describe('Instance — a value that survives a bad read', () => {
 
     expect(instance.value).toBe(value);
     expect(instance.sequence).toBe(before);
-    expect(readFailureLines).toHaveLength(1);
+    expect(errorLines).toHaveLength(1);
   });
 
   it('reports a failed first read to failure subscribers, so a tree can settle on an error node instead of a spinner that never ends, holds the sequence at 0, and lands the next successful read at sequence 1', async () => {
@@ -769,7 +769,7 @@ describe('Instance — a value that survives a bad read', () => {
   });
 
   it('keeps recomputing after a subscriber throws', async () => {
-    const { instance, readFailureLines } = realInstance();
+    const { instance, errorLines } = realInstance();
     const seen: number[] = [];
     instance.subscribe(() => {
       throw new Error('subscriber exploded');
@@ -780,7 +780,7 @@ describe('Instance — a value that survives a bad read', () => {
     await instance.refresh();
 
     expect(seen).toEqual([1, 2]);
-    expect(readFailureLines.filter((m) => m.includes('subscriber threw'))).toHaveLength(2);
+    expect(errorLines.filter((m) => m.includes('subscriber threw'))).toHaveLength(2);
   });
 
   it('corrects the value on refresh after a watcher event that never arrived', async () => {
@@ -850,7 +850,7 @@ describe('Instance — downloads, profile and game directory', () => {
   });
 
   it('keeps the value when an off-profile mod\'s meta.ini is present but unreadable, only ENOENT reading as empty', async () => {
-    const { root, instance, readFailureLines } = realInstance();
+    const { root, instance, errorLines } = realInstance();
     await readUntilNoArmedReadIsLeft(instance);
     const value = instance.value;
     const before = instance.sequence;
@@ -860,7 +860,7 @@ describe('Instance — downloads, profile and game directory', () => {
 
     expect(instance.value).toBe(value);
     expect(instance.sequence).toBe(before);
-    expect(readFailureLines).toHaveLength(1);
+    expect(errorLines).toHaveLength(1);
   });
 
   it('reflects a profile switch made outside Modbench in the next value', async () => {
@@ -914,7 +914,7 @@ describe('Instance — downloads, profile and game directory', () => {
   });
 
   it('lands a value carrying the game folder not found, with each place looked, rather than a failure', async () => {
-    const { instance, setResolver, readFailureLines } = realInstance();
+    const { instance, setResolver, errorLines } = realInstance();
     await instance.refresh();
     expect(instance.value.gameFolder.kind).toBe('found');
     const before = instance.sequence;
@@ -924,13 +924,13 @@ describe('Instance — downloads, profile and game directory', () => {
 
     expect(instance.sequence).toBe(before + 1);
     expect(instance.readFailure).toBeUndefined();
-    expect(readFailureLines).toEqual([]);
+    expect(errorLines).toEqual([]);
     expect(instance.value.gameFolder).toEqual(GAME_FOLDER_NOT_FOUND);
     expect(instance.value.mods.length).toBeGreaterThan(0);
   });
 
   it('fails the read, keeping the last value, when the configuration names no game, rather than reading as the game folder not found', async () => {
-    const { root, instance, readFailureLines } = realInstance();
+    const { root, instance, errorLines } = realInstance();
     await readUntilNoArmedReadIsLeft(instance);
     const before = instance.sequence;
     const ini = join(root, 'ModOrganizer.ini');
@@ -940,7 +940,7 @@ describe('Instance — downloads, profile and game directory', () => {
 
     expect(instance.sequence).toBe(before);
     expect(instance.readFailure).toMatch(/gameName/);
-    expect(readFailureLines).toHaveLength(1);
+    expect(errorLines).toHaveLength(1);
   });
 
   it('keeps every plugins.txt line as a row when the game directory is unresolved, Data-only rows line-only with no path rather than a guess or a drop, a mod-provided row keeping its real path', async () => {
@@ -1043,7 +1043,7 @@ describe('Instance — downloads, profile and game directory', () => {
 });
 
 async function minimalInstanceWithoutCorpusMasters(): Promise<{
-  root: string; instance: Instance; logs: string[]; warnings: string[]; readFailureLines: string[];
+  root: string; instance: Instance; logs: string[]; warnings: string[]; errorLines: string[];
   setResolver: (resolve: ResolveGameFolder) => void;
 }> {
   const root = await mkdtemp(join(tmpdir(), 'medit-instance-status-'));
@@ -1054,16 +1054,16 @@ async function minimalInstanceWithoutCorpusMasters(): Promise<{
   await writeFile(join(root, 'profiles', 'Default', 'plugins.txt'), '');
   await mkdir(join(root, 'mods', 'Consumer'), { recursive: true });
   const logs: string[] = [];
-  const readFailureLines: string[] = [];
+  const errorLines: string[] = [];
   const warnings: string[] = [];
   let resolve: ResolveGameFolder = resolvesNotFound;
   const instance = new Instance({
     window: STEADY_WINDOW,
     adapter: adapterOver(root, { gameFolder: () => resolve() }),
-    log: { info: (msg) => logs.push(msg), warn: (msg) => warnings.push(msg), error: (line) => readFailureLines.push(line) },
+    log: { info: (msg) => logs.push(msg), warn: (msg) => warnings.push(msg), error: (line) => errorLines.push(line) },
   });
   instances.push(instance);
-  return { root, instance, logs, warnings, readFailureLines, setResolver: (next) => { resolve = next; } };
+  return { root, instance, logs, warnings, errorLines, setResolver: (next) => { resolve = next; } };
 }
 
 describe('Instance — Overwrite\'s files', () => {
@@ -1088,7 +1088,7 @@ describe('Instance — listing mods/, on a profile listing no mod folder so only
   };
 
   it('keeps the value when mods/ is present but cannot be listed, as only ENOENT is "no mods/ yet" and any other failure must not read as every folder having its line', async () => {
-    const { root, instance, readFailureLines } = await minimalInstanceWithoutCorpusMasters();
+    const { root, instance, errorLines } = await minimalInstanceWithoutCorpusMasters();
     await separatorOnly(root);
     await readUntilNoArmedReadIsLeft(instance);
     const value = instance.value;
@@ -1101,7 +1101,7 @@ describe('Instance — listing mods/, on a profile listing no mod folder so only
     expect(instance.value).toBe(value);
     expect(instance.sequence).toBe(before);
     expect(instance.readFailure).toBeDefined();
-    expect(readFailureLines).toHaveLength(1);
+    expect(errorLines).toHaveLength(1);
   });
 
   it('lands a value whose mod folders are unknown when mods/ is absent entirely, ENOENT alone being tolerated', async () => {

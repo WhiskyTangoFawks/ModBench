@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { SILENT_LOG, type Log } from '../ports/log';
 import type { MEditClient, PluginAddress, ReferenceResult } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { ErrorNode } from '../drivingLib/errorNode';
@@ -150,7 +151,7 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
 
   constructor(
     private readonly client: ReferencedByClient,
-    private readonly log: (msg: string) => void = () => {},
+    private readonly log: Log = SILENT_LOG,
   ) {
     this.unsubscribe = [
       client.onNotification('rows-changed', () => this.reread()),
@@ -253,7 +254,7 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
       this.failure = undefined;
     } else {
       this.failure = failureReason(read);
-      this.log(`[ReferencedByTreeProvider] getReferences(${target}) failed: ${this.failure}`);
+      this.log.error(`[ReferencedByTreeProvider] getReferences(${target}) failed: ${this.failure}`);
     }
     this._onDidChangeView.fire();
   }

@@ -64,12 +64,12 @@ export function forgetRegistrations(): void {
 interface Registered {
   selection?: () => readonly unknown[];
   meditClient?: InMemoryMEditClient;
-  outputChannel?: { debug: () => void; info: () => void; warn: (message: string) => void };
+  outputChannel?: { debug: () => void; info: () => void; warn: (message: string) => void; error: () => void };
 }
 
 /** Creates the Editor with the view `test.view` selecting `selection`. */
 export async function register({
-  selection = () => [], meditClient, outputChannel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+  selection = () => [], meditClient, outputChannel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }: Registered = {}): Promise<void> {
   const vscode = await import('vscode');
   const { createEditor } = await import('..');

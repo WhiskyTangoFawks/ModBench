@@ -211,10 +211,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
   context.subscriptions.push(outputChannel);
-  const log = (msg: string) => outputChannel.info(msg);
 
   // ADR-0002.
-  const meditClient = createMEditClient({ backend: { attachPort }, backendLog: outputChannel, log });
+  const meditClient = createMEditClient({ backend: { attachPort }, backendLog: outputChannel, log: outputChannel });
   const focusedView = createFocusedView();
 
   const ownedByViews = ownership();
