@@ -1,28 +1,31 @@
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 
 namespace MEditService.Http.Endpoints;
 
-/// <summary>The binding shared by the endpoints that take unsaved documents, the write handlers' error-mapping
-/// seam, and the one place a refusal is logged.</summary>
-internal static class WriteEndpointMapping
+/// <summary>The protocol's one mapping: how a request names a plugin, the one status each refusal of the Index and
+/// of the write handlers takes, and the one place a refusal is logged.</summary>
+internal static class EndpointMapping
 {
-    /// <summary>For route-bound (URL-encoded) plugin names only. A body-sourced name must never pass
-    /// through here: a literal <c>%</c> would be double-unescaped.</summary>
-    internal static PluginAddress PluginAddressOf(string routePlugin, string origin) =>
-        new(Uri.UnescapeDataString(routePlugin), origin);
-
-    /// <summary>The unsaved texts a hand-over carries, which stand in for their files.</summary>
-    internal static IReadOnlyList<SourceAdapter.DocumentChange> Unsaved(IReadOnlyList<DocumentChange> documents) =>
-        [.. documents.Select(document => new SourceAdapter.DocumentChange(document.Path, document.Text))];
-
-    /// <summary>The 400 for a request that omits its unsaved texts: without them mEdit would read the disk.</summary>
-    internal static IResult? MissingDocuments(IReadOnlyList<DocumentChange>? documents) =>
-        documents is null ? Results.Problem("The unsaved documents are required, empty when none are dirty.", statusCode: 400) : null;
+    /// <summary>The plugin a route and its origin name (ADR-0012), or the 400 for an origin that is missing. Only a
+    /// route-bound (URL-encoded) name may pass: a body-sourced one would be double-unescaped on a literal <c>%</c>.</summary>
+    internal static bool PluginAt(
+        string routePlugin, string? origin, out PluginAddress address, [NotNullWhen(false)] out IResult? refusal)
+    {
+        if (string.IsNullOrWhiteSpace(origin))
+        {
+            (address, refusal) = (default, Results.Problem("Origin is required.", statusCode: 400));
+            return false;
+        }
+        (address, refusal) = (new PluginAddress(Uri.UnescapeDataString(routePlugin), origin), null);
+        return true;
+    }
 
     /// <summary>The release a request names, or the 400 that says which names are known.</summary>
     internal static IResult? ParseGameRelease(string? raw, out GameRelease release) =>
@@ -35,13 +38,16 @@ internal static class WriteEndpointMapping
     internal static string RequireNewFormKey(RecordEditResult result) =>
         result.NewFormKey ?? throw new InvalidOperationException("Expected an applied result to carry the new FormKey.");
 
+    /// <summary>A "not right now" the caller can retry, never a bad request.</summary>
+    internal static IResult NoLoadOrder() =>
+        Results.Problem(NoLoadOrderException.DefaultMessage, statusCode: StatusCodes.Status503ServiceUnavailable);
+
     private static IResult Problem<TRefusal>(
         TRefusal refusal, TRefusal noLoadOrder, string? message, Func<TRefusal, int> status,
         IReadOnlyDictionary<string, object?>? more = null)
         where TRefusal : struct, Enum
     {
-        if (EqualityComparer<TRefusal>.Default.Equals(refusal, noLoadOrder))
-            return Results.Problem(NoLoadOrderException.DefaultMessage, statusCode: StatusCodes.Status503ServiceUnavailable);
+        if (EqualityComparer<TRefusal>.Default.Equals(refusal, noLoadOrder)) return NoLoadOrder();
 
         var extensions = new Dictionary<string, object?> { ["refusal"] = refusal.ToString() };
         foreach (var (key, value) in more ?? new Dictionary<string, object?>()) extensions[key] = value;
@@ -138,6 +144,37 @@ internal static class WriteEndpointMapping
             _ => throw new InvalidEnumArgumentException(nameof(refused), (int)refused.Refusal, typeof(StoreRebuildRefusal)),
         },
         extensions: new Dictionary<string, object?> { ["refusal"] = refused.Refusal.ToString() });
+
+    /// <summary>Copies no plugin gave answer the comparison with nothing compared and each one named; no load
+    /// order, or an index not yet ready, is a "not right now", never a bad request.</summary>
+    internal static IResult Refusal(IndexRefused refused) => refused is CopiesMissing missing
+        ? Results.Ok(new CompareRecordsResponse(null, [.. missing.Missing.Select(RecordEndpoints.Wire)]))
+        : new Logged(refused, Results.Problem(
+            refused.Message,
+            statusCode: refused.Refusal switch
+            {
+                IndexRefusal.NoLoadOrder or IndexRefusal.IndexNotReady => StatusCodes.Status503ServiceUnavailable,
+                IndexRefusal.FilterRejected => StatusCodes.Status400BadRequest,
+                IndexRefusal.SourceStopped => StatusCodes.Status422UnprocessableEntity,
+                _ => throw new InvalidEnumArgumentException(nameof(refused), (int)refused.Refusal, typeof(IndexRefusal)),
+            }));
+
+    private sealed class Logged(IndexRefused refused, IResult problem) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext)
+        {
+            httpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(EndpointMapping))
+                .LogWarning(
+                    "{Method} {Path} refused: {Refusal} — {Message}",
+                    httpContext.Request.Method, httpContext.Request.Path, refused.Refusal, refused.Message);
+            return problem.ExecuteAsync(httpContext);
+        }
+    }
+
+    internal static IResult Ok<T>(Answer<T, IndexRefused> answer) => Answered(answer, Results.Ok);
+
+    internal static IResult Answered<T>(Answer<T, IndexRefused> answer, Func<T, IResult> onAnswered) =>
+        answer.Holds(out var value, out var refused) ? onAnswered(value) : Refusal(refused);
 
     /// <summary>A gesture over a selection answers 200 with what landed and what was refused, or the
     /// refusal of the whole selection (ADR-0019).</summary>

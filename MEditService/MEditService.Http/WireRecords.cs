@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Http;
 
@@ -70,20 +71,11 @@ internal sealed record RecordEditChangesResponse(
 {
     internal static RecordEditChangesResponse Of(string formKey, string path, RecordEditChanges answer) =>
         new(formKey, path,
-            [.. answer.Changes.Moves.Select(move => new SourceMove(move.From, move.To))],
-            answer.Changes.Deletions,
-            [.. answer.Changes.Documents.Select(document => new DocumentChange(document.Path, document.Text))],
-            answer.Outcome.NewFormKey);
+            answer.Changes.Moves, answer.Changes.Deletions, answer.Changes.Documents, answer.Outcome.NewFormKey);
 }
 
 /// <summary>Documents are the unsaved texts of every dirty plugin-source document.</summary>
-internal sealed record UnsavedDocumentsRequest(IReadOnlyList<DocumentChange> Documents);
-
-/// <summary>A file or folder an edit moves, by absolute path.</summary>
-internal sealed record SourceMove(string From, string To);
-
-/// <summary>A document's new text at its absolute path once every move is made.</summary>
-internal sealed record DocumentChange(string Path, string Text);
+internal sealed record UnsavedDocumentsRequest(IReadOnlyList<DocumentChange>? Documents);
 
 // The three lifecycle gestures' wire shapes, on the same door (Plugin/Origin as the compound
 // identity, refusals as ProblemDetails carrying the same `refusal` extension) Edit already
@@ -94,24 +86,13 @@ internal sealed record DocumentChange(string Path, string Text);
 internal sealed record RecordCreateChangesRequest(
     string Origin, string RecordType, string? Container = null, GridPosition? Position = null);
 
-/// <summary>Changes to plugin source as the wire carries them: moves, then deletions, then each document's text, by absolute path.</summary>
-internal sealed record SourceChangesResponse(
-    IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents)
-{
-    internal static SourceChangesResponse Of(SourceAdapter.SourceChanges changes) =>
-        new(
-            [.. changes.Moves.Select(move => new SourceMove(move.From, move.To))],
-            changes.Deletions,
-            [.. changes.Documents.Select(document => new DocumentChange(document.Path, document.Text))]);
-}
-
 /// <summary>The changes creating a record makes to plugin source, written nowhere, as an edit's are.</summary>
 internal sealed record RecordCreateChangesResponse(
     string FormKey, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents)
 {
     internal static RecordCreateChangesResponse Of(string formKey, RecordEditChanges answer)
     {
-        var (moves, deletions, documents) = SourceChangesResponse.Of(answer.Changes);
+        var (moves, deletions, documents) = answer.Changes;
         return new(formKey, moves, deletions, documents);
     }
 }
@@ -120,9 +101,9 @@ internal sealed record RecordCreateChangesResponse(
 internal sealed record RenameSourceChangesResponse(
     string TreeName, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents)
 {
-    internal static RenameSourceChangesResponse Of(string treeName, SourceAdapter.SourceChanges changes)
+    internal static RenameSourceChangesResponse Of(string treeName, SourceChanges changes)
     {
-        var (moves, deletions, documents) = SourceChangesResponse.Of(changes);
+        var (moves, deletions, documents) = changes;
         return new(treeName, moves, deletions, documents);
     }
 }

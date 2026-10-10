@@ -14,7 +14,7 @@ internal static class PluginEndpoints
     public static IEndpointRouteBuilder MapPluginEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/plugins", (IQueries svc) =>
-            QueryEndpointMapping.Answered(svc.GetPlugins(), plugins => Results.Ok(plugins.Select(PluginResponse.Of).ToList())))
+            EndpointMapping.Answered(svc.GetPlugins(), plugins => Results.Ok(plugins.Select(PluginResponse.Of).ToList())))
             .WithName("GetPlugins")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>()
@@ -24,14 +24,14 @@ internal static class PluginEndpoints
         // session-load complement of Track's refusal. With no load order applied the refusal is a
         // 503, never an unmapped 500.
         app.MapGet("/plugins/diagnoses", (IQueries svc) =>
-            QueryEndpointMapping.Ok(svc.GetLoadOrderDiagnoses()))
+            EndpointMapping.Ok(svc.GetLoadOrderDiagnoses()))
             .WithName("GetPluginDiagnoses")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginDiagnosisReport>>()
             .ProducesProblem(503);
 
         app.MapGet("/plugins/problems", (IQueries svc) =>
-            QueryEndpointMapping.Ok(svc.GetProblems()))
+            EndpointMapping.Ok(svc.GetProblems()))
             .WithName("GetPluginProblems")
             .WithTags(Tag)
             .WithDescription(
@@ -42,9 +42,9 @@ internal static class PluginEndpoints
 
         app.MapGet("/plugins/{plugin}/dependants", (string plugin, string? origin, IQueries svc) =>
         {
-            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            return QueryEndpointMapping.Answered(
-                svc.GetDependants(WriteEndpointMapping.PluginAddressOf(plugin, origin)),
+            if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
+            return EndpointMapping.Answered(
+                svc.GetDependants(address),
                 dependants => Results.Ok(new PluginDependantsResponse(dependants.Plugins, dependants.Unreadable)));
         })
             .WithName("GetPluginDependants")
@@ -58,8 +58,8 @@ internal static class PluginEndpoints
 
         app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IQueries svc) =>
         {
-            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            return QueryEndpointMapping.Ok(svc.GetPluginRecordTypes(WriteEndpointMapping.PluginAddressOf(plugin, origin)));
+            if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
+            return EndpointMapping.Ok(svc.GetPluginRecordTypes(address));
         })
             .WithName("GetPluginRecordTypes")
             .WithTags(Tag)
@@ -69,8 +69,8 @@ internal static class PluginEndpoints
 
         app.MapGet("/plugins/{plugin}/working-tree-states-beneath", (string plugin, string? origin, IQueries svc) =>
         {
-            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            return QueryEndpointMapping.Ok(svc.GetWorkingTreeStatesBeneath(WriteEndpointMapping.PluginAddressOf(plugin, origin)));
+            if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
+            return EndpointMapping.Ok(svc.GetWorkingTreeStatesBeneath(address));
         })
             .WithName("GetWorkingTreeStatesBeneath")
             .WithTags(Tag)
@@ -79,7 +79,7 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapGet("/record-types/creatable", (IQueries svc) =>
-            QueryEndpointMapping.Ok(svc.GetCreatableRecordTypes()))
+            EndpointMapping.Ok(svc.GetCreatableRecordTypes()))
             .WithName("GetCreatableRecordTypes")
             .WithTags(Tag)
             .Produces<IReadOnlyList<RecordTypeChoice>>()
@@ -127,7 +127,9 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapGet("/plugins/creatable-extensions", (LoadOrderHolder loadOrder) =>
-            Results.Ok(CreatablePluginExtensions.Of(loadOrder.Require().GameRelease)))
+            loadOrder.Held is { Snapshot: var held }
+                ? Results.Ok(CreatablePluginExtensions.Of(held.GameRelease))
+                : EndpointMapping.NoLoadOrder())
             .WithName("GetCreatablePluginExtensions")
             .WithTags(Tag)
             .WithDescription("The file extensions a new plugin may take in the held release.")
@@ -236,8 +238,8 @@ internal static class PluginEndpoints
         var result = await create.CreatePlugin(plugin, req.Folder);
         if (result.Refusal is { } refusal)
         {
-            WriteEndpointMapping.LogRefusal(logger, "Create plugin", refusal, result.Message, plugin);
-            return WriteEndpointMapping.Refusal(refusal, result.Message);
+            EndpointMapping.LogRefusal(logger, "Create plugin", refusal, result.Message, plugin);
+            return EndpointMapping.Refusal(refusal, result.Message);
         }
 
         return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin));
@@ -282,8 +284,8 @@ internal static class PluginEndpoints
 
     private static IResult Refused(ILoggerFactory loggerFactory, string gesture, RenameSourceRefusal refusal, string? message, PluginAddress plugin)
     {
-        WriteEndpointMapping.LogRefusal(loggerFactory.CreateLogger(nameof(PluginEndpoints)), gesture, refusal, message, plugin);
-        return WriteEndpointMapping.Refusal(refusal, message);
+        EndpointMapping.LogRefusal(loggerFactory.CreateLogger(nameof(PluginEndpoints)), gesture, refusal, message, plugin);
+        return EndpointMapping.Refusal(refusal, message);
     }
 
     // Track (ADR-0007) over a selection of mods (commands.md, A selection is one gesture); the
@@ -298,10 +300,10 @@ internal static class PluginEndpoints
         if (mods.Any(string.IsNullOrWhiteSpace))
             return Results.Problem("Every mod needs a name.", statusCode: 400);
 
-        return await WriteEndpointMapping.Answered(
+        return await EndpointMapping.Answered(
             "Track", logger,
             trackHandler.TrackAsync(mods),
-            WriteEndpointMapping.Refusal,
+            EndpointMapping.Refusal,
             landed => new TrackedModResponse(landed.Item, landed.Outcome.Tracked),
             refused => new ModTrackRefusal(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new TrackResponse(applied, refused));
@@ -312,10 +314,10 @@ internal static class PluginEndpoints
         DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        return OverPlugins(req.Plugins, plugins => WriteEndpointMapping.Answered(
+        return OverPlugins(req.Plugins, plugins => EndpointMapping.Answered(
             "Decompile", logger,
             decompileHandler.DecompileAsync(plugins),
-            WriteEndpointMapping.Refusal,
+            EndpointMapping.Refusal,
             landed => landed.Item,
             refused => new PluginDecompileRefusal(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new DecompileResponse(applied, refused)));
@@ -326,10 +328,10 @@ internal static class PluginEndpoints
         CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        return OverPlugins(req.Plugins, plugins => WriteEndpointMapping.Answered(
+        return OverPlugins(req.Plugins, plugins => EndpointMapping.Answered(
             "Compile", logger,
             compileHandler.CompileAsync(plugins),
-            WriteEndpointMapping.Refusal,
+            EndpointMapping.Refusal,
             landed => new CompiledPlugin(landed.Item.Name, landed.Item.Origin, landed.Outcome),
             refused => new PluginCompileRefusal(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new CompileResponse(applied, refused)));
@@ -354,31 +356,27 @@ internal static class PluginEndpoints
     internal static IResult CreateRecordChanges(
         string plugin, RecordCreateChangesRequest req, CreateRecordChangesHandler edits, ILoggerFactory loggerFactory)
     {
+        if (!EndpointMapping.PluginAt(plugin, req.Origin, out var address, out var refused)) return refused;
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        return WriteEndpointMapping.Execute(
+        return EndpointMapping.Execute(
             "Create record", logger,
             logReceived: null,
-            validate: () =>
-            {
-                if (string.IsNullOrWhiteSpace(req.Origin))
-                    return Results.Problem("Origin is required.", statusCode: 400);
-                if (string.IsNullOrWhiteSpace(req.RecordType))
-                    return Results.Problem("A record type is required.", statusCode: 400);
-                return null;
-            },
+            validate: () => string.IsNullOrWhiteSpace(req.RecordType)
+                ? Results.Problem("A record type is required.", statusCode: 400)
+                : null,
             execute: () => edits.CreateRecord(
-                WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType, req.Container, req.Position),
+                address, req.RecordType, req.Container, req.Position),
             outcome: answer => answer.Outcome,
-            onApplied: answer => Results.Ok(RecordCreateChangesResponse.Of(WriteEndpointMapping.RequireNewFormKey(answer.Outcome), answer)));
+            onApplied: answer => Results.Ok(RecordCreateChangesResponse.Of(EndpointMapping.RequireNewFormKey(answer.Outcome), answer)));
     }
 
     // A source tree that cannot say where the copy is answers why.
     private static IResult PluginRecordAnswer<T>(
         string plugin, string formKey, string? origin, Func<PluginAddress, string, Answer<T?, IndexRefused>> answer) where T : class
     {
-        if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-        return QueryEndpointMapping.Answered(
-            answer(WriteEndpointMapping.PluginAddressOf(plugin, origin), Uri.UnescapeDataString(formKey)),
+        if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
+        return EndpointMapping.Answered(
+            answer(address, Uri.UnescapeDataString(formKey)),
             found => found is not null ? Results.Ok(found) : Results.Problem("The plugin holds no such record.", statusCode: 404));
     }
 }

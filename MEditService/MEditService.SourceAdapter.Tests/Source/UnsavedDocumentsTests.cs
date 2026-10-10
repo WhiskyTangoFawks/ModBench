@@ -2,8 +2,8 @@ namespace MEditService.SourceAdapter.Tests.Source;
 
 public sealed class UnsavedDocumentsTests
 {
-    private static readonly DocumentChange A = new("/mod/plugin-source/A.esp/A.json", "a");
-    private static readonly DocumentChange B = new("/mod/plugin-source/A.esp/B.json", "b");
+    private static readonly DocumentChange A = new(Path.Combine(Path.GetTempPath(), "A.json"), "a");
+    private static readonly DocumentChange B = new(Path.Combine(Path.GetTempPath(), "B.json"), "b");
 
     private readonly UnsavedDocuments _unsaved = new();
     private readonly List<string[]> _arrivals = [];
@@ -29,5 +29,32 @@ public sealed class UnsavedDocumentsTests
         _unsaved.Apply([B, A]);
 
         Assert.Empty(_arrivals);
+    }
+
+    [Fact]
+    public void Apply_OfADocumentByARelativePath_RefusesAndHoldsNothingNew()
+    {
+        _unsaved.Apply([A]);
+        _arrivals.Clear();
+
+        var refused = _unsaved.Apply([B, new DocumentChange("plugin-source/C.json", "c")]);
+
+        Assert.Equal("Name each document by its absolute path.", refused?.Message);
+        Assert.Equal([A], _unsaved.Current);
+        Assert.Empty(_arrivals);
+    }
+
+    [Fact]
+    public void Apply_OfNoSet_Refuses_ForWithoutOneTheIndexWouldReadTheDisk()
+    {
+        var refused = _unsaved.Apply(null);
+
+        Assert.Equal("The unsaved documents are required, empty when none are dirty.", refused?.Message);
+    }
+
+    [Fact]
+    public void Apply_OfAnAbsoluteSet_Accepts()
+    {
+        Assert.Null(_unsaved.Apply([A, B]));
     }
 }

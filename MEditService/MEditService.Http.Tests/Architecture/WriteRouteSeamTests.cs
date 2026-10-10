@@ -69,7 +69,7 @@ public sealed class WriteRouteSeamTests
         Assert.True(MethodBody(method) is not null, $"{route}: no internal/private/public static method named {method} found in {string.Join(", ", EndpointFiles)}.");
         Assert.True(
             MapsThroughSeamIn(EndpointFiles.Select(EndpointFile), method),
-            $"{route}: {method} never reaches WriteEndpointMapping — the write routes' shared error-mapping seam.");
+            $"{route}: {method} never reaches EndpointMapping — the write routes' shared error-mapping seam.");
     }
 
     [Theory]
@@ -84,7 +84,7 @@ public sealed class WriteRouteSeamTests
         Assert.True(
             offenders.Length == 0,
             $"{route}: {method} hand-rolls a Results.Problem(...) outside the request-shape validation "
-            + $"carve-out — a handler outcome must map through WriteEndpointMapping instead: {string.Join(" | ", offenders)}");
+            + $"carve-out — a handler outcome must map through EndpointMapping instead: {string.Join(" | ", offenders)}");
     }
 
     [Fact]
@@ -95,13 +95,13 @@ public sealed class WriteRouteSeamTests
             + "    internal static IResult Caller(int x)\n    {\n"
             + "        return DirectHit(x);\n    }\n\n"
             + "    internal static IResult DirectHit(int x)\n    {\n"
-            + "        return WriteEndpointMapping.Refusal(null!);\n    }\n}\n",
+            + "        return EndpointMapping.Refusal(null!);\n    }\n}\n",
             file =>
             {
                 Assert.Null(BlockBodyOfStaticDeclarationIn(file, "NoSuchMethod"));
                 var body = BlockBodyOfStaticDeclarationIn(file, "DirectHit");
                 Assert.NotNull(body);
-                Assert.Contains("WriteEndpointMapping.", body, StringComparison.Ordinal);
+                Assert.Contains("EndpointMapping.", body, StringComparison.Ordinal);
                 Assert.DoesNotContain("Caller", body, StringComparison.Ordinal);
             });
     }
@@ -114,7 +114,7 @@ public sealed class WriteRouteSeamTests
             + "    internal static IResult ThroughASibling(int x)\n    {\n"
             + "        return Shared(x);\n    }\n\n"
             + "    private static IResult Shared(int x)\n    {\n"
-            + "        return WriteEndpointMapping.Refusal(null!);\n    }\n}\n",
+            + "        return EndpointMapping.Refusal(null!);\n    }\n}\n",
             file => Assert.True(MapsThroughSeamIn([file], "ThroughASibling")));
     }
 
@@ -150,7 +150,7 @@ public sealed class WriteRouteSeamTests
         Path.Combine(ServiceProjects.SolutionDirectory(), "MEditService.Http", "Endpoints", name);
 
     private static bool MapsThroughSeamIn(IEnumerable<string> files, string methodName) =>
-        ReachInFollowingEachHelperOnce(files, methodName).Any(body => body.Contains("WriteEndpointMapping.", StringComparison.Ordinal));
+        ReachInFollowingEachHelperOnce(files, methodName).Any(body => body.Contains("EndpointMapping.", StringComparison.Ordinal));
 
     private static IReadOnlyList<string> ReachInFollowingEachHelperOnce(IEnumerable<string> files, string methodName)
     {
