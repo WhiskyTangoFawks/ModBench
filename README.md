@@ -118,7 +118,7 @@ The repo is set up to be worked on by people and coding agents alike:
 - [docs/research/](docs/research/) — audits of MO2 and xEdit, read from their source. They are the evidence behind the registers and commands.md's Template column.
 - [docs/agents/](docs/agents/) — tracker conventions (GitHub issues and milestones) and triage labels.
 
-The editing backend is agent-friendly by construction: a discoverable OpenAPI surface, typed request/response for every operation, an index you can query with SQL, and edits that land as git working-tree changes a human can review before anything touches the binary. Scripts, plain HTTP clients of the same API in any language, are planned but not yet built.
+The editing backend is agent-friendly by construction: a discoverable OpenAPI surface, typed request/response for every operation, an index you can query with SQL, and edits that land as git working-tree changes a human can review before anything touches the binary. Scripts, xEdit scripting in Python against the same API, are planned but not yet built.
 
 ## References
 
