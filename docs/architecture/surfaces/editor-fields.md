@@ -24,7 +24,7 @@ As a user, I want:
 | Integer | the number | a number box | the number |
 | Float | the number | a number box | the full number |
 | True or false | `True` or `False` | a check box, which writes as it is clicked | `True` or `False` |
-| Enum | the member's name; a value the enum does not name reads `<Unknown: 5>` | a dropdown of the names | the name |
+| Enum | the member's name; a value the enum does not name reads `<Unknown: 5>` | VS Code's quick pick of the names, opened on the current one | the name |
 | Flags | collapsed, the names of the flags set, joined by `, `; expanded, a check box for each flag | the check boxes, each of which writes as it is clicked | the names, joined by `, ` |
 | Reference | `EditorID [FormKey]`, or the FormKey alone when it resolves to no record of an active plugin; `—` for no reference | the record picker, below | `EditorID [FormKey]` |
 | Bytes | `0x` and the bytes in uppercase hex | a text box; a different length is refused | the text |
@@ -73,7 +73,7 @@ As a user, I want:
 
 Some fields hold one of several kinds of value, such as an alias that is a reference, a location or a collection. As a user, I want:
 
-1. A Kind row that chooses between them, a dropdown of the kinds named as the schema names them, never a class name. Source: xedit.md, Choose the next or previous member of a union
+1. A Kind row that chooses between them from VS Code's quick pick of the kinds, named as the schema names them, never a class name. Source: xedit.md, Choose the next or previous member of a union
 2. Switching the kind to keep the members both kinds have, and to drop the rest.
 
 ## Collapsed readings
@@ -102,7 +102,7 @@ A condition list is an array like any other. As a user, I want:
 
 1. A parameter the condition's function does not use to have no row, unless a column uses it, so an overridden record's data is never hidden. Source: xedit.md, divergence 13
 2. A change of function, or of Run On, to empty the parameters it leaves unused, so a stale value never reaches the plugin.
-3. The function chosen from the ordinary enum dropdown.
+3. The function chosen as any enum is chosen.
 
 ## Scripts
 
