@@ -9,7 +9,7 @@ import { RecordPanel } from './RecordPanel';
 import type { CompareResult, FieldDiff, FieldMetadata } from './types';
 import { vscode } from './vscode';
 import {
-  compareOverride, compareResultFixture, diffNode, fieldMeta, leafMeta as leaf, panelClient,
+  compareOverride, compareResultFixture, diffNode, fieldMeta, hostPickingEnum, leafMeta as leaf, panelClient,
   postedEnvelopes as sharedPostedEnvelopes, required,
 } from './test/fixtures';
 
@@ -528,13 +528,10 @@ describe('a governing member posts its own value and nothing else, the cascade b
       RunOnType: 'Reference', Reference: '00000014:Fallout4.esm', Function: 'IsSneaking',
     })]);
     renderPanel();
-    const cell = await openMemberEditor('RunOnType');
+    vi.mocked(vscode.postMessage).mockImplementation(hostPickingEnum(() => 'Subject'));
+    await openMemberEditor('RunOnType');
 
-    const select = required(cell.querySelector('select'), "the cell's select");
-    fireEvent.change(select, { target: { value: 'Subject' } });
-    fireEvent.blur(select);
-
-    expect(postedEnvelopes()).toEqual([{ op: 'set', path: dataMember('RunOnType'), value: 'Subject' }]);
+    await waitFor(() => expect(postedEnvelopes()).toEqual([{ op: 'set', path: dataMember('RunOnType'), value: 'Subject' }]));
   });
 
   it('changing the function posts one set of the function, no emptied slots beside it', async () => {
@@ -542,13 +539,10 @@ describe('a governing member posts its own value and nothing else, the cascade b
       Function: 'GetGraphVariableFloat', ParameterOneString: 'bAllowRotation',
     })]);
     renderPanel();
-    const cell = await openMemberEditor('Function');
+    vi.mocked(vscode.postMessage).mockImplementation(hostPickingEnum(() => 'HasKeyword'));
+    await openMemberEditor('Function');
 
-    const select = required(cell.querySelector('select'), "the cell's select");
-    fireEvent.change(select, { target: { value: 'HasKeyword' } });
-    fireEvent.blur(select);
-
-    expect(postedEnvelopes()).toEqual([{ op: 'set', path: dataMember('Function'), value: 'HasKeyword' }]);
+    await waitFor(() => expect(postedEnvelopes()).toEqual([{ op: 'set', path: dataMember('Function'), value: 'HasKeyword' }]));
   });
 
   it('a member that governs nothing posts the same one-leaf set', async () => {
@@ -576,16 +570,13 @@ describe('switching a condition\'s leaf, as Use Global is an ordinary discrimina
     const kindLabelCell = required(rowLabelTdNotAValueCellOfTheSameText('Kind'), "the 'Kind' row's label cell");
     const kindRow = required(kindLabelCell.closest('tr'), "the 'Kind' row");
     const cell = required(kindRow.querySelectorAll('td')[1], "the 'Kind' row's second cell");
+    vi.mocked(vscode.postMessage).mockImplementation(hostPickingEnum(() => 'ConditionGlobal'));
     fireEvent.doubleClick(required(cell.querySelector('[data-open-trigger]'), "the cell's open trigger"));
-    const select = required(cell.querySelector('select'), "the cell's select");
-    fireEvent.change(select, { target: { value: 'ConditionGlobal' } });
-    fireEvent.blur(select);
-
-    expect(postedEnvelopes()).toEqual([{
+    await waitFor(() => expect(postedEnvelopes()).toEqual([{
       op: 'set',
       path: [{ kind: 'member', name: 'Conditions' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'MutagenObjectType' }],
       value: 'ConditionGlobal',
-    }]);
+    }]));
   });
 });
 
@@ -618,10 +609,14 @@ describe('the function picker comes from the schema', () => {
     const functionLabelCell = required(rowLabelTdNotAValueCellOfTheSameText('Function'), "the 'Function' row's label cell");
     const functionRow = required(functionLabelCell.closest('tr'), "the 'Function' row");
     const cell = required(functionRow.querySelectorAll('td')[1], "the 'Function' row's second cell");
+    let offered: string[] = [];
+    vi.mocked(vscode.postMessage).mockImplementation(hostPickingEnum((choices) => {
+      offered = choices.map(c => c.value);
+      return null;
+    }));
     fireEvent.doubleClick(required(cell.querySelector('[data-open-trigger]'), "the cell's open trigger"));
-    const select = required(cell.querySelector('select'), "the cell's select");
-    const options = Array.from(select.options).map(o => o.value);
-    expect(options).toEqual(Object.keys(GET_PARAMETER_TYPES_SLOTS_OF_THE_FUNCTIONS_USED));
+
+    expect(offered).toEqual(Object.keys(GET_PARAMETER_TYPES_SLOTS_OF_THE_FUNCTIONS_USED).sort());
   });
 });
 

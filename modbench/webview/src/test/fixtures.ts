@@ -1,7 +1,7 @@
 import { pluginCanBeEdited } from '../../../src/wire/pluginEditable';
 import { vi } from 'vitest';
 import { act } from '@testing-library/react';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection, type ExtensionToWebview, type FocusedCellContext, type ModRepository, type WebviewToExtension } from '../../../src/wire/messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection, type EnumChoice, type ExtensionToWebview, type FocusedCellContext, type ModRepository, type WebviewToExtension } from '../../../src/wire/messages';
 import type { RecordPanelClient } from '../RecordPanelClient';
 import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
 import { columnKey, copyColumnKey } from '../../../src/wire/columnKey';
@@ -176,4 +176,13 @@ export const hostPicking = (pick: (seed: string, validTypes: string[]) => Promis
       data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: msg.requestId, formKey },
     }));
   });
+};
+
+/** The host answering each enum pick the page asks for with `pick`'s choice, null for none. */
+export const hostPickingEnum = (pick: (choices: EnumChoice[], current: string) => string | null) => (msg: WebviewToExtension): void => {
+  if (msg.type !== WEBVIEW_TO_EXTENSION.OPEN_ENUM_PICKER) return;
+  const value = pick(msg.choices, msg.current);
+  window.dispatchEvent(new MessageEvent('message', {
+    data: { type: EXTENSION_TO_WEBVIEW.ENUM_PICKED, requestId: msg.requestId, value },
+  }));
 };

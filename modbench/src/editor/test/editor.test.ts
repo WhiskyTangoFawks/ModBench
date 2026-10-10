@@ -1105,6 +1105,16 @@ describe('what a record tab\'s webview posts', () => {
     expect(tab.webview.postMessage).toHaveBeenCalledWith({ type: 'formKeyPicked', requestId: 'r1', formKey: null });
   });
 
+  it('answers a request for an enum value the pick was dismissed on with null, correlated by requestId', async () => {
+    const { open } = makeEditor(client());
+    const tab = open(GUN);
+
+    tab.receive({ type: WEBVIEW_TO_EXTENSION.OPEN_ENUM_PICKER, requestId: 'r1', choices: [{ value: 'A', label: 'A' }], current: 'A' });
+    await settle();
+
+    expect(tab.webview.postMessage).toHaveBeenCalledWith({ type: 'enumPicked', requestId: 'r1', value: null });
+  });
+
   describe('a request for the record', () => {
     it('is answered with the comparison, the plugin list, whether conflicts are computed, the plugins mEdit cannot read and the plugin the tab\'s document holds', async () => {
       const mEdit = client();

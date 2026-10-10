@@ -1,10 +1,15 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+
+vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
+
+import { vscode } from './vscode';
+import type { EnumChoice } from '../../src/wire/messages';
 import { ScalarCell } from './ScalarCell';
 import type { FieldMetadata } from './types';
-import { fieldMeta } from './test/fixtures';
+import { fieldMeta, hostPickingEnum } from './test/fixtures';
 
 const meta = (over: Partial<FieldMetadata> = {}): FieldMetadata =>
   fieldMeta({ name: 'value', type: 'string', ...over });
@@ -161,12 +166,19 @@ describe('ScalarCell — a hex row edits as text because the schema says the fie
   });
 });
 
-describe('ScalarCell — an enum whose values are wire tokens, as an abstract union\'s `MutagenObjectType` holds Mutagen class names, not words', () => {
+describe('ScalarCell — an enum is picked from the host\'s quick pick', () => {
   const kind = meta({
     name: 'MutagenObjectType', type: 'enum',
-    enumMembers: [{ value: 'NpcLevel', label: 'Npc Level' },
-      { value: 'PcLevelMult', label: 'Pc Level Mult' }],
+    enumMembers: [{ value: 'PcLevelMult', label: 'Pc Level Mult' }, { value: 'NpcLevel', label: 'Npc Level' }],
   });
+  const asked: { choices: EnumChoice[]; current: string }[] = [];
+  const hostChoosing = (value: string | null) => {
+    vi.mocked(vscode.postMessage).mockImplementation(hostPickingEnum((choices, current) => {
+      asked.push({ choices, current });
+      return value;
+    }));
+  };
+  beforeEach(() => { asked.length = 0; });
 
   it('shows the label at rest, never the value behind it', () => {
     render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={vi.fn()} />);
@@ -175,25 +187,76 @@ describe('ScalarCell — an enum whose values are wire tokens, as an abstract un
     expect(screen.queryByText('NpcLevel')).toBeNull();
   });
 
-  it('commits the chosen option\'s own value, not the label the user read', () => {
-    const onCommit = vi.fn();
-    render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={onCommit} />);
+  it('opens no in-page control, and asks for the names sorted, opening on the current value', () => {
+    hostChoosing(null);
+    render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={vi.fn()} />);
+
     fireEvent.click(screen.getByText('Npc Level'));
 
-    const select = screen.getByRole('combobox');
-    fireEvent.change(select, { target: { value: 'PcLevelMult' } });
-    fireEvent.blur(select);
-
-    expect(onCommit).toHaveBeenCalledWith('PcLevelMult');
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(asked).toEqual([{
+      choices: [{ value: 'NpcLevel', label: 'Npc Level' }, { value: 'PcLevelMult', label: 'Pc Level Mult' }],
+      current: 'NpcLevel',
+    }]);
   });
 
   it('falls back to the values themselves for an ordinary enum, which has no labels', () => {
-    const plain = meta({ type: 'enum', enumMembers: [{ value: 'Alpha' }, { value: 'Beta' }] });
+    hostChoosing(null);
+    const plain = meta({ type: 'enum', enumMembers: [{ value: 'Beta' }, { value: 'Alpha' }] });
     render(<ScalarCell value="Alpha" meta={plain} editable onCommit={vi.fn()} />);
 
-    expect(screen.getByText('Alpha')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Alpha'));
-    expect(screen.getAllByRole('option').map(o => o.textContent)).toEqual(['Alpha', 'Beta']);
+
+    expect(asked[0]?.choices.map(c => c.label)).toEqual(['Alpha', 'Beta']);
+  });
+
+  it('commits the chosen name\'s own value, not the label the user read', async () => {
+    hostChoosing('PcLevelMult');
+    const onCommit = vi.fn();
+    render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={onCommit} />);
+
+    fireEvent.click(screen.getByText('Npc Level'));
+
+    await waitFor(() => expect(onCommit).toHaveBeenCalledWith('PcLevelMult'));
+  });
+
+  it('writes nothing when the pick is dismissed', async () => {
+    hostChoosing(null);
+    const onCommit = vi.fn();
+    render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={onCommit} />);
+
+    fireEvent.click(screen.getByText('Npc Level'));
+    await waitFor(() => expect(asked).toHaveLength(1));
+    await act(async () => { await Promise.resolve(); });
+
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing when the choice is the current value', async () => {
+    hostChoosing('NpcLevel');
+    const onCommit = vi.fn();
+    render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={onCommit} />);
+
+    fireEvent.click(screen.getByText('Npc Level'));
+    await waitFor(() => expect(asked).toHaveLength(1));
+    await act(async () => { await Promise.resolve(); });
+
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('lists a value the enum does not name as <Unknown: n>, the current one, and choosing it writes nothing', async () => {
+    hostChoosing('5');
+    const onCommit = vi.fn();
+    const numbered = meta({ type: 'enum', enumMembers: [{ value: 'A' }, { value: 'B' }] });
+    render(<ScalarCell value={5} meta={numbered} editable onCommit={onCommit} />);
+
+    fireEvent.click(screen.getByText('<Unknown: 5>'));
+    await waitFor(() => expect(asked).toHaveLength(1));
+    await act(async () => { await Promise.resolve(); });
+
+    expect(asked[0]?.current).toBe('5');
+    expect(asked[0]?.choices).toContainEqual({ value: '5', label: '<Unknown: 5>' });
+    expect(onCommit).not.toHaveBeenCalled();
   });
 });
 
@@ -231,11 +294,6 @@ describe('ScalarCell — a translated string, which the codec spells as an objec
 });
 
 describe('ScalarCell — Enter writes and Esc cancels', () => {
-  const enumMeta = () => meta({
-    type: 'enum',
-    enumMembers: [{ value: 'A' }, { value: 'B' }],
-  });
-
   it('Esc closes the text editor and writes nothing', () => {
     const onCommit = vi.fn();
     render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
@@ -271,31 +329,6 @@ describe('ScalarCell — Enter writes and Esc cancels', () => {
     fireEvent.blur(screen.getByRole('textbox'));
 
     expect(onCommit).toHaveBeenCalledWith('after');
-  });
-
-  it('Enter in the enum dropdown writes the chosen member and closes it', () => {
-    const onCommit = vi.fn();
-    render(<ScalarCell value="A" meta={enumMeta()} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getByText('A'));
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'B' } });
-
-    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
-
-    expect(onCommit).toHaveBeenCalledTimes(1);
-    expect(onCommit).toHaveBeenCalledWith('B');
-    expect(screen.queryByRole('combobox')).toBeNull();
-  });
-
-  it('Esc in the enum dropdown closes it and writes nothing', () => {
-    const onCommit = vi.fn();
-    render(<ScalarCell value="A" meta={enumMeta()} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getByText('A'));
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'B' } });
-
-    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
-
-    expect(screen.queryByRole('combobox')).toBeNull();
-    expect(onCommit).not.toHaveBeenCalled();
   });
 
   it('Esc hands the focus back to the cell without the blur writing the text', () => {
