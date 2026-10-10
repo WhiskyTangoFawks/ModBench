@@ -37,16 +37,16 @@ public sealed class CopyRecordChangesHandler
         }
 
         _loadOrder.Require();
-        var batches = new UnsavedBatches(_unsaved.Current);
-        using var sources = new CopySources(_resolution, batches);
+        var sessions = new WriteSessions(_unsaved.Current);
+        using var sources = new CopySources(_resolution, sessions);
         var containersFirst = records.OrderBy(record => sources.Of(record.Plugin).ContainmentDepth(record.FormKey));
         return await ItemWrite.Over(
             containersFirst.SelectMany(record => destinations.Select(destination => new CopyItem(record, destination))),
             SameCopy.Instance,
             item => mode switch
             {
-                CopyMode.Override => _override.Copy(sources.Of(item.Record.Plugin), item.Record.FormKey, item.Destination, replace, batches),
-                CopyMode.New => _new.Copy(sources.Of(item.Record.Plugin), item.Record.FormKey, item.Destination, batches),
+                CopyMode.Override => _override.Copy(sources.Of(item.Record.Plugin), item.Record.FormKey, item.Destination, replace, sessions),
+                CopyMode.New => _new.Copy(sources.Of(item.Record.Plugin), item.Record.FormKey, item.Destination, sessions),
                 _ => throw new InvalidEnumArgumentException(nameof(mode), (int)mode, typeof(CopyMode)),
             },
             changes => changes,

@@ -12,13 +12,13 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-public sealed class SourceBatchTests : IDisposable
+public sealed class WriteSessionTests : IDisposable
 {
-    private const string PluginName = "Batch.esp";
+    private const string PluginName = "Session.esp";
     private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    private readonly ScratchDirectory _modFolder = new("medit-batch-");
+    private readonly ScratchDirectory _modFolder = new("medit-session-");
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
     private readonly Quest _quest;
     private readonly DialogTopic _topic;
@@ -29,7 +29,7 @@ public sealed class SourceBatchTests : IDisposable
     private readonly Cell _exteriorCell;
     private readonly byte[] _header;
 
-    public SourceBatchTests()
+    public WriteSessionTests()
     {
         _response = new DialogResponses(_mod) { EditorID = "Response" };
         _response2 = new DialogResponses(_mod) { EditorID = "Response2" };
@@ -81,6 +81,8 @@ public sealed class SourceBatchTests : IDisposable
 
     private SourceRepository Repository => SourceRepository.Over(TestMod.In(_modFolder), Release);
 
+    private WriteSession Session(params DocumentChange[] held) => WriteSession.Over(TestMod.In(_modFolder), Release, held);
+
     private static RecordIdentity Identity(IMajorRecordGetter record, string recordType) =>
         new(record.FormKey.ToString(), recordType, record.EditorID);
 
@@ -90,26 +92,26 @@ public sealed class SourceBatchTests : IDisposable
     [Fact]
     public void ARead_TakesTheUnsavedTextOfADocument_InPlaceOfItsFile()
     {
-        var batch = SourceBatch.Over(Repository, [new DocumentChange(FullPath(QuestPath), UnsavedQuest())]);
+        var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
 
-        var response = batch.Repository.RecordOf(Plugin, Identity(_response2, "info")).Value().Require();
+        var response = session.Repository.RecordOf(Plugin, Identity(_response2, "info")).Value().Require();
 
         Assert.Contains("\"UnsavedName\"", response.Body, StringComparison.Ordinal);
     }
 
-    private static SourceFailure? Write(SourceBatch batch, Func<SourceRepository, Answer<SourceChanges, SourceFailure>> changes) =>
-        SourceTransaction.Atomically(batch.Repository, transaction => transaction.Apply(changes(batch.Repository)));
+    private static SourceFailure? Write(WriteSession session, Func<SourceRepository, Answer<SourceChanges, SourceFailure>> changes) =>
+        session.Atomically(() => session.Apply(changes(session.Repository)));
 
     [Fact]
     public void TwoRemovalsFromOneDocument_AnswerItsTextWithoutEither_AndWriteNothing()
     {
         var before = TreeSnapshot.Of(_modFolder);
-        var batch = SourceBatch.Over(Repository, []);
+        var session = Session();
 
-        Assert.Null(Write(batch, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
-        Assert.Null(Write(batch, repository => repository.ChangesToRemove(Plugin, Identity(_response2, "info"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_response2, "info"))));
 
-        var document = Assert.Single(batch.Changes.Documents);
+        var document = Assert.Single(session.Changes.Documents);
         Assert.Equal(FullPath(QuestPath), document.Path);
         Assert.DoesNotContain("\"Response\"", document.Text, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Response2\"", document.Text, StringComparison.Ordinal);
@@ -120,32 +122,34 @@ public sealed class SourceBatchTests : IDisposable
     [Fact]
     public void RemovingAChildThenTheDocumentThatCarriedIt_AnswersTheDocumentsDeletionAlone()
     {
-        var batch = SourceBatch.Over(Repository, []);
+        var session = Session();
 
-        Assert.Null(Write(batch, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
-        Assert.Null(Write(batch, repository => repository.ChangesToRemove(Plugin, Identity(_quest, "qust"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_quest, "qust"))));
 
-        Assert.Equal([FullPath(QuestPath)], batch.Changes.Deletions);
-        Assert.Empty(batch.Changes.Documents);
-        Assert.Null(batch.Repository.RecordOf(Plugin, Identity(_quest, "qust")).Value());
+        Assert.Equal([FullPath(QuestPath)], session.Changes.Deletions);
+        Assert.Empty(session.Changes.Documents);
+        Assert.Null(session.Repository.RecordOf(Plugin, Identity(_quest, "qust")).Value());
         Assert.True(File.Exists(FullPath(QuestPath)));
     }
 
-    private IReadOnlyList<string> TreeTheBatchAnswers(Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
+    private IReadOnlyList<string> TreeTheSessionAnswers(Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
     {
-        var batch = SourceBatch.Over(Repository, []);
-        foreach (var write in writes) Assert.Null(Write(batch, write));
-        Assert.Null(SourceTransaction.Atomically(Repository, transaction => transaction.Apply(SourceAnswer.Of(batch.Changes))));
+        var session = Session();
+        foreach (var write in writes) Assert.Null(Write(session, write));
+        Repository.SaveChanges(SourceAnswer.Of(session.Changes)).Wrote();
         return TreeSnapshot.Of(_modFolder);
     }
 
     private IReadOnlyList<string> TreeTheWritesLeaveOneAfterAnother(Func<SourceRepository, Answer<SourceChanges, SourceFailure>>[] writes)
     {
-        using var oneAfterAnother = new ScratchDirectory("medit-batch-sequence-");
+        using var oneAfterAnother = new ScratchDirectory("medit-session-sequence-");
         PluginBaselines.Track(oneAfterAnother, TheTree());
-        var repository = SourceRepository.Over(TestMod.In(oneAfterAnother), Release);
         foreach (var write in writes)
-            Assert.Null(SourceTransaction.Atomically(repository, transaction => transaction.Apply(write(repository))));
+        {
+            var repository = SourceRepository.Over(TestMod.In(oneAfterAnother), Release);
+            repository.SaveChanges(write(repository)).Wrote();
+        }
         return TreeSnapshot.Of(oneAfterAnother);
     }
 
@@ -167,7 +171,7 @@ public sealed class SourceBatchTests : IDisposable
             repository => repository.ChangesToRemove(Plugin, Identity(_response, "info")),
         ];
 
-        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
     }
 
     [Fact]
@@ -181,7 +185,7 @@ public sealed class SourceBatchTests : IDisposable
             repository => repository.ChangesToRemove(Plugin, renamed.Identity),
         ];
 
-        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
     }
 
     [Fact]
@@ -196,7 +200,7 @@ public sealed class SourceBatchTests : IDisposable
             repository => repository.ChangesToPutChild(Plugin, renamed.Identity, "Temporary", child),
         ];
 
-        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
     }
 
     [Fact]
@@ -215,7 +219,7 @@ public sealed class SourceBatchTests : IDisposable
             }),
         ];
 
-        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
     }
 
     [Fact]
@@ -230,7 +234,7 @@ public sealed class SourceBatchTests : IDisposable
             repository => repository.ChangesToRemove(Plugin, rekeyed),
         ];
 
-        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
     }
 
     [Fact]
@@ -244,59 +248,129 @@ public sealed class SourceBatchTests : IDisposable
             repository => repository.ChangesToPut(Plugin, renamed),
         ];
 
-        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
     }
 
     [Fact]
     public void AnUnsavedTextNoWriteChanged_IsNoChange()
     {
-        var batch = SourceBatch.Over(Repository, [new DocumentChange(FullPath(QuestPath), UnsavedQuest())]);
+        var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
 
-        Assert.Null(Write(batch, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))));
 
-        Assert.Empty(batch.Changes.Documents);
+        Assert.Empty(session.Changes.Documents);
     }
 
     [Fact]
     public void AWriteOverAnUnsavedText_AnswersItWithTheWritesChange()
     {
-        var batch = SourceBatch.Over(Repository, [new DocumentChange(FullPath(QuestPath), UnsavedQuest())]);
+        var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
 
-        Assert.Null(Write(batch, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
 
-        var document = Assert.Single(batch.Changes.Documents);
+        var document = Assert.Single(session.Changes.Documents);
         Assert.Contains("\"UnsavedName\"", document.Text, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Response\"", document.Text, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AWriteThatFails_LeavesTheBatchAsItWas()
+    public void AWriteThatFails_LeavesTheSessionAsItWas()
     {
-        var batch = SourceBatch.Over(Repository, []);
-        Assert.Null(Write(batch, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
-        var before = batch.Changes;
+        var session = Session();
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
+        var before = session.Changes;
 
-        var failed = SourceTransaction.Atomically(batch.Repository, transaction =>
+        var failed = session.Atomically(() =>
         {
-            transaction.Apply(batch.Repository.ChangesToRemove(Plugin, Identity(_quest, "qust")));
-            transaction.Apply(batch.Repository.ChangesToRemove(Plugin, Identity(_response, "info")));
+            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_quest, "qust")));
+            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_response, "info")));
         });
 
         Assert.IsType<SourceFailure.NotCarried>(failed);
-        Assert.Equal(before.Deletions, batch.Changes.Deletions);
-        Assert.Equal(before.Documents, batch.Changes.Documents);
-        Assert.NotNull(batch.Repository.RecordOf(Plugin, Identity(_quest, "qust")).Value());
+        Assert.Equal(before.Deletions, session.Changes.Deletions);
+        Assert.Equal(before.Documents, session.Changes.Documents);
+        Assert.NotNull(session.Repository.RecordOf(Plugin, Identity(_quest, "qust")).Value());
+    }
+
+    [Fact]
+    public void AWriteThatAnswersAFailureAfterApplyingAChange_PutsTheChangeBack_AndAnswersTheFailure()
+    {
+        var session = Session();
+
+        var answered = session.Atomically(() =>
+        {
+            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_response, "info")));
+            return session.Repository.ChangesToRemove(Plugin, new RecordIdentity($"00FFFF:{PluginName}", "info", "Absent"));
+        });
+
+        Assert.IsType<SourceFailure.NotCarried>(answered.Stopped());
+        Assert.Equal(SourceChanges.None, session.Changes);
+    }
+
+    [Fact]
+    public void ADefectInAWrite_PutsBackWhatItApplied_AndIsRethrownAsItself()
+    {
+        var session = Session();
+        var cause = new InvalidCastException("defect");
+
+        var thrown = Assert.Throws<InvalidCastException>(() => session.Atomically(() =>
+        {
+            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_response, "info")));
+            throw cause;
+        }));
+
+        Assert.Same(cause, thrown);
+        Assert.Equal(SourceChanges.None, session.Changes);
+    }
+
+    [Fact]
+    public void ADocumentWrittenWhereTheDiskHoldsAFolder_IsInaccessible_AndLeavesTheSessionAsItWas()
+    {
+        var session = Session();
+        var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
+        var changes = session.Repository.ChangesToPut(Plugin, created).Value();
+        Directory.CreateDirectory(Path.Combine(_modFolder, Assert.Single(changes.Documents).Path));
+
+        var failed = session.Atomically(() => session.Apply(SourceAnswer.Of(changes)));
+
+        Assert.IsType<SourceFailure.Inaccessible>(failed);
+        Assert.Equal(SourceChanges.None, session.Changes);
+    }
+
+    [Fact]
+    public void ChangesAppliedOutsideAnAllOrNoneWrite_AreADefect_AndChangeNothing()
+    {
+        var session = Session();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
+
+        Assert.Equal(SourceChanges.None, session.Changes);
+    }
+
+    [Fact]
+    public void AnAllOrNoneWriteInsideAnother_IsADefect_AndPutsBackWhatTheOuterApplied()
+    {
+        var session = Session();
+
+        Assert.Throws<InvalidOperationException>(() => session.Atomically(() =>
+        {
+            session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_response, "info")));
+            session.Atomically(() => session.Apply(session.Repository.ChangesToRemove(Plugin, Identity(_response2, "info"))));
+        }));
+
+        Assert.Equal(SourceChanges.None, session.Changes);
     }
 
     [Fact]
     public void TheChanges_NameEveryPathAbsolutely()
     {
-        var batch = SourceBatch.Over(Repository, []);
+        var session = Session();
 
-        Assert.Null(Write(batch, repository => repository.ChangesToPut(Plugin, Renamed(_quest, "qust", QuestPath, "Renamed"))));
-        Assert.Null(Write(batch, repository => repository.ChangesToRemove(Plugin, Identity(_cell, "cell"))));
+        Assert.Null(Write(session, repository => repository.ChangesToPut(Plugin, Renamed(_quest, "qust", QuestPath, "Renamed"))));
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_cell, "cell"))));
 
-        var (moves, deletions, documents) = batch.Changes;
+        var (moves, deletions, documents) = session.Changes;
         Assert.All(
             [.. moves.SelectMany(move => new[] { move.From, move.To }), .. deletions, .. documents.Select(document => document.Path)],
             path => Assert.StartsWith(_modFolder + Path.DirectorySeparatorChar, path, StringComparison.Ordinal));
@@ -306,62 +380,62 @@ public sealed class SourceBatchTests : IDisposable
     }
 
     [Fact]
-    public void AMoveOntoAPathARemovalInTheBatchFrees_IsADefect_AndLeavesTheBatchAsItWas()
+    public void AMoveOntoAPathARemovalInTheSessionFrees_IsADefect_AndLeavesTheSessionAsItWas()
     {
         var namesake = new Quest(_mod) { EditorID = "Quest" };
         var namesakePath = Path.Combine(PluginSourceRoot.For(PluginName), "Quests", $"Quest - {namesake.FormKey.ID:X6}_{PluginName}.json");
         File.WriteAllBytes(FullPath(namesakePath), Serialize(namesake));
-        var batch = SourceBatch.Over(Repository, []);
-        Assert.Null(Write(batch, repository => repository.ChangesToRemove(Plugin, Identity(_quest, "qust"))));
-        var before = batch.Changes;
+        var session = Session();
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_quest, "qust"))));
+        var before = session.Changes;
 
-        var defect = Assert.Throws<InvalidOperationException>(() => Write(batch, repository =>
+        var defect = Assert.Throws<InvalidOperationException>(() => Write(session, repository =>
             repository.ChangesToRekey(Plugin, Identity(namesake, "qust"), _quest.FormKey.ToString())));
 
         Assert.Contains("a removal in it frees that path", defect.Message, StringComparison.Ordinal);
-        Assert.Equal(before.Moves, batch.Changes.Moves);
-        Assert.Equal(before.Deletions, batch.Changes.Deletions);
+        Assert.Equal(before.Moves, session.Changes.Moves);
+        Assert.Equal(before.Deletions, session.Changes.Deletions);
     }
 
     [Fact]
     public void AnUnsavedTextOfAFileTheDiskNoLongerHolds_StandsForNoDocument()
     {
-        var batch = SourceBatch.Over(Repository, [new DocumentChange(FullPath(QuestPath), UnsavedQuest())]);
+        var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
 
         File.Delete(FullPath(QuestPath));
 
-        Assert.Null(batch.Repository.RecordOf(Plugin, Identity(_quest, "qust")).Value());
+        Assert.Null(session.Repository.RecordOf(Plugin, Identity(_quest, "qust")).Value());
     }
 
     [Fact]
-    public void AMoveIntoAFolderOnlyTheBatchsDocumentsMake_IsADefect_AndLeavesTheBatchAsItWas()
+    public void AMoveIntoAFolderOnlyTheSessionsDocumentsMake_IsADefect_AndLeavesTheSessionAsItWas()
     {
         var folder = Path.Combine(PluginSourceRoot.For(PluginName), "Quests", "New");
-        var batch = SourceBatch.Over(Repository, []);
-        Assert.Null(Write(batch, _ => SourceAnswer.Of(new SourceChanges([], [], [new DocumentChange(Path.Combine(folder, "Other.json"), "{}")]))));
-        var before = batch.Changes;
+        var session = Session();
+        Assert.Null(Write(session, _ => SourceAnswer.Of(new SourceChanges([], [], [new DocumentChange(Path.Combine(folder, "Other.json"), "{}")]))));
+        var before = session.Changes;
 
-        var defect = Assert.Throws<InvalidOperationException>(() => Write(batch, _ =>
+        var defect = Assert.Throws<InvalidOperationException>(() => Write(session, _ =>
             SourceAnswer.Of(new SourceChanges([new SourceMove(QuestPath, Path.Combine(folder, "Quest.json"))], [], []))));
 
-        Assert.Contains("only a document of the batch makes that folder", defect.Message, StringComparison.Ordinal);
-        Assert.Equal(before.Moves, batch.Changes.Moves);
-        Assert.Equal(before.Documents, batch.Changes.Documents);
+        Assert.Contains("only a document of the session makes that folder", defect.Message, StringComparison.Ordinal);
+        Assert.Equal(before.Moves, session.Changes.Moves);
+        Assert.Equal(before.Documents, session.Changes.Documents);
     }
 
     [Fact]
     public void AReadAfterAFailedWrite_SeesNothingOfIt()
     {
-        var batch = SourceBatch.Over(Repository, []);
+        var session = Session();
         var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
         bool HoldsTheNewNpc() =>
-            batch.Repository.TreeOf(Plugin).Value().Files.Any(file => file.RelativePath.Contains("NewNpc", StringComparison.Ordinal));
+            session.Repository.TreeOf(Plugin).Value().Files.Any(file => file.RelativePath.Contains("NewNpc", StringComparison.Ordinal));
 
-        var failed = SourceTransaction.Atomically(batch.Repository, transaction =>
+        var failed = session.Atomically(() =>
         {
-            transaction.Apply(batch.Repository.ChangesToPut(Plugin, created));
+            session.Apply(session.Repository.ChangesToPut(Plugin, created));
             Assert.True(HoldsTheNewNpc());
-            transaction.Apply(batch.Repository.ChangesToRemove(Plugin, new RecordIdentity($"00FFFF:{PluginName}", "info", "Absent")));
+            session.Apply(session.Repository.ChangesToRemove(Plugin, new RecordIdentity($"00FFFF:{PluginName}", "info", "Absent")));
         });
 
         Assert.IsType<SourceFailure.NotCarried>(failed);
@@ -369,29 +443,29 @@ public sealed class SourceBatchTests : IDisposable
     }
 
     [Fact]
-    public void ASecondAllocatorInTheBatch_ReadsTheHeaderAndTheFormKeysTheFirstLeft()
+    public void ASecondAllocatorInTheSession_ReadsTheHeaderAndTheFormKeysTheFirstLeft()
     {
-        var batch = SourceBatch.Over(Repository, []);
+        var session = Session();
         var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
-        var header = batch.Repository.RecordOf(Plugin, PluginHeader.IdentityOf(PluginName)).Value().Require();
+        var header = session.Repository.RecordOf(Plugin, PluginHeader.IdentityOf(PluginName)).Value().Require();
         var movedPast = header with
         {
             Body = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(Encoding.UTF8.GetBytes(header.Body), 0x900)),
         };
 
-        Assert.Null(SourceTransaction.Atomically(batch.Repository, transaction =>
+        Assert.Null(session.Atomically(() =>
         {
-            transaction.Apply(batch.Repository.ChangesToPut(Plugin, created));
-            transaction.Apply(batch.Repository.ChangesToRewrite(Plugin, movedPast));
+            session.Apply(session.Repository.ChangesToPut(Plugin, created));
+            session.Apply(session.Repository.ChangesToRewrite(Plugin, movedPast));
         }));
 
-        var headerRead = batch.Repository.RecordOf(Plugin, PluginHeader.IdentityOf(PluginName)).Value().Require();
+        var headerRead = session.Repository.RecordOf(Plugin, PluginHeader.IdentityOf(PluginName)).Value().Require();
         Assert.Equal(0x900u, HeaderDocument.NextObjectId(Encoding.UTF8.GetBytes(headerRead.Body)));
-        Assert.Contains(created.FormKey, batch.Repository.FormKeysUsed(Plugin).Value());
+        Assert.Contains(created.FormKey, session.Repository.FormKeysUsed(Plugin).Value());
     }
 
     [Fact]
-    public void AChildPutIntoAContainerTheBatchCreated_AnswersTheTreeTheyLeave()
+    public void AChildPutIntoAContainerTheSessionCreated_AnswersTheTreeTheyLeave()
     {
         var cell = Child(new Cell(_mod) { EditorID = "NewCell" }, "cell");
         var child = Child(new PlacedObject(_mod) { EditorID = "AddedRef" }, "refr");
@@ -401,24 +475,24 @@ public sealed class SourceBatchTests : IDisposable
             repository => repository.ChangesToPutChild(Plugin, cell.Identity, "Temporary", child),
         ];
 
-        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheBatchAnswers(writes));
+        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
     }
 
     [Theory]
     [InlineData("replace")]
     [InlineData("moveLast")]
     [InlineData("binary")]
-    public void AVerbThatWritesTheDiskItself_RefusesOnABatchsRepository_AndWritesNothing(string verb)
+    public void AVerbThatWritesTheDiskItself_RefusesOnASessionsRepository_AndWritesNothing(string verb)
     {
         var before = TreeSnapshot.Of(_modFolder);
-        var batch = SourceBatch.Over(Repository, []);
+        var session = Session();
         var wrote = false;
 
         Assert.Throws<InvalidOperationException>(() => verb switch
         {
-            "replace" => batch.Repository.ReplaceSourceFrom(Plugin, [], "ABCDEF0123"),
-            "moveLast" => batch.Repository.MoveLastWrittenTo(Plugin.Name, "Renamed.esp"),
-            _ => batch.Repository.WriteBinary(Plugin, "ABCDEF0123", () => wrote = true).Holds(out _, out var failure) ? null : failure,
+            "replace" => session.Repository.ReplaceSourceFrom(Plugin, [], "ABCDEF0123"),
+            "moveLast" => session.Repository.MoveLastWrittenTo(Plugin.Name, "Renamed.esp"),
+            _ => session.Repository.WriteBinary(Plugin, "ABCDEF0123", () => wrote = true).Holds(out _, out var failure) ? null : failure,
         });
 
         Assert.False(wrote);

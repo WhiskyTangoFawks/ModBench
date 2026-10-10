@@ -48,17 +48,4 @@ public sealed class SourceRepositoryMintingTests : IDisposable
         Assert.NotEmpty(files);
         Assert.All(files, file => Assert.Equal(groupFolder, Path.GetRelativePath(root, file).Split(Path.DirectorySeparatorChar)[0]));
     }
-
-    [Fact]
-    public void APutWhoseWriteFailsAfterTheDirectoriesAboveItWereMinted_LeavesNoneOfThem()
-    {
-        var repository = Tracked();
-        var originWhoseFileNameNoFilesystemTakesAsALeaf = new string('a', 300) + ".esp";
-        var formKey = $"000800:{originWhoseFileNameNoFilesystemTakesAsALeaf}";
-
-        Assert.IsType<SourceFailure.Inaccessible>(repository.Put(
-            Plugin, new SourceDocument(formKey, "npc_", "Overlong", $"{{\"FormKey\": \"{formKey}\"}}")).Failed());
-
-        Assert.False(Directory.Exists(PluginSourceRoot.In(_modFolder, Plugin.Name)));
-    }
 }

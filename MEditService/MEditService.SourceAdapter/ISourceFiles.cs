@@ -1,6 +1,6 @@
 namespace MEditService.SourceAdapter;
 
-/// <summary>The files a repository reads its tree from: the disk's, or a batch's changes over them. Each
+/// <summary>The files a repository reads its tree from: the disk's, or a session's changes over them. Each
 /// answers and throws as the file system's own call does.</summary>
 internal interface ISourceFiles
 {

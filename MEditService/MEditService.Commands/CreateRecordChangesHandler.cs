@@ -50,14 +50,11 @@ public sealed class CreateRecordChangesHandler
 
     private Answer<RecordEditChanges, SourceFailure> MintRecord(PluginAddress plugin, string recordType, string? container, GridPosition? position)
     {
-        var unsaved = _unsaved.Current;
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
-        if (_targets.RefuseUnlessEditable(plugin, out var openedRepository) is { } blocked) return blocked;
-        var onDisk = openedRepository
-            ?? throw new InvalidOperationException("Expected RefuseUnlessEditable to open a repository when it does not refuse.");
-        var batch = SourceBatch.Over(onDisk, unsaved);
-        var unsavedByFolder = new UnsavedBatches(unsaved);
-        var repository = batch.Repository;
+        if (_targets.RefuseUnlessEditable(plugin) is { } blocked) return blocked;
+        var sessions = new WriteSessions(_unsaved.Current);
+        var session = _targets.SessionOf(plugin, sessions);
+        var repository = session.Repository;
 
         var release = _loadOrder.Current.GameRelease;
         var schemas = _schemaReflector.GetSchemas(release);
@@ -66,7 +63,7 @@ public sealed class CreateRecordChangesHandler
             return RecordEditResult.Refused(
                 RecordEditRefusal.RecordTypeNotFound, $"'{recordType}' is not a creatable record type.");
         }
-        if (container is not null) return MintChild(batch, unsavedByFolder, plugin, recordType, schema, release, container, position);
+        if (container is not null) return MintChild(session, sessions, plugin, recordType, schema, release, container, position);
         if (position is not null) return MalformedPosition("names no container");
         if (!RecordTypes.For(release).IsCreatable(recordType))
         {
@@ -81,10 +78,10 @@ public sealed class CreateRecordChangesHandler
         var body = RecordMint.BareDocument(schema, release, targetFormKey, editorId: null);
         if (RecordTypes.For(release).IsCell(recordType)) body = AsInteriorCell(body);
 
-        if (SourceTransaction.Atomically(repository, transaction =>
+        if (session.Atomically(() =>
             {
-                transaction.Apply(repository.ChangesToPut(plugin, new SourceDocument(targetFormKey, recordType, null, body)));
-                transaction.Apply(allocator.HeaderChanges());
+                session.Apply(repository.ChangesToPut(plugin, new SourceDocument(targetFormKey, recordType, null, body)));
+                session.Apply(allocator.HeaderChanges());
             }) is { } unwritten)
         {
             return unwritten;
@@ -96,18 +93,18 @@ public sealed class CreateRecordChangesHandler
                 "Answered the creation of {RecordType} {FormKey} in {Plugin} ({Origin}) — a new source document",
                 recordType, targetFormKey, plugin.Name, plugin.Origin);
         }
-        return Landed(batch, targetFormKey);
+        return Landed(session, targetFormKey);
     }
 
-    private static Answer<RecordEditChanges, SourceFailure> Landed(SourceBatch batch, string formKey) =>
-        SourceAnswer.Of(new RecordEditChanges(RecordEditResult.Success(formKey), batch.Changes));
+    private static Answer<RecordEditChanges, SourceFailure> Landed(WriteSession session, string formKey) =>
+        SourceAnswer.Of(new RecordEditChanges(RecordEditResult.Success(formKey), session.Changes));
 
     private Answer<RecordEditChanges, SourceFailure> MintChild(
-        SourceBatch batch, UnsavedBatches unsavedByFolder, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
+        WriteSession session, WriteSessions sessions, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
         string container, GridPosition? position)
     {
-        var repository = batch.Repository;
-        if (WriteTargets.ResolveInTheTree(plugin, container, repository, release, out var target, out var containerDocument) is { } unresolved)
+        var repository = session.Repository;
+        if (WriteTargets.ResolveInTheTree(plugin, container, session, release, out var target, out var containerDocument) is { } unresolved)
             return unresolved;
         if (containerDocument is null) throw new InvalidOperationException($"Expected {container}'s document to have been located.");
         var containerType = target.Identity.RecordType;
@@ -129,7 +126,7 @@ public sealed class CreateRecordChangesHandler
         if (exteriorCell && containerHoldsIt)
         {
             return position is { X: int x, Y: int y }
-                ? CreateCellAt(batch, unsavedByFolder, plugin, recordType, schemas, release, container, (x, y))
+                ? CreateCellAt(session, sessions, plugin, recordType, schemas, release, container, (x, y))
                 : RecordEditResult.Refused(
                     RecordEditRefusal.InvalidEnvelope, $"A cell created in the worldspace {container} takes a grid position, both x and y.");
         }
@@ -137,7 +134,7 @@ public sealed class CreateRecordChangesHandler
         {
             case ChildSlot.Open(var slot):
                 return AppendChild(
-                    batch, plugin, recordType, schema, release, new Landing(target.Identity, Document.Parse(containerDocument.Body), slot));
+                    session, plugin, recordType, schema, release, new Landing(target.Identity, Document.Parse(containerDocument.Body), slot));
             case ChildSlot.Filled(var slot, var held):
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ChildSlotHeldByAnotherRecord,
@@ -149,12 +146,12 @@ public sealed class CreateRecordChangesHandler
     }
 
     private Answer<RecordEditChanges, SourceFailure> CreateCellAt(
-        SourceBatch batch, UnsavedBatches unsavedByFolder, PluginAddress plugin, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        WriteSession session, WriteSessions sessions, PluginAddress plugin, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         GameRelease release, string worldspace, (int X, int Y) grid)
     {
-        var repository = batch.Repository;
+        var repository = session.Repository;
         var at = $"at {grid.X}, {grid.Y}";
-        var holder = _resolution.HolderOfCell(repository, plugin, schemas, worldspace, grid, worldspace, $"whether a cell sits {at}", unsavedByFolder);
+        var holder = _resolution.HolderOfCell(repository, plugin, schemas, worldspace, grid, worldspace, $"whether a cell sits {at}", sessions);
         switch (holder)
         {
             case GridCellHolder.Unreadable(var why):
@@ -177,10 +174,10 @@ public sealed class CreateRecordChangesHandler
         var cell = minted ?? throw new InvalidOperationException("Expected Mint to answer a cell when it does not refuse.");
         var formKey = GridCellHolder.FormKeyOf(cell);
         var text = RecordTextCodec.RoundTrip(cell.Text, release, recordType);
-        if (SourceTransaction.Atomically(repository, transaction =>
+        if (session.Atomically(() =>
             {
-                transaction.Apply(repository.ChangesToPutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace));
-                transaction.Apply(allocator.HeaderChanges());
+                session.Apply(repository.ChangesToPutInWorldspace(plugin, new SourceDocument(formKey, recordType, null, text), worldspace));
+                session.Apply(allocator.HeaderChanges());
             }) is { } unwritten)
         {
             return unwritten;
@@ -192,16 +189,16 @@ public sealed class CreateRecordChangesHandler
                 "Answered the creation of cell {FormKey} in {Plugin} ({Origin}) — at grid {X}, {Y} of {Worldspace}",
                 formKey, plugin.Name, plugin.Origin, grid.X, grid.Y, worldspace);
         }
-        return Landed(batch, formKey);
+        return Landed(session, formKey);
     }
 
     private sealed record Landing(RecordIdentity Container, Document Root, string Slot);
 
     private Answer<RecordEditChanges, SourceFailure> AppendChild(
-        SourceBatch batch, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
+        WriteSession session, PluginAddress plugin, string recordType, RecordTableSchema schema, GameRelease release,
         Landing landing)
     {
-        var repository = batch.Repository;
+        var repository = session.Repository;
         var (container, root, slot) = landing;
         if (!FormKeyAllocator.Over(repository, plugin, release).Holds(out var allocator, out var unread)) return unread;
         if (allocator.Next(out var formKey) is { } refusedTarget) return refusedTarget;
@@ -210,10 +207,10 @@ public sealed class CreateRecordChangesHandler
             return RecordEditResult.Refused(RecordEditRefusal.HeldInAnotherRecordNotYetSupported, unplaceable);
         var childDocument = new SourceDocument(formKey.ToString(), recordType, null, child.Text);
 
-        if (SourceTransaction.Atomically(repository, transaction =>
+        if (session.Atomically(() =>
             {
-                transaction.Apply(repository.ChangesToPutChild(plugin, container, slot, childDocument));
-                transaction.Apply(allocator.HeaderChanges());
+                session.Apply(repository.ChangesToPutChild(plugin, container, slot, childDocument));
+                session.Apply(allocator.HeaderChanges());
             }) is { } unwritten)
         {
             return unwritten;
@@ -225,6 +222,6 @@ public sealed class CreateRecordChangesHandler
                 "Answered the creation of {RecordType} {FormKey} in {Plugin} ({Origin}) — at the end of {Container}'s {Slot}",
                 recordType, formKey, plugin.Name, plugin.Origin, container.FormKey, slot);
         }
-        return Landed(batch, formKey.ToString());
+        return Landed(session, formKey.ToString());
     }
 }

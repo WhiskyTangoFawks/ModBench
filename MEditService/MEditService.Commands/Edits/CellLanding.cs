@@ -19,8 +19,11 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
     private sealed record CellIn(SourceDocument Cell, Answer<SourceChanges, SourceFailure> HeaderChanges);
 
     private sealed record Move(
-        PluginAddress Plugin, SourceRepository Repository, GameRelease Release, RecordIdentity Moved, string Worldspace,
-        string CellType, string Spelled, UnsavedBatches Batches);
+        PluginAddress Plugin, WriteSession Session, GameRelease Release, RecordIdentity Moved, string Worldspace,
+        string CellType, string Spelled, WriteSessions Sessions)
+    {
+        internal SourceRepository Repository => Session.Repository;
+    }
 
     // One step of a landing: the value it yields, or the refusal or source failure that ends the landing.
     private abstract record Step<T>
@@ -59,29 +62,30 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
     /// it in, and puts it into <paramref name="into"/>. A tree it cannot read refuses, with nothing written.</summary>
     internal RecordEditResult Land(
         PluginAddress plugin, WriteTargets.EditTarget edit, HeldIn from, SourceDocument moved, AnotherCell into, string spelled,
-        UnsavedBatches batches)
+        WriteSessions sessions)
     {
         var failed = $"Moving {moved.FormKey} into another cell failed";
-        return WriteFailure.Refused(Cross(plugin, edit, from, moved, into, spelled, batches), refused => refused, failed, logger);
+        return WriteFailure.Refused(Cross(plugin, edit, from, moved, into, spelled, sessions), refused => refused, failed, logger);
     }
 
     private Answer<RecordEditResult, SourceFailure> Cross(
         PluginAddress plugin, WriteTargets.EditTarget edit, HeldIn from, SourceDocument moved, AnotherCell into, string spelled,
-        UnsavedBatches batches)
+        WriteSessions sessions)
     {
-        var (release, _, repository) = edit;
+        var (release, _, session) = edit;
+        var repository = session.Repository;
         if (!repository.WorldspaceOf(plugin, from.Container.Identity).Holds(out var worldspace, out var unread)) return unread;
         if (worldspace is null)
             return CellGroupMove.Unknown(spelled, moved.FormKey, $"{plugin.Name} holds no worldspace above its cell {from.Container.FormKey}");
 
-        var move = new Move(plugin, repository, release, moved.Identity, worldspace, RecordTypes.For(release).Cell, spelled, batches);
+        var move = new Move(plugin, session, release, moved.Identity, worldspace, RecordTypes.For(release).Cell, spelled, sessions);
         var landing = into is AnotherCell.GridCell grid ? IntoGridCell(move, grid) : IntoPersistentCell(move);
-        return landing.Finish(landed => RecordEditResult.Making(RecordEditResult.Success(), repository, transaction =>
+        return landing.Finish(landed => RecordEditResult.Making(RecordEditResult.Success(), session, () =>
         {
-            transaction.Apply(repository.ChangesToRemove(plugin, moved.Identity));
-            if (landed.PutCell is { } putCell) transaction.Apply(putCell());
-            transaction.Apply(repository.ChangesToPutChild(plugin, landed.Cell, into.Group, moved));
-            transaction.Apply(landed.HeaderChanges);
+            session.Apply(repository.ChangesToRemove(plugin, moved.Identity));
+            if (landed.PutCell is { } putCell) session.Apply(putCell());
+            session.Apply(repository.ChangesToPutChild(plugin, landed.Cell, into.Group, moved));
+            session.Apply(landed.HeaderChanges);
         }));
     }
 
@@ -113,7 +117,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
     {
         var holder = resolution.HolderOfCell(
             move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release), move.Worldspace, (grid.X, grid.Y),
-            move.Spelled, $"the cell {move.Moved.FormKey} moves into", move.Batches);
+            move.Spelled, $"the cell {move.Moved.FormKey} moves into", move.Sessions);
         return holder switch
         {
             GridCellHolder.Plugins(var held) => new Step<Landed>.Done(new(held.Identity, null, SourceChanges.None)),
@@ -132,7 +136,7 @@ internal sealed class CellLanding(LoadOrderResolution resolution, SchemaReflecto
 
     // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile; ADR-0018).
     private LoadOrderResolution.MastersWalk MastersWalkOf(Move move) =>
-        resolution.WalkAmongMastersOf(move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release), move.Batches);
+        resolution.WalkAmongMastersOf(move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release), move.Sessions);
 
     // The own fields of the nearest master's copy, as an override, or else a new cell native to the plugin.
     private Step<CellIn> CopiedOrNew(Move move, LeftCopy left, Func<string, Document?> cellIn, long flags, (int X, int Y) grid)

@@ -23,7 +23,8 @@ internal sealed class FormKeyChange(ILogger logger)
     internal Answer<RecordEditResult, SourceFailure> Change(
         PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, EditValue? value)
     {
-        var (release, identity, repository) = editTarget;
+        var (release, identity, session) = editTarget;
+        var repository = session.Repository;
         if (identity.RecordType == PluginHeader.RecordType)
         {
             return RecordTextEdit.ReadOnlyRefusal(Member, Member, PluginHeader.FormIdReadOnly);
@@ -57,10 +58,10 @@ internal sealed class FormKeyChange(ILogger logger)
 
         var failed = $"Changing the FormID of {formKey} to {targetFormKey} failed";
         return WriteFailure.Refused(
-            RecordEditResult.Making(RecordEditResult.Success(targetFormKey), repository, transaction =>
+            RecordEditResult.Making(RecordEditResult.Success(targetFormKey), session, () =>
             {
-                transaction.Apply(repository.ChangesToRekey(plugin, identity, targetFormKey));
-                transaction.Apply(allocator.HeaderChanges());
+                session.Apply(repository.ChangesToRekey(plugin, identity, targetFormKey));
+                session.Apply(allocator.HeaderChanges());
             }),
             refused => refused, failed, logger);
     }
