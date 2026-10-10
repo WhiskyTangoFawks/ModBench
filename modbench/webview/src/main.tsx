@@ -1,5 +1,6 @@
 import React from "react";
 import "@vscode/codicons/dist/codicon.css";
+import "./checkbox.css";
 import { createRoot } from "react-dom/client";
 import { RecordPanel } from "./RecordPanel";
 import { createRecordPanelClient } from "./RecordPanelClient";

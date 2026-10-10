@@ -346,6 +346,13 @@ describe('ScalarCell — Enter writes and Esc cancels', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  it('draws the checkbox editor in the theme\'s checkbox style', () => {
+    render(<ScalarCell value={false} meta={meta({ type: 'bool' })} editable onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('False'));
+
+    expect(screen.getByRole('checkbox')).toHaveClass('vscode-checkbox');
+  });
+
   it('Esc closes the checkbox editor', () => {
     render(<ScalarCell value={false} meta={meta({ type: 'bool' })} editable onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('False'));

@@ -55,6 +55,7 @@ describe('FilterCodeLensProvider', () => {
     const lens = soleLens(new FilterCodeLensProvider().provideCodeLenses(doc));
 
     expect(lens.command).toBe('modbench.record.filter');
+    expect(lens.title).toBe('$(play) Apply as Filter');
     expect(lens.arguments).toEqual([doc.uri]);
   });
 
@@ -74,7 +75,7 @@ describe('FilterCodeLensProvider', () => {
     const lens = soleLens(provider.provideCodeLenses(makeDocumentDeclaringEveryTextDocumentMember(ARMOR_SQL, 'Untitled-1', true)));
 
     expect(lens.command).toBe('modbench.record.clearFilter');
-    expect(lens.title).toContain('Active');
+    expect(lens.title).toBe('$(check) Active — click to clear');
   });
 
   it('offers to apply a document whose SQL differs from the filter in force', () => {

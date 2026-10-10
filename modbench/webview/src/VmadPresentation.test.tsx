@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
@@ -590,7 +590,7 @@ describe('Add Script is the generic array gesture', () => {
 
     const added = document.querySelectorAll('tbody tr')[2];
     if (!added) throw new Error('no second script row after the reload');
-    expect(cellAt(added, 0).textContent).toBe('▼');
+    expect(within(cellAt(added, 0)).getByRole('button', { expanded: true })).toBeInTheDocument();
     const beneath = added.nextElementSibling;
     if (!beneath) throw new Error('no row beneath the added script');
     expect(cellAt(beneath, 0).textContent).toBe('Name');

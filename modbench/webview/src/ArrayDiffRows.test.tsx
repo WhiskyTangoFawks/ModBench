@@ -209,7 +209,7 @@ describe('RecordPanel — array child rows (in sequence)', () => {
   it('parent array row shows [2] when collapsed', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('Packages'));
-    fireEvent.click(within(required(screen.getByText('Packages').closest('tr'), "Packages's row")).getByText('▼'));
+    fireEvent.click(within(required(screen.getByText('Packages').closest('tr'), "Packages's row")).getByRole('button', { expanded: true }));
     expect(screen.getAllByText('[2]').length).toBeGreaterThan(0);
     expect(screen.queryByText('{…}')).not.toBeInTheDocument();
   });
@@ -235,7 +235,7 @@ describe('RecordPanel — struct row conflict color follows collapse state', () 
   it('collapsed: the struct row shows the aggregate tint from its conflicting child', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('X1'));
-    fireEvent.click(within(required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row")).getByText('▼'));
+    fireEvent.click(within(required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row")).getByRole('button', { expanded: true }));
     await waitFor(() => expect(screen.queryByText('X1')).not.toBeInTheDocument());
     const structRow = required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row");
     expect(structRow.style.backgroundColor).toBe('var(--vscode-modbench-conflictRowOverride)');
@@ -257,11 +257,11 @@ describe('RecordPanel — struct row conflict color follows collapse state', () 
     renderPanel();
     await waitFor(() => screen.getByText('X1'));
     const structRowOf = () => required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row");
-    fireEvent.click(within(structRowOf()).getByText('▼'));
+    fireEvent.click(within(structRowOf()).getByRole('button', { expanded: true }));
     await waitFor(() => expect(screen.queryByText('X1')).not.toBeInTheDocument());
-    fireEvent.click(within(structRowOf()).getByText('▶'));
+    fireEvent.click(within(structRowOf()).getByRole('button', { expanded: false }));
     await waitFor(() => screen.getByText('X1'));
-    fireEvent.click(within(structRowOf()).getByText('▼'));
+    fireEvent.click(within(structRowOf()).getByRole('button', { expanded: true }));
     await waitFor(() => expect(screen.queryByText('X1')).not.toBeInTheDocument());
 
     const structRow = required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row");
@@ -710,8 +710,8 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
     fireEvent.click(required(rowLabelled('Guard', 1).querySelector('button'), "the second Guard row's toggle"));
 
     await waitFor(() => expect(screen.getAllByText('flags')).toHaveLength(1));
-    expect(rowLabelled('Guard', 0).querySelector('td')?.textContent).toBe('▼Guard');
-    expect(rowLabelled('Guard', 1).querySelector('td')?.textContent).toBe('▶Guard');
+    expect(rowLabelled('Guard', 0).querySelector('button')).toHaveAttribute('aria-expanded', 'true');
+    expect(rowLabelled('Guard', 1).querySelector('button')).toHaveAttribute('aria-expanded', 'false');
   });
 });
 
@@ -858,7 +858,7 @@ describe('RecordPanel — an element after a null slot is addressed at its own i
   it('the collapsed array counts the null slot', async () => {
     await waitFor(() => screen.getByText('Items'));
     const items = required(screen.getByText('Items').closest('tr'), 'the Items row');
-    fireEvent.click(within(items).getByText('▼'));
+    fireEvent.click(within(items).getByRole('button', { expanded: true }));
 
     const cells = items.querySelectorAll('td');
     expect(cells[1]?.textContent).toBe('[2]');
@@ -884,7 +884,7 @@ describe('RecordPanel — an array whose one slot is null', () => {
     }), { plugins: [{ name: 'MyMod.esp', isTracked: true }] })} />);
     await waitFor(() => screen.getByText('Items'));
     const items = required(screen.getByText('Items').closest('tr'), 'the Items row');
-    fireEvent.click(within(items).getByText('▼'));
+    fireEvent.click(within(items).getByRole('button', { expanded: true }));
 
     expect(items.querySelectorAll('td')[1]?.textContent).toBe('{…}');
     vi.unstubAllGlobals();
