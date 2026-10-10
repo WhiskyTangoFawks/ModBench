@@ -1071,7 +1071,7 @@ describe('a child record of a tracked plugin', () => {
       await openRecord(childCopy);
 
       const child = await childDocument();
-      await waitFor('the child\'s document to show the container\'s unsaved text, unsaved', () => child.isDirty && child.getText() === cellText('BeforeChildOpened'));
+      await waitFor('the child\'s document to show the container\'s unsaved text, and be unsaved', () => child.isDirty && child.getText() === cellText('BeforeChildOpened'));
     });
   });
 });

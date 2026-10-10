@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
   changed: [] as ((change: Change) => void)[],
   opened: [] as ((document: FakeDocument) => void)[],
   saved: [] as ((document: FakeDocument) => void)[],
+  closed: [] as ((document: FakeDocument) => void)[],
   afterEdit: (): void => undefined,
 }));
 
@@ -38,6 +39,7 @@ vi.mock('vscode', () => {
       onDidChangeTextDocument: on(h.changed),
       onDidOpenTextDocument: on(h.opened),
       onDidSaveTextDocument: on(h.saved),
+      onDidCloseTextDocument: on(h.closed),
       applyEdit: ({ replacements }: { replacements: Replacement[] }) => {
         for (const { uri, range, text } of replacements) {
           const document = h.documents.find((each) => each.uri === uri);
@@ -85,6 +87,7 @@ beforeEach(() => {
   h.changed.length = 0;
   h.opened.length = 0;
   h.saved.length = 0;
+  h.closed.length = 0;
   h.afterEdit = () => undefined;
   holdOneTextPerFile({ warn: () => undefined });
 });
@@ -113,7 +116,7 @@ describe('the documents over one file', () => {
     expect([file.text, child.text]).toEqual(['typed again', 'typed again']);
   });
 
-  it('keep a change typed before one that took the change before it reports turning unsaved, passing nothing back', async () => {
+  it('keep what is typed in one while another, having taken the change before, reports turning unsaved', async () => {
     const [file, child] = [document('file', 'saved'), document('modbench-child-record', 'saved')];
     h.afterEdit = () => {
       h.afterEdit = () => undefined;
@@ -125,6 +128,26 @@ describe('the documents over one file', () => {
     await settled();
 
     expect([file.text, child.text]).toEqual(['typed again', 'typed again']);
+  });
+
+  it('give a change to the others from one opened again on a text it took before it closed', async () => {
+    const [file, child] = [document('file', 'saved'), document('modbench-child-record', 'saved')];
+    changed(file, 'taken', true);
+    await settled();
+    await file.save();
+    await settled();
+    h.documents.splice(h.documents.indexOf(child), 1);
+    for (const listener of h.closed) listener(child);
+    changed(file, 'saved again', true);
+    await file.save();
+    await settled();
+    Object.assign(child, { text: 'saved again', isDirty: false });
+    h.documents.push(child);
+
+    changed(child, 'taken', true);
+    await settled();
+
+    expect(file.text).toBe('taken');
   });
 
   it('keep an unsaved text when another reads the file again, as a revert does, and that one takes it', async () => {

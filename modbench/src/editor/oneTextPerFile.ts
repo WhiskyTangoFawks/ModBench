@@ -24,7 +24,7 @@ export async function takeText(document: vscode.TextDocument, text: string): Pro
 /** A file's document and its child records' documents hold one text, saved or not (editor.md,
  *  Opening, story 10), as VS Code gives each tab a document of its own. */
 export function holdOneTextPerFile(channel: Pick<vscode.LogOutputChannel, 'warn'>): vscode.Disposable {
-  // The text each document took from another, which it holds with no change of its own to pass back.
+  // The text each document took from another.
   const taken = new Map<string, string>();
   let queue = Promise.resolve();
   const inTurn = (work: () => Promise<void>) => {
@@ -54,8 +54,7 @@ export function holdOneTextPerFile(channel: Pick<vscode.LogOutputChannel, 'warn'
     // A change of text or of saved state: VS Code reports a document's first unsaved change before it is unsaved.
     vscode.workspace.onDidChangeTextDocument(({ document, contentChanges, reason }) => {
       const key = document.uri.toString();
-      // A document holding only what it took has no change of its own, as when it then turns unsaved: passing
-      // its text back would undo what was typed in the other since.
+      // Passing back the text it took would undo what was typed in the other since.
       if (taken.get(key) === document.getText()) return;
       taken.delete(key);
       const undoOrRedo = reason !== undefined;
@@ -65,6 +64,7 @@ export function holdOneTextPerFile(channel: Pick<vscode.LogOutputChannel, 'warn'
       });
     }),
     vscode.workspace.onDidOpenTextDocument((document) => { inTurn(() => takeUnsaved(document)); }),
+    vscode.workspace.onDidCloseTextDocument(({ uri }) => { taken.delete(uri.toString()); }),
     // The others holding the saved text are saved too, which writes nothing the file does not hold.
     vscode.workspace.onDidSaveTextDocument((document) => {
       const saved = document.getText();

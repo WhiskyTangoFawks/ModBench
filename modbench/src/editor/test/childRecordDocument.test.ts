@@ -6,7 +6,7 @@ interface TestUri {
   with(change: Partial<Pick<TestUri, 'scheme' | 'query'>>): TestUri;
   toString(): string;
 }
-interface TestDocument { uri: TestUri; getText?(): string }
+interface TestDocument { uri: TestUri; getText?(): string; isDirty?: boolean }
 interface Replacement { uri: TestUri; range: { start: number; end: number }; text: string }
 
 const h = vi.hoisted(() => {
@@ -185,9 +185,11 @@ describe('a child record\'s document', () => {
 
   it('keeps the size it read past a stat its unsaved document\'s save takes while a sibling\'s save is writing the file', async () => {
     const { files } = childDocuments();
-    const sizeStated = opened(files);
+    const child: TestDocument = { uri: PLACED_URI, isDirty: false };
+    h.textDocuments.push(child);
+    const sizeStated = async () => (await files.stat(PLACED_URI)).size;
     await sizeStated();
-    Object.assign(h.textDocuments[0] ?? {}, { isDirty: true });
+    child.isDirty = true;
 
     h.disk = { mtime: 5, size: 0 };
     const midWrite = await sizeStated();
