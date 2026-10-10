@@ -35,6 +35,19 @@ internal static class Envelopes
     internal static RecordEditEnvelope MoveTo(int destination, params PathHop[] path) =>
         new(RecordEditEnvelope.Move, path, new EditValue(EditValueKind.WholeNumber, destination.ToString(System.Globalization.CultureInfo.InvariantCulture)));
 
+    /// <summary>The envelope a table row spells: an operation, a path as "Scripts[1].Name" and a JSON value.</summary>
+    internal static RecordEditEnvelope Spelled(string op, string path, string? json = null) =>
+        new(op, Hops(path), json is null ? null : ValueOf(JsonDocument.Parse(json).RootElement));
+
+    private static PathHop[] Hops(string path) =>
+        [.. path.Split('.').SelectMany(segment =>
+        {
+            var parts = segment.Split('[', StringSplitOptions.RemoveEmptyEntries);
+            return parts.Skip(1)
+                .Select(index => At(int.Parse(index.TrimEnd(']'), System.Globalization.CultureInfo.InvariantCulture)))
+                .Prepend(Member(parts[0]));
+        })];
+
     /// <summary>A set of one top-level member: the gesture most tests make.</summary>
     internal static RecordEditResult Set(
         this TestEditor handler, PluginAddress plugin, string formKey, string member, JsonElement value) =>

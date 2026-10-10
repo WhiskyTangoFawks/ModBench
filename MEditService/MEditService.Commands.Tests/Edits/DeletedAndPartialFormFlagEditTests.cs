@@ -8,6 +8,7 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
@@ -20,12 +21,17 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     private static readonly ModKey Fallout4Esm = ModKey.FromFileName("Fallout4.esm");
 
     private readonly DocumentEditFixture _fixture = new();
-    private readonly Fallout4Mod _mod = new(ModKey.FromFileName("DocEdit.esp"), Fallout4Release.Fallout4);
+    private readonly Fallout4Mod _mod = new(DocumentEditFixture.ModKey, Fallout4Release.Fallout4);
 
     public void Dispose() => _fixture.Dispose();
 
-    private static Cell InteriorCellOfFallout4Esm() =>
-        new(new FormKey(Fallout4Esm, 0x800), Fallout4Release.Fallout4) { EditorID = "C", Flags = Cell.Flag.IsInteriorCell };
+    private static Cell InteriorCellOfFallout4Esm(int flags = 0) =>
+        new(new FormKey(Fallout4Esm, 0x800), Fallout4Release.Fallout4)
+        {
+            EditorID = "C",
+            Flags = Cell.Flag.IsInteriorCell,
+            MajorRecordFlagsRaw = flags,
+        };
 
     private static Cell ExteriorCellOfFallout4Esm(int flags) =>
         new(new FormKey(Fallout4Esm, 0x800), Fallout4Release.Fallout4)
@@ -34,6 +40,19 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
             Grid = new CellGrid { Point = new P2Int(3, -2) },
             MajorRecordFlagsRaw = flags,
         };
+
+    public static TheoryData<string, Func<IMajorRecordGetter>> RecordsThatCannotBePartialForms => new()
+    {
+        { "a temporary exterior cell", () => ExteriorCellOfFallout4Esm(0) },
+        { "a cell another plugin than Fallout4.esm defines", () => new Cell(DocumentEditFixture.KeyOf(0x800), Fallout4Release.Fallout4) { EditorID = "C", Flags = Cell.Flag.IsInteriorCell } },
+        { "a cell that says not where it sits", () => new Cell(new FormKey(Fallout4Esm, 0x800), Fallout4Release.Fallout4) { EditorID = "C" } },
+    };
+
+    public static TheoryData<Func<IMajorRecordGetter>, string, int, string> RecordsThatCanBePartialForms => new()
+    {
+        { () => ExteriorCellOfFallout4Esm(Persistent), "cell", Persistent, "Grid" },
+        { () => new Quest(DocumentEditFixture.KeyOf(0x800), Fallout4Release.Fallout4) { EditorID = "Q", Filter = "F" }, "qust", 0, "Filter" },
+    };
 
     private static JsonElement Flags(int raw) => JsonDocument.Parse(raw.ToString(CultureInfo.InvariantCulture)).RootElement;
 
@@ -47,19 +66,54 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
         return Parse(after.Require());
     }
 
-    private void AssertRefusedUnchanged(string formKey, int raw)
-    {
-        var before = _fixture.Document(formKey);
-
-        var (result, _) = WriteFlags(formKey, raw);
-
-        Assert.Equal(RecordEditRefusal.CannotBePartialForm, result.Refusal);
-        Assert.Equal(before, _fixture.Document(formKey));
-    }
-
     private static JsonObject Parse(string text) => JsonNode.Parse(text).Require().AsObject();
 
     private static int FlagsOf(JsonObject document) => document["MajorRecordFlagsRaw"].Require().GetValue<int>();
+
+    [Theory]
+    [InlineData(Compressed, Compressed | Deleted, Deleted)]
+    [InlineData(Compressed, Compressed | PartialForm, PartialForm)]
+    [InlineData(PartialForm, PartialForm | Deleted, Deleted)]
+    [InlineData(Deleted | Persistent, Deleted | Persistent | PartialForm, Persistent | PartialForm)]
+    [InlineData(0, Deleted | PartialForm, PartialForm)]
+    public void DeletedAndPartialFormExcludeEachOtherAndCompressed_WhateverIsWrittenAfterwards(int held, int written, int kept)
+    {
+        var formKey = _fixture.Seed(InteriorCellOfFallout4Esm(held), "cell");
+
+        Assert.Equal(kept, FlagsOf(SetFlags(formKey, written)));
+    }
+
+    [Theory]
+    [InlineData(PartialForm, PartialForm | Deleted)]
+    [InlineData(0, Deleted | PartialForm)]
+    public void AnEmptiedRecordWithNoCopyToItsLeft_HoldsNeitherItsEditorIdNorItsFields(int held, int written)
+    {
+        var cell = InteriorCellOfFallout4Esm(held);
+        cell.WaterHeight = 5f;
+        var formKey = _fixture.Seed(cell, "cell");
+
+        var emptied = SetFlags(formKey, written);
+
+        Assert.DoesNotContain(emptied, p => p.Key is "EditorID" or "WaterHeight");
+    }
+
+    [Theory]
+    [InlineData(0, Deleted)]
+    [InlineData(0, PartialForm)]
+    [InlineData(PartialForm, PartialForm | Deleted)]
+    public void EmptyingACell_KeepsItsChildren_AndDropsItsOwnFields(int held, int written)
+    {
+        var cell = InteriorCellOfFallout4Esm(held);
+        cell.WaterHeight = 5f;
+        cell.Landscape = new Landscape(_mod);
+        var formKey = _fixture.Seed(cell, "cell");
+        var landscape = Parse(_fixture.Document(formKey))["Landscape"].Require().DeepClone();
+
+        var emptied = SetFlags(formKey, written);
+
+        Assert.True(JsonNode.DeepEquals(landscape, emptied["Landscape"]), emptied.ToJsonString());
+        Assert.DoesNotContain(emptied, p => p.Key == "WaterHeight");
+    }
 
     [Fact]
     public void SettingDeleted_LeavesTheRecordItsHeaderAlone_RemovingItsEditorId()
@@ -78,52 +132,24 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void SettingDeleted_ClearsCompressed()
+    public void SettingPartialForm_LeavesTheCopyItsHeaderAndItsEditorIdAlone()
     {
-        var npc = _mod.Npcs.AddNew("Guy");
-        npc.MajorRecordFlagsRaw = Compressed;
-        var formKey = _fixture.Seed(npc, "npc_");
-
-        var deleted = SetFlags(formKey, Compressed | Deleted);
-
-        Assert.Equal(Deleted, FlagsOf(deleted));
-    }
-
-    [Fact]
-    public void SettingDeleted_OnAContainer_KeepsItsChildren()
-    {
-        var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f, Landscape = new Landscape(_mod) };
+        var cell = InteriorCellOfFallout4Esm();
+        cell.WaterHeight = 5f;
+        cell.VersionControl = 7;
         var formKey = _fixture.Seed(cell, "cell");
-        var landscape = Parse(_fixture.Document(formKey))["Landscape"].Require().DeepClone();
+        var headerAndEditorId = new Cell(cell.FormKey, Fallout4Release.Fallout4)
+        {
+            EditorID = "C",
+            MajorRecordFlagsRaw = PartialForm,
+            VersionControl = 7,
+        };
 
-        var deleted = SetFlags(formKey, Deleted);
+        var partial = SetFlags(formKey, PartialForm);
 
-        Assert.True(JsonNode.DeepEquals(landscape, deleted["Landscape"]), deleted.ToJsonString());
-        Assert.DoesNotContain(deleted, p => p.Key is "EditorID" or "WaterHeight");
-    }
-
-    [Fact]
-    public void SettingDeleted_OnAPartialForm_ClearsPartialForm()
-    {
-        var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f, MajorRecordFlagsRaw = PartialForm };
-        var formKey = _fixture.Seed(cell, "cell");
-
-        var deleted = SetFlags(formKey, PartialForm | Deleted);
-
-        Assert.Equal(Deleted, FlagsOf(deleted));
-        Assert.DoesNotContain(deleted, p => p.Key is "EditorID" or "WaterHeight");
-    }
-
-    [Fact]
-    public void SettingDeleted_OnAPartialForm_KeepsItsChildren()
-    {
-        var cell = new Cell(_mod) { EditorID = "C", MajorRecordFlagsRaw = PartialForm, Landscape = new Landscape(_mod) };
-        var formKey = _fixture.Seed(cell, "cell");
-        var landscape = Parse(_fixture.Document(formKey))["Landscape"].Require().DeepClone();
-
-        var deleted = SetFlags(formKey, PartialForm | Deleted);
-
-        Assert.True(JsonNode.DeepEquals(landscape, deleted["Landscape"]), deleted.ToJsonString());
+        Assert.True(
+            JsonNode.DeepEquals(Parse(RecordTextCodec.SerializeToText(headerAndEditorId, GameRelease.Fallout4)), partial),
+            partial.ToJsonString());
     }
 
     [Fact]
@@ -158,88 +184,11 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     [Fact]
     public void SettingPersistent_OnADeletedCell_IsRefusedAsPersistentOnDeletedRecord_AndAnswersNoChanges()
     {
-        var cell = InteriorCellOfFallout4Esm();
-        cell.MajorRecordFlagsRaw = Deleted;
-        var formKey = _fixture.Seed(cell, "cell");
-        var before = _fixture.Document(formKey);
+        var formKey = _fixture.Seed(InteriorCellOfFallout4Esm(Deleted), "cell");
 
-        var (result, _) = WriteFlags(formKey, Deleted | Persistent);
+        var result = _fixture.Refused(formKey, SetAt(Flags(Deleted | Persistent), Member("MajorRecordFlagsRaw")));
 
         Assert.Equal(RecordEditRefusal.PersistentOnDeletedRecord, result.Refusal);
-        Assert.Equal(before, _fixture.Document(formKey));
-    }
-
-    [Fact]
-    public void SettingPartialForm_LeavesTheCopyItsHeaderAndItsEditorIdAlone()
-    {
-        var cell = InteriorCellOfFallout4Esm();
-        cell.WaterHeight = 5f;
-        cell.VersionControl = 7;
-        var formKey = _fixture.Seed(cell, "cell");
-        var headerAndEditorId = new Cell(cell.FormKey, Fallout4Release.Fallout4)
-        {
-            EditorID = "C",
-            MajorRecordFlagsRaw = PartialForm,
-            VersionControl = 7,
-        };
-
-        var partial = SetFlags(formKey, PartialForm);
-
-        Assert.True(
-            JsonNode.DeepEquals(Parse(RecordTextCodec.SerializeToText(headerAndEditorId, GameRelease.Fallout4)), partial),
-            partial.ToJsonString());
-    }
-
-    [Fact]
-    public void SettingPartialForm_ClearsCompressed()
-    {
-        var cell = InteriorCellOfFallout4Esm();
-        cell.MajorRecordFlagsRaw = Compressed;
-        var formKey = _fixture.Seed(cell, "cell");
-
-        var partial = SetFlags(formKey, Compressed | PartialForm);
-
-        Assert.Equal(PartialForm, FlagsOf(partial));
-    }
-
-    [Fact]
-    public void SettingPartialForm_KeepsTheCopysChildren()
-    {
-        var cell = InteriorCellOfFallout4Esm();
-        cell.WaterHeight = 5f;
-        cell.Landscape = new Landscape(_mod);
-        var formKey = _fixture.Seed(cell, "cell");
-        var landscape = Parse(_fixture.Document(formKey))["Landscape"].Require().DeepClone();
-
-        var partial = SetFlags(formKey, PartialForm);
-
-        Assert.True(JsonNode.DeepEquals(landscape, partial["Landscape"]), partial.ToJsonString());
-        Assert.DoesNotContain(partial, p => p.Key == "WaterHeight");
-    }
-
-    [Fact]
-    public void SettingPartialForm_OnADeletedCopy_ClearsDeleted()
-    {
-        var cell = InteriorCellOfFallout4Esm();
-        cell.MajorRecordFlagsRaw = Deleted | Persistent;
-        var formKey = _fixture.Seed(cell, "cell");
-
-        var partial = SetFlags(formKey, Deleted | Persistent | PartialForm);
-
-        Assert.Equal(Persistent | PartialForm, FlagsOf(partial));
-    }
-
-    [Fact]
-    public void SettingDeletedAndPartialFormTogether_OnACopyHoldingNeither_WithNoCopyToItsLeft_MakesAnEmptyPartialForm()
-    {
-        var cell = InteriorCellOfFallout4Esm();
-        cell.WaterHeight = 5f;
-        var formKey = _fixture.Seed(cell, "cell");
-
-        var partial = SetFlags(formKey, Deleted | PartialForm);
-
-        Assert.Equal(PartialForm, FlagsOf(partial));
-        Assert.DoesNotContain(partial, p => p.Key is "EditorID" or "WaterHeight");
     }
 
     [Fact]
@@ -276,9 +225,8 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     [Fact]
     public void ClearingPartialForm_WithNoCopyToItsLeft_LeavesItsOwnFieldsEmpty()
     {
-        var cell = InteriorCellOfFallout4Esm();
+        var cell = InteriorCellOfFallout4Esm(PartialForm);
         cell.WaterHeight = 5f;
-        cell.MajorRecordFlagsRaw = PartialForm;
         var formKey = _fixture.Seed(cell, "cell");
 
         var whole = SetFlags(formKey, 0);
@@ -302,9 +250,7 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     [Fact]
     public void ClearingPartialForm_MakesTheCopysOwnFieldsEditable()
     {
-        var cell = InteriorCellOfFallout4Esm();
-        cell.MajorRecordFlagsRaw = PartialForm;
-        var formKey = _fixture.Seed(cell, "cell");
+        var formKey = _fixture.Seed(InteriorCellOfFallout4Esm(PartialForm), "cell");
 
         SetFlags(formKey, 0);
         var (result, _) = _fixture.Apply(formKey, SetAt(Flags(9), Member("WaterHeight")));
@@ -315,8 +261,7 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     [Fact]
     public void ARecordHeaderRow_OnAPartialForm_Edits()
     {
-        var cell = new Cell(_mod) { EditorID = "C", MajorRecordFlagsRaw = PartialForm };
-        var formKey = _fixture.Seed(cell, "cell");
+        var formKey = _fixture.Seed(new Cell(_mod) { EditorID = "C", MajorRecordFlagsRaw = PartialForm }, "cell");
 
         var (result, after) = _fixture.Apply(formKey, SetAt(Flags(9), Member("VersionControl")));
 
@@ -328,56 +273,31 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     public void AViewOfRecordFlags_IsRefusedAsFieldNotFound_AndAnswersNoChanges()
     {
         var formKey = _fixture.Seed(InteriorCellOfFallout4Esm(), "cell");
-        var before = _fixture.Document(formKey);
 
-        var (result, _) = _fixture.Apply(
-            formKey, SetAt(JsonDocument.Parse("[\"Deleted\"]").RootElement, Member("Fallout4MajorRecordFlags")));
+        var result = _fixture.Refused(formKey, SetAt(JsonDocument.Parse("[\"Deleted\"]").RootElement, Member("Fallout4MajorRecordFlags")));
 
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
-        Assert.Equal(before, _fixture.Document(formKey));
     }
 
-    [Fact]
-    public void SettingPartialForm_OnATemporaryExteriorCell_IsRefusedAsCannotBePartialForm_AndAnswersNoChanges()
+    [Theory]
+    [MemberData(nameof(RecordsThatCannotBePartialForms))]
+    public void SettingPartialForm_OnARecordThatCannotBeOne_IsRefusedAsCannotBePartialForm_AndAnswersNoChanges(string description, Func<IMajorRecordGetter> record)
     {
-        var formKey = _fixture.Seed(ExteriorCellOfFallout4Esm(0), "cell");
+        var formKey = _fixture.Seed(record(), "cell");
 
-        AssertRefusedUnchanged(formKey, PartialForm);
+        var result = _fixture.Refused(formKey, SetAt(Flags(PartialForm), Member("MajorRecordFlagsRaw")));
+
+        Assert.True(result.Refusal == RecordEditRefusal.CannotBePartialForm, description);
     }
 
-    [Fact]
-    public void SettingPartialForm_OnAPersistentExteriorCell_EmptiesIt()
+    [Theory]
+    [MemberData(nameof(RecordsThatCanBePartialForms))]
+    public void SettingPartialForm_OnARecordThatCanBeOne_EmptiesIt(Func<IMajorRecordGetter> record, string recordType, int held, string dropped)
     {
-        var formKey = _fixture.Seed(ExteriorCellOfFallout4Esm(Persistent), "cell");
+        var formKey = _fixture.Seed(record(), recordType);
 
-        var partial = SetFlags(formKey, Persistent | PartialForm);
+        var partial = SetFlags(formKey, held | PartialForm);
 
-        Assert.DoesNotContain(partial, p => p.Key == "Grid");
-    }
-
-    [Fact]
-    public void SettingPartialForm_OnACellAPluginOtherThanFallout4EsmDefines_IsRefusedAsCannotBePartialForm_AndAnswersNoChanges()
-    {
-        var formKey = _fixture.Seed(new Cell(_mod) { EditorID = "C", Flags = Cell.Flag.IsInteriorCell }, "cell");
-
-        AssertRefusedUnchanged(formKey, PartialForm);
-    }
-
-    [Fact]
-    public void SettingPartialForm_OnACellThatSaysNotWhereItSits_WithNoCopyToItsLeft_IsRefusedAsCannotBePartialForm_AndAnswersNoChanges()
-    {
-        var formKey = _fixture.Seed(new Cell(new FormKey(Fallout4Esm, 0x800), Fallout4Release.Fallout4) { EditorID = "C" }, "cell");
-
-        AssertRefusedUnchanged(formKey, PartialForm);
-    }
-
-    [Fact]
-    public void SettingPartialForm_OnAQuestAPluginOtherThanFallout4EsmDefines_EmptiesIt()
-    {
-        var formKey = _fixture.Seed(new Quest(_mod) { EditorID = "Q", Filter = "F" }, "qust");
-
-        var partial = SetFlags(formKey, PartialForm);
-
-        Assert.DoesNotContain(partial, p => p.Key == "Filter");
+        Assert.DoesNotContain(partial, p => p.Key == dropped);
     }
 }
