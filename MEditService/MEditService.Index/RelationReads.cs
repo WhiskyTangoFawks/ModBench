@@ -10,8 +10,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Index;
 
 /// <summary>Every read the index answers, over the Store's relations (ADR-0010). A record read sees
-/// only the active plugins (ADR-0012), unless it names one plugin and returns that plugin's own copy.
-/// A plugin's own facts answer while the snapshot names it.</summary>
+/// only the active plugins (ADR-0012), unless it names one plugin and returns that plugin's copy.</summary>
 internal sealed class RelationReads(
     Store store, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed)
 {
@@ -177,11 +176,8 @@ internal sealed class RelationReads(
         return conditions.Count == 0 ? "" : "WHERE " + string.Join(" AND ", conditions);
     }
 
-    // The filter narrows counts the same way it narrows listings (invariant: SetFilter affects
-    // Search/counts/plugin-highlight, never a point read), routed through the same BuildWhere
-    // every other filterable query here uses.
-    /// <summary>Row count per record type for one plugin — a single grouped query replacing a
-    /// per-type loop.</summary>
+    /// <summary>Row count per record type for one plugin, narrowed by the filter as listings are
+    /// (SetFilter never affects a point read), through the same BuildWhere.</summary>
     public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin)
     {
         using var connection = store.OpenReadConnection();
@@ -438,10 +434,8 @@ internal sealed class RelationReads(
         return derivations;
     }
 
-    /// <summary>Both halves of "could not be read": a record whose own document failed, and a
-    /// record type whose enumeration did.</summary>
-    /// <summary>Every plugin holding at least one record Mutagen could not read: the tree's "has a
-    /// failure below it" for a plugin row, answered from the page it already has.</summary>
+    /// <summary>Every plugin holding a record whose document failed or a record type whose
+    /// enumeration did: the tree's "has a failure below it" for a plugin row.</summary>
     public IReadOnlySet<PluginAddress> GetPluginsWithParseFailures()
     {
         using var connection = store.OpenReadConnection();
