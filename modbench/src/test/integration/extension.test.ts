@@ -428,6 +428,7 @@ const METADATA_FILE = path.join(path.dirname(TRACKED_FILE), 'GroupRecordData.jso
 writeFileSync(METADATA_FILE, JSON.stringify({ Type: 'WEAP' }));
 const METADATA_FS_PATH = vscode.Uri.file(METADATA_FILE).fsPath;
 const copyQuery = (formKey: string, plugin: string, origin: string) => `formKey=${encodeURIComponent(formKey)}&name=${plugin}&origin=${encodeURIComponent(origin)}`;
+const RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT = 10;
 const trackedChildUri = vscode.Uri.file(TRACKED_FILE)
   .with({ scheme: 'modbench-child-record', query: copyQuery(CHILD_FORM_KEY, TRACKED_PLUGIN, TRACKED_ORIGIN) }).toString(true);
 const renderedUri = (formKey: string) =>
@@ -1607,8 +1608,7 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     await setGameDirectory(FIXTURE_GAME_DIRECTORY);
     writeFileSync(pluginsTxtPath, original);
-    // Windows refuses to delete a folder while the game folder's watcher, moved away a moment ago, still holds it.
-    rmSync(gameDir, { recursive: true, force: true, maxRetries: 10 });
+    rmSync(gameDir, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
   });
 
   it('Space disables the selected plugin', async () => {
@@ -1635,8 +1635,8 @@ describe('The game-directory setting reaches the Instance as a recompute', () =>
   after(async () => {
     await setGameDirectory(FIXTURE_GAME_DIRECTORY);
     writeFileSync(pluginsTxtPath, '');
-    rmSync(providing, { recursive: true, force: true, maxRetries: 10 });
-    rmSync(empty, { recursive: true, force: true, maxRetries: 10 });
+    rmSync(providing, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
+    rmSync(empty, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
   });
 
   it('lands a value plugin sync reads, with no file of the instance touched: the line the Data folder it now names does not provide goes', async () => {
@@ -1685,7 +1685,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   after(async () => {
     await setGameDirectory(FIXTURE_GAME_DIRECTORY);
     writeFileSync(pluginsTxtPath, '');
-    rmSync(gameDir, { recursive: true, force: true, maxRetries: 10 });
+    rmSync(gameDir, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
   });
 
   it('a plugins.txt write is followed by a fresh PUT /load-order, no command required', async () => {

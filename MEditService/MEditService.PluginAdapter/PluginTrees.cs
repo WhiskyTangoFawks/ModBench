@@ -104,12 +104,11 @@ internal static class PluginTrees
         }
     }
 
-    // The files written under baseDirectory, answering the root the door reads from.
-    // Mutagen takes a plugin's ModKey from its folder's name before its header's, and Windows names a temp
-    // folder with a random extension that is now and then .esp, .esm or .esl: a tree is read from a folder
-    // whose name names no plugin.
+    // Mutagen takes a ModKey from a folder's name before a header's, and Windows names a temp folder with a
+    // random extension, now and then .esp, .esm or .esl.
     private const string TreeFolder = "tree";
 
+    // The files written under baseDirectory, answering the root the door reads from.
     private static async Task<string> MaterializeTree(
         IReadOnlyList<TreeFile> files, string baseDirectory, CancellationToken cancel)
     {

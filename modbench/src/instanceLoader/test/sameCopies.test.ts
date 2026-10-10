@@ -155,9 +155,7 @@ describe('Instance — which copies of a file are the same', () => {
     expect(read).toHaveLength(2);
   });
 
-  // NTFS stamps a change with a clock that ticks every 15.6 ms, so a rewrite within the tick of the last
-  // change keeps its change time.
-  async function afterTheFileSystemClockPasses(file: string): Promise<void> {
+  async function afterTheFileSystemClockThatStampsAChangePasses(file: string): Promise<void> {
     const { ctimeNs } = await stat(file, { bigint: true });
     const folder = await mkdtemp(join(tmpdir(), 'modbench-clock-'));
     const probe = join(folder, 'probe');
@@ -171,7 +169,7 @@ describe('Instance — which copies of a file are the same', () => {
     const copy = present(nono, 'the winning copy');
     await utimes(copy, MODIFIED_ON_A_WHOLE_SECOND, MODIFIED_ON_A_WHOLE_SECOND);
     await instance.sameCopies([SHARED]);
-    await afterTheFileSystemClockPasses(copy);
+    await afterTheFileSystemClockThatStampsAChangePasses(copy);
 
     await writeFile(copy, 'bbbb');
     await utimes(copy, MODIFIED_ON_A_WHOLE_SECOND, MODIFIED_ON_A_WHOLE_SECOND);

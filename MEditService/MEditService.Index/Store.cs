@@ -116,10 +116,9 @@ internal sealed class Store : IDisposable
         }
     }
 
-    /// <summary>Whether the open failed because another process holds the file, which must never be
-    /// answered by rebuilding: deleting an open file succeeds on POSIX and destroys a live index.
-    /// Matched on DuckDB's message, all it offers: a conflicting lock on POSIX, a file already open in
-    /// another process on Windows.</summary>
+    /// <summary>Whether another process holds the file, never answered by rebuilding: deleting an open
+    /// file can succeed and destroy a live index. Matched on DuckDB's message, all it offers, which
+    /// differs on POSIX and Windows.</summary>
     internal static bool IsAnotherWriter(Exception ex) =>
         ex.Message.Contains("lock on file", StringComparison.OrdinalIgnoreCase)
         || ex.Message.Contains("Conflicting lock", StringComparison.OrdinalIgnoreCase)
