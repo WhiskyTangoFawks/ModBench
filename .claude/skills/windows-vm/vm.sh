@@ -15,7 +15,11 @@ case "${1:-}" in
     [[ -f $KEY ]] || ssh-keygen -q -t ed25519 -N '' -C modbench-windows -f "$KEY"
     cp "$HERE"/oem/* "$VM_HOME/oem/"
     cp "$KEY.pub" "$VM_HOME/oem/authorized_keys"
+    # A Windows installed afresh answers SSH with a host key of its own.
+    [[ -f $VM_HOME/disk/data.img ]] || rm -f "$VM_HOME/known_hosts"
     "${COMPOSE[@]}" up -d
+    until "$0" ssh -o BatchMode=yes exit 2>/dev/null; do sleep 30; done
+    exec "$0" run "$HERE/provision.ps1"
     ;;
   down) "${COMPOSE[@]}" down ;;
   logs) "${COMPOSE[@]}" logs -f ;;
