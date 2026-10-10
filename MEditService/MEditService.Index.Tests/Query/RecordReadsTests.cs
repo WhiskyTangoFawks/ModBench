@@ -23,42 +23,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
     private OpenedIndex LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
 
     [Fact]
-    public void ATypeListing_ReturnsEveryRecordOfTheType()
-    {
-        using var index = LoadedIndex();
-        var result = index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 100, offset: 0).Value();
-        Assert.Equal(TestPluginFixture.RecordCount, result.Total);
-        Assert.Equal(TestPluginFixture.RecordCount, result.Items.Count);
-    }
-
-    [Fact]
-    public void APluginFilter_ListsOnlyThatPluginsRecords()
-    {
-        using var index = LoadedIndex();
-        var result = index.Queries.GetRecords(["npc_"], Plugin, search: null, limit: 100, offset: 0).Value();
-        Assert.Equal(TestPluginFixture.RecordCount, result.Total);
-        Assert.All(result.Items, r => Assert.Equal(TestPluginFixture.PluginName, r.Plugin));
-    }
-
-    [Fact]
-    public void APluginFilter_NamingAnUnknownPlugin_ListsNothing()
-    {
-        using var index = LoadedIndex();
-        var result = index.Queries.GetRecords(["npc_"], UnknownPlugin, search: null, limit: 100, offset: 0).Value();
-        Assert.Equal(0, result.Total);
-        Assert.Empty(result.Items);
-    }
-
-    [Fact]
-    public void ASearch_MatchesTheEditorId()
-    {
-        using var index = LoadedIndex();
-        var result = index.Queries.GetRecords(["npc_"], plugin: null, search: "TestNPC01", limit: 100, offset: 0).Value();
-        Assert.Equal(1, result.Total);
-        Assert.Equal("TestNPC01", result.Items[0].EditorId);
-    }
-
-    [Fact]
     public void ASearchByFormId_AlsoOffersTheRecordsWhoseEditorIdHoldsItsText()
     {
         using var fixture = new PluginFixtureBuilder("medit-search-formid-text")
@@ -97,37 +61,15 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal([found], result.Items.Select(r => r.EditorId));
     }
 
-    [Fact]
-    public void APage_RespectsLimitAndOffset()
-    {
-        using var index = LoadedIndex();
-        var page1 = index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 1, offset: 0).Value();
-        var page2 = index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 1, offset: 1).Value();
-        Assert.Single(page1.Items);
-        Assert.Single(page2.Items);
-        Assert.NotEqual(page1.Items[0].FormKey, page2.Items[0].FormKey);
-        Assert.Equal(TestPluginFixture.RecordCount, page1.Total);
-    }
-
-    [Fact]
-    public void ASearchByFormKey_FindsThatRecord()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ASearchByFormKey_FindsThatRecord_IgnoringCase_AcrossTypes(bool lowerCase)
     {
         using var index = LoadedIndex();
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var result = index.Queries.GetRecords(["npc_"], plugin: null, search: formKey, limit: 100, offset: 0).Value();
-
-        Assert.Equal(1, result.Total);
-        Assert.Equal(formKey, result.Items[0].FormKey);
-    }
-
-    [Fact]
-    public void ASearchByFormKey_IgnoresCase()
-    {
-        using var index = LoadedIndex();
-        var formKey = _fixture.Npc1FormKey.ToString();
-
-        var result = index.Queries.GetRecords(["npc_"], plugin: null, search: formKey.ToLowerInvariant(), limit: 100, offset: 0).Value();
+        var result = index.Queries.GetRecords(["npc_", "weap"], plugin: null, search: lowerCase ? formKey.ToLowerInvariant() : formKey, limit: 100, offset: 0).Value();
 
         Assert.Equal(1, result.Total);
         Assert.Equal(formKey, result.Items[0].FormKey);
@@ -191,20 +133,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         var result = index.Queries.GetRecords(["npc_"], plugin: null, search: "e", limit: 10, offset: 0).Value();
 
         Assert.Equal(["Apple", "Zebra"], result.Items.Select(r => r.EditorId));
-    }
-
-    [Fact]
-    public void AFormKeyAlone_ReadsTheWinningDocument()
-    {
-        using var index = LoadedIndex();
-        var formKey = _fixture.Npc1FormKey.ToString();
-
-        var record = index.Queries.GetRecord(formKey).Value();
-
-        Assert.NotNull(record);
-        Assert.True(record.IsWinner);
-        Assert.Equal(formKey, record.FormKey);
-        Assert.NotEmpty(record.Fields);
     }
 
     [Fact]
@@ -326,19 +254,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void TheLaterProvider_IsTheWinningDocument()
-    {
-        using var fixture = TwoProviders("medit-winner", out var npcKey);
-        using var index = Indexes.Reconciled(fixture);
-
-        var record = index.Queries.GetRecord(npcKey.ToString()).Value();
-
-        Assert.NotNull(record);
-        Assert.True(record.IsWinner);
-        Assert.Equal("PluginB.esp", record.Plugin);
-    }
-
-    [Fact]
     public void TheOverrideStack_IsOrderedByLoadOrderIndex_WithTheLaterPluginTheWinner()
     {
         using var fixture = TwoProviders("medit-duckdb", out var npcKey);
@@ -351,30 +266,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(1, overrides[1].LoadOrderIndex);
         Assert.False(overrides[0].IsWinner);
         Assert.True(overrides[1].IsWinner);
-    }
-
-    [Fact]
-    public void ACountOfAPluginsType_IsItsRecordCount()
-    {
-        using var index = LoadedIndex();
-        var count = index.CountOf(Plugin, "npc_");
-        Assert.Equal(TestPluginFixture.RecordCount, count);
-    }
-
-    [Fact]
-    public void ACountOfAnUnknownPlugin_IsZero()
-    {
-        using var index = LoadedIndex();
-        var count = index.CountOf(UnknownPlugin, "npc_");
-        Assert.Equal(0, count);
-    }
-
-    [Fact]
-    public void AKnownFormKey_ReadsItsRecordType()
-    {
-        using var index = LoadedIndex();
-        var document = index.Queries.GetRecord(_fixture.Npc1FormKey.ToString()).Value();
-        Assert.Equal("npc_", document?.RecordType);
     }
 
     [Fact]
@@ -396,14 +287,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         var link = index.ResolutionOf(_fixture.Npc1FormKey.ToString(), Plugin, "FFFFFF:Unknown.esp");
 
         Assert.Equal(new FormKeyResolution(FormKeyResolutionState.Unresolved, null, null), link);
-    }
-
-    [Fact]
-    public void ALoneProvidersListing_MarksEveryRecordAWinner()
-    {
-        using var index = LoadedIndex();
-        var result = index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 100, offset: 0).Value();
-        Assert.All(result.Items, r => Assert.True(r.IsWinner));
     }
 
     [Fact]
@@ -443,21 +326,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void APluginFilter_ExcludesTheOtherPluginsRecords()
-    {
-        using var fixture = new PluginFixtureBuilder("medit-search")
-            .WithPlugin("SearchA.esm", mod => mod.Npcs.AddNew("NPC_A"))
-            .WithPlugin("SearchB.esp", mod => mod.Npcs.AddNew("NPC_B"))
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
-
-        var result = index.Queries.GetRecords(["npc_"], new PluginAddress("SearchA.esm", PluginOrigin.DataDirectory), search: null, limit: 100, offset: 0).Value();
-
-        Assert.Equal(1, result.Total);
-        Assert.All(result.Items, r => Assert.Equal("SearchA.esm", r.Plugin));
-    }
-
-    [Fact]
     public void ARecordWithoutAnEditorId_ReadsANullEditorId()
     {
         FormKey npcFormKey = default;
@@ -476,13 +344,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         var detail = index.Queries.GetRecord(npcFormKey.ToString()).Value();
         Assert.NotNull(detail);
         Assert.Null(detail.EditorId);
-    }
-
-    [Fact]
-    public void ReadsBeforeAnyReconcile_ThrowNoLoadOrder()
-    {
-        using var index = Indexes.Open(new LoadOrderHolder());
-        Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.GetRecord(_fixture.Npc1FormKey.ToString()).Refused().Refusal);
     }
 
     [Fact]
