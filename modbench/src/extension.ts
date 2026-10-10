@@ -207,7 +207,7 @@ function buildViews(opened: Opened, { own, dispose }: ReturnType<typeof ownershi
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  const attachPort = meditConfig().get<number>('attachToBackendPort');
+  const attachPort = meditConfig().get<number | null>('attachToBackendPort') ?? undefined;
 
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
   context.subscriptions.push(outputChannel);
