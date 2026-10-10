@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import {
   gameDirectoryResolver, normalizeGamePath, type GameDetectors,
 } from '../gameDirectory';
@@ -54,7 +54,7 @@ describe('normalizeGamePath', () => {
 
     const result = await normalizeGamePath('C:\\Games\\Fallout4', 'linux', detectPrefix);
 
-    expect(result).toBe(join(prefix, 'drive_c', 'Games/Fallout4'));
+    expect(result).toBe(posix.join(prefix, 'drive_c', 'Games/Fallout4'));
   });
 
   it('surfaces (throws), rather than guesses, when a C: path\'s prefix cannot be determined', async () => {
@@ -133,7 +133,7 @@ describe('the game directory resolver', () => {
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
-  it('normalizes a Z:-drive ini gamePath, as MO2 under Proton writes it, to its POSIX path', async () => {
+  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) normalizes a Z:-drive ini gamePath, as MO2 under Proton writes it, to its POSIX path', async () => {
     const gameRoot = await gameFolder();
     const winePath = 'Z:' + gameRoot.replaceAll('/', '\\');
 
@@ -142,7 +142,7 @@ describe('the game directory resolver', () => {
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
-  it("normalizes a C: drive-mapped ini gamePath into the Proton prefix's drive_c", async () => {
+  it.skipIf(process.platform === 'win32')("(Wine translates a drive letter only on Linux) normalizes a C: drive-mapped ini gamePath into the Proton prefix's drive_c", async () => {
     const prefixDir = await mkdtemp(join(tmpdir(), 'medit-prefix-'));
     dirs.push(prefixDir);
     const gameRoot = join(prefixDir, 'drive_c', 'Games', 'Fallout4');
@@ -154,7 +154,7 @@ describe('the game directory resolver', () => {
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
-  it('answers not found, with the reason, and does not answer with the detected folder when a C: ini path has no determinable prefix', async () => {
+  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) answers not found, with the reason, and does not answer with the detected folder when a C: ini path has no determinable prefix', async () => {
     const detectors: GameDetectors = {
       paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: () => Promise.resolve(null),

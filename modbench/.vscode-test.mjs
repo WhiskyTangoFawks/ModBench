@@ -34,10 +34,13 @@ const workspace = (name, fixture) => {
 const logs = path.join(runDir, 'logs');
 
 // test-cli hands cachePath through to test-electron's download, so one install serves every
-// worktree.
+// worktree. The download makes only the last folder of the path, so a first run makes the rest.
+const cachePath = path.join(process.env.LOCALAPPDATA ?? process.env.XDG_CACHE_HOME ?? path.join(homedir(), '.cache'), 'modbench', 'vscode-test');
+mkdirSync(path.dirname(cachePath), { recursive: true });
+
 const shared = {
   version: '1.140.0',
-  cachePath: path.join(process.env.LOCALAPPDATA ?? process.env.XDG_CACHE_HOME ?? path.join(homedir(), '.cache'), 'modbench', 'vscode-test'),
+  cachePath,
   extensionDevelopmentPath: '.',
   // Installing a dependency downloads a second VS Code into the checkout, and the one dependency,
   // vscode.git, ships with VS Code.

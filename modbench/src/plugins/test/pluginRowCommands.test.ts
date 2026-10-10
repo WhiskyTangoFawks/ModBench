@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { normalize } from 'node:path';
 
 const {
   handlers, registerCommand, showQuickPick, createQuickPick, executeCommand,
@@ -306,7 +307,7 @@ const valueWithFolders = (folders: { overwriteDir?: string; modDirs?: ReadonlyMa
 describe('modbench.plugin.compile', () => {
   const PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
-  const FILES = valueWithFolders({ modDirs: new Map([['ModA', '/instance/mods/ModA'], ['ModB', '/instance/mods/ModB']]) });
+  const FILES = valueWithFolders({ modDirs: new Map([['ModA', normalize('/instance/mods/ModA')], ['ModB', normalize('/instance/mods/ModB')]]) });
 
   function row(plugin: { name: string; origin: string }, contextValue = 'plugin enabled inTrackedMod tracked editable'): PluginNode {
     const node = new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
@@ -359,7 +360,7 @@ describe('modbench.plugin.compile', () => {
 
     expect(compileCalls(client)).toEqual([[[PATCH]]]);
     expect(progressSteps).toEqual([
-      'save /instance/mods/ModA/plugin-source/MyPatch.esp', 'progress opens on modbench.pluginListTree', 'compile', 'Instance loader: read every file again', 'progress closes',
+      `save ${normalize('/instance/mods/ModA/plugin-source/MyPatch.esp')}`, 'progress opens on modbench.pluginListTree', 'compile', 'Instance loader: read every file again', 'progress closes',
     ]);
     expect(reporter.landings).toEqual(['Compiled "MyPatch.esp".']);
     expect(reporter.reports).toEqual([]);
@@ -373,20 +374,20 @@ describe('modbench.plugin.compile', () => {
     await handler(row(PATCH));
 
     expect(progressSteps.filter((step) => step.startsWith('save') || step === 'compile')).toEqual([
-      'save /instance/mods/ModA/plugin-source/MyPatch.esp', 'compile',
+      `save ${normalize('/instance/mods/ModA/plugin-source/MyPatch.esp')}`, 'compile',
     ]);
   });
 
   it('refuses the compile, naming each document VS Code did not save, and calls mEdit not at all', async () => {
     const client = new InMemoryMEditClient();
-    const { handler, reporter } = registered(client, { unsaved: { '/instance/mods/ModA/plugin-source/MyPatch.esp': ['/instance/mods/ModA/plugin-source/MyPatch.esp/A.json'] } });
+    const { handler, reporter } = registered(client, { unsaved: { [normalize('/instance/mods/ModA/plugin-source/MyPatch.esp')]: [normalize('/instance/mods/ModA/plugin-source/MyPatch.esp/A.json')] } });
 
     await handler(row(PATCH));
 
     expect(compileCalls(client)).toEqual([]);
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Could not compile: VS Code did not save its plugin source.',
-      detail: '/instance/mods/ModA/plugin-source/MyPatch.esp/A.json',
+      detail: normalize('/instance/mods/ModA/plugin-source/MyPatch.esp/A.json'),
     }]);
     expect(reporter.landings).toEqual([]);
   });
@@ -394,17 +395,17 @@ describe('modbench.plugin.compile', () => {
   it('saves every selected plugin, refuses when one of them has a document left unsaved, and compiles none', async () => {
     const client = new InMemoryMEditClient();
     const { handler, reporter } = registered(client, {
-      unsaved: { '/instance/mods/ModB/plugin-source/Other.esp': ['/instance/mods/ModB/plugin-source/Other.esp/B.json'] },
+      unsaved: { [normalize('/instance/mods/ModB/plugin-source/Other.esp')]: [normalize('/instance/mods/ModB/plugin-source/Other.esp/B.json')] },
     });
     const rows = [row(PATCH), row(OTHER)];
 
     await handler(rows[0], rows);
 
     expect(progressSteps).toEqual([
-      'save /instance/mods/ModA/plugin-source/MyPatch.esp', 'save /instance/mods/ModB/plugin-source/Other.esp',
+      `save ${normalize('/instance/mods/ModA/plugin-source/MyPatch.esp')}`, `save ${normalize('/instance/mods/ModB/plugin-source/Other.esp')}`,
     ]);
     expect(compileCalls(client)).toEqual([]);
-    expect(reporter.reports.map((r) => r.detail)).toEqual(['/instance/mods/ModB/plugin-source/Other.esp/B.json']);
+    expect(reporter.reports.map((r) => r.detail)).toEqual([normalize('/instance/mods/ModB/plugin-source/Other.esp/B.json')]);
   });
 
   it('refuses, naming the plugin, when its origin has no folder to hold plugin source', async () => {
@@ -467,7 +468,7 @@ describe('modbench.plugin.compile', () => {
 
     expect(reporter.landings).toEqual(['Compiled "MyPatch.esp" with 1 diagnostic. See the Problems panel.']);
     expect([...diagnostics].map(([uri, list]) => [uri.fsPath, list.map((d) => d.message)])).toEqual([
-      ['/instance/mods/ModA/Source/A.json', ['Race: points at nothing']],
+      [normalize('/instance/mods/ModA/Source/A.json'), ['Race: points at nothing']],
     ]);
   });
 
@@ -491,7 +492,7 @@ describe('modbench.plugin.compile', () => {
     await handler(rows[0], rows);
 
     expect([...diagnostics].map(([uri, list]) => [uri.fsPath, list.map((d) => d.message)])).toEqual([
-      ['/instance/mods/ModA/Sibling.esp/A.json', ['Sibling.esp is broken']],
+      [normalize('/instance/mods/ModA/Sibling.esp/A.json'), ['Sibling.esp is broken']],
     ]);
   });
 
@@ -762,18 +763,18 @@ describe('CompileProblems', () => {
 
   it('targets the folder the value gave for the origin, overwrite included', () => {
     const diagnostics = new FakeDiagnosticCollection();
-    const value = valueWithFolders({ overwriteDir: '/instance/overwrite' });
+    const value = valueWithFolders({ overwriteDir: normalize('/instance/overwrite') });
 
     new CompileProblems(diagnostics)
       .publish({ name: 'Stray.esp', origin: 'overwrite/' }, originFiles(value, 'overwrite/'), diagnosticAt('Source/Stray.psc'));
 
-    expect(publishedPaths(diagnostics)).toEqual(['/instance/overwrite/Source/Stray.psc']);
+    expect(publishedPaths(diagnostics)).toEqual([normalize('/instance/overwrite/Source/Stray.psc')]);
   });
 
   it("replaces the plugin's own entries, and leaves every other plugin's, its mod's included", () => {
     const diagnostics = new FakeDiagnosticCollection();
     const problems = new CompileProblems(diagnostics);
-    const value = valueWithFolders({ modDirs: new Map([['ModA', '/instance/mods/ModA'], ['ModB', '/instance/mods/ModB']]) });
+    const value = valueWithFolders({ modDirs: new Map([['ModA', normalize('/instance/mods/ModA')], ['ModB', normalize('/instance/mods/ModB')]]) });
     const a = { name: 'A.esp', origin: 'ModA' };
     const also = { name: 'Also.esp', origin: 'ModA' };
     const b = { name: 'B.esp', origin: 'ModB' };
@@ -784,7 +785,7 @@ describe('CompileProblems', () => {
     problems.publish(a, originFiles(value, 'ModA'), diagnosticAt('A.esp/New.json'));
 
     expect(publishedPaths(diagnostics)).toEqual([
-      '/instance/mods/ModA/Also.esp/Kept.json', '/instance/mods/ModB/B.esp/Other.json', '/instance/mods/ModA/A.esp/New.json',
+      normalize('/instance/mods/ModA/Also.esp/Kept.json'), normalize('/instance/mods/ModB/B.esp/Other.json'), normalize('/instance/mods/ModA/A.esp/New.json'),
     ]);
   });
 

@@ -80,7 +80,7 @@ describe('write', () => {
     }
   });
 
-  it('carries the target\'s own mode onto the file that lands, not the default mode of a fresh temp', async () => {
+  it.skipIf(process.platform === 'win32')('(Windows has no POSIX mode bits) carries the target\'s own mode onto the file that lands, not the default mode of a fresh temp', async () => {
     await writeFile(path, 'original');
     await chmod(path, 0o640);
 

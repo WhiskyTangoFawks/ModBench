@@ -535,7 +535,7 @@ describe('Instance — built by watching', () => {
     }
   });
 
-  it('lands mods and plugins even when download_directory names an untranslatable drive letter, losing only the downloads rows', async () => {
+  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) lands mods and plugins even when download_directory names an untranslatable drive letter, losing only the downloads rows', async () => {
     const { root, instance } = realInstance();
     await instance.refresh();
     const before = instance.sequence;
@@ -553,7 +553,7 @@ describe('Instance — built by watching', () => {
     expect(instance.value.downloads.reason).toMatch(/download_directory/);
   });
 
-  it('lists, watches and exposes as paths.downloadsDir nothing from the default downloads/ folder while download_directory is unresolved, which downloads.md story 1 forbids', async () => {
+  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) lists, watches and exposes as paths.downloadsDir nothing from the default downloads/ folder while download_directory is unresolved, which downloads.md story 1 forbids', async () => {
     const { root, instance } = realInstance();
     await mkdir(join(root, 'downloads'), { recursive: true });
     await writeFile(join(root, 'downloads', 'RealArchive.7z'), 'bytes');
@@ -1245,7 +1245,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
     expect(instance.value.loadOrderSnapshot).toMatchObject({ loadedWithNoLine: [provided] });
   });
 
-  it('sends both plugins of a mod whose names differ only in case, whatever case the line names them in', async () => {
+  it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) sends both plugins of a mod whose names differ only in case, whatever case the line names them in', async () => {
     const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
     const dataFolder = join(root, 'Game', 'Data');
     await mkdir(dataFolder, { recursive: true });

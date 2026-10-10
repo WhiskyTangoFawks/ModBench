@@ -40,14 +40,14 @@ describe('the downloads directory resolver', () => {
     expect(await resolvedDir(INSTANCE_ROOT, iniOf('MyDownloads'))).toBe(join(INSTANCE_ROOT, 'MyDownloads'));
   });
 
-  it('normalizes a Z:-drive absolute path, as MO2 under Proton writes it, to its POSIX path', async () => {
+  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) normalizes a Z:-drive absolute path, as MO2 under Proton writes it, to its POSIX path', async () => {
     const real = join('/home', 'user', 'MyDownloads');
     const winePath = 'Z:' + real.replaceAll('/', '\\');
 
     expect(await resolvedDir(INSTANCE_ROOT, iniOf(winePath))).toBe(real);
   });
 
-  it("normalizes a C:-drive absolute path into the Proton prefix's drive_c, sharing gamePath's own Wine translation", async () => {
+  it.skipIf(process.platform === 'win32')("(Wine translates a drive letter only on Linux) normalizes a C:-drive absolute path into the Proton prefix's drive_c, sharing gamePath's own Wine translation", async () => {
     const prefix = join('/home', 'user', '.steam', 'compatdata', '377160', 'pfx');
     const detectors: GameDetectors = { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(prefix) };
 
@@ -60,7 +60,7 @@ describe('the downloads directory resolver', () => {
     expect(await resolvedDir(INSTANCE_ROOT, iniOf('Downloads'))).toBe(join(INSTANCE_ROOT, 'Downloads'));
   });
 
-  describe('an untranslatable download_directory answers unresolved with why rather than guessing at the default folder, which is not the folder MO2 names', () => {
+  describe.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) an untranslatable download_directory answers unresolved with why rather than guessing at the default folder, which is not the folder MO2 names', () => {
     it('answers unresolved, naming the key and the drive, for a drive letter neither Z nor C', async () => {
       const resolution = await downloadsDirectoryResolver(NO_DETECTORS)(INSTANCE_ROOT, iniOf('D:\\Games\\downloads'));
 

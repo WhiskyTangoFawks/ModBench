@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { present } from '../ports/present';
 import { productionFiles, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
@@ -87,7 +87,7 @@ describe('the createTreeView sites', () => {
 });
 
 function sourceFiles(): string[] {
-  return productionFiles(SRC).map((f) => relative(SRC, f));
+  return productionFiles(SRC).map((f) => relative(SRC, f).split(sep).join('/'));
 }
 
 function treeViewOptions(source: string): { id: string; options: string }[] {

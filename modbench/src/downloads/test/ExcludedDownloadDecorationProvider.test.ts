@@ -19,13 +19,12 @@ vi.mock('vscode', () => ({
 
 import * as vscode from 'vscode';
 import { ExcludedDownloadDecorationProvider } from '../ExcludedDownloadDecorationProvider';
-import { fakeUri } from '../../test/vscodeMock';
 import { present } from '../../ports/present';
 
 describe('ExcludedDownloadDecorationProvider', () => {
   const instanceRoot = '/instance';
   const downloadsDir = join(instanceRoot, 'downloads');
-  const downloadUri = (name: string) => fakeUri(join(downloadsDir, name));
+  const downloadUri = (name: string) => vscode.Uri.file(join(downloadsDir, name));
 
   it('dims an excluded download row with the disabled-foreground colour (colour only, no badge)', () => {
     const provider = new ExcludedDownloadDecorationProvider(() => downloadsDir, () => new Set(['excluded.zip']));
@@ -42,13 +41,13 @@ describe('ExcludedDownloadDecorationProvider', () => {
 
   it('returns undefined for a URI outside downloads/', () => {
     const provider = new ExcludedDownloadDecorationProvider(() => downloadsDir, () => new Set(['excluded.zip']));
-    expect(provider.provideFileDecoration(fakeUri(join(instanceRoot, 'mods', 'SomeMod')))).toBeUndefined();
+    expect(provider.provideFileDecoration(vscode.Uri.file(join(instanceRoot, 'mods', 'SomeMod')))).toBeUndefined();
   });
 
   it('returns undefined for a sibling path that only shares the downloads/ string prefix, even when slicing it reproduces an excluded download\'s name', () => {
     const downloadsDir = join(instanceRoot, 'downloads');
     const provider = new ExcludedDownloadDecorationProvider(() => downloadsDir, () => new Set(['evil.zip']));
-    const uri = fakeUri(`${downloadsDir}Xevil.zip`);
+    const uri = vscode.Uri.file(`${downloadsDir}Xevil.zip`);
 
     expect(provider.provideFileDecoration(uri)).toBeUndefined();
   });
@@ -75,7 +74,7 @@ describe('ExcludedDownloadDecorationProvider', () => {
     const moved = join(instanceRoot, 'MovedDownloads');
     dir = moved;
 
-    const decoration = provider.provideFileDecoration(fakeUri(join(moved, 'excluded.zip')));
+    const decoration = provider.provideFileDecoration(vscode.Uri.file(join(moved, 'excluded.zip')));
 
     expect(decoration?.color).toEqual(new vscode.ThemeColor('disabledForeground'));
   });
