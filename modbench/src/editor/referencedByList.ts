@@ -5,24 +5,14 @@ import { errorMessage } from '../ports/errorMessage';
 import { ErrorNode } from '../drivingLib/errorNode';
 import type { RecordArgument } from '../drivingLib/recordArgument';
 import { recordLabel } from '../wire/recordLabel';
-import { pluginAddressKey } from '../wire/pluginAddress';
+import { conditionedContextValue, type PluginConditions } from '../drivingLib/recordRowContext';
 import { failureReason, isReadFailed, localFailure } from '../wire/readFailed';
 
 function openCommand(row: { readonly argument: RecordArgument }): vscode.Command {
   return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: row.argument }] };
 }
 
-interface HolderOffers {
-  readonly tracked: boolean;
-  readonly editable: boolean;
-  readonly container: boolean;
-}
-
-/** The facts Plugins holds about a plugin, which decide whether its records can be edited. */
-export type ConditionsOf = (plugin: PluginAddress) => Pick<HolderOffers, 'tracked' | 'editable'>;
-
-const holderContextValue = ({ tracked, editable, container }: HolderOffers): string =>
-  `referencedByHolder ${tracked ? 'tracked' : 'untracked'}${editable ? ' editable' : ''}${container ? ' container' : ''}`;
+export type ConditionsOf = (plugin: PluginAddress) => PluginConditions;
 
 class ReferencedByHolderNode extends vscode.TreeItem {
   readonly argument: RecordArgument;
@@ -37,7 +27,8 @@ class ReferencedByHolderNode extends vscode.TreeItem {
     editorId: string | undefined,
     address: PluginAddress,
     fieldPaths: readonly string[],
-    offers: HolderOffers,
+    conditions: PluginConditions,
+    container: boolean,
   ) {
     super(address.name, vscode.TreeItemCollapsibleState.None);
     this.plugin = address;
@@ -46,7 +37,7 @@ class ReferencedByHolderNode extends vscode.TreeItem {
     this.argument = { kind: 'record', plugin: address, formKey };
     this.id = JSON.stringify([list, formKey, address.origin, address.name]);
     this.description = fieldPaths.join(', ');
-    this.contextValue = holderContextValue(offers);
+    this.contextValue = conditionedContextValue('referencedByHolder', conditions, container);
     this.command = openCommand(this);
   }
 }
@@ -103,31 +94,23 @@ function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): T[][] {
   return [...groups.values()];
 }
 
-type ContainerTypes = (plugin: PluginAddress) => Promise<ReadonlySet<string>>;
-
-function containerTypesOver(client: Pick<MEditClient, 'getRecordTypes'>, log: Log): ContainerTypes {
-  const read = new Map<string, Promise<ReadonlySet<string>>>();
-  return (plugin) => {
-    const key = pluginAddressKey(plugin);
-    const held = read.get(key);
-    if (held) return held;
-    const fresh = client.getRecordTypes(plugin).catch((error: unknown) => localFailure(errorMessage(error))).then((types) => {
-      if (!isReadFailed(types)) return new Set(types.filter(t => t.isContainer).map(t => t.type));
-      log.warn(`[ReferencedBy] getRecordTypes(${plugin.name}) failed: ${failureReason(types)}`);
-      return new Set<string>();
-    });
-    read.set(key, fresh);
-    return fresh;
-  };
+// Create record is offered where the plugin's copy of the record can hold a child, which is what
+// create's own pick reads.
+async function holdsChildren(client: Pick<MEditClient, 'getChildRecordTypes'>, log: Log, plugin: PluginAddress, formKey: string): Promise<boolean> {
+  const types = await client.getChildRecordTypes(plugin, formKey).catch((error: unknown) => localFailure(errorMessage(error)));
+  if (!isReadFailed(types)) return types.length > 0;
+  log.warn(`[ReferencedBy] getChildRecordTypes(${plugin.name}, ${formKey}) failed: ${failureReason(types)}`);
+  return false;
 }
 
 interface Lookups {
   readonly list: string;
   readonly conditionsOf: ConditionsOf;
-  readonly containerTypes: ContainerTypes;
+  readonly client: ReferencedByClient;
+  readonly log: Log;
 }
 
-async function referrerNode({ list, conditionsOf, containerTypes }: Lookups, copies: readonly ReferenceResult[]): Promise<ReferencedByReferrerNode | undefined> {
+async function referrerNode({ list, conditionsOf, client, log }: Lookups, copies: readonly ReferenceResult[]): Promise<ReferencedByReferrerNode | undefined> {
   const [first] = copies;
   if (!first) return undefined;
   const editorId = first.editorId ?? undefined;
@@ -136,10 +119,9 @@ async function referrerNode({ list, conditionsOf, containerTypes }: Lookups, cop
     if (!held) return [];
     const address = { name: held.plugin, origin: held.origin };
     return [(async () => {
-      const { tracked, editable } = conditionsOf(address);
-      const container = tracked && editable && (await containerTypes(address)).has(held.recordType);
-      return new ReferencedByHolderNode(
-        list, first.formKey, editorId, address, fields.map(r => r.fieldPath), { tracked, editable, container });
+      const conditions = conditionsOf(address);
+      const container = conditions.tracked && conditions.editable && await holdsChildren(client, log, address, first.formKey);
+      return new ReferencedByHolderNode(list, first.formKey, editorId, address, fields.map(r => r.fieldPath), conditions, container);
     })()];
   }));
   return new ReferencedByReferrerNode(list, first.formKey, editorId, first.recordTypeName, holders);
@@ -173,7 +155,7 @@ export interface ReferencedByList {
   message: string | undefined;
 }
 
-export type ReferencedByClient = Pick<MEditClient, 'getReferences' | 'getRecordTypes' | 'loadOrderStatus'>;
+export type ReferencedByClient = Pick<MEditClient, 'getReferences' | 'getChildRecordTypes' | 'loadOrderStatus'>;
 
 /** What references `target`, read once (editor-referenced-by.md, Asking, story 4); `list` tells this list from every other asked for. */
 export async function readReferencedBy(
@@ -186,7 +168,7 @@ export async function readReferencedBy(
     log.error(`[ReferencedBy] getReferences(${target}) failed: ${reason}`);
     return { provider: new ReferencedByTreeProvider([new ErrorNode(reason)]), message: indexing };
   }
-  const lookups = { list, conditionsOf, containerTypes: containerTypesOver(client, log) };
+  const lookups = { list, conditionsOf, client, log };
   const referrers = (await Promise.all(groupBy(read, r => r.formKey).map(copies => referrerNode(lookups, copies))))
     .flatMap(referrer => referrer ?? []).sort(byTypeThenLabel);
   return {

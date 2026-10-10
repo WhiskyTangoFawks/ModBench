@@ -69,7 +69,7 @@ function recordingWrite(): { write: RecordWrite; writing: string[] } {
 
 async function referencedByCopy(record: RecordAddress, editorId: string) {
   const client = new InMemoryMEditClient();
-  client.setQueryAnswer('getRecordTypes', []);
+  client.setQueryAnswer('getChildRecordTypes', []);
   client.setQueryAnswer('getReferences', [{
     formKey: record.formKey, plugin: record.plugin, origin: record.origin, fieldPath: 'Keywords[0]',
     recordType: 'npc_', recordTypeName: 'Non-Player Character', editorId,

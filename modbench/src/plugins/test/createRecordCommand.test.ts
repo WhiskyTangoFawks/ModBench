@@ -95,8 +95,9 @@ function harness(viewSelection: readonly PluginsTreeNode[] = []) {
       watch: (plugin) => {
         steps.push(`watch ${plugin.name} ${plugin.origin}`);
         return {
-          select: (place: RecordPlace<PluginsTreeNode>, formKey: string) => {
-            steps.push(`select ${formKey} ${'container' in place ? `beneath ${place.container.id ?? ''}` : `in ${place.recordType}`}`);
+          select: (place: RecordPlace<PluginsTreeNode> | undefined, formKey: string) => {
+            const where = place === undefined ? 'nowhere in Plugins' : 'container' in place ? `beneath ${place.container.id ?? ''}` : `in ${place.recordType}`;
+            steps.push(`select ${formKey} ${where}`);
           },
           forget: () => { steps.push('forget'); },
         };
@@ -399,7 +400,7 @@ describe('modbench.record.create on a row that is no Plugins row but carries a r
     argument: { kind: 'record', formKey, plugin: MY_PATCH },
   });
 
-  it('creates beneath the record in its plugin\'s copy, picking from the types that record can hold, and selects nothing', async () => {
+  it('creates beneath the record in its plugin\'s copy, picking from the types that record can hold, and opens it without selecting a row', async () => {
     const { steps, create } = harness();
     showQuickPick.mockImplementation((items) => Promise.resolve(items[0]));
 
@@ -407,7 +408,7 @@ describe('modbench.record.create on a row that is no Plugins row but carries a r
 
     expect(showQuickPick.mock.calls[0]?.[0].map((item) => item.description)).toEqual(['dlbr', 'dial', 'scen']);
     expect(steps).toEqual([
-      'watch MyPatch.esp ModA', 'create MyPatch.esp ModA dlbr {"container":"000801:MyPatch.esp"}', 'forget',
+      'watch MyPatch.esp ModA', 'create MyPatch.esp ModA dlbr {"container":"000801:MyPatch.esp"}', 'select 000900:MyPatch.esp nowhere in Plugins',
     ]);
   });
 

@@ -10,7 +10,7 @@ import { noticeExternalChanges } from './externalChangeNotice';
 import { recordWriteOver } from './recordWrite';
 import { editingView } from './editingView';
 import { createPluginsView, type PluginsView, type PluginsViewDeps } from './pluginsView';
-import type { PluginConditions } from './pluginFacts';
+import type { PluginConditions } from '../drivingLib/recordRowContext';
 import type { PluginAddress } from '../client';
 import type { ReconcileNarrator } from './reconcileNarrator';
 

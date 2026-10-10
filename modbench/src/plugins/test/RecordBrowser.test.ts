@@ -12,7 +12,7 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import { childrenOf, recordRow, soleChild, soleGroup } from './browserRows';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
-import type { PluginConditions } from '../pluginFacts';
+import type { PluginConditions } from '../../drivingLib/recordRowContext';
 import { recordResourceUri } from '../recordResourceUri';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import { expectInstanceOf, expectInstanceOfOrUndefined } from '../../test/expectInstanceOf';

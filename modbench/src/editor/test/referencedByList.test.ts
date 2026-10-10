@@ -200,50 +200,38 @@ describe('the Referenced By list — what a plugin copy offers', () => {
   const EDITABLE_MOD = 'EditableMod';
   const conditions: ConditionsOf = ({ origin }) =>
     origin === EDITABLE_MOD ? { tracked: true, editable: true } : { tracked: origin === 'TrackedMod', editable: false };
+  const HOLDS_CHILDREN = [{ type: 'dial', displayName: 'Dialog Topic' }];
 
-  async function offersOver(references: ReferenceResult[], types: { type: string; isContainer: boolean }[] = []) {
+  async function listedAs(references: ReferenceResult[], children: typeof HOLDS_CHILDREN) {
     const client = indexed(references);
-    client.setQueryAnswer('getRecordTypes', types.map(({ type, isContainer }) =>
-      ({ type, count: 1, displayName: type, hasParseFailure: false, isCreatable: true, isContainer })));
+    client.setQueryAnswer('getChildRecordTypes', children);
     const { provider, referrers: [referrer] } = await listOf(client, 'a list', conditions);
-    return provider.getChildren(present(referrer, 'the referrer')).map((holder) => holder.contextValue);
+    return { client, offers: provider.getChildren(present(referrer, 'the referrer')).map((holder) => holder.contextValue) };
   }
 
   it.each([
-    ['an editable tracked plugin', EDITABLE_MOD, 'referencedByHolder tracked editable'],
-    ['a tracked plugin that is not editable', 'TrackedMod', 'referencedByHolder tracked'],
-    ['a plugin of neither kind', 'Fallout4.esm', 'referencedByHolder untracked'],
-  ])('is stated as Plugins states it for %s', async (_, origin, expected) => {
-    expect(await offersOver([reference({ formKey: '000002:Fallout4.esm', origin })])).toEqual([expected]);
+    ['an editable tracked plugin, for a record that can hold a child', EDITABLE_MOD, HOLDS_CHILDREN, 'referencedByHolder tracked editable container'],
+    ['an editable tracked plugin, for a record that can hold none', EDITABLE_MOD, [], 'referencedByHolder tracked editable'],
+    ['a tracked plugin that is not editable', 'TrackedMod', HOLDS_CHILDREN, 'referencedByHolder tracked'],
+    ['a plugin of neither kind', 'Fallout4.esm', HOLDS_CHILDREN, 'referencedByHolder untracked'],
+  ])('is stated as Plugins states it for %s', async (_, origin, children, expected) => {
+    expect((await listedAs([reference({ formKey: '000002:Fallout4.esm', origin })], children)).offers).toEqual([expected]);
   });
 
-  it('adds container for a record of a type that holds children, in an editable tracked plugin', async () => {
-    expect(await offersOver(
-      [reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD, recordType: 'quest' })],
-      [{ type: 'quest', isContainer: true }, { type: 'npc_', isContainer: false }],
-    )).toEqual(['referencedByHolder tracked editable container']);
-    expect(await offersOver(
-      [reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD, recordType: 'npc_' })],
-      [{ type: 'quest', isContainer: true }, { type: 'npc_', isContainer: false }],
-    )).toEqual(['referencedByHolder tracked editable']);
-  });
-
-  it('asks for the record types of an editable tracked plugin only, and once however many of its records are listed', async () => {
-    const client = indexed([
-      reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD, plugin: 'E.esp', recordType: 'quest' }),
-      reference({ formKey: '000003:Fallout4.esm', origin: EDITABLE_MOD, plugin: 'E.esp', recordType: 'quest' }),
-      reference({ formKey: '000004:Fallout4.esm', origin: 'Fallout4.esm' }),
-    ]);
-    client.setQueryAnswer('getRecordTypes', []);
-    await listOf(client, 'a list', conditions);
-    expect(client.calls.filter((c) => c.method === 'getRecordTypes')).toEqual([
-      { method: 'getRecordTypes', args: [{ name: 'E.esp', origin: EDITABLE_MOD }] },
+  it('asks what a record can hold of an editable tracked plugin\'s copy only', async () => {
+    const { client } = await listedAs([
+      reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD, plugin: 'E.esp' }),
+      reference({ formKey: '000002:Fallout4.esm', origin: 'TrackedMod' }),
+      reference({ formKey: '000002:Fallout4.esm', origin: 'Fallout4.esm' }),
+    ], HOLDS_CHILDREN);
+    expect(client.calls.filter((c) => c.method === 'getChildRecordTypes')).toEqual([
+      { method: 'getChildRecordTypes', args: [{ name: 'E.esp', origin: EDITABLE_MOD }, '000002:Fallout4.esm'] },
     ]);
   });
 
-  it('offers no create where the plugin\'s record types cannot be read, and logs it', async () => {
-    const client = indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD, recordType: 'quest' })]);
-    client.setQueryFailure('getRecordTypes', { failed: 'refused', refusal: 'boom' });
+  it('offers no create where what the record can hold cannot be read, and logs it', async () => {
+    const client = indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD })]);
+    client.setQueryFailure('getChildRecordTypes', { failed: 'refused', refusal: 'boom' });
     const log = leveledLog();
     const { provider } = await readReferencedBy(client, log, TARGET, 'a list', conditions);
     const [referrer] = provider.getChildren();

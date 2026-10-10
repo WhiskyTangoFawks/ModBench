@@ -13,7 +13,7 @@ import { reportSyncFailures, type Sync, type SyncChannel, type SyncFailureReport
 import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider';
 import { type PluginsTreeNode } from './pluginRows';
 import type { PluginFactsClient } from './pluginFactsFeed';
-import type { PluginConditions } from './pluginFacts';
+import type { PluginConditions } from '../drivingLib/recordRowContext';
 import type { RecordBrowser } from './RecordBrowser';
 import { publishPluginWarnings } from './loadDiagnostics';
 import { pluginsKeyContext } from './gestureEntry';

@@ -38,6 +38,7 @@ vi.mock('vscode', () => {
   return {
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic,
     DiagnosticSeverity, Uri: { file: uriFile, from: uriFrom },
+    StatusBarAlignment: { Left: 1 },
     Position: class { constructor(public line: number, public character: number) {} },
     CodeLens: class { constructor(public range: unknown, public command: unknown) {} },
     Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
@@ -66,6 +67,7 @@ vi.mock('vscode', () => {
         h.decorations.push(provider);
         return disposable();
       },
+      createStatusBarItem: () => ({ text: '', show: () => undefined, dispose: () => undefined }),
       withProgress: (_options: unknown, task: () => Promise<unknown>) => task(),
       showQuickPick: (items: { label: string }[]) => {
         h.picked.push(items.map((item) => item.label));
@@ -108,6 +110,7 @@ vi.mock('vscode', () => {
 
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { createPluginsView } from '../pluginsView';
+import { createPlugins } from '../index';
 import { createSync, type Sync } from '../../drivingLib/syncFailureReport';
 import type { PluginSyncArguments } from '../../instanceLoader/instance';
 import type { PluginSyncResult } from '../../pluginsCommands/plugins';
@@ -116,7 +119,7 @@ import { PluginNode } from '../pluginRows';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import type { PluginMetadata, RecordSummary } from '../../client';
-import { recordTypeCountFixture } from '../../client/test/fixtures';
+import { recordTypeCountFixture, pluginMetadataFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
@@ -242,6 +245,63 @@ describe('the Plugins view registers its own gestures', () => {
     expect(plugins.copyValue.reporterTag).toBe('pluginListTree.copyValue');
     expect(plugins.copyValue.text({ view: 'modbench.modList' }, undefined)).toBeUndefined();
     expect(plugins.copyValue.text({ view: 'modbench.pluginListTree' }, undefined)).toBe('');
+  });
+});
+
+describe('the Plugins view says what it knows of a plugin\'s tracking and editability', () => {
+  const TRACKED_EDITABLE = { name: 'Test.esp', origin: 'ModA' };
+  const withThePlugin = () => instanceValueFixture({
+    plugins: [{ name: 'Test.esp', path: '/instance/mods/ModA/Test.esp', origin: 'ModA', line: 0, enabled: true, winning: true }],
+  });
+  const holdingTrackedEditable = () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...TRACKED_EDITABLE, isTracked: true, isImmutable: false })]);
+    return client;
+  };
+
+  it('says nothing is tracked or editable until mEdit has answered, then what it answered', async () => {
+    const client = holdingTrackedEditable();
+    const { plugins } = pluginsView(withThePlugin(), { client });
+    expect(plugins.conditionsOf(TRACKED_EDITABLE)).toEqual({ tracked: false, editable: false });
+
+    client.emit(rowsChanged);
+    await settle();
+
+    expect(plugins.conditionsOf(TRACKED_EDITABLE)).toEqual({ tracked: true, editable: true });
+    expect(plugins.conditionsOf({ name: 'Other.esp', origin: 'ModA' })).toEqual({ tracked: false, editable: false });
+  });
+
+  describe('through the Plugins box', () => {
+    const NOTHING = { tracked: false, editable: false };
+
+    function box(client: InMemoryMEditClient) {
+      const value = withThePlugin();
+      const plugins = createPlugins({
+        client, facts: new FakeInstance(value), channel: { ...silentChannel, warn: vi.fn(), show: vi.fn() } as unknown as vscode.LogOutputChannel,
+        reporterFor: () => recordingReporter(), registerRepositories: () => Promise.resolve(), ask: scriptedDialog(),
+        sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
+      });
+      const onInstance = () => plugins.onInstance({
+        instance: new FakeInstance(value), instanceRoot: '/instance', commands: pluginsCommandsOver('/instance'),
+        pluginSync: syncRefusing().pluginSync, saveUnsavedPluginSource: () => Promise.resolve([]), trackSelection: () => [],
+        modsView: 'modbench.modList', dataFolderFile: () => undefined,
+      });
+      return { plugins, onInstance };
+    }
+
+    it('says nothing is editable before an Instance is open and after its view is gone, and what the view knows between', async () => {
+      const client = holdingTrackedEditable();
+      const { plugins, onInstance } = box(client);
+      expect(plugins.conditionsOf(TRACKED_EDITABLE)).toEqual(NOTHING);
+
+      const opened = onInstance();
+      client.emit(rowsChanged);
+      await settle();
+      expect(plugins.conditionsOf(TRACKED_EDITABLE)).toEqual({ tracked: true, editable: true });
+
+      opened.dispose();
+      expect(plugins.conditionsOf(TRACKED_EDITABLE)).toEqual(NOTHING);
+    });
   });
 });
 

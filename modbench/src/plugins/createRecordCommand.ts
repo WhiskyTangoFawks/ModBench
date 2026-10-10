@@ -158,7 +158,6 @@ export function registerRecordCreateCommand(
       }));
     } finally {
       if (answer.formKey === undefined) created.forget();
-      else if (place === undefined) created.forget();
       else created.select(place, answer.formKey);
     }
   });

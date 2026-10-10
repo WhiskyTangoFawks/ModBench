@@ -364,7 +364,7 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
   it('states each plugin copy by what the Plugins view knows of its plugin', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getComparison', null);
-    client.setQueryAnswer('getRecordTypes', []);
+    client.setQueryAnswer('getChildRecordTypes', []);
     client.setQueryAnswer('getReferences', [{
       formKey: '000900:A.esp', plugin: 'A.esp', origin: 'ModA', fieldPath: 'Keywords[0]', recordType: 'weap', recordTypeName: 'Weapon', editorId: 'Rifle',
     }]);
