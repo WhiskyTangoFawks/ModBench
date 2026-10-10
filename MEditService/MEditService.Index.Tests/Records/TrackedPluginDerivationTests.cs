@@ -55,7 +55,7 @@ public sealed class TrackedPluginDerivationTests : IDisposable
         TrackedMods.Track(_mod, _fixture.GameDirectory);
         _index.NextSnapshotUntil(ReadsAsTracked, "the plugin reading as tracked");
 
-        Directory.Delete(Path.Combine(_mod.ModFolderOf(), ".git"), recursive: true);
+        AnotherTool.Delete(Path.Combine(_mod.ModFolderOf(), ".git"));
         _index.NextSnapshotUntil(() => !ReadsAsTracked(), "the plugin reading as untracked");
     }
 }

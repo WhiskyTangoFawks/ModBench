@@ -228,9 +228,10 @@ public sealed class StoreRebuildTests : IDisposable
             earlier.Reconcile(earlierHolder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         var indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex = IndexFiles.In(_fixture.InstanceRoot);
         var bytesBeforeHold = File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);
-        using var otherWindow = ForeignIndexHolder.Hold(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);
-
-        var refusal = _index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
+        StoreRebuildRefused? refusal;
+        // Windows lets nothing read a file DuckDB holds, so its bytes are compared once the holder is gone.
+        using (ForeignIndexHolder.Hold(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex))
+            refusal = _index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
 
         Assert.Equal(StoreRebuildRefusal.HeldByAnotherWindow, refusal?.Refusal);
         Assert.Contains(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex, refusal?.Message);

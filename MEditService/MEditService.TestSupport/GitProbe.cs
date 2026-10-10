@@ -30,6 +30,12 @@ public static class GitProbe
         foreach (var arg in args) psi.ArgumentList.Add(arg);
         psi.Environment["GIT_DIR"] = gitDir;
         psi.Environment["GIT_WORK_TREE"] = workTree;
+        // A test's commit never depends on the identity of the machine it runs on.
+        foreach (var role in new[] { "AUTHOR", "COMMITTER" })
+        {
+            psi.Environment[$"GIT_{role}_NAME"] = "Test";
+            psi.Environment[$"GIT_{role}_EMAIL"] = "test@localhost";
+        }
 
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start the git process.");
         process.StandardInput.Close();

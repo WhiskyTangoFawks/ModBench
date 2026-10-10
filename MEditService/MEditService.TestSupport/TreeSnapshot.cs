@@ -16,10 +16,27 @@ public static class TreeSnapshot
 
             lines.Add(Directory.Exists(entry)
                 ? $"dir  {relative}"
-                : $"file {relative} {Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(entry)))}");
+                : $"file {relative} {HashOf(entry)}");
         }
 
         lines.Sort(StringComparer.Ordinal);
         return lines;
+    }
+
+    private const int SharingViolation = unchecked((int)0x80070020);
+
+    // A file another process holds open against every reader, as DuckDB holds the backend's index on
+    // Windows, is named as held: its bytes cannot be read until it lets go.
+    private static string HashOf(string file)
+    {
+        try
+        {
+            using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return Convert.ToHexString(SHA256.HashData(stream));
+        }
+        catch (IOException ex) when (ex.HResult == SharingViolation)
+        {
+            return "held";
+        }
     }
 }

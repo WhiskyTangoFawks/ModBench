@@ -13,7 +13,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class WriteGatesOverAFakeSourceTests
 {
-    private const string ModFolder = "/fake/mods/FixtureMod";
+    private static readonly string ModFolder = Path.GetFullPath("/fake/mods/FixtureMod");
     private static readonly PluginAddress Plugin = new("Fixture.esp", "FixtureMod");
     private static readonly string Npc = $"000800:{Plugin.Name}";
 

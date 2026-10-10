@@ -21,7 +21,7 @@ public sealed class SourceRepositoryUntrackTests
         Assert.True(File.Exists(sourceFilePath));
         Assert.Equal(content, File.ReadAllBytes(sourceFilePath));
 
-        Directory.Delete(Path.Combine(modFolder, ".git"), recursive: true);
+        AnotherTool.Delete(Path.Combine(modFolder, ".git"));
 
         Assert.False(TestAdapters.Source().IsTracked(modFolder));
         Assert.True(File.Exists(sourceFilePath), "the source text is not registry-backed and must survive .git's deletion");

@@ -24,6 +24,14 @@ public sealed class PluginFileHashesTests : IDisposable
     private static MutagenPluginAdapter WithTheClockPastEveryWrite() =>
         new(new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1)));
 
+    // NTFS stamps a change with the system clock, which ticks every 15.6 ms, so a rewrite within the tick of the
+    // last change keeps its change time.
+    private static void AfterTheSystemClockTicks()
+    {
+        var tick = Environment.TickCount64;
+        SpinWait.SpinUntil(() => Environment.TickCount64 != tick);
+    }
+
     private static Answer<FileClaim, PluginFailure> ClaimOf(string path) => TestAdapters.Mutagen().ClaimOf(path);
 
     private FileStream HeldAgainstReaders()
@@ -80,6 +88,7 @@ public sealed class PluginFileHashesTests : IDisposable
         rewritten[^1] ^= 0xFF;
         File.SetLastWriteTimeUtc(PluginPath, ModifiedOnAWholeDateTimeTick);
         hashes.HashOf(PluginPath);
+        AfterTheSystemClockTicks();
 
         File.WriteAllBytes(PluginPath, rewritten);
         File.SetLastWriteTimeUtc(PluginPath, ModifiedOnAWholeDateTimeTick);
@@ -93,6 +102,7 @@ public sealed class PluginFileHashesTests : IDisposable
         var hashes = WithTheClockPastEveryWrite();
         File.SetLastWriteTimeUtc(PluginPath, ModifiedOnAWholeDateTimeTick);
         hashes.HashOf(PluginPath);
+        AfterTheSystemClockTicks();
 
         File.SetLastWriteTimeUtc(PluginPath, ModifiedOnAWholeDateTimeTick);
         using var held = HeldAgainstReaders();

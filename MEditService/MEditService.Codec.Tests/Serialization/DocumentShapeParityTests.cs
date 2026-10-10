@@ -108,7 +108,8 @@ public sealed class DocumentShapeParityTests
         var wholeModFile = Assert.Single(directoryPerRecordContainersRecordDataJsonOrAFlatRecordsOwnFile);
         Assert.True(File.Exists(wholeModFile), $"Expected the whole-mod door to write {wholeModFile}.");
 
-        var wholeModBytes = await File.ReadAllBytesAsync(wholeModFile);
+        // The whole-mod door indents with the platform newline, which on Windows is \r\n; the codec's has no \r.
+        var wholeModBytes = (await File.ReadAllBytesAsync(wholeModFile)).Where(b => b != (byte)'\r').ToArray();
         var codecText = RecordTextCodec.SerializeToText(record, GameRelease.Fallout4);
 
         Assert.Equal(System.Text.Encoding.UTF8.GetString(wholeModBytes), codecText);

@@ -58,7 +58,7 @@ public sealed class UnreadableBinaryTests : IDisposable
         WriteValidPlugin(_pluginPath);
         TrackedMods.Track(_pluginPath, _gameDirectory);
         Reconcile(Entry);
-        Directory.Delete(Path.Combine(_modFolder, ".git"), recursive: true);
+        AnotherTool.Delete(Path.Combine(_modFolder, ".git"));
         File.WriteAllText(_pluginPath, "not a plugin");
         var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
         other.Npcs.AddNew("OtherNpc");
