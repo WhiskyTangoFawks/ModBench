@@ -296,11 +296,12 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
         Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_holdings_parent
-                ON {MirrorSchema}.holdings(parent, plugin)
+                ON {MirrorSchema}.holdings(parent, plugin, origin)
             """);
     }
 
-    // A cell's grid and block coordinates; the worldspace holding it is its holdings row.
+    // A cell's grid and block coordinates. The worldspace holding it is its holdings row; a cell no
+    // holding holds is interior.
     internal static void CreateCellLocationTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
@@ -313,8 +314,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 sub_x            INTEGER,
                 sub_y            INTEGER,
                 grid_x           INTEGER,
-                grid_y           INTEGER,
-                is_interior      BOOLEAN NOT NULL DEFAULT FALSE
+                grid_y           INTEGER
             )
             """);
     }

@@ -24,7 +24,7 @@ internal static class ContainerChildren
 
     public static IReadOnlyList<ContainerChildSummary> Of(RelationReads repo, PluginAddress plugin, string parentFormKey, GameRelease release)
     {
-        var rows = repo.GetContainerChildren(plugin, parentFormKey)
+        var rows = repo.GetHoldings(plugin, parentFormKey)
             .Where(r => SlotRecordTypes.ContainsKey(r.Slot))
             .ToList();
         if (rows.Count == 0) return [];

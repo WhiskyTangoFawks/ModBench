@@ -463,11 +463,11 @@ internal sealed class RelationReads(
         CellLocations(plugin, $"EXISTS ({HeldBy("cl", "$3")})", "cl.block_x, cl.block_y, cl.sub_x, cl.sub_y", [worldspaceFormKey]);
 
     public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin) =>
-        CellLocations(plugin, "cl.is_interior", "cl.block_x, cl.sub_x", []);
+        CellLocations(plugin, $"NOT EXISTS ({HeldBy("cl")})", "cl.block_x, cl.sub_x", []);
 
-    private static string HeldBy(string cell, string parent) => $"""
+    private static string HeldBy(string cell, string? parent = null) => $"""
         SELECT 1 FROM holdings h
-        WHERE h.child = {cell}.cell_form_key AND h.plugin = {cell}.plugin AND h.origin = {cell}.origin AND h.parent = {parent}
+        WHERE h.child = {cell}.cell_form_key AND h.plugin = {cell}.plugin AND h.origin = {cell}.origin{(parent is null ? "" : $" AND h.parent = {parent}")}
         """;
 
     private List<CellLocationSummary> CellLocations(
@@ -587,12 +587,12 @@ internal sealed class RelationReads(
         return GetCellLocation(connection, cellFormKey, plugin.Name, plugin.Origin);
     }
 
-    /// <summary>What <paramref name="parentFormKey"/> holds, in FormID order; empty when it holds
-    /// nothing. Ref-invariant by construction.</summary>
-    public IReadOnlyList<HoldingRow> GetContainerChildren(PluginAddress plugin, string parentFormKey)
+    /// <summary>Everything <paramref name="parentFormKey"/> holds, placed references and cells
+    /// included, in FormID order; empty when it holds nothing. Ref-invariant by construction.</summary>
+    public IReadOnlyList<HoldingRow> GetHoldings(PluginAddress plugin, string parentFormKey)
     {
         using var connection = store.OpenReadConnection();
-        return GetContainerChildren(
+        return GetHoldings(
             connection, plugin.Name, plugin.Origin, parentFormKey, store.Filter.AlsoKeeps("cc", "child"), NavigatorSql.FormIdOrder("cc.child"));
     }
 
@@ -723,7 +723,7 @@ internal sealed class RelationReads(
             SELECT (SELECT h.parent FROM holdings h
                     WHERE h.child = cl.cell_form_key AND h.plugin = cl.plugin AND h.origin = cl.origin
                     LIMIT 1),
-                   cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.is_interior
+                   cl.block_x, cl.block_y, cl.sub_x, cl.sub_y
             FROM cell_location cl
             WHERE cl.cell_form_key = $1 AND cl.plugin = $2 AND cl.origin = $3
             """;
@@ -733,12 +733,11 @@ internal sealed class RelationReads(
         int? NullableInt(int i) => reader.IsDBNull(i) ? null : reader.GetInt32(i);
         if (!reader.Read()) return null;
 
-        return new CellStructure(
-            reader.IsDBNull(0) ? null : reader.GetString(0),
-            NullableInt(1), NullableInt(2), NullableInt(3), NullableInt(4), reader.GetBoolean(5));
+        var parent = reader.IsDBNull(0) ? null : reader.GetString(0);
+        return new CellStructure(parent, NullableInt(1), NullableInt(2), NullableInt(3), NullableInt(4), IsInterior: parent is null);
     }
 
-    private static List<HoldingRow> GetContainerChildren(
+    private static List<HoldingRow> GetHoldings(
         DuckDBConnection connection, string plugin, string origin, string parentFormKey, string inFilter, string order)
     {
         using var cmd = connection.CreateCommand();

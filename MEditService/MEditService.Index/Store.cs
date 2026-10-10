@@ -914,7 +914,7 @@ internal sealed class Store : IDisposable
           AND NOT EXISTS (
             SELECT 1 FROM mirror.holdings h
             WHERE h.child = r.form_key AND h.plugin = r.plugin AND h.origin = r.origin
-              AND h.slot <> '{HoldingSlots.ExteriorCell}')
+              AND h.slot <> {HoldingSlots.Exterior})
         """;
 
     /// <summary>The content stamp of each source document the rows were derived from, by the key of

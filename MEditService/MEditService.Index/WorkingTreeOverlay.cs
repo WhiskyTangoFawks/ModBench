@@ -159,8 +159,8 @@ internal sealed class WorkingTreeOverlay
             return;
         }
 
-        var prepared = _ingest.PrepareRecord(new PluginDocument(recordType, formKey, body), schema);
-        List<ContainerDocuments.ChildDocument> children = [.. _containers.ChildrenOf(recordType, Document.Parse(body))];
+        List<ContainerDocuments.ChildDocument> children = [];
+        var prepared = _ingest.PrepareRecord(new PluginDocument(recordType, formKey, body), schema, children);
 
         DeleteFormReferencesForRecord(key, formKey);
         if (prepared.Refs.Count > 0)
@@ -174,7 +174,7 @@ internal sealed class WorkingTreeOverlay
         // from the child documents this body carries.
         var recordedBefore = ChildrenRecorded(key, formKey, embeddedIn: recordType);
         DeriveEmbeddedChildRows(key, recordType, children, touched);
-        RederiveContainmentForRecord(key, formKey, prepared);
+        RederiveContainmentForRecord(key, prepared);
 
         // A child absent from the document is gone at Effective, unless another container's document
         // holds it (a container whose FormID changed re-derives its children under the new identity first).
@@ -217,8 +217,8 @@ internal sealed class WorkingTreeOverlay
             LIMIT 1
             """, childFormKey, thisParentFormKey, key.Name, key.Origin) != null;
 
-    // An embedded child's own row is a projection of its container's document, like its placement
-    // row: serialized out of the container's graph through the codec ingest uses.
+    // An embedded child's own row is a projection of its container's document, like its holdings:
+    // serialized out of the container's graph through the codec ingest uses.
     private void DeriveEmbeddedChildRows(
         PluginAddress key, string recordType, IReadOnlyList<ContainerDocuments.ChildDocument> children,
         ICollection<string> touched)
@@ -246,11 +246,11 @@ internal sealed class WorkingTreeOverlay
 
     // A container's child set and slot order live in its body, so delete-then-insert per parent
     // is correct. A worldspace's exterior cells are not in its body: their own records place them.
-    private void RederiveContainmentForRecord(PluginAddress key, string formKey, PluginIngest.PreparedRecord prepared)
+    private void RederiveContainmentForRecord(PluginAddress key, PluginIngest.PreparedRecord prepared)
     {
         DuckDbSql.ExecuteFor(_connection,
-            "DELETE FROM mirror.holdings WHERE parent = $1 AND slot <> $4 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin, HoldingSlots.ExteriorCell);
+            $"DELETE FROM mirror.holdings WHERE parent = $1 AND slot <> {HoldingSlots.Exterior} AND plugin = $2 AND origin = $3",
+            prepared.FormKey, key.Name, key.Origin);
         if (prepared.Holdings.Count > 0)
         {
             using var appender = _connection.CreateAppender("mirror", "holdings");

@@ -157,7 +157,8 @@ internal sealed class PluginIngest
         counters.AppendMs += batchTimer.ElapsedMilliseconds;
     }
 
-    internal PreparedRecord PrepareRecord(PluginDocument document, RecordTableSchema schema)
+    internal PreparedRecord PrepareRecord(
+        PluginDocument document, RecordTableSchema schema, List<ContainerDocuments.ChildDocument>? childDocuments = null)
     {
         var body = Encoding.UTF8.GetBytes(document.Text);
         var root = Document.Parse(document.Text);
@@ -174,9 +175,11 @@ internal sealed class PluginIngest
             ? []
             : Rows(_containers, root, schema, document.FormKey, editorId, document.RecordType);
 
+        if (!refused) childDocuments?.AddRange(_containers.ChildrenOf(document.RecordType, root));
         var children = refused
             ? (document.Contents ?? []).Select(c => (c.FormKey, c.SlotName, c.SlotIndex, Child: (Document?)null))
-            : _containers.ChildrenOf(document.RecordType, root).Select(c => (c.FormKey, c.SlotName, c.SlotIndex, Child: (Document?)c.Document));
+            : (childDocuments ?? [.. _containers.ChildrenOf(document.RecordType, root)])
+                .Select(c => (c.FormKey, c.SlotName, c.SlotIndex, Child: (Document?)c.Document));
         var holdings = new List<HoldingRow>();
         var cellLocations = new List<CellLocationRow>();
         foreach (var (formKey, slot, index, childDocument) in children)
@@ -184,8 +187,7 @@ internal sealed class PluginIngest
             holdings.Add(new HoldingRow(document.FormKey, formKey, slot, index));
             if (slot == PlacedCell.WorldspacePersistentCellMember && _types.IsWorldspace(document.RecordType))
             {
-                cellLocations.Add(CellLocations.Of(
-                    formKey, childDocument, new CellStructure(document.FormKey, null, null, null, null, IsInterior: false)));
+                cellLocations.Add(CellLocations.Of(formKey, childDocument, structure: null));
             }
         }
 
@@ -321,7 +323,6 @@ internal sealed class PluginIngest
         DuckDbAppend.Nullable(r, row.SubY);
         DuckDbAppend.Nullable(r, row.GridX);
         DuckDbAppend.Nullable(r, row.GridY);
-        r.AppendValue(row.IsInterior);
         r.EndRow();
     }
 }

@@ -19,7 +19,7 @@ internal static class LinkResolution
                 UNION
                 SELECT inline.child FROM {TableDdlBuilder.MirrorSchema}.holdings inline
                 JOIN carried ON inline.parent = carried.form_key
-                WHERE inline.slot NOT IN ({HoldingSlots.Placed}, '{HoldingSlots.ExteriorCell}'))
+                WHERE inline.slot NOT IN ({HoldingSlots.Placed}, {HoldingSlots.Exterior}))
             SELECT form_key FROM carried)
         """;
 

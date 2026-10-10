@@ -12,5 +12,5 @@ internal sealed record RecordScope(string Records, string SideTables)
     internal string Held => NavigatorSql.HeldIn(SideTables);
 
     /// <summary>What a record holds that no spatial read lists: not its placed references or its cells.</summary>
-    internal string ContainerChildren => $"(SELECT * FROM {SideTables}holdings WHERE slot NOT IN ({HoldingSlots.Placed}, {HoldingSlots.TopCell}, '{HoldingSlots.ExteriorCell}'))";
+    internal string ContainerChildren => $"(SELECT * FROM {SideTables}holdings WHERE slot NOT IN ({HoldingSlots.Placed}, {HoldingSlots.TopCell}, {HoldingSlots.Exterior}))";
 }

@@ -180,7 +180,7 @@ public record RecordSummary(
     string? EditorId,
     string Origin,
     WorkingTreeState WorkingTreeState = WorkingTreeState.None,
-    // Whether at least one container_child row names this FormKey as parent: the Plugins tree's
+    // Whether this FormKey holds at least one container child: the Plugins tree's
     // expand chevron for a qust/dial row.
     bool HasContainerChildren = false,
     // Non-null when ingest could not turn this record into its document, so a listing never omits
