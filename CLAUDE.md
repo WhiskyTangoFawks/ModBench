@@ -21,6 +21,8 @@ npm run test:unit         # Vitest, no backend
 npm run test:integration  # real VS Code process (~10s), no backend
 npm run generate-api      # regen api.ts from a backend you run on :5172; agents use /regenerate-api
 npm run package           # build alpha .vsix — pinned local @vscode/vsce, no npx
+
+# On Windows the same commands run in PowerShell; from Linux, /windows-vm runs them in a Windows VM.
 ```
 
 ## Resources
