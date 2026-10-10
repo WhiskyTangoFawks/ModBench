@@ -113,6 +113,20 @@ describe('the documents over one file', () => {
     expect([file.text, child.text]).toEqual(['typed again', 'typed again']);
   });
 
+  it('keep a change typed before one that took the change before it reports turning unsaved, passing nothing back', async () => {
+    const [file, child] = [document('file', 'saved'), document('modbench-child-record', 'saved')];
+    h.afterEdit = () => {
+      h.afterEdit = () => undefined;
+      for (const listener of h.changed) listener({ document: child, contentChanges: [] });
+      changed(file, 'typed again', true);
+    };
+
+    changed(file, 'typed', true);
+    await settled();
+
+    expect([file.text, child.text]).toEqual(['typed again', 'typed again']);
+  });
+
   it('keep an unsaved text when another reads the file again, as a revert does, and that one takes it', async () => {
     const [file, child] = [document('file', 'typed', true), document('modbench-child-record', 'typed', true)];
 
