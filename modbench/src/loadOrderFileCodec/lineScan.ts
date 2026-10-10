@@ -19,9 +19,9 @@ export function editLines(text: string, edit: (lines: string[]) => readonly stri
 export const entryLineIndices = (lines: readonly string[], isEntry: (line: string) => boolean): number[] =>
   [...lines.entries()].filter(([, line]) => isEntry(line)).map(([i]) => i);
 
-/** Whole-file presence, never a one-line sniff, which could name a bare `\r` the
- *  terminator when it is a partial write. Accepted cost: one stray CRLF line
- *  makes a mostly-LF file insert CRLF, with no path back. */
+// Whole-file presence, never a one-line sniff, which could name a bare `\r` the
+// terminator when it is a partial write. Accepted cost: one stray CRLF line
+// makes a mostly-LF file insert CRLF, with no path back.
 function detectEol(text: string): string {
   return text.includes('\r\n') ? '\r\n' : '\n';
 }
