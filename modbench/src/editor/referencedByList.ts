@@ -12,7 +12,6 @@ function openCommand(row: { readonly argument: RecordArgument }): vscode.Command
   return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: row.argument }] };
 }
 
-/** What a plugin's copy of a record offers, as a Plugins record row states it (plugins.md, Menus and keys, story 4). */
 interface HolderOffers {
   readonly tracked: boolean;
   readonly editable: boolean;
@@ -25,7 +24,6 @@ export type ConditionsOf = (plugin: PluginAddress) => Pick<HolderOffers, 'tracke
 const holderContextValue = ({ tracked, editable, container }: HolderOffers): string =>
   `referencedByHolder ${tracked ? 'tracked' : 'untracked'}${editable ? ' editable' : ''}${container ? ' container' : ''}`;
 
-/** One plugin's copy of a referrer, with the fields that hold the reference. */
 class ReferencedByHolderNode extends vscode.TreeItem {
   readonly argument: RecordArgument;
   readonly plugin: PluginAddress;
