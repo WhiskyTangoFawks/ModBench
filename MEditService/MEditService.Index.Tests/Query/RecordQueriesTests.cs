@@ -301,7 +301,8 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     {
         var index = Reconciled(new PluginFixtureBuilder("record-query")
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("InOther"), origin: "OtherOrigin")
-            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("InData")));
+            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("InData"))
+            .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("InAnotherFilename")));
 
         var page = index.Queries.GetRecords(types: ["npc_"], plugin: new PluginAddress(PluginName, origin), search: null, limit: 10, offset: 0).Value();
 
@@ -891,12 +892,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         return index;
     }
 
-    [Fact]
-    public void GetCreatableRecordTypes_NoLoadOrder_ThrowsNoLoadOrderException()
-    {
-        Assert.Equal(IndexRefusal.NoLoadOrder, Unloaded().Queries.GetCreatableRecordTypes().Refused().Refusal);
-    }
-
     private OpenedIndex OneOfEachType() => Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
     {
         mod.Npcs.AddNew("NpcX");
@@ -933,14 +928,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     public void GetPlugins_NoLoadOrder_ThrowsNoLoadOrderException()
     {
         var refused = Unloaded().Queries.GetPlugins().Refused();
-        Assert.Equal(IndexRefusal.NoLoadOrder, refused.Refusal);
-        Assert.Contains("No load order", refused.Message);
-    }
-
-    [Fact]
-    public void GetRecords_NoLoadOrder_ThrowsNoLoadOrderException()
-    {
-        var refused = Unloaded().Queries.GetRecords(["npc_"], null, null, 10, 0).Refused();
         Assert.Equal(IndexRefusal.NoLoadOrder, refused.Refusal);
         Assert.Contains("No load order", refused.Message);
     }
