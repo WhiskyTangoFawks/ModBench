@@ -278,6 +278,13 @@ describe('removeModFromText', () => {
 });
 
 describe('moveModsInText', () => {
+  it('leaves the text as it was when the mods already sit where they are asked to go', () => {
+    const text = defaultModlist();
+
+    expect(moveModsInText(text, ['[NODELETE] Radfall', 'Unofficial Fallout 4 Patch'],
+      { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing')).toBe(text);
+  });
+
   it('lands the mods directly above the separator line, leaving every other line where it was', () => {
     const out = moveModsInText(
       defaultModlist(), ['Cracked and Smudged Pip-Boy Screen', 'SKK Fast Start new game (Fallout 4)'],
@@ -406,6 +413,13 @@ describe('moveModsInText', () => {
 });
 
 describe('moveSeparatorsInText', () => {
+  it('leaves the text as it was when the separator already sits where it is asked to go', () => {
+    const text = defaultModlist();
+
+    expect(moveSeparatorsInText(text, ['Radfall - All-In-One Survival Overhaul'],
+      { kind: 'separator', name: 'Unassigned (Modlist Development)' }, 'losing')).toBe(text);
+  });
+
   it('lands each separator block, in file order, directly below the target line, leaving a leading comment in place', () => {
     const text = '# h\r\n+A\r\n+S1_separator\r\n+B\r\n+S2_separator\r\n+C\r\n+S3_separator\r\n+D\r\n';
 

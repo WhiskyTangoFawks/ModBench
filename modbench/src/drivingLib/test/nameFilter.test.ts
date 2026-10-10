@@ -132,41 +132,26 @@ describe('the name filter is durable', () => {
 });
 
 describe('the active term reads out in the view description', () => {
-  it('names the active term, so the user can see what they are filtered by without opening anything', () => {
-    const { view } = setup();
+  it.each<[string, Partial<Parameters<typeof registerNameFilter>[0]>, string | undefined, string, string | undefined]>([
+    ['the term alone, so the user sees what they are filtered by', {}, undefined, 'arm', '"arm"'],
+    ['the term first, then the base', {}, 'Default', 'arm', '"arm" · Default'],
+    ['the term after the base where the view reads its base first', { termPlacement: 'afterBase' }, '12 / 30', 'arm', '12 / 30 · "arm"'],
+    ['the base alone while no filter is active', {}, 'Default', '', 'Default'],
+    ['nothing when no filter is active and the view has no base', {}, undefined, '', undefined],
+  ])('says %s', (_what, overrides, base, typed, said) => {
+    const { view, filter } = setup(overrides);
+    filter.setBaseDescription(base);
     open();
-    currentBox().type('arm');
-    expect(view.description).toBe('"arm"');
+    currentBox().type(typed);
+    expect(view.description).toBe(said);
   });
 
-  it('says nothing when no filter is active', () => {
+  it('says nothing once the filter is cleared', () => {
     const { view } = setup();
     open();
     currentBox().type('arm');
     clear();
     expect(view.description).toBeUndefined();
-  });
-
-  it('composes with whatever else the view says about itself — the term first, then the base', () => {
-    const { view, filter } = setup();
-    filter.setBaseDescription('Default');
-    open();
-    currentBox().type('arm');
-    expect(view.description).toBe('"arm" · Default');
-  });
-
-  it('leaves the base description alone while no filter is active — the Mods profile name predates this and survives it', () => {
-    const { view, filter } = setup();
-    filter.setBaseDescription('Default');
-    expect(view.description).toBe('Default');
-  });
-
-  it('puts the term after the base where the view reads its base first', () => {
-    const { view, filter } = setup({ termPlacement: 'afterBase' });
-    filter.setBaseDescription('12 / 30');
-    open();
-    currentBox().type('arm');
-    expect(view.description).toBe('12 / 30 · "arm"');
   });
 
   it('recomposes when the record filter\'s base changes under a live name filter, leaving the name half standing', () => {
@@ -181,20 +166,15 @@ describe('the active term reads out in the view description', () => {
 });
 
 describe('a term that matches nothing says so', () => {
-  it('names the term rather than leaving a bare empty tree, which reads as "there is nothing here"', async () => {
-    const { view } = setup({ hasRows: () => Promise.resolve(false) });
+  it.each([
+    ['names the term rather than leaving a bare empty tree, which reads as "there is nothing here"', false, 'zzz', 'No matches for "zzz".'],
+    ['says nothing while rows match, an error row that survives the filter included', true, 'arm', undefined],
+  ])('%s', async (_what, rowsMatch, term, said) => {
+    const { view } = setup({ hasRows: () => Promise.resolve(rowsMatch) });
     open();
-    currentBox().type('zzz');
+    currentBox().type(term);
     await flush();
-    expect(view.message).toBe('No matches for "zzz".');
-  });
-
-  it('says nothing while rows match', async () => {
-    const { view } = setup({ hasRows: () => Promise.resolve(true) });
-    open();
-    currentBox().type('arm');
-    await flush();
-    expect(view.message).toBeUndefined();
+    expect(view.message).toBe(said);
   });
 
   it('takes the message back down when the filter is cleared', async () => {
@@ -203,14 +183,6 @@ describe('a term that matches nothing says so', () => {
     currentBox().type('zzz');
     await flush();
     clear();
-    await flush();
-    expect(view.message).toBeUndefined();
-  });
-
-  it('stays silent when what survived the filter is an error row', async () => {
-    const { view } = setup({ hasRows: () => Promise.resolve(true) });
-    open();
-    currentBox().type('zzz');
     await flush();
     expect(view.message).toBeUndefined();
   });
@@ -350,22 +322,10 @@ describe('the message follows the view\'s own row-change signal', () => {
     expect(view.message).toBe('No matches for "zzz".');
   });
 
-  it('leaves another owner\'s message alone when a row change still matches nothing', async () => {
-    const matches = false;
-    const rows = fakeRowsChangedEvent();
-    const { view } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
-    open();
-    currentBox().type('zzz');
-    await flush();
-    expect(view.message).toBe('No matches for "zzz".');
-
-    view.message = 'Starting backend…';
-    rows.fire();
-    await flush();
-    expect(view.message).toBe('Starting backend…');
-  });
-
-  it('leaves another owner\'s message alone when a row change would otherwise have cleared it', async () => {
+  it.each([
+    ['still matches nothing', false],
+    ['would otherwise have cleared it', true],
+  ])('leaves another owner\'s message alone when a row change %s', async (_what, matchesAfter) => {
     let matches = false;
     const rows = fakeRowsChangedEvent();
     const { view } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
@@ -375,7 +335,7 @@ describe('the message follows the view\'s own row-change signal', () => {
     expect(view.message).toBe('No matches for "zzz".');
 
     view.message = 'Starting backend…';
-    matches = true;
+    matches = matchesAfter;
     rows.fire();
     await flush();
     expect(view.message).toBe('Starting backend…');
@@ -449,36 +409,18 @@ describe('the catalog\'s filter pair acts on the focused view\'s filter', () => 
     return { calls, run: (id: string) => { void present(h.state.commands.get(id), id)(); } };
   }
 
-  it('opens the focused view\'s box, and no other\'s', () => {
-    const { calls, run } = wire('view.b');
-    run('modbench.filter');
-    expect(calls).toEqual(['b open']);
-  });
-
-  it('clears the focused view\'s filter, and no other\'s', () => {
-    const { calls, run } = wire('view.a');
-    run('modbench.clearFilter');
-    expect(calls).toEqual(['a clear']);
-  });
-
-  it('opens the filter of the view whose title icon was clicked, whichever view was last selected in', () => {
-    const { calls, run } = wire('view.a');
-    run('view.b.filterHere');
-    expect(calls).toEqual(['b open']);
-  });
-
-  it('clears the filter of the view whose title icon was clicked, whichever view was last selected in', () => {
-    const { calls, run } = wire('view.a');
-    run('view.b.clearFilterHere');
-    expect(calls).toEqual(['b clear']);
-  });
-
-  it('says so when the focused view has no name filter, or no view is focused', () => {
-    for (const focused of ['view.elsewhere', undefined]) {
-      const { calls, run } = wire(focused);
-      run('modbench.filter');
-      run('modbench.clearFilter');
-      expect(calls).toEqual(['nothing focused', 'nothing focused']);
-    }
+  it.each<[string, string | undefined, string, string[]]>([
+    ['opens the focused view\'s box, and no other\'s', 'view.b', 'modbench.filter', ['b open']],
+    ['clears the focused view\'s filter, and no other\'s', 'view.a', 'modbench.clearFilter', ['a clear']],
+    ['opens the filter of the view whose title icon was clicked, whichever view was last selected in', 'view.a', 'view.b.filterHere', ['b open']],
+    ['clears the filter of the view whose title icon was clicked, whichever view was last selected in', 'view.a', 'view.b.clearFilterHere', ['b clear']],
+    ['says so when open finds a focused view with no name filter', 'view.elsewhere', 'modbench.filter', ['nothing focused']],
+    ['says so when clear finds a focused view with no name filter', 'view.elsewhere', 'modbench.clearFilter', ['nothing focused']],
+    ['says so when open finds no view focused', undefined, 'modbench.filter', ['nothing focused']],
+    ['says so when clear finds no view focused', undefined, 'modbench.clearFilter', ['nothing focused']],
+  ])('%s', (_what, focused, command, expected) => {
+    const { calls, run } = wire(focused);
+    run(command);
+    expect(calls).toEqual(expected);
   });
 });

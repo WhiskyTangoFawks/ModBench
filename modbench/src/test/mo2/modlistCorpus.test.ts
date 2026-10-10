@@ -11,7 +11,6 @@ import {
 } from './corpusFixture';
 import { adapterOver, readModlistEntries } from './adapterOver';
 import type { Mod } from '../../instanceLoader/instance';
-import { present } from '../../ports/present';
 
 const isMod = (name: string) => (e: { kind: string; name: string }): e is Mod => e.kind === 'mod' && e.name === name;
 
@@ -58,9 +57,6 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     await modlistCommands(adapterOver(dir)).moveMods(PROFILE, ['ENBoost - 12k'], { kind: 'modOrder' }, 'winning');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
-
-    const entries = await readModlistEntries(dir);
-    expect(present(entries[0], 'the first entry after reordering to the winning end').name).toBe('ENBoost - 12k');
   });
 
   it('insertSeparator adds a separator line and its empty mods/ folder, touching no other file', async () => {
@@ -130,24 +126,11 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     expect((await readModlistEntries(dir)).filter((e) => e.kind === 'mod')).toEqual(modsBefore);
   });
 
-  it('moveMods regroups mods, touching only modlist.txt', async () => {
-    const before = await snapshotTree(dir);
-    await modlistCommands(adapterOver(dir)).moveMods(PROFILE, ['Cracked and Smudged Pip-Boy Screen'], { kind: 'separator', name: 'Unassigned (Modlist Development)' }, 'losing');
-    const after = await snapshotTree(dir);
-    assertOnlyChanged(before, after, new Set([MODLIST]));
-
-    const entries = await readModlistEntries(dir);
-    const sepIdx = entries.findIndex((e) => e.kind === 'separator' && e.name === 'Unassigned (Modlist Development)');
-    expect(present(entries[sepIdx - 1], "the entry now preceding the separator").name).toBe('Cracked and Smudged Pip-Boy Screen');
-  });
-
   it('moveSeparators moves a separator with its mods, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
     await modlistCommands(adapterOver(dir)).moveSeparators(PROFILE, ['Unassigned (Modlist Development)'], { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
-
-    expect(await separatorNames(dir)).toEqual(['Radfall - All-In-One Survival Overhaul', 'Unassigned (Modlist Development)']);
   });
 
   it('createEmptyMod adds one empty mods/ folder and one disabled modlist line, and nothing else', async () => {
