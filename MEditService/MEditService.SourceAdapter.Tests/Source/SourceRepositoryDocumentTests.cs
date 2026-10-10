@@ -46,7 +46,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         return repository;
     }
 
-    [Fact]
+    [PosixFact]
     public async Task Put_OfARecordNoDocumentHolds_ReadsNoOtherDocument()
     {
         Opened();

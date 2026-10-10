@@ -1,0 +1,23 @@
+name: modbench-windows
+services:
+  windows:
+    image: dockurr/windows:6.06@sha256:16fd7c39a3e48bb946d29c59dc6015942e5b900a1fa5d7e5552053bfc48ee2ea
+    environment:
+      VERSION: "11"
+      RAM_SIZE: 6G
+      CPU_CORES: "6"
+      DISK_SIZE: 64G
+      USERNAME: modbench
+      PASSWORD: modbench
+    devices:
+      - /dev/kvm
+      - /dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - 127.0.0.1:8006:8006
+      - 127.0.0.1:2222:22
+    volumes:
+      - ${VM_HOME}/disk:/storage
+      - ${VM_HOME}/oem:/oem
+    stop_grace_period: 2m

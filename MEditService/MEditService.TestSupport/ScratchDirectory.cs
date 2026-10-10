@@ -10,7 +10,7 @@ public sealed class ScratchDirectory(string prefix) : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(Path, recursive: true); }
+        try { AnotherTool.Delete(Path); }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
     }

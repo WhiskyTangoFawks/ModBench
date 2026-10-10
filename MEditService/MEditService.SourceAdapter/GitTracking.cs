@@ -78,6 +78,9 @@ internal static class GitTracking
         git.Run("init", "-q", "-b", "main");
         git.Run("config", $"{SourceRepositoryGit.TrackMarkSection}.{SourceRepositoryGit.TrackMarkKey}", "true");
         git.Run("config", "core.autocrlf", "false");
+        // Git for Windows refuses a path past 260 characters unless told otherwise, and a mod folder's
+        // plugin source nests deep.
+        git.Run("config", "core.longpaths", "true");
         git.Run("config", "commit.gpgsign", "false");
         git.Run("config", "gc.autoDetach", "false");
         // Plugin file names carry spaces, which git's default quotePath C-quotes in porcelain output,

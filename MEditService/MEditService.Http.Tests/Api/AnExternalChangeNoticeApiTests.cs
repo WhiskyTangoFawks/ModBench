@@ -58,7 +58,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
             ChangedPlugins(notice));
     }
 
-    [Fact]
+    [PosixFact]
     public async Task ATrackedPluginWhoseBinaryCannotBeRead_FailsToLoad_AndIsNamedWithNoState()
     {
         var fx = Owned(await Watched());

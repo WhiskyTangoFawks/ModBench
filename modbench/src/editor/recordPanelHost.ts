@@ -34,9 +34,10 @@ interface GridPage { columns: readonly RecordCopy[]; place?: ViewState }
 interface MovedTab extends RecordCopy { from?: string; columns: readonly RecordCopy[]; place: ViewState | undefined }
 
 // Where `uri` stands once each move is made in order, each against the tree the one before it left.
+// By the URI's text, which spells a Windows drive letter in one case, as a path mEdit answers may not.
 const movedTo = (uri: vscode.Uri, moves: readonly FileMove[]): vscode.Uri => moves.reduce((at, { from, to }) => {
-  if (at.path === from.path) return to;
-  return at.path.startsWith(`${from.path}/`) ? to.with({ path: to.path + at.path.slice(from.path.length) }) : at;
+  if (at.toString() === from.toString()) return to;
+  return at.toString().startsWith(`${from.toString()}/`) ? to.with({ path: to.path + at.path.slice(from.path.length) }) : at;
 }, uri);
 
 // The grid as VS Code's editor for a record's file, a child's or a rendered document. A file's

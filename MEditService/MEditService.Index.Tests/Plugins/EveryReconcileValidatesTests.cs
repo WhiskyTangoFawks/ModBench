@@ -139,7 +139,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         HandEditTracked();
         ArrivalAnnouncing(RowsChanged(_trackedNpc));
 
-        Directory.Delete(Path.Combine(_tracked.ModFolderOf(), ".git"), recursive: true);
+        AnotherTool.Delete(Path.Combine(_tracked.ModFolderOf(), ".git"));
         File.Delete(_tracked.Path);
         ArrivalAnnouncing(PluginChanged(_tracked));
 

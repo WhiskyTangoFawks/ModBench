@@ -164,7 +164,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         Put(loadOrder);
         Assert.Single(TheExternalChange().Plugins);
 
-        Directory.Delete(Path.Combine(ModFolder, ".git"), recursive: true);
+        AnotherTool.Delete(Path.Combine(ModFolder, ".git"));
         Put(loadOrder);
 
         var notices = _notifications.Notifications.OfType<ExternalChangeNotification>().ToList();
@@ -180,7 +180,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         var loadOrder = WithPlugins((PluginName, tracked));
         Track((PluginName, tracked));
         Put(loadOrder);
-        Directory.Delete(Path.Combine(ModFolder, ".git"), recursive: true);
+        AnotherTool.Delete(Path.Combine(ModFolder, ".git"));
         Put(loadOrder);
         var told = _notifications.Notifications.Count;
 

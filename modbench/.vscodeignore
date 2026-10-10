@@ -14,6 +14,7 @@ eslint.config.*
 esbuild.mjs
 buildWebview.mjs
 package.mjs
+integration.mjs
 vitest.config.*
 **/*.test.*
 out/**

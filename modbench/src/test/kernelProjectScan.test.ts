@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { join, relative } from 'node:path';
+import { posix, sep } from 'node:path';
 import ts from 'typescript';
 import { tsFiles } from './tsFiles';
 import { BOXES, BOXES_BY_BAND, CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, READ_MODEL_AND_REPOSITORY_BOXES, parseProject } from './boxes';
 
-const MODBENCH = join(__dirname, '..', '..');
+const join = (...segments: string[]): string => posix.join(...segments);
+const inTypeScriptsForwardSlashedForm = (path: string): string => path.split(sep).join('/');
+const relative = (from: string, to: string): string => posix.relative(from, inTypeScriptsForwardSlashedForm(to));
+const MODBENCH = join(inTypeScriptsForwardSlashedForm(__dirname), '..', '..');
 
 const ROOT_SOLUTION = 'tsconfig.json';
 const ROOT_PROJECT = join('src', 'tsconfig.json');

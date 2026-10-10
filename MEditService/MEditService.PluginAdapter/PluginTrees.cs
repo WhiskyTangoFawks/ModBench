@@ -90,7 +90,7 @@ internal static class PluginTrees
         try
         {
             var recompiled = await DeserializeTree(
-                await MaterializeTree(files, scratchDir, cancel), cancel);
+                await MaterializeTree(files, Path.Combine(scratchDir, TreeFolder), cancel), cancel);
             await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder);
             return PluginAnswer.Of(destinationPath);
         }
@@ -103,6 +103,10 @@ internal static class PluginTrees
             Directory.Delete(scratchDir, recursive: true);
         }
     }
+
+    // Mutagen takes a ModKey from a folder's name before a header's, and Windows names a temp folder with a
+    // random extension, now and then .esp, .esm or .esl.
+    private const string TreeFolder = "tree";
 
     // The files written under baseDirectory, answering the root the door reads from.
     private static async Task<string> MaterializeTree(
@@ -165,7 +169,8 @@ internal static class PluginTrees
         {
             // Outside the catch below: a scratch folder this filesystem cannot write is not a source
             // defect, and a refusal naming the source would misname it.
-            var treeRoot = await MaterializeTree(files, scratchDir, cancel);
+            var treeBase = Path.Combine(scratchDir, TreeFolder);
+            var treeRoot = await MaterializeTree(files, treeBase, cancel);
 
             // The files carry their own mod-folder-relative paths, so the scratch is a mod folder and
             // every path a read failure names is relative to one.
@@ -175,7 +180,7 @@ internal static class PluginTrees
             }
             catch (Exception ex) when (PluginFailure.StandsFor(ex))
             {
-                return new PluginFailure.Unparsed(PluginDiagnosis.FromSourceReadException(ex, scratchDir), ex);
+                return new PluginFailure.Unparsed(PluginDiagnosis.FromSourceReadException(ex, treeBase), ex);
             }
         }
         finally

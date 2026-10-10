@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { relative } from 'node:path';
+import { relative, sep } from 'node:path';
 import { tsFiles } from './tsFiles';
 import { SRC } from './scanSource';
 
@@ -9,7 +9,7 @@ describe('each key has one writer', () => {
   const FIRST_READ_OWNERS = ['drivingLib/instanceFirstRead.ts'];
   const production = tsFiles(SRC, { exclude: ['generated', 'test'] });
   const naming = (pattern: RegExp) =>
-    production.filter((path) => pattern.test(readFileSync(path, 'utf8'))).map((path) => relative(SRC, path));
+    production.filter((path) => pattern.test(readFileSync(path, 'utf8'))).map((path) => relative(SRC, path).split(sep).join('/'));
 
   it('scans a real body of files', () => {
     expect(production.length).toBeGreaterThan(100);

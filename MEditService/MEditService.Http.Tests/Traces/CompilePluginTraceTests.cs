@@ -147,7 +147,7 @@ public sealed class CompilePluginTraceTests : HostedTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    [Fact]
+    [PosixFact]
     public async Task CompilingWhenOnePluginsBytesCannotBeWritten_RefusesItByName_AndCompilesTheOthers()
     {
         using var fx = await LoadedAndTracked();

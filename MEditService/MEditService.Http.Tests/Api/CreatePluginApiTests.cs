@@ -123,7 +123,7 @@ public sealed class CreatePluginApiTests : HostedTests
         Assert.False(File.Exists(Path.Combine(modFolder, "Bad|Name.esp")));
     }
 
-    [Fact]
+    [PosixFact]
     public async Task CreatingAPluginInAFolderTheFileSystemWillNotWrite_IsATypedRefusal_AndWritesNothing()
     {
         var fx = Owned(await Loaded());

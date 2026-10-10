@@ -72,7 +72,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.Subset(GitDirContents().ToHashSet(), before.ToHashSet());
     }
 
-    [Fact]
+    [PosixFact]
     public void Track_WhenTheCommitFails_RestoresTheSourceFileItReplaced()
     {
         var existing = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
@@ -152,7 +152,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         return reason;
     }
 
-    [Fact]
+    [PosixFact]
     public void Track_WhenTheCommitFails_TakesBackWhatItMade_AndTrackingAgainCreatesTheRepository()
     {
         var asset = UnreadableFileTheCommitCannotAdd();

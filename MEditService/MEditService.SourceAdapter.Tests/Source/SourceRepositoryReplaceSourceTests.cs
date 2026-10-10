@@ -178,7 +178,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     public void ReplaceSourceFrom_IntoAModFolderAnotherToolRemoved_NamesTheMissingRepository_AndRecreatesNothing()
     {
         var repository = Repository;
-        Directory.Delete(_modFolder, recursive: true);
+        AnotherTool.Delete(_modFolder);
 
         var refused = Assert.IsType<SourceFailure.Inaccessible>(
             repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Failed());
@@ -191,7 +191,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     public void AGitStep_InAModFolderAnotherToolRemoved_FailsNamingTheFolder_NotGit()
     {
         var repository = Repository;
-        Directory.Delete(_modFolder, recursive: true);
+        AnotherTool.Delete(_modFolder);
 
         var failure = Assert.IsType<SourceFailure.Inaccessible>(repository.WriteBinary(Address, Sha, () => { }).Stopped());
 

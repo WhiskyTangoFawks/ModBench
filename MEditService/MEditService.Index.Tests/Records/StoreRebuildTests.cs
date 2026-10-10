@@ -228,15 +228,16 @@ public sealed class StoreRebuildTests : IDisposable
             earlier.Reconcile(earlierHolder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         var indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex = IndexFiles.In(_fixture.InstanceRoot);
         var bytesBeforeHold = File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);
-        using var otherWindow = ForeignIndexHolder.Hold(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);
-
-        var refusal = _index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
+        StoreRebuildRefused? refusal;
+        using (ForeignIndexHolder.Hold(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex))
+            refusal = _index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
+        var bytesOnceTheHolderIsGoneAsWindowsLetsNothingReadAFileDuckDbHolds = File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);
 
         Assert.Equal(StoreRebuildRefusal.HeldByAnotherWindow, refusal?.Refusal);
         Assert.Contains(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex, refusal?.Message);
 
         Assert.True(File.Exists(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex), "the file must still exist — a refusal must never delete it");
-        Assert.Equal(bytesBeforeHold, File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex));
+        Assert.Equal(bytesBeforeHold, bytesOnceTheHolderIsGoneAsWindowsLetsNothingReadAFileDuckDbHolds);
     }
 
     private static bool ReadMetAClosedScopeOrARefusal(Exception ex) =>

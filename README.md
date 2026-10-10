@@ -80,7 +80,7 @@ The UX rules are borrowed, not invented: Mod Management follows MO2, record edit
 
 ## Getting started
 
-Prerequisites: [.NET SDK](https://dotnet.microsoft.com/download) 10.x, [Node.js](https://nodejs.org/) 20 LTS or later, VS Code, git on `PATH` (Track needs it), and 7-Zip on `PATH` as `7z`, `7za` or `7zz` (installing a mod from an archive needs it). The backend test suite also wants `python3` on `PATH` — only to hold an index file from a second process in the two-windows tests, which skip without it. On Ubuntu/Debian: `sudo apt-get install -y dotnet-sdk-10.0 nodejs npm p7zip-full`.
+Prerequisites: [.NET SDK](https://dotnet.microsoft.com/download) 10.x, [Node.js](https://nodejs.org/) 20 LTS or later, VS Code, git on `PATH` (Track needs it), and 7-Zip on `PATH` as `7z`, `7za` or `7zz` (installing a mod from an archive needs it). The backend test suite also wants `python3` (`python` on Windows) on `PATH` — only to hold an index file from a second process in the two-windows tests, which skip without it. On Ubuntu/Debian: `sudo apt-get install -y dotnet-sdk-10.0 nodejs npm p7zip-full`. On Windows: `winget install Git.Git OpenJS.NodeJS.22 Microsoft.DotNet.SDK.10 Python.Python.3.12 7zip.7zip`; turn on Developer Mode, since the tests create symlinks; and run `Set-ExecutionPolicy RemoteSigned` so npm runs in PowerShell.
 
 ```bash
 # backend
