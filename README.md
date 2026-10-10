@@ -28,6 +28,7 @@ The decisions behind this are [ADR-0007](docs/adr/0007-plugin-edits-are-git-work
 | Record filter — plain `.sql` files against the record index, applied with a Code Lens | [plugins.md](docs/architecture/surfaces/plugins.md) | Implemented |
 | Repair — byte-level repair of malformed plugins the Creation Kit wouldn't have written | [#666](https://github.com/WhiskyTangoFawks/ModBench/issues/666) | Planned |
 | Downloads — the downloads folder as a tree: install, exclude, delete (`nxm://` downloading not built) | [downloads.md](docs/architecture/surfaces/downloads.md) | Implemented; spec rewritten, code catching up |
+| Agent — an agent in VS Code reads the instance and its records, and runs the gestures, through one MCP server | [agent.md](docs/architecture/surfaces/agent.md) | Planned |
 
 What's next is the [GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones) board: each numbered milestone is an epic in priority order, its issues are the slices.
 
