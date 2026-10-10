@@ -24,8 +24,8 @@ export async function takeText(document: vscode.TextDocument, text: string): Pro
 /** A file's document and its child records' documents hold one text, saved or not (editor.md,
  *  Opening, story 10), as VS Code gives each tab a document of its own. */
 export function holdOneTextPerFile(channel: Pick<vscode.LogOutputChannel, 'warn'>): vscode.Disposable {
-  // The text each document takes from another, so its own change event is not passed back.
-  const taking = new Map<string, string>();
+  // The text each document took from another.
+  const taken = new Map<string, string>();
   let queue = Promise.resolve();
   const inTurn = (work: () => Promise<void>) => {
     queue = queue.then(work).catch((err: unknown) => { channel.warn(`The documents over one file differ: ${errorMessage(err)}`); });
@@ -33,11 +33,11 @@ export function holdOneTextPerFile(channel: Pick<vscode.LogOutputChannel, 'warn'
   const take = async (document: vscode.TextDocument, text: string) => {
     if (document.getText() === text) return;
     const key = document.uri.toString();
-    taking.set(key, text);
+    taken.set(key, text);
     try {
       await takeText(document, text);
     } catch (err) {
-      taking.delete(key);
+      taken.delete(key);
       throw err;
     }
   };
@@ -54,10 +54,9 @@ export function holdOneTextPerFile(channel: Pick<vscode.LogOutputChannel, 'warn'
     // A change of text or of saved state: VS Code reports a document's first unsaved change before it is unsaved.
     vscode.workspace.onDidChangeTextDocument(({ document, contentChanges, reason }) => {
       const key = document.uri.toString();
-      if (contentChanges.length > 0 && taking.get(key) === document.getText()) {
-        taking.delete(key);
-        return;
-      }
+      // Passing back the text it took would undo what was typed in the other since.
+      if (taken.get(key) === document.getText()) return;
+      taken.delete(key);
       const undoOrRedo = reason !== undefined;
       inTurn(async () => {
         if (document.isDirty || undoOrRedo) await giveUnsaved(document);
@@ -65,6 +64,7 @@ export function holdOneTextPerFile(channel: Pick<vscode.LogOutputChannel, 'warn'
       });
     }),
     vscode.workspace.onDidOpenTextDocument((document) => { inTurn(() => takeUnsaved(document)); }),
+    vscode.workspace.onDidCloseTextDocument(({ uri }) => { taken.delete(uri.toString()); }),
     // The others holding the saved text are saved too, which writes nothing the file does not hold.
     vscode.workspace.onDidSaveTextDocument((document) => {
       const saved = document.getText();
