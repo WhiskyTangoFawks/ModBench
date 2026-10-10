@@ -1605,7 +1605,7 @@ describe('a record tab', () => {
   it('keeps its page alive while it is hidden', () => {
     makeEditor();
 
-    expect(h.editorProviderOptions.get('modbench.record')).toEqual({ webviewOptions: { retainContextWhenHidden: true } });
+    expect(h.editorProviderOptions.get('modbench.record')).toEqual({ webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true } });
   });
 });
 
