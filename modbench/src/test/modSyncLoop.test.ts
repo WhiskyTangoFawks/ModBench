@@ -47,8 +47,7 @@ async function settledWiredInstance(): Promise<{
   const instance = new Instance({
     window: STEADY_WINDOW,
     adapter: adapterOver(root, { gameFolder: DATA_FOLDER_FOUND }),
-    log: () => {},
-    logReadFailure: () => {},
+    log: { info: () => {}, warn: () => {}, error: () => {} },
   });
   instances.push(instance);
   const channel = channelDouble();

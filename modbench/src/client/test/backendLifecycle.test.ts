@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { leveledLog } from '../../test/leveledLog';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { createServer, type Server } from 'node:http';
@@ -254,10 +255,10 @@ describe('BackendLifecycle exit / stop', () => {
   it('stays stopped when the backend exits after running, logging why and starting nothing', async () => {
     const children: ReturnType<typeof makeChild>[] = [];
     const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
-    const logged: string[] = [];
+    const logged = leveledLog();
     const lifecycle = new BackendLifecycle({
       freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x',
-      checkHealth: () => Promise.resolve(true), log: (line) => logged.push(line),
+      checkHealth: () => Promise.resolve(true), log: logged,
     });
     await lifecycle.start();
     const statuses = record(lifecycle);
@@ -267,7 +268,7 @@ describe('BackendLifecycle exit / stop', () => {
 
     expect(statuses).toEqual(['stopped']);
     expect(spawn).toHaveBeenCalledTimes(1);
-    expect(logged).toContain('[backend] mEdit exited unexpectedly (code 1)');
+    expect(logged.lines.error).toContain('[backend] mEdit exited unexpectedly (code 1)');
   });
 
   it('stays stopped when the child exits before it answers, and the start settles', async () => {
@@ -288,30 +289,30 @@ describe('BackendLifecycle exit / stop', () => {
 
   it('logs the signal that ended the backend when it has no exit code', async () => {
     const children: ReturnType<typeof makeChild>[] = [];
-    const logged: string[] = [];
+    const logged = leveledLog();
     const lifecycle = new BackendLifecycle({
       freePort: () => Promise.resolve(5172), pollIntervalMs: 5, executablePath: '/x', checkHealth: () => Promise.resolve(true),
-      spawn: () => { const c = makeChild(); children.push(c); return c; }, log: (line) => logged.push(line),
+      spawn: () => { const c = makeChild(); children.push(c); return c; }, log: logged,
     });
     await lifecycle.start();
 
     present(children[0], 'the first spawned child').emit('exit', null, 'SIGSEGV');
 
-    expect(logged).toContain('[backend] mEdit exited unexpectedly (signal SIGSEGV)');
+    expect(logged.lines.error).toContain('[backend] mEdit exited unexpectedly (signal SIGSEGV)');
   });
 
   it('is stopped, logging why, when the backend cannot be spawned at all', async () => {
-    const logged: string[] = [];
+    const logged = leveledLog();
     const lifecycle = new BackendLifecycle({
       freePort: () => Promise.resolve(5172), pollIntervalMs: 5, pollTimeoutMs: 10_000, executablePath: '/nonexistent/backend',
-      checkHealth: () => Promise.resolve(false), log: (line) => logged.push(line),
+      checkHealth: () => Promise.resolve(false), log: logged,
       spawn: (exe, args) => nodeSpawn(exe, args, { stdio: 'pipe' }),
     });
 
     await lifecycle.start();
 
     expect(lifecycle.status).toBe('stopped');
-    expect(logged.some((line) => line.startsWith('[backend] mEdit failed to start: spawn /nonexistent/backend ENOENT'))).toBe(true);
+    expect(logged.lines.error.some((line) => line.startsWith('[backend] mEdit failed to start: spawn /nonexistent/backend ENOENT'))).toBe(true);
   });
 
   it.each([

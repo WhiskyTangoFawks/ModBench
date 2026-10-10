@@ -104,7 +104,7 @@ function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened 
     instance: (instanceRoot) => {
       const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides, gameDirectoryChanged: onGameDirectoryChange });
       const instance = own(new Instance({
-        adapter, window: vscode.window, log: (line) => outputChannel.info(line), logReadFailure: (line) => outputChannel.error(line),
+        adapter, window: vscode.window, log: outputChannel,
       }));
       return { facts: factsOf(instance), side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },
@@ -211,10 +211,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
   context.subscriptions.push(outputChannel);
-  const log = (msg: string) => outputChannel.info(msg);
 
   // ADR-0002.
-  const meditClient = createMEditClient({ backend: { attachPort }, backendLog: outputChannel, log });
+  const meditClient = createMEditClient({ backend: { attachPort }, backendLog: outputChannel, log: outputChannel });
   const focusedView = createFocusedView();
 
   const ownedByViews = ownership();

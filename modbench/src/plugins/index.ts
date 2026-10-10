@@ -50,7 +50,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
   const { client, channel, reporterFor } = deps;
   const statusBar = createStatusBar(client);
   const externalChanges = noticeExternalChanges(reporterFor('externalChange'), client);
-  const recordBrowser = new RecordBrowser(client, (line) => channel.info(line));
+  const recordBrowser = new RecordBrowser(client, channel);
   const recordWrite = recordWriteOver(deps.facts, client);
   return {
     recordWrite,
