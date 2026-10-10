@@ -301,7 +301,8 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     {
         var index = Reconciled(new PluginFixtureBuilder("record-query")
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("InOther"), origin: "OtherOrigin")
-            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("InData")));
+            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("InData"))
+            .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("InAnotherFilename")));
 
         var page = index.Queries.GetRecords(types: ["npc_"], plugin: new PluginAddress(PluginName, origin), search: null, limit: 10, offset: 0).Value();
 
