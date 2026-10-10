@@ -34,7 +34,6 @@ interface ViewEntry { id: string; name: string; when?: string; }
 interface MenuEntry { command: string; when: string; group?: string; icon?: string; }
 interface CommandEntry { command: string; title: string; category: string; icon?: string; }
 interface KeybindingEntry { command: string; key: string; when: string; mac?: string; args?: unknown; }
-interface ViewsContainerEntry { id: string; }
 interface SettingEntry { description?: string; type?: unknown; default?: unknown; enum?: unknown; }
 interface ColorEntry { id: string; }
 interface CustomEditorEntry { viewType: string; }
@@ -44,7 +43,6 @@ interface PackageManifest {
   contributes: {
     viewsWelcome: ViewsWelcomeEntry[];
     views: Record<string, ViewEntry[]>;
-    viewsContainers: { panel: ViewsContainerEntry[] };
     menus: Record<string, MenuEntry[]>;
     commands: CommandEntry[];
     keybindings: KeybindingEntry[];
@@ -85,9 +83,6 @@ function isCommandEntry(v: unknown): v is CommandEntry {
 function isKeybindingEntry(v: unknown): v is KeybindingEntry {
   return isRecord(v) && isString(v.command) && isString(v.key) && isString(v.when) && isOptionalString(v.mac);
 }
-function isViewsContainerEntry(v: unknown): v is ViewsContainerEntry {
-  return isRecord(v) && isString(v.id);
-}
 function isSettingEntry(v: unknown): v is SettingEntry {
   return isRecord(v) && isOptionalString(v.description);
 }
@@ -104,15 +99,12 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   }
   const { contributes } = raw;
   if (!isRecord(contributes)) throw new Error('Expected package.json to have a contributes object.');
-  const { viewsWelcome, views, viewsContainers, menus, commands, keybindings, configuration, colors, customEditors } = contributes;
+  const { viewsWelcome, views, menus, commands, keybindings, configuration, colors, customEditors } = contributes;
   if (!isArrayOf(viewsWelcome, isViewsWelcomeEntry)) {
     throw new Error('Expected contributes.viewsWelcome to be an array of { view, contents, when? }.');
   }
   if (!isRecordOfArrays(views, isViewEntry)) {
     throw new Error('Expected contributes.views to be a map of { id, name, when? } arrays.');
-  }
-  if (!isRecord(viewsContainers) || !isArrayOf(viewsContainers.panel, isViewsContainerEntry)) {
-    throw new Error('Expected contributes.viewsContainers.panel to be an array of { id }.');
   }
   if (!isRecordOfArrays(menus, isMenuEntry)) {
     throw new Error('Expected contributes.menus to be a map of { command, when, group?, icon? } arrays.');
@@ -132,7 +124,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   return {
     activationEvents: raw.activationEvents,
     contributes: {
-      viewsWelcome, views, viewsContainers: { panel: viewsContainers.panel }, menus, commands, keybindings,
+      viewsWelcome, views, menus, commands, keybindings,
       configuration: { properties }, colors, customEditors,
     },
   };
@@ -278,23 +270,6 @@ describe('package.json outside an instance', () => {
   });
 });
 
-describe('package.json Referenced By view container', () => {
-  it('lives in a Panel-location viewsContainer, not stacked under the modbench activity-bar container', () => {
-    const panel: { id: string }[] = pkg.contributes.viewsContainers.panel;
-    const panelContainerIds = new Set(panel.map((c) => c.id));
-    const views: Record<string, { id: string }[]> = pkg.contributes.views;
-    const referencedByContainer = present(
-      Object.entries(views).find(([, entries]) => entries.some((v) => v.id === 'modbench.referencedByTree'))?.[0],
-      'a views entry for modbench.referencedByTree',
-    );
-
-    expect(panelContainerIds.has(referencedByContainer)).toBe(true);
-
-    const sidebarViews = present(pkg.contributes.views.modbench, "contributes.views['modbench']");
-    expect(sidebarViews.some((v) => v.id === 'modbench.referencedByTree')).toBe(false);
-  });
-});
-
 describe('package.json Toolbox view', () => {
   const sidebarViews = (): ViewEntry[] => present(pkg.contributes.views.modbench, "contributes.views['modbench']");
 
@@ -318,46 +293,6 @@ describe('package.json Toolbox view', () => {
       .filter((e) => requires(e.when, 'view == modbench.toolbox') && requires(e.when, 'viewItem == profile'));
 
     expect(profileMenu.map((e) => e.command)).toEqual(['modbench.profile.switch']);
-  });
-});
-
-describe('package.json Referenced By view', () => {
-  const view = (): ViewEntry => present(
-    present(pkg.contributes.views.modbenchReferencedBy, "contributes.views['modbenchReferencedBy']")
-      .find((v) => v.id === 'modbench.referencedByTree'),
-    'the modbench.referencedByTree view entry',
-  );
-
-  it('names the Referenced By view "Referenced By", the title xEdit gives its tab', () => {
-    expect(view().name).toBe('Referenced By');
-  });
-
-  it('carries no gate at all — always present, like Mods/Plugins/Downloads', () => {
-    expect(view().when).toBeUndefined();
-  });
-});
-
-describe('package.json Referenced By title bar', () => {
-  const REFERENCED_BY_VIEW = 'view == modbench.referencedByTree';
-  const titleBar = (): MenuEntry[] =>
-    present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']").filter((e) => requires(e.when, REFERENCED_BY_VIEW));
-
-  it('offers filter or clear, then sort direction, as icons', () => {
-    expect(placed(titleBar())).toEqual([
-      ['modbench.referencedByTree.filterHere', 'navigation'],
-      ['modbench.referencedByTree.clearFilterHere', 'navigation'],
-      ['modbench.referrer.sortDescending', 'navigation'],
-      ['modbench.referrer.sortAscending', 'navigation'],
-    ]);
-    expect(titleBar().map((e) => e.group)).toEqual(['navigation@1', 'navigation@1', 'navigation@2', 'navigation@2']);
-  });
-
-  it.each([
-    [{}, ['modbench.referencedByTree.filterHere', 'modbench.referrer.sortDescending']],
-    [{ 'modbench.referrer.descending': true }, ['modbench.referencedByTree.filterHere', 'modbench.referrer.sortAscending']],
-    [{ 'modbench.referrer.filterActive': true }, ['modbench.referencedByTree.clearFilterHere', 'modbench.referrer.sortDescending']],
-  ])('with %j the title bar shows one filter control and the one direction the list is not in', (facts, commands) => {
-    expect(offeredIn(titleBar(), { view: 'modbench.referencedByTree', ...inInstance, ...facts })).toEqual(commands);
   });
 });
 
@@ -422,7 +357,6 @@ describe('package.json filtering is one UX', () => {
     ['modbench.modList', 'modbench.modList.filterHere'],
     ['modbench.pluginListTree', 'modbench.pluginListTree.filterHere'],
     ['modbench.downloads', 'modbench.downloads.filterHere'],
-    ['modbench.referencedByTree', 'modbench.referencedByTree.filterHere'],
   ] as const;
 
   it.each(FILTERED_VIEWS)('%s narrows by name from slot 1', (view, command) => {
@@ -448,7 +382,6 @@ describe('package.json filtering is one UX', () => {
   const OTHER_DURABLE_FILTERS = [
     ['modbench.modList', 'modbench.modList.filterHere', 'modbench.modList.clearFilterHere', 'modbench.mod.filterActive'],
     ['modbench.pluginListTree', 'modbench.pluginListTree.filterHere', 'modbench.pluginListTree.clearFilterHere', 'modbench.plugin.filterActive'],
-    ['modbench.referencedByTree', 'modbench.referencedByTree.filterHere', 'modbench.referencedByTree.clearFilterHere', 'modbench.referrer.filterActive'],
   ] as const;
   const DOWNLOADS_FILTER = ['modbench.downloads', 'modbench.downloads.filterHere', 'modbench.downloads.clearFilterHere', 'modbench.downloadedFile.filterActive'] as const;
   const entryOn = (view: string, command: string): MenuEntry => present(
@@ -744,9 +677,10 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   });
 
   it.each(['record', 'worldspace', 'cell', 'placed'])(
-    'record menu on a %s row: open to the side, copy, copy value, then delete last', (kind) => {
+    'record menu on a %s row: open to the side, referenced by, copy, copy value, then delete last', (kind) => {
       expect(menuOf(`${kind} tracked editable`)).toEqual([
         [OPEN_TO_THE_SIDE, '1_open'],
+        [REFERENCED_BY, '1_open'],
         ['modbench.record.copy', '5_copy'],
         ['modbench.copyValue', '5_copy'],
         ['modbench.record.delete', '6_destroy'],
@@ -757,6 +691,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     'record menu on a %s row that is a container: create record between open and copy', (kind) => {
       expect(menuOf(`${kind} tracked editable container`)).toEqual([
         [OPEN_TO_THE_SIDE, '1_open'],
+        [REFERENCED_BY, '1_open'],
         ['modbench.record.create', '3_create'],
         ['modbench.record.copy', '5_copy'],
         ['modbench.copyValue', '5_copy'],
@@ -771,6 +706,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   it.each([['untracked', 'untracked editable'], ['read-only', 'tracked']])('record menu on a record whose plugin is %s: no delete', (_what, conditions) => {
     expect(menuOf(`record ${conditions}`)).toEqual([
       [OPEN_TO_THE_SIDE, '1_open'],
+      [REFERENCED_BY, '1_open'],
       ['modbench.record.copy', '5_copy'],
       ['modbench.copyValue', '5_copy'],
     ]);
@@ -1336,8 +1272,9 @@ const commandsMarkdown = readFileSync(
 const catalog = catalogCommandIds(commandsMarkdown);
 
 const OPEN_TO_THE_SIDE = 'modbench.record.openToSide';
+const REFERENCED_BY = 'modbench.record.referencedBy';
 const OPEN_REFERENCE = 'modbench.record.openReference';
-const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads', 'modbench.referencedByTree']
+const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
 const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_TO_THE_SIDE, OPEN_REFERENCE];

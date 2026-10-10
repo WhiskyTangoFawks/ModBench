@@ -1,7 +1,6 @@
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { recordDocument } from '../drivingLib/recordDocument';
-import type { RecordLocation, RecordLocationDeps } from './recordLocation';
+import { locateRecord, type RecordLocation, type RecordLocationDeps } from './recordLocation';
 import { formKeyAt, formKeyMember } from './sourceText';
 
 interface DefinitionDeps<Document> extends RecordLocationDeps<Document> {
@@ -17,19 +16,12 @@ export function definitionsOf<Document extends { getText(): string }>(
     if (!found) return undefined;
     const { formKey } = found;
     try {
-      const opened = await recordDocument(client, { formKey });
-      if (!opened) return undefined;
-      if ('refused' in opened) {
-        reporter.shownOnSurface('warning', `Go to Definition cannot open ${formKey}.`, opened.refused);
+      const located = await locateRecord({ client, open }, { formKey }, formKeyMember);
+      if (located && 'refused' in located) {
+        reporter.shownOnSurface('warning', `Go to Definition cannot open ${formKey}.`, located.refused);
         return undefined;
       }
-      const document = await open(opened.uri);
-      const member = formKeyMember(document.getText(), formKey);
-      if (!member) {
-        reporter.shownOnSurface('warning', `Go to Definition cannot open ${formKey}.`, `${opened.uri.path} states no ${formKey} member.`);
-        return undefined;
-      }
-      return { uri: opened.uri, document, ...member };
+      return located;
     } catch (error) {
       reporter.shownOnSurface('error', `Go to Definition cannot open ${formKey}.`, errorMessage(error));
       return undefined;

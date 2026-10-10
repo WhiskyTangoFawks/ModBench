@@ -1364,6 +1364,43 @@ describe('an untracked copy of a record', () => {
   });
 });
 
+describe('Referenced By, as VS Code\'s References view takes it', () => {
+  interface ReferencesViewInput {
+    title: string;
+    location: vscode.Location;
+    resolve(): Promise<{ provider: vscode.TreeDataProvider<vscode.TreeItem>; message?: string }>;
+  }
+  const shown = async (formKey: string, title: string) => {
+    const referencesView = await present(
+      vscode.extensions.getExtension<{ getInput(): ReferencesViewInput | undefined }>('vscode.references-view'), 'VS Code\'s References view',
+    ).activate();
+    await vscode.commands.executeCommand('modbench.record.referencedBy', { argument: { kind: 'record', formKey } });
+    return waitFor(`the References view showing ${title}`, () => referencesView.getInput()?.title === title && referencesView.getInput());
+  };
+  const anchoredAt = async ({ uri, range }: vscode.Location) =>
+    [uri.toString(true), (await vscode.workspace.openTextDocument(uri)).offsetAt(range.start)];
+
+  it('lists a tracked record\'s referrers, anchored at its FormKey in its file', async () => {
+    const input = await shown(TRACKED_FORM_KEY, 'Referenced By: TrackedGun');
+
+    assert.deepStrictEqual(await anchoredAt(input.location),
+      [vscode.Uri.file(TRACKED_FILE).toString(true), readFileSync(TRACKED_FILE, 'utf8').indexOf(`"${TRACKED_FORM_KEY}"`)]);
+    const { provider, message } = await input.resolve();
+    assert.deepStrictEqual(await provider.getChildren(), []);
+    assert.ok(message?.startsWith('No references found.'), message);
+  });
+
+  it('lists an untracked record\'s referrers, one row each, anchored at its FormKey in mEdit\'s rendering of it', async () => {
+    const input = await shown(HELD_FORM_KEY, 'Referenced By: NewGun');
+
+    assert.deepStrictEqual(await anchoredAt(input.location),
+      [renderedUri(HELD_FORM_KEY), renderedText(HELD_FORM_KEY).indexOf(`"${HELD_FORM_KEY}"`)]);
+    const rows = await (await input.resolve()).provider.getChildren() ?? [];
+    assert.deepStrictEqual(rows.map((row) => row.label),
+      [HELD_FORM_KEY, TRACKED_FORM_KEY, CHILD_FORM_KEY, RENDERED_REFERRER_FORM_KEY].sort());
+  });
+});
+
 async function downloadsRows(): Promise<string[]> {
   await vscode.env.clipboard.writeText('');
   await vscode.commands.executeCommand('modbench.downloads.focus');
