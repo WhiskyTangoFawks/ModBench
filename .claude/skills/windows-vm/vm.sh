@@ -19,11 +19,11 @@ case "${1:-}" in
     [[ -f $VM_HOME/disk/data.img ]] || rm -f "$VM_HOME/known_hosts"
     "${COMPOSE[@]}" up -d
     deadline=$((SECONDS + 5400))
-    until "$0" ssh -o BatchMode=yes exit 2>/dev/null; do
+    until "$HERE/vm.sh" ssh -o BatchMode=yes exit 2>/dev/null; do
       (( SECONDS < deadline )) || { echo "No SSH after 90 minutes; vm.sh screen shows where the install stopped." >&2; exit 1; }
       sleep 30
     done
-    exec "$0" run "$HERE/provision.ps1"
+    exec "$HERE/vm.sh" run "$HERE/provision.ps1"
     ;;
   down) "${COMPOSE[@]}" down ;;
   logs) "${COMPOSE[@]}" logs -f ;;
@@ -35,9 +35,9 @@ case "${1:-}" in
   sync)
     root="$(git -C "$HERE" rev-parse --show-toplevel)"
     (cd "$root" && git ls-files -z -co --exclude-standard | while IFS= read -r -d '' f; do if [[ -f $f ]]; then printf '%s\0' "$f"; fi; done | tar --format=pax --null -cf - -T -) \
-      | "$0" ssh "Remove-Item -Recurse -Force $STAGE -ErrorAction SilentlyContinue; New-Item -ItemType Directory $STAGE | Out-Null; tar -xf - -C $STAGE"
+      | "$HERE/vm.sh" ssh "Remove-Item -Recurse -Force $STAGE -ErrorAction SilentlyContinue; New-Item -ItemType Directory $STAGE | Out-Null; tar -xf - -C $STAGE"
     # Mirroring keeps the excluded folders, so dependencies and build output survive between runs.
-    exec "$0" ssh "robocopy $STAGE $WORK /MIR /XD node_modules bin obj out .vscode-test backend /NFL /NDL /NJH /NJS /NP | Out-Null; exit [int](\$LASTEXITCODE -ge 8)"
+    exec "$HERE/vm.sh" ssh "robocopy $STAGE $WORK /MIR /XD node_modules bin obj out .vscode-test backend /NFL /NDL /NJH /NJS /NP | Out-Null; exit [int](\$LASTEXITCODE -ge 8)"
     ;;
   ssh)
     shift
