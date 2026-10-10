@@ -1,9 +1,11 @@
+using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Serialization.Exceptions;
 using Noggog.WorkEngine;
 
 namespace MEditService.PluginAdapter;
@@ -135,10 +137,24 @@ internal static class PluginTrees
 
     private static async Task<IMod> DeserializeTree(string treeRoot, CancellationToken cancel)
     {
-        var rootDocument = await File.ReadAllBytesAsync(Path.Combine(treeRoot, DocumentFileNames.Root), cancel);
+        var rootPath = Path.Combine(treeRoot, DocumentFileNames.Root);
+        var rootDocument = await File.ReadAllBytesAsync(rootPath, cancel);
         return HeaderDocument.RestoreOmittedNextObjectId(
-            await HeaderDocument.GameOf(rootDocument).DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel),
+            await GameNamedBy(rootDocument, rootPath).DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel),
             rootDocument);
+    }
+
+    // Read ahead of the door, so a failure names the file as the door's own failures do.
+    private static IGameCodec GameNamedBy(byte[] rootDocument, string rootPath)
+    {
+        try
+        {
+            return HeaderDocument.GameOf(rootDocument);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidDataException)
+        {
+            throw FilePathedException.Enrich(ex, rootPath);
+        }
     }
 
     /// <summary>The codec's verdict on the plugin written at <paramref name="recompiledPath"/> against

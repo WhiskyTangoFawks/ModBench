@@ -51,9 +51,11 @@ public static class HeaderDocument
 
     /// <summary>The codec of the game a root document names.</summary>
     public static IGameCodec GameOf(byte[] rootDocument) =>
-        GameCodecs.For(Enum.Parse<GameRelease>(
-            JsonNode.Parse(rootDocument)?["GameRelease"]?.GetValue<string>()
-                ?? throw new InvalidDataException("A root document names its GameRelease, and this one names none.")));
+        JsonNode.Parse(rootDocument)?["GameRelease"] is JsonValue named
+        && named.TryGetValue<string>(out var name)
+        && Enum.TryParse<GameRelease>(name, out var release)
+            ? GameCodecs.For(release)
+            : throw new InvalidDataException("A root document names its GameRelease, and this one names none.");
 
     /// <summary>Mutagen's serializer omits a Next Object ID equal to its default, which a new mod does not start at.</summary>
     public static IMod RestoreOmittedNextObjectId(IMod mod, byte[] rootDocument)

@@ -30,14 +30,16 @@ public sealed class PluginTreeReadTests
         AssertScratchFolderGone(thrown.Message);
     }
 
-    [Fact]
-    public async Task ReadTree_OfASourceItCannotRead_AnswersTheDiagnosis()
+    [Theory]
+    [InlineData("{ not json")]
+    [InlineData("{ \"ModKey\": \"Tree.esp\" }")]
+    public async Task ReadTree_OfAHeaderItCannotRead_AnswersTheDiagnosisAtTheHeadersFile(string header)
     {
-        var unreadable = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), "{ not json"u8.ToArray());
+        var unreadable = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), Encoding.UTF8.GetBytes(header));
 
         var read = await Adapter.ReadTreeAsync([unreadable], GameRelease.Fallout4);
 
-        Assert.IsType<PluginFailure.Unparsed>(read.Failure());
+        Assert.Equal(Path.Combine("Tree.esp", "RecordData.json"), Assert.IsType<PluginFailure.Unparsed>(read.Failure()).Diagnosis.Anchor);
     }
 
     [Fact]
