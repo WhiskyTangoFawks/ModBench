@@ -945,7 +945,6 @@ describe('a child record of a tracked plugin', () => {
       const { child, container } = await openBoth();
 
       await replace(container, cellText('InContainer'));
-      // VS Code reports a document's first unsaved change before it marks it unsaved.
       await waitFor('the child\'s document to show the container\'s change, unsaved', () => child.isDirty && child.getText() === cellText('InContainer'));
 
       await replace(child, cellText('InChild'));
@@ -971,9 +970,7 @@ describe('a child record of a tracked plugin', () => {
       assert.strictEqual(readFileSync(cell, 'utf8'), cellText('SavedInChild', large));
     });
 
-    it('keeps every key typed in quick succession in its container\'s text editor, and saves them all', async () => {
-      // A webview takes the focus as its frame loads, before its page asks its read, and a key types only
-      // into the focused editor.
+    it('keeps every key typed in quick succession in its container\'s text editor, focused once its own tab\'s page has loaded, and saves them all', async () => {
       await openLoaded({ ...childCopy, placement: 'beside' });
       const child = await childDocument();
       const editor = await vscode.window.showTextDocument(await containerDocument(), vscode.ViewColumn.One);
