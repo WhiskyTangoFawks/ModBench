@@ -7,7 +7,7 @@ namespace MEditService.Index.Queries;
 /// no line, the game's own, are never reported: they are the proof set the tables were built from.</summary>
 internal static class LoadOrderDiagnoses
 {
-    public static IReadOnlyList<PluginDiagnosisReport> Of(IRecordReads reads, LoadOrderSnapshot held)
+    public static IReadOnlyList<PluginDiagnosisReport> Of(RelationReads reads, LoadOrderSnapshot held)
     {
         var byPlugin = reads.GetPluginDiagnoses().ToLookup(row => row.Plugin, PluginAddress.Comparer);
         var loadedWithNoLine = held.LoadedWithNoLine.Select(plugin => plugin.Key).ToHashSet(PluginAddress.Comparer);

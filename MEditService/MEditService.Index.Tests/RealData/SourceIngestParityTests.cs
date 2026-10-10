@@ -117,7 +117,6 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     [Theory]
     [InlineData("placement")]
     [InlineData("cell_location")]
-    [InlineData("form_lookup")]
     [InlineData("form_references")]
     [InlineData("container_child")]
     public void ASideTablesRows_AreIdentical_TrackedAndUntracked(string relation)

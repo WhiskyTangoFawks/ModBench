@@ -38,7 +38,7 @@ public class FormLookupTests
     }
 
     [Fact]
-    public async Task ReindexingAPlugin_ReplacesItsLookupRowsRatherThanDuplicating()
+    public async Task ReindexingAPlugin_LeavesOneRecordAndOneLookupAnswerPerFormKey()
     {
         FormKey npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-lookup-reindex")
