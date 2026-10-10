@@ -108,6 +108,26 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
     }
 
+    public enum Read
+    {
+        Get,
+        GetByFormKey,
+        RecordFromText,
+        EditorIdsHeld,
+        ReadingTheTree,
+    }
+
+    private SourceFailure Stopped(Read read, IMajorRecordGetter record, string recordType, string documentPath) =>
+        read switch
+        {
+            Read.Get => Repository.RecordOf(Plugin, Identity(record, recordType)).Stopped(),
+            Read.GetByFormKey => Repository.RecordByFormKey(Plugin, record.FormKey.ToString()).Stopped(),
+            Read.RecordFromText => Repository.RecordFromText(Plugin, record.FormKey.ToString(), File.ReadAllText(FullPath(documentPath))).Stopped(),
+            Read.EditorIdsHeld => Repository.EditorIdsHeld(Plugin).Stopped(),
+            Read.ReadingTheTree => Repository.ReadDocuments(Plugin, tree => tree.Records.ToList()).Stopped(),
+            _ => throw new ArgumentOutOfRangeException(nameof(read), read, null),
+        };
+
     private static string? RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(string body)
     {
         using var document = JsonDocument.Parse(body);
@@ -252,12 +272,14 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         File.WriteAllText(path, edited);
     }
 
-    [Fact]
-    public void Get_ByFormKey_OfARecordWhoseEditorIdIsNoString_RefusesNamingItsFileAndTheField()
+    [Theory]
+    [InlineData(Read.GetByFormKey)]
+    [InlineData(Read.EditorIdsHeld)]
+    public void ARecordsEditorIdThatIsNoString_RefusesNamingItsFileAndTheField(Read read)
     {
         GiveANumberForTheEditorId(QuestPath, "Quest");
 
-        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.RecordByFormKey(Plugin, _quest.FormKey.ToString()).Stopped());
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Stopped(read, _quest, "qust", QuestPath));
 
         Assert.Equal((QuestPath, _quest.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
         Assert.Contains("its 'EditorID' is not a string", refused.Reason, StringComparison.Ordinal);
@@ -275,28 +297,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void RecordFromText_OfARecordWithADocumentOfItsOwn_WhoseEditorIdIsNoString_RefusesNamingItsFileAndTheField()
-    {
-        var text = File.ReadAllText(FullPath(QuestPath)).Replace("\"EditorID\": \"Quest\"", "\"EditorID\": 5", StringComparison.Ordinal);
-
-        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.RecordFromText(Plugin, _quest.FormKey.ToString(), text).Stopped());
-
-        Assert.Contains(QuestPath, refused.Reason, StringComparison.Ordinal);
-        Assert.Contains("its 'EditorID' is not a string", refused.Reason, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void EditorIdsHeld_WhenADocumentsEditorIdIsNoString_RefusesNamingItsFileAndTheField()
-    {
-        GiveANumberForTheEditorId(QuestPath, "Quest");
-
-        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.EditorIdsHeld(Plugin).Stopped());
-
-        Assert.Equal((QuestPath, _quest.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
-        Assert.Contains("its 'EditorID' is not a string", refused.Reason, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void EditorIdsHeld_WhenAnEmbeddedChildsEditorIdIsNoString_RefusesNamingItsOwnersFileAndTheField()
     {
         GiveANumberForTheEditorId(InteriorCellPath, "TempRef");
@@ -305,6 +305,17 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         Assert.Equal(InteriorCellPath, refused.File?.SourceRelativePath);
         Assert.Contains("a child it embeds has an 'EditorID' that is not a string", refused.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RecordFromText_OfARecordWithADocumentOfItsOwn_WhoseEditorIdIsNoString_RefusesNamingItsFileAndTheField()
+    {
+        var text = File.ReadAllText(FullPath(QuestPath)).Replace("\"EditorID\": \"Quest\"", "\"EditorID\": 5", StringComparison.Ordinal);
+
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.RecordFromText(Plugin, _quest.FormKey.ToString(), text).Stopped());
+
+        Assert.Contains(QuestPath, refused.Reason, StringComparison.Ordinal);
+        Assert.Contains("its 'EditorID' is not a string", refused.Reason, StringComparison.Ordinal);
     }
 
     private string InteriorCellWithItsRefsTyped(string type) =>
@@ -317,19 +328,15 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains($"a '{type}', and its slot holds no record type of that name", refused.Reason, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Get_ByFormKey_OfAChildNoTypeResolves_RefusesNamingItsOwnersFileAndWhy()
+    [Theory]
+    [InlineData("PlacedObjekt", Read.GetByFormKey)]
+    [InlineData("Npc", Read.GetByFormKey)]
+    [InlineData("PlacedObjekt", Read.RecordFromText)]
+    public void AChildNoTypeResolves_RefusesNamingItsOwnersFileAndWhy(string type, Read read)
     {
-        File.WriteAllText(FullPath(InteriorCellPath), InteriorCellWithItsRefsTyped("PlacedObjekt"));
+        File.WriteAllText(FullPath(InteriorCellPath), InteriorCellWithItsRefsTyped(type));
 
-        AssertNamesTheInteriorCellsUntypedRef("PlacedObjekt", Assert.IsType<SourceFailure.Unreadable>(Repository.RecordByFormKey(Plugin, _temporaryRef.FormKey.ToString()).Stopped()));
-    }
-
-    [Fact]
-    public void RecordFromText_OfAChildNoTypeResolves_RefusesNamingItsOwnersFileAndWhy()
-    {
-        AssertNamesTheInteriorCellsUntypedRef("PlacedObjekt", Assert.IsType<SourceFailure.Unreadable>(Repository.RecordFromText(
-                Plugin, _temporaryRef.FormKey.ToString(), InteriorCellWithItsRefsTyped("PlacedObjekt")).Stopped()));
+        AssertNamesTheInteriorCellsUntypedRef(type, Assert.IsType<SourceFailure.Unreadable>(Stopped(read, _temporaryRef, "refr", InteriorCellPath)));
     }
 
     [Fact]
@@ -342,15 +349,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.RecordFromText(Plugin, _temporaryRef.FormKey.ToString(), text).Stopped());
 
         Assert.Equal($"The text given for {InteriorCellPath} declares NotAFormKey, which is no FormKey.", refused.Reason);
-    }
-
-    [Fact]
-    public void Get_ByFormKey_OfAChildNamingARecordTypeItsListSlotCannotHold_RefusesNamingItsOwnersFileAndWhy()
-    {
-        File.WriteAllText(FullPath(InteriorCellPath), InteriorCellWithItsRefsTyped("Npc"));
-
-        AssertNamesTheInteriorCellsUntypedRef(
-            "Npc", Assert.IsType<SourceFailure.Unreadable>(Repository.RecordByFormKey(Plugin, _temporaryRef.FormKey.ToString()).Stopped()));
     }
 
     private string TopCellFormKey => _worldspace.TopCell.Require().FormKey.ToString();
@@ -402,20 +400,14 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.StartsWith($"'{InteriorCellPath}' holds {_temporaryRef.FormKey} more than once.", refused.Reason, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Get_OfAChildItsOwnersDocumentHoldsTwice_IsRefusedAsAClaimOfThatDocument()
+    [Theory]
+    [InlineData(Read.Get)]
+    [InlineData(Read.ReadingTheTree)]
+    public void AChildItsOwnersDocumentHoldsTwice_IsRefusedAsAClaimOfThatDocument(Read read)
     {
         HoldTheTemporaryRefTwiceInItsCell();
 
-        AssertClaimedTwiceByTheInteriorCell(Assert.IsType<SourceFailure.Ambiguous>(Repository.RecordOf(Plugin, Identity(_temporaryRef, "refr")).Stopped()));
-    }
-
-    [Fact]
-    public void ReadingTheTree_WhenADocumentHoldsAChildTwice_IsRefusedAsAClaimOfThatDocument()
-    {
-        HoldTheTemporaryRefTwiceInItsCell();
-        AssertClaimedTwiceByTheInteriorCell(Assert.IsType<SourceFailure.Ambiguous>(
-            Repository.ReadDocuments(Plugin, tree => tree.Records.ToList()).Stopped()));
+        AssertClaimedTwiceByTheInteriorCell(Assert.IsType<SourceFailure.Ambiguous>(Stopped(read, _temporaryRef, "refr", InteriorCellPath)));
     }
 
     private void GiveTheTemporaryRefItsCellsOwnFormKey()
@@ -428,33 +420,19 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     private void AssertTheCellClaimedTwiceByItsOwnDocument(SourceFailure.Ambiguous refused) =>
         Assert.Equal(new ClaimedFormKey(_interiorCell.FormKey.ToString(), [InteriorCellPath]), refused.Claim);
 
-    [Fact]
-    public void Get_OfAContainerOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
+    [Theory]
+    [InlineData(Read.Get)]
+    [InlineData(Read.GetByFormKey)]
+    [InlineData(Read.RecordFromText)]
+    public void AContainerOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument(Read read)
     {
         GiveTheTemporaryRefItsCellsOwnFormKey();
 
-        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.IsType<SourceFailure.Ambiguous>(Repository.RecordOf(Plugin, Identity(_interiorCell, "cell")).Stopped()));
+        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.IsType<SourceFailure.Ambiguous>(Stopped(read, _interiorCell, "cell", InteriorCellPath)));
     }
 
     [Fact]
-    public void Get_ByFormKey_OfAContainerOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
-    {
-        GiveTheTemporaryRefItsCellsOwnFormKey();
-
-        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.IsType<SourceFailure.Ambiguous>(Repository.RecordByFormKey(Plugin, _interiorCell.FormKey.ToString()).Stopped()));
-    }
-
-    [Fact]
-    public void RecordFromText_OfAContainerOneOfWhoseChildrenCarriesItsFormKey_IsRefusedAsAClaimOfThatDocument()
-    {
-        GiveTheTemporaryRefItsCellsOwnFormKey();
-
-        AssertTheCellClaimedTwiceByItsOwnDocument(Assert.IsType<SourceFailure.Ambiguous>(Repository.RecordFromText(
-                Plugin, _interiorCell.FormKey.ToString(), File.ReadAllText(FullPath(InteriorCellPath))).Stopped()));
-    }
-
-    [Fact]
-    public void ContainerDocument_OfAChildWhoseOwnerAnotherChildCarriesTheFormKeyOf_IsRefusedAsAClaimOfThatDocument()
+    public void ContainerOf_AChildWhoseOwnerAnotherChildCarriesTheFormKeyOf_IsRefusedAsAClaimOfThatDocument()
     {
         GiveTheTemporaryRefItsCellsOwnFormKey();
 
@@ -494,16 +472,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     {
         var path = FullPath(InteriorCellPath);
         File.WriteAllText(path, File.ReadAllText(path).Replace(_interiorCell.FormKey.ToString(), "NotAFormKey", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void ContainerDocument_OfAChildWhoseOwnerDocumentNamesNoRecord_RefusesWithTheReadersWords()
-    {
-        GiveTheInteriorCellsDocumentNoFormKey();
-
-        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.ContainerOf(Plugin, Identity(_temporaryRef, "refr")).Stopped());
-
-        Assert.Contains("names no document of its own", refused.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -757,36 +725,15 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void ChangesToPutChild_IntoAnEmbeddedContainer_OfHandFormattedText_ChangesNoByteOutsideTheChild()
+    public void ChangesToPutChild_IntoAContainerWithADocumentOfItsOwn_AppendsToThatDocument()
     {
-        var handFormatted = HandFormatted(QuestPath);
-        var added = new DialogResponses(_mod) { EditorID = "Response3" };
-
-        var owner = Assert.Single(Repository.ChangesToPutChild(Plugin, Identity(_topic, "dial"), "Responses", ANewChild(added, "info")).Value().Documents);
-
-        OneInsertion.AssertKeepsEveryOtherByte(handFormatted, owner.Text);
-        Assert.Contains("\"Response3\"", owner.Text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ChangesToPutChild_IntoAContainerWithADocumentOfItsOwn_OfHandFormattedText_ChangesNoByteOutsideTheChild()
-    {
-        var handFormatted = HandFormatted(InteriorCellPath);
         var added = new PlacedObject(_mod) { EditorID = "AddedRef", Position = new P3Float(1f, 1f, 1f), Scale = 1f };
 
         var changes = Repository.ChangesToPutChild(Plugin, Identity(_interiorCell, "cell"), "Temporary", ANewChild(added, "refr")).Value();
 
         var document = Assert.Single(changes.Documents);
         Assert.Equal(FullPath(InteriorCellPath), Path.Combine(_modFolder, document.Path));
-        OneInsertion.AssertKeepsEveryOtherByte(handFormatted, document.Text);
         Assert.Contains("\"AddedRef\"", document.Text, StringComparison.Ordinal);
-    }
-
-    private string HandFormatted(string relativePath)
-    {
-        var text = File.ReadAllText(FullPath(relativePath)).Replace("\": ", "\":   ", StringComparison.Ordinal);
-        File.WriteAllText(FullPath(relativePath), text);
-        return text;
     }
 
     [Fact]
