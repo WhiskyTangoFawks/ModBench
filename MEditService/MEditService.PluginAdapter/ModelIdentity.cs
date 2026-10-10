@@ -3,7 +3,6 @@ using System.Reflection;
 using Loqui;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
@@ -35,8 +34,8 @@ internal static class ModelIdentity
 
         // FindFirst never reaches ModHeader (not an IMajorRecordGetter); this is the header's own check,
         // scoped to OpaqueHeaderFields' allow-list — a blanket sweep would refuse legitimate divergence.
-        return HeaderOf(original) is { } originalHeader && HeaderOf(recompiled) is { } recompiledHeader
-               && FindFirstHeaderFieldDivergence(originalHeader, recompiledHeader) is { } field
+        return HeaderOf(original) is not null && HeaderOf(recompiled) is not null
+               && FindFirstHeaderFieldDivergence(original, recompiled) is { } field
             ? new Divergence(
                 PluginHeader.RecordType, FormKey.Null, null,
                 $"TES4 header field '{field}' changed after being recompiled from its own tracked source.")
@@ -52,6 +51,7 @@ internal static class ModelIdentity
     // field the mask disagrees on, else the codec document path that differs; null when none differs.
     private static Divergence? FindFirst(IModGetter original, IModGetter recompiled)
     {
+        var game = GameCodecs.For(original.GameRelease);
         var recompiledByFormKey = recompiled.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
         var originalFormKeys = new HashSet<FormKey>();
         foreach (var originalRecord in original.EnumerateMajorRecords())
@@ -63,8 +63,8 @@ internal static class ModelIdentity
                     "is missing from the recompiled plugin.");
             }
 
-            var normalizedOriginal = NormalizeEncoding(originalRecord);
-            var normalizedRecompiled = NormalizeEncoding(recompiledRecord);
+            var normalizedOriginal = game.NormalizeEncoding(originalRecord);
+            var normalizedRecompiled = game.NormalizeEncoding(recompiledRecord);
 
             // The mask lies by omission (a polymorphic hierarchy's derived-only fields bind through the
             // base overload and are never compared), so a mask-equal pair is never the verdict; the codec
@@ -91,41 +91,26 @@ internal static class ModelIdentity
         return null;
     }
 
-    /// <summary>The <c>Fallout4ModHeader.Mask</c> fields Mutagen carries as opaque data, so a corruption is
+    /// <summary>The mod header mask fields Mutagen carries as opaque data, so a corruption is
     /// a real defect. An allow-list, not every field: masters, stats and overridden forms have
     /// legitimate divergence paths (ADR-0006).</summary>
     internal static readonly HashSet<string> OpaqueHeaderFields =
         ["TypeOffsets", "Deleted", "Screenshot", "INTV", "INCC", "Author", "Description"];
 
     // The first OpaqueHeaderFields member the mask disagrees on, or null. The allow-list is shared
-    // across games; only the TransientTypes check below is FO4-shaped.
-    private static string? FindFirstHeaderFieldDivergence(ILoquiObjectGetter original, ILoquiObjectGetter recompiled)
+    // across games; the game's codec answers the transient types.
+    private static string? FindFirstHeaderFieldDivergence(IModGetter original, IModGetter recompiled)
     {
-        if (FailingFields(original, recompiled).FirstOrDefault(OpaqueHeaderFields.Contains) is { } field)
+        if (HeaderOf(original) is { } originalHeader && HeaderOf(recompiled) is { } recompiledHeader
+            && FailingFields(originalHeader, recompiledHeader).FirstOrDefault(OpaqueHeaderFields.Contains) is { } field)
+        {
             return field;
+        }
 
         // The mask reports a TransientTypes item against the nested leaf's type and ignores a count
         // difference, so it is compared by plain values here.
-        if (original is IFallout4ModHeaderGetter fromOriginal && recompiled is IFallout4ModHeaderGetter fromRecompiled
-            && !TransientTypesMatch(fromOriginal, fromRecompiled))
-        {
-            return "TransientTypes";
-        }
-        return null;
-    }
-
-    private static bool TransientTypesMatch(IFallout4ModHeaderGetter original, IFallout4ModHeaderGetter recompiled)
-    {
-        var a = original.TransientTypes;
-        var b = recompiled.TransientTypes;
-        if (a.Count != b.Count) return false;
-        for (var i = 0; i < a.Count; i++)
-        {
-            if (a[i].FormType != b[i].FormType) return false;
-            if (!a[i].Links.Select(l => l.FormKey).SequenceEqual(b[i].Links.Select(l => l.FormKey)))
-                return false;
-        }
-        return true;
+        var game = GameCodecs.For(original.GameRelease);
+        return game.TransientTypes(original).SequenceEqual(game.TransientTypes(recompiled)) ? null : "TransientTypes";
     }
 
     // Both records through the codec, text-compared.
@@ -140,11 +125,13 @@ internal static class ModelIdentity
         // is entitled to — negative zero and a dictionary field's enumeration order.
         using var originalDoc = System.Text.Json.JsonDocument.Parse(originalText);
         using var recompiledDoc = System.Text.Json.JsonDocument.Parse(recompiledText);
-        return FirstModelDifference(originalDoc.RootElement, recompiledDoc.RootElement, path: "", propertyName: null);
+        return FirstModelDifference(originalDoc.RootElement, recompiledDoc.RootElement, path: "", propertyName: null,
+            DictionaryPropertyNames(original.GetType().Assembly));
     }
 
     private static string? FirstModelDifference(
-        System.Text.Json.JsonElement a, System.Text.Json.JsonElement b, string path, string? propertyName)
+        System.Text.Json.JsonElement a, System.Text.Json.JsonElement b, string path, string? propertyName,
+        IReadOnlySet<string> dictionaryProperties)
     {
         if (a.ValueKind != b.ValueKind) return path;
         switch (a.ValueKind)
@@ -157,7 +144,7 @@ internal static class ModelIdentity
                     var namePath = path.Length == 0 ? name : $"{path}.{name}";
                     if (!aProps.TryGetValue(name, out var aValue) || !bProps.TryGetValue(name, out var bValue))
                         return namePath;
-                    if (FirstModelDifference(aValue, bValue, namePath, name) is { } difference) return difference;
+                    if (FirstModelDifference(aValue, bValue, namePath, name, dictionaryProperties) is { } difference) return difference;
                 }
                 return null;
             case System.Text.Json.JsonValueKind.Array:
@@ -166,7 +153,7 @@ internal static class ModelIdentity
                 if (aItems.Count != bItems.Count) return path;
                 // Keyed comparison needs BOTH the {Key, Value} shape and a reflected dictionary property name:
                 // NpcMorph is an ordered list whose elements are also exactly {Key, Value}.
-                if (aItems.Count > 0 && propertyName != null && DictionaryPropertyNames.Value.Contains(propertyName)
+                if (aItems.Count > 0 && propertyName != null && dictionaryProperties.Contains(propertyName)
                     && aItems.All(IsKeyValueEntry) && bItems.All(IsKeyValueEntry))
                 {
                     // A duplicated key on either side is not a dictionary any more — unequal
@@ -182,14 +169,14 @@ internal static class ModelIdentity
                         var key = entry.GetProperty("Key").GetRawText();
                         var keyPath = $"{path}[{key}]";
                         if (!seenKeys.Add(key) || !byKey.TryGetValue(key, out var match)) return keyPath;
-                        if (FirstModelDifference(entry.GetProperty("Value"), match.GetProperty("Value"), keyPath, propertyName)
+                        if (FirstModelDifference(entry.GetProperty("Value"), match.GetProperty("Value"), keyPath, propertyName, dictionaryProperties)
                             is { } difference)
                             return difference;
                     }
                     return null;
                 }
                 return aItems.Zip(bItems)
-                    .Select((pair, i) => FirstModelDifference(pair.First, pair.Second, $"{path}[{i}]", propertyName))
+                    .Select((pair, i) => FirstModelDifference(pair.First, pair.Second, $"{path}[{i}]", propertyName, dictionaryProperties))
                     .FirstOrDefault(difference => difference != null);
             case System.Text.Json.JsonValueKind.String:
                 return a.GetString() is { } left && b.GetString() is { } right
@@ -212,21 +199,24 @@ internal static class ModelIdentity
 
     // Reflected once, never hand-listed; gates the keyed comparison so a merely dictionary-shaped list
     // never compares order-insensitively.
-    private static readonly Lazy<HashSet<string>> DictionaryPropertyNames = new(() =>
-    {
-        var names = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var type in typeof(Fallout4Mod).Assembly.GetTypes())
+    private static readonly ConcurrentDictionary<Assembly, IReadOnlySet<string>> DictionaryPropertyNamesByGame = new();
+
+    private static IReadOnlySet<string> DictionaryPropertyNames(Assembly game) =>
+        DictionaryPropertyNamesByGame.GetOrAdd(game, assembly =>
         {
-            if (!type.IsClass || type.IsAbstract) continue;
-            foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var type in assembly.GetTypes())
             {
-                var candidates = property.PropertyType.GetInterfaces().Append(property.PropertyType);
-                if (candidates.Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)))
-                    names.Add(property.Name);
+                if (!type.IsClass || type.IsAbstract) continue;
+                foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    var candidates = property.PropertyType.GetInterfaces().Append(property.PropertyType);
+                    if (candidates.Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)))
+                        names.Add(property.Name);
+                }
             }
-        }
-        return names;
-    });
+            return names;
+        });
 
     private static bool IsKeyValueEntry(System.Text.Json.JsonElement element)
     {
@@ -239,67 +229,6 @@ internal static class ModelIdentity
     private static string NormalizeNegativeZeros(string text) =>
         System.Text.RegularExpressions.Regex.Replace(text, @"(?<![\w.])-0(?=$|[,\s""\]}])", "0");
 
-
-    // Deep copies without the encoding a rewrite is entitled to change: group-header-derived fields
-    // zeroed, and a worldspace's block levels in one canonical order (ADR-0006).
-    private static IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record)
-    {
-        switch (record)
-        {
-            case ICellGetter cell:
-                var cellCopy = cell.DeepCopy();
-                ZeroCellGroupFields(cellCopy);
-                return cellCopy;
-            case IWorldspaceGetter worldspace:
-                var worldspaceCopy = worldspace.DeepCopy();
-                worldspaceCopy.SubCellsTimestamp = 0;
-                worldspaceCopy.SubCellsUnknown = 0;
-                foreach (var block in worldspaceCopy.SubCells)
-                {
-                    block.LastModified = 0;
-                    block.Unknown = 0;
-                    foreach (var subBlock in block.Items)
-                    {
-                        subBlock.LastModified = 0;
-                        subBlock.Unknown = 0;
-                        foreach (var nestedCell in subBlock.Items) ZeroCellGroupFields(nestedCell);
-                        subBlock.Items.SetTo(subBlock.Items.OrderBy(c => c.FormKey.ToString(), StringComparer.Ordinal).ToList());
-                    }
-                    block.Items.SetTo(block.Items.OrderBy(s => s.BlockNumberX).ThenBy(s => s.BlockNumberY).ToList());
-                }
-                worldspaceCopy.SubCells.SetTo(worldspaceCopy.SubCells.OrderBy(b => b.BlockNumberX).ThenBy(b => b.BlockNumberY).ToList());
-                if (worldspaceCopy.TopCell is { } topCell) ZeroCellGroupFields(topCell);
-                return worldspaceCopy;
-            case IQuestGetter quest:
-                var questCopy = quest.DeepCopy();
-                questCopy.Timestamp = 0;
-                questCopy.Unknown = 0;
-                foreach (var nestedTopic in questCopy.DialogTopics) ZeroTopicGroupFields(nestedTopic);
-                return questCopy;
-            case IDialogTopicGetter topic:
-                var topicCopy = topic.DeepCopy();
-                ZeroTopicGroupFields(topicCopy);
-                return topicCopy;
-            default:
-                return record;
-        }
-    }
-
-    private static void ZeroTopicGroupFields(DialogTopic topic)
-    {
-        topic.Timestamp = 0;
-        topic.Unknown = 0;
-    }
-
-    private static void ZeroCellGroupFields(Cell cell)
-    {
-        cell.Timestamp = 0;
-        cell.UnknownGroupData = 0;
-        cell.PersistentTimestamp = 0;
-        cell.PersistentUnknownGroupData = 0;
-        cell.TemporaryTimestamp = 0;
-        cell.TemporaryUnknownGroupData = 0;
-    }
 
     // Every field name the generated mask disagrees on. Typed ILoquiObjectGetter, the narrowest type
     // records and the mod header share, so a caller with no generated mask fails to compile.

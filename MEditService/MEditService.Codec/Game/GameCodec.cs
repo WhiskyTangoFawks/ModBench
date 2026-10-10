@@ -3,6 +3,7 @@ using System.Reflection;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
+using Noggog;
 using Noggog.IO;
 using Noggog.WorkEngine;
 
@@ -24,6 +25,13 @@ internal sealed class GameCodec : IGameCodec
     // a non-null extraMeta anywhere emits a colliding overload (CS0111).
 
     public Assembly GeneratedSerializers => typeof(GameCodec).Assembly;
+
+    public SiblingsInUseRows SiblingsInUse =>
+        GameSpecifics.SiblingsInUse;
+
+    public IReadOnlyList<string> TransientTypes(IModGetter plugin) => GameSpecifics.TransientTypes((IGameModGetter)plugin);
+
+    public uint NextObjectIdDefault => ModStats.NextFormIDDefault;
 
     public Task SerializeWholeMod(
         IModGetter plugin, string folder, IWorkDropoff workDropoff, CancellationToken cancel,
@@ -47,5 +55,58 @@ internal sealed class GameCodec : IGameCodec
         var clone = ModFactory<GameMod>.Activator(source.ModKey, source.GameRelease);
         clone.ModHeader.DeepCopyIn(source.ModHeader);
         return clone;
+    }
+
+    public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record)
+    {
+        switch (record)
+        {
+            case ICellGetter cell:
+                var cellCopy = cell.DeepCopy();
+                ZeroCellGroupFields(cellCopy);
+                return cellCopy;
+            case IWorldspaceGetter worldspace:
+                var worldspaceCopy = worldspace.DeepCopy();
+                worldspaceCopy.SubCellsTimestamp = 0;
+                worldspaceCopy.SubCellsUnknown = 0;
+                foreach (var block in worldspaceCopy.SubCells)
+                {
+                    block.LastModified = 0;
+                    block.Unknown = 0;
+                    foreach (var subBlock in block.Items)
+                    {
+                        subBlock.LastModified = 0;
+                        subBlock.Unknown = 0;
+                        foreach (var nestedCell in subBlock.Items) ZeroCellGroupFields(nestedCell);
+                        subBlock.Items.SetTo(subBlock.Items.OrderBy(c => c.FormKey.ToString(), StringComparer.Ordinal).ToList());
+                    }
+                    block.Items.SetTo(block.Items.OrderBy(s => s.BlockNumberX).ThenBy(s => s.BlockNumberY).ToList());
+                }
+                worldspaceCopy.SubCells.SetTo(worldspaceCopy.SubCells.OrderBy(b => b.BlockNumberX).ThenBy(b => b.BlockNumberY).ToList());
+                if (worldspaceCopy.TopCell is { } topCell) ZeroCellGroupFields(topCell);
+                return worldspaceCopy;
+            case IDialogTopicGetter topic:
+                var topicCopy = topic.DeepCopy();
+                ZeroTopicGroupFields(topicCopy);
+                return topicCopy;
+            default:
+                return GameSpecifics.NormalizeRecord(record);
+        }
+    }
+
+    internal static void ZeroTopicGroupFields(DialogTopic topic)
+    {
+        topic.Timestamp = 0;
+        topic.Unknown = 0;
+    }
+
+    private static void ZeroCellGroupFields(Cell cell)
+    {
+        cell.Timestamp = 0;
+        cell.UnknownGroupData = 0;
+        cell.PersistentTimestamp = 0;
+        cell.PersistentUnknownGroupData = 0;
+        cell.TemporaryTimestamp = 0;
+        cell.TemporaryUnknownGroupData = 0;
     }
 }

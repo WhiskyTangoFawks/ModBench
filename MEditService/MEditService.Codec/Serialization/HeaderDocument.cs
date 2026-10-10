@@ -1,7 +1,6 @@
 using System.IO.Abstractions;
 using System.Text.Json.Nodes;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 using Noggog.IO;
@@ -53,7 +52,7 @@ public static class HeaderDocument
     public static IMod RestoreOmittedNextObjectId(IMod mod, byte[] rootDocument)
     {
         if (JsonNode.Parse(rootDocument)?["ModHeader"]?["Stats"]?["NextFormID"] is null)
-            mod.NextFormID = ModStats.NextFormIDDefault;
+            mod.NextFormID = GameCodecs.For(mod.GameRelease).NextObjectIdDefault;
         return mod;
     }
 

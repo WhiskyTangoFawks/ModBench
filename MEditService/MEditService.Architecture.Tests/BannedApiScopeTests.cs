@@ -6,7 +6,7 @@ namespace MEditService.Architecture.Tests;
 
 public sealed class BannedApiScopeTests
 {
-    private static readonly string[] MutagenBanProjectsExcludingCodecAndPluginAdapterWhoseGameAssemblyHoldsTheRule =
+    private static readonly string[] MutagenBanProjectsExcludingTheCodecAndThePluginAdapterWhichHoldLiveObjects =
     [
         "MEditService.Commands",
         "MEditService.Http",
@@ -71,7 +71,7 @@ public sealed class BannedApiScopeTests
             .Select(e => ProjectNamedBy((string?)e.Attribute("Condition") ?? ""))
             .Order(StringComparer.Ordinal)
             .ToList();
-        Assert.Equal(MutagenBanProjectsExcludingCodecAndPluginAdapterWhoseGameAssemblyHoldsTheRule, namedProjects);
+        Assert.Equal(MutagenBanProjectsExcludingTheCodecAndThePluginAdapterWhichHoldLiveObjects, namedProjects);
 
         var mutagenFile = Assert.Single(
             props.Descendants("AdditionalFiles"),
@@ -115,7 +115,7 @@ public sealed class BannedApiScopeTests
         && !id.StartsWith("Mutagen.Bethesda.Serialization", StringComparison.Ordinal);
 
     [Fact]
-    public void TheGameAssemblies_AreTheCodecsAndTheAdapters_AndNeitherCarriesTheMutagenBanFile()
+    public void TheGameAssemblies_AreTheCodecsGameProjectsOnly_AndNoneCarriesTheMutagenBanFile()
     {
         var projects = ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 
@@ -123,8 +123,8 @@ public sealed class BannedApiScopeTests
 
         var holders = projects.Where(HoldsAGameAssembly).ToList();
 
-        Assert.Equal(["MEditService.Codec", "MEditService.Codec.Fallout4", "MEditService.PluginAdapter"], holders);
-        Assert.All(holders, project => Assert.DoesNotContain(project, MutagenBanProjectsExcludingCodecAndPluginAdapterWhoseGameAssemblyHoldsTheRule));
+        Assert.Equal(["MEditService.Codec.Fallout4"], holders);
+        Assert.All(holders, project => Assert.DoesNotContain(project, MutagenBanProjectsExcludingTheCodecAndThePluginAdapterWhichHoldLiveObjects));
     }
 
     private sealed record ConfiguredSeverity(AnalyzerConfigSet Set, string SolutionDirectory)
