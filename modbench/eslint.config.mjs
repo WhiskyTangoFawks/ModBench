@@ -183,9 +183,8 @@ export default defineConfig(
         },
     },
 
-    // columnKey.ts holds one function, its only cast. messages.ts casts a message once per
-    // direction, after checking its type: both ends compile from the same types in the same .vsix.
-    // Pinned by unsafeTypeAssertionAllowlist.test.ts.
+    // messages.ts casts a message once per direction, after checking its type: both ends compile
+    // from the same types in the same .vsix. Pinned by unsafeTypeAssertionAllowlist.test.ts.
     {
         files: ['src/wire/columnKey.ts', 'src/wire/messages.ts'],
         rules: {
