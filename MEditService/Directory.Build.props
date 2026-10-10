@@ -17,7 +17,7 @@
     <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
   </PropertyGroup>
 
-  <!-- ADR-0005: for Codec and PluginAdapter the package edge already holds the rule (only
+  <!-- ADR-0005: for the codec's projects and PluginAdapter the package edge already holds the rule (only
        they reference a game assembly); everything else that must never hold a live Mutagen object
        is these seven production boxes. No test project and not TestSupport — fixtures assemble
        plugins from live objects by design. -->

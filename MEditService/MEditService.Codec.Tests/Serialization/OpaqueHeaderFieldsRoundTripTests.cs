@@ -1,8 +1,6 @@
-using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Noggog.WorkEngine;
 
 namespace MEditService.Codec.Tests.Serialization;
 
@@ -25,8 +23,8 @@ public sealed class OpaqueHeaderFieldsRoundTripTests
         mod.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
 
         using var folder = new ScratchDirectory("medit-opaqueheader-");
-        await RecordTextCodecGeneratorSeed.SerializeWholeMod(mod, folder.Path, InlineWorkDropoff.Instance, CancellationToken.None);
-        var recompiled = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder.Path, InlineWorkDropoff.Instance, CancellationToken.None);
+        await Fallout4WholeMod.Serialize(mod, folder.Path, CancellationToken.None);
+        var recompiled = await Fallout4WholeMod.Deserialize(folder.Path, CancellationToken.None);
 
         Assert.Equal(Require(mod.ModHeader.INTV, "INTV").ToArray(), Require(recompiled.ModHeader.INTV, "INTV").ToArray());
         Assert.Equal(mod.ModHeader.INCC, recompiled.ModHeader.INCC);

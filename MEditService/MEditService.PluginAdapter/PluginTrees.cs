@@ -1,7 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Records;
@@ -53,13 +52,7 @@ internal static class PluginTrees
         {
             // Always the inline dropoff, explicitly: MajorRecordListParallelHelper has a real upstream race
             // under a genuinely parallel dropoff (nested-list containers writing into each other's folders).
-            await RecordTextCodecGeneratorSeed.SerializeWholeMod(
-                // FO4-typed: the generated whole-mod mixin is itself seeded from an FO4 mod type — the existing
-                // generalization boundary.
-                (IFallout4ModGetter)mod,
-                scratchDir,
-                InlineWorkDropoff.Instance,
-                cancel);
+            await GameCodecs.For(mod.GameRelease).SerializeWholeMod(mod, scratchDir, InlineWorkDropoff.Instance, cancel);
 
             // Newtonsoft's JsonTextWriter has no reachable NewLine to pin, so line endings are canonicalized
             // after the write, as the per-record codec does.
@@ -140,10 +133,13 @@ internal static class PluginTrees
         return shared;
     }
 
-    private static async Task<IMod> DeserializeTree(string treeRoot, CancellationToken cancel) =>
-        HeaderDocument.RestoreOmittedNextObjectId(
-            await RecordTextCodecGeneratorSeed.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel),
-            await File.ReadAllBytesAsync(Path.Combine(treeRoot, DocumentFileNames.Root), cancel));
+    private static async Task<IMod> DeserializeTree(string treeRoot, CancellationToken cancel)
+    {
+        var rootDocument = await File.ReadAllBytesAsync(Path.Combine(treeRoot, DocumentFileNames.Root), cancel);
+        return HeaderDocument.RestoreOmittedNextObjectId(
+            await HeaderDocument.GameOf(rootDocument).DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel),
+            rootDocument);
+    }
 
     /// <summary>The codec's verdict on the plugin written at <paramref name="recompiledPath"/> against
     /// the one at <paramref name="modPath"/>; null when they are model-identical. Both are

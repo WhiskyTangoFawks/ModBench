@@ -36,7 +36,7 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public async Task Write_ProducesTheSameBytesAsAFullWholeModWrite_ForAModWithRealGroups_TestsSideBecauseTheGeneratedWholeModMixinIsKeptOutOfCoreByTheGeneratorSeedWhitelist_ComparedAsTextForAReadableFailureThenAsBytesBecauseATextOnlyCompareCannotSeeABomOrEncodingDifference()
+    public async Task Write_ProducesTheSameBytesAsAFullWholeModWrite_ForAModWithRealGroups_ComparedAsTextForAReadableFailureThenAsBytesBecauseATextOnlyCompareCannotSeeABomOrEncodingDifference()
     {
         var mod = PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords();
 
@@ -125,6 +125,17 @@ public sealed class HeaderDocumentTests
         Assert.Equal(mod.ModHeader.Stats.Version, readBack.ModHeader.Stats.Version);
 
         Assert.Equal(body, HeaderDocument.Write(readBack));
+    }
+
+    [Fact]
+    public void Read_TakesTheGameTheDocumentNames()
+    {
+        var fallout4 = Encoding.UTF8.GetString(HeaderDocument.Write(new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4)));
+        var skyrim = fallout4.Replace("\"GameRelease\": \"Fallout4\"", "\"GameRelease\": \"SkyrimSE\"", StringComparison.Ordinal);
+
+        var refusal = Assert.Throws<NotSupportedException>(() => HeaderDocument.Read(Encoding.UTF8.GetBytes(skyrim)));
+
+        Assert.Contains("Skyrim", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -14,25 +14,18 @@ namespace MEditService.Codec.Serialization;
 public static class HeaderDocument
 {
 
-    /// <summary>The root document's exact bytes, <c>\r</c>-stripped like every committed file.
-    /// Serialized from a header-only clone: a full-mod walk costs ~1.5 s per plugin, the clone 1 ms,
-    /// byte-identical.</summary>
+    /// <summary>The root document's exact bytes, <c>\r</c>-stripped like every committed file.</summary>
     public static byte[] Write(IModGetter mod)
     {
-        // FO4-typed for the same reason Track's whole-mod call is: the generated mixin is
-        // seeded from an FO4 mod type, so this is the existing generalization boundary, not a new one.
-        var source = (IFallout4ModGetter)mod;
-        var clone = new Fallout4Mod(source.ModKey, source.GameRelease.ToFallout4Release());
-        clone.ModHeader.DeepCopyIn(source.ModHeader);
-
+        var game = GameCodecs.For(mod.GameRelease);
         var folder = ScratchFolder();
         using var capture = new CaptureRootDocument(Path.Combine(folder, DocumentFileNames.Root));
 
         // Nothing is created and nothing is written: NoRecordFolders neutralizes the door's own
         // Directory.CreateDirectory, and every stream but the root document's goes to Stream.Null.
         InlineSerialization.Finished(
-            RecordTextCodecGeneratorSeed.SerializeWholeMod(
-                clone, folder, InlineWorkDropoff.Instance, CancellationToken.None,
+            game.SerializeWholeMod(
+                game.HeaderOnly(mod), folder, InlineWorkDropoff.Instance, CancellationToken.None,
                 fileSystem: NoRecordFolders.Instance, streamCreator: capture));
 
         // The one canonical-formatting guarantee the kernel does not make, applied identically to the
@@ -49,12 +42,18 @@ public static class HeaderDocument
         var rootPath = Path.Combine(folder, DocumentFileNames.Root);
 
         var mod = InlineSerialization.Finished(
-            () => RecordTextCodecGeneratorSeed.DeserializeWholeMod(
+            () => GameOf(body).DeserializeWholeMod(
                 folder, InlineWorkDropoff.Instance, CancellationToken.None,
                 fileSystem: new OnlyTheRootDocumentExists(rootPath),
                 streamCreator: new SupplyRootDocument(rootPath, body)));
         return RestoreOmittedNextObjectId(mod, body);
     }
+
+    /// <summary>The codec of the game a root document names.</summary>
+    public static IGameCodec GameOf(byte[] rootDocument) =>
+        GameCodecs.For(Enum.Parse<GameRelease>(
+            JsonNode.Parse(rootDocument)?["GameRelease"]?.GetValue<string>()
+                ?? throw new InvalidDataException("A root document names its GameRelease, and this one names none.")));
 
     /// <summary>Mutagen's serializer omits a Next Object ID equal to its default, which a new mod does not start at.</summary>
     public static IMod RestoreOmittedNextObjectId(IMod mod, byte[] rootDocument)

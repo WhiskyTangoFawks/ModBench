@@ -123,7 +123,7 @@ public sealed class BannedApiScopeTests
 
         var holders = projects.Where(HoldsAGameAssembly).ToList();
 
-        Assert.Equal(["MEditService.Codec", "MEditService.PluginAdapter"], holders);
+        Assert.Equal(["MEditService.Codec", "MEditService.Codec.Fallout4", "MEditService.PluginAdapter"], holders);
         Assert.All(holders, project => Assert.DoesNotContain(project, MutagenBanProjectsExcludingCodecAndPluginAdapterWhoseGameAssemblyHoldsTheRule));
     }
 

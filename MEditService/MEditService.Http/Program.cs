@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
+using MEditService.Codec.Fallout4;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Composition;
 using MEditService.Http;
 using MEditService.Http.Endpoints;
@@ -10,6 +12,7 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
+using Mutagen.Bethesda;
 using Serilog;
 using Serilog.Events;
 
@@ -22,6 +25,11 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
+    GameCodecs.Register(new Dictionary<GameCategory, IGameCodec>
+    {
+        [GameCategory.Fallout4] = Fallout4Codec.Instance,
+    });
+
     var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     {
         Args = args,

@@ -1,9 +1,10 @@
 
 namespace MEditService.Architecture.Tests;
 
-public class RecordTextCodecGeneratorSeedTests
+public class GameCodecSeedTests
 {
-    private const string CompileTimeSeedDoor = "RecordTextCodecGeneratorSeed.cs";
+    private const string CompileTimeSeedDoor = "GameCodec.cs";
+    private const string GameInterface = "IGameCodec.cs";
     private const string PluginBinaryAndTreeDoor = "PluginTrees.cs";
     private const string HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter = "HeaderDocument.cs";
 
@@ -11,17 +12,11 @@ public class RecordTextCodecGeneratorSeedTests
     public void CoreSources_NameTheWholeModMixinOnlyInTheDesignatedDoorFiles()
     {
         const string mixinTypeName = "MutagenJsonConverterFallout4ModMixIns";
-        var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
-        {
-            CompileTimeSeedDoor,
-            PluginBinaryAndTreeDoor,
-        };
-
         var sourceFiles = ProductionSources();
         Assert.NotEmpty(sourceFiles);
 
         var offendingFiles = sourceFiles
-            .Where(f => !designatedDoors.Contains(Path.GetFileName(f)))
+            .Where(f => Path.GetFileName(f) != CompileTimeSeedDoor)
             .Where(f => File.ReadAllText(f).Contains(mixinTypeName, StringComparison.Ordinal))
             .Select(Path.GetFileName)
             .ToList();
@@ -36,6 +31,7 @@ public class RecordTextCodecGeneratorSeedTests
         const string gatewayFile = CompileTimeSeedDoor;
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
+            GameInterface,
             PluginBinaryAndTreeDoor,
             HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter,
         };
@@ -59,6 +55,7 @@ public class RecordTextCodecGeneratorSeedTests
         const string gatewayFile = CompileTimeSeedDoor;
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
+            GameInterface,
             PluginBinaryAndTreeDoor,
             HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter,
         };

@@ -1,4 +1,3 @@
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -7,7 +6,6 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
-using Noggog.WorkEngine;
 
 namespace MEditService.Commands.Tests.RealData;
 
@@ -95,7 +93,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
 
         async Task<IMod> DeserializeThenAddAnNpc(string folder, CancellationToken ct)
         {
-            var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
+            var deserialized = await Fallout4WholeMod.Deserialize(folder, ct);
             extra = deserialized.Npcs.AddNew("ExtraNpc").FormKey;
             return deserialized;
         }

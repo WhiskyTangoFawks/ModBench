@@ -29,7 +29,7 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
 
     private static IEnumerable<(string ParentType, string Slot)> ReplayEveryCustomizeOfTheSerializationFolderThroughARecordingBuilder()
     {
-        foreach (var found in typeof(RecordTypes).Assembly.GetTypes()
+        foreach (var found in GameCodecs.For(GameRelease.Fallout4).GeneratedSerializers.GetTypes()
                      .Where(type => type is { IsClass: true, IsAbstract: false })
                      .Select(type => (Type: type, Customized: CustomizedType(type)))
                      .Where(found => found.Customized != null))
