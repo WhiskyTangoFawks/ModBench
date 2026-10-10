@@ -1,7 +1,6 @@
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Serialization.Customizations;
 
-namespace MEditService.Codec.Serialization;
+namespace MEditService.Codec.Game;
 
 /// <summary>The embed list, in Mutagen's list order with no SortList (ADR-0006).</summary>
 internal sealed class CellEmbedCustomization : ICustomize<ICellGetter>

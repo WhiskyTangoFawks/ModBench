@@ -1,14 +1,16 @@
 using System.IO.Abstractions;
-using Mutagen.Bethesda.Fallout4;
+using System.Reflection;
+using MEditService.Codec.Serialization;
+using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
 using Noggog.IO;
+using Noggog.WorkEngine;
 
-namespace MEditService.Codec.Serialization;
+namespace MEditService.Codec.Game;
 
 /// <summary>The one compile-time seed the Mutagen serialization source generator needs to emit
-/// &lt;Type&gt;_Serialization classes; delete it and RecordTextCodec's generated calls stop
-/// resolving. Whole-mod callers go through here only.</summary>
-public static class RecordTextCodecGeneratorSeed
+/// &lt;Type&gt;_Serialization classes for the game this project compiles against.</summary>
+internal sealed class GameCodec : IGameCodec
 {
     // The generator seeds from the compile-time type of argument 0 of a MutagenJsonConverter.Instance
     // call; there is no per-record seed shape, and a mod-shaped seed emits the entire schema plus a
@@ -21,22 +23,29 @@ public static class RecordTextCodecGeneratorSeed
     // `cancel`) as the meta type and emits a broken CancellationToken_Serializations class. Passing
     // a non-null extraMeta anywhere emits a colliding overload (CS0111).
 
-    /// <summary>Under FilePerRecord the root document's stream also comes from streamCreator, so a
-    /// caller can capture the mod header without writing a tree. workDropoff is sequential: the
-    /// parallel list helpers have a real upstream race.</summary>
-    public static Task SerializeWholeMod(
-        IFallout4ModGetter mod, string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel,
+    public Assembly GeneratedSerializers => typeof(GameCodec).Assembly;
+
+    public Task SerializeWholeMod(
+        IModGetter plugin, string folder, IWorkDropoff workDropoff, CancellationToken cancel,
         IFileSystem? fileSystem = null, ICreateStream? streamCreator = null)
         => MutagenJsonConverter.Instance.Serialize(
-            mod, folder, extraMeta: null, workDropoff: workDropoff,
+            (IGameModGetter)plugin, folder, extraMeta: null, workDropoff: workDropoff,
             fileSystem: fileSystem, streamCreator: streamCreator, cancel: cancel);
 
-    /// <summary>Argument 0 is the folder, not a mod, so this call site emits no mixin and cannot
-    /// collide (CS8785). An in-memory read needs both fileSystem and streamCreator: the reader checks
-    /// File.Exists before consulting the stream creator.</summary>
-    public static Task<IFallout4Mod> DeserializeWholeMod(
-        string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel,
+    // Argument 0 is the folder, not a mod, so this call site emits no mixin and cannot collide (CS8785).
+    public async Task<IMod> DeserializeWholeMod(
+        string folder, IWorkDropoff workDropoff, CancellationToken cancel,
         IFileSystem? fileSystem = null, ICreateStream? streamCreator = null)
-        => MutagenJsonConverter.Instance.Deserialize(
+        => await MutagenJsonConverter.Instance.Deserialize(
             folder, workDropoff: workDropoff, fileSystem: fileSystem, streamCreator: streamCreator, cancel: cancel);
+
+    // Serialized from a header-only clone: a full-mod walk costs ~1.5 s per plugin, the clone 1 ms,
+    // byte-identical.
+    public IModGetter HeaderOnly(IModGetter plugin)
+    {
+        var source = (IGameModGetter)plugin;
+        var clone = ModFactory<GameMod>.Activator(source.ModKey, source.GameRelease);
+        clone.ModHeader.DeepCopyIn(source.ModHeader);
+        return clone;
+    }
 }

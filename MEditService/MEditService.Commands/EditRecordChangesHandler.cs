@@ -68,7 +68,7 @@ public sealed class EditRecordChangesHandler
         if (!Document.TryRead(text, out var record, out var whyNot)) return WriteTargets.RefuseUnreadable(formKey, whyNot, spelled);
 
         Func<string, string> roundTrip = schema.IsHeader
-            ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
+            ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched), release)))
             : patched => RecordTextCodec.RoundTrip(patched, release, identity.RecordType);
 
         var request = new RecordTextEditRequest(

@@ -49,7 +49,7 @@ public sealed class CreateRecordChangesHandlerTests
         Assert.Empty(changes.Deletions);
         Assert.Contains(changes.Documents, document => document.Text.Contains(FixtureNextObjectId, StringComparison.Ordinal));
         var header = Assert.Single(changes.Documents, document => document.Path == Path.Combine(mod.ModFolder, TrackedTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin)));
-        Assert.Equal(0x808u, HeaderDocument.NextObjectId(Encoding.UTF8.GetBytes(header.Text)));
+        Assert.Equal(0x808u, HeaderDocument.NextObjectId(Encoding.UTF8.GetBytes(header.Text), GameRelease.Fallout4));
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class CreateRecordChangesHandlerTests
         using var mod = SourceEditFixture.Tracked();
         var headerFile = Path.Combine(mod.ModFolder, TrackedTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin));
         var unsavedHeader = Encoding.UTF8.GetString(
-            HeaderDocument.WithNextObjectId(File.ReadAllBytes(headerFile), 0x900));
+            HeaderDocument.WithNextObjectId(File.ReadAllBytes(headerFile), GameRelease.Fallout4, 0x900));
 
         mod.Unsaved.Apply([new DocumentChange(headerFile, unsavedHeader)]);
 

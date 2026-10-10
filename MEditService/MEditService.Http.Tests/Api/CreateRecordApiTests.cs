@@ -60,7 +60,7 @@ public sealed class CreateRecordApiTests : HostedTests
         var fx = await Loaded(tracked: true);
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
         var headerFile = Path.Combine(modFolder, "plugin-source", Plugin, $"000000_{Plugin}.json");
-        var unsavedHeader = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(await File.ReadAllBytesAsync(headerFile), 0xA00));
+        var unsavedHeader = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(await File.ReadAllBytesAsync(headerFile), GameRelease.Fallout4, 0xA00));
 
         await Client.HandUnsaved((headerFile, unsavedHeader));
 

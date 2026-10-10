@@ -130,9 +130,9 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         PluginTrees.ReadTreeAsync(files, gameRelease, cancel);
 
     public Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
-        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder,
+        IReadOnlyList<TreeFile> files, string destinationPath, IReadOnlyList<string> masterOrder, GameRelease gameRelease,
         CancellationToken cancel = default) =>
-        PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, cancel);
+        PluginTrees.WriteFromTreeAsync(files, destinationPath, masterOrder, gameRelease, cancel);
 
     public Task<Answer<PluginSource, PluginFailure>> ReadSourceOfAsync(
         RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>

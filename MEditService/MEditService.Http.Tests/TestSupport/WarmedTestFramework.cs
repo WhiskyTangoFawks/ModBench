@@ -10,7 +10,7 @@ namespace MEditService.Http.Tests.TestSupport;
 
 /// <summary>Walks each gesture once before the first test starts, so the seconds of JIT the first
 /// calls cost are no test's time and cannot break the per-test ceiling under load.</summary>
-public sealed class WarmedTestFramework(IMessageSink diagnostics) : XunitTestFramework(diagnostics)
+public sealed class WarmedTestFramework(IMessageSink diagnostics) : GamesRegisteredTestFramework(diagnostics)
 {
     protected override ITestFrameworkExecutor CreateExecutor(AssemblyName assemblyName) =>
         new Executor(assemblyName, SourceInformationProvider, DiagnosticMessageSink);

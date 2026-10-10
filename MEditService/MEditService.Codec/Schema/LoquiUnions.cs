@@ -163,7 +163,7 @@ public static class LoquiUnions
             var declaring = group.ToList();
             var alike = declaring.Count == leaves.Count
                 && declaring.Select(d => JsonSerializer.Serialize(shape(d.Member))).Distinct(StringComparer.Ordinal).Count() == 1;
-            // Whatever order the assembly lists its leaves in.
+            // Mutagen lists a union's leaves in no fixed order.
             var face = declaring.FirstOrDefault(d => shape(d.Member).SiblingsInUse != null, declaring[0]);
             yield return (face.Member, alike ? null : declaring.ToDictionary(d => d.ClassName, d => d.Member, StringComparer.Ordinal));
         }

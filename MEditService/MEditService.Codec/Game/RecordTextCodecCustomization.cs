@@ -1,7 +1,6 @@
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Serialization.Customizations;
 
-namespace MEditService.Codec.Serialization;
+namespace MEditService.Codec.Game;
 
 /// <summary>Filename numbering is off (ADR-0006). No Omit*Data call exists (ADR-0006): each drops real fields.</summary>
 internal sealed class RecordTextCodecCustomization : ICustomize
@@ -14,9 +13,9 @@ internal sealed class RecordTextCodecCustomization : ICustomize
 }
 
 /// <summary>Every write derives the masters from content (ADR-0008), so the source holds none.</summary>
-internal sealed class ModHeaderMastersCustomization : ICustomize<IFallout4ModHeaderGetter>
+internal sealed class ModHeaderMastersCustomization : ICustomize<IGameModHeaderGetter>
 {
-    public void CustomizeFor(ICustomizationBuilder<IFallout4ModHeaderGetter> builder)
+    public void CustomizeFor(ICustomizationBuilder<IGameModHeaderGetter> builder)
     {
         builder.Omit(x => x.MasterReferences);
     }

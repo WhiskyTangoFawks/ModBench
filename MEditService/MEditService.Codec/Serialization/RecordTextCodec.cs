@@ -61,7 +61,7 @@ public static class RecordTextCodec
             gameRelease, null, NoRecordFolders.Instance, DiscardChildRecordStreams.Instance, cancel);
 
         // Resolved first on both branches so an unsupported type fails with this class's named exception.
-        var generated = FindGeneratedSerializationType(record.GetType());
+        var generated = FindGeneratedSerializationType(record.GetType(), gameRelease);
         // A path-ambiguous record dispatches through the game's abstract serializer, whose
         // SerializeWithCheck writes MutagenObjectType ahead of the fields, and every other record
         // carries none.
@@ -106,7 +106,7 @@ public static class RecordTextCodec
     {
         using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json), writable: false);
         return DeserializeObject(stream, gameRelease,
-            readerType => ResolveConcreteDeserializeMethod(loquiType, readerType), CancellationToken.None);
+            readerType => ResolveConcreteDeserializeMethod(loquiType, gameRelease, readerType), CancellationToken.None);
     }
 
     private static IMajorRecord DeserializeCore(
@@ -120,7 +120,7 @@ public static class RecordTextCodec
             readerType => recordType is not null
                 && dispatch.ConcreteFor(recordType) is { } concrete
                 && !dispatch.IsPathAmbiguous(recordType)
-                    ? ResolveConcreteDeserializeMethod(concrete, readerType)
+                    ? ResolveConcreteDeserializeMethod(concrete, gameRelease, readerType)
                     : ResolveCheckedDeserializeMethod(gameRelease, readerType),
             cancel);
         return (IMajorRecord)record;
@@ -187,8 +187,8 @@ public static class RecordTextCodec
             return open.MakeGenericMethod(typeof(NewtonsoftJsonSerializationWriterKernel), typeof(JsonWritingUnit));
         });
 
-    private static MethodInfo ResolveConcreteDeserializeMethod(Type recordType, Type readerType) =>
-        DeserializeMethods.GetOrAdd((FindGeneratedSerializationType(recordType), readerType), static key =>
+    private static MethodInfo ResolveConcreteDeserializeMethod(Type recordType, GameRelease gameRelease, Type readerType) =>
+        DeserializeMethods.GetOrAdd((FindGeneratedSerializationType(recordType, gameRelease), readerType), static key =>
         {
             var open = key.Record.GetMethod("Deserialize", BindingFlags.Public | BindingFlags.Static)
                 ?? throw new NotSupportedException(NoGeneratedSerializer(key.Record, key.Record, "Deserialize"));
@@ -199,17 +199,14 @@ public static class RecordTextCodec
     {
         var category = gameRelease.ToCategory();
         var name = $"Mutagen.Bethesda.{category}.{category}MajorRecord_Serialization";
-        return typeof(RecordTextCodec).Assembly.GetType(name)
+        return GameCodecs.For(gameRelease).GeneratedSerializers.GetType(name)
             ?? throw new NotSupportedException(
-                $"No '{name}' was generated into this assembly, so no record of {category} can be " +
-                "serialized or read back. RecordTextCodecGeneratorSeed seeds generation per game; a " +
-                "game reaching here needs its own seed entry.");
+                $"No '{name}' was generated into {category}'s codec project, so no record of {category} " +
+                "can be serialized or read back.");
     }
 
-    // The generated classes live in this assembly under the game's namespace, so the lookup is
-    // against typeof(RecordTextCodec).Assembly, never recordType.Assembly.
-    private static Type FindGeneratedSerializationType(Type recordType) =>
-        LookupGeneratedSerializationType(recordType)
+    private static Type FindGeneratedSerializationType(Type recordType, GameRelease gameRelease) =>
+        LookupGeneratedSerializationType(recordType, gameRelease)
             ?? throw new NotSupportedException(NoGeneratedSerializer(recordType, null, null));
 
     // Under FilePerRecord a container writes each non-embedded child (a worldspace's blocks) to its
@@ -223,18 +220,18 @@ public static class RecordTextCodec
 
     // By the record class an overlay reader stands for: an interface scan matched an ancestor's
     // narrower serializer and silently produced truncated text.
-    private static Type? LookupGeneratedSerializationType(Type recordType) =>
-        typeof(RecordTextCodec).Assembly.GetType($"{recordType.Namespace}.{RecordTypes.ClassNameOf(recordType)}_Serialization");
+    private static Type? LookupGeneratedSerializationType(Type recordType, GameRelease gameRelease) =>
+        GameCodecs.For(gameRelease).GeneratedSerializers
+            .GetType($"{recordType.Namespace}.{RecordTypes.ClassNameOf(recordType)}_Serialization");
 
     // Derived from the record type's namespace, not a named game, as LookupGeneratedSerializationType
     // derives it: hardcoding "Fallout4" would have a Skyrim record report a path the lookup never tried.
     private static string NoGeneratedSerializer(Type recordType, Type? generatedType, string? missingMethodName) =>
         generatedType == null
             ? $"No generated serializer found for record type '{recordType.Name}' — expected " +
-              $"'{recordType.Namespace}.{recordType.Name}_Serialization' in this assembly. " +
-              "RecordTextCodecGeneratorSeed seeds generation per game, and is seeded for the whole " +
-              "FO4 record schema today; if a real record type lands here, the seed shape (or this " +
-              "naming convention) needs revisiting."
+              $"'{recordType.Namespace}.{recordType.Name}_Serialization' in its game's codec project. " +
+              "Each game's project seeds its whole record schema; if a real record type lands here, " +
+              "the seed shape (or this naming convention) needs revisiting."
             : $"Generated type '{generatedType.FullName}' has no public static '{missingMethodName}' " +
               "method — the generator's output shape may have changed.";
 }

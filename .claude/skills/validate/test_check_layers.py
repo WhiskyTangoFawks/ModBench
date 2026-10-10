@@ -250,6 +250,24 @@ class MEditProjectReferencesAgainstLayers(unittest.TestCase):
             csproj(root, 'Queries', ['Index', 'Codec'])
             self.assertEqual(cl.run(root), [])
 
+    def test_a_game_project_of_the_codec_is_the_codec_box(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = fixture(pathlib.Path(tmp))
+            csproj(root, 'Codec.Fallout4', ['Codec', 'Commands'])
+            failures = cl.run(root)
+            self.assertEqual(len(failures), 1)
+            self.assertIn('MEditService.Codec.Fallout4.csproj', failures[0])
+            self.assertIn('codec -> commands', failures[0])
+
+    def test_a_reference_to_a_game_project_of_the_codec_is_a_reference_to_the_codec(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = fixture(pathlib.Path(tmp))
+            csproj(root, 'Commands', ['Codec.Fallout4'])
+            csproj(root, 'Ports', ['Codec.Fallout4'])
+            failures = cl.run(root)
+            self.assertEqual(len(failures), 1)
+            self.assertIn('ports -> codec', failures[0])
+
     def test_a_reference_across_the_columns_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = fixture(pathlib.Path(tmp))
