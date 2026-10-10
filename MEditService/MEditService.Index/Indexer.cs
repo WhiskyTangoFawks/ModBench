@@ -14,8 +14,8 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Index;
 
 /// <summary>Brings the Store to the load order (ADR-0013), then validates every plugin against its
-/// system of record (ADR-0003). It holds the plugins open, the progress Status reports, the scope
-/// the Store is opened for, and the filter in force.</summary>
+/// system of record (ADR-0003). It holds the open plugins, the progress, the Store's scope and the
+/// filter in force.</summary>
 internal sealed class Indexer : IDisposable
 {
     private readonly LoadOrderHolder _holder;
