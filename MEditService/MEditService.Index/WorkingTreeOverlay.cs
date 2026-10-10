@@ -244,10 +244,8 @@ internal sealed class WorkingTreeOverlay
         DuckDbSql.ScalarString(_connection, "SELECT body FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
 
-    // A container's child set and slot order live in its body, so a delete-then-insert per parent
-    // is correct by construction. The exterior cells a worldspace holds are not in its body: their
-    // own records say where they sit. An embedded child that is itself a container derives its own
-    // containment through its own row.
+    // A container's child set and slot order live in its body, so delete-then-insert per parent
+    // is correct. A worldspace's exterior cells are not in its body: their own records place them.
     private void RederiveContainmentForRecord(PluginAddress key, string formKey, PluginIngest.PreparedRecord prepared)
     {
         DuckDbSql.ExecuteFor(_connection,
