@@ -2,9 +2,8 @@ using MEditService.Ports;
 
 namespace MEditService.TestSupport;
 
-/// <summary>The notification port's second adapter: a plain recorder, so a test asserts the port
-/// fired without a live HTTP stream. <see cref="OnPublish"/> runs before a notification is recorded,
-/// and <see cref="FaultsOn"/> makes the publish throw instead.</summary>
+/// <summary>The notification port's second adapter: a recorder with a hook that runs before each
+/// record and a switch that makes a publish throw.</summary>
 public sealed class InMemoryNotificationPublisher : INotificationPublisher
 {
     public const string FaultReason = "the stream could not take the push";
