@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -50,7 +51,7 @@ public sealed class WorkingTreeChangeMarkingTests : IDisposable
         var filterNarrowingToKeepMesTwoOverrideRowsOfTheFixturesThree = $"SELECT '{_keptNpc}' AS form_key";
         index.SetFilter(filterNarrowingToKeepMesTwoOverrideRowsOfTheFixturesThree, "filter.sql");
 
-        var listing = index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value();
+        var listing = index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value();
 
         Assert.Equal(2, listing.Total);
         Assert.All(listing.Items, i => Assert.Equal(_keptNpc, i.FormKey));

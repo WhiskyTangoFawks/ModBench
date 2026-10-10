@@ -44,7 +44,7 @@ public sealed class IndexWriteOrderTests : IDisposable
         Assert.NotSame(filter, await Task.WhenAny(filter, Task.Delay(TimeSpan.FromMilliseconds(500))));
         _adapter.Release();
         await Task.WhenAll(revalidation, filter).WaitAsync(Waits.Patience);
-        Assert.Equal("filter.sql", _index.Records.GetFilter().Value()?.Source);
+        Assert.Equal("filter.sql", _index.Queries.GetFilter().Value()?.Source);
     }
 
     [Fact]

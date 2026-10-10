@@ -68,15 +68,15 @@ internal static class IndexEndpoints
     // Deliberately not logged at Information like its neighbours: the Plugins tree polls this every
     // few hundred milliseconds for the duration of a reconcile, and one reception line per poll
     // would bury the per-plugin indexing lines it sits between.
-    private static IResult GetStatus(IRecordQueryService svc, ILoggerFactory loggerFactory)
+    private static IResult GetStatus(IQueries svc, ILoggerFactory loggerFactory)
     {
         loggerFactory.CreateLogger(nameof(IndexEndpoints)).LogTrace("Received GetLoadOrderStatus");
         return Results.Ok(svc.GetStatus());
     }
 
-    private static IResult GetSequence(IRecordQueryService svc) => Results.Ok(svc.GetSequence());
+    private static IResult GetSequence(IQueries svc) => Results.Ok(svc.GetSequence());
 
-    private static async Task<IResult> AwaitSequence(IRecordQueryService svc, long atLeast, int timeoutMs = 5000)
+    private static async Task<IResult> AwaitSequence(IQueries svc, long atLeast, int timeoutMs = 5000)
     {
         if (timeoutMs <= 0)
             return Results.Problem("timeoutMs must be positive.", statusCode: 400);
@@ -84,7 +84,7 @@ internal static class IndexEndpoints
         return Results.Ok(await svc.AwaitSequence(atLeast, TimeSpan.FromMilliseconds(timeoutMs)));
     }
 
-    private static IResult SetFilter(FilterRequest req, IRecordQueryService svc, ILoggerFactory loggerFactory)
+    private static IResult SetFilter(FilterRequest req, IQueries svc, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -100,7 +100,7 @@ internal static class IndexEndpoints
             : Results.Ok(new FilterResponse(req.Sql, req.Source));
     }
 
-    private static IResult ClearFilter(IRecordQueryService svc, ILoggerFactory loggerFactory)
+    private static IResult ClearFilter(IQueries svc, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received ClearFilter");
@@ -108,14 +108,14 @@ internal static class IndexEndpoints
         return Results.NoContent();
     }
 
-    private static IResult GetFilter(IRecordQueryService svc, ILoggerFactory loggerFactory)
+    private static IResult GetFilter(IQueries svc, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received GetFilter");
         return QueryEndpointMapping.Answered(svc.GetFilter(), filter => Results.Ok(new FilterResponse(filter?.Sql, filter?.Source)));
     }
 
-    private static IResult PostRebuildIndex(RebuildIndexRequest req, IRecordQueryService svc, ILoggerFactory loggerFactory)
+    private static IResult PostRebuildIndex(RebuildIndexRequest req, IQueries svc, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         if (logger.IsEnabled(LogLevel.Information))

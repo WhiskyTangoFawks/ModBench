@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
@@ -94,3 +95,38 @@ internal interface IRecordReads
     /// none. Ref-invariant by construction.</summary>
     IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey);
 }
+
+// ADR-0012.
+internal sealed record ReferenceRow(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId, string Origin);
+
+internal record struct FormReferenceRow(
+    string SourceFormKey,
+    string TargetFormKey,
+    string FieldPath,
+    string RecordType,
+    string? EditorId);
+
+/// <summary>A link in <paramref name="Plugin"/>'s record <paramref name="FormKey"/> (an inline child
+/// under its own) to <paramref name="TargetFormKey"/>, which no active plugin holds.</summary>
+internal sealed record MissingReference(
+    PluginAddress Plugin, string FormKey, string RecordType, string? EditorId, string TargetFormKey, string FieldPath);
+
+/// <summary>One malformed-plugin diagnosis the Index projected from a plugin's binary, in the
+/// binary's record order.</summary>
+internal sealed record PluginDiagnosisRow(PluginAddress Plugin, PluginDiagnosis Diagnosis);
+
+/// <summary>One child's parent slot for the container relationships the placement tables omit;
+/// additive, never a copy. <see cref="SlotIndex"/> is the real GRUP position. Effective only: every
+/// write path re-derives it.</summary>
+internal readonly record struct ContainerChildRow(
+    string ChildFormKey, string ParentFormKey, string ParentRecordType, string SlotName, int SlotIndex);
+// Rejected: having every reader existence-check against records instead, which would make "these
+// tables track Effective" a documented falsehood.
+
+// Flat row for a cell in its blocks. BlockX/Y and SubX/Y are null for a worldspace's TopCell; an
+// interior cell's block and sub-block are one number each, in BlockX and SubX.
+internal sealed record CellLocationSummary(
+    string FormKey, string? EditorId,
+    int? BlockX, int? BlockY, int? SubX, int? SubY, int? CellX, int? CellY,
+    WorkingTreeState WorkingTreeState,
+    string? FullName = null, bool HasParseFailure = false, string? ParseDiagnosis = null, bool HasChildren = false);

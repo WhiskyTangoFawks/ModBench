@@ -153,3 +153,176 @@ public record RecordTypeChoice(string Type, string DisplayName);
 /// is the value observed at the moment of that answer, not necessarily equal to the awaited
 /// bound.</summary>
 public record SequenceAwaitResponse(bool Reached, long Sequence);
+
+public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
+
+public record CellChildRecords(
+    IReadOnlyList<ChildRecordSummary> Persistent,
+    IReadOnlyList<ChildRecordSummary> Temporary);
+
+public record ChildRecordSummary(
+    string FormKey, string? EditorId, string? BaseFormKey, string RecordType, WorkingTreeState WorkingTreeState,
+    bool HasParseFailure = false, string? FullName = null, string? BaseEditorId = null, string? ParseDiagnosis = null);
+
+/// <summary><see cref="RecordGone"/> when no registered plugin holds the record at all, otherwise only the
+/// plugin the copy names lacks it.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum CopyMissingReason { RecordGone, NotInPlugin }
+
+public sealed record MissingCopy(RecordCopy Copy, CopyMissingReason Reason, string Message);
+
+// ADR-0012.
+public record RecordSummary(
+    string FormKey,
+    string Plugin,
+    int LoadOrderIndex,
+    bool IsWinner,
+    string? EditorId,
+    string Origin,
+    WorkingTreeState WorkingTreeState = WorkingTreeState.None,
+    // Whether at least one container_child row names this FormKey as parent: the Plugins tree's
+    // expand chevron for a qust/dial row.
+    bool HasContainerChildren = false,
+    // Non-null when ingest could not turn this record into its document, so a listing never omits
+    // one silently.
+    string? ParseDiagnosis = null,
+    // The same fact widened to this row's subtree, so the tree never walks children to aggregate.
+    bool HasParseFailure = false,
+    string? FullName = null);
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ConflictAll
+{
+    OnlyOne,
+    NoConflict,
+    Override,
+    Conflict,
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ConflictThis
+{
+    OnlyOne,
+    Master,
+    IdenticalToMaster,
+    Override,
+    ConflictWins,
+    ConflictLoses,
+}
+
+// Container-type-agnostic by design: only Quest/DialogTopic are wired to it; Cell/Worldspace keep
+// their own worldspace-tree surface.
+
+/// <summary>One child record of a container, in xEdit's presentation order. RecordType is the raw
+/// signature ("dial", "dlbr", "scen", "info") the frontend needs to know a returned Dialog Topic
+/// is itself expandable.</summary>
+public record ContainerChildSummary(
+    string FormKey, string? EditorId, string Plugin, string Origin,
+    int LoadOrderIndex, bool IsWinner, WorkingTreeState WorkingTreeState, string RecordType,
+    // A returned "dial" child is itself a container the Plugins tree recurses into, so it needs
+    // the same presence fact for its own expand chevron.
+    bool HasContainerChildren = false,
+    // The same pair every record row carries: this child's own diagnosis, and the fact widened to
+    // its own children so the tree renders the failure prefix without walking them.
+    string? ParseDiagnosis = null,
+    bool HasParseFailure = false,
+    string? FullName = null,
+    // The child's type holds child records in the game, whether or not this one holds any.
+    bool IsContainer = false);
+
+// DTOs for the per-plugin worldspace / cell / placed-object tree.
+
+// HasParseFailure on every node of this tree means the same thing it means on a record row:
+// this row, or something the tree shows under it, could not be read. HasChildren is whether it
+// holds a cell.
+public record WorldspaceSummary(
+    string FormKey, string? EditorId, WorkingTreeState WorkingTreeState, bool HasParseFailure = false, string? FullName = null,
+    string? ParseDiagnosis = null, bool HasChildren = false);
+
+public record WorldspaceSubBlockDto(
+    int X, int Y, IReadOnlyList<CellSummary> Cells, bool HasParseFailure = false);
+
+public record WorldspaceBlockDto(
+    int X, int Y, IReadOnlyList<WorldspaceSubBlockDto> SubBlocks, bool HasParseFailure = false);
+
+public record WorldspaceBlocks(IReadOnlyList<WorldspaceBlockDto> Blocks, IReadOnlyList<CellSummary> TopCells);
+
+// xEdit numbers an interior cell's block and sub-block with one number each.
+public record InteriorCellSubBlock(int Number, IReadOnlyList<CellSummary> Cells, bool HasParseFailure = false);
+
+public record InteriorCellBlock(int Number, IReadOnlyList<InteriorCellSubBlock> SubBlocks, bool HasParseFailure = false);
+
+// IsPersistentWorldspaceCell is the cell a Worldspace's TopCell slot names (xEdit's "<Persistent
+// Worldspace Cell>"). FullName stays a separate fact: xEdit's GetDisplayName checks FULL first,
+// unconditionally, so the tree provider needs both.
+public record CellSummary(
+    string FormKey, string? EditorId, int? CellX, int? CellY, WorkingTreeState WorkingTreeState,
+    bool IsPersistentWorldspaceCell = false, string? FullName = null, bool HasParseFailure = false,
+    string? ParseDiagnosis = null, bool HasChildren = false);
+
+/// <summary>Why a store rebuild did nothing (ADR-0010, ADR-0019).</summary>
+public enum StoreRebuildRefusal
+{
+    InstanceRootNotFound,
+    HeldByAnotherWindow,
+    StillServingReads,
+}
+
+public sealed record StoreRebuildRefused(StoreRebuildRefusal Refusal, string Message);
+
+/// <summary>Why a read or a filter of the Index answered nothing (ADR-0019).</summary>
+public enum IndexRefusal
+{
+    NoLoadOrder,
+    IndexNotReady,
+    FilterRejected,
+    CopiesMissing,
+    SourceStopped,
+}
+
+public record IndexRefused(IndexRefusal Refusal, string Message);
+
+/// <summary>The copies no plugin gave, in the order given.</summary>
+public sealed record CopiesMissing(IReadOnlyList<MissingCopy> Missing)
+    : IndexRefused(IndexRefusal.CopiesMissing, $"Copies not found: {string.Join("; ", Missing.Select(m => $"{m.Copy.FormKey} in {m.Copy.Plugin.Name} ({m.Copy.Plugin.Origin})"))}.");
+
+// A tri-state rather than two booleans: the states are mutually exclusive. Deleted is absent
+// because a working-tree-deleted record has no row to describe.
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum WorkingTreeState { None, Modified, Added }
+
+/// <summary>The working-tree states beneath each tree row that has any, under the record filter
+/// (common.md, story 11). A record's own state is on its listing; a block holds what its cells
+/// hold.</summary>
+public record WorkingTreeStatesBeneath(
+    IReadOnlyList<WorkingTreeState> Plugin,
+    IReadOnlyDictionary<string, IReadOnlyList<WorkingTreeState>> RecordTypes,
+    IReadOnlyDictionary<string, IReadOnlyList<WorkingTreeState>> Records);
+
+/// <summary>What is wrong in a plugin's source, on its file: a link at <paramref name="FieldPath"/> to
+/// <paramref name="TargetFormKey"/>, which neither it nor an active plugin holds, or a file the read stopped at.</summary>
+public sealed record SourceProblem(
+    string? FormKey, string? TargetFormKey, string? FieldPath, string SourceRelativePath, string Message)
+{
+    internal static SourceProblem StoppedAt(SourceFileFailure failure) =>
+        new(failure.FormKey, null, null, failure.SourceRelativePath, failure.Message);
+}
+
+/// <summary>Why a plugin's <see cref="PluginProblems.Problems"/> are not a clean bill (ADR-0019).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ProblemsFailureKind
+{
+    /// <summary>Its links could not be placed on files; mEdit does not log this.</summary>
+    Placement,
+    /// <summary>Its rows are the last good read's; mEdit logs this once when it begins.</summary>
+    LaterRead,
+}
+
+/// <summary><paramref name="Failure"/> and its <paramref name="FailureKind"/> are set when the plugin's
+/// <paramref name="Problems"/> are not a clean bill (ADR-0019).</summary>
+public sealed record PluginProblems(
+    PluginAddress Plugin, IReadOnlyList<SourceProblem> Problems, string? Failure = null, ProblemsFailureKind? FailureKind = null);
+
+/// <summary>The plugins whose masters list a plugin's file name, and those whose masters mEdit could not
+/// read and so may.</summary>
+public sealed record PluginDependants(IReadOnlyList<PluginAddress> Plugins, IReadOnlyList<PluginAddress> Unreadable);

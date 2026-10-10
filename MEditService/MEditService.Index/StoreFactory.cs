@@ -8,35 +8,34 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>A <see cref="DuckDbRecordIndex"/> per game, opened over the calling instance's persistent
-/// file when it names one. Another window holding the file answers a refusal and no index
-/// (ADR-0010).</summary>
-internal sealed class DuckDbRecordIndexFactory(
+/// <summary>A <see cref="Store"/> per game, opened over the calling instance's persistent file when it
+/// names one. Another window holding the file answers a refusal and no store (ADR-0010).</summary>
+internal sealed class StoreFactory(
     SchemaReflector schemaReflector,
     TableDdlBuilder ddlBuilder,
     IPluginAdapter plugins,
     IndexWriteGate gate,
     FilterInForce filter,
     INotificationPublisher? notifications,
-    ILogger<DuckDbRecordIndexFactory>? logger = null,
+    ILogger<StoreFactory>? logger = null,
     TimeProvider? timeProvider = null)
 {
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
-    /// <summary>A null <paramref name="instanceRoot"/> means an in-memory index that dies with this
+    /// <summary>A null <paramref name="instanceRoot"/> means an in-memory store that dies with this
     /// object. <paramref name="openedPlugins"/> answers <see cref="IRecordReads.OpenedPlugins"/>;
     /// <paramref name="indexed"/> says whether the whole set is read.</summary>
-    public DuckDbRecordIndex? Create(
+    public Store? Create(
         GameRelease gameRelease, string? instanceRoot,
         Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed, out string? refusal)
     {
         var store = Open(gameRelease, instanceRoot, openedPlugins, indexed, atLeastSequence: null, out refusal);
         try
         {
-            if (store is null) return null;
-            var index = new DuckDbRecordIndex(store, gate, filter, notifications, _logger);
+            store?.ValidateAgainstDisk();
+            var validated = store;
             store = null;
-            return index;
+            return validated;
         }
         finally
         {
@@ -61,7 +60,7 @@ internal sealed class DuckDbRecordIndexFactory(
     {
         var store = new Store(
             _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), schemaReflector, ddlBuilder, plugins,
-            timeProvider, openedPlugins, indexed);
+            timeProvider, openedPlugins, indexed, gate, filter, notifications);
         refusal = store.Open();
         if (refusal is not null)
         {

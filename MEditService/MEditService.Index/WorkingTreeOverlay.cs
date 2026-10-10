@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>The working-tree overlay collaborator of <see cref="DuckDbRecordIndex"/>, which owns
+/// <summary>The working-tree overlay collaborator of <see cref="Store"/>, which owns
 /// every transaction and the winner sweep. Uses <c>PluginIngest</c>'s collectors so an edit's
 /// derived rows cannot drift from ingest's.</summary>
 internal sealed class WorkingTreeOverlay

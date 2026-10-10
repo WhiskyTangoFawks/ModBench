@@ -1,4 +1,3 @@
-using MEditService.Index;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.Ports;
@@ -9,9 +8,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.TestSupport;
 
-/// <summary>Query services that fail every question; given a rebuild refusal, answer a rebuild with
-/// it, as another window's hold does.</summary>
-internal sealed class FailingQueries(string? rebuildRefusal = null) : IRecordQueryService, IWorldspaceQueryService
+/// <summary>A face that fails every question; given a rebuild refusal, answers a rebuild with it, as
+/// another window's hold does.</summary>
+internal sealed class FailingQueries(string? rebuildRefusal = null) : IQueries
 {
     public Answer<IReadOnlyList<PluginRow>, IndexRefused> GetPlugins() => throw Failed();
 
@@ -64,13 +63,17 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IRecordQue
 
     public Answer<IReadOnlyList<InteriorCellBlock>, IndexRefused> GetInteriorCells(PluginAddress plugin) => throw Failed();
 
-    internal static void Replace(IServiceCollection services, string? rebuildRefusal = null)
-    {
-        var failing = new FailingQueries(rebuildRefusal);
-        services.AddSingleton<IRecordQueryService>(failing);
-        services.AddSingleton<IWorldspaceQueryService>(failing);
-        services.AddSingleton<ContainerChildQueryService>(_ => throw Failed());
-    }
+    public Answer<IReadOnlyList<ContainerChildSummary>, IndexRefused> GetContainerChildren(PluginAddress plugin, string parentFormKey) =>
+        throw Failed();
+
+    public Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses() => throw Failed();
+
+    public Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin) => throw Failed();
+
+    public Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems() => throw Failed();
+
+    internal static void Replace(IServiceCollection services, string? rebuildRefusal = null) =>
+        services.AddSingleton<IQueries>(new FailingQueries(rebuildRefusal));
 
     private static InvalidOperationException Failed() => new("The index failed.");
 }

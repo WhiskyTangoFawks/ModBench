@@ -17,7 +17,7 @@ public sealed class PluginRowImmutabilityTests
             : fixture.Plugins;
         using var index = Indexes.Reconciled(fixture.GameDirectory, plugins);
 
-        return index.Records.GetPlugins().Value().Single().IsImmutable;
+        return index.Queries.GetPlugins().Value().Single().IsImmutable;
     }
 
     [Fact]

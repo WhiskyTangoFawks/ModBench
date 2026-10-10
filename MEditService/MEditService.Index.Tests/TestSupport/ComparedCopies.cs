@@ -66,7 +66,7 @@ internal static class ComparedCopies
             spell(document);
             text = new CopyText(address, document.ToJsonString());
         }
-        return index.Records.GetCompare(Record.ToString(), text).Value()
+        return index.Queries.GetCompare(Record.ToString(), text).Value()
             ?? throw new InvalidOperationException($"Expected {Record} to compare.");
     }
 }

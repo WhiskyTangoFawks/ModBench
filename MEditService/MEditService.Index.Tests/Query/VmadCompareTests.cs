@@ -82,7 +82,7 @@ public sealed class VmadCompareTests : IDisposable
 
     private FieldDiff Adapter(string record)
     {
-        var compare = _index.Records.GetCompare(record).Value()
+        var compare = _index.Queries.GetCompare(record).Value()
             ?? throw new InvalidOperationException($"Expected {record} to resolve to a compare result.");
         return compare.Diffs.Single(d => d.FieldName == Field);
     }

@@ -33,7 +33,7 @@ public sealed class LoadOrderFormIdKeyOrderTests
         }
         using var fixture = builder.Build();
         using var index = Indexes.Reconciled(fixture);
-        return index.Records.GetCompare(ContainerKey.ToString()).Value()
+        return index.Queries.GetCompare(ContainerKey.ToString()).Value()
             ?? throw new InvalidOperationException($"Expected {ContainerKey} to resolve to a compare result.");
     }
 

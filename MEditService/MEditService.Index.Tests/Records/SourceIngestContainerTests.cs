@@ -15,7 +15,7 @@ public sealed class SourceIngestContainerTests : IDisposable
 
     private SourceProblem TheOneSourceProblemOf(OpenedIndex index)
     {
-        var problems = index.Problems.GetProblems().Value() ?? throw new InvalidOperationException("Expected the index to be ready.");
+        var problems = index.Queries.GetProblems().Value() ?? throw new InvalidOperationException("Expected the index to be ready.");
         return Assert.Single(Assert.Single(problems, p => PluginAddress.Comparer.Equals(p.Plugin, _fixture.Plugin)).Problems);
     }
 

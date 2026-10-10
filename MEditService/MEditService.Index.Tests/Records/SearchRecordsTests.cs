@@ -22,10 +22,10 @@ public class SearchRecordsTests(TestPluginFixture fixture)
     {
         var holder = new LoadOrderHolder();
         using var manager = MakeLoadedManager(holder);
-        var byEditorId = manager.Records.GetRecords(["npc_"], plugin: null, search: "TestNPC01", limit: 10, offset: 0).Value();
+        var byEditorId = manager.Queries.GetRecords(["npc_"], plugin: null, search: "TestNPC01", limit: 10, offset: 0).Value();
         var formKey = byEditorId.Items[0].FormKey;
 
-        var result = manager.Records.GetRecords(["npc_", "weap"], plugin: null, search: formKey, limit: 10, offset: 0).Value();
+        var result = manager.Queries.GetRecords(["npc_", "weap"], plugin: null, search: formKey, limit: 10, offset: 0).Value();
 
         Assert.Equal(1, result.Total);
         Assert.Equal(formKey, result.Items[0].FormKey);

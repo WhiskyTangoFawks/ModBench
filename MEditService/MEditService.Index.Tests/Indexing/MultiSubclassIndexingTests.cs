@@ -16,7 +16,7 @@ public class MultiSubclassIndexingTests
     private static Dictionary<string, object?> FieldByEditorId(OpenedIndex index, string table, string field)
     {
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
-        foreach (var summary in index.Records.GetRecords([table], plugin: null, search: null, limit: 100, offset: 0).Value().Items)
+        foreach (var summary in index.Queries.GetRecords([table], plugin: null, search: null, limit: 100, offset: 0).Value().Items)
         {
             var detail = index.DocumentOf(summary.FormKey, new PluginAddress(summary.Plugin, summary.Origin));
             var value = detail.Fields.FirstOrDefault(f => f.Metadata.Name == field);

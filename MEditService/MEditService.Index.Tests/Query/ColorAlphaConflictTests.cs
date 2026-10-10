@@ -80,7 +80,7 @@ public sealed class ColorAlphaConflictTests
             ?? throw new InvalidOperationException("Expected the placed object's document to be an object.");
         document["Primitive"] = new JsonObject { ["Color"] = "#102030" };
 
-        var result = index.Records.GetCompare(placed.ToString(), new CopyText(edited, document.ToJsonString())).Value()
+        var result = index.Queries.GetCompare(placed.ToString(), new CopyText(edited, document.ToJsonString())).Value()
             ?? throw new InvalidOperationException("Expected the placed object to compare.");
 
         Assert.Equal(ConflictThis.IdenticalToMaster, OverrideState(result, "Primitive"));

@@ -1,24 +1,15 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.RepositoriesLib;
+using Mutagen.Bethesda;
 
 namespace MEditService.Index.Queries;
 
 /// <summary>Container-child rows (a Quest's topics/branches/scenes, a Dialog Topic's responses),
 /// hydrated through the ordinary Search path so IsWinner/WorkingTreeState/LoadOrderIndex derive
 /// exactly as every other listing does — no second derivation to keep in step.</summary>
-public sealed class ContainerChildQueryService
+internal static class ContainerChildren
 {
     private const int UnlimitedRecords = int.MaxValue;
-
-    private readonly IQueryIndex _index;
-    private readonly LoadOrderHolder _loadOrder;
-
-    internal ContainerChildQueryService(IQueryIndex index, LoadOrderHolder loadOrder)
-    {
-        _index = index;
-        _loadOrder = loadOrder;
-    }
 
     // The children xEdit nests under a quest (wbVWDAsQuestChildren: DIAL, DLBR, SCEN) and a topic
     // (INFO). A Cell/Worldspace slot isn't here, so a call against one answers empty rather than
@@ -31,18 +22,12 @@ public sealed class ContainerChildQueryService
         ["Responses"] = "info",
     };
 
-    public Answer<IReadOnlyList<ContainerChildSummary>, IndexRefused> GetChildren(PluginAddress plugin, string parentFormKey) =>
-        IndexAnswer.Of<IReadOnlyList<ContainerChildSummary>>(() => ChildrenOf(plugin, parentFormKey));
-
-    private List<ContainerChildSummary> ChildrenOf(PluginAddress plugin, string parentFormKey)
+    public static IReadOnlyList<ContainerChildSummary> Of(IRecordReads repo, PluginAddress plugin, string parentFormKey, GameRelease release)
     {
-        var repo = _index.RequireReads();
-
         var rows = repo.GetContainerChildren(plugin, parentFormKey)
             .Where(r => SlotRecordTypes.ContainsKey(r.SlotName))
             .ToList();
         if (rows.Count == 0) return [];
-        var release = _loadOrder.Require().GameRelease;
 
         // One Search per record type present, so hydration shares every other listing's derivation.
         var byFormKey = new Dictionary<string, RecordSummary>(StringComparer.Ordinal);

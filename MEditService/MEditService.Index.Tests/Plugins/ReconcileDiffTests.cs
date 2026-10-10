@@ -30,7 +30,7 @@ public sealed class ReconcileDiffTests
     private static PluginAddress Key(ScatteredFixtureData fx, string name) => fx.Plugins.Single(p => p.Name == name).KeyOf();
 
     private static string SharedNpc(OpenedIndex index, ScatteredFixtureData fx) =>
-        index.Records.GetRecords(["npc_"], Key(fx, "A.esm"), search: null, limit: 10, offset: 0).Value().Items.Single().FormKey;
+        index.Queries.GetRecords(["npc_"], Key(fx, "A.esm"), search: null, limit: 10, offset: 0).Value().Items.Single().FormKey;
 
     private static string WinnerOf(OpenedIndex index, string formKey) =>
         index.StackOf(formKey).Single(copy => copy.IsWinner).Plugin;
@@ -225,7 +225,7 @@ public sealed class ReconcileDiffTests
 
         Assert.Contains(index.Status.Failures, f => f.Name == "Bad.esp");
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.DoesNotContain(index.Records.GetPlugins().Value(), row => row.Plugin.Name == "Bad.esp");
+        Assert.DoesNotContain(index.Queries.GetPlugins().Value(), row => row.Plugin.Name == "Bad.esp");
 
         var sequence = index.Sequence;
         PluginBinaries.Touch(fx.Plugins[0].Path);
@@ -235,7 +235,7 @@ public sealed class ReconcileDiffTests
         new Fallout4Mod(ModKey.FromFileName("Bad.esp"), Fallout4Release.Fallout4).WriteToBinary(badPath);
         index.NextSnapshotUntil(() => index.Status.Failures.Count == 0, "the status without the recovered plugin's failure");
 
-        Assert.Contains(index.Records.GetPlugins().Value(), row => row.Plugin.Name == "Bad.esp");
+        Assert.Contains(index.Queries.GetPlugins().Value(), row => row.Plugin.Name == "Bad.esp");
     }
 
     [Fact]
