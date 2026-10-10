@@ -237,6 +237,7 @@ describe('the Referenced By list — what a plugin copy offers', () => {
     const [referrer] = provider.getChildren();
     expect(provider.getChildren(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder tracked editable']);
     expect(log.lines.warn).toHaveLength(1);
+    expect(log.lines.warn[0]).toContain(`getChildRecordTypes(${EDITABLE_MOD}, Fallout4.esm, 000002:Fallout4.esm)`);
   });
 });
 

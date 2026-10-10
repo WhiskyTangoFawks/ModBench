@@ -1272,6 +1272,11 @@
           "group": "1_open@2"
         },
         {
+          "command": "modbench.record.referencedBy",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/",
+          "group": "1_open@3"
+        },
+        {
           "command": "modbench.record.addElement",
           "when": "webviewId == 'modbench.record' && webviewSection =~ /\\barrayParent\\b/",
           "group": "2_change@1"
