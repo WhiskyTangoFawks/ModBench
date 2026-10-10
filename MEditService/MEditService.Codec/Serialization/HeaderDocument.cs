@@ -1,4 +1,5 @@
 using System.IO.Abstractions;
+using System.Text.Json.Nodes;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins.Records;
@@ -47,11 +48,20 @@ public static class HeaderDocument
         var folder = ScratchFolder();
         var rootPath = Path.Combine(folder, DocumentFileNames.Root);
 
-        return InlineSerialization.Finished(
+        var mod = InlineSerialization.Finished(
             () => RecordTextCodecGeneratorSeed.DeserializeWholeMod(
                 folder, InlineWorkDropoff.Instance, CancellationToken.None,
                 fileSystem: new OnlyTheRootDocumentExists(rootPath),
                 streamCreator: new SupplyRootDocument(rootPath, body)));
+        return WithAbsentNextObjectIdAsZero(mod, body);
+    }
+
+    /// <summary>A header document omits a Next Object ID of zero, but a new mod starts at 0x800, so
+    /// a mod read from a document that omits it holds 0x800 unless it is put back to zero.</summary>
+    public static IMod WithAbsentNextObjectIdAsZero(IMod mod, byte[] rootDocument)
+    {
+        if (JsonNode.Parse(rootDocument)?["ModHeader"]?["Stats"]?["NextFormID"] is null) mod.NextFormID = 0;
+        return mod;
     }
 
     public static uint NextObjectId(byte[] body) => Read(body).NextFormID;

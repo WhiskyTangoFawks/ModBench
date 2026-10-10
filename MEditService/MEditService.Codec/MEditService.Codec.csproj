@@ -7,13 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Pinned with MEditService.PluginAdapter's Mutagen reference; its comment says why. -->
-    <PackageReference Include="Mutagen.Bethesda.Fallout4" Version="0.53.1" />
+    <!-- Pinned with MEditService.PluginAdapter's Mutagen reference. Serialization stays at 1.37.1 until
+         a release of its source generator emits code for a whole-mod seed: 1.38.6, paired with Mutagen
+         0.54.x, generated nothing (MutagenJsonConverter.Instance.Serialize failed with CS1061). -->
+    <PackageReference Include="Mutagen.Bethesda.Fallout4" Version="0.54.4" />
     <!-- Library-level integration of Mutagen.Bethesda.Serialization (ADR-0004), not the Spriggit tool
          itself: avoids its exe-per-version machinery and its exact Mutagen [0.54.0] pin, which
-         this repo cannot take (see the 0.53.1 pin comment above). Serialization 1.37.1 depends on
-         Mutagen.Bethesda.Core >= 0.51.3 (a floor, not Spriggit's exact pin), so it is compatible
-         with 0.53.1, confirmed via the nuspec; restores with zero NuGet warnings.
+         this repo cannot take. Serialization 1.37.1 depends on Mutagen.Bethesda.Core >= 0.51.3 (a floor),
+         so it builds against 0.54.4.
          The JSON kernel (ADR-0005) is the Newtonsoft
          translation package, not a package literally named ".Json" — confirmed on nuget.org; it
          exists at this exact 1.37.1 version, matching the other two pins here. -->
@@ -28,7 +29,7 @@
          explicitly because RecordTextCodec names those types in production code (it suppresses
          the child-record folder creation a container write would otherwise do), and a type used
          directly should not depend on another package continuing to drag it in. -->
-    <PackageReference Include="System.IO.Abstractions" Version="22.0.16" />
+    <PackageReference Include="System.IO.Abstractions" Version="22.1.1" />
     <PackageReference Include="Roslynator.Analyzers" Version="4.15.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

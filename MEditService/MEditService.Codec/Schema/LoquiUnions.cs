@@ -165,7 +165,9 @@ public static class LoquiUnions
             var declaring = group.ToList();
             var alike = declaring.Count == leaves.Count
                 && declaring.Select(d => JsonSerializer.Serialize(shape(d.Member))).Distinct(StringComparer.Ordinal).Count() == 1;
-            yield return (declaring[0].Member, alike ? null : declaring.ToDictionary(d => d.ClassName, d => d.Member, StringComparer.Ordinal));
+            // The field's own face is the one that governs siblings, whatever order the assembly lists its leaves in.
+            var face = declaring.FirstOrDefault(d => shape(d.Member).SiblingsInUse != null, declaring[0]);
+            yield return (face.Member, alike ? null : declaring.ToDictionary(d => d.ClassName, d => d.Member, StringComparer.Ordinal));
         }
     }
 

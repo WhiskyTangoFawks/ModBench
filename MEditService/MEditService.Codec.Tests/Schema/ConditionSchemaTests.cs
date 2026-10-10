@@ -36,7 +36,7 @@ public sealed class ConditionSchemaTests
 
         Assert.True(discriminator.IsDiscriminator);
         Assert.Equal(
-            [nameof(FunctionConditionData), nameof(GetEventData)],
+            [nameof(GetEventData), nameof(FunctionConditionData)],
             discriminator.EnumMembers.Select(m => m.Value));
     }
 
