@@ -69,6 +69,12 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         if (comparison.Identical)
             return null;
 
+        if (comparison.DeletedRecordEmptied is { } deleted)
+        {
+            return $"{pluginName} does not round-trip through its own source: {deleted} is flagged Deleted and still " +
+                   "holds fields, which Mutagen does not write for a deleted record.";
+        }
+
         if (comparison.Loss is { } loss)
         {
             // A Kind B diagnosis on the record names the cause ahead of the drop it produced.

@@ -399,6 +399,76 @@ public sealed class TrackModTests
         Assert.False(TestAdapters.Source().IsTracked(modFolder));
     }
 
+    [Fact]
+    public async Task TrackMod_ADeletedRecordStillHoldingFields_RefusesNamingIt_SinceMutagenWritesADeletedRecordAsItsHeader()
+    {
+        using var modFolder = new ScratchDirectory("medit-track-deleted-fields-");
+        using var gameDir = new ScratchDirectory("medit-track-deleted-fields-game-");
+        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+        var npc = new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800);
+        DeletedNpcPlugin.WriteHoldingEveryField(pluginPath, npc);
+
+        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
+        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+
+        Assert.Equal((false, TrackRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal(
+            $"Fixture.esp does not round-trip through its own source: NPC_ {npc} is flagged Deleted " +
+            "and still holds fields, which Mutagen does not write for a deleted record.",
+            result.Message);
+        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+    }
+
+    [Fact]
+    public async Task TrackMod_ARecordWithANullFormId_RefusesNamingItsFile_SinceItsSourceCannotBeReadBack()
+    {
+        using var modFolder = new ScratchDirectory("medit-track-null-formid-");
+        using var gameDir = new ScratchDirectory("medit-track-null-formid-game-");
+        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        mod.Npcs.AddNew("NullGuy");
+        mod.WriteToBinary(pluginPath);
+        var bytes = File.ReadAllBytes(pluginPath);
+        const int formIdOffset = 12;
+        BitConverter.GetBytes(0u).CopyTo(bytes, bytes.AsSpan().LastIndexOf("NPC_"u8) + formIdOffset);
+        File.WriteAllBytes(pluginPath, bytes);
+
+        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
+        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+
+        Assert.Equal((false, TrackRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.StartsWith("Fixture.esp does not round-trip through its own source: ", result.Message, StringComparison.Ordinal);
+        Assert.Contains("NullGuy - Null.json", result.Message, StringComparison.Ordinal);
+        Assert.False(TestAdapters.Source().IsTracked(modFolder));
+    }
+
+    [Fact]
+    public async Task TrackMod_LocalizedPluginWhoseStringsAreInItsArchive_TracksAndMaterializesTheRealString()
+    {
+        using var modFolder = new ScratchDirectory("medit-trackservice-archived-strings-");
+        using var gameDir = new ScratchDirectory("medit-trackservice-archived-strings-game-");
+        var pluginPath = Path.Combine(modFolder, "Fixture.esl");
+        var mod = new Mutagen.Bethesda.Skyrim.SkyrimMod(ModKey.FromFileName("Fixture.esl"), Mutagen.Bethesda.Skyrim.SkyrimRelease.SkyrimSE);
+        var door = mod.Doors.AddNew("MainDoor");
+        door.Name = new TranslatedString(Language.English, "The Big Door");
+        mod.UsingLocalization = true;
+        ((IModGetter)mod).WriteToBinary(pluginPath);
+        var looseStrings = Path.Combine(modFolder, "Strings");
+        StringsArchive.Pack(Directory.EnumerateFiles(looseStrings), Path.Combine(modFolder, "Fixture.bsa"));
+        Directory.Delete(looseStrings, recursive: true);
+
+        var loadOrder = SnapshotPlugins.Snapshot(
+            gameDir, gameDir, GameRelease.SkyrimSE,
+            [new LoadOrderEntry("Fixture.esl", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
+        var result = (await TrackEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+
+        Assert.True(result.Applied, result.Message);
+        var sourceText = TrackedTree.Document(modFolder, new PluginAddress("Fixture.esl", "FixtureMod"), door.FormKey.ToString()).Require().Body;
+        Assert.Contains("The Big Door", sourceText);
+    }
+
     private static (string PluginPath, Door Door) WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(string modFolder)
     {
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");

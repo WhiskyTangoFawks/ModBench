@@ -83,8 +83,7 @@ internal static class PluginTrees
         var scratchDir = Directory.CreateTempSubdirectory("medit-writetree-").FullName;
         try
         {
-            var recompiled = await DeserializeTree(
-                game, await MaterializeTree(files, Path.Combine(scratchDir, TreeFolder), cancel), cancel);
+            if (!(await ReadIntoAsync(game, files, scratchDir, cancel)).Holds(out var recompiled, out var unread)) return unread;
             await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath, masterOrder);
             return PluginAnswer.Of(destinationPath);
         }
@@ -134,6 +133,27 @@ internal static class PluginTrees
         return shared;
     }
 
+    // The mod files compile to, read in scratchDir, or the failure that names the file at fault.
+    private static async Task<Answer<IMod, PluginFailure>> ReadIntoAsync(
+        IGameCodec game, IReadOnlyList<TreeFile> files, string scratchDir, CancellationToken cancel)
+    {
+        // Outside the catch below: a scratch folder this filesystem cannot write is not a source
+        // defect, and a refusal naming the source would misname it.
+        var treeBase = Path.Combine(scratchDir, TreeFolder);
+        var treeRoot = await MaterializeTree(files, treeBase, cancel);
+
+        // The files carry their own mod-folder-relative paths, so the scratch is a mod folder and
+        // every path a read failure names is relative to one.
+        try
+        {
+            return PluginAnswer.Of(await DeserializeTree(game, treeRoot, cancel));
+        }
+        catch (Exception ex) when (PluginFailure.StandsFor(ex))
+        {
+            return new PluginFailure.Unparsed(PluginDiagnosis.FromSourceReadException(ex, treeBase), ex);
+        }
+    }
+
     private static async Task<IMod> DeserializeTree(IGameCodec game, string treeRoot, CancellationToken cancel) =>
         HeaderDocument.RestoreOmittedNextObjectId(
             await game.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel),
@@ -165,21 +185,7 @@ internal static class PluginTrees
         var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
         try
         {
-            // Outside the catch below: a scratch folder this filesystem cannot write is not a source
-            // defect, and a refusal naming the source would misname it.
-            var treeBase = Path.Combine(scratchDir, TreeFolder);
-            var treeRoot = await MaterializeTree(files, treeBase, cancel);
-
-            // The files carry their own mod-folder-relative paths, so the scratch is a mod folder and
-            // every path a read failure names is relative to one.
-            try
-            {
-                return PluginAnswer.Of(new CompiledTree(await DeserializeTree(game, treeRoot, cancel), gameRelease));
-            }
-            catch (Exception ex) when (PluginFailure.StandsFor(ex))
-            {
-                return new PluginFailure.Unparsed(PluginDiagnosis.FromSourceReadException(ex, treeBase), ex);
-            }
+            return (await ReadIntoAsync(game, files, scratchDir, cancel)).Then(mod => PluginAnswer.Of(new CompiledTree(mod, gameRelease)));
         }
         finally
         {

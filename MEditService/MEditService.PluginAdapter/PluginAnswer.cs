@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.RepositoriesLib;
+using Mutagen.Bethesda.Plugins.Exceptions;
 
 namespace MEditService.PluginAdapter;
 
@@ -62,6 +63,17 @@ public abstract record PluginFailure
         public override string Reason => _reason;
     }
 
+    /// <summary>The write's content references a plugin the load order it orders masters by does not hold.</summary>
+    public sealed record MasterNotInLoadOrder : PluginFailure
+    {
+        private readonly string _reason;
+
+        internal MasterNotInLoadOrder(MissingModException error) : base(error) =>
+            _reason = $"it references {string.Join(", ", error.ModPaths.Select(path => path.ModKey.FileName))}, which the load order does not hold";
+
+        public override string Reason => _reason;
+    }
+
     /// <summary>The failure <paramref name="ex"/> stands for: a file system refusal is
     /// <see cref="Inaccessible"/>, anything else a read Mutagen could not make.</summary>
     internal static PluginFailure Of(Exception ex) =>
@@ -79,6 +91,7 @@ public abstract record PluginFailure
     {
         IOException or UnauthorizedAccessException => new Inaccessible(ex),
         _ when PluginDiagnosis.HasUnmappableFormID(ex) => new PrunedMaster(ex),
+        MissingModException missing => new MasterNotInLoadOrder(missing),
         _ => null,
     };
 

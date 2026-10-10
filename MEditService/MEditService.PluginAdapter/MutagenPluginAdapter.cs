@@ -153,12 +153,13 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             if (originalBytes.AsSpan().SequenceEqual(recompiledBytes))
                 return new PluginByteComparison(Identical: true);
 
+            var deletedRecordEmptied = DroppedDeletedFields.FirstIn(originalBytes, recompiledBytes, Path.GetFileName(originalPath));
             if (PluginBinaryWalk.FindFirstSubrecordLoss(originalBytes, recompiledBytes) is not { } loss)
-                return new PluginByteComparison(Identical: false);
+                return new PluginByteComparison(Identical: false, DeletedRecordEmptied: deletedRecordEmptied);
 
             var cause = MalformedPluginScan.Scan(originalBytes, gameRelease).FirstOrDefault(d =>
                 d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
-            return new PluginByteComparison(Identical: false, loss, cause);
+            return new PluginByteComparison(Identical: false, loss, cause, deletedRecordEmptied);
         });
 
     internal static IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
