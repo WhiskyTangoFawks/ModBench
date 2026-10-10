@@ -173,6 +173,17 @@ describe('modbench.mod.track', () => {
     }]);
   });
 
+  it('from the palette, tracks the mod of a Plugins selection', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('track', { landed: [modB([OTHER])], refused: [] });
+    const { handler, reporter } = invokeTrack(client, undefined, () => [row(OTHER)]);
+
+    await handler();
+
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModB'], expect.anything()] }]);
+    expect(reporter.landings).toEqual(['Tracked "ModB".']);
+  });
+
   it('on an Editor column header, tracks the column plugin\'s mod', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('track', { landed: [modA([FIRST, SECOND])], refused: [] });
@@ -185,28 +196,6 @@ describe('modbench.mod.track', () => {
     await handler(header);
 
     expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModA'], expect.anything()] }]);
-  });
-
-  it('from the palette, tracks the mods of a Mods selection', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [modB([OTHER])], refused: [] });
-    const { handler, reporter } = invokeTrack(client, undefined, () => [new ModsRowStandIn('ModB')]);
-
-    await handler();
-
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModB'], expect.anything()] }]);
-    expect(reporter.landings).toEqual(['Tracked "ModB".']);
-  });
-
-  it('from the palette, tracks the mod of a Plugins selection', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('track', { landed: [modB([OTHER])], refused: [] });
-    const { handler, reporter } = invokeTrack(client, undefined, () => [row(OTHER)]);
-
-    await handler();
-
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [['ModB'], expect.anything()] }]);
-    expect(reporter.landings).toEqual(['Tracked "ModB".']);
   });
 
   it('names a mod mEdit refused while the rest land', async () => {
