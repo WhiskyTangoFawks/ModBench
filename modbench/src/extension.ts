@@ -206,7 +206,7 @@ function buildViews(opened: Opened, { own, dispose }: ReturnType<typeof ownershi
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-    const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
+  const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
   context.subscriptions.push(outputChannel);
 
   // ADR-0002.
