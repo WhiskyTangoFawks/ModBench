@@ -1,10 +1,8 @@
-using Mutagen.Bethesda.Fallout4;
 
-namespace MEditService.Codec.Schema;
+namespace MEditService.Codec.Game;
 
-/// <summary>The Fallout 4 condition facts overlaid on the reflected schema — the one place a
-/// game-specific Mutagen type is named for an annotation row, so <see cref="SchemaAnnotations"/>
-/// stays game-neutral.</summary>
+/// <summary>Fallout 4's condition facts: a flat <c>Function</c> enum, which Skyrim and Starfield do
+/// not have.</summary>
 internal static class Fallout4ConditionAnnotations
 {
     /// <summary>Which parameter slots each function reads, from Mutagen's own
