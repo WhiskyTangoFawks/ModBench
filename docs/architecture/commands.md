@@ -86,6 +86,7 @@ A gesture that fits none of these stays in the tables. A new reason is added to 
 | Downloads | - | Downloads tab | [downloads.md](surfaces/downloads.md) |
 | Editor | View grid, Referenced By | - | [editor.md](surfaces/editor.md) |
 | Plugin source | Referenced By, Ctrl + click | - | [plugin-source.md](surfaces/plugin-source.md) |
+| Agent | - | - | [agent.md](surfaces/agent.md) |
 
 The xEdit Messages tab is not a surface. Failures go to the Output and the surface their severity calls for (ADR-0019); diagnostics go to the Problems panel.
 
