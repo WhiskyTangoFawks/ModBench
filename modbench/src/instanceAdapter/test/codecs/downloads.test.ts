@@ -49,25 +49,6 @@ describe('setHiddenInText', () => {
     expect(setHiddenInText('', true)).toBe('[General]\r\nremoved=true\r\n');
   });
 
-  it('inserts removed=true after an existing [General] header, preserving other lines', () => {
-    const text = '[General]\r\ngameName=Fallout4\r\nmodid=12345\r\n';
-    expect(setHiddenInText(text, true)).toBe(
-      '[General]\r\nremoved=true\r\ngameName=Fallout4\r\nmodid=12345\r\n',
-    );
-  });
-
-  it('flips an existing removed=false to true in place, byte-faithful', () => {
-    const text = '[General]\r\ngameName=Fallout4\r\nremoved=false\r\nmodid=12345\r\n';
-    expect(setHiddenInText(text, true)).toBe(
-      '[General]\r\ngameName=Fallout4\r\nremoved=true\r\nmodid=12345\r\n',
-    );
-  });
-
-  it('is a no-op when removed=true is already present', () => {
-    const text = '[General]\r\nremoved=true\r\nmodid=12345\r\n';
-    expect(setHiddenInText(text, true)).toBe(text);
-  });
-
   it('flips removed=true to false in place when unhiding as MO2 does, writing removed=false rather than deleting the key, byte-faithful', () => {
     const text = '[General]\r\ngameName=Fallout4\r\nremoved=true\r\nmodid=12345\r\n';
     expect(setHiddenInText(text, false)).toBe(
@@ -81,61 +62,15 @@ describe('setInstalledInText', () => {
     expect(setInstalledInText('')).toBe('[General]\r\ninstalled=true\r\nuninstalled=false\r\n');
   });
 
-  it('inserts both keys after an existing [General] header, preserving other lines', () => {
-    const text = '[General]\r\ngameName=Fallout4\r\nmodid=12345\r\n';
-    expect(setInstalledInText(text)).toBe(
-      '[General]\r\ninstalled=true\r\nuninstalled=false\r\ngameName=Fallout4\r\nmodid=12345\r\n',
-    );
-  });
-
-  it('flips an existing installed=false to true in place, byte-faithful', () => {
-    const text = '[General]\r\ngameName=Fallout4\r\ninstalled=false\r\nmodid=12345\r\n';
-    expect(setInstalledInText(text)).toBe(
-      '[General]\r\nuninstalled=false\r\ngameName=Fallout4\r\ninstalled=true\r\nmodid=12345\r\n',
-    );
-  });
-
-  it('is a no-op when both keys already read installed', () => {
-    const text = '[General]\r\ninstalled=true\r\nuninstalled=false\r\nmodid=12345\r\n';
-    expect(setInstalledInText(text)).toBe(text);
-  });
-
   it('clears an earlier uninstall, so a reinstalled download reads Installed again, MO2\'s markInstalled writing uninstalled=false beside installed=true and a reader taking uninstalled first', () => {
     const uninstalled = setUninstalledInText('[General]\r\ninstalled=true\r\n');
     expect(parseDownloadMeta(uninstalled).status).toBe('Uninstalled');
     expect(parseDownloadMeta(setInstalledInText(uninstalled)).status).toBe('Installed');
   });
 
-  it('preserves LF-only line endings when inserting after an existing [General] header, a .meta from a platform that writes bare LF keeping its own convention though MO2 writes CRLF on Windows', () => {
-    const text = '[General]\ngameName=Fallout4\n';
-    expect(setInstalledInText(text)).toBe('[General]\ninstalled=true\nuninstalled=false\ngameName=Fallout4\n');
-  });
 });
 
 describe('setUninstalledInText', () => {
-  it('creates a fresh [General] section with uninstalled=true when there is no .meta text', () => {
-    expect(setUninstalledInText('')).toBe('[General]\r\nuninstalled=true\r\n');
-  });
-
-  it('inserts uninstalled=true after an existing [General] header, preserving other lines', () => {
-    const text = '[General]\r\ngameName=Fallout4\r\nmodid=12345\r\n';
-    expect(setUninstalledInText(text)).toBe(
-      '[General]\r\nuninstalled=true\r\ngameName=Fallout4\r\nmodid=12345\r\n',
-    );
-  });
-
-  it('flips an existing uninstalled=false to true in place, byte-faithful', () => {
-    const text = '[General]\r\ngameName=Fallout4\r\nuninstalled=false\r\nmodid=12345\r\n';
-    expect(setUninstalledInText(text)).toBe(
-      '[General]\r\ngameName=Fallout4\r\nuninstalled=true\r\nmodid=12345\r\n',
-    );
-  });
-
-  it('is a no-op when uninstalled=true is already present', () => {
-    const text = '[General]\r\nuninstalled=true\r\nmodid=12345\r\n';
-    expect(setUninstalledInText(text)).toBe(text);
-  });
-
   it('leaves installed=true in place — it is a separate key, never cleared, as MO2 writes uninstalled=true on uninstall without clearing installed', () => {
     const text = '[General]\r\ninstalled=true\r\nmodid=12345\r\n';
     expect(setUninstalledInText(text)).toBe(

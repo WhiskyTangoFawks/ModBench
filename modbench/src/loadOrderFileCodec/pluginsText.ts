@@ -89,8 +89,8 @@ export function removePluginFromText(text: string, pluginName: string): string {
 export function renamePluginInText(text: string, pluginName: string, newName: string): string {
   return editLines(text, (lines) => {
     const idx = entryLineAt(lines, pluginName);
-    if (idx === -1) throw notFound(pluginName);
-    const line = lines[idx] ?? '';
+    const line = lines[idx];
+    if (line === undefined) throw notFound(pluginName);
     const nameAt = line.indexOf(pluginName, paddingOf(line));
     lines[idx] = line.slice(0, nameAt) + newName + line.slice(nameAt + pluginName.length);
     return lines;

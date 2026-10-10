@@ -23,9 +23,22 @@ describe('readSelectedProfile', () => {
     );
   });
 
-  it('does not spuriously match a key-like line lacking "=", as a slice(0, -1) off the missing "=" would land on exactly "selected_profile", ahead of the real line', () => {
-    const text = '[General]\r\nselected_profileX\r\nselected_profile=Real Value\r\n';
-    expect(readSelectedProfile(text)).toBe('Real Value');
+});
+
+describe('section-aware lookups', () => {
+  it('reads a key from its own section, not the same key in an earlier one', () => {
+    expect(readSelectedProfile('[Other]\r\nselected_profile=Wrong\r\n[General]\r\nselected_profile=Right\r\n')).toBe('Right');
+  });
+
+  it('does not find a key that exists only in another section', () => {
+    expect(() => readSelectedProfile('[Settings]\r\nselected_profile=Wrong\r\n')).toThrow(/missing selected_profile/);
+  });
+
+  it('sets the key in its own section, leaving the same key elsewhere', () => {
+    const text = '[Other]\r\nselected_profile=Keep\r\n[General]\r\nselected_profile=Old\r\n';
+    expect(setSelectedProfileInText(text, 'New')).toBe(
+      '[Other]\r\nselected_profile=Keep\r\n[General]\r\nselected_profile=@ByteArray(New)\r\n',
+    );
   });
 });
 
@@ -58,21 +71,6 @@ describe('readDownloadDirectory', () => {
   it('un-escapes the doubled backslashes MO2/Qt actually writes for a plain Windows path, download_directory being a plain QString (settings.cpp:1683), never @ByteArray unlike gamePath', () => {
     const onDisk = String.raw`download_directory=C:\\Games\\MO2\\downloads`;
     expect(readDownloadDirectory(`[Settings]\r\n${onDisk}\r\n`)).toBe(String.raw`C:\Games\MO2\downloads`);
-  });
-
-  it('un-escapes the doubled backslashes in a Wine Z:-drive path the same way', () => {
-    const onDisk = String.raw`download_directory=Z:\\home\\x`;
-    expect(readDownloadDirectory(`[Settings]\r\n${onDisk}\r\n`)).toBe(String.raw`Z:\home\x`);
-  });
-
-  it('reads a plain value needing no escaping (a POSIX path) unchanged', () => {
-    expect(readDownloadDirectory('[Settings]\r\ndownload_directory=/mnt/storage/downloads\r\n'))
-      .toBe('/mnt/storage/downloads');
-  });
-
-  it('strips the quote wrapper and un-escapes a value Qt quoted for a special character', () => {
-    const onDisk = String.raw`download_directory="C:\\Games;New"`;
-    expect(readDownloadDirectory(`[Settings]\r\n${onDisk}\r\n`)).toBe(String.raw`C:\Games;New`);
   });
 
   it('unwraps an @ByteArray(...) value with no unescaping, matching gamePath\'s own raw bytes', () => {

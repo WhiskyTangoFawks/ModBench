@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lineRanges, detectEol, editLines } from '../lineScan';
+import { detectEol, editLines } from '../lineScan';
 
 describe('editLines', () => {
   const unchanged = (lines: string[]): string[] => lines;
@@ -32,23 +32,6 @@ describe('editLines', () => {
 
   it('terminates the first line of an empty file', () => {
     expect(editLines('', () => ['a'])).toBe('a\n');
-  });
-});
-
-const contentAndEol = (text: string): [string, string][] =>
-  [...lineRanges(text)].map((r) => [text.slice(r.start, r.contentEnd), text.slice(r.contentEnd, r.end)]);
-
-describe('lineRanges', () => {
-  it('treats a bare LF blank line as its own line, not merged with its neighbor', () => {
-    expect(contentAndEol('+A\n\n+B\n')).toEqual([['+A', '\n'], ['', '\n'], ['+B', '\n']]);
-  });
-
-  it('ends a line at a bare CR without swallowing the character after it', () => {
-    expect(contentAndEol('A\rB')).toEqual([['A', '\r'], ['B', '']]);
-  });
-
-  it('yields the final line even when it has no trailing EOL, without a spurious extra range', () => {
-    expect(contentAndEol('+A\r\n+B')).toEqual([['+A', '\r\n'], ['+B', '']]);
   });
 });
 

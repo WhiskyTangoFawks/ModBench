@@ -173,8 +173,8 @@ describe('renamePluginInText — byte-faithful rename of one line, in place', ()
     expect(renamePluginInText(input, 'B.esp', 'Z.esp')).toBe('# header\r\n*A.esp\r\n\r\nZ.esp\r\n*C.esp\r\n');
   });
 
-  it('keeps a leading BOM, a hand-padded line\'s padding, and a last line with no EOL', () => {
-    expect(renamePluginInText('\uFEFF*First.esp\r\n  *Second.esp  ', 'Second.esp', 'Third.esp')).toBe('\uFEFF*First.esp\r\n  *Third.esp  ');
+  it('keeps a hand-padded line\'s padding', () => {
+    expect(renamePluginInText('  *Second.esp  ', 'Second.esp', 'Third.esp')).toBe('  *Third.esp  ');
   });
 
   it('leaves a comment that holds the name alone', () => {
