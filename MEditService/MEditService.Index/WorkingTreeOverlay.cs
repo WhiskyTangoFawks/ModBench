@@ -80,7 +80,7 @@ internal sealed class WorkingTreeOverlay
 
             // Gone: document and derived rows alike. Dropping only the document would leave the
             // record in the reference graph.
-            DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            DuckDbSql.Execute(_connection, "DELETE FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin);
             DeleteDerivationsForRecord(key, formKey);
             return true;
@@ -111,18 +111,10 @@ internal sealed class WorkingTreeOverlay
         if (!IsRegisteredPlugin(key))
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
+        DuckDbSql.Execute(_connection, """
             INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, content_hash)
             VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $5, $6)
-            """;
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
-        cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin });
-        cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
-        cmd.Parameters.Add(new DuckDBParameter { Value = body });
-        cmd.Parameters.Add(new DuckDBParameter { Value = SourceRepository.ContentStamp(body) });
-        cmd.ExecuteNonQuery();
+            """, formKey, key.Name, key.Origin, recordType, body, SourceRepository.ContentStamp(body));
     }
 
     private bool IsRegisteredPlugin(PluginAddress key) =>
@@ -134,7 +126,7 @@ internal sealed class WorkingTreeOverlay
         // editor_id follows the body: it is a projection of the document; otherwise a renamed record
         // would keep listing under its old EditorID. record_type is not re-derived: a record cannot
         // change type.
-        DuckDbSql.ExecuteFor(_connection, """
+        DuckDbSql.Execute(_connection, """
             UPDATE mirror.records
             SET body = $4, content_hash = $5, editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
@@ -195,20 +187,13 @@ internal sealed class WorkingTreeOverlay
     // The children last recorded under this container. embeddedIn names the container's type and
     // keeps only the children its document carries; null takes every child, the set a deleted
     // directory held.
-    private List<string> ChildrenRecorded(PluginAddress key, string parentFormKey, string? embeddedIn)
-    {
-        var recorded = new List<string>();
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "SELECT child, slot FROM mirror.holdings WHERE parent = $1 AND plugin = $2 AND origin = $3";
-        DuckDbSql.AddParams(cmd, [parentFormKey, key.Name, key.Origin]);
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            if (embeddedIn == null || _types.IsEmbeddedSlot(embeddedIn, reader.GetString(1)))
-                recorded.Add(reader.GetString(0));
-        }
-        return recorded;
-    }
+    private List<string> ChildrenRecorded(PluginAddress key, string parentFormKey, string? embeddedIn) =>
+        DuckDbSql.Rows(
+                _connection, "SELECT child, slot FROM mirror.holdings WHERE parent = $1 AND plugin = $2 AND origin = $3",
+                reader => (Child: reader.GetString(0), Slot: reader.GetString(1)), parentFormKey, key.Name, key.Origin)
+            .Where(row => embeddedIn == null || _types.IsEmbeddedSlot(embeddedIn, row.Slot))
+            .Select(row => row.Child)
+            .ToList();
 
     private bool HeldByAnotherContainer(PluginAddress key, string childFormKey, string thisParentFormKey) =>
         DuckDbSql.ScalarString(_connection, """
@@ -248,7 +233,7 @@ internal sealed class WorkingTreeOverlay
     // is correct. A worldspace's exterior cells are not in its body: their own records place them.
     private void RederiveContainmentForRecord(PluginAddress key, PluginIngest.PreparedRecord prepared)
     {
-        DuckDbSql.ExecuteFor(_connection,
+        DuckDbSql.Execute(_connection,
             $"DELETE FROM mirror.holdings WHERE parent = $1 AND slot <> {HoldingSlots.Exterior} AND plugin = $2 AND origin = $3",
             prepared.FormKey, key.Name, key.Origin);
         if (prepared.Holdings.Count > 0)
@@ -260,7 +245,7 @@ internal sealed class WorkingTreeOverlay
 
         foreach (var row in prepared.CellLocations)
         {
-            DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
+            DuckDbSql.Execute(_connection, "DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
                 row.CellFormKey, key.Name, key.Origin);
             using var appender = _connection.CreateAppender("mirror", "cell_location");
             PluginIngest.AppendCellLocationRow(appender, row, key.Name, key.Origin);
@@ -274,7 +259,7 @@ internal sealed class WorkingTreeOverlay
     }
 
     private void DeleteFormReferencesForRecord(PluginAddress key, string formKey) =>
-        DuckDbSql.ExecuteFor(_connection,
+        DuckDbSql.Execute(_connection,
             "DELETE FROM mirror.form_references WHERE source_form_key = $1 AND source_plugin = $2 AND source_origin = $3",
             formKey, key.Name, key.Origin);
 
@@ -283,9 +268,9 @@ internal sealed class WorkingTreeOverlay
     // children lose their rows via their own deletion.
     private void DeleteContainmentForRecord(PluginAddress key, string formKey)
     {
-        DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.holdings WHERE (child = $1 OR parent = $1) AND plugin = $2 AND origin = $3",
+        DuckDbSql.Execute(_connection, "DELETE FROM mirror.holdings WHERE (child = $1 OR parent = $1) AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
-        DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
+        DuckDbSql.Execute(_connection, "DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
     }
 }

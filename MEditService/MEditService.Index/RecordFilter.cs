@@ -48,13 +48,13 @@ internal sealed class RecordFilter(Store store)
         }
         try
         {
-            DuckDbSql.ExecuteFor(connection, $"CREATE OR REPLACE TABLE {Matches} AS ({sql}\n)");
+            DuckDbSql.Execute(connection, $"CREATE OR REPLACE TABLE {Matches} AS ({sql}\n)");
         }
         catch (DuckDBException ex) when (FailedOnARow(ex))
         {
             return ex.Message;
         }
-        DuckDbSql.ExecuteFor(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE OR REPLACE TABLE {Holders} AS
             WITH RECURSIVE held AS (SELECT plugin, origin, parent, child FROM ({NavigatorSql.Held}) h),
             holders(plugin, origin, form_key) AS (

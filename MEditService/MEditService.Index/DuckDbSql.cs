@@ -1,4 +1,5 @@
 using DuckDB.NET.Data;
+using MEditService.LoadOrder;
 
 namespace MEditService.Index;
 
@@ -7,25 +8,49 @@ namespace MEditService.Index;
 /// consumer instead.</summary>
 internal static class DuckDbSql
 {
-    public static string? ScalarString(DuckDBConnection connection, string sql, params string[] values)
+    public static List<T> Rows<T>(
+        DuckDBConnection connection, string sql, Func<DuckDBDataReader, T> map, params object?[] args)
     {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = sql;
-        AddParams(cmd, values);
+        using var cmd = Command(connection, sql, args);
+        using var reader = cmd.ExecuteReader();
+        var rows = new List<T>();
+        while (reader.Read()) rows.Add(map(reader));
+        return rows;
+    }
+
+    public static int Execute(DuckDBConnection connection, string sql, params object?[] args)
+    {
+        using var cmd = Command(connection, sql, args);
+        return cmd.ExecuteNonQuery();
+    }
+
+    public static string? ScalarString(DuckDBConnection connection, string sql, params object?[] args)
+    {
+        using var cmd = Command(connection, sql, args);
         return cmd.ExecuteScalar() as string;
     }
 
-    public static void ExecuteFor(DuckDBConnection connection, string sql, params string[] values)
+    /// <summary>The one value a query that always answers a value (a count, a counter) returns.</summary>
+    public static T Scalar<T>(DuckDBConnection connection, string sql, params object?[] args) where T : struct
     {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = sql;
-        AddParams(cmd, values);
-        cmd.ExecuteNonQuery();
+        using var cmd = Command(connection, sql, args);
+        return cmd.ExecuteScalar() is T value
+            ? value
+            : throw new InvalidOperationException($"Expected a {typeof(T).Name} from: {sql}");
     }
 
-    public static void AddParams(DuckDBCommand cmd, IEnumerable<string> values)
+    public static string? GetStringOrNull(this DuckDBDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+
+    public static PluginAddress ReadPluginAddress(DuckDBDataReader reader) =>
+        new(reader.GetString(0), reader.GetString(1));
+
+    private static DuckDBCommand Command(DuckDBConnection connection, string sql, object?[] args)
     {
-        foreach (var v in values)
-            cmd.Parameters.Add(new DuckDBParameter { Value = v });
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        foreach (var arg in args)
+            cmd.Parameters.Add(new DuckDBParameter { Value = arg });
+        return cmd;
     }
 }

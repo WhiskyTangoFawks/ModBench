@@ -75,7 +75,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     public static void CreateTables(DuckDBConnection connection)
     {
-        Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {MirrorSchema}");
+        DuckDbSql.Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {MirrorSchema}");
         CreateRecordsTable(connection);
         CreateRegistrationsTable(connection);
         CreateActiveTable(connection);
@@ -88,7 +88,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateCellLocationTable(connection);
         CreateRecordTypeFailureTable(connection);
         CreateSequenceTable(connection);
-        Execute(connection, $"CREATE TABLE IF NOT EXISTS {MirrorSchema}.index_version (value VARCHAR NOT NULL)");
+        DuckDbSql.Execute(connection, $"CREATE TABLE IF NOT EXISTS {MirrorSchema}.index_version (value VARCHAR NOT NULL)");
 
         // Views after tables: the public views over every mirror table.
         CreatePublicViews(connection);
@@ -99,12 +99,12 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // open.
     private static void CreateSequenceTable(DuckDBConnection connection)
     {
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.sequence (
                 value BIGINT NOT NULL
             )
             """);
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             INSERT INTO {MirrorSchema}.sequence (value)
             SELECT 0 WHERE NOT EXISTS (SELECT 1 FROM {MirrorSchema}.sequence)
             """);
@@ -151,7 +151,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         var winnerJoin = relation.DerivesWinner
             ? WinnerJoin("t", relation.PluginColumn, relation.OriginColumn)
             : "";
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE OR REPLACE VIEW "{view}" AS
             SELECT {columns}{loadOrderColumn}{winnerColumn}
             FROM {MirrorSchema}."{relation.Table}" t
@@ -164,7 +164,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // as the source file" is what lets content_hash stamp them.
     private static void CreateRecordsTable(DuckDBConnection connection)
     {
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.records (
                 form_key        VARCHAR {FilenameIdentity} NOT NULL,
                 plugin          VARCHAR {FilenameIdentity} NOT NULL,
@@ -180,10 +180,10 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
         // form_key drives every single-record read; (plugin, origin) drives the per-plugin delete
         // every re-index starts with, and the per-plugin listings/counts.
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_records_form_key ON {MirrorSchema}.records(form_key)
             """);
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_records_plugin ON {MirrorSchema}.records(plugin, origin)
             """);
     }
@@ -191,7 +191,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // Replaced whole by each sweep, never diffed (ADR-0013), and remembered for
     // the re-sweeps a working-tree write triggers.
     private static void CreateActiveTable(DuckDBConnection connection) =>
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {ActiveRelation} (
                 plugin VARCHAR {FilenameIdentity} NOT NULL,
                 origin VARCHAR {FilenameIdentity} NOT NULL,
@@ -204,7 +204,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // the rebuild measured 6x the sweep.
     private static void CreateWinnersTable(DuckDBConnection connection)
     {
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {WinnersRelation} (
                 form_key   VARCHAR {FilenameIdentity} NOT NULL,
                 plugin     VARCHAR {FilenameIdentity} NOT NULL,
@@ -214,7 +214,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     }
 
     private static void CreateRegistrationsTable(DuckDBConnection connection) =>
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {RegistrationsRelation} (
                 plugin VARCHAR {FilenameIdentity} NOT NULL,
                 origin VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -228,7 +228,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     /// <c>registrations</c>, whose rows come and go with every reconcile, so the first unregister (a
     /// profile switch) keeps the hash.</summary>
     internal static void CreateFilesTable(DuckDBConnection connection) =>
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.files (
                 plugin        VARCHAR {FilenameIdentity} NOT NULL,
                 origin        VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -239,7 +239,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
 
     internal static void CreatePluginDerivationTable(DuckDBConnection connection) =>
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.{PluginDerivationTable} (
                 plugin       VARCHAR {FilenameIdentity} NOT NULL,
                 origin       VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -249,7 +249,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
 
     internal static void CreatePluginDiagnosisTable(DuckDBConnection connection) =>
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.{PluginDiagnosisTable} (
                 plugin       VARCHAR {FilenameIdentity} NOT NULL,
                 origin       VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -263,7 +263,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     internal static void CreateFormReferencesTable(DuckDBConnection connection)
     {
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.form_references (
                 source_form_key VARCHAR {FilenameIdentity} NOT NULL,
                 source_plugin   VARCHAR {FilenameIdentity} NOT NULL,
@@ -274,7 +274,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 editor_id       VARCHAR
             )
             """);
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_form_references_target
                 ON {MirrorSchema}.form_references(target_form_key)
             """);
@@ -284,7 +284,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // the same plugin: a topic in its quest, a placed reference in its cell, a cell in its worldspace.
     internal static void CreateHoldingsTable(DuckDBConnection connection)
     {
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.holdings (
                 plugin      VARCHAR {FilenameIdentity} NOT NULL,
                 origin      VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -294,7 +294,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 slot_index  INTEGER NOT NULL
             )
             """);
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_holdings_parent
                 ON {MirrorSchema}.holdings(parent, plugin, origin)
             """);
@@ -304,7 +304,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // holding holds is interior.
     internal static void CreateCellLocationTable(DuckDBConnection connection)
     {
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.cell_location (
                 cell_form_key    VARCHAR {FilenameIdentity} NOT NULL,
                 plugin           VARCHAR {FilenameIdentity} NOT NULL,
@@ -323,7 +323,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // status, because the records it would have carried are the ones that never arrived.
     internal static void CreateRecordTypeFailureTable(DuckDBConnection connection)
     {
-        Execute(connection, $"""
+        DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.record_type_failure (
                 plugin          VARCHAR {FilenameIdentity} NOT NULL,
                 origin          VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -331,12 +331,5 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 parse_diagnosis VARCHAR NOT NULL
             )
             """);
-    }
-
-    private static void Execute(DuckDBConnection connection, string sql)
-    {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
     }
 }
