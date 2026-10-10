@@ -88,6 +88,7 @@ export async function register({
     recordWrite: (command) => command(),
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     locateRecord: () => Promise.resolve(undefined),
+    conditionsOf: () => ({ tracked: false, editable: false }),
   });
   focusedView.follow('test.view', {
     get selection() { return selection(); },

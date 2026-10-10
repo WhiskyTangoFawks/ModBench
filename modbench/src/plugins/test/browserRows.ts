@@ -4,7 +4,7 @@ import type {
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordTypeCountFixture } from '../../client/test/fixtures';
 import { present } from '../../ports/present';
-import type { PluginConditions } from '../pluginFacts';
+import type { PluginConditions } from '../../drivingLib/recordRowContext';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 
 type GroupSpec = Partial<PluginRecordTypeCount> & { type: string };

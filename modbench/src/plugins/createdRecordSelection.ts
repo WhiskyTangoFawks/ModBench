@@ -19,8 +19,8 @@ export interface CreatedRecordSelectionDeps<Row> {
 
 export interface CreatedRecordWatch<Row> {
   /** The record mEdit created, selected and opened once a change to its plugin names it, or
-   *  mEdit re-derives the whole plugin. */
-  select(place: RecordPlace<Row>, formKey: string): void;
+   *  mEdit re-derives the whole plugin. With no place, it is opened and no row is selected. */
+  select(place: RecordPlace<Row> | undefined, formKey: string): void;
   forget(): void;
 }
 
@@ -32,8 +32,8 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
 } {
   let forgetLatest: (() => void) | undefined;
 
-  const selectAndOpen = async (plugin: PluginAddress, place: RecordPlace<Row>, formKey: string): Promise<void> => {
-    const row = await deps.rowOf(place, formKey);
+  const selectAndOpen = async (plugin: PluginAddress, place: RecordPlace<Row> | undefined, formKey: string): Promise<void> => {
+    const row = place && await deps.rowOf(place, formKey);
     if (row !== undefined) await deps.view.reveal(row, { select: true, focus: true });
     void vscode.commands.executeCommand('modbench.record.open', { argument: { kind: 'record', formKey, plugin } });
   };
@@ -43,7 +43,7 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
       forgetLatest?.();
       let landed = false;
       let namedBeforeAnswer: Set<string> | undefined = new Set();
-      let created: { place: RecordPlace<Row>; formKey: string } | undefined;
+      let created: { place: RecordPlace<Row> | undefined; formKey: string } | undefined;
       const settle = (): void => {
         if (created === undefined || !landed || forgetLatest !== forget) return;
         forget();

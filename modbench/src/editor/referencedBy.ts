@@ -7,7 +7,7 @@ import { recordArgumentOf, type RecordArgument } from '../drivingLib/recordArgum
 import { isReadFailed } from '../wire/readFailed';
 import { pickRecord } from './recordPicker';
 import { recordTitle } from './recordTitle';
-import { readReferencedBy, type ReferencedByClient, type ReferencedByList } from './referencedByList';
+import { readReferencedBy, type ConditionsOf, type ReferencedByClient, type ReferencedByList } from './referencedByList';
 import { REFERENCES_VIEW_EXTENSION, referencesView, type ReferencesViewInput } from './referencesView';
 
 const REFERENCED_BY_SOURCE = 'modbench.referencedBy';
@@ -21,6 +21,7 @@ export interface ReferencedByDeps {
   reporter: Reporter;
   locateRecord: LocateRecord;
   recordInFocus: () => string | undefined;
+  conditionsOf: ConditionsOf;
 }
 
 async function titleOf(client: ReferencedByDeps['client'], formKey: string): Promise<string> {
@@ -65,7 +66,7 @@ export function registerReferencedBy(deps: ReferencedByDeps): vscode.Disposable 
         return;
       }
       const list = String(++lists);
-      view.setInput(referencedByInput(title, location, () => readReferencedBy(deps.client, deps.log, record.formKey, list)));
+      view.setInput(referencedByInput(title, location, () => readReferencedBy(deps.client, deps.log, record.formKey, list, deps.conditionsOf)));
     });
   });
 }
