@@ -11,9 +11,11 @@ public static class GameCodecs
     public static void Register(IReadOnlyDictionary<GameCategory, IGameCodec> games) =>
         _registered = games.ToFrozenDictionary();
 
-    public static IGameCodec For(GameRelease release) =>
-        _registered.TryGetValue(release.ToCategory(), out var game)
+    public static IGameCodec For(GameRelease release) => For(release.ToCategory());
+
+    internal static IGameCodec For(GameCategory category) =>
+        _registered.TryGetValue(category, out var game)
             ? game
             : throw new NotSupportedException(
-                $"No codec project for {release.ToCategory()} is registered, so none of its plugins can be read or written.");
+                $"No codec project for {category} is registered, so none of its plugins can be read or written.");
 }

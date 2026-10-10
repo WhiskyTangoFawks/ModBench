@@ -63,7 +63,7 @@ internal sealed record SchemaAnnotations(
     IReadOnlyList<KnownDefect> KnownDefects,
     // See FieldMetadata.SiblingsInUse. The inner map must name every enum value, since an unnamed one
     // would silently idle every member the row governs; validated in all four directions.
-    Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
+    SiblingsInUseRows SiblingsInUse,
     // xEdit's wbArrayS: elements identified by key members (Mutagen member names, dotted one struct
     // down), not by position. Aligned by key in the compare grid, kept in the order held.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
@@ -127,6 +127,13 @@ internal sealed record SchemaAnnotations(
         new("IMajorRecordGetter", "VersionControl", "Version Control Info 1", IgnoredInConflicts: true, IsVersionControlInfo1: true),
         new("IMajorRecordGetter", "FormVersion", "Form Version", IgnoredInConflicts: true),
     ];
+
+    // The game's codec project supplies the real rows (SchemaReflector).
+    private static readonly SiblingsInUseRows NoSiblingsInUse = [];
+
+    private static string ModHeaderGetter(GameCategory game) => $"I{game}ModHeaderGetter";
+
+    private static string MajorRecordGetter(GameCategory game) => $"I{game}MajorRecordGetter";
 
     // Each game's ModHeader declares these (its *ModHeader.xml in Mutagen), the TES4 record's header
     // first, in wbRecordHeader's order (wbDefinitionsCommon.pas).
@@ -238,7 +245,7 @@ internal sealed record SchemaAnnotations(
             RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
             EnumMemberLabels: new()
             {
-                [("IFallout4ModHeaderGetter", "Flags")] = XEditModHeaderFlagNames,
+                [(ModHeaderGetter(GameCategory.Fallout4), "Flags")] = XEditModHeaderFlagNames,
             },
             KnownDefects:
             [
@@ -246,11 +253,7 @@ internal sealed record SchemaAnnotations(
                     "SceneActionTypicalType's binary-overlay Type getter is an unimplemented throw upstream, so the "
                     + "leaves under ASceneActionType cannot be read; the member is named as the document holds it and never written"),
             ],
-            SiblingsInUse: new()
-            {
-                [("IFunctionConditionDataGetter", "Function")] = Fallout4ConditionAnnotations.FunctionParameterSlots,
-                [("IConditionDataGetter", "RunOnType")] = Fallout4ConditionAnnotations.RunOnReference,
-            },
+            SiblingsInUse: NoSiblingsInUse,
             KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4KeyedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
             ExtendedKeys: Fallout4KeyedArrayAnnotations.ExtendedKeys.ToDictionary(
@@ -258,12 +261,12 @@ internal sealed record SchemaAnnotations(
             PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
             SyntheticFlagMembers: new()
             {
-                [("IFallout4ModHeaderGetter", "IsSmallMaster")] = ("Flags", "Small"),
+                [(ModHeaderGetter(GameCategory.Fallout4), "IsSmallMaster")] = ("Flags", "Small"),
             },
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
-                new("IFallout4MajorRecordGetter", "Version2", "Version Control Info 2", IgnoredInConflicts: true),
+                new(MajorRecordGetter(GameCategory.Fallout4), "Version2", "Version Control Info 2", IgnoredInConflicts: true),
             ],
             // Quest's MajorFlag names it; wbDefinitionsFO4.pas gives CELL, DIAL and WRLD bit 14 too.
             RecordFlagNames:
@@ -277,7 +280,7 @@ internal sealed record SchemaAnnotations(
             // Mutagen's Fallout 4 worldspace bounds divide by it.
             ExteriorCellWidth: 4096f,
             PartialFormCellsDefinedIn: "Fallout4.esm",
-            PluginHeaderMembers: PluginHeaderMembersOf("IFallout4ModHeaderGetter"),
+            PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetter(GameCategory.Fallout4)),
             ContainmentMembers: [CellGridInEveryGame]),
 
         [GameCategory.Skyrim] = new(
@@ -292,7 +295,7 @@ internal sealed record SchemaAnnotations(
             // loads. A label, defect, condition or keyed-array row is found from a built schema.
             EnumMemberLabels: [],
             KnownDefects: [],
-            SiblingsInUse: [],
+            SiblingsInUse: NoSiblingsInUse,
             KeyedArrays: [],
             ExtendedKeys: [],
             PermittedNullFormLinks: [],
@@ -300,7 +303,7 @@ internal sealed record SchemaAnnotations(
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
-                new("ISkyrimMajorRecordGetter", "Version2", "Version Control Info 2", IgnoredInConflicts: true),
+                new(MajorRecordGetter(GameCategory.Skyrim), "Version2", "Version Control Info 2", IgnoredInConflicts: true),
             ],
             // Mutagen names bit 14 on no Skyrim type; wbDefinitionsTES5.pas gives it to CELL, DIAL and WRLD.
             RecordFlagNames:
@@ -313,7 +316,7 @@ internal sealed record SchemaAnnotations(
             // Mutagen's Skyrim containing-cell lookup divides by it.
             ExteriorCellWidth: 4096f,
             PartialFormCellsDefinedIn: null,
-            PluginHeaderMembers: PluginHeaderMembersOf("ISkyrimModHeaderGetter"),
+            PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetter(GameCategory.Skyrim)),
             ContainmentMembers: [CellGridInEveryGame]),
 
         [GameCategory.Starfield] = new(
@@ -335,7 +338,7 @@ internal sealed record SchemaAnnotations(
             // Empty for the same reason as Skyrim's above.
             EnumMemberLabels: [],
             KnownDefects: [],
-            SiblingsInUse: [],
+            SiblingsInUse: NoSiblingsInUse,
             KeyedArrays: [],
             ExtendedKeys: [],
             PermittedNullFormLinks: [],
@@ -343,7 +346,7 @@ internal sealed record SchemaAnnotations(
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
-                new("IStarfieldMajorRecordGetter", "Version2", "Version Control Info 2", IgnoredInConflicts: true),
+                new(MajorRecordGetter(GameCategory.Starfield), "Version2", "Version Control Info 2", IgnoredInConflicts: true),
             ],
             // Mutagen names it on Starfield's Cell, DialogTopic and Quest; wbDefinitionsSF1.pas gives WRLD bit 14 too.
             RecordFlagNames: [("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName)],
@@ -362,7 +365,7 @@ internal sealed record SchemaAnnotations(
             // wbCellSizeFactor, and no xEdit source in references/ shows how.
             ExteriorCellWidth: null,
             PartialFormCellsDefinedIn: null,
-            PluginHeaderMembers: PluginHeaderMembersOf("IStarfieldModHeaderGetter"),
+            PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetter(GameCategory.Starfield)),
             ContainmentMembers: [CellGridInEveryGame]),
     };
 

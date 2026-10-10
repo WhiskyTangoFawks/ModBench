@@ -17,10 +17,9 @@
     <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
   </PropertyGroup>
 
-  <!-- ADR-0005: for the codec's projects and PluginAdapter the package edge already holds the rule (only
-       they reference a game assembly); everything else that must never hold a live Mutagen object
-       is these seven production boxes. No test project and not TestSupport — fixtures assemble
-       plugins from live objects by design. -->
+  <!-- ADR-0005: the codec's projects and PluginAdapter are the boxes that hold live Mutagen objects, so
+       they carry no ban; everything else that must never hold one is these seven production boxes.
+       No test project and not TestSupport — fixtures assemble plugins from live objects by design. -->
   <PropertyGroup>
     <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Http'">true</MutagenBanIncluded>
     <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Commands'">true</MutagenBanIncluded>
@@ -46,7 +45,7 @@
     <EditorConfigFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.globalconfig" />
     <!-- Identity is not a model of a record (ADR-0005): FormKey, ModKey and GameRelease are
          values every box names, and the ban above is what keeps the live-object namespaces out.
-         Pinned to the version Mutagen.Bethesda.Fallout4 resolves in the codec and the adapter. -->
+         Pinned to the version the codec's game projects resolve. -->
     <PackageReference Include="Mutagen.Bethesda.Core" Version="0.54.4" />
     <!-- No built-in analyzer reads the null-forgiving operator; NX0001 does, held at error through
          .editorconfig for every project, production and test alike. -->
