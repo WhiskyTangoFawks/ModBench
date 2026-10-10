@@ -132,7 +132,7 @@ function openTable(instance: FakeInstance, modName: string, reporter = recording
   setup(instance, [], reporter);
   const [viewType, provider, options] = registerCustomEditorProvider.mock.calls.at(-1) ?? [];
   expect(viewType).toBe('modbench.conflicts');
-  expect(options).toEqual({ webviewOptions: { retainContextWhenHidden: true } });
+  expect(options).toEqual({ webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true } });
   if (!isResolvingProvider(provider)) throw new Error('no custom editor provider was registered');
   const panel = fakePanel();
   provider.resolveCustomEditor(provider.openCustomDocument(conflictTableUri(modName)), panel);

@@ -104,7 +104,7 @@ export function registerConflictTable(
   return [
     vscode.window.registerCustomEditorProvider(
       CONFLICT_TABLE_VIEW_TYPE, new ConflictTableEditorProvider(instance, extensionUri, reporter, settings),
-      { webviewOptions: { retainContextWhenHidden: true } }),
+      { webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true } }),
     vscode.commands.registerCommand('modbench.mod.openConflicts', async (clicked?: unknown, selected?: readonly ModlistNode[]) => {
       const mod = modOfConflictColumn(clicked)
         ?? singularArgument(gestureEntry(clicked, selected, viewSelection), 'mod')?.mod.name;

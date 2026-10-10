@@ -81,7 +81,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     client: meditClient, reporter: deps.reporterFor('extendedField'),
     commit: (field, value) => commitField(commitDeps, field, value),
   });
-  const keepsItsPlace = { webviewOptions: { retainContextWhenHidden: true } };
+  const editorOptions = { webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true } };
 
   return [
     { dispose: subscribeRecordTabsToNotifications(meditClient, tabs) },
@@ -90,7 +90,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     new ChildRecordDocuments(meditClient),
     holdOneTextPerFile(outputChannel),
     { dispose: meditClient.onLoadOrderSettled(() => { announceConflictsComputed(tabs); }) },
-    vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, keepsItsPlace),
+    vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, editorOptions),
     { dispose: meditClient.onNotification('load-order-status', () => { recordEditorProvider.readAgain(); }) },
     // A report names the records that changed, and a move of any of them can move a child's carrier.
     followReportedCopies(meditClient, (affects) => { void recordEditorProvider.followCarried(affects); },
