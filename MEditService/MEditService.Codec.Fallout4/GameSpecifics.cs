@@ -12,6 +12,26 @@ internal static class GameSpecifics
         [("IConditionDataGetter", "RunOnType")] = Fallout4ConditionAnnotations.RunOnReference,
     });
 
+    // Proven over every shipped binary: all 823 entry-point effects, all 1,031 weapon templates.
+    public static CreationKitShapes CreationKitShapes { get; } = new(
+        SubrecordSizes: new Dictionary<(string, string), int>
+        {
+            [("REGN", "RDAT")] = 8, // Type u32, Override u8, Priority u8, unused ×2
+        },
+        SubrecordCounts: new Dictionary<(string, string), int>
+        {
+            [("RACE", "NAME")] = 32, // Biped Object Names — one per biped slot
+        },
+        CountedEntries: new Dictionary<(string, string), string>
+        {
+            [("REFR", "XWPG")] = "XWPN", // power-grid connections
+        },
+        TemplateCombinations: new HashSet<string> { "WEAP" },
+        EntryPoints: new(
+            EpftByFunction: new Dictionary<byte, byte> { [1] = 1, [2] = 1, [3] = 1, [5] = 8, [9] = 4, [10] = 5, [12] = 8, [13] = 8, [14] = 8 },
+            FunctionsWithoutParameters: new HashSet<byte> { 6 },
+            FunctionsCarryingEpf3: new HashSet<byte> { 9 }));
+
     public static IReadOnlyList<string> TransientTypes(IGameModGetter plugin) =>
     [
         .. plugin.ModHeader.TransientTypes.Select(

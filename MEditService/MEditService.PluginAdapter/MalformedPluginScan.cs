@@ -10,46 +10,9 @@ namespace MEditService.PluginAdapter;
 /// binaries, not a reference's comments.</summary>
 internal static class MalformedPluginScan
 {
-    // Every table and detector below is proven over this game's vanilla binaries; another game's
-    // vanilla breaks them (Skyrim.esm's function-14 entry points write EPFT 2), so its plugins get no claim.
-    private const GameCategory ProvenOver = GameCategory.Fallout4;
-
-    // (record type, subrecord) → the payload size the CK always writes; a shorter one is zero-padded, losslessly.
-    private static readonly Dictionary<(string RecordType, string Sig), int> FixedSizeTable = new()
-    {
-        [("REGN", "RDAT")] = 8, // Type u32, Override u8, Priority u8, unused ×2
-    };
-
-    // (record type, subrecord) → the count the CK writes when it writes any; zero occurrences stays clean.
-    private static readonly Dictionary<(string RecordType, string Sig), int> FixedCountTable = new()
-    {
-        [("RACE", "NAME")] = 32, // Biped Object Names — one per FO4 biped slot
-    };
-
-    // (record type, counter) → the entry subrecord its u32 counts; entries follow contiguously.
-    private static readonly Dictionary<(string RecordType, string Counter), string> CounterTable = new()
-    {
-        [("REFR", "XWPG")] = "XWPN", // power-grid connections
-    };
-
     private const string Lossless = "repairable (lossless)";
 
-    // PERK entry-point function → the EPFT vanilla writes, proven over all 823 shipped entry-point
-    // effects. Functions vanilla never exercises are absent; fn 6 writes no parameter block; fn 9 always
-    // carries EPF3.
-    private static readonly Dictionary<byte, byte> EpftByPerkFunction = new()
-    {
-        [1] = 1,
-        [2] = 1,
-        [3] = 1,
-        [5] = 8,
-        [9] = 4,
-        [10] = 5,
-        [12] = 8,
-        [13] = 8,
-        [14] = 8,
-    };
-
+    // xEdit's names for a perk entry point's function, the same in every game it defines.
     private static readonly Dictionary<byte, string> PerkFunctionNames = new()
     {
         [1] = "Set Value",
@@ -57,11 +20,14 @@ internal static class MalformedPluginScan
         [3] = "Multiply Value",
         [5] = "Add Actor Value Mult",
         [6] = "Absolute Value",
+        [7] = "Negative Absolute Value",
         [9] = "Add Activate Choice",
         [10] = "Select Spell",
+        [11] = "Select Text",
         [12] = "Set to Actor Value Mult",
         [13] = "Multiply Actor Value Mult",
         [14] = "Multiply 1 + Actor Value Mult",
+        [15] = "Set Text",
     };
 
     /// <summary>Every Kind B diagnosis the plugin's own bytes prove, in record order. A record
@@ -69,11 +35,11 @@ internal static class MalformedPluginScan
     /// different failure than the classes this scan names.</summary>
     internal static List<PluginDiagnosis> Scan(byte[] pluginBytes, GameRelease gameRelease)
     {
+        var shapes = GameCodecs.For(gameRelease).CreationKitShapes;
         var diagnoses = new List<PluginDiagnosis>();
-        if (gameRelease.ToCategory() != ProvenOver) return diagnoses;
         foreach (var record in PluginBinaryWalk.WalkRecords(pluginBytes))
         {
-            if (record.IsGrup || !HasDetector(record.Type)) continue;
+            if (record.IsGrup || !HasDetector(shapes, record.Type)) continue;
 
             byte[] data;
             try
@@ -88,28 +54,29 @@ internal static class MalformedPluginScan
 
             var subrecords = PluginBinaryWalk.WalkSubrecords(data);
             var anchor = Anchor(record, data, subrecords);
-            DetectFixedSize(record, subrecords, anchor, diagnoses);
-            DetectFixedCount(record, subrecords, anchor, diagnoses);
-            DetectCounterEntries(record, data, subrecords, anchor, diagnoses);
-            DetectTemplateOrder(record, subrecords, anchor, diagnoses);
-            DetectEntryPointShape(record, data, subrecords, anchor, diagnoses);
+            DetectFixedSize(shapes, record, subrecords, anchor, diagnoses);
+            DetectFixedCount(shapes, record, subrecords, anchor, diagnoses);
+            DetectCounterEntries(shapes, record, data, subrecords, anchor, diagnoses);
+            DetectTemplateOrder(shapes, record, subrecords, anchor, diagnoses);
+            DetectEntryPointShape(shapes.EntryPoints, record, data, subrecords, anchor, diagnoses);
         }
         return diagnoses;
     }
 
-    private static bool HasDetector(string recordType) =>
-        FixedSizeTable.Keys.Any(k => k.RecordType == recordType)
-        || FixedCountTable.Keys.Any(k => k.RecordType == recordType)
-        || CounterTable.Keys.Any(k => k.RecordType == recordType)
-        || recordType is "WEAP" or "PERK";
+    private static bool HasDetector(CreationKitShapes shapes, string recordType) =>
+        shapes.SubrecordSizes.Keys.Any(k => k.RecordType == recordType)
+        || shapes.SubrecordCounts.Keys.Any(k => k.RecordType == recordType)
+        || shapes.CountedEntries.Keys.Any(k => k.RecordType == recordType)
+        || shapes.TemplateCombinations.Contains(recordType)
+        || recordType == "PERK";
 
     private static void DetectFixedSize(
-        PluginBinaryWalk.RecordSpan record, List<PluginBinaryWalk.SubrecordSpan> subrecords,
+        CreationKitShapes shapes, PluginBinaryWalk.RecordSpan record, List<PluginBinaryWalk.SubrecordSpan> subrecords,
         string anchor, List<PluginDiagnosis> diagnoses)
     {
         foreach (var sub in subrecords)
         {
-            if (!FixedSizeTable.TryGetValue((record.Type, sub.Sig), out var expected)) continue;
+            if (!shapes.SubrecordSizes.TryGetValue((record.Type, sub.Sig), out var expected)) continue;
             var payload = sub.Len - 6;
             if (payload < expected)
             {
@@ -120,10 +87,10 @@ internal static class MalformedPluginScan
     }
 
     private static void DetectFixedCount(
-        PluginBinaryWalk.RecordSpan record, List<PluginBinaryWalk.SubrecordSpan> subrecords,
+        CreationKitShapes shapes, PluginBinaryWalk.RecordSpan record, List<PluginBinaryWalk.SubrecordSpan> subrecords,
         string anchor, List<PluginDiagnosis> diagnoses)
     {
-        foreach (var ((recordType, sig), expected) in FixedCountTable)
+        foreach (var ((recordType, sig), expected) in shapes.SubrecordCounts)
         {
             if (recordType != record.Type) continue;
             var count = subrecords.Count(s => s.Sig == sig);
@@ -136,12 +103,12 @@ internal static class MalformedPluginScan
     }
 
     private static void DetectCounterEntries(
-        PluginBinaryWalk.RecordSpan record, byte[] data, List<PluginBinaryWalk.SubrecordSpan> subrecords,
+        CreationKitShapes shapes, PluginBinaryWalk.RecordSpan record, byte[] data, List<PluginBinaryWalk.SubrecordSpan> subrecords,
         string anchor, List<PluginDiagnosis> diagnoses)
     {
         for (var i = 0; i < subrecords.Count; i++)
         {
-            if (!CounterTable.TryGetValue((record.Type, subrecords[i].Sig), out var entrySig)) continue;
+            if (!shapes.CountedEntries.TryGetValue((record.Type, subrecords[i].Sig), out var entrySig)) continue;
             if (subrecords[i].Len - 6 < 4) continue; // a short counter is the fixed-size class's finding, not a count disagreement
             var declared = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(
                 data.AsSpan(subrecords[i].Start + 6, 4));
@@ -155,13 +122,13 @@ internal static class MalformedPluginScan
         }
     }
 
-    // R1: every vanilla WEAP template (1,031/1,031) writes combinations as OBTF, FULL, OBTS after an
-    // optional bare leading OBTS; a trailing OBTF/FULL with no closing OBTS is the defect.
+    // R1: combinations are written OBTF, FULL, OBTS after an optional bare leading OBTS; a trailing
+    // OBTF/FULL with no closing OBTS is the defect.
     private static void DetectTemplateOrder(
-        PluginBinaryWalk.RecordSpan record, List<PluginBinaryWalk.SubrecordSpan> subrecords,
+        CreationKitShapes shapes, PluginBinaryWalk.RecordSpan record, List<PluginBinaryWalk.SubrecordSpan> subrecords,
         string anchor, List<PluginDiagnosis> diagnoses)
     {
-        if (record.Type != "WEAP") return;
+        if (!shapes.TemplateCombinations.Contains(record.Type)) return;
         var start = subrecords.FindIndex(s => s.Sig == "OBTE");
         if (start < 0) return;
         var end = subrecords.FindIndex(start, s => s.Sig == "STOP");
@@ -194,7 +161,7 @@ internal static class MalformedPluginScan
     // R5-R7: a PRKE with type byte 2 carries its function in the next DATA's second byte; the parameter
     // block until PRKF must match the vanilla-proven shape.
     private static void DetectEntryPointShape(
-        PluginBinaryWalk.RecordSpan record, byte[] data, List<PluginBinaryWalk.SubrecordSpan> subrecords,
+        PerkEntryPointShapes shapes, PluginBinaryWalk.RecordSpan record, byte[] data, List<PluginBinaryWalk.SubrecordSpan> subrecords,
         string anchor, List<PluginDiagnosis> diagnoses)
     {
         if (record.Type != "PERK") return;
@@ -229,18 +196,19 @@ internal static class MalformedPluginScan
             var fn = function.Value;
             var name = PerkFunctionNames.GetValueOrDefault(fn, "Unknown");
 
-            if (fn == 6 && epft != null)
+            if (shapes.FunctionsWithoutParameters.Contains(fn) && epft != null)
             {
                 diagnoses.Add(new PluginDiagnosis(anchor, "entry-point-parameter-shape",
                     $"repairable (drops {parameterBytes} bytes)",
                     $"entry point {entryIndex} (function {fn}, {name}) has EPFT {epft}; vanilla writes no parameters"));
             }
-            else if (fn == 9 && epft == 4 && !hasEpf3)
+            else if (shapes.FunctionsCarryingEpf3.Contains(fn) && shapes.EpftByFunction.TryGetValue(fn, out var carrying)
+                     && epft == carrying && !hasEpf3)
             {
                 diagnoses.Add(new PluginDiagnosis(anchor, "entry-point-parameter-shape", Lossless,
                     $"entry point {entryIndex} (function {fn}, {name}) is missing EPF3; vanilla always writes it"));
             }
-            else if (EpftByPerkFunction.TryGetValue(fn, out var expected) && epft != null && epft != expected)
+            else if (shapes.EpftByFunction.TryGetValue(fn, out var expected) && epft != null && epft != expected)
             {
                 // Diagnose only — no repair tail: converting the parameter's
                 // value between EPFT encodings (an AV index to an AVIF FormKey) is a semantic

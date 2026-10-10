@@ -14,12 +14,16 @@ public sealed class GameCodecsTests
     }
 
     [Fact]
-    public void TheSiblingsInUseRows_RefuseAChangeFromACaller()
+    public void SiblingsInUseRows_KeepTheRowsTheyWereBuiltWith_WhenTheDictionaryTheyCameFromChanges()
     {
-        var rows = (IDictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>>)
-            GameCodecs.For(GameRelease.Fallout4).SiblingsInUse;
+        var source = new Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>>
+        {
+            [("IConditionDataGetter", "RunOnType")] = new Dictionary<string, IReadOnlyList<string>> { ["Reference"] = ["Reference"] },
+        };
+        var rows = new SiblingsInUseRows(source);
 
-        Assert.Throws<NotSupportedException>(rows.Clear);
-        Assert.NotEmpty(rows);
+        source.Clear();
+
+        Assert.Equal([("IConditionDataGetter", "RunOnType")], rows.Keys);
     }
 }

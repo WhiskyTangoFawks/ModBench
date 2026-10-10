@@ -365,7 +365,16 @@ public class SchemaReflectorTests
         Assert.Equal("ESL", col.Field.EnumMembers.Single(m => m.Value == "Small").Label);
         Assert.Null(col.Field.EnumMembers.Single(m => m.Value == "Localized").Label);
         Assert.DoesNotContain(col.Field.EnumMembers, m => m.Value is "ESM" or "ESL");
-        Assert.Contains(schemas["header"].RecordColumns, c => c.Name == "IsSmallMaster");
+    }
+
+    [Theory]
+    [InlineData(GameRelease.Fallout4)]
+    [InlineData(GameRelease.SkyrimSE)]
+    public void GetSchemas_Header_PresentsTheLightMasterFlagAsAMemberOfItsOwn(GameRelease release)
+    {
+        var header = _reflector.GetSchemas(release)["header"];
+
+        Assert.Equal("bool", header.RecordColumns.Single(c => c.Name == "IsSmallMaster").ApiType);
     }
 
     [Fact]
