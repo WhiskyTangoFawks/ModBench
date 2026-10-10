@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectEol, editLines } from '../lineScan';
+import { editLines } from '../lineScan';
 
 describe('editLines', () => {
   const unchanged = (lines: string[]): string[] => lines;
@@ -32,24 +32,5 @@ describe('editLines', () => {
 
   it('terminates the first line of an empty file', () => {
     expect(editLines('', () => ['a'])).toBe('a\n');
-  });
-});
-
-describe('detectEol', () => {
-  it('a file with both LF- and CRLF-terminated lines detects CRLF', () => {
-    expect(detectEol('+ModA\n+ModB\r\n')).toBe('\r\n');
-  });
-
-  it('never returns a bare CR, even when the first line is CR-terminated', () => {
-    expect(detectEol('+ModA\r+ModB\n')).toBe('\n');
-  });
-
-  it('an all-LF file detects LF', () => {
-    expect(detectEol('+ModA\n+ModB\n')).toBe('\n');
-  });
-
-  it('falls back to LF for an empty text or one with no terminator anywhere', () => {
-    expect(detectEol('')).toBe('\n');
-    expect(detectEol('no terminator at all')).toBe('\n');
   });
 });

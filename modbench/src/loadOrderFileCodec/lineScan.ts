@@ -22,6 +22,6 @@ export const entryLineIndices = (lines: readonly string[], isEntry: (line: strin
 /** Whole-file presence, never a one-line sniff, which could name a bare `\r` the
  *  terminator when it is a partial write. Accepted cost: one stray CRLF line
  *  makes a mostly-LF file insert CRLF, with no path back. */
-export function detectEol(text: string): string {
+function detectEol(text: string): string {
   return text.includes('\r\n') ? '\r\n' : '\n';
 }
