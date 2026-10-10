@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -8,7 +11,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class AbstractUnionCompileRoundTripTests : IDisposable
+public sealed partial class AbstractUnionCompileRoundTripTests : IDisposable
 {
     private readonly AbstractUnionCompileFixture _fixture = new();
 
@@ -16,270 +19,52 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private TestEditor EditService() => _fixture.EditHandler;
-
-    private CompilePluginHandler CompileService() => CompileServices.Over(_fixture.LoadOrder);
-
-    private async Task<IFallout4ModGetter> CompileAndReparse()
+    [Theory]
+    [InlineData("Npc", "Level", """{"MutagenObjectType": "NpcLevel", "Level": 20}""")]
+    [InlineData("Npc", "Level", """{"MutagenObjectType": "PcLevelMult", "LevelMult": 1.5}""")]
+    [InlineData("Quest", "Aliases", """[{"MutagenObjectType": "QuestReferenceAlias", "Name": "NewRef", "ClosestToAlias": 4}]""")]
+    [InlineData("Quest", "Aliases", """[{"MutagenObjectType": "QuestReferenceAlias", "Name": "NewRef", "ClosestToAlias": 4, "Location": {"AliasID": 9}}]""")]
+    [InlineData("Book", "Teaches", """{"MutagenObjectType": "BookPerk", "Perk": "{Perk}"}""")]
+    [InlineData("ColorRecord", "Data", """{"MutagenObjectType": "ColorRemappingIndex", "Index": 7.5}""")]
+    [InlineData("ColorRecord", "Data", """{"MutagenObjectType": "ColorData", "Color": "#112233"}""")]
+    [InlineData("Holotape", "Data", """{"MutagenObjectType": "HolotapeSound", "Sound": "{SoundDescriptor}"}""")]
+    [InlineData("SoundDescriptor", "Data", """{"MutagenObjectType": "SoundDescriptorStandardData", "PercentFrequencyShift": 5, "PercentFrequencyVariance": 9, "Priority": 20, "Variance": 30, "StaticAttenuation": 2.5}""")]
+    [InlineData("SoundDescriptor", "Data", """{"MutagenObjectType": "SoundDescriptorCompoundData"}""")]
+    [InlineData("Perk", "Effects", """[{"MutagenObjectType": "PerkAbilityEffect", "Ability": "{Spell}"}]""")]
+    [InlineData("Perk", "Effects", """[{"MutagenObjectType": "PerkEntryPointAddRangeToValue", "From": 1.5, "To": 9.5}]""")]
+    [InlineData("MagicEffect", "Archetype", """{"MutagenObjectType": "MagicEffectPeakValueModArchetype", "Association": "{Keyword}"}""")]
+    [InlineData("MagicEffect", "Archetype", """{"MutagenObjectType": "MagicEffectPeakValueModArchetype", "Association": "{Keyword}", "ActorValue": "{ActorValueInformation}"}""")]
+    [InlineData("MagicEffect", "Archetype", """{"MutagenObjectType": "MagicEffectArchetype", "Type": "ValueModifier", "Association": "{ActorValueInformation}"}""")]
+    [InlineData("AudioEffectChain", "Effects", """[{"MutagenObjectType": "StateVariableFilterAudioEffect", "Enabled": true, "CenterFrequency": 440.0, "QValue": 0.75}]""")]
+    [InlineData("Faction", "VendorLocation", """{"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": 3}}""")]
+    [InlineData("Static", "NavmeshGeometry", """{"Parent": {"MutagenObjectType": "CellNavmeshParent"}}""")]
+    public async Task AnEditedUnion_CompilesAndReparsesAsTheDocumentReads(string subject, string member, string value)
     {
-        await CompileService().CompileLandedAsync(_fixture.Plugin);
+        var formKey = Property(subject).ToString();
+        var edited = _fixture.EditHandler.Set(_fixture.Plugin, formKey, member, Json(PlaceholdersFilled(value)));
+        Assert.True(edited.Applied, edited.Message);
+        var document = TrackedTree.Body(_fixture.ModFolder, _fixture.Plugin, formKey);
 
-        var pluginPath = Path.Combine(_fixture.ModFolder, AbstractUnionCompileFixture.PluginName);
-        return (IFallout4ModGetter)ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(AbstractUnionCompileFixture.PluginName), pluginPath), GameRelease.Fallout4);
+        await CompileServices.Over(_fixture.LoadOrder).CompileLandedAsync(_fixture.Plugin);
+
+        var reparsed = (IFallout4ModGetter)ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(AbstractUnionCompileFixture.PluginName), Path.Combine(_fixture.ModFolder, AbstractUnionCompileFixture.PluginName)),
+            GameRelease.Fallout4);
+        var record = reparsed.EnumerateMajorRecords().Single(candidate => candidate.FormKey.ToString() == formKey);
+        var compiled = RecordTextCodec.SerializeToText(record, GameRelease.Fallout4);
+        Assert.Empty(DocumentDiffs.Of(MemberOf(document, member), MemberOf(compiled, member)));
     }
 
-    private const string TheOnlyArchetypeTypeReadArchetypeHasNoNamedCaseFor = "ValueModifier";
-    private const string NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue = "NearSelf";
+    private static string MemberOf(string document, string member) =>
+        JsonNode.Parse(document).Require()[member].Require().ToJsonString();
 
-    private static T AsGetterBecauseBinaryOverlayLeavesAreLazy<T>(object? leaf) => Assert.IsAssignableFrom<T>(leaf);
+    private FormKey Property(string name) =>
+        (FormKey)(typeof(AbstractUnionCompileFixture).GetProperty(name)?.GetValue(_fixture)
+            ?? throw new InvalidOperationException($"Expected the fixture to hold '{name}'."));
 
-    [Fact]
-    public async Task Level_EditingWithinSameConcreteType_CompilesAndReparsesTheNewValue()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.Npc.ToString(), "Level",
-            Json("""{"MutagenObjectType": "NpcLevel", "Level": 20}"""));
-        Assert.True(result.Applied, result.Message);
+    private string PlaceholdersFilled(string value) =>
+        Placeholder().Replace(value, match => Property(match.Groups[1].Value).ToString());
 
-        var npc = (await CompileAndReparse()).Npcs.Single(n => n.FormKey == _fixture.Npc);
-        Assert.IsType<NpcLevel>(npc.Level);
-        Assert.Equal((byte)20, ((INpcLevelGetter)npc.Level.Require()).Level);
-    }
-
-    [Fact]
-    public async Task Level_SwitchingConcreteType_NpcLevelToPcLevelMult_CompilesAndReparsesAsTheNewConcreteType()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.Npc.ToString(), "Level",
-            Json("""{"MutagenObjectType": "PcLevelMult", "LevelMult": 1.5}"""));
-        Assert.True(result.Applied, result.Message);
-
-        var npc = (await CompileAndReparse()).Npcs.Single(n => n.FormKey == _fixture.Npc);
-        var mult = Assert.IsType<PcLevelMult>(npc.Level);
-        Assert.Equal(1.5f, mult.LevelMult);
-    }
-
-    [Fact]
-    public async Task Aliases_WholeArrayWrite_QuestReferenceAliasElement_CompilesAndReparsesTheNewElement()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.Quest.ToString(), "Aliases",
-            Json("""[{"MutagenObjectType": "QuestReferenceAlias", "Name": "NewRef", "ClosestToAlias": 4}]"""));
-        Assert.True(result.Applied, result.Message);
-
-        var quest = (await CompileAndReparse()).Quests.Single(q => q.FormKey == _fixture.Quest);
-        var alias = Assert.Single(quest.Aliases.Require());
-        var refAlias = AsGetterBecauseBinaryOverlayLeavesAreLazy<IQuestReferenceAliasGetter>(alias);
-        Assert.Equal("NewRef", refAlias.Name);
-        Assert.Equal(4, refAlias.ClosestToAlias);
-    }
-
-    [Fact]
-    public async Task Teaches_SwitchingConcreteType_SpellToPerk_CompilesAndReparsesAsTheNewConcreteType()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.Book.ToString(), "Teaches",
-            Json($$"""{"MutagenObjectType": "BookPerk", "Perk": "{{_fixture.Perk}}"}"""));
-        Assert.True(result.Applied, result.Message);
-
-        var book = (await CompileAndReparse()).Books.Single(b => b.FormKey == _fixture.Book);
-        var teaches = Assert.IsType<BookPerk>(book.Teaches);
-        Assert.Equal(_fixture.Perk, teaches.Perk.FormKey);
-    }
-
-    [Fact]
-    public async Task Data_EditingWithinSameConcreteType_IndexEdit_CompilesAndReparsesTheNewIndex()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.ColorRecord.ToString(), "Data",
-            Json("""{"MutagenObjectType": "ColorRemappingIndex", "Index": 7.5}"""));
-        Assert.True(result.Applied, result.Message);
-
-        var color = (await CompileAndReparse()).Colors.Single(c => c.FormKey == _fixture.ColorRecord);
-        var remap = Assert.IsType<ColorRemappingIndex>(color.Data);
-        Assert.Equal(7.5f, remap.Index);
-    }
-
-    [Fact]
-    public async Task Data_SwitchingConcreteType_IndexToColorData_CompilesAndReparsesTheNewColorValue()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.ColorRecord.ToString(), "Data",
-            Json("""{"MutagenObjectType": "ColorData", "Color": "#112233"}"""));
-        Assert.True(result.Applied, result.Message);
-
-        var color = (await CompileAndReparse()).Colors.Single(c => c.FormKey == _fixture.ColorRecord);
-        var colorData = Assert.IsType<ColorData>(color.Data);
-        Assert.Equal((17, 34, 51), (colorData.Color.R, colorData.Color.G, colorData.Color.B));
-    }
-
-    [Fact]
-    public async Task Data_SwitchingConcreteType_ProgramToSound_CompilesAndReparsesAsTheNewConcreteType()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.Holotape.ToString(), "Data",
-            Json($$"""{"MutagenObjectType": "HolotapeSound", "Sound": "{{_fixture.SoundDescriptor}}"}"""));
-        Assert.True(result.Applied, result.Message);
-
-        var holotape = (await CompileAndReparse()).Holotapes.Single(h => h.FormKey == _fixture.Holotape);
-        var sound = Assert.IsType<HolotapeSound>(holotape.Data);
-        Assert.Equal(_fixture.SoundDescriptor, sound.Sound.FormKey);
-    }
-
-    [Fact]
-    public async Task Data_EditingWithinSameConcreteType_StandardDataFields_CompileAndReparse()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.SoundDescriptor.ToString(), "Data",
-            Json("""
-            {"MutagenObjectType": "SoundDescriptorStandardData", "PercentFrequencyShift": 5,
-             "PercentFrequencyVariance": 9, "Priority": 20, "Variance": 30,
-             "StaticAttenuation": 2.5}
-            """));
-        Assert.True(result.Applied, result.Message);
-
-        var sd = (await CompileAndReparse()).SoundDescriptors.Single(s => s.FormKey == _fixture.SoundDescriptor);
-        var data = Assert.IsType<SoundDescriptorStandardData>(sd.Data);
-        Assert.Equal((sbyte)5, data.PercentFrequencyShift);
-        Assert.Equal((sbyte)9, data.PercentFrequencyVariance);
-        Assert.Equal((byte)20, data.Priority);
-        Assert.Equal((byte)30, data.Variance);
-        Assert.Equal(2.5f, data.StaticAttenuation, 2);
-    }
-
-    [Fact]
-    public async Task Data_SwitchingConcreteType_StandardToCompound_CompilesAndReparsesAsTheDegenerateLeaf()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.SoundDescriptor.ToString(), "Data",
-            Json("""{"MutagenObjectType": "SoundDescriptorCompoundData"}"""));
-        Assert.True(result.Applied, result.Message);
-
-        var sd = (await CompileAndReparse()).SoundDescriptors.Single(s => s.FormKey == _fixture.SoundDescriptor);
-        Assert.IsType<SoundDescriptorCompoundData>(sd.Data);
-    }
-
-    [Fact]
-    public async Task Effects_WholeArrayWrite_QuestEffectToAbilityEffect_CompilesAndReparsesAsTheNewConcreteType()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.Perk.ToString(), "Effects",
-            Json($$"""[{"MutagenObjectType": "PerkAbilityEffect", "Ability": "{{_fixture.Spell}}"}]"""));
-        Assert.True(result.Applied, result.Message);
-
-        var perk = (await CompileAndReparse()).Perks.Single(p => p.FormKey == _fixture.Perk);
-        var effect = Assert.Single(perk.Effects);
-        var ability = Assert.IsType<PerkAbilityEffect>(effect);
-        Assert.Equal(_fixture.Spell, ability.Ability.FormKey);
-    }
-
-    [Fact]
-    public async Task Effects_WholeArrayWrite_ToTwoLevelEntryPointChainLeaf_CompilesAndReparsesAsTheNewConcreteType()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.Perk.ToString(), "Effects",
-            Json("""[{"MutagenObjectType": "PerkEntryPointAddRangeToValue", "From": 1.5, "To": 9.5}]"""));
-        Assert.True(result.Applied, result.Message);
-
-        var perk = (await CompileAndReparse()).Perks.Single(p => p.FormKey == _fixture.Perk);
-        var effect = Assert.Single(perk.Effects);
-        var entryPoint = Assert.IsType<PerkEntryPointAddRangeToValue>(effect);
-        Assert.Equal(1.5f, entryPoint.From);
-        Assert.Equal(9.5f, entryPoint.To);
-    }
-
-    [Fact]
-    public async Task Archetype_SwitchingConcreteType_LightToPeakValueMod_CompilesAndReparsesTheNewAssociation()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.MagicEffect.ToString(), "Archetype",
-            Json($$"""{"MutagenObjectType": "MagicEffectPeakValueModArchetype", "Association": "{{_fixture.Keyword}}"}"""));
-        Assert.True(result.Applied, result.Message);
-
-        var mgef = (await CompileAndReparse()).MagicEffects.Single(m => m.FormKey == _fixture.MagicEffect);
-        var archetype = Assert.IsType<MagicEffectPeakValueModArchetype>(mgef.Archetype);
-        Assert.Equal(_fixture.Keyword, archetype.Association.FormKey);
-    }
-
-    [Fact]
-    public async Task Archetype_BaseActorValueField_SurvivesAConcreteTypeSwitch_AndCompilesAndReparses()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.MagicEffect.ToString(), "Archetype",
-            Json($$"""
-            {"MutagenObjectType": "MagicEffectPeakValueModArchetype", "Association": "{{_fixture.Keyword}}",
-             "ActorValue": "{{_fixture.ActorValueInformation}}"}
-            """));
-        Assert.True(result.Applied, result.Message);
-
-        var mgef = (await CompileAndReparse()).MagicEffects.Single(m => m.FormKey == _fixture.MagicEffect);
-        var archetype = Assert.IsType<MagicEffectPeakValueModArchetype>(mgef.Archetype);
-        Assert.Equal(_fixture.ActorValueInformation, archetype.ActorValue.FormKey);
-    }
-
-    [Fact]
-    public async Task Archetype_SwitchingToTheBaseLeaf_ItsOwnRealTypeFieldCompilesAndReparses()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.MagicEffect.ToString(), "Archetype",
-            Json($$"""
-            {"MutagenObjectType": "MagicEffectArchetype", "Type": "{{TheOnlyArchetypeTypeReadArchetypeHasNoNamedCaseFor}}",
-             "Association": "{{_fixture.ActorValueInformation}}"}
-            """));
-        Assert.True(result.Applied, result.Message);
-
-        var mgef = (await CompileAndReparse()).MagicEffects.Single(m => m.FormKey == _fixture.MagicEffect);
-        var archetype = Assert.IsType<MagicEffectArchetype>(mgef.Archetype);
-        Assert.Equal(Enum.Parse<MagicEffectArchetype.TypeEnum>(TheOnlyArchetypeTypeReadArchetypeHasNoNamedCaseFor), archetype.Type);
-    }
-
-    [Fact]
-    public async Task Effects_WholeArrayWrite_OverdriveToStateVariableFilter_CompilesAndReparsesAsTheNewConcreteType()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.AudioEffectChain.ToString(), "Effects",
-            Json("""
-            [{"MutagenObjectType": "StateVariableFilterAudioEffect", "Enabled": true,
-              "CenterFrequency": 440.0, "QValue": 0.75}]
-            """));
-        Assert.True(result.Applied, result.Message);
-
-        var aech = (await CompileAndReparse()).AudioEffectChains.Single(a => a.FormKey == _fixture.AudioEffectChain);
-        var effect = Assert.Single(aech.Effects);
-        var filter = AsGetterBecauseBinaryOverlayLeavesAreLazy<IStateVariableFilterAudioEffectGetter>(effect);
-        Assert.True(filter.Enabled);
-        Assert.Equal(440.0f, filter.CenterFrequency);
-        Assert.Equal(0.75f, filter.QValue);
-    }
-
-    [Fact]
-    public async Task VendorLocationTarget_NestedStructEdit_CompilesAndReparsesTheNewValue()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
-            Json($$$"""
-            {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "{{{NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue}}}", "Data": 3}}
-            """));
-        Assert.True(result.Applied, result.Message);
-
-        var faction = (await CompileAndReparse()).Factions.Single(f => f.FormKey == _fixture.Faction);
-        var vendorLocation = faction.VendorLocation.Require();
-        Assert.Equal(99u, vendorLocation.Radius);
-        var target = Assert.IsAssignableFrom<ILocationFallbackGetter>(vendorLocation.Target);
-        Assert.Equal(Enum.Parse<LocationTargetRadius.LocationType>(NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue), target.Type);
-        Assert.Equal(3, target.Data);
-    }
-
-    [Fact]
-    public async Task NavmeshGeometryParent_SwitchingConcreteType_WorldspaceToCell_CompilesAndReparsesAsTheNewLeaf()
-    {
-        var result = EditService().Set(
-            _fixture.Plugin, _fixture.Static.ToString(), "NavmeshGeometry",
-            Json("""{"Parent": {"MutagenObjectType": "CellNavmeshParent"}}"""));
-        Assert.True(result.Applied, result.Message);
-
-        var stat = (await CompileAndReparse()).Statics.Single(s => s.FormKey == _fixture.Static);
-        Assert.IsAssignableFrom<ICellNavmeshParentGetter>(stat.NavmeshGeometry.Require().Parent);
-    }
+    [GeneratedRegex(@"\{(\w+)\}")]
+    private static partial Regex Placeholder();
 }
