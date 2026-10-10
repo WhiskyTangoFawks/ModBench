@@ -36,10 +36,11 @@ internal static class WriteEndpointMapping
         result.NewFormKey ?? throw new InvalidOperationException("Expected an applied result to carry the new FormKey.");
 
     private static IResult Problem<TRefusal>(
-        TRefusal refusal, string? message, Func<TRefusal, int> status, IReadOnlyDictionary<string, object?>? more = null)
+        TRefusal refusal, TRefusal noLoadOrder, string? message, Func<TRefusal, int> status,
+        IReadOnlyDictionary<string, object?>? more = null)
         where TRefusal : struct, Enum
     {
-        if (refusal.ToString() == nameof(RecordEditRefusal.NoLoadOrder))
+        if (EqualityComparer<TRefusal>.Default.Equals(refusal, noLoadOrder))
             return Results.Problem(NoLoadOrderException.DefaultMessage, statusCode: StatusCodes.Status503ServiceUnavailable);
 
         var extensions = new Dictionary<string, object?> { ["refusal"] = refusal.ToString() };
@@ -57,7 +58,7 @@ internal static class WriteEndpointMapping
     /// <summary>Track's own refusal-to-status map, the same posture the record edits' has: the status
     /// says what kind of problem, the refusal extension says exactly which (ADR-0019).</summary>
     internal static IResult Refusal(SelectionRefusal<TrackRefusal> refusal) => Problem(
-        refusal.Refusal, refusal.Message,
+        refusal.Refusal, TrackRefusal.NoLoadOrder, refusal.Message,
         r => r switch
         {
             TrackRefusal.AlreadyTracked => 409,
@@ -70,7 +71,7 @@ internal static class WriteEndpointMapping
     /// <summary>Decompile's refusal of a whole selection: the refusal extension says which cause no
     /// plugin escaped (ADR-0019).</summary>
     internal static IResult Refusal(SelectionRefusal<DecompileRefusal> refusal) => Problem(
-        refusal.Refusal, refusal.Message,
+        refusal.Refusal, DecompileRefusal.NoLoadOrder, refusal.Message,
         r => r switch
         {
             // The request is sound; the machine lacks git.
@@ -80,7 +81,7 @@ internal static class WriteEndpointMapping
 
     /// <summary>Compile's refusal of a whole selection, mapped as Decompile's is (ADR-0019).</summary>
     internal static IResult Refusal(SelectionRefusal<CompileRefusal> refusal) => Problem(
-        refusal.Refusal, refusal.Message,
+        refusal.Refusal, CompileRefusal.NoLoadOrder, refusal.Message,
         r => r switch
         {
             // The request is sound; the machine lacks git.
@@ -91,7 +92,7 @@ internal static class WriteEndpointMapping
     /// <summary>Create plugin's own refusal, each leaving the folder as it was: the status says what kind
     /// of problem, the refusal extension says exactly which (ADR-0019).</summary>
     internal static IResult Refusal(PluginCreateRefusal refusal, string? message) => Problem(
-        refusal, message,
+        refusal, PluginCreateRefusal.NoLoadOrder, message,
         r => r switch
         {
             PluginCreateRefusal.FolderGone => 404,
@@ -106,7 +107,7 @@ internal static class WriteEndpointMapping
     /// <summary>Rename source's own refusal, each leaving the plugin's source as it was: the status says
     /// what kind of problem, the refusal extension says exactly which (ADR-0019).</summary>
     internal static IResult Refusal(RenameSourceRefusal refusal, string? message) => Problem(
-        refusal, message,
+        refusal, RenameSourceRefusal.NoLoadOrder, message,
         r => r switch
         {
             RenameSourceRefusal.NotAPluginFile or RenameSourceRefusal.TreeNameNotThePlugins => 400,
@@ -167,7 +168,7 @@ internal static class WriteEndpointMapping
         logger.LogWarning("Refused {Gesture} of {Item}: {Refusal} — {Message}", gesture, item, refusal, message);
 
     private static IResult RecordEditProblem(RecordEditRefusal refusal, string message, string? path) => Problem(
-        refusal, message,
+        refusal, RecordEditRefusal.NoLoadOrder, message,
         r => r switch
         {
             // The request is sound; the plugin's present state refuses it until that state changes.

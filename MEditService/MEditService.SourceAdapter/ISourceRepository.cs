@@ -19,8 +19,8 @@ public interface ISourceRepository : ISourceRepositoryReads
     /// for a record with a document of its own.</summary>
     Answer<DocumentContainment?, SourceFailure> ContainerOf(PluginAddress plugin, RecordIdentity identity);
 
-    /// <summary>The worldspace above the cell <paramref name="identity"/> names; null for one the plugin does not hold.
-    /// A cell filed under neither a cell group nor a worldspace is unreadable.</summary>
+    /// <summary>The worldspace carrying the cell <paramref name="identity"/> names; null for an interior cell or one
+    /// the plugin does not hold. A cell filed under neither is unreadable.</summary>
     Answer<string?, SourceFailure> WorldspaceOf(PluginAddress plugin, RecordIdentity identity);
 
     /// <summary>Where the GRUP hierarchy puts the cell <paramref name="identity"/> names; null for one the plugin
