@@ -1,3 +1,5 @@
+using System.Data.Common;
+using DuckDB.NET.Data;
 namespace MEditService.Index;
 
 /// <summary>The record filter: the matches of one SQL query, and the records holding a match in the
@@ -23,6 +25,16 @@ internal sealed class RecordFilter(Store store)
         """;
 
     /// <summary>Why the SQL cannot be a filter, or null once it is the filter in force; null clears it.</summary>
+    private static bool ReturnsFormKey(DuckDBConnection connection, string sql)
+    {
+        using var probeCmd = connection.CreateCommand();
+        // The newline keeps a trailing line comment in the filter from swallowing the wrapper.
+        probeCmd.CommandText = $"SELECT * FROM ({sql}\n) __probe LIMIT 0";
+        using var probeReader = probeCmd.ExecuteReader();
+        return Enumerable.Range(0, probeReader.FieldCount)
+            .Any(i => string.Equals(probeReader.GetName(i), "form_key", StringComparison.OrdinalIgnoreCase));
+    }
+
     public string? Set(string? sql)
     {
         if (sql is null)
@@ -36,17 +48,15 @@ internal sealed class RecordFilter(Store store)
             return refusal;
 
         store.CreateRecordTypeViews();
-        using var probeCmd = connection.CreateCommand();
-        // The newline keeps a trailing line comment in the filter from swallowing the wrapper.
-        probeCmd.CommandText = $"SELECT * FROM ({sql}\n) __probe LIMIT 0";
-        using var probeReader = probeCmd.ExecuteReader();
-        bool hasFormKey = Enumerable.Range(0, probeReader.FieldCount)
-            .Any(i => string.Equals(probeReader.GetName(i), "form_key", StringComparison.OrdinalIgnoreCase));
-
-        if (!hasFormKey)
-            return "Filter SQL must return a form_key column";
-
-        DuckDbSql.ExecuteFor(connection, $"CREATE OR REPLACE TABLE {Matches} AS ({sql}\n)");
+        try
+        {
+            if (!ReturnsFormKey(connection, sql)) return "Filter SQL must return a form_key column";
+            DuckDbSql.ExecuteFor(connection, $"CREATE OR REPLACE TABLE {Matches} AS ({sql}\n)");
+        }
+        catch (DbException ex)
+        {
+            return ex.Message;
+        }
         DuckDbSql.ExecuteFor(connection, $"""
             CREATE OR REPLACE TABLE {Holders} AS
             WITH RECURSIVE held AS (SELECT plugin, origin, parent, child FROM ({NavigatorSql.Held}) h),

@@ -1,4 +1,3 @@
-using System.Data.Common;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using Microsoft.Extensions.Logging;
@@ -61,24 +60,12 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
                 index.SetFilter(null);
                 return null;
             }
-            try
-            {
-                if (index.SetFilter(filter.Sql) is not { } rejection) return null;
-                return Cleared(index, filter.Source, rejection);
-            }
-            catch (DbException ex)
-            {
-                logger.LogWarning(ex,
-                    "Could not re-materialize the active filter ({Error}); the filter is cleared", ex.Message);
-                return Cleared(index, filter.Source, ex.Message);
-            }
+            if (index.SetFilter(filter.Sql) is not { } rejection) return null;
+            logger.LogWarning(
+                "Could not re-materialize the active filter ({Error}); the filter is cleared", rejection);
+            index.SetFilter(null);
+            _current = null;
+            return new RecordFilterClearedNotification(filter.Source, rejection);
         }
-    }
-
-    private RecordFilterClearedNotification Cleared(DuckDbRecordIndex index, string source, string reason)
-    {
-        index.SetFilter(null);
-        _current = null;
-        return new RecordFilterClearedNotification(source, reason);
     }
 }
