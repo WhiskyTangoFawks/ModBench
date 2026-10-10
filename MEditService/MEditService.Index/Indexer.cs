@@ -13,10 +13,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index;
 
-/// <summary>The record index's Indexer (target-architecture.d2 medit_readmodel.index.indexer): brings the
-/// Store to the load order (ADR-0013), then validates every plugin against its system of record
-/// (ADR-0003). It holds the plugins open, the progress Status reports, the scope the Store is opened
-/// for, and the filter in force.</summary>
+/// <summary>Brings the Store to the load order (ADR-0013), then validates every plugin against its
+/// system of record (ADR-0003). It holds the plugins open, the progress Status reports, the scope
+/// the Store is opened for, and the filter in force.</summary>
 internal sealed class Indexer : IDisposable
 {
     private readonly LoadOrderHolder _holder;
@@ -143,8 +142,8 @@ internal sealed class Indexer : IDisposable
         lock (_lock) return _scope ?? throw new NoLoadOrderException();
     }
 
-    /// <summary>Runs <paramref name="action"/> under the lock that disposing the scope takes, so the
-    /// index cannot be closed beneath it. False, having run nothing, with no scope held.</summary>
+    // Runs the action under the lock that disposing the scope takes, so the index cannot be closed
+    // beneath it. False, having run nothing, with no scope held.
     private bool UnderScope<T>(Func<Store, IndexScope, T> action, [MaybeNullWhen(false)] out T result)
     {
         lock (_lock)
@@ -217,14 +216,13 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    /// <summary>Reconciles every arrival of the load order, changed or not, on a thread of its own
-    /// (ADR-0013): the snapshot held when it runs, so an overtaken arrival reconciles
-    /// the newer.</summary>
+    // ADR-0013: every arrival, changed or not, reconciles the snapshot held when it runs, so an
+    // overtaken arrival reconciles the newer.
     private void StartReconcile() =>
         Task.Factory.StartNew(ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-    /// <summary>ADR-0015: validates each plugin whose tree holds one of <paramref name="paths"/>, as a change on
-    /// disk is. A reconcile in flight is waited out, never cancelled; paths handed meanwhile are validated together.</summary>
+    // ADR-0015: a handed path is validated as a change on disk is. A reconcile in flight is waited out,
+    // never cancelled; paths handed meanwhile are validated together.
     private void ValidateTreesHolding(IReadOnlyList<string> paths)
     {
         lock (_lock)
@@ -1000,8 +998,8 @@ internal sealed class Indexer : IDisposable
 
     private void OnArrived(LoadOrderSnapshot snapshot, long version) => StartReconcile();
 
-    /// <summary>Drops the scope after stopping an in-flight reconcile. False when a read outlived
-    /// <see cref="Store.EndReads"/>: that index stays open, so nothing opens a store on its file.</summary>
+    // False when a read outlived Store.EndReads: that index stays open, so nothing opens a store on
+    // its file.
     private bool Close()
     {
         // Cancels an in-flight reconcile and waits for it to stop *before* disposing anything,
