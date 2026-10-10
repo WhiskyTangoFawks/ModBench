@@ -6,12 +6,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
+import { collapsedReading } from './presentation';
 import type { CompareResult, FieldDiff, FieldMetadata } from './types';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW } from '../../src/wire/messages';
 import {
   compareOverride, compareResultFixture, diffNode, fieldMeta, leafMeta as field, lastPostedEnvelope, panelClient,
-  lastToldElement,
+  lastToldElement, required,
 } from './test/fixtures';
 
 const SCRIPT_PROPERTY_LEAF_LABELS_DROPPING_THE_BASES_WORDS: Record<string, string> = {
@@ -258,171 +259,111 @@ describe('a collapsed script reads as xEdit prose', () => {
     expect(summaryOf('Guard')).toBe('Guard(Awake: Bool = True, Radius: Int = 10)');
   });
 
-  it('a script with no properties reads as its own name and an empty list', async () => {
-    currentCompare = oneColumn([script('Bare')]);
-    renderPanel();
-    await openScripts();
-    await waitFor(() => fieldCell('Bare'));
-    toggleRow('Bare');
+});
 
-    expect(summaryOf('Bare')).toBe('Bare()');
+describe('collapsedReading of a script', () => {
+  const { elementType: scriptElementType } = scriptsMeta;
+  if (!scriptElementType) throw new Error("scriptsMeta's elementType is missing");
+  const { fields: scriptElementFields } = scriptElementType;
+  if (!scriptElementFields) throw new Error("scriptsMeta's elementType has no fields");
+  const { fields: propertyFields } = propertyMeta;
+  if (!propertyFields) throw new Error('propertyMeta has no fields');
+  const objectBinding = required(propertyFields.find(f => f.name === 'Objects')?.elementType, "propertyMeta's Objects elementType");
+  const aliasProperty = required(aliasesMeta.elementType?.fields?.find(f => f.name === 'Property'), "aliasesMeta's Property");
+  const ofUnknownLeaf = (propertiesOver: Partial<FieldMetadata> = {}): FieldMetadata => ({
+    ...scriptsMeta,
+    elementType: {
+      ...scriptElementType,
+      fields: scriptElementFields.map(f => (f.name !== 'Properties' ? f : {
+        ...f, ...propertiesOver,
+        elementType: { ...propertyMeta, leafTypeName: 'SomethingElse', fields: propertyFields.filter(m => !m.isDiscriminator) },
+      })),
+    },
   });
+  const unkeyedUnknownLeaf = ofUnknownLeaf({ keyMembers: null });
+  const keyedUnknownLeaf = ofUnknownLeaf();
+  const unkeyedAliases: FieldMetadata = { ...aliasesMeta, keyMembers: null };
+  const unnamed = documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 });
+  delete unnamed.MutagenObjectType;
+  const twoUnnamed = [script('Guard', [unnamed, { ...unnamed, Name: 'Speed' }])];
+  const playerRef = { '00000014:Fallout4.esm': 'PlayerRef' };
+  const owner = (alias: number) => [script('Guard', [documentSpelledProperty('Owner', 'ScriptObjectProperty', {
+    Object: '00000014:Fallout4.esm', Alias: alias,
+  })])];
+  const intRadius = documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 });
+  const aliasOf = (property: Obj): Obj[] => [{ Property: property, Scripts: [] }];
+  const threeProperties = [script('Guard', [
+    intRadius,
+    documentSpelledProperty('Rate', 'ScriptFloatProperty', { Data: 2.5 }),
+    documentSpelledProperty('Tag', 'ScriptStringProperty', { Data: 'alpha' }),
+  ])];
+  const element = (diff: FieldDiff, index: number): FieldDiff => required(diff.children?.[index], `element ${index}`);
+  const member = (diff: FieldDiff, name: string): FieldDiff => required(diff.children?.find(c => c.fieldName === name), `member ${name}`);
+  const scriptKeys = scriptsMeta.keyMembers;
+  const propertyKeys = FALLOUT4_VMAD_ANNOTATIONS_KEYED_ARRAYS.properties;
 
-  it('a property reads name, kind and value, the kind coming from the schema’s own leaf label', async () => {
-    currentCompare = oneColumn([script('Guard', [
-      documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 }),
-      documentSpelledProperty('Rate', 'ScriptFloatProperty', { Data: 2.5 }),
-      documentSpelledProperty('Tag', 'ScriptStringProperty', { Data: 'alpha' }),
-    ])]);
-    renderPanel();
-    await openScripts();
-    await waitFor(() => fieldCell('Radius'));
-    toggleRow('Radius');
-    toggleRow('Rate');
-    toggleRow('Tag');
-
-    expect(summaryOf('Radius')).toBe('Radius: Int = 10');
-    expect(summaryOf('Rate')).toBe('Rate: Float = 2.5');
-    expect(summaryOf('Tag')).toBe('Tag: String = alpha');
+  interface Row {
+    name: string; scripts: Obj[]; meta: FieldMetadata; editorIds?: Record<string, string>;
+    diff: (top: FieldDiff) => FieldDiff; at: FieldMetadata | undefined; keyMembers: readonly string[] | null | undefined; reads: string;
+  }
+  const scriptRow = (name: string, scripts: Obj[], reads: string, editorIds?: Record<string, string>): Row => ({
+    name, scripts, meta: scriptsMeta, editorIds, diff: top => element(top, 0), at: scriptElementType, keyMembers: scriptKeys, reads,
   });
-
-  it('an object binding reads as the bound record’s own cell text and its alias slot', async () => {
-    currentCompare = oneColumn(
-      [script('Guard', [documentSpelledProperty('Owner', 'ScriptObjectListProperty', {
+  const propertyRow = (name: string, index: number, reads: string): Row => ({
+    name, scripts: threeProperties, meta: scriptsMeta, diff: top => element(member(element(top, 0), 'Properties'), index),
+    at: propertyMeta, keyMembers: propertyKeys, reads,
+  });
+  const rows: Row[] = [
+    scriptRow('a script reads under its own name with every property passed through, not counted',
+      [script('Guard', [documentSpelledProperty('Awake', 'ScriptBoolProperty', { Data: true }), intRadius])],
+      'Guard(Awake: Bool = True, Radius: Int = 10)'),
+    scriptRow('a script with no properties reads as its own name and an empty list', [script('Bare')], 'Bare()'),
+    propertyRow('an int property reads name, kind and value, the kind coming from the schema\'s own leaf label', 0, 'Radius: Int = 10'),
+    propertyRow('a float property reads name, kind and value', 1, 'Rate: Float = 2.5'),
+    propertyRow('a string property reads name, kind and value', 2, 'Tag: String = alpha'),
+    { name: 'an object binding reads as the bound record\'s own cell text and its alias slot',
+      scripts: [script('Guard', [documentSpelledProperty('Owner', 'ScriptObjectListProperty', {
         Objects: [{ Object: '00000014:Fallout4.esm', Alias: -1 }],
       })])],
-      { '00000014:Fallout4.esm': 'PlayerRef' },
-    );
-    renderPanel();
-    await openScripts();
-    await waitFor(() => fieldCell('[0]'));
-    toggleRow('[0]');
+      meta: scriptsMeta, editorIds: playerRef,
+      diff: top => element(member(element(member(element(top, 0), 'Properties'), 0), 'Objects'), 0),
+      at: objectBinding, keyMembers: undefined, reads: 'PlayerRef [00000014:Fallout4.esm], Alias[None]' },
+    scriptRow('the same binding read as a property of its own takes the property\'s shape around it, alias -1 reading None',
+      owner(-1), 'Guard(Owner: Object = PlayerRef [00000014:Fallout4.esm], Alias[None])', playerRef),
+    scriptRow('the alias slot -2 reads as Player', owner(-2), 'Guard(Owner: Object = PlayerRef [00000014:Fallout4.esm], Alias[Player])', playerRef),
+    scriptRow('any other alias slot reads as its number', owner(3), 'Guard(Owner: Object = PlayerRef [00000014:Fallout4.esm], Alias[3])', playerRef),
+    scriptRow('a property whose value is a list reads by name and kind alone, its elements having their own rows',
+      [script('Guard', [documentSpelledProperty('Names', 'ScriptStringListProperty', { Data: ['a', 'b'] })])], 'Guard(Names: String List)'),
+    scriptRow('a leaf the table has no reading of its own for reads by its declared base\'s',
+      [script('Guard', [documentSpelledProperty('V', 'ScriptVariableProperty')])], 'Guard(V: Variable)'),
+    { ...scriptRow('an element of a passed-through list whose leaf has no reading at all still occupies its place', twoUnnamed, 'Guard({…}, {…})'),
+      meta: unkeyedUnknownLeaf, at: unkeyedUnknownLeaf.elementType ?? undefined },
+    { ...scriptRow('a keyed element of a passed-through list whose leaf has no reading reads as its key', twoUnnamed, 'Guard(Radius, Speed)'),
+      meta: keyedUnknownLeaf, at: keyedUnknownLeaf.elementType ?? undefined },
+    scriptRow('a null slot of a passed-through list holds its place, so the count stays true',
+      [script('Guard', [null, intRadius])], 'Guard({…}, Radius: Int = 10)'),
+    scriptRow('the concrete base is a leaf like any other and reads with no value',
+      [script('Guard', [documentSpelledProperty('Nothing', 'ScriptProperty')])], 'Guard(Nothing: Script Property)'),
+    { name: 'an array with one element reads as that element', scripts: [script('Guard', [intRadius])], meta: scriptsMeta,
+      diff: top => top, at: scriptsMeta, keyMembers: undefined, reads: 'Guard(Radius: Int = 10)' },
+    { name: 'an array whose one element has no reading reads as that element does', scripts: aliasOf({ Alias: 0 }), meta: unkeyedAliases,
+      diff: top => top, at: unkeyedAliases, keyMembers: undefined, reads: '{…}' },
+    { name: 'an array whose one element has a dotted key reads as that key, one struct member down', scripts: aliasOf({ Alias: 7 }), meta: aliasesMeta,
+      diff: top => top, at: aliasesMeta, keyMembers: undefined, reads: '7' },
+    { name: 'a struct member with a reading of its own reads by it',
+      scripts: aliasOf({ Object: '00000014:Fallout4.esm', Alias: -2 }), meta: aliasesMeta, editorIds: playerRef,
+      diff: top => member(element(top, 0), 'Property'), at: aliasProperty, keyMembers: undefined,
+      reads: 'PlayerRef [00000014:Fallout4.esm], Alias[Player]' },
+  ];
 
-    expect(summaryOf('[0]')).toBe('PlayerRef [00000014:Fallout4.esm], Alias[None]');
-  });
+  it.each(rows)('$name', ({ scripts, editorIds, meta, diff, at, keyMembers, reads }) => {
+    const top = required(oneColumn(scripts, editorIds, meta).diffs[0], 'the array diff');
 
-  it('the same binding read as a property of its own takes the property’s shape around it', async () => {
-    currentCompare = oneColumn(
-      [script('Guard', [documentSpelledProperty('Owner', 'ScriptObjectProperty', {
-        Object: '00000014:Fallout4.esm', Alias: -1,
-      })])],
-      { '00000014:Fallout4.esm': 'PlayerRef' },
-    );
-    renderPanel();
-    await openScripts();
-    await waitFor(() => fieldCell('Guard'));
-    toggleRow('Guard');
-
-    expect(summaryOf('Guard'))
-      .toBe('Guard(Owner: Object = PlayerRef [00000014:Fallout4.esm], Alias[None])');
-  });
-
-  it('a property whose value is a list reads by name and kind alone, as xEdit passes a property\'s own value through one level only and the elements have their own rows', async () => {
-    currentCompare = oneColumn([script('Guard', [
-      documentSpelledProperty('Names', 'ScriptStringListProperty', { Data: ['a', 'b'] }),
-    ])]);
-    renderPanel();
-    await openScripts();
-    await waitFor(() => fieldCell('Guard'));
-    toggleRow('Guard');
-
-    expect(summaryOf('Guard')).toBe('Guard(Names: String List)');
-  });
-
-  it('a leaf the table has no reading of its own for reads by its declared base’s', async () => {
-    currentCompare = oneColumn([script('Guard', [documentSpelledProperty('V', 'ScriptVariableProperty')])]);
-    renderPanel();
-    await openScripts();
-    await waitFor(() => fieldCell('Guard'));
-    toggleRow('Guard');
-
-    expect(summaryOf('Guard')).toBe('Guard(V: Variable)');
-  });
-
-  it('an element of a passed-through list whose leaf has no reading at all still occupies its place, so a script with two properties does not read like one with one', async () => {
-    const { elementType: scriptElementType } = scriptsMeta;
-    if (!scriptElementType) throw new Error("scriptsMeta's elementType is missing");
-    const { fields: scriptElementFields } = scriptElementType;
-    if (!scriptElementFields) throw new Error("scriptsMeta's elementType has no fields");
-    const { fields: propertyFields } = propertyMeta;
-    if (!propertyFields) throw new Error('propertyMeta has no fields');
-    const unknownBase: FieldMetadata = {
-      ...scriptsMeta,
-      elementType: {
-        ...scriptElementType,
-        fields: scriptElementFields.map(f => (f.name !== 'Properties' ? f : {
-          ...f, keyMembers: null, elementType: { ...propertyMeta, leafTypeName: 'SomethingElse', fields: propertyFields.filter(m => !m.isDiscriminator) },
-        })),
-      },
-    };
-    const unnamed = documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 });
-    delete unnamed.MutagenObjectType;
-    currentCompare = oneColumn([script('Guard', [unnamed, { ...unnamed, Name: 'Speed' }])], {}, unknownBase);
-    renderPanel();
-    await openScripts();
-    await waitFor(() => fieldCell('Guard'));
-    toggleRow('Guard');
-
-    expect(summaryOf('Guard')).toBe('Guard({…}, {…})');
-  });
-
-  it('a keyed element of a passed-through list whose leaf has no reading reads as its key', async () => {
-    const { elementType: scriptElementType } = scriptsMeta;
-    if (!scriptElementType) throw new Error("scriptsMeta's elementType is missing");
-    const { fields: scriptElementFields } = scriptElementType;
-    if (!scriptElementFields) throw new Error("scriptsMeta's elementType has no fields");
-    const { fields: propertyFields } = propertyMeta;
-    if (!propertyFields) throw new Error('propertyMeta has no fields');
-    const unknownBase: FieldMetadata = {
-      ...scriptsMeta,
-      elementType: {
-        ...scriptElementType,
-        fields: scriptElementFields.map(f => (f.name !== 'Properties' ? f : {
-          ...f, elementType: { ...propertyMeta, leafTypeName: 'SomethingElse', fields: propertyFields.filter(m => !m.isDiscriminator) },
-        })),
-      },
-    };
-    const unnamed = documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 });
-    delete unnamed.MutagenObjectType;
-    currentCompare = oneColumn([script('Guard', [unnamed, { ...unnamed, Name: 'Speed' }])], {}, unknownBase);
-    renderPanel();
-    await openScripts();
-    await waitFor(() => fieldCell('Guard'));
-    toggleRow('Guard');
-
-    expect(summaryOf('Guard')).toBe('Guard(Radius, Speed)');
-  });
-
-  it('a null slot of a passed-through list holds its place, so the count stays true', async () => {
-    currentCompare = oneColumn([script('Guard', [null, documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 })])]);
-    renderPanel();
-    await openScripts();
-    await waitFor(() => fieldCell('Guard'));
-    toggleRow('Guard');
-
-    expect(summaryOf('Guard')).toBe('Guard({…}, Radius: Int = 10)');
-  });
-
-  it('the concrete base is a leaf like any other and reads with no value', async () => {
-    currentCompare = oneColumn([script('Guard', [documentSpelledProperty('Nothing', 'ScriptProperty')])]);
-    renderPanel();
-    await openScripts();
-    await waitFor(() => fieldCell('Guard'));
-    toggleRow('Guard');
-
-    expect(summaryOf('Guard')).toBe('Guard(Nothing: Script Property)');
+    expect(collapsedReading(diff(top), at, PLUGIN, true, keyMembers).text).toBe(reads);
   });
 });
 
 describe('a collapsed array reads by its elements', () => {
-  it('an array with one element reads as that element', async () => {
-    currentCompare = oneColumn([script('Guard', [documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 })])]);
-    renderPanel();
-    await openScripts();
-    toggleRow('Scripts');
-
-    expect(summaryOf('Scripts')).toBe('Guard(Radius: Int = 10)');
-  });
 
   it('counts its elements per column, so one column reads its one element where another reads the count', async () => {
     currentCompare = compareResult({
@@ -438,24 +379,6 @@ describe('a collapsed array reads by its elements', () => {
     expect(cellAt(scripts, 2).textContent).toBe('[2]');
   });
 
-  it('an array whose one element has no reading reads as that element does', async () => {
-    currentCompare = oneColumn([{ Property: { Alias: 0 }, Scripts: [] }], {}, { ...aliasesMeta, keyMembers: null });
-    renderPanel();
-    await waitFor(() => screen.getByText('Aliases'));
-    toggleRow('Aliases');
-
-    expect(summaryOf('Aliases')).toBe('{…}');
-  });
-
-  it('an array whose one element has a dotted key reads as that key, one struct member down', async () => {
-    currentCompare = oneColumn([{ Property: { Alias: 7 }, Scripts: [] }], {}, aliasesMeta);
-    renderPanel();
-    await waitFor(() => screen.getByText('Aliases'));
-    toggleRow('Aliases');
-
-    expect(summaryOf('Aliases')).toBe('7');
-  });
-
   it('an array whose one element is a plain value reads as that value, each column by its own leaf\'s shape', async () => {
     currentCompare = compareResult({
       [PLUGIN]: [script('Guard', [documentSpelledProperty('Names', 'ScriptStringListProperty', { Data: ['alpha'] })])],
@@ -469,41 +392,6 @@ describe('a collapsed array reads by its elements', () => {
     expect(cellAt(data, 1).textContent).toBe('alpha');
     expect(cellAt(data, 2).textContent).toBe('3');
   });
-});
-
-describe('a collapsed struct reads by its own reading', () => {
-  it('a member with a reading of its own reads by it', async () => {
-    currentCompare = oneColumn(
-      [{ Property: { Object: '00000014:Fallout4.esm', Alias: -2 }, Scripts: [] }],
-      { '00000014:Fallout4.esm': 'PlayerRef' },
-      aliasesMeta,
-    );
-    renderPanel();
-    await waitFor(() => fieldCell('Property'));
-    toggleRow('Property');
-
-    expect(summaryOf('Property')).toBe('PlayerRef [00000014:Fallout4.esm], Alias[Player]');
-  });
-});
-
-describe('the alias slot of an object binding', () => {
-  const withAlias = (alias: number) => oneColumn(
-    [script('Guard', [documentSpelledProperty('Owner', 'ScriptObjectProperty', {
-      Object: '00000014:Fallout4.esm', Alias: alias,
-    })])],
-    { '00000014:Fallout4.esm': 'PlayerRef' });
-
-  it.each([[-1, 'None'], [-2, 'Player'], [3, '3']])(
-    'alias %i reads as %s', async (alias, expected) => {
-      currentCompare = withAlias(alias);
-      renderPanel();
-      await openScripts();
-      await waitFor(() => fieldCell('Guard'));
-      toggleRow('Guard');
-
-      expect(summaryOf('Guard'))
-        .toBe(`Guard(Owner: Object = PlayerRef [00000014:Fallout4.esm], Alias[${expected}])`);
-    });
 });
 
 describe('a row of a keyed array is identified by its key', () => {
