@@ -252,6 +252,19 @@ public sealed class RecordDocumentEditTests : IDisposable
     }
 
     [Fact]
+    public void AChildOfAPartialFormCell_IsEdited()
+    {
+        var cell = new Cell(_mod) { EditorID = "C", MajorRecordFlagsRaw = PartialFormFlag.Bit };
+        var placed = new PlacedObject(_mod) { EditorID = "Ref", Scale = 1f };
+        cell.Temporary.Add(placed);
+        _fixture.Seed(cell, "cell");
+
+        var (result, _) = _fixture.Apply(placed.FormKey.ToString(), SetAt(Json("2.5"), Member("Scale")));
+
+        Assert.True(result.Applied, result.Message);
+    }
+
+    [Fact]
     public void EmbeddedChild_IsPatchedInsideItsParentsDocument()
     {
         var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f };

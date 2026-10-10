@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
@@ -16,13 +17,17 @@ internal sealed class DocumentEditFixture : TestInstance
 {
     private const string PluginName = "DocEdit.esp";
 
+    internal static readonly ModKey ModKey = ModKey.FromFileName(PluginName);
+
     private ISourceRepository Repository => RepositoryOf(Plugin)
         ?? throw new InvalidOperationException($"Expected '{Plugin}' to already be tracked.");
 
     internal PluginAddress Plugin { get; }
 
     internal DocumentEditFixture() =>
-        Plugin = Add(new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4), "DocEditMod");
+        Plugin = Add(new Fallout4Mod(ModKey, Fallout4Release.Fallout4), "DocEditMod");
+
+    internal static FormKey KeyOf(uint id) => new(ModKey, id);
 
     /// <summary>Seeds the working tree with a real record's own codec-serialized document; returns
     /// its FormKey.</summary>
@@ -48,5 +53,42 @@ internal sealed class DocumentEditFixture : TestInstance
     {
         var result = EditHandler.Edit(Plugin, formKey, envelope);
         return (result, result.Applied ? Document(formKey) : null);
+    }
+
+    /// <summary>Applies an edit that must land, and answers what it changed in the document.</summary>
+    internal List<string> Changed(string formKey, RecordEditEnvelope envelope)
+    {
+        var before = Document(formKey);
+        var (result, after) = Apply(formKey, envelope);
+        Assert.True(result.Applied, result.Message);
+        return [.. DocumentDiffs.Of(before, after.Require()).Select(Unescaped)];
+    }
+
+    /// <summary>The set that sends back a member's whole value with the one part at <paramref name="path"/>
+    /// ("0.Data.Function") replaced.</summary>
+    internal RecordEditEnvelope Resend(string formKey, string member, string path, string replacement)
+    {
+        var value = JsonNode.Parse(Document(formKey)).Require()[member].Require();
+        var hops = path.Split('.');
+        var owner = hops[..^1].Aggregate(value, (node, hop) => Step(node, hop).Require());
+        var replaced = JsonNode.Parse(replacement);
+        if (int.TryParse(hops[^1], out var index)) owner[index] = replaced;
+        else owner[hops[^1]] = replaced;
+        return Envelopes.Spelled(RecordEditEnvelope.Set, member, value.ToJsonString());
+    }
+
+    private static JsonNode? Step(JsonNode node, string hop) => int.TryParse(hop, out var index) ? node[index] : node[hop];
+
+    private static string Unescaped(string diff) =>
+        diff.Replace("\\u003C", "<", StringComparison.Ordinal).Replace("\\u003E", ">", StringComparison.Ordinal).Replace("\\u002B", "+", StringComparison.Ordinal);
+
+    /// <summary>Applies an edit that must be refused, and checks the document was left as it was.</summary>
+    internal RecordEditResult Refused(string formKey, RecordEditEnvelope envelope)
+    {
+        var before = Document(formKey);
+        var (result, _) = Apply(formKey, envelope);
+        Assert.False(result.Applied);
+        Assert.Equal(before, Document(formKey));
+        return result;
     }
 }
