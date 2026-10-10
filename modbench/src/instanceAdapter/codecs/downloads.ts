@@ -3,15 +3,13 @@
 // Status, which `uninstalled=true` carries.
 
 import type { DownloadMeta, DownloadStatus } from '../instanceAdapter';
-import { readIniSection, setIniValue } from './qSettingsIni';
-
-const GENERAL = 'General';
+import { GENERAL_SECTION, readIniSection, setIniValue } from './qSettingsIni';
 
 /** Appended to a download's filename to name its sidecar. */
 export const DOWNLOAD_SIDECAR_SUFFIX = '.meta';
 
 export function parseDownloadMeta(text: string): DownloadMeta {
-  const values = readIniSection(text, GENERAL);
+  const values = readIniSection(text, GENERAL_SECTION);
   let status: DownloadStatus = 'Downloaded';
   if (values.get('uninstalled') === 'true') status = 'Uninstalled';
   else if (values.get('installed') === 'true') status = 'Installed';
@@ -35,7 +33,7 @@ export function parseDownloadMeta(text: string): DownloadMeta {
 // Writes the value verbatim, so `false` clears rather than deleting the key,
 // matching MO2's `QSettings::setValue`. Empty text yields a minimal `.meta`, in MO2's CRLF.
 const setMetaFlag = (text: string, key: string, value: boolean): string =>
-  setIniValue(text === '' ? `[${GENERAL}]\r\n` : text, GENERAL, key, String(value));
+  setIniValue(text === '' ? `[${GENERAL_SECTION}]\r\n` : text, GENERAL_SECTION, key, String(value));
 
 /** Both keys, as MO2's own markInstalled writes them: a reader resolves `uninstalled` first, so
  *  a download uninstalled and then reinstalled would otherwise still read Uninstalled. */

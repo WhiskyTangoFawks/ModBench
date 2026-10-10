@@ -2,12 +2,14 @@ const BOM = '\uFEFF';
 
 export const stripBom = (text: string): string => (text.startsWith(BOM) ? text.slice(BOM.length) : text);
 
+export const splitLines = (text: string): string[] => text.split(/\r\n|\r|\n/);
+
 /** Applies `edit` to the lines. The file keeps its BOM and whether its last line has a
  *  terminator, and is written whole with the one line ending `detectEol` names. */
 export function editLines(text: string, edit: (lines: string[]) => readonly string[]): string {
   const bom = text.startsWith(BOM) ? BOM : '';
   const body = text.slice(bom.length);
-  const lines = body === '' ? [] : body.split(/\r\n|\r|\n/);
+  const lines = body === '' ? [] : splitLines(body);
   const terminated = lines.at(-1) === '' || body === '';
   if (lines.at(-1) === '') lines.pop();
   const edited = edit(lines);

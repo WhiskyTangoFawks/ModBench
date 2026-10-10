@@ -1,17 +1,18 @@
 // MO2 wraps special-character values as `@ByteArray(<value>)`; a profile name needs no
 // wrapping, but MO2 writes one, so we match it.
 
-import { decodeIniValue, readIniValue, setIniValue } from './qSettingsIni';
+import { decodeIniValue, GENERAL_SECTION, readIniValue, setIniValue } from './qSettingsIni';
 
 /** MO2's settings file, at the instance root. */
 export const SETTINGS_FILE_NAME = 'ModOrganizer.ini';
 
-const GENERAL = 'General';
 const SELECTED_PROFILE_KEY = 'selected_profile';
 
+const missingKey = (key: string): Error => new Error(`ModOrganizer.ini: missing ${key}`);
+
 function readRequired(text: string, key: string): string {
-  const raw = readIniValue(text, GENERAL, key);
-  if (raw === undefined) throw new Error(`ModOrganizer.ini: missing ${key}`);
+  const raw = readIniValue(text, GENERAL_SECTION, key);
+  if (raw === undefined) throw missingKey(key);
   return decodeIniValue(raw);
 }
 
@@ -29,6 +30,6 @@ export function readDownloadDirectory(text: string): string | undefined {
 }
 
 export function setSelectedProfileInText(text: string, profile: string): string {
-  readSelectedProfile(text);
-  return setIniValue(text, GENERAL, SELECTED_PROFILE_KEY, `@ByteArray(${profile})`);
+  if (readIniValue(text, GENERAL_SECTION, SELECTED_PROFILE_KEY) === undefined) throw missingKey(SELECTED_PROFILE_KEY);
+  return setIniValue(text, GENERAL_SECTION, SELECTED_PROFILE_KEY, `@ByteArray(${profile})`);
 }

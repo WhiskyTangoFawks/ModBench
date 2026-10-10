@@ -2,7 +2,7 @@
 // order is not guaranteed, so it's read scoped to the section and keyed by index.
 
 import type { InstalledFileId, ModMeta, OwnedMetaKeys } from '../instanceAdapter';
-import { readIniSection, replaceIniSection, setIniValue } from './qSettingsIni';
+import { GENERAL_SECTION, readIniSection, replaceIniSection, setIniValue } from './qSettingsIni';
 
 /** A mod folder's metadata file. */
 export const MOD_META_FILE_NAME = 'meta.ini';
@@ -17,7 +17,6 @@ const OWNED_GENERAL_KEYS = [
   ['archiveFilename', 'installationFile'],
 ] as const;
 
-const GENERAL = 'General';
 const INSTALLED_FILES = 'installedFiles';
 
 // A `[installedFiles]` array key is `<index>\modid` or `<index>\fileid`; anything else
@@ -25,9 +24,9 @@ const INSTALLED_FILES = 'installedFiles';
 function arrayEntryKey(key: string): { index: number; field: 'modid' | 'fileid' } | undefined {
   const sep = key.indexOf('\\');
   if (sep === -1) return undefined;
-  const index = Number(key.slice(0, sep).trim());
+  const index = Number(key.slice(0, sep));
   if (!Number.isInteger(index)) return undefined;
-  const field = key.slice(sep + 1).trim().toLowerCase();
+  const field = key.slice(sep + 1);
   return field === 'modid' || field === 'fileid' ? { index, field } : undefined;
 }
 
@@ -47,7 +46,7 @@ function parseInstalledFiles(text: string): InstalledFileId[] | undefined {
 }
 
 export function parseMetaIni(text: string): ModMeta {
-  const general = readIniSection(text, GENERAL);
+  const general = readIniSection(text, GENERAL_SECTION);
   const present = (key: string): string | undefined => general.get(key) || undefined; // blank == absent
   const modid = present('modid');
   return {
@@ -69,10 +68,9 @@ function installedFilesBody(pairs: readonly InstalledFileId[] | undefined): stri
 /** Sets the keys Modbench owns into existing meta.ini text — replaced, added or (value
  *  absent) cleared — leaving every other key and section as found. */
 export function setOwnedKeysInText(text: string, keys: MetaKeys): string {
-  // A key is added right after the header, so adding in reverse keeps the owned order.
   const general = [...OWNED_GENERAL_KEYS]
     .reverse()
-    .reduce((acc, [field, key]) => setIniValue(acc, GENERAL, key, keys[field] || undefined), text);
+    .reduce((acc, [field, key]) => setIniValue(acc, GENERAL_SECTION, key, keys[field]), text);
   return replaceIniSection(general, INSTALLED_FILES, installedFilesBody(keys.installedFiles));
 }
 

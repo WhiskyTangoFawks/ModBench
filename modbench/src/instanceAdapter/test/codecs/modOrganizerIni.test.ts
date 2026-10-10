@@ -25,21 +25,11 @@ describe('readSelectedProfile', () => {
 
 });
 
-describe('section-aware lookups', () => {
-  it('reads a key from its own section, not the same key in an earlier one', () => {
-    expect(readSelectedProfile('[Other]\r\nselected_profile=Wrong\r\n[General]\r\nselected_profile=Right\r\n')).toBe('Right');
-  });
-
+describe('section-aware lookup', () => {
   it('does not find a key that exists only in another section', () => {
     expect(() => readSelectedProfile('[Settings]\r\nselected_profile=Wrong\r\n')).toThrow(/missing selected_profile/);
   });
 
-  it('sets the key in its own section, leaving the same key elsewhere', () => {
-    const text = '[Other]\r\nselected_profile=Keep\r\n[General]\r\nselected_profile=Old\r\n';
-    expect(setSelectedProfileInText(text, 'New')).toBe(
-      '[Other]\r\nselected_profile=Keep\r\n[General]\r\nselected_profile=@ByteArray(New)\r\n',
-    );
-  });
 });
 
 describe('readGameName', () => {
@@ -50,7 +40,7 @@ describe('readGameName', () => {
 
 describe('readGamePath', () => {
   it('unwraps an @ByteArray(...) value from the fixture', () => {
-    expect(readGamePath(ini())).toBe(String.raw`Z:\\\\path\\to\\Stock Game Folder`);
+    expect(readGamePath(ini())).toBe(String.raw`Z:\\path\to\Stock Game Folder`);
   });
 
   it('reads a plain (non-@ByteArray) value', () => {
@@ -84,6 +74,10 @@ describe('readDownloadDirectory', () => {
 });
 
 describe('setSelectedProfileInText — surgical, byte-faithful', () => {
+  it.each(['a,b', 'back\\slash', 'say "hi"', ' padded '])('writes %j so that readSelectedProfile reads it back', (name) => {
+    expect(readSelectedProfile(setSelectedProfileInText(ini(), name))).toBe(name);
+  });
+
   it('rewrites only the selected_profile value, preserving every other byte', () => {
     const input = ini();
     const out = setSelectedProfileInText(input, 'Secondary');

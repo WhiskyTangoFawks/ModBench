@@ -111,7 +111,7 @@ describe('writeMetaIni', () => {
 });
 
 describe('writeMetaIni — installedFiles', () => {
-  it('emits the array section whole, in MO2 form, after [General]', () => {
+  it('emits the array section whole, in MO2 form', () => {
     expect(writeMetaIni({ installedFiles: [{ nexusId: '123', fileId: '456' }] })).toBe(
       '[installedFiles]\n1\\modid=123\n1\\fileid=456\nsize=1\n',
     );
@@ -151,6 +151,10 @@ describe('writeMetaIni — installedFiles', () => {
 });
 
 describe('setOwnedKeysInText', () => {
+  it('writes an owned key given empty as `key=`, not as a deletion', () => {
+    expect(setOwnedKeysInText('[General]\r\nversion=1\r\n', { version: '' })).toBe('[General]\r\nversion=\r\n');
+  });
+
   it('replaces only the owned keys, preserving unknown General keys, other sections and re-emitting installedFiles whole', () => {
     const text = [
       '[General]',
