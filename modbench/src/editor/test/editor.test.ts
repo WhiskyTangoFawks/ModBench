@@ -1,14 +1,7 @@
 import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, uriFrom, fakeUri } from '../../test/vscodeMock';
-
-interface ReferencesViewInput {
-  title: string;
-  location: unknown;
-  contextValue: string;
-  resolve(): Promise<{ provider: { getChildren(element?: unknown): unknown[] }; message: string | undefined }>;
-  with(location: unknown): ReferencesViewInput;
-}
+import type { ReferencesViewInput } from '../referencesView';
 
 const h = vi.hoisted(() => ({
   referencesView: { enabled: true, inputs: [] as ReferencesViewInput[] },
@@ -236,11 +229,13 @@ const askReferencedBy = async (...args: unknown[]): Promise<ReferencesViewInput 
   return h.referencesView.inputs.slice(shown).at(-1);
 };
 
-const askedFromThePalette = async (): Promise<string | undefined> => {
-  const pickers = h.pickersShown;
-  const input = await askReferencedBy();
-  return h.pickersShown > pickers ? 'the record picker' : input?.title;
+const askedFromThePalette = async () => {
+  const [inputs, pickers] = [h.referencesView.inputs.length, h.pickersShown];
+  await askReferencedBy();
+  return { listed: h.referencesView.inputs.slice(inputs).map((input) => input.title), picked: h.pickersShown - pickers };
 };
+const listing = (record: string) => ({ listed: [`Referenced By: ${record}`], picked: 0 });
+const PICKED = { listed: [], picked: 1 };
 
 const pageGlobal = (panel: FakePanel, name: string): unknown => {
   const html = panel.webview.html ?? '';
@@ -275,14 +270,14 @@ describe('Referenced By from the palette asks about the record tab in focus', ()
     const { open } = palette();
 
     const first = open('000801:A.esp');
-    expect(await askedFromThePalette()).toBe('Referenced By: 000801:A.esp');
+    expect(await askedFromThePalette()).toEqual(listing('000801:A.esp'));
     open('000802:A.esp');
-    expect(await askedFromThePalette()).toBe('Referenced By: 000802:A.esp');
+    expect(await askedFromThePalette()).toEqual(listing('000802:A.esp'));
     first.focus();
-    expect(await askedFromThePalette()).toBe('Referenced By: 000801:A.esp');
+    expect(await askedFromThePalette()).toEqual(listing('000801:A.esp'));
   });
 
-  it('keeps the record of a tab that closes while other record tabs stay open, until another is focused', async () => {
+  it('asks with the record picker once the tab in focus closes, though other record tabs stay open, until another is focused', async () => {
     const { open } = palette();
     const first = open('000801:A.esp');
     const second = open('000802:A.esp');
@@ -290,9 +285,9 @@ describe('Referenced By from the palette asks about the record tab in focus', ()
     first.focus();
 
     first.close();
-    expect(await askedFromThePalette()).toBe('Referenced By: 000801:A.esp');
+    expect(await askedFromThePalette()).toEqual(PICKED);
     second.focus();
-    expect(await askedFromThePalette()).toBe('Referenced By: 000802:A.esp');
+    expect(await askedFromThePalette()).toEqual(listing('000802:A.esp'));
   });
 
   it('keeps the record in focus when a tab out of focus closes', async () => {
@@ -302,20 +297,13 @@ describe('Referenced By from the palette asks about the record tab in focus', ()
 
     first.close();
 
-    expect(await askedFromThePalette()).toBe('Referenced By: 000802:A.esp');
+    expect(await askedFromThePalette()).toEqual(listing('000802:A.esp'));
   });
 
-  it('asks with the record picker with no record tab open, the last one closed even when it was not the tab last in focus', async () => {
-    const { open } = palette();
-    expect(await askedFromThePalette()).toBe('the record picker');
-    const first = open('000801:A.esp');
-    const second = open('000802:A.esp');
-    first.focus();
+  it('asks with the record picker with no record tab open', async () => {
+    palette();
 
-    first.close();
-    second.close();
-
-    expect(await askedFromThePalette()).toBe('the record picker');
+    expect(await askedFromThePalette()).toEqual(PICKED);
   });
 
   it('names the new FormKey for the tab in focus when an edit of its FormID moves it, and keeps the record in focus when another tab moves', async () => {
@@ -333,10 +321,10 @@ describe('Referenced By from the palette asks about the record tab in focus', ()
 
     await h.commands.get('modbench.record.editField')?.(
       { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin }, { op: 'set', path: [{ kind: 'member', name: 'FormID' }], value: 'x' });
-    expect(await askedFromThePalette()).toBe(`Referenced By: ${OTHER}`);
+    expect(await askedFromThePalette()).toEqual(listing(OTHER));
 
     moving.focus();
-    expect(await askedFromThePalette()).toBe(`Referenced By: ${MOVED}`);
+    expect(await askedFromThePalette()).toEqual(listing(MOVED));
   });
 });
 
@@ -355,8 +343,9 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
     const referencesAsked = () => client.calls.filter(({ method }) => method === 'getReferences').map(({ args }) => args);
     return { client, anchor, locateRecord, referencesAsked };
   }
-  const labelsOf = async (input: ReferencesViewInput | undefined) =>
-    present(input, 'the list shown').resolve().then(({ provider }) => provider.getChildren().map((row): unknown => Reflect.get(Object(row), 'label')));
+  const rowsOf = async (input: ReferencesViewInput | undefined) => (await present(input, 'the list shown').resolve()).provider.getChildren();
+  const labelsOf = async (input: ReferencesViewInput | undefined) => (await rowsOf(input)).map((row) => row.label);
+  const idsOf = async (input: ReferencesViewInput | undefined) => (await rowsOf(input)).map((row) => row.id);
 
   it('shows the clicked record\'s list, titled by its EditorID and anchored at its FormKey in that copy\'s document', async () => {
     const { anchor, locateRecord } = asking();
@@ -387,6 +376,16 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
 
     expect(referencesAsked()).toEqual([[GUN], [GUN]]);
     expect(moved.title).toBe(input.title);
+  });
+
+  it('gives each list its own rows, so the same record asked about again shows collapsed, and the view\'s refresh keeps what was expanded', async () => {
+    asking();
+    const first = present(await askReferencedBy(recordRow), 'the first list');
+    const again = present(await askReferencedBy(recordRow), 'the list asked for again');
+    const refreshed = first.with(new vscode.Location(vscode.Uri.file('/its/document.json'), new vscode.Position(9, 15)));
+
+    expect(await idsOf(again)).not.toEqual(await idsOf(first));
+    expect(await idsOf(refreshed)).toEqual(await idsOf(first));
   });
 
   it('is refused, naming the built-in extension it needs, while VS Code\'s References view is disabled, before any record is asked for', async () => {
@@ -690,7 +689,7 @@ describe('a record file\'s tab', () => {
 
     expect(client.calls).toContainEqual({ method: 'getRecordOfFile', args: [FILE] });
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
-    expect(await askedFromThePalette()).toBe('Referenced By: Gun');
+    expect(await askedFromThePalette()).toEqual(listing('Gun'));
     client.emit(conflictsComputedTick);
     expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
   });
@@ -1021,7 +1020,7 @@ describe('a record tab closed', () => {
 
     expect(pageGlobal(tab, 'mEditFormKey')).toBeUndefined();
     expect(tab.webview.postMessage).not.toHaveBeenCalled();
-    expect(await askedFromThePalette()).toBe('the record picker');
+    expect(await askedFromThePalette()).toEqual(PICKED);
   });
 
   it('lets go of what it listened to: its document\'s changes and the instance\'s mods', async () => {
@@ -1306,7 +1305,7 @@ describe('an untracked copy\'s tab', () => {
     const tab = await openDocument(RENDERED);
 
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
-    expect(await askedFromThePalette()).toBe('Referenced By: Gun');
+    expect(await askedFromThePalette()).toEqual(listing('Gun'));
     expect(client.calls.map(({ method }) => method)).not.toContain('getRecordOfFile');
   });
 

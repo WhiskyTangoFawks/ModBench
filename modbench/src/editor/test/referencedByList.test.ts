@@ -9,7 +9,7 @@ import {
   readReferencedBy,
   ReferencedByHolderNode,
   referencedByCopyValueText,
-} from '../ReferencedByTreeProvider';
+} from '../referencedByList';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { expectInstancesOf } from '../../test/expectInstanceOf';
 import type { ReferenceResult } from '../../client';
@@ -41,9 +41,9 @@ function indexed(references: ReferenceResult[]): InMemoryMEditClient {
   return client;
 }
 
-async function listOf(client: InMemoryMEditClient, target = TARGET) {
-  const list = await readReferencedBy(client, leveledLog(), target);
-  return { ...list, referrers: list.provider.getChildren() };
+async function listOf(client: InMemoryMEditClient, list = 'a list') {
+  const read = await readReferencedBy(client, leveledLog(), TARGET, list);
+  return { ...read, referrers: read.provider.getChildren() };
 }
 
 const referrersOver = async (references: ReferenceResult[]) => (await listOf(indexed(references))).referrers;
@@ -71,7 +71,7 @@ describe('the Referenced By list — states', () => {
     const log = leveledLog();
     const client = indexed([]);
     client.setQueryFailure('getReferences', { failed: 'refused', refusal: 'boom' });
-    const [error, ...rest] = (await readReferencedBy(client, log, TARGET)).provider.getChildren();
+    const [error, ...rest] = (await readReferencedBy(client, log, TARGET, 'a list')).provider.getChildren();
     expect(rest).toEqual([]);
     expect(error?.label).toBe('Failed to load: boom');
     expect(error?.tooltip).toBe('boom');
@@ -80,7 +80,7 @@ describe('the Referenced By list — states', () => {
 
   it('is a snapshot: mEdit is asked once, however often the view asks for rows and whatever changes after', async () => {
     const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
-    const { provider } = await readReferencedBy(client, leveledLog(), TARGET);
+    const { provider } = await readReferencedBy(client, leveledLog(), TARGET, 'a list');
     client.emit({ kind: 'rows-changed', plugin: '', origin: '', keys: [], sequence: 0 });
     provider.getChildren();
     provider.getChildren();
@@ -129,10 +129,10 @@ describe('the Referenced By list — a referrer', () => {
     expect(recordOpenPlan(referrer, []).addresses).toEqual([{ formKey: '000002:Fallout4.esm' }]);
   });
 
-  it('shows collapsed, with an identity of its own under each record the list is about', async () => {
+  it('shows collapsed, with an identity of its own in each list, whatever record it is about', async () => {
     const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
-    const [first] = (await listOf(client)).referrers;
-    const [second] = (await listOf(client, '000009:Fallout4.esm')).referrers;
+    const [first] = (await listOf(client, 'one list')).referrers;
+    const [second] = (await listOf(client, 'another list')).referrers;
     expect([first?.collapsibleState, second?.collapsibleState])
       .toEqual([TreeItemCollapsibleState.Collapsed, TreeItemCollapsibleState.Collapsed]);
     expect(first?.id).not.toBe(second?.id);

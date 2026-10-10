@@ -7,26 +7,8 @@ import { recordArgumentOf, type RecordArgument } from '../drivingLib/recordArgum
 import { isReadFailed } from '../wire/readFailed';
 import { pickRecord } from './recordPicker';
 import { recordTitle } from './recordTitle';
-import { readReferencedBy, type ReferencedByClient, type ReferencedByList } from './ReferencedByTreeProvider';
-
-// The slice of the built-in extension's exports Referenced By drives; @types/vscode does not declare it.
-// Read from vscode.references-view's dist/extension.js (VS Code 1.137 to 1.141).
-const REFERENCES_VIEW_EXTENSION = 'vscode.references-view';
-
-interface ReferencesViewInput {
-  readonly title: string;
-  // The view opens this as a text document and clears itself unless a non-blank run sits at its start.
-  readonly location: vscode.Location;
-  // The view sets `reference-list.source` to it.
-  readonly contextValue: string;
-  resolve(): Promise<ReferencedByList>;
-  // Its refresh calls this when the document moved the anchor since the list was asked for.
-  with(location: vscode.Location): ReferencesViewInput;
-}
-
-interface ReferencesView {
-  setInput(input: ReferencesViewInput): void;
-}
+import { readReferencedBy, type ReferencedByClient, type ReferencedByList } from './referencedByList';
+import { REFERENCES_VIEW_EXTENSION, referencesView, type ReferencesViewInput } from './referencesView';
 
 const REFERENCED_BY_SOURCE = 'modbench.referencedBy';
 
@@ -39,10 +21,6 @@ export interface ReferencedByDeps {
   reporter: Reporter;
   locateRecord: LocateRecord;
   recordInFocus: () => string | undefined;
-}
-
-async function referencesView(): Promise<ReferencesView | undefined> {
-  return vscode.extensions.getExtension<ReferencesView>(REFERENCES_VIEW_EXTENSION)?.activate();
 }
 
 async function titleOf(client: ReferencedByDeps['client'], formKey: string): Promise<string> {
@@ -66,6 +44,7 @@ async function recordAskedAbout(deps: ReferencedByDeps, argument: unknown): Prom
 
 export function registerReferencedBy(deps: ReferencedByDeps): vscode.Disposable {
   const { reporter } = deps;
+  let lists = 0;
   return vscode.commands.registerCommand('modbench.record.referencedBy', async (argument?: unknown) => {
     const view = await referencesView();
     if (!view) {
@@ -85,7 +64,8 @@ export function registerReferencedBy(deps: ReferencedByDeps): vscode.Disposable 
         reporter.report('error', failMessage, location?.refused ?? `No active plugin holds ${record.formKey}.`);
         return;
       }
-      view.setInput(referencedByInput(title, location, () => readReferencedBy(deps.client, deps.log, record.formKey)));
+      const list = String(++lists);
+      view.setInput(referencedByInput(title, location, () => readReferencedBy(deps.client, deps.log, record.formKey, list)));
     });
   });
 }

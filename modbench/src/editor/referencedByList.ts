@@ -15,7 +15,7 @@ export class ReferencedByHolderNode extends vscode.TreeItem {
   readonly name: string;
 
   constructor(
-    target: string,
+    list: string,
     formKey: string,
     editorId: string | undefined,
     address: PluginAddress,
@@ -25,7 +25,7 @@ export class ReferencedByHolderNode extends vscode.TreeItem {
     this.plugin = address;
     this.name = editorId ?? formKey;
     this.argument = { kind: 'record', plugin: address, formKey };
-    this.id = JSON.stringify([target, formKey, address.origin, address.name]);
+    this.id = JSON.stringify([list, formKey, address.origin, address.name]);
     this.description = fieldPaths.join(', ');
     this.contextValue = 'referencedByHolder';
   }
@@ -38,7 +38,7 @@ class ReferencedByReferrerNode extends vscode.TreeItem {
   readonly name: string;
 
   constructor(
-    target: string,
+    list: string,
     readonly formKey: string,
     editorId: string | undefined,
     readonly recordTypeName: string,
@@ -48,8 +48,8 @@ class ReferencedByReferrerNode extends vscode.TreeItem {
     this.name = editorId ?? formKey;
     this.argument = { kind: 'record', formKey };
     this.copyText = recordLabel(editorId, formKey);
-    // The target is in the id so a new list starts collapsed.
-    this.id = JSON.stringify([target, formKey]);
+    // The list is in the id so each list starts collapsed.
+    this.id = JSON.stringify([list, formKey]);
     this.description = holders.length > 1 ? `${recordTypeName} · ${holders.length} plugins` : recordTypeName;
     this.tooltip = [this.copyText, recordTypeName, holders.map(h => h.plugin.name).join(', ')].join('\n');
     this.contextValue = 'referencedByReferrer';
@@ -85,17 +85,17 @@ function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): T[][] {
   return [...groups.values()];
 }
 
-function referrerNode(target: string, copies: readonly ReferenceResult[]): ReferencedByReferrerNode | undefined {
+function referrerNode(list: string, copies: readonly ReferenceResult[]): ReferencedByReferrerNode | undefined {
   const [first] = copies;
   if (!first) return undefined;
   const editorId = first.editorId ?? undefined;
   const holders = groupBy(copies, r => JSON.stringify([r.origin, r.plugin])).flatMap(fields => {
     const [held] = fields;
     return held
-      ? [new ReferencedByHolderNode(target, first.formKey, editorId, { name: held.plugin, origin: held.origin }, fields.map(r => r.fieldPath))]
+      ? [new ReferencedByHolderNode(list, first.formKey, editorId, { name: held.plugin, origin: held.origin }, fields.map(r => r.fieldPath))]
       : [];
   });
-  return new ReferencedByReferrerNode(target, first.formKey, editorId, first.recordTypeName, holders);
+  return new ReferencedByReferrerNode(list, first.formKey, editorId, first.recordTypeName, holders);
 }
 
 const byTypeThenLabel = (a: ReferencedByReferrerNode, b: ReferencedByReferrerNode): number =>
@@ -128,8 +128,8 @@ export interface ReferencedByList {
 
 export type ReferencedByClient = Pick<MEditClient, 'getReferences' | 'loadOrderStatus'>;
 
-/** What references `target`, read once (editor-referenced-by.md, Asking, story 4). */
-export async function readReferencedBy(client: ReferencedByClient, log: Log, target: string): Promise<ReferencedByList> {
+/** What references `target`, read once (editor-referenced-by.md, Asking, story 4); `list` tells this list from every other asked for. */
+export async function readReferencedBy(client: ReferencedByClient, log: Log, target: string, list: string): Promise<ReferencedByList> {
   const read = await client.getReferences(target).catch((error: unknown) => localFailure(errorMessage(error)));
   const indexing = client.loadOrderStatus?.conflictsComputed ? undefined : INDEXING_MESSAGE;
   if (isReadFailed(read)) {
@@ -137,7 +137,7 @@ export async function readReferencedBy(client: ReferencedByClient, log: Log, tar
     log.error(`[ReferencedBy] getReferences(${target}) failed: ${reason}`);
     return { provider: new ReferencedByTreeProvider([new ErrorNode(reason)]), message: indexing };
   }
-  const referrers = groupBy(read, r => r.formKey).flatMap(copies => referrerNode(target, copies) ?? []).sort(byTypeThenLabel);
+  const referrers = groupBy(read, r => r.formKey).flatMap(copies => referrerNode(list, copies) ?? []).sort(byTypeThenLabel);
   return {
     provider: new ReferencedByTreeProvider(referrers),
     message: messageLine(referrers.length === 0 ? NO_REFERENCES_MESSAGE : undefined, indexing),

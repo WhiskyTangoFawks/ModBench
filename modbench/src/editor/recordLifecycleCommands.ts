@@ -15,7 +15,7 @@ import { gestureEntry, isClickedRow } from '../drivingLib/gestureEntry';
 import { rowLabelOf, rowNameOf } from '../drivingLib/argument';
 import { recordArgumentOf } from '../drivingLib/recordArgument';
 import { pluginAddressOf } from '../wire/pluginAddress';
-import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from './ReferencedByTreeProvider';
+import { ReferencedByHolderNode, REFERENCED_BY_VIEW } from './referencedByList';
 import { answerOf } from '../wire/readFailed';
 
 function recordName(formKey: string, label: string | undefined): string {

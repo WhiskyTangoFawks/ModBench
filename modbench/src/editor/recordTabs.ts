@@ -7,7 +7,6 @@ import type { FocusedCellContext } from '../wire/messages';
 export class RecordTabs implements Iterable<RecordTab> {
   private readonly tabs = new Set<RecordTab>();
   private active: RecordTab | undefined;
-  private record: string | undefined;
 
   /** `showCell` hears the in-focus tab's cell whenever it changes. `entered` hears the user take the
    *  focus: a cell clicked, or a tab gaining it. */
@@ -21,16 +20,9 @@ export class RecordTabs implements Iterable<RecordTab> {
   }
 
   open(panel: TabPanel, document: vscode.Uri): RecordTab {
-    const tab = new RecordTab(panel, document, {
-      retargeted: (moved) => { if (moved === this.active) this.record = moved.formKey; },
-      closed: (closed) => { this.close(closed); },
-    });
+    const tab = new RecordTab(panel, document, { closed: (closed) => { this.close(closed); } });
     this.tabs.add(tab);
     return tab;
-  }
-
-  activeRecord(): string | undefined {
-    return this.record;
   }
 
   /** The record tab last in focus; none once it closes. */
@@ -44,7 +36,6 @@ export class RecordTabs implements Iterable<RecordTab> {
 
   focus(tab: RecordTab): void {
     this.active = tab;
-    this.record = tab.formKey;
     this.showCell(tab.cell);
     this.entered();
   }
@@ -71,14 +62,11 @@ export class RecordTabs implements Iterable<RecordTab> {
     return async (address, write) => { await through(0, address, address.formKey, write); };
   }
 
-  // VS Code has no "last record tab closed" event. A closing tab in focus with others open keeps
-  // its record until another tab gains focus.
   private close(tab: RecordTab): void {
     this.tabs.delete(tab);
     if (tab === this.active) {
       this.active = undefined;
       this.showCell(undefined);
     }
-    if ([...this.tabs].every((open) => open.formKey === undefined)) this.record = undefined;
   }
 }

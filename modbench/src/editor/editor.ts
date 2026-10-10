@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { RecordTabs } from './recordTabs';
 import { GRID_VIEW, publishFocusedCell, gridCopyValueText } from './focusedCells';
 import { registerEditorCommands, type EditorCommandDeps } from './editorCommands';
-import { referencedByCopyValueText } from './ReferencedByTreeProvider';
+import { referencedByCopyValueText } from './referencedByList';
 import { registerReferencedBy, type LocateRecord, type ReferencedByDeps } from './referencedBy';
 import { selectionInFocusedView } from '../drivingLib/inFocusedView';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
@@ -37,7 +37,7 @@ export function createEditor(deps: EditorDeps): Editor {
 
   own(registerReferencedBy({
     client: deps.meditClient, log: deps.outputChannel, reporter: deps.reporterFor('referencedBy'),
-    locateRecord: deps.locateRecord, recordInFocus: () => tabs.activeRecord(),
+    locateRecord: deps.locateRecord, recordInFocus: () => tabs.activeTab()?.formKey,
   }));
 
   registerEditorCommands({
@@ -48,7 +48,7 @@ export function createEditor(deps: EditorDeps): Editor {
   return {
     copyValue: [
       { text: gridCopyValueText(() => tabs.focusedCell()), reporterTag: 'recordGrid.copy' },
-      { text: referencedByCopyValueText, reporterTag: 'referencedByTree.copy' },
+      { text: referencedByCopyValueText, reporterTag: 'referencedBy.copy' },
     ],
     dispose: () => { owned.splice(0).reverse().forEach((disposable) => { disposable.dispose(); }); },
   };
