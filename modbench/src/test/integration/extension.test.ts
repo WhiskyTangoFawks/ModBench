@@ -1491,13 +1491,14 @@ describe('Delete separator, as VS Code runs it on the Mods view\'s selection', (
   });
 
   it('takes its line from modlist.txt and its folder to the OS trash', async () => {
-    await selectFirstRow('modbench.modList', 'Doomed');
     const warn = vscode.window.showWarningMessage;
     (vscode.window as { showWarningMessage: unknown }).showWarningMessage = () => Promise.resolve('Delete');
     try {
-      await vscode.commands.executeCommand('modbench.separator.delete');
-
-      assert.ok(!readFileSync(modlistPath, 'utf8').includes('Doomed'), 'the delete should have written modlist.txt');
+      await waitFor('the delete to write modlist.txt, the Mods view reloading after the setup writes having dropped its selection', async () => {
+        await selectFirstRow('modbench.modList', 'Doomed');
+        await vscode.commands.executeCommand('modbench.separator.delete');
+        return !readFileSync(modlistPath, 'utf8').includes('Doomed');
+      });
       assert.ok(!existsSync(doomedDir), 'the delete should have taken the separator\'s folder from mods/');
       if (process.platform === 'linux') {
         assert.strictEqual(takeFromTrash(doomedDir, trashedBefore), 1, 'the separator\'s folder should be in the OS trash');
