@@ -170,7 +170,7 @@ describe('the Referenced By list — where a referrer is held', () => {
     const [holder] = await holdersOver([
       reference({ formKey: '000002:Fallout4.esm', plugin: 'MyMod.esp', origin: 'MyMod' }),
     ]);
-    const [invocation] = present(holder?.command?.arguments, 'the click\'s arguments');
+    const [invocation] = present<unknown[]>(holder?.command?.arguments, 'the click\'s arguments');
     expect(holder?.command?.command).toBe('modbench.record.open');
     expect(invocation).toMatchObject({ argument: holder?.argument });
     expect(openedRow(invocation)).toBe(holder);

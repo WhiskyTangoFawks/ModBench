@@ -363,7 +363,8 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
     const { provider } = await present(await askReferencedBy(recordRow), 'the list shown').resolve();
     const [referrer] = provider.getChildren();
     const [holder] = provider.getChildren(present(referrer, 'the referrer'));
-    const click = async (row: typeof holder) => { await h.commands.get('modbench.record.open')?.(...(row?.command?.arguments ?? [])); };
+    const click = async (row: typeof holder) => { const clicked: unknown[] = row?.command?.arguments ?? [];
+      await h.commands.get('modbench.record.open')?.(...clicked); };
 
     await click(referrer);
     expect(focusedView.selectionOf('references-view.tree')).toEqual([referrer]);
