@@ -598,7 +598,8 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(NO_PLUGINS_MESSAGE).toContain('title bar');
   });
 
-  const [REVEAL, COPY_VALUE] = [['modbench.plugin.reveal', '1_open'], ['modbench.copyValue', '5_copy']] as [string, string][];
+  const REVEAL: [string, string] = ['modbench.plugin.reveal', '1_open'];
+  const COPY_VALUE: [string, string] = ['modbench.copyValue', '5_copy'];
   const OPEN_BESIDE: [string, string] = [OPEN_TO_THE_SIDE, '1_open'];
   const REFERENCES: [string, string] = [REFERENCED_BY, '1_open'];
   const ENABLE: [string, string] = ['modbench.plugin.enable', '2_change'];
@@ -1045,8 +1046,11 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   const menuOn = (viewItem: string): [string, string][] =>
     placed(inModsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.modList', viewItem })));
 
-  const [OPEN_FOLDER, OPEN_CONFLICTS, VIEW_ON_NEXUS] = ['modbench.mod.openFolder', 'modbench.mod.openConflicts', 'modbench.mod.viewOnNexus'].map((c): [string, string] => [c, '1_open']);
-  const [GO_TO_MOD, COMPARE_FILE] = ['modbench.mod.goToMod', 'modbench.mod.compareFile'].map((c): [string, string] => [c, '1_open']);
+  const OPEN_FOLDER: [string, string] = ['modbench.mod.openFolder', '1_open'];
+  const OPEN_CONFLICTS: [string, string] = ['modbench.mod.openConflicts', '1_open'];
+  const VIEW_ON_NEXUS: [string, string] = ['modbench.mod.viewOnNexus', '1_open'];
+  const GO_TO_MOD: [string, string] = ['modbench.mod.goToMod', '1_open'];
+  const COMPARE_FILE: [string, string] = ['modbench.mod.compareFile', '1_open'];
   const MOVE: [string, string] = ['modbench.mod.move', '2_change'];
   const RENAME: [string, string] = ['modbench.mod.rename', '2_change'];
   const ADD_SEPARATOR: [string, string] = ['modbench.separator.add', '3_create'];
