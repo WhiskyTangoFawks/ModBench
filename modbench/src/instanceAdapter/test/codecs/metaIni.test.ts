@@ -151,6 +151,14 @@ describe('writeMetaIni — installedFiles', () => {
 });
 
 describe('setOwnedKeysInText', () => {
+  it.each([
+    ['a quoted value', 'installationFile="Mod, v2.7z"'],
+    ['an escaped backslash', 'installationFile=C:\\\\x.7z'],
+  ])('writes back %s a carried parse read, byte for byte', (_name, line) => {
+    const text = `[General]\r\ngameName=Fallout4\r\n${line}\r\n`;
+    expect(setOwnedKeysInText(text, { ...parseMetaIni(text), gameName: 'Fallout4' })).toBe(text);
+  });
+
   it('writes an owned key given empty as `key=`, not as a deletion', () => {
     expect(setOwnedKeysInText('[General]\r\nversion=1\r\n', { version: '' })).toBe('[General]\r\nversion=\r\n');
   });

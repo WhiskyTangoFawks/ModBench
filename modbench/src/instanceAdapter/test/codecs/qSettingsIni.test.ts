@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decodeIniValue, readIniSection, readIniValue, replaceIniSection, setIniValue } from '../../codecs/qSettingsIni';
+import { readIniSection, readIniValue, replaceIniSection, setIniValue } from '../../codecs/qSettingsIni';
 
 describe('readIniValue', () => {
   it('reads the key in the named section, not the same key in another', () => {
@@ -48,7 +48,7 @@ describe('readIniSection', () => {
   });
 });
 
-describe('decodeIniValue', () => {
+describe('decoded values', () => {
   it.each([
     ['unwraps @ByteArray and un-escapes inside it, as Qt writes a path there', '@ByteArray(C:\\\\Mod\\\\x)', 'C:\\Mod\\x'],
     ['un-escapes doubled backslashes', 'C:\\\\Games', 'C:\\Games'],
@@ -56,7 +56,11 @@ describe('decodeIniValue', () => {
     ['leaves an unknown escape as written', 'C:\\Games', 'C:\\Games'],
     ['reads an empty value as empty', '', ''],
   ])('%s', (_name, raw, expected) => {
-    expect(decodeIniValue(raw)).toBe(expected);
+    expect(readIniValue(`[A]\nk=${raw}\n`, 'A', 'k')).toBe(expected);
+  });
+
+  it('reach readIniSection decoded too', () => {
+    expect(readIniSection('[A]\nk="a,b"\n', 'A').get('k')).toBe('a,b');
   });
 });
 
@@ -71,7 +75,7 @@ describe('values written by setIniValue', () => {
     ['plain text', 'My Profile'],
   ])('read back as written: %s', (_name, value) => {
     const text = setIniValue('[A]\n', 'A', 'k', value);
-    expect(decodeIniValue(readIniValue(text, 'A', 'k') ?? '')).toBe(value);
+    expect(readIniValue(text, 'A', 'k')).toBe(value);
   });
 
   it('quote a comma, as Qt writes category="-1,"', () => {

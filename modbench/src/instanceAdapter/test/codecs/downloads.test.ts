@@ -44,6 +44,12 @@ describe('parseDownloadMeta', () => {
   });
 });
 
+describe('parseDownloadMeta values', () => {
+  it('are decoded, as MO2 writes a name holding a comma quoted', () => {
+    expect(parseDownloadMeta('[General]\r\nmodName="A, B"\r\n').modName).toBe('A, B');
+  });
+});
+
 describe('setHiddenInText', () => {
   it('creates a fresh [General] section with removed=true when there is no .meta text', () => {
     expect(setHiddenInText('', true)).toBe('[General]\r\nremoved=true\r\n');

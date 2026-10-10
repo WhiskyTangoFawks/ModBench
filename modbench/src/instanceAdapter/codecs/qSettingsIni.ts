@@ -41,13 +41,13 @@ function findKeyLine(lines: readonly string[], section: SectionSpan, key: string
   return offset === -1 ? -1 : section.header + 1 + offset;
 }
 
-/** Every key of the section, raw and trimmed. */
+/** Every key of the section with its decoded value. */
 export function readIniSection(text: string, section: string): Map<string, string> {
   const lines = splitLines(text);
   const span = findSection(lines, section);
   const entries = span ? lines.slice(span.header + 1, span.end).flatMap((line) => keyValueOf(line) ?? []) : [];
   const firsts = entries.filter(({ key }, i) => entries.findIndex((entry) => entry.key === key) === i);
-  return new Map(firsts.map(({ key, value }) => [key, value]));
+  return new Map(firsts.map(({ key, value }) => [key, decodeIniValue(value)]));
 }
 
 export const readIniValue = (text: string, section: string, key: string): string | undefined =>
@@ -58,8 +58,7 @@ export const readIniValue = (text: string, section: string, key: string): string
 const UNESCAPES: Record<string, string> = { '\\': '\\', '"': '"', n: '\n', r: '\r', t: '\t' };
 const ESCAPES: Record<string, string> = { '\\': '\\\\', '"': '\\"', '\n': '\\n', '\r': '\\r', '\t': '\\t' };
 
-/** The string a raw value holds. */
-export function decodeIniValue(raw: string): string {
+function decodeIniValue(raw: string): string {
   const trimmed = raw.trim();
   const quoted = trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"');
   const body = quoted ? trimmed.slice(1, -1) : trimmed;
