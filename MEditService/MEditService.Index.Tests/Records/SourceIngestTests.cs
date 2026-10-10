@@ -62,7 +62,7 @@ public sealed class SourceIngestTests : IDisposable
         index.PluginRowOf(Plugin) is { IsTracked: true, PluginSourceUnreadable: not null };
 
     private IEnumerable<string> SourceFilesTheReadStoppedAt(OpenedIndex index) =>
-        (index.Problems.GetProblems().Value() ?? throw new InvalidOperationException("Expected the index to be ready."))
+        (index.Queries.GetProblems().Value() ?? throw new InvalidOperationException("Expected the index to be ready."))
             .Single(p => PluginAddress.Comparer.Equals(p.Plugin, Plugin)).Problems.Select(p => p.SourceRelativePath);
 
     private string RootDocument => Path.Combine(ModFolder, PluginSourceRoot.HeaderDocument(PluginName));

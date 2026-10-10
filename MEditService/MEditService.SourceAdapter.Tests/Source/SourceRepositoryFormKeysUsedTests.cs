@@ -24,11 +24,11 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
     private string Git(params string[] args) =>
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 
-    private SourceRepository Tracked(params TreeFile[] files)
+    private ISourceRepository Tracked(params TreeFile[] files)
     {
         if (files.Length == 0) PluginBaselines.TrackWithNoRecords(_modFolder);
         else PluginBaselines.Track(_modFolder, files);
-        return SourceRepository.Open(TestMod.In(_modFolder), Release)
+        return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
 

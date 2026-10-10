@@ -16,9 +16,9 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
 {
     /// <summary>The tracked plugin a copy lands in: its session and its key. No folder — every
     /// write here is a put, and the repository decides where a document goes.</summary>
-    internal readonly record struct Destination(WriteSession Session, PluginAddress Plugin)
+    internal readonly record struct Destination(IWriteSession Session, PluginAddress Plugin)
     {
-        internal SourceRepository Repository => Session.Repository;
+        internal ISourceRepository Repository => Session.Repository;
     }
 
     /// <summary>A copy of a child the destination lacks, as every Copy as Override: own fields only, so a copied
@@ -48,7 +48,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
 
     /// <summary>What a copy made in <paramref name="session"/> since <paramref name="before"/>, once it applied.</summary>
     internal static Answer<RecordEditChanges, SourceFailure> ChangesSince(
-        WriteSession session, SourceChanges before, Answer<RecordEditResult, SourceFailure> copied) =>
+        IWriteSession session, SourceChanges before, Answer<RecordEditResult, SourceFailure> copied) =>
         copied.Then(result => SourceAnswer.Of(
             result.Applied ? new RecordEditChanges(result, session.ChangesAddedSince(before)) : result));
 
@@ -64,7 +64,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         Destination destination, GameRelease release)
     {
         var containerFormKey = container.ParentFormKey;
-        if (!destination.Repository.Get(destination.Plugin, containerFormKey).Holds(out var held, out var unread)) return unread;
+        if (!destination.Repository.RecordByFormKey(destination.Plugin, containerFormKey).Holds(out var held, out var unread)) return unread;
         if (held is not { } containerDocument)
         {
             return CopyContainerInAround(source, container, child, destination, release);
@@ -179,7 +179,7 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     /// <summary>What the destination's tree names at <paramref name="formKey"/>, or null when nothing
     /// in it carries that key at the working tree.</summary>
     internal static Answer<RecordIdentity?, SourceFailure> Identity(Destination destination, string formKey) =>
-        destination.Repository.Get(destination.Plugin, formKey).Then(held => SourceAnswer.Of(held?.Identity));
+        destination.Repository.RecordByFormKey(destination.Plugin, formKey).Then(held => SourceAnswer.Of(held?.Identity));
 
     internal static RecordEditResult RefuseHeldWithoutReplace(string formKey, PluginAddress destination) =>
         RecordEditResult.Refused(

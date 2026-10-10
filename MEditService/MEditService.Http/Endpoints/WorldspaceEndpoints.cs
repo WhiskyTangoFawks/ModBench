@@ -1,4 +1,3 @@
-using MEditService.Index;
 using MEditService.Index.Queries;
 
 namespace MEditService.Http.Endpoints;
@@ -9,7 +8,7 @@ internal static class WorldspaceEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(WorldspaceEndpoints));
 
-        app.MapGet("/plugins/{plugin}/worldspaces", (string plugin, string? origin, IWorldspaceQueryService svc) =>
+        app.MapGet("/plugins/{plugin}/worldspaces", (string plugin, string? origin, IQueries svc) =>
             GetWorldspaces(plugin, origin, svc, logger))
         .WithName("GetWorldspaces")
         .WithTags("Worldspaces")
@@ -18,7 +17,7 @@ internal static class WorldspaceEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/worldspaces/{formKey}/blocks", (string plugin, string formKey, string? origin, IWorldspaceQueryService svc) =>
+        app.MapGet("/plugins/{plugin}/worldspaces/{formKey}/blocks", (string plugin, string formKey, string? origin, IQueries svc) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -36,7 +35,7 @@ internal static class WorldspaceEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/cells/{formKey}/children", (string plugin, string formKey, string? origin, IWorldspaceQueryService svc) =>
+        app.MapGet("/plugins/{plugin}/cells/{formKey}/children", (string plugin, string formKey, string? origin, IQueries svc) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -54,7 +53,7 @@ internal static class WorldspaceEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/interior-cells", (string plugin, string? origin, IWorldspaceQueryService svc) =>
+        app.MapGet("/plugins/{plugin}/interior-cells", (string plugin, string? origin, IQueries svc) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -74,7 +73,7 @@ internal static class WorldspaceEndpoints
         return app;
     }
 
-    internal static IResult GetWorldspaces(string plugin, string? origin, IWorldspaceQueryService svc, ILogger logger)
+    internal static IResult GetWorldspaces(string plugin, string? origin, IQueries svc, ILogger logger)
     {
         if (logger.IsEnabled(LogLevel.Information))
         {

@@ -71,7 +71,7 @@ public sealed class SourceEditFixture : TestInstance, ITrackedPlugin
 
     public static SourceEditFixture Untracked() => new(track: false, PluginName, isLight: false);
 
-    public SourceRepository? Repository => RepositoryOf(Plugin);
+    public ISourceRepository? Repository => RepositoryOf(Plugin);
 
     public RecordIdentity NpcIdentity => new(Npc.ToString(), "npc_", NpcEditorId);
 }

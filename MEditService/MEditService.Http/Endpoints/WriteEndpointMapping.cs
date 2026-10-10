@@ -35,6 +35,19 @@ internal static class WriteEndpointMapping
     internal static string RequireNewFormKey(RecordEditResult result) =>
         result.NewFormKey ?? throw new InvalidOperationException("Expected an applied result to carry the new FormKey.");
 
+    private static IResult Problem<TRefusal>(
+        TRefusal refusal, TRefusal noLoadOrder, string? message, Func<TRefusal, int> status,
+        IReadOnlyDictionary<string, object?>? more = null)
+        where TRefusal : struct, Enum
+    {
+        if (EqualityComparer<TRefusal>.Default.Equals(refusal, noLoadOrder))
+            return Results.Problem(NoLoadOrderException.DefaultMessage, statusCode: StatusCodes.Status503ServiceUnavailable);
+
+        var extensions = new Dictionary<string, object?> { ["refusal"] = refusal.ToString() };
+        foreach (var (key, value) in more ?? new Dictionary<string, object?>()) extensions[key] = value;
+        return Results.Problem(detail: message, statusCode: status(refusal), extensions: extensions);
+    }
+
     /// <summary>The status code says what kind of problem; the refusal and path extensions say
     /// exactly which (ADR-0019).</summary>
     internal static IResult Refusal(RecordEditResult result) => RecordEditProblem(result.Refusal, result.Message, result.Path);
@@ -44,46 +57,43 @@ internal static class WriteEndpointMapping
 
     /// <summary>Track's own refusal-to-status map, the same posture the record edits' has: the status
     /// says what kind of problem, the refusal extension says exactly which (ADR-0019).</summary>
-    internal static IResult Refusal(SelectionRefusal<TrackRefusal> refusal) => Results.Problem(
-        detail: refusal.Message,
-        statusCode: refusal.Refusal switch
+    internal static IResult Refusal(SelectionRefusal<TrackRefusal> refusal) => Problem(
+        refusal.Refusal, TrackRefusal.NoLoadOrder, refusal.Message,
+        r => r switch
         {
             TrackRefusal.AlreadyTracked => 409,
             // The request is sound; the machine lacks git, or git or the disk refused the write.
             TrackRefusal.GitUnavailable or TrackRefusal.CommitFailed => 500,
             // A data problem in the plugin itself, the status the record edits' own refusals use.
             _ => 422,
-        },
-        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.Refusal.ToString() });
+        });
 
     /// <summary>Decompile's refusal of a whole selection: the refusal extension says which cause no
     /// plugin escaped (ADR-0019).</summary>
-    internal static IResult Refusal(SelectionRefusal<DecompileRefusal> refusal) => Results.Problem(
-        detail: refusal.Message,
-        statusCode: refusal.Refusal switch
+    internal static IResult Refusal(SelectionRefusal<DecompileRefusal> refusal) => Problem(
+        refusal.Refusal, DecompileRefusal.NoLoadOrder, refusal.Message,
+        r => r switch
         {
             // The request is sound; the machine lacks git.
             DecompileRefusal.GitUnavailable => 500,
             _ => 422,
-        },
-        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.Refusal.ToString() });
+        });
 
     /// <summary>Compile's refusal of a whole selection, mapped as Decompile's is (ADR-0019).</summary>
-    internal static IResult Refusal(SelectionRefusal<CompileRefusal> refusal) => Results.Problem(
-        detail: refusal.Message,
-        statusCode: refusal.Refusal switch
+    internal static IResult Refusal(SelectionRefusal<CompileRefusal> refusal) => Problem(
+        refusal.Refusal, CompileRefusal.NoLoadOrder, refusal.Message,
+        r => r switch
         {
             // The request is sound; the machine lacks git.
             CompileRefusal.GitUnavailable => 500,
             _ => 422,
-        },
-        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.Refusal.ToString() });
+        });
 
     /// <summary>Create plugin's own refusal, each leaving the folder as it was: the status says what kind
     /// of problem, the refusal extension says exactly which (ADR-0019).</summary>
-    internal static IResult Refusal(PluginCreateRefusal refusal, string? message) => Results.Problem(
-        detail: message,
-        statusCode: refusal switch
+    internal static IResult Refusal(PluginCreateRefusal refusal, string? message) => Problem(
+        refusal, PluginCreateRefusal.NoLoadOrder, message,
+        r => r switch
         {
             PluginCreateRefusal.FolderGone => 404,
             PluginCreateRefusal.FileExists => 409,
@@ -92,14 +102,13 @@ internal static class WriteEndpointMapping
             PluginCreateRefusal.WriteFailed => 422,
             // Well-formed, and still not a plugin this game can load.
             _ => 422,
-        },
-        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.ToString() });
+        });
 
     /// <summary>Rename source's own refusal, each leaving the plugin's source as it was: the status says
     /// what kind of problem, the refusal extension says exactly which (ADR-0019).</summary>
-    internal static IResult Refusal(RenameSourceRefusal refusal, string? message) => Results.Problem(
-        detail: message,
-        statusCode: refusal switch
+    internal static IResult Refusal(RenameSourceRefusal refusal, string? message) => Problem(
+        refusal, RenameSourceRefusal.NoLoadOrder, message,
+        r => r switch
         {
             RenameSourceRefusal.NotAPluginFile or RenameSourceRefusal.TreeNameNotThePlugins => 400,
             RenameSourceRefusal.PluginNotLoaded => 404,
@@ -109,8 +118,7 @@ internal static class WriteEndpointMapping
             RenameSourceRefusal.GitUnavailable or RenameSourceRefusal.WriteFailed => 500,
             // Well-formed, addressed at something real, and its source holds a file nothing can read.
             _ => 422,
-        },
-        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.ToString() });
+        });
 
     /// <summary>Put load order's own refusal: a bad request, since none of them is found by touching the Index.</summary>
     internal static IResult Refusal(PutLoadOrderResult result) => Results.Problem(
@@ -159,9 +167,9 @@ internal static class WriteEndpointMapping
     internal static void LogRefusal<TRefusal, TItem>(ILogger logger, string gesture, TRefusal refusal, string? message, TItem item) =>
         logger.LogWarning("Refused {Gesture} of {Item}: {Refusal} — {Message}", gesture, item, refusal, message);
 
-    private static IResult RecordEditProblem(RecordEditRefusal refusal, string message, string? path) => Results.Problem(
-        detail: message,
-        statusCode: refusal switch
+    private static IResult RecordEditProblem(RecordEditRefusal refusal, string message, string? path) => Problem(
+        refusal, RecordEditRefusal.NoLoadOrder, message,
+        r => r switch
         {
             // The request is sound; the plugin's present state refuses it until that state changes.
             RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder
@@ -174,11 +182,7 @@ internal static class WriteEndpointMapping
             // Well-formed, addressed at something real, and still not something we will write.
             _ => 422,
         },
-        extensions: new Dictionary<string, object?>
-        {
-            ["refusal"] = refusal.ToString(),
-            ["path"] = path,
-        });
+        new Dictionary<string, object?> { ["path"] = path });
 
     /// <summary>No Index gate here (ADR-0015): the Index serializes its own projections
     /// afterwards, so a source write never queues behind one and never answers "busy".</summary>

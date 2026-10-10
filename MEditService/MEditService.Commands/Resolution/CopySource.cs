@@ -12,7 +12,7 @@ namespace MEditService.Commands.Resolution;
 /// <summary>What a copy reads of the record it is copying (ADR-0015). One per gesture,
 /// not thread-safe.</summary>
 internal sealed class CopySource(
-    PluginAddress plugin, LoadOrderSnapshot loadOrder, IPluginAdapter adapter, SchemaReflector schemaReflector,
+    PluginAddress plugin, LoadOrderSnapshot loadOrder, IPluginAdapter adapter, SchemaReflector schemaReflector, ISourceAdapter source,
     WriteSessions sessions)
     : IDisposable
 {
@@ -21,8 +21,8 @@ internal sealed class CopySource(
     private readonly IReadOnlyDictionary<string, RecordTableSchema> _schemas =
         schemaReflector.GetSchemas(loadOrder.GameRelease);
 
-    private readonly SourceRepository? _tree = loadOrder.Plugin(plugin) is { Provider: PluginProvider.FromMod mod } registered
-        && SourceRepository.SourceReads(registered)
+    private readonly ISourceRepository? _tree = loadOrder.Plugin(plugin) is { Provider: PluginProvider.FromMod mod } registered
+        && source.SourceReads(registered)
         ? sessions.Over(mod, loadOrder.GameRelease).Repository
         : null;
 
@@ -41,7 +41,7 @@ internal sealed class CopySource(
     /// unreadable, not none.</summary>
     internal CopyRead<RecordIdentity?> Identity(string formKey) =>
         _tree is { } tree
-            ? CopyRead<RecordIdentity?>.Of(tree.Get(plugin, formKey).Then(held => SourceAnswer.Of(held?.Identity)))
+            ? CopyRead<RecordIdentity?>.Of(tree.RecordByFormKey(plugin, formKey).Then(held => SourceAnswer.Of(held?.Identity)))
             : FromFile(records => records.IdentityOf(formKey));
 
     /// <summary>The record header's flags, read without the record's fields.</summary>
@@ -135,7 +135,7 @@ internal sealed class CopySource(
 
     public void Dispose() => _records?.Dispose();
 
-    private CopyRead<string> BodyInTheTree(SourceRepository tree, RecordIdentity identity) =>
+    private CopyRead<string> BodyInTheTree(ISourceRepository tree, RecordIdentity identity) =>
         CopyRead<SourceDocument?>.Of(tree.RecordOf(plugin, identity))
             .Then<string>(held => held?.Body ?? throw NoLongerHeld(identity.FormKey));
 

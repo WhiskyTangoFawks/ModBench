@@ -1,30 +1,14 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.RepositoriesLib;
 
 namespace MEditService.Index.Queries;
 
 /// <summary>Kind B diagnoses as rows, the active plugins in load order first. The plugins loaded with
 /// no line, the game's own, are never reported: they are the proof set the tables were built from.</summary>
-public sealed class MalformedPluginQueryService
+internal static class LoadOrderDiagnoses
 {
-    private readonly IQueryIndex _index;
-    private readonly LoadOrderHolder _loadOrder;
-
-    internal MalformedPluginQueryService(IQueryIndex index, LoadOrderHolder loadOrder)
+    public static IReadOnlyList<PluginDiagnosisReport> Of(IRecordReads reads, LoadOrderSnapshot held)
     {
-        _index = index;
-        _loadOrder = loadOrder;
-    }
-
-    /// <summary>A plugin the index has not reached holds no rows yet and would read clean.</summary>
-    public Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses() => IndexAnswer.Of(Diagnoses);
-
-    private IReadOnlyList<PluginDiagnosisReport> Diagnoses()
-    {
-        var reads = _index.RequireWholeSetReads();
-        var held = _loadOrder.Require();
-
         var byPlugin = reads.GetPluginDiagnoses().ToLookup(row => row.Plugin, PluginAddress.Comparer);
         var loadedWithNoLine = held.LoadedWithNoLine.Select(plugin => plugin.Key).ToHashSet(PluginAddress.Comparer);
         return

@@ -85,7 +85,7 @@ public sealed class FormIdEditFailureTests
 
     private static string RelocatedWorldspaceDirectory(SourceContainerFixture fixture, string newFormKey)
     {
-        SourceRepository Repository() => SourceRepository.Over(TestMod.Of(fixture.Plugin, fixture.ModFolder), GameRelease.Fallout4);
+        ISourceRepository Repository() => TestAdapters.Source().OverFolder(TestMod.Of(fixture.Plugin, fixture.ModFolder), GameRelease.Fallout4);
         var identity = new RecordIdentity(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId);
         Repository().Put(fixture.Plugin, new SourceDocument(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId, "{}")).Wrote();
         var directory = TreeTampering.DirectoryOf(fixture.ModFolder, fixture.Plugin, identity);

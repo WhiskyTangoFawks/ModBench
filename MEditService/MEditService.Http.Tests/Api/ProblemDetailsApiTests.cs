@@ -152,6 +152,44 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         Assert.Contains("load order", problem.GetProperty("detail").GetString(), StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("track")]
+    [InlineData("decompile")]
+    [InlineData("compile")]
+    [InlineData("createPlugin")]
+    [InlineData("copyRecord")]
+    [InlineData("deleteRecordChanges")]
+    [InlineData("renameSourceChanges")]
+    [InlineData("moveLastWritten")]
+    public async Task AWriteGestureWithNoLoadOrder_Answers503_WithTheExactNoLoadOrderProblem(string gesture)
+    {
+        await using var app = new MEditHost();
+        var client = app.CreateClient();
+        var plugin = new { name = "New.esp", origin = "NoLoadOrderMod" };
+
+        var response = gesture switch
+        {
+            "track" => await client.Track("NoLoadOrderMod"),
+            "decompile" => await client.Decompile([("New.esp", "NoLoadOrderMod")]),
+            "compile" => await client.Compile([("New.esp", "NoLoadOrderMod")]),
+            "createPlugin" => await client.PostAsJsonAsync(
+                "/plugins/create", new { origin = "NoLoadOrderMod", name = "New.esp", folder = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod") }),
+            "copyRecord" => await client.Copy("000800:New.esp", ("New.esp", "NoLoadOrderMod"), "Override", ("Dest.esp", "DestMod")),
+            "deleteRecordChanges" => await client.PostAsJsonAsync("/records/delete-changes", new
+            {
+                records = new[] { new { formKey = "000800:New.esp", plugin = "New.esp", origin = "NoLoadOrderMod" } }
+            }),
+            "renameSourceChanges" => await client.PostAsJsonAsync("/plugins/rename-source-changes", new { plugin.origin, plugin.name, newName = "Renamed.esp" }),
+            "moveLastWritten" => await client.PostAsJsonAsync("/plugins/move-last-written", new { plugin.origin, plugin.name, treeName = plugin.name, newName = "Renamed.esp" }),
+            _ => throw new ArgumentOutOfRangeException(nameof(gesture), gesture, "Unknown gesture"),
+        };
+
+        var problem = AssertIsProblemDetails(response, 503);
+        Assert.Equal(LoadOrder.NoLoadOrderException.DefaultMessage, problem.GetProperty("detail").GetString());
+        Assert.Equal("Service Unavailable", problem.GetProperty("title").GetString());
+        Assert.False(problem.TryGetProperty("refusal", out _));
+    }
+
     [Fact]
     public async Task ANoLoadOrderAnswer_StillCarriesTheCorsHeaders()
     {

@@ -102,8 +102,8 @@ public abstract class TestInstance : IDisposable
 
     /// <summary>The repository over the mod providing <paramref name="plugin"/>, or null when its
     /// folder is not tracked.</summary>
-    public SourceRepository? RepositoryOf(PluginAddress plugin) =>
-        LoadOrder.ProviderOf(plugin) is PluginProvider.FromMod mod ? SourceRepository.Open(mod, GameRelease.Fallout4) : null;
+    public ISourceRepository? RepositoryOf(PluginAddress plugin) =>
+        LoadOrder.ProviderOf(plugin) is PluginProvider.FromMod mod ? TestAdapters.Source().Open(mod, GameRelease.Fallout4) : null;
 
     private void Track(string origin)
     {

@@ -1,6 +1,6 @@
+using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.Index;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
@@ -13,7 +13,7 @@ internal static class PluginEndpoints
 
     public static IEndpointRouteBuilder MapPluginEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/plugins", (IRecordQueryService svc) =>
+        app.MapGet("/plugins", (IQueries svc) =>
             QueryEndpointMapping.Answered(svc.GetPlugins(), plugins => Results.Ok(plugins.Select(PluginResponse.Of).ToList())))
             .WithName("GetPlugins")
             .WithTags(Tag)
@@ -23,14 +23,14 @@ internal static class PluginEndpoints
         // Every mutable plugin in the load order, diagnosed off its original bytes — the
         // session-load complement of Track's refusal. With no load order applied the refusal is a
         // 503, never an unmapped 500.
-        app.MapGet("/plugins/diagnoses", (MalformedPluginQueryService svc) =>
+        app.MapGet("/plugins/diagnoses", (IQueries svc) =>
             QueryEndpointMapping.Ok(svc.GetLoadOrderDiagnoses()))
             .WithName("GetPluginDiagnoses")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginDiagnosisReport>>()
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/problems", (PluginProblemQueryService svc) =>
+        app.MapGet("/plugins/problems", (IQueries svc) =>
             QueryEndpointMapping.Ok(svc.GetProblems()))
             .WithName("GetPluginProblems")
             .WithTags(Tag)
@@ -40,7 +40,7 @@ internal static class PluginEndpoints
             .Produces<IReadOnlyList<PluginProblems>>()
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/dependants", (string plugin, string? origin, PluginDependantsQueryService svc) =>
+        app.MapGet("/plugins/{plugin}/dependants", (string plugin, string? origin, IQueries svc) =>
         {
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
             return QueryEndpointMapping.Answered(
@@ -56,7 +56,7 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IRecordQueryService svc) =>
+        app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IQueries svc) =>
         {
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
             return QueryEndpointMapping.Ok(svc.GetPluginRecordTypes(WriteEndpointMapping.PluginAddressOf(plugin, origin)));
@@ -67,7 +67,7 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/working-tree-states-beneath", (string plugin, string? origin, IRecordQueryService svc) =>
+        app.MapGet("/plugins/{plugin}/working-tree-states-beneath", (string plugin, string? origin, IQueries svc) =>
         {
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
             return QueryEndpointMapping.Ok(svc.GetWorkingTreeStatesBeneath(WriteEndpointMapping.PluginAddressOf(plugin, origin)));
@@ -78,7 +78,7 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(503);
 
-        app.MapGet("/record-types/creatable", (IRecordQueryService svc) =>
+        app.MapGet("/record-types/creatable", (IQueries svc) =>
             QueryEndpointMapping.Ok(svc.GetCreatableRecordTypes()))
             .WithName("GetCreatableRecordTypes")
             .WithTags(Tag)
@@ -86,7 +86,7 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapGet("/plugins/{plugin}/records/{formKey}/child-record-types", (
-            string plugin, string formKey, string? origin, IRecordQueryService svc) =>
+            string plugin, string formKey, string? origin, IQueries svc) =>
             PluginRecordAnswer(plugin, formKey, origin, svc.GetChildRecordTypes))
             .WithName("GetChildRecordTypes")
             .WithTags(Tag)
@@ -97,7 +97,7 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapGet("/plugins/{plugin}/records/{formKey}/rendered-document", (
-            string plugin, string formKey, string? origin, IRecordQueryService svc) =>
+            string plugin, string formKey, string? origin, IQueries svc) =>
             PluginRecordAnswer(plugin, formKey, origin, svc.GetRenderedDocument))
             .WithName("GetRenderedDocument")
             .WithTags(Tag)
@@ -112,7 +112,7 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapGet("/plugins/{plugin}/records/{formKey}/document", (
-            string plugin, string formKey, string? origin, IRecordQueryService svc) =>
+            string plugin, string formKey, string? origin, IQueries svc) =>
             PluginRecordAnswer(plugin, formKey, origin, svc.GetCopyDocument))
             .WithName("GetCopyDocument")
             .WithTags(Tag)
@@ -126,8 +126,8 @@ internal static class PluginEndpoints
             .ProducesProblem(422)
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/creatable-extensions", (PluginExtensionsQueryService svc) =>
-            QueryEndpointMapping.Ok(svc.GetCreatable()))
+        app.MapGet("/plugins/creatable-extensions", (LoadOrderHolder loadOrder) =>
+            Results.Ok(CreatablePluginExtensions.Of(loadOrder.Require().GameRelease)))
             .WithName("GetCreatablePluginExtensions")
             .WithTags(Tag)
             .WithDescription("The file extensions a new plugin may take in the held release.")

@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Query;
 
-public sealed class PluginDependantsQueryServiceTests
+public sealed class DependantsTests
 {
     private static readonly PluginAddress Renamed = new("Base.esm", "BaseMod");
 
@@ -44,7 +44,7 @@ public sealed class PluginDependantsQueryServiceTests
     {
         using var fixture = Fixture(plugins);
         using var index = Indexes.Reconciled(fixture);
-        return index.Dependants.GetDependants(Renamed).Value();
+        return index.Queries.GetDependants(Renamed).Value();
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public sealed class PluginDependantsQueryServiceTests
         File.WriteAllBytes(fixture.Plugins.Single(p => p.Name == unread.Name).Path, truncatedBelowATes4Header);
         using var index = Indexes.Reconciled(fixture);
 
-        var answer = index.Dependants.GetDependants(Renamed).Value();
+        var answer = index.Queries.GetDependants(Renamed).Value();
 
         Assert.Equal([unread.Key], answer.Unreadable);
         Assert.Empty(answer.Plugins);
@@ -106,7 +106,7 @@ public sealed class PluginDependantsQueryServiceTests
         var load = Task.Run(() => index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        Assert.Equal(IndexRefusal.IndexNotReady, index.Dependants.GetDependants(Renamed).Refused().Refusal);
+        Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetDependants(Renamed).Refused().Refusal);
 
         gate.Release();
         await load;
@@ -121,7 +121,7 @@ public sealed class PluginDependantsQueryServiceTests
         index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.SkyrimSE);
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
 
-        Assert.Equal(IndexRefusal.IndexNotReady, index.Dependants.GetDependants(Renamed).Refused().Refusal);
+        Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetDependants(Renamed).Refused().Refusal);
     }
 
     [Fact]
@@ -129,6 +129,6 @@ public sealed class PluginDependantsQueryServiceTests
     {
         using var index = Indexes.Open(new LoadOrderHolder());
 
-        Assert.Equal(IndexRefusal.NoLoadOrder, index.Dependants.GetDependants(Renamed).Refused().Refusal);
+        Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.GetDependants(Renamed).Refused().Refusal);
     }
 }

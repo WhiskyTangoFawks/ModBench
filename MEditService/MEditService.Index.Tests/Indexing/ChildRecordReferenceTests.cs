@@ -43,8 +43,8 @@ public sealed class ChildRecordReferenceTests : IDisposable
 
     private void AssertEachListsOnlyItsOwn(OpenedIndex index)
     {
-        Assert.Equal(_quest, Assert.Single(index.Records.GetReferences(_global).Value()).FormKey);
-        Assert.Equal(_topic, Assert.Single(index.Records.GetReferences(_keyword).Value()).FormKey);
+        Assert.Equal(_quest, Assert.Single(index.Queries.GetReferences(_global).Value()).FormKey);
+        Assert.Equal(_topic, Assert.Single(index.Queries.GetReferences(_keyword).Value()).FormKey);
     }
 
     [Fact]

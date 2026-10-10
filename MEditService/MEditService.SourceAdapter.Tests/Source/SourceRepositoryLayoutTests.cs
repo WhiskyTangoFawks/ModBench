@@ -38,7 +38,7 @@ public sealed class SourceRepositoryLayoutTests
     {
         using var modFolder = new ScratchDirectory("medit-layout-roundtrip-");
         PluginBaselines.TrackWithNoRecords(modFolder);
-        var repository = SourceRepository.Open(TestMod.In(modFolder), Release)
+        var repository = TestAdapters.Source().Open(TestMod.In(modFolder), Release)
             ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
         var plugin = new PluginAddress(pluginFileName, TestMod.Name);
         repository.Put(plugin, new SourceDocument(formKeyString, recordType, editorId, "{}")).Wrote();
@@ -92,7 +92,7 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     private static void TrackMixed(string modFolder, params TreeFile[] tree) =>
-        SourceRepository.Track(modFolder, [(tree, new DecompiledPlugin("Mixed.ESP", null))]);
+        TestAdapters.Source().Track(modFolder, [(tree, new DecompiledPlugin("Mixed.ESP", null))]);
 
     private static List<string> SourceFilesIn(string modFolder) =>
         [.. Directory.EnumerateFiles(Path.Combine(modFolder, "plugin-source"), "*", SearchOption.AllDirectories)
@@ -223,7 +223,7 @@ public sealed class SourceRepositoryLayoutTests
             new(Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json"), [4]),
         ];
 
-        var readBack = SourceRepository.ReadBackOf("Mixed.ESP", tree, Release);
+        var readBack = TestAdapters.Source().ReadBackOf("Mixed.ESP", tree, Release);
 
         Assert.Equal(
             tree.Select(file => (file.RelativePath, file.Content.Single())),
@@ -232,8 +232,8 @@ public sealed class SourceRepositoryLayoutTests
 
     private static readonly PluginAddress Mixed = new("Mixed.ESP", TestMod.Name);
 
-    private static SourceRepository RepositoryOver(string modFolder) =>
-        SourceRepository.Open(TestMod.In(modFolder), Release) ?? throw new InvalidOperationException($"Expected '{modFolder}' tracked.");
+    private static ISourceRepository RepositoryOver(string modFolder) =>
+        TestAdapters.Source().Open(TestMod.In(modFolder), Release) ?? throw new InvalidOperationException($"Expected '{modFolder}' tracked.");
 
     private static List<string> TreePathsOf(string modFolder) =>
         [.. RepositoryOver(modFolder).TreeOf(Mixed).Value().Files.Select(file => file.RelativePath).Order(StringComparer.Ordinal)];

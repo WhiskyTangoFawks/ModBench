@@ -17,13 +17,13 @@ public sealed class SourceRepositoryUntrackTests
             [new TreeFile(relativePath, content)]);
 
         var sourceFilePath = Path.Combine(modFolder, relativePath);
-        Assert.True(SourceRepository.IsTracked(modFolder));
+        Assert.True(TestAdapters.Source().IsTracked(modFolder));
         Assert.True(File.Exists(sourceFilePath));
         Assert.Equal(content, File.ReadAllBytes(sourceFilePath));
 
         Directory.Delete(Path.Combine(modFolder, ".git"), recursive: true);
 
-        Assert.False(SourceRepository.IsTracked(modFolder));
+        Assert.False(TestAdapters.Source().IsTracked(modFolder));
         Assert.True(File.Exists(sourceFilePath), "the source text is not registry-backed and must survive .git's deletion");
         Assert.Equal(content, File.ReadAllBytes(sourceFilePath));
     }

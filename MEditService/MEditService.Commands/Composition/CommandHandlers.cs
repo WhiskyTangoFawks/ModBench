@@ -20,21 +20,25 @@ public static class CommandHandlers
         services.AddSingleton(sp => new LoadOrderResolution(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
-            sp.GetRequiredService<SchemaReflector>()));
+            sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<ISourceAdapter>()));
 
         services.AddSingleton(sp => new WriteTargets(
-            sp.GetRequiredService<LoadOrderHolder>()));
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<ISourceAdapter>()));
 
         services.AddSingleton(sp => new EditRecordChangesHandler(
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<LoadOrderResolution>(),
             sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<ILogger<EditRecordChangesHandler>>()));
 
         services.AddSingleton(sp => new DeleteRecordChangesHandler(
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<ILogger<DeleteRecordChangesHandler>>()));
 
@@ -43,6 +47,7 @@ public static class CommandHandlers
             sp.GetRequiredService<LoadOrderResolution>(),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<ILogger<CreateRecordChangesHandler>>()));
 
@@ -65,44 +70,53 @@ public static class CommandHandlers
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(NewRecordCopy))),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<LoadOrderResolution>(),
+            sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<ILogger<CopyRecordChangesHandler>>()));
 
         services.AddSingleton(sp => new TrackHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
+            sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<INotificationPublisher>(),
             sp.GetRequiredService<ILogger<TrackHandler>>()));
 
         services.AddSingleton(sp => new DecompilePluginHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
+            sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<ILogger<DecompilePluginHandler>>()));
 
-        services.AddSingleton(sp => new RenameSourceChangesHandler(sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<UnsavedDocuments>()));
+        services.AddSingleton(sp => new RenameSourceChangesHandler(
+            sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<ISourceAdapter>(), sp.GetRequiredService<UnsavedDocuments>()));
 
-        services.AddSingleton(sp => new MoveLastWrittenHandler(sp.GetRequiredService<LoadOrderHolder>()));
+        services.AddSingleton(sp => new MoveLastWrittenHandler(sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<ISourceAdapter>()));
 
         services.AddSingleton(sp => new CompilePluginHandler(
             new PluginCompileService(
                 sp.GetRequiredService<LoadOrderHolder>(),
                 sp.GetRequiredService<SchemaReflector>(),
                 sp.GetRequiredService<IPluginAdapter>(),
+                sp.GetRequiredService<ISourceAdapter>(),
                 sp.GetRequiredService<ILogger<PluginCompileService>>()),
-            sp.GetRequiredService<LoadOrderHolder>()));
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<ISourceAdapter>()));
 
         services.AddSingleton(sp => new CreatePluginHandler(
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<ILogger<CreatePluginHandler>>()));
 
         services.AddSingleton(sp => new PutLoadOrderHandler(
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<ISourceAdapter>(),
             new ExternalChangeCheck(
                 sp.GetRequiredService<INotificationPublisher>(),
-                sp.GetRequiredService<IPluginAdapter>())));
+                sp.GetRequiredService<IPluginAdapter>(),
+                sp.GetRequiredService<ISourceAdapter>())));
 
         return services;
     }

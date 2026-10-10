@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RepositoriesLib;
@@ -11,7 +12,7 @@ namespace MEditService.Index;
 /// <summary>Reads a system of record (a tracked plugin's source tree, or its binary's hash) and writes
 /// what differs into the Store (ADR-0015).</summary>
 internal sealed class Projector(
-    DuckDbRecordIndex index, Func<PluginAddress, PluginMetadata?> held, ISourceAdapter source, ILogger logger)
+    Store index, Func<PluginAddress, PluginMetadata?> held, ISourceAdapter source, ILogger logger)
 {
     /// <summary>The truth <paramref name="plugin"/> is derived from, as its folder answers now.</summary>
     internal DerivedFrom TruthOf(RegisteredPlugin plugin)
@@ -144,7 +145,7 @@ internal sealed class Projector(
     // The whole tree, read as one mod: where a record sits is a fact about the tree, not about one
     // document. Idempotent by construction, being the ingest Track and a re-index run.
     private SourceFailure? RederiveWholePluginFromSource(
-        DuckDbRecordIndex.Projection projection, RegisteredPlugin registered, IReadOnlyList<string> formKeys)
+        Store.Projection projection, RegisteredPlugin registered, IReadOnlyList<string> formKeys)
     {
         var key = registered.Key;
         // Nothing to re-derive from: the tree went away between the signal and this line, or the
@@ -171,7 +172,7 @@ internal sealed class Projector(
         return null;
     }
 
-    private static void AnnounceRows(DuckDbRecordIndex.Projection projection, PluginAddress key, IReadOnlyList<string> formKeys) =>
+    private static void AnnounceRows(Store.Projection projection, PluginAddress key, IReadOnlyList<string> formKeys) =>
         projection.Announce(sequence => new RowsChangedNotification(key, formKeys, sequence));
 
     /// <summary>ADR-0015: compares <paramref name="plugin"/>'s rows against the system of record they

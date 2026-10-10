@@ -31,6 +31,9 @@ public enum TrackRefusal
 
     /// <summary>git is not on PATH, so no repository can be created at all (ADR-0007).</summary>
     GitUnavailable,
+
+    /// <summary>No load order has been received, so the gesture has nothing to act on.</summary>
+    NoLoadOrder,
 }
 
 /// <summary>A mod of the selection that tracked whole: every plugin whose source landed in its commit. A mod

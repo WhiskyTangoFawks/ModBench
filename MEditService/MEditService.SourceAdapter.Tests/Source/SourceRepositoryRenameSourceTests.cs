@@ -57,7 +57,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     ];
 
     public SourceRepositoryRenameSourceTests() =>
-        SourceRepository.Track(
+        TestAdapters.Source().Track(
             _modFolder,
             [
                 (Files(OldTree), new DecompiledPlugin(Old.Name, LastWritten)),
@@ -247,9 +247,9 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         return true;
     }
 
-    private SourceRepository Repository => SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require();
+    private ISourceRepository Repository => TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require();
 
-    private WriteSession Session(params DocumentChange[] held) => WriteSession.Over(TestMod.In(_modFolder), GameRelease.Fallout4, held);
+    private IWriteSession Session(params DocumentChange[] held) => TestAdapters.Source().WriteSessionOver(TestMod.In(_modFolder), GameRelease.Fallout4, held);
 
     private static List<TreeFile> Files(IEnumerable<(string Path, string Text)> tree) =>
         [.. tree.Select(file => new TreeFile(file.Path, Encoding.UTF8.GetBytes(file.Text)))];

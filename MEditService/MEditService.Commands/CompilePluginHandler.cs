@@ -1,5 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
 
@@ -8,18 +9,24 @@ public sealed class CompilePluginHandler
 {
     private readonly PluginCompileService _compileService;
     private readonly LoadOrderHolder _loadOrder;
+    private readonly ISourceAdapter _source;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal CompilePluginHandler(PluginCompileService compileService, LoadOrderHolder loadOrder) =>
-        (_compileService, _loadOrder) = (compileService, loadOrder);
+    internal CompilePluginHandler(PluginCompileService compileService, LoadOrderHolder loadOrder, ISourceAdapter source) =>
+        (_compileService, _loadOrder, _source) = (compileService, loadOrder, source);
 
-    /// <summary>Throws <see cref="NoLoadOrderException"/> with nothing written when none is held: no
+    /// <summary>Refuses with <see cref="CompileRefusal.NoLoadOrder"/>, writing nothing, when none is held: no
     /// plugin of the selection escapes it (commands.md, A selection is one gesture).</summary>
     public Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileAsync(
         IReadOnlyList<PluginAddress> plugins)
     {
-        _loadOrder.Require();
-        return ItemWrite.OverAsync(plugins, PluginAddress.Comparer, CompileRefusal.GitUnavailable, CompileOneAsync);
+        if (_loadOrder.Held is null)
+        {
+            return Task.FromResult(SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>.WholeSelectionRefused(
+                CompileRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage));
+        }
+
+        return ItemWrite.OverAsync(_source, plugins, PluginAddress.Comparer, CompileRefusal.GitUnavailable, CompileOneAsync);
     }
 
     private async Task<ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileOneAsync(PluginAddress plugin)

@@ -786,7 +786,7 @@ export interface components {
             message: string;
         };
         /** @enum {string} */
-        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotTracked" | "PluginSourceUnreadable" | "NoSource" | "SourceFileHeld" | "SourceDoesNotParse" | "SourceDoesNotRoundTrip" | "FormKeyCollision" | "LightFormIdOutOfRange" | "FormIdUnmappable" | "WriteFailed" | "GitUnavailable";
+        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotTracked" | "PluginSourceUnreadable" | "NoSource" | "SourceFileHeld" | "SourceDoesNotParse" | "SourceDoesNotRoundTrip" | "FormKeyCollision" | "LightFormIdOutOfRange" | "FormIdUnmappable" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
         CompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
         };
@@ -846,7 +846,7 @@ export interface components {
             folder: string;
         };
         /** @enum {string} */
-        DecompileRefusal: "None" | "PluginNotLoaded" | "NotInTrackedMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "GitUnavailable";
+        DecompileRefusal: "None" | "PluginNotLoaded" | "NotInTrackedMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
         DecompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
         };
@@ -1205,7 +1205,7 @@ export interface components {
             newFormKey?: string | null;
         };
         /** @enum {string} */
-        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginSourceUnreadable" | "PluginHasNoModFolder" | "PluginNotInLoadOrder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "ContainerCannotHoldType" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "HeldInAnotherRecordNotYetSupported" | "SourceUnitNotFound" | "SourceAccessFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "CannotBePartialForm" | "SyntheticMemberIndirectWrite" | "PersistentOnDeletedRecord" | "PersistentMoveDestinationUnknown" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "ChildSlotHeldByAnotherRecord" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "AlphaNotHeld" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
+        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginSourceUnreadable" | "PluginHasNoModFolder" | "PluginNotInLoadOrder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "ContainerCannotHoldType" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "HeldInAnotherRecordNotYetSupported" | "SourceUnitNotFound" | "SourceAccessFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "CannotBePartialForm" | "SyntheticMemberIndirectWrite" | "PersistentOnDeletedRecord" | "PersistentMoveDestinationUnknown" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "ChildSlotHeldByAnotherRecord" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "AlphaNotHeld" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable" | "NoLoadOrder";
         RecordEditRequest: {
             plugin: string;
             origin: string;
@@ -1291,7 +1291,7 @@ export interface components {
             pluginsTotal: number;
         };
         /** @enum {string} */
-        TrackRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyTracked" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "PluginsRefused" | "GitUnavailable";
+        TrackRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyTracked" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
         TrackRequest: {
             mods: string[];
         };

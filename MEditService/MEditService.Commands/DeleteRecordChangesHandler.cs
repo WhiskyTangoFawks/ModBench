@@ -13,23 +13,30 @@ public sealed class DeleteRecordChangesHandler
 {
     private readonly WriteTargets _targets;
     private readonly LoadOrderHolder _loadOrder;
+    private readonly ISourceAdapter _source;
     private readonly UnsavedDocuments _unsaved;
     private readonly ILogger<DeleteRecordChangesHandler> _logger;
 
     // Internal because the shared module is, which is why this assembly registers its own handlers
     // (MEditService.Commands.Composition) rather than the host naming a type it cannot see.
     internal DeleteRecordChangesHandler(
-        WriteTargets targets, LoadOrderHolder loadOrder, UnsavedDocuments unsaved, ILogger<DeleteRecordChangesHandler> logger) =>
-        (_targets, _loadOrder, _unsaved, _logger) = (targets, loadOrder, unsaved, logger);
+        WriteTargets targets, LoadOrderHolder loadOrder, ISourceAdapter source, UnsavedDocuments unsaved,
+        ILogger<DeleteRecordChangesHandler> logger) =>
+        (_targets, _loadOrder, _source, _unsaved, _logger) = (targets, loadOrder, source, unsaved, logger);
 
     /// <summary>Each record's deletion answered as the changes it makes over the held unsaved documents, written
-    /// nowhere (ADR-0001). Each item sees the ones before it. Throws <see cref="NoLoadOrderException"/> when no
-    /// load order is held (ADR-0013).</summary>
+    /// nowhere (ADR-0001). Each item sees the ones before it. No load order held refuses (ADR-0013).</summary>
     public Task<SelectionResult<RecordAt, RecordEditRefusal, SourceChanges>> DeleteRecords(IReadOnlyList<RecordAt> records)
     {
-        _loadOrder.Require();
-        var sessions = new WriteSessions(_unsaved.Current);
+        if (_loadOrder.Held is null)
+        {
+            return Task.FromResult(SelectionResult<RecordAt, RecordEditRefusal, SourceChanges>.WholeSelectionRefused(
+                RecordEditRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage));
+        }
+
+        var sessions = new WriteSessions(_source, _unsaved.Current);
         return ItemWrite.Over(
+            _source,
             records, SameRecord.Instance,
             record => Delete(record.Plugin, record.FormKey, sessions),
             changes => changes.Changes,
@@ -52,7 +59,7 @@ public sealed class DeleteRecordChangesHandler
         var (_, identity, session) = target;
         if (RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
 
-        var repository = session.Repository;
+        var repository = target.Repository;
 
         // Read before the removal, so what the log names is where it took from.
         if (!repository.RelativePathOf(plugin, identity).Holds(out var relativePath, out var unread)) return unread;

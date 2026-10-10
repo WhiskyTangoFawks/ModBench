@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Query;
 
-public sealed class ContainerChildQueryServiceTests : IDisposable
+public sealed class ContainerChildrenTests : IDisposable
 {
     private const string PluginName = "M.esp";
     private const string Quest = "000800:M.esp";
@@ -24,7 +24,7 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
     private readonly ScatteredFixtureData _fixture;
     private readonly OpenedIndex _index;
 
-    public ContainerChildQueryServiceTests()
+    public ContainerChildrenTests()
     {
         _fixture = new PluginFixtureBuilder("container-child-query")
             .WithPlugin(PluginName, mod =>
@@ -53,7 +53,7 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
     [Fact]
     public void GetChildren_Quest_KeepsTheIndexsOrder_WhateverTheChildrensTypes()
     {
-        var result = _index.Containers.GetChildren(Plugin, Quest).Value();
+        var result = _index.Queries.GetContainerChildren(Plugin, Quest).Value();
 
         Assert.Equal([BranchA, TopicB, SceneA, TopicA], result.Select(r => r.FormKey));
         Assert.Equal(["dlbr", "dial", "scen", "dial"], result.Select(r => r.RecordType));
@@ -62,7 +62,7 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
     [Fact]
     public void GetChildren_SaysWhichChildHoldsChildrenOfItsOwn_ForADialChildIsItselfAContainerThePluginsTreeExpands()
     {
-        var result = _index.Containers.GetChildren(Plugin, Quest).Value();
+        var result = _index.Queries.GetContainerChildren(Plugin, Quest).Value();
 
         Assert.True(result.Single(r => r.FormKey == TopicA).HasContainerChildren);
         Assert.False(result.Single(r => r.FormKey == TopicB).HasContainerChildren);
@@ -71,7 +71,7 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
     [Fact]
     public void GetChildren_SaysWhichChildIsAContainer_AnEmptyTopicIncluded()
     {
-        var result = _index.Containers.GetChildren(Plugin, Quest).Value();
+        var result = _index.Queries.GetContainerChildren(Plugin, Quest).Value();
 
         Assert.True(result.Single(r => r.FormKey == TopicB).IsContainer);
         Assert.False(result.Single(r => r.FormKey == BranchA).IsContainer);
@@ -80,7 +80,7 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
     [Fact]
     public void GetChildren_DialogTopic_ReturnsItsResponses_TaggedInfo()
     {
-        var result = _index.Containers.GetChildren(Plugin, TopicA).Value();
+        var result = _index.Queries.GetContainerChildren(Plugin, TopicA).Value();
 
         Assert.Equal([ResponseA, ResponseB], result.Select(r => r.FormKey));
         Assert.All(result, r => Assert.Equal("info", r.RecordType));
@@ -89,7 +89,7 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
     [Fact]
     public void GetChildren_OfARecordHoldingNone_IsEmpty()
     {
-        Assert.Empty(_index.Containers.GetChildren(Plugin, ChildlessQuest).Value());
+        Assert.Empty(_index.Queries.GetContainerChildren(Plugin, ChildlessQuest).Value());
     }
 
     [Fact]
@@ -112,10 +112,10 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
 
-        var result = index.Containers.GetChildren(modB, Quest).Value();
+        var result = index.Queries.GetContainerChildren(modB, Quest).Value();
 
         Assert.Equal(["FromModB"], result.Select(r => r.EditorId));
-        Assert.Empty(index.Containers.GetChildren(Plugin, Quest).Value());
+        Assert.Empty(index.Queries.GetContainerChildren(Plugin, Quest).Value());
     }
 
     [Fact]
@@ -123,6 +123,6 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
     {
         using var index = Indexes.Open(new LoadOrderHolder());
 
-        Assert.Equal(IndexRefusal.NoLoadOrder, index.Containers.GetChildren(Plugin, Quest).Refused().Refusal);
+        Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.GetContainerChildren(Plugin, Quest).Refused().Refusal);
     }
 }

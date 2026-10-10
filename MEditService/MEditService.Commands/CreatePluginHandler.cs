@@ -14,11 +14,12 @@ public sealed class CreatePluginHandler
 {
     private readonly IPluginAdapter _adapter;
     private readonly LoadOrderHolder _holder;
+    private readonly ISourceAdapter _source;
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal CreatePluginHandler(IPluginAdapter adapter, LoadOrderHolder holder, ILogger<CreatePluginHandler> logger) =>
-        (_adapter, _holder, _decompiler) = (adapter, holder, new PluginDecompiler(logger, adapter));
+    internal CreatePluginHandler(IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, ILogger<CreatePluginHandler> logger) =>
+        (_adapter, _holder, _source, _decompiler) = (adapter, holder, source, new PluginDecompiler(logger, adapter, source));
 
     private async Task<PluginCreateResult> LandSourceIfTracked(LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string written)
     {
@@ -29,11 +30,11 @@ public sealed class CreatePluginHandler
             : loadOrder.Plugins.FirstOrDefault(p => string.Equals(p.Origin, address.Origin, StringComparison.OrdinalIgnoreCase))?.Provider
                 ?? new PluginProvider.FromMod(address.Origin, folder);
         var plugin = new RegisteredPlugin(address.Name, address.Origin, path, provider, Line: null);
-        if (!SourceRepository.IsTracked(plugin)) return new PluginCreateResult();
+        if (!_source.IsTracked(plugin)) return new PluginCreateResult();
 
         var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, folder, onParsed: () => { }, default);
         var failure = decompiled.Source is { } source
-            ? SourceRepository.Over((PluginProvider.FromMod)provider, loadOrder.GameRelease)
+            ? _source.OverFolder((PluginProvider.FromMod)provider, loadOrder.GameRelease)
                 .ReplaceSourceFrom(address, source.Files, source.BinarySha256)?.Reason
             : decompiled.Message;
         if (failure is null) return new PluginCreateResult();
@@ -54,11 +55,13 @@ public sealed class CreatePluginHandler
         };
     }
 
-    /// <summary>Throws <see cref="NoLoadOrderException"/> with nothing written when no load order
+    /// <summary>Refuses with <see cref="PluginCreateRefusal.NoLoadOrder"/>, writing nothing, when no load order
     /// is held, since the release comes from it.</summary>
     public async Task<PluginCreateResult> CreatePlugin(PluginAddress plugin, string folder)
     {
-        var loadOrder = _holder.Require();
+        if (_holder.Held is not { Snapshot: var loadOrder })
+            return new PluginCreateResult(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
+
         var release = loadOrder.GameRelease;
         if (!ModKey.TryFromFileName(plugin.Name, out var modKey))
         {

@@ -10,12 +10,12 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Index;
 
-/// <summary>The record index's one registration: the host takes its query services, the box's face.</summary>
+/// <summary>The record index's one registration: the host takes its face.</summary>
 public static class RecordIndexServices
 {
     public static IServiceCollection AddRecordIndex(this IServiceCollection services)
     {
-        services.AddSingleton<IQueryIndex>(sp =>
+        services.AddSingleton<IQueries>(sp =>
         {
             var index = new Indexer(
                 sp.GetRequiredService<LoadOrderHolder>(),
@@ -27,20 +27,11 @@ public static class RecordIndexServices
                 sp.GetService<INotificationPublisher>(),
                 sp.GetRequiredService<TimeProvider>());
             index.Subscribe();
-            return index;
+            return new RecordQueries(
+                index, sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<SchemaReflector>(),
+                sp.GetRequiredService<ISourceAdapter>(), sp.GetRequiredService<ILogger<RecordQueries>>());
         });
         services.AddHostedService<IndexAtStartup>();
-        services.AddSingleton<IRecordQueryService, RecordQueryService>();
-        services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
-        services.AddSingleton(sp => new MalformedPluginQueryService(
-            sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>()));
-        services.AddSingleton(sp => new PluginDependantsQueryService(
-            sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>()));
-        services.AddSingleton<PluginExtensionsQueryService>();
-        services.AddSingleton(sp => new PluginProblemQueryService(
-            sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<ISourceAdapter>()));
-        services.AddSingleton(sp => new ContainerChildQueryService(
-            sp.GetRequiredService<IQueryIndex>(), sp.GetRequiredService<LoadOrderHolder>()));
         return services;
     }
 
@@ -49,7 +40,7 @@ public static class RecordIndexServices
     {
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            services.GetRequiredService<IQueryIndex>();
+            services.GetRequiredService<IQueries>();
             return Task.CompletedTask;
         }
 

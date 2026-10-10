@@ -63,11 +63,11 @@ public sealed class CompareFromContainerTextTests : IDisposable
     private static string TextOf(IMajorRecordGetter record) => RecordTextCodec.SerializeToText(record, GameRelease.Fallout4);
 
     private string RoomDocument =>
-        _index.Records.GetCopyDocument(Plugin, _room.FormKey.ToString()).Value()?.Location
+        _index.Queries.GetCopyDocument(Plugin, _room.FormKey.ToString()).Value()?.Location
             ?? throw new InvalidOperationException("Expected the room's document in the tree.");
 
     private CompareOverride ColumnReadFrom(IMajorRecordGetter record, string text) =>
-        (_index.Records.GetCompare(record.FormKey.ToString(), new CopyText(Plugin, text)).Value()
+        (_index.Queries.GetCompare(record.FormKey.ToString(), new CopyText(Plugin, text)).Value()
             ?? throw new InvalidOperationException("Expected the record to compare.")).Overrides.Single();
 
     private void AnotherRoomCarryingThePlacedObject()
@@ -96,7 +96,7 @@ public sealed class CompareFromContainerTextTests : IDisposable
         _placed.EditorID = "Edited";
         _placed.Scale = 2.5f;
 
-        var compare = _index.Records.GetCompare(_placed.FormKey.ToString(), new CopyText(Plugin, TextOf(_room))).Value()
+        var compare = _index.Queries.GetCompare(_placed.FormKey.ToString(), new CopyText(Plugin, TextOf(_room))).Value()
             ?? throw new InvalidOperationException("Expected the child to compare.");
 
         Assert.Equal(("Edited", null), (compare.Overrides.Single().EditorId, compare.Overrides.Single().ParseDiagnosis));

@@ -74,7 +74,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
         Reconcile(active: false);
 
         Assert.Null(_index.CopyIn(_npc, _mod.KeyOf()));
-        Assert.NotNull(_index.Records.GetCompare(_npc, new CopyText(_mod.KeyOf(), text)).Value());
+        Assert.NotNull(_index.Queries.GetCompare(_npc, new CopyText(_mod.KeyOf(), text)).Value());
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     {
         Reconcile(active: false);
 
-        var found = _index.Records.GetRecords(types: null, _mod.KeyOf(), search: "FixtureNpc", limit: 100, offset: 0).Value();
+        var found = _index.Queries.GetRecords(types: null, _mod.KeyOf(), search: "FixtureNpc", limit: 100, offset: 0).Value();
 
         Assert.Equal(_npc, Assert.Single(found.Items).FormKey);
     }
@@ -92,7 +92,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     {
         Reconcile(active: false);
 
-        var found = _index.Records.GetRecords(types: null, plugin: null, search: "FixtureNpc", limit: 100, offset: 0).Value();
+        var found = _index.Queries.GetRecords(types: null, plugin: null, search: "FixtureNpc", limit: 100, offset: 0).Value();
 
         Assert.Empty(found.Items);
     }

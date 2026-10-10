@@ -16,7 +16,7 @@ internal sealed class DocumentEditFixture : TestInstance
 {
     private const string PluginName = "DocEdit.esp";
 
-    private SourceRepository Repository => RepositoryOf(Plugin)
+    private ISourceRepository Repository => RepositoryOf(Plugin)
         ?? throw new InvalidOperationException($"Expected '{Plugin}' to already be tracked.");
 
     internal PluginAddress Plugin { get; }

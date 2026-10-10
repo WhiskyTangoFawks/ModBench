@@ -46,7 +46,7 @@ public sealed class ReconcileScatteredTests
         using var index = OpenIndex(holder);
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var winner = index.Records.GetRecord(shared.ToString()).Value();
+        var winner = index.Queries.GetRecord(shared.ToString()).Value();
         Assert.NotNull(winner);
         Assert.True(winner.IsWinner);
         Assert.Equal("Override.esp", winner.Plugin);

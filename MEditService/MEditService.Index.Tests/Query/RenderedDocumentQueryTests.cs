@@ -51,23 +51,23 @@ public sealed class RenderedDocumentQueryTests : IDisposable
     [Fact]
     public void APlacedReference_IsNamedByItsOwnEditorId()
     {
-        Assert.Equal("SharedRef - 000901_Shared.esp.json", _index.Records.GetRenderedDocument(ModB, PlacedRef).Value()?.FileName);
+        Assert.Equal("SharedRef - 000901_Shared.esp.json", _index.Queries.GetRenderedDocument(ModB, PlacedRef).Value()?.FileName);
     }
 
     [Fact]
     public void ACopy_RendersAsTheDocumentItsPluginHolds_NotAnotherOfTheSameName()
     {
-        var text = _index.Records.GetRenderedDocument(ModB, Npc).Value()?.Text;
+        var text = _index.Queries.GetRenderedDocument(ModB, Npc).Value()?.Text;
 
         Assert.Contains("held by ModB", text, StringComparison.Ordinal);
         Assert.DoesNotContain("held by ModA", text, StringComparison.Ordinal);
-        Assert.Contains("held by ModA", _index.Records.GetRenderedDocument(ModA, Npc).Value()?.Text, StringComparison.Ordinal);
+        Assert.Contains("held by ModA", _index.Queries.GetRenderedDocument(ModA, Npc).Value()?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
     public void ACopyThePluginDoesNotHold_HasNoRendering()
     {
-        Assert.Null(_index.Records.GetRenderedDocument(ModB, OnlyInModA).Value());
+        Assert.Null(_index.Queries.GetRenderedDocument(ModB, OnlyInModA).Value());
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public sealed class RenderedDocumentQueryTests : IDisposable
             gameDirectory, [new LoadOrderEntry(plugin.Name, path, plugin.Origin, Line: 0, Enabled: true, Winning: true)]);
         Assert.NotNull(index.RowOf(unreadable, plugin)?.ParseDiagnosis);
 
-        var text = index.Records.GetRenderedDocument(plugin, unreadable).Value()?.Text;
+        var text = index.Queries.GetRenderedDocument(plugin, unreadable).Value()?.Text;
 
         Assert.Contains(unreadable, text, StringComparison.Ordinal);
         Assert.Contains("\"Guy\"", text, StringComparison.Ordinal);

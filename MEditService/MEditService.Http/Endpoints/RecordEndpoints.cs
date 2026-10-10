@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.Index;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
@@ -16,7 +15,7 @@ internal static class RecordEndpoints
         var logger = loggerFactory.CreateLogger(nameof(RecordEndpoints));
 
         app.MapGet("/records", (
-            IRecordQueryService svc,
+            IQueries svc,
             string? plugin,
             string[]? type,
             string? search,
@@ -41,7 +40,7 @@ internal static class RecordEndpoints
         .ProducesProblem(400)
         .ProducesProblem(503);
 
-        app.MapGet("/records/{formKey}", (string formKey, IRecordQueryService svc) =>
+        app.MapGet("/records/{formKey}", (string formKey, IQueries svc) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -56,7 +55,7 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(503);
 
-        app.MapGet("/records/{formKey}/compare", (string formKey, IRecordQueryService svc) =>
+        app.MapGet("/records/{formKey}/compare", (string formKey, IQueries svc) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -71,7 +70,7 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(503);
 
-        app.MapPost("/records/{formKey}/compare", (string formKey, CopyText copy, IRecordQueryService svc) =>
+        app.MapPost("/records/{formKey}/compare", (string formKey, CopyText copy, IQueries svc) =>
             CompareRecord(Uri.UnescapeDataString(formKey), copy, svc))
         .WithName("CompareRecordWithText")
         .WithSummary("One record as every active plugin has it, one plugin's copy read from the document text given.")
@@ -86,7 +85,7 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(503);
 
-        app.MapPost("/records/compare", (CompareRecordsRequest request, IRecordQueryService svc) =>
+        app.MapPost("/records/compare", (CompareRecordsRequest request, IQueries svc) =>
             CompareRecords(request.Copies ?? [], svc))
         .WithName("CompareRecords")
         .WithSummary("Several records side by side: one column per copy, in the order given, with no conflict state.")
@@ -98,7 +97,7 @@ internal static class RecordEndpoints
         .ProducesProblem(400)
         .ProducesProblem(503);
 
-        app.MapGet("/plugin-source/record", (string? path, IRecordQueryService svc) =>
+        app.MapGet("/plugin-source/record", (string? path, IQueries svc) =>
         {
             if (path is null || !Path.IsPathFullyQualified(path))
                 return Results.Problem("Name the file by its absolute path.", statusCode: 400);
@@ -122,17 +121,17 @@ internal static class RecordEndpoints
         .ProducesProblem(422)
         .ProducesProblem(503);
 
-        app.MapGet("/records/{formKey}/references", (string formKey, IRecordQueryService svc) =>
-            GetReferences(nameof(IRecordQueryService.GetReferences), formKey, svc.GetReferences, logger))
+        app.MapGet("/records/{formKey}/references", (string formKey, IQueries svc) =>
+            GetReferences(nameof(IQueries.GetReferences), formKey, svc.GetReferences, logger))
         .WithName("GetReferences")
         .WithTags("Records")
         .Produces<IReadOnlyList<ReferenceResult>>()
         .ProducesProblem(503)
         .ProducesProblem(500);
 
-        app.MapGet("/records/{formKey}/references-in-active-or-tracked-plugins", (string formKey, IRecordQueryService svc) =>
+        app.MapGet("/records/{formKey}/references-in-active-or-tracked-plugins", (string formKey, IQueries svc) =>
             GetReferences(
-                nameof(IRecordQueryService.GetReferencesInActiveOrTrackedPlugins), formKey, svc.GetReferencesInActiveOrTrackedPlugins, logger))
+                nameof(IQueries.GetReferencesInActiveOrTrackedPlugins), formKey, svc.GetReferencesInActiveOrTrackedPlugins, logger))
         .WithName("GetReferencesInActiveOrTrackedPlugins")
         .WithTags("Records")
         .Produces<IReadOnlyList<ReferenceResult>>()
@@ -315,7 +314,7 @@ internal static class RecordEndpoints
     internal static CopyMissing Wire(MissingCopy missing) =>
         new(missing.Copy.FormKey, missing.Copy.Plugin, missing.Reason, missing.Message);
 
-    internal static IResult CompareRecords(IReadOnlyList<RecordCopy> copies, IRecordQueryService svc)
+    internal static IResult CompareRecords(IReadOnlyList<RecordCopy> copies, IQueries svc)
     {
         if (copies.Count == 0)
             return Results.Problem("At least one record is required.", statusCode: 400);
@@ -326,7 +325,7 @@ internal static class RecordEndpoints
             svc.GetCompareRecords(copies), compared => Results.Ok(new CompareRecordsResponse(compared, [])));
     }
 
-    internal static IResult CompareRecord(string formKey, CopyText copy, IRecordQueryService svc)
+    internal static IResult CompareRecord(string formKey, CopyText copy, IQueries svc)
     {
         if (copy.DocumentText is null || string.IsNullOrWhiteSpace(copy.Plugin.Name) || string.IsNullOrWhiteSpace(copy.Plugin.Origin))
             return Results.Problem("A plugin name, an origin and a document text are required.", statusCode: 400);

@@ -2,7 +2,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -54,7 +53,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
 
         await scratch.TrackAsync();
 
-        Assert.True(SourceRepository.IsTracked(scratch.ModFolder));
+        Assert.True(TestAdapters.Source().IsTracked(scratch.ModFolder));
     }
 
     [Theory]

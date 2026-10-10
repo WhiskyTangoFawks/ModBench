@@ -12,7 +12,7 @@ public sealed class DocumentFromTextTests
     private static readonly PluginAddress Elsewhere = new("Elsewhere.esp", PluginOrigin.DataDirectory);
 
     private static RecordDetail CopyFromText(OpenedIndex index, string formKey, string text) =>
-        index.Records.GetCompareRecords([new RecordCopy(formKey, Elsewhere, text)]).Value().Overrides.Single();
+        index.Queries.GetCompareRecords([new RecordCopy(formKey, Elsewhere, text)]).Value().Overrides.Single();
 
     private static PluginAddress PluginOf(RecordDetail copy) => new(copy.Plugin, copy.Origin);
 
@@ -46,7 +46,7 @@ public sealed class DocumentFromTextTests
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
 
-        index.Records.GetCompareRecords([new RecordCopy("00DEAD:Nowhere.esp", Elsewhere, "{}")]).Missing();
+        index.Queries.GetCompareRecords([new RecordCopy("00DEAD:Nowhere.esp", Elsewhere, "{}")]).Missing();
     }
 
     [Theory]

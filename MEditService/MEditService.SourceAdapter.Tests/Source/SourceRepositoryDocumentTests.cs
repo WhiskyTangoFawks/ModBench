@@ -20,8 +20,8 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private SourceRepository RequireOpened() =>
-        SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4)
+    private ISourceRepository RequireOpened() =>
+        TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private void Track(params TreeFile[] files) =>
@@ -38,7 +38,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         }
     }
 
-    private SourceRepository Opened()
+    private ISourceRepository Opened()
     {
         PluginBaselines.TrackWithNoRecords(_modFolder);
         var repository = RequireOpened();
@@ -93,7 +93,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     [Fact]
     public void Open_OnAnUntrackedFolder_IsNull()
     {
-        Assert.Null(SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4));
+        Assert.Null(TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4));
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     {
         PluginBaselines.TrackWithNoRecords(_modFolder);
 
-        Assert.NotNull(SourceRepository.Open(TestMod.In(_modFolder), GameRelease.Fallout4));
+        Assert.NotNull(TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4));
     }
 
     [Fact]
@@ -436,7 +436,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     {
         var repository = Opened();
 
-        Assert.Throws<ArgumentException>(() => repository.Get(TheSameNameFromAnotherMod, NpcFormKey));
+        Assert.Throws<ArgumentException>(() => repository.RecordByFormKey(TheSameNameFromAnotherMod, NpcFormKey));
     }
 
     [Fact]

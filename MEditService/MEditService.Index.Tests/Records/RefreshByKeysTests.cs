@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
@@ -60,7 +61,7 @@ public sealed class RefreshByKeysTests : IDisposable
         Refresh();
 
         Assert.Equal("HandCreated", _index.CopyIn(formKey, _mod.KeyOf())?.EditorId);
-        var listing = _index.Records.GetRecords(["npc_"], _mod.KeyOf(), search: null, limit: 50, offset: 0).Value();
+        var listing = _index.Queries.GetRecords(["npc_"], _mod.KeyOf(), search: null, limit: 50, offset: 0).Value();
         Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == formKey).WorkingTreeState);
     }
 

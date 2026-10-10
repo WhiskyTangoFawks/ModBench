@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -61,7 +62,7 @@ public class RegistrationScopingTests
         public IEnumerable<string> BetaRecordsFound() => BetaRecords.Where(formKey => Index.RowOf(formKey, BetaKey) is not null);
 
         public IReadOnlyList<RecordSummary> EveryListedRecord() =>
-            Index.Records.GetRecords(types: null, plugin: null, search: null, limit: 1000, offset: 0).Value().Items;
+            Index.Queries.GetRecords(types: null, plugin: null, search: null, limit: 1000, offset: 0).Value().Items;
 
         public FormKeyResolutionState ResolutionOfBetasNpc() =>
             Index.ResolutionOf(SharedNpcFk, AlphaKey, BetaNpcFk).State;
@@ -124,47 +125,47 @@ public class RegistrationScopingTests
 
         Assert.Equal(fx.BetaRecords, fx.BetaRecordsFound());
         Assert.Equal(2, index.StackOf(fx.SharedNpcFk).Count);
-        Assert.NotEmpty(index.Records.GetReferences(fx.BetaRaceFk).Value());
+        Assert.NotEmpty(index.Queries.GetReferences(fx.BetaRaceFk).Value());
         Assert.NotNull(index.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
-        Assert.NotEmpty(index.Containers.GetChildren(BetaKey, fx.BetaQuestFk).Value());
+        Assert.NotEmpty(index.Queries.GetContainerChildren(BetaKey, fx.BetaQuestFk).Value());
 
         fx.Reconcile(fx.WithoutBeta);
 
-        Assert.Null(index.Records.GetRecord(fx.BetaNpcFk).Value());
+        Assert.Null(index.Queries.GetRecord(fx.BetaNpcFk).Value());
         Assert.Null(index.CopyIn(fx.BetaNpcFk, BetaKey));
         Assert.Empty(fx.BetaRecordsFound());
-        Assert.Null(index.Records.GetCompare(fx.BetaNpcFk).Value());
+        Assert.Null(index.Queries.GetCompare(fx.BetaNpcFk).Value());
         var only = Assert.Single(index.StackOf(fx.SharedNpcFk));
         Assert.Equal(AlphaKey.Name, only.Plugin);
         Assert.True(only.IsWinner);
-        Assert.Equal(AlphaKey.Name, index.Records.GetRecord(fx.SharedNpcFk).Value()?.Plugin);
+        Assert.Equal(AlphaKey.Name, index.Queries.GetRecord(fx.SharedNpcFk).Value()?.Plugin);
 
         Assert.DoesNotContain(fx.EveryListedRecord(), r => r.Plugin == BetaKey.Name);
-        Assert.Empty(index.Records.GetPluginRecordTypes(BetaKey).Value());
+        Assert.Empty(index.Queries.GetPluginRecordTypes(BetaKey).Value());
 
         Assert.Equal(FormKeyResolutionState.Unresolved, fx.ResolutionOfBetasNpc());
-        Assert.Empty(index.Records.GetReferences(fx.BetaRaceFk).Value());
-        var cells = index.Worldspaces.GetWorldspaceBlocks(BetaKey, fx.BetaWorldspaceFk).Value();
+        Assert.Empty(index.Queries.GetReferences(fx.BetaRaceFk).Value());
+        var cells = index.Queries.GetWorldspaceBlocks(BetaKey, fx.BetaWorldspaceFk).Value();
         Assert.Empty(cells.Blocks);
         Assert.Empty(cells.TopCells);
-        Assert.Empty(index.Worldspaces.GetInteriorCells(BetaKey).Value());
-        var cellRefs = index.Worldspaces.GetCellChildRecords(BetaKey, fx.BetaCellFk).Value();
+        Assert.Empty(index.Queries.GetInteriorCells(BetaKey).Value());
+        var cellRefs = index.Queries.GetCellChildRecords(BetaKey, fx.BetaCellFk).Value();
         Assert.Empty(cellRefs.Persistent);
         Assert.Empty(cellRefs.Temporary);
-        Assert.Empty(index.Containers.GetChildren(BetaKey, fx.BetaQuestFk).Value());
+        Assert.Empty(index.Queries.GetContainerChildren(BetaKey, fx.BetaQuestFk).Value());
 
         var filterNamingBetaWhereTheSharedNpcFormKeySitsInBothPluginsSoALeakedRowWouldSurfaceAlphasCopy =
             $"SELECT form_key FROM npc_ WHERE plugin = '{BetaKey.Name}' AND origin = '{BetaKey.Origin}'";
         index.SetFilter(filterNamingBetaWhereTheSharedNpcFormKeySitsInBothPluginsSoALeakedRowWouldSurfaceAlphasCopy, "filter.sql");
         Assert.Empty(fx.EveryListedRecord());
-        Assert.DoesNotContain(index.Records.GetPlugins().Value(), p => p.HasMatchingRecords);
+        Assert.DoesNotContain(index.Queries.GetPlugins().Value(), p => p.HasMatchingRecords);
         index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{AlphaKey.Name}' AND origin = '{AlphaKey.Origin}'", "filter.sql");
         Assert.True(index.PluginRowOf(AlphaKey)?.HasMatchingRecords);
         Assert.Contains(fx.EveryListedRecord(), r => r.FormKey == fx.SharedNpcFk);
         index.ClearFilter();
 
         Assert.NotEmpty(index.ListedIn(AlphaKey));
-        Assert.NotEmpty(index.Records.GetPluginRecordTypes(AlphaKey).Value());
+        Assert.NotEmpty(index.Queries.GetPluginRecordTypes(AlphaKey).Value());
     }
 
     [Fact]
@@ -176,18 +177,18 @@ public class RegistrationScopingTests
 
         fx.Reconcile(fx.WithBetaDisabled);
 
-        Assert.Null(index.Records.GetRecord(fx.BetaNpcFk).Value());
+        Assert.Null(index.Queries.GetRecord(fx.BetaNpcFk).Value());
         Assert.Null(index.CopyIn(fx.BetaNpcFk, BetaKey));
-        Assert.Null(index.Records.GetCompare(fx.BetaNpcFk).Value());
+        Assert.Null(index.Queries.GetCompare(fx.BetaNpcFk).Value());
         var shared = Assert.Single(index.StackOf(fx.SharedNpcFk));
         Assert.Equal(AlphaKey, new PluginAddress(shared.Plugin, shared.Origin));
         Assert.DoesNotContain(fx.EveryListedRecord(), r => r.Plugin == BetaKey.Name);
-        Assert.Empty(index.Records.GetPluginRecordTypes(BetaKey).Value());
+        Assert.Empty(index.Queries.GetPluginRecordTypes(BetaKey).Value());
         Assert.Equal(FormKeyResolutionState.Unresolved, fx.ResolutionOfBetasNpc());
-        Assert.Empty(index.Records.GetReferences(fx.BetaRaceFk).Value());
-        Assert.Empty(index.Worldspaces.GetInteriorCells(BetaKey).Value());
+        Assert.Empty(index.Queries.GetReferences(fx.BetaRaceFk).Value());
+        Assert.Empty(index.Queries.GetInteriorCells(BetaKey).Value());
         Assert.Null(index.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
-        Assert.Empty(index.Containers.GetChildren(BetaKey, fx.BetaQuestFk).Value());
+        Assert.Empty(index.Queries.GetContainerChildren(BetaKey, fx.BetaQuestFk).Value());
     }
 
     [Fact]
@@ -198,9 +199,9 @@ public class RegistrationScopingTests
 
         fx.Reconcile(fx.WithBetaDisabled);
 
-        var reference = Assert.Single(fx.Index.Records.GetReferencesInActiveOrTrackedPlugins(fx.BetaRaceFk).Value(), r => r.FormKey == fx.BetaNpcFk);
+        var reference = Assert.Single(fx.Index.Queries.GetReferencesInActiveOrTrackedPlugins(fx.BetaRaceFk).Value(), r => r.FormKey == fx.BetaNpcFk);
         Assert.Equal(BetaKey, new PluginAddress(reference.Plugin, reference.Origin));
-        Assert.Empty(fx.Index.Records.GetReferences(fx.BetaRaceFk).Value());
+        Assert.Empty(fx.Index.Queries.GetReferences(fx.BetaRaceFk).Value());
     }
 
     [Fact]
@@ -210,7 +211,7 @@ public class RegistrationScopingTests
 
         fx.Reconcile(fx.WithBetaDisabled);
 
-        Assert.Empty(fx.Index.Records.GetReferencesInActiveOrTrackedPlugins(fx.BetaRaceFk).Value());
+        Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrTrackedPlugins(fx.BetaRaceFk).Value());
     }
 
     [Fact]
@@ -218,7 +219,7 @@ public class RegistrationScopingTests
     {
         using var fx = Build("registration-active-untracked-references");
 
-        Assert.Contains(fx.Index.Records.GetReferencesInActiveOrTrackedPlugins(fx.BetaRaceFk).Value(), r => r.FormKey == fx.BetaNpcFk);
+        Assert.Contains(fx.Index.Queries.GetReferencesInActiveOrTrackedPlugins(fx.BetaRaceFk).Value(), r => r.FormKey == fx.BetaNpcFk);
     }
 
     [Fact]
@@ -228,7 +229,7 @@ public class RegistrationScopingTests
 
         fx.Reconcile(fx.WithoutBeta);
 
-        Assert.Empty(fx.Index.Records.GetReferencesInActiveOrTrackedPlugins(fx.BetaRaceFk).Value());
+        Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrTrackedPlugins(fx.BetaRaceFk).Value());
     }
 
     [Fact]
@@ -270,10 +271,10 @@ public class RegistrationScopingTests
         var stack = index.StackOf(fx.SharedNpcFk);
         Assert.Equal(2, stack.Count);
         Assert.True(stack.Single(e => e.Plugin == BetaKey.Name).IsWinner);
-        Assert.Equal(BetaKey.Name, index.Records.GetRecord(fx.SharedNpcFk).Value()?.Plugin);
+        Assert.Equal(BetaKey.Name, index.Queries.GetRecord(fx.SharedNpcFk).Value()?.Plugin);
         Assert.NotEqual(FormKeyResolutionState.Unresolved, fx.ResolutionOfBetasNpc());
         Assert.NotNull(index.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
-        Assert.NotEmpty(index.Containers.GetChildren(BetaKey, fx.BetaQuestFk).Value());
+        Assert.NotEmpty(index.Queries.GetContainerChildren(BetaKey, fx.BetaQuestFk).Value());
     }
 
     [Fact]

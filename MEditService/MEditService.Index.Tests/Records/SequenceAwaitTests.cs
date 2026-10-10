@@ -35,7 +35,7 @@ public sealed class SequenceAwaitTests : IDisposable
     {
         var landed = _index.Sequence;
 
-        var pending = _index.Records.AwaitSequence(landed, TimeSpan.FromDays(1));
+        var pending = _index.Queries.AwaitSequence(landed, TimeSpan.FromDays(1));
 
         Assert.True(await Waits.CompletesWithin(pending, Generous));
         Assert.True((await pending).Reached);
@@ -46,7 +46,7 @@ public sealed class SequenceAwaitTests : IDisposable
     [Fact]
     public async Task AwaitSequence_NotReached_AnswersNotYet_OnceTheClockPassesTheTimeout()
     {
-        var pending = _index.Records.AwaitSequence(_index.Sequence + 1, DayLongTimeoutSoAStopwatchAwaitWouldStillBePending);
+        var pending = _index.Queries.AwaitSequence(_index.Sequence + 1, DayLongTimeoutSoAStopwatchAwaitWouldStillBePending);
 
         _clock.SetUtcNow(Start + TimeSpan.FromDays(2));
 
@@ -57,7 +57,7 @@ public sealed class SequenceAwaitTests : IDisposable
     [Fact]
     public async Task AwaitSequence_LandingWhileWaiting_AnswersTrue_WithTheClockAdvancedOnlyToWakeThePoll()
     {
-        var pending = _index.Records.AwaitSequence(_index.Sequence + 1, DayLongTimeoutSoAStopwatchAwaitWouldStillBePending);
+        var pending = _index.Queries.AwaitSequence(_index.Sequence + 1, DayLongTimeoutSoAStopwatchAwaitWouldStillBePending);
 
         var path = _fixture.Plugins.Single().Path;
         PluginBinaries.Touch(path);

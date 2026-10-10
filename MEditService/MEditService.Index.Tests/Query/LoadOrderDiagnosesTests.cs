@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Query;
 
-public sealed class MalformedPluginQueryServiceTests : IDisposable
+public sealed class LoadOrderDiagnosesTests : IDisposable
 {
     private const string Malformed = ShortRdatRegionPlugin.FileName;
     private const string ShortRdat = "fixed-size-subrecord-short";
@@ -34,7 +34,7 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
     private PluginDiagnosisReport[] Diagnose(params LoadOrderEntry[] plugins)
     {
         using var index = Indexes.Reconciled(GameDirectory, plugins);
-        return [.. index.Malformed.GetLoadOrderDiagnoses().Value()];
+        return [.. index.Queries.GetLoadOrderDiagnoses().Value()];
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
 
         using var index = Indexes.Reconciled(GameDirectory, [upper, master]);
 
-        Assert.Empty(index.Malformed.GetLoadOrderDiagnoses().Value());
+        Assert.Empty(index.Queries.GetLoadOrderDiagnoses().Value());
         Assert.Equal([Malformed.ToUpperInvariant(), Malformed], index.Status.Failures.Select(f => f.Name).Order(StringComparer.Ordinal));
     }
 
@@ -106,11 +106,11 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
         index.Reconcile(holder, GameDirectory, [held, gone], GameRelease.Fallout4);
-        Assert.Single(index.Malformed.GetLoadOrderDiagnoses().Value());
+        Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
 
         index.Reconcile(holder, GameDirectory, [held], GameRelease.Fallout4);
 
-        Assert.Empty(index.Malformed.GetLoadOrderDiagnoses().Value());
+        Assert.Empty(index.Queries.GetLoadOrderDiagnoses().Value());
     }
 
     [Fact]
@@ -152,11 +152,11 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
         var load = Task.Run(() => index.Reconcile(holder, GameDirectory, plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        Assert.Equal(IndexRefusal.IndexNotReady, index.Malformed.GetLoadOrderDiagnoses().Refused().Refusal);
+        Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetLoadOrderDiagnoses().Refused().Refusal);
 
         gate.Release();
         await load;
-        Assert.Single(index.Malformed.GetLoadOrderDiagnoses().Value());
+        Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
     }
 
     [Fact]
@@ -164,6 +164,6 @@ public sealed class MalformedPluginQueryServiceTests : IDisposable
     {
         using var index = Indexes.Open(new LoadOrderHolder());
 
-        Assert.Equal(IndexRefusal.NoLoadOrder, index.Malformed.GetLoadOrderDiagnoses().Refused().Refusal);
+        Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.GetLoadOrderDiagnoses().Refused().Refusal);
     }
 }

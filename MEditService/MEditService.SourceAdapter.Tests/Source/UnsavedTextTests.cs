@@ -27,7 +27,7 @@ public sealed class UnsavedTextTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    private SourceRepository Repository => SourceRepository.Over(TestMod.In(_modFolder), Release);
+    private ISourceRepository Repository => TestAdapters.Source().OverFolder(TestMod.In(_modFolder), Release);
 
     private ISourceRepositoryReads Reads =>
         new GitSourceAdapter(_unsaved).Over(new RegisteredPlugin(PluginName, TestMod.Name, Path.Combine(_modFolder, PluginName), TestMod.In(_modFolder), Line: null), Release)
@@ -62,7 +62,7 @@ public sealed class UnsavedTextTests : IDisposable
         Repository.Put(Plugin, new SourceDocument(Worldspace, "wrld", null, $"{{\n  \"FormKey\": \"{Worldspace}\"\n}}")).Wrote();
         Repository.PutInWorldspace(Plugin, new SourceDocument(Cell, "cell", null, CellBody("9, -9")), Worldspace);
 
-        var session = WriteSession.Over(TestMod.In(_modFolder), Release, [new DocumentChange(FileOf(Cell, "cell"), CellBody("10, -9"))]);
+        var session = TestAdapters.Source().WriteSessionOver(TestMod.In(_modFolder), Release, [new DocumentChange(FileOf(Cell, "cell"), CellBody("10, -9"))]);
 
         Assert.Equal(Cell, session.Repository.GetCellAt(Plugin, Worldspace, 10, -9).Value()?.FormKey);
     }

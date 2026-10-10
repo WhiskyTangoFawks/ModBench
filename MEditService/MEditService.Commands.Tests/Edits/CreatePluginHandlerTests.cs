@@ -3,7 +3,6 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.RepositoriesLib;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -55,7 +54,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.Same(before, _holder.Current);
         Assert.Equal(version, _holder.Held?.Version);
         Assert.Equal(0, changes);
-        Assert.False(SourceRepository.IsTracked(folder));
+        Assert.False(TestAdapters.Source().IsTracked(folder));
         Assert.Equal(["NewPlugin.esp"], Directory.EnumerateFileSystemEntries(folder).Select(Path.GetFileName));
         Assert.Empty(Directory.EnumerateFiles(
             _data.InstanceRoot, "plugins.txt", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, RecurseSubdirectories = true }));
@@ -90,7 +89,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         Assert.Null(result.Refusal);
         Assert.Equal(firstBefore, TrackedTree.Records(folder, first));
-        Assert.True(SourceRepository.SourceReads(Registered("Second.esp", "TrackedMod", folder)));
+        Assert.True(TestAdapters.Source().SourceReads(Registered("Second.esp", "TrackedMod", folder)));
         Assert.Equal(headBefore, Head(folder));
     }
 
@@ -105,7 +104,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
         Assert.Contains("Second.esp", result.Message, StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(folder, "Second.esp")));
-        Assert.False(SourceRepository.SourceReads(Registered("Second.esp", "FailingMod", folder)));
+        Assert.False(TestAdapters.Source().SourceReads(Registered("Second.esp", "FailingMod", folder)));
     }
 
     private static string Head(string folder) =>
@@ -120,7 +119,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         Assert.Null(result.Refusal);
         Assert.True(File.Exists(Path.Combine(folder, "Second.esp")));
-        Assert.False(SourceRepository.SourceReads(Registered("Second.esp", "HostMod", folder)));
+        Assert.False(TestAdapters.Source().SourceReads(Registered("Second.esp", "HostMod", folder)));
     }
 
     [Fact]
@@ -176,7 +175,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         Assert.Equal(
             [Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(folder, "Second.esp"))))],
-            SourceRepository.Over(new PluginProvider.FromMod("ParkedMod", folder), GameRelease.Fallout4).LastWrittenBinarySha256s(new PluginAddress("Second.esp", "ParkedMod")).Value());
+            TestAdapters.Source().OverFolder(new PluginProvider.FromMod("ParkedMod", folder), GameRelease.Fallout4).LastWrittenBinarySha256s(new PluginAddress("Second.esp", "ParkedMod")).Value());
     }
 
     private sealed class SourceUnreadableAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
@@ -194,18 +193,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         public override Answer<EmptyPluginTakeBack, PluginFailure> TakeBackEmpty(ModKey modKey, string folder, string written) =>
             TakeBackFailure ?? base.TakeBackEmpty(modKey, folder, written);
-    }
-
-    [Fact]
-    public async Task CreatePlugin_WithNoLoadOrderHeld_RefusesBeforeWritingAnything()
-    {
-        var folder = ModFolder("HomelessMod");
-        var handler = TestEditService.PluginCreateHandler(new LoadOrderHolder());
-
-        await Assert.ThrowsAsync<NoLoadOrderException>(
-            () => handler.CreatePlugin(new PluginAddress("Homeless.esp", "HomelessMod"), folder));
-
-        Assert.Empty(Directory.EnumerateFileSystemEntries(folder));
     }
 
     [Fact]

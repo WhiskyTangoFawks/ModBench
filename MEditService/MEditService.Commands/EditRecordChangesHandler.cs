@@ -20,13 +20,14 @@ public sealed class EditRecordChangesHandler
     private readonly ILogger<EditRecordChangesHandler> _logger;
     private readonly FormKeyChange _formKeyChange;
     private readonly CellLanding _cellLanding;
+    private readonly ISourceAdapter _source;
     private readonly UnsavedDocuments _unsaved;
 
     internal EditRecordChangesHandler(
-        WriteTargets targets, LoadOrderResolution resolution, SchemaReflector schemaReflector, UnsavedDocuments unsaved,
+        WriteTargets targets, LoadOrderResolution resolution, SchemaReflector schemaReflector, ISourceAdapter source, UnsavedDocuments unsaved,
         ILogger<EditRecordChangesHandler> logger)
     {
-        (_targets, _resolution, _schemaReflector, _unsaved, _logger) = (targets, resolution, schemaReflector, unsaved, logger);
+        (_targets, _resolution, _schemaReflector, _source, _unsaved, _logger) = (targets, resolution, schemaReflector, source, unsaved, logger);
         _formKeyChange = new(logger);
         _cellLanding = new(resolution, schemaReflector, logger);
     }
@@ -38,8 +39,8 @@ public sealed class EditRecordChangesHandler
 
     private Answer<RecordEditChanges, SourceFailure> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
-        if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
-        var sessions = new WriteSessions(_unsaved.Current);
+        if (ItemWrite.RefuseWithoutGit(_source) is { } gitMissing) return gitMissing;
+        var sessions = new WriteSessions(_source, _unsaved.Current);
         if (_targets.ResolveEditTarget(plugin, formKey, sessions, out var target) is { } blocked) return blocked;
         return Edit(plugin, formKey, envelope, target, sessions)
             .Then(outcome => SourceAnswer.Of(new RecordEditChanges(outcome, target.Session.Changes)));
@@ -50,7 +51,7 @@ public sealed class EditRecordChangesHandler
         WriteSessions sessions)
     {
         var (release, identity, session) = editTarget;
-        var repository = session.Repository;
+        var repository = editTarget.Repository;
         if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, envelope.Value);
         var schemas = _schemaReflector.GetSchemas(release);
         var spelled = RecordEditEnvelope.Spell(envelope.Path);

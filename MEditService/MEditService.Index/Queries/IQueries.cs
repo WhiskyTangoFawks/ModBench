@@ -6,7 +6,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Queries;
 
-public interface IRecordQueryService
+/// <summary>The record index's face (ADR-0014): what the API asks of the read model.</summary>
+public interface IQueries
 {
     Answer<IReadOnlyList<PluginRow>, IndexRefused> GetPlugins();
     // A null plugin browses every plugin.
@@ -30,6 +31,16 @@ public interface IRecordQueryService
     // Null when the plugin holds no such record; a source stop when its source tree cannot say.
     Answer<CopyDocument?, IndexRefused> GetCopyDocument(PluginAddress plugin, string formKey);
     Answer<RecordOfFileAnswer, IndexRefused> GetRecordOfFile(string path);
+
+    Answer<IReadOnlyList<WorldspaceSummary>, IndexRefused> GetWorldspaces(PluginAddress plugin);
+    Answer<WorldspaceBlocks, IndexRefused> GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey);
+    Answer<CellChildRecords, IndexRefused> GetCellChildRecords(PluginAddress plugin, string cellFormKey);
+    Answer<IReadOnlyList<InteriorCellBlock>, IndexRefused> GetInteriorCells(PluginAddress plugin);
+    Answer<IReadOnlyList<ContainerChildSummary>, IndexRefused> GetContainerChildren(PluginAddress plugin, string parentFormKey);
+
+    Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses();
+    Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin);
+    Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems();
 
     // Answered in every state, "no load order yet" included (ADR-0013).
     LoadOrderStatus GetStatus();

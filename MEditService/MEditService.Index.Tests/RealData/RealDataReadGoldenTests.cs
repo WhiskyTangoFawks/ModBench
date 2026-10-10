@@ -33,7 +33,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
 
     private PagedResult<RecordSummary> Listing(IReadOnlyList<string> types, string? search)
     {
-        var page = _index.Records.GetRecords(types, CutDownPluginFixture.Plugin, search, WholeType, offset: 0).Value();
+        var page = _index.Queries.GetRecords(types, CutDownPluginFixture.Plugin, search, WholeType, offset: 0).Value();
         Assert.True(page.Total <= WholeType, $"'{string.Join(", ", types)}' has {page.Total} records, more than the {WholeType} one page lists.");
         return page;
     }
@@ -80,12 +80,12 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
         var captured = new
         {
             WorldspaceBlocks = LowestFormKeysOfTheRelationHoldingHeldRecordsToo("wrld").ToDictionary(
-                fk => fk, fk => _index.Worldspaces.GetWorldspaceBlocks(CutDownPluginFixture.Plugin, fk).Value()),
-            InteriorCells = _index.Worldspaces.GetInteriorCells(CutDownPluginFixture.Plugin).Value(),
+                fk => fk, fk => _index.Queries.GetWorldspaceBlocks(CutDownPluginFixture.Plugin, fk).Value()),
+            InteriorCells = _index.Queries.GetInteriorCells(CutDownPluginFixture.Plugin).Value(),
             CellChildRecords = LowestFormKeysOfTheRelationHoldingHeldRecordsToo("cell").ToDictionary(
                 fk => fk, fk =>
                 {
-                    var refs = _index.Worldspaces.GetCellChildRecords(CutDownPluginFixture.Plugin, fk).Value();
+                    var refs = _index.Queries.GetCellChildRecords(CutDownPluginFixture.Plugin, fk).Value();
                     return new
                     {
                         Persistent = refs.Persistent.OrderBy(r => r.FormKey, StringComparer.Ordinal).ToList(),
@@ -106,7 +106,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
         var captured = new
         {
             ReferencedBy = allFormKeys
-                .Select(fk => (FormKey: fk, Refs: _index.Records.GetReferences(fk).Value()))
+                .Select(fk => (FormKey: fk, Refs: _index.Queries.GetReferences(fk).Value()))
                 .Where(r => r.Refs.Count > 0)
                 .ToDictionary(r => r.FormKey, r => new
                 {

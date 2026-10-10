@@ -101,18 +101,18 @@ public sealed class RecordFilterNarrowsSpatialReadsTests
 
         internal void Filter(string sql) => _index.SetFilter(sql, "filter.sql");
 
-        internal IReadOnlyList<WorldspaceSummary> Worldspaces() => _index.Worldspaces.GetWorldspaces(Plugin).Value();
+        internal IReadOnlyList<WorldspaceSummary> Worldspaces() => _index.Queries.GetWorldspaces(Plugin).Value();
 
         internal IEnumerable<CellSummary> ExteriorCells()
         {
-            var blocks = _index.Worldspaces.GetWorldspaceBlocks(Plugin, WorldspaceFormKey).Value();
+            var blocks = _index.Queries.GetWorldspaceBlocks(Plugin, WorldspaceFormKey).Value();
             return blocks.TopCells.Concat(blocks.Blocks.SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells));
         }
 
         internal IEnumerable<CellSummary> InteriorCells() =>
-            _index.Worldspaces.GetInteriorCells(Plugin).Value().SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells);
+            _index.Queries.GetInteriorCells(Plugin).Value().SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells);
 
-        internal IReadOnlyList<PluginRecordTypeCount> RecordTypes() => _index.Records.GetPluginRecordTypes(Plugin).Value();
+        internal IReadOnlyList<PluginRecordTypeCount> RecordTypes() => _index.Queries.GetPluginRecordTypes(Plugin).Value();
 
         public void Dispose()
         {

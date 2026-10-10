@@ -11,7 +11,7 @@ public sealed class IndexFileSystemScanTests
     [
         "MEditService.Index/Store.cs",
         "MEditService.Index/IndexFile.cs",
-        "MEditService.Index/Reconciler.cs",
+        "MEditService.Index/Indexer.cs",
         "MEditService.Index/HeldPlugins.cs",
         "MEditService.Index/IndexScope.cs",
     ];

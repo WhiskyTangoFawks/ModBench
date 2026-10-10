@@ -103,7 +103,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
         Directory.Delete(SourceRoot, recursive: true);
         using var index = Indexes.Reconciled(_fixture.GameDirectory, [_entry with { Enabled = false }], _fixture.InstanceRoot);
 
-        var rendered = index.Records.GetRenderedDocument(Plugin, _npc).Value();
+        var rendered = index.Queries.GetRenderedDocument(Plugin, _npc).Value();
 
         Assert.Contains(NpcEditorId, rendered?.Text);
     }

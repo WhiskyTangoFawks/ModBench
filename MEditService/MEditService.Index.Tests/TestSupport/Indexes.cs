@@ -126,7 +126,7 @@ internal static class Indexes
         index.SetFilter(sql, "filter.sql");
         try
         {
-            return index.Records.GetRecords(types: null, plugin: null, search: null, limit: 1, offset: 0).Value().Total;
+            return index.Queries.GetRecords(types: null, plugin: null, search: null, limit: 1, offset: 0).Value().Total;
         }
         finally
         {
@@ -145,6 +145,6 @@ internal static class Indexes
 
     /// <summary>One record type's row count for one plugin, zero when the plugin holds none.</summary>
     internal static int CountOf(this OpenedIndex index, PluginAddress plugin, string recordType) =>
-        index.Records.GetPluginRecordTypes(plugin).Value()
+        index.Queries.GetPluginRecordTypes(plugin).Value()
             .FirstOrDefault(c => string.Equals(c.Type, recordType, StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
 }

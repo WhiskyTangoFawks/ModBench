@@ -14,25 +14,29 @@ public sealed class TrackHandler
     private readonly LoadOrderHolder _loadOrder;
     private readonly ILogger _logger;
     private readonly INotificationPublisher _notifications;
+    private readonly ISourceAdapter _source;
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal TrackHandler(
-        LoadOrderHolder loadOrder, IPluginAdapter adapter, INotificationPublisher notifications, ILogger<TrackHandler> logger) =>
-        (_loadOrder, _notifications, _logger, _decompiler) = (loadOrder, notifications, logger, new PluginDecompiler(logger, adapter));
+        LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, INotificationPublisher notifications,
+        ILogger<TrackHandler> logger) =>
+        (_loadOrder, _source, _notifications, _logger, _decompiler) =
+            (loadOrder, source, notifications, logger, new PluginDecompiler(logger, adapter, source));
 
-    /// <summary>Each name is a mod, whose plugins and folder the held load order says. Throws
-    /// <see cref="NoLoadOrderException"/> with nothing written when none is held; git missing refuses
+    /// <summary>Each name is a mod, whose plugins and folder the held load order says. Refuses
+    /// with <see cref="TrackRefusal.NoLoadOrder"/>, writing nothing, when none is held; git missing refuses
     /// the whole selection once.</summary>
     public async Task<SelectionResult<string, TrackRefusal, TrackedMod>> TrackAsync(
         IReadOnlyList<string> mods, CancellationToken cancel = default)
     {
-        var loadOrder = _loadOrder.Require();
+        if (_loadOrder.Held is not { Snapshot: var loadOrder })
+            return SelectionResult<string, TrackRefusal, TrackedMod>.WholeSelectionRefused(TrackRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
         var total = mods.Distinct(StringComparer.OrdinalIgnoreCase).Sum(mod => ProvidedBy(loadOrder, mod).Count);
         var done = 0;
         try
         {
-            return await ItemWrite.OverAsync(mods, StringComparer.OrdinalIgnoreCase, TrackRefusal.GitUnavailable, async mod =>
+            return await ItemWrite.OverAsync(_source, mods, StringComparer.OrdinalIgnoreCase, TrackRefusal.GitUnavailable, async mod =>
             {
                 var plugins = ProvidedBy(loadOrder, mod);
                 var answer = await TrackModAsync(loadOrder, mod, plugins, done, total, cancel);
@@ -63,14 +67,14 @@ public sealed class TrackHandler
         var modFolder = ((PluginProvider.FromMod)plugins[0].Provider).Folder;
 
         // Track takes a mod with no repository (ADR-0007).
-        if (SourceRepository.IsTracked(modFolder))
+        if (_source.IsTracked(modFolder))
         {
             return ItemAnswer<TrackRefusal, TrackedMod>.Refused(TrackRefusal.AlreadyTracked,
                 $"'{modFolder}' is already tracked. To put a plugin's source into its working tree, decompile it.");
         }
 
         // A .git with no main that Track did not mark is someone else's, never written to (ADR-0003).
-        if (SourceRepository.HoldsAnotherRepository(modFolder))
+        if (_source.HoldsAnotherRepository(modFolder))
         {
             return ItemAnswer<TrackRefusal, TrackedMod>.Refused(TrackRefusal.AlreadyTracked,
                 $"'{modFolder}' already holds a repository Track did not make, with no main branch.");
@@ -124,7 +128,7 @@ public sealed class TrackHandler
                 verified.Count, modFolder, verified.Sum(v => v.Source.Files.Count));
         }
 
-        var failed = SourceRepository.Track(modFolder,
+        var failed = _source.Track(modFolder,
             [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Name, v.Source.BinarySha256)))]);
 
         var refused = new List<ItemRefused<PluginAddress, TrackRefusal>>();

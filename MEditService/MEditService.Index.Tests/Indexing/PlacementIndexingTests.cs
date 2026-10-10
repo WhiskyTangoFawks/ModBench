@@ -97,7 +97,7 @@ public class PlacementIndexingTests
 
     private static List<CellAt> WorldspaceCells(OpenedIndex index, PluginAddress plugin, string worldspace)
     {
-        var blocks = index.Worldspaces.GetWorldspaceBlocks(plugin, worldspace).Value();
+        var blocks = index.Queries.GetWorldspaceBlocks(plugin, worldspace).Value();
         return
         [
             .. blocks.TopCells.Select(c => new CellAt(null, null, null, null, c)),
@@ -106,7 +106,7 @@ public class PlacementIndexingTests
     }
 
     private static List<CellSummary> InteriorCells(OpenedIndex index, PluginAddress plugin) =>
-        [.. index.Worldspaces.GetInteriorCells(plugin).Value().SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells)];
+        [.. index.Queries.GetInteriorCells(plugin).Value().SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells)];
 
     private static PluginFixtureData OneWorldspaceCell(string prefix, string plugin, out FormKey cellKey, out FormKey placedKey, out FormKey worldspaceKey)
     {
@@ -152,7 +152,7 @@ public class PlacementIndexingTests
         index.NextSnapshot();
 
         Assert.Single(WorldspaceCells(index, key, wrld.ToString()), c => c.Cell.FormKey == cell.ToString());
-        Assert.Single(index.Worldspaces.GetCellChildRecords(key, cell.ToString()).Value().Persistent, p => p.FormKey == placed.ToString());
+        Assert.Single(index.Queries.GetCellChildRecords(key, cell.ToString()).Value().Persistent, p => p.FormKey == placed.ToString());
     }
 
     [Fact]
@@ -178,7 +178,7 @@ public class PlacementIndexingTests
     {
         using var b = new Built();
 
-        var top = Assert.Single(b.Index.Worldspaces.GetWorldspaceBlocks(Key, b.WorldspaceFk).Value().TopCells);
+        var top = Assert.Single(b.Index.Queries.GetWorldspaceBlocks(Key, b.WorldspaceFk).Value().TopCells);
 
         Assert.Equal(b.TopCellFk, top.FormKey);
         Assert.True(top.IsPersistentWorldspaceCell);
@@ -203,14 +203,14 @@ public class PlacementIndexingTests
 
         Assert.All(
             [b.BarrelFk, b.NullRefFk, b.RaiderFk],
-            placed => Assert.Single(b.Index.Records.GetRecords(["refr"], Key, search: placed, limit: 10, offset: 0).Value().Items));
+            placed => Assert.Single(b.Index.Queries.GetRecords(["refr"], Key, search: placed, limit: 10, offset: 0).Value().Items));
     }
 
     [Fact]
     public void ACellsChildren_SplitIntoPersistentAndTemporary()
     {
         using var b = new Built();
-        var refs = b.Index.Worldspaces.GetCellChildRecords(Key, b.ExtCellFk).Value();
+        var refs = b.Index.Queries.GetCellChildRecords(Key, b.ExtCellFk).Value();
 
         Assert.Equal(2, refs.Persistent.Count);
         Assert.Single(refs.Temporary);
@@ -396,9 +396,9 @@ public class PlacementIndexingTests
         foreach (var (winner, other) in WinnerAndOther)
         {
             var index = f.WithWinner(winner);
-            Assert.Single(index.Worldspaces.GetCellChildRecords(winner, f.ExtCellFk).Value().Persistent);
-            Assert.Empty(index.Worldspaces.GetCellChildRecords(other, f.ExtCellFk).Value().Persistent);
-            Assert.Empty(index.Worldspaces.GetCellChildRecords(SharedC, f.ExtCellFk).Value().Persistent);
+            Assert.Single(index.Queries.GetCellChildRecords(winner, f.ExtCellFk).Value().Persistent);
+            Assert.Empty(index.Queries.GetCellChildRecords(other, f.ExtCellFk).Value().Persistent);
+            Assert.Empty(index.Queries.GetCellChildRecords(SharedC, f.ExtCellFk).Value().Persistent);
         }
     }
 
