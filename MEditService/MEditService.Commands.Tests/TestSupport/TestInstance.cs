@@ -3,7 +3,7 @@ using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -17,14 +17,16 @@ public enum Listing { Winning, Overridden, Unlisted }
 public abstract class TestInstance : IDisposable
 {
     private readonly ScratchDirectory _root = new("medit-instance-");
+    private readonly GameRelease _release;
     private readonly List<LoadOrderEntry> _entries = [];
     private readonly Lazy<LoadOrderHolder> _holder;
     private readonly Lazy<IServiceProvider> _services;
     private LoadOrderSnapshot? _loadOrder;
     private int _nextLine;
 
-    protected TestInstance()
+    protected TestInstance(GameRelease release = GameRelease.Fallout4)
     {
+        _release = release;
         GameDirectory = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
         _holder = new Lazy<LoadOrderHolder>(() =>
         {
@@ -72,9 +74,10 @@ public abstract class TestInstance : IDisposable
 
     /// <summary>The next plugin in load order. A tracked one is a mod's plugin, tracked as it is added;
     /// one that masters another is tracked over the load order so far, which holds its masters.</summary>
-    protected PluginAddress Add(Fallout4Mod mod, string origin, bool tracked = true, Listing listing = Listing.Winning)
+    protected PluginAddress Add(IMod mod, string origin, bool tracked = true, Listing listing = Listing.Winning)
     {
         if (_loadOrder is not null) throw new InvalidOperationException("The load order is sealed.");
+        if (mod.GameRelease != _release) throw new InvalidOperationException($"{mod.ModKey} is a {mod.GameRelease} plugin in a {_release} instance.");
         var name = mod.ModKey.FileName.String;
         var folder = Directory.CreateDirectory(FolderOf(origin)).FullName;
         var path = Path.Combine(folder, name);
@@ -90,7 +93,7 @@ public abstract class TestInstance : IDisposable
         if (!tracked) mod.WriteToBinary(path);
         else if (entry.Provider is not PluginProvider.FromMod)
             throw new InvalidOperationException($"'{origin}' is not a mod, so its plugin has no folder to track.");
-        else if (mod.ModHeader.MasterReferences.Count == 0) TrackedTemplates.WriteTracked(folder, mod);
+        else if (mod.MasterReferences.Count == 0) TrackedTemplates.WriteTracked(folder, mod);
         else
         {
             mod.WriteToBinary(path);
@@ -103,7 +106,7 @@ public abstract class TestInstance : IDisposable
     /// <summary>The repository over the mod providing <paramref name="plugin"/>, or null when its
     /// folder is not tracked.</summary>
     public ISourceRepository? RepositoryOf(PluginAddress plugin) =>
-        LoadOrder.ProviderOf(plugin) is PluginProvider.FromMod mod ? TestAdapters.Source().Open(mod, GameRelease.Fallout4) : null;
+        LoadOrder.ProviderOf(plugin) is PluginProvider.FromMod mod ? TestAdapters.Source().Open(mod, _release) : null;
 
     private void Track(string origin)
     {
@@ -112,7 +115,7 @@ public abstract class TestInstance : IDisposable
             throw new InvalidOperationException($"Expected '{origin}' to track: {string.Join("; ", messages)}");
     }
 
-    private LoadOrderSnapshot Snapshot() => SnapshotPlugins.Snapshot(GameDirectory, _root, GameRelease.Fallout4, _entries);
+    private LoadOrderSnapshot Snapshot() => SnapshotPlugins.Snapshot(GameDirectory, _root, _release, _entries);
 
     /// <summary>Hands the handlers the load order again with <paramref name="plugin"/>'s entry changed, as
     /// Mod Management does after its line changes.</summary>
