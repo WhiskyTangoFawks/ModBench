@@ -42,14 +42,14 @@ public sealed class IndexerTests
     }
 
     private static string SharedNpc(OpenedIndex indexer) =>
-        indexer.Records.GetRecords(["npc_"], new PluginAddress("A.esm", PluginOrigin.DataDirectory), search: null, limit: 10, offset: 0).Value()
+        indexer.Queries.GetRecords(["npc_"], new PluginAddress("A.esm", PluginOrigin.DataDirectory), search: null, limit: 10, offset: 0).Value()
             .Items.Single().FormKey;
 
     private static string WinnerOf(OpenedIndex indexer, string formKey) =>
         indexer.StackOf(formKey).Single(copy => copy.IsWinner).Plugin;
 
     private static IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins(OpenedIndex indexer) =>
-        indexer.Records.GetPlugins().Value().ToDictionary(row => row.Plugin.Key, row => row.Content, PluginAddress.Comparer);
+        indexer.Queries.GetPlugins().Value().ToDictionary(row => row.Plugin.Key, row => row.Content, PluginAddress.Comparer);
 
     [Fact]
     public async Task AReDerivationAfterASnapshotMovedTheWinners_TakesItsWinnersFromTheHolder_NotFromThePluginsItHasOpen()
@@ -179,7 +179,7 @@ public sealed class IndexerTests
 
         ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, Snapshot(fx));
 
-        var matched = indexer.Records.GetRecords(
+        var matched = indexer.Queries.GetRecords(
             ["npc_"], new PluginAddress("C.esp", PluginOrigin.DataDirectory), search: null, limit: 10, offset: 0).Value();
         Assert.Equal([charlieNpcOwnedNotOverriddenFromASoTheFilterCouldNotAlreadyHaveListedItsFormKey], matched.Items.Select(i => i.EditorId));
     }

@@ -15,7 +15,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
     private static readonly string[] CellChildFields = ["Persistent", "Temporary", "NavigationMeshes", "Landscape"];
 
     private string? StoredBody(string formKey) =>
-        fixture.Index.Records.GetRenderedDocument(CutDownPluginFixture.Plugin, formKey).Value()?.Text;
+        fixture.Index.Queries.GetRenderedDocument(CutDownPluginFixture.Plugin, formKey).Value()?.Text;
 
     private static IModDisposeGetter OpenPlugin() => ModFactory.ImportGetter(
         new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),

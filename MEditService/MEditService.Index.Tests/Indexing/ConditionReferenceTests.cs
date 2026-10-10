@@ -12,7 +12,7 @@ public class ConditionReferenceTests
     private static List<string> ConditionRefPaths(PluginFixtureData fixture, FormKey source, FormKey target)
     {
         using var index = Indexes.Reconciled(fixture);
-        return [.. index.Records.GetReferences(target.ToString()).Value()
+        return [.. index.Queries.GetReferences(target.ToString()).Value()
             .Where(r => r.FormKey == source.ToString())
             .Select(r => r.FieldPath)
             .Order(StringComparer.Ordinal)];

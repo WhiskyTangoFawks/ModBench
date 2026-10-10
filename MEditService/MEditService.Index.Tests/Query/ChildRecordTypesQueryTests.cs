@@ -69,7 +69,7 @@ public sealed class ChildRecordTypesQueryTests : IDisposable
     [Fact]
     public void AQuest_HoldsTopicsBranchesAndScenes_NamedAsXEditNamesThem_InNameOrder()
     {
-        var types = _index.Records.GetChildRecordTypes(Plugin, Quest).Value();
+        var types = _index.Queries.GetChildRecordTypes(Plugin, Quest).Value();
 
         Assert.Equal<RecordTypeChoice>(
             [new("dlbr", "Dialog Branch"), new("dial", "Dialog Topic"), new("scen", "Scene")],
@@ -82,7 +82,7 @@ public sealed class ChildRecordTypesQueryTests : IDisposable
     [InlineData(TopCell, new[] { "Navmesh" })]
     public void ACell_HoldsWhatItsPlaceInTheIndexAllows(string cell, string[] besidesPlacedRecords)
     {
-        var types = _index.Records.GetChildRecordTypes(Plugin, cell).Value();
+        var types = _index.Queries.GetChildRecordTypes(Plugin, cell).Value();
 
         Assert.Equal([.. besidesPlacedRecords, .. PlacedRecordTables.DisplayNames], types?.Select(t => t.DisplayName));
     }
@@ -90,7 +90,7 @@ public sealed class ChildRecordTypesQueryTests : IDisposable
     [Fact]
     public void AWorldspacesPersistentCellCarryingThePersistentFlag_HoldsOnlyPlacedRecords()
     {
-        var types = _index.Records.GetChildRecordTypes(Plugin, PersistentTopCell).Value();
+        var types = _index.Queries.GetChildRecordTypes(Plugin, PersistentTopCell).Value();
 
         Assert.Equal(PlacedRecordTables.DisplayNames, types?.Select(t => t.DisplayName));
     }
@@ -98,7 +98,7 @@ public sealed class ChildRecordTypesQueryTests : IDisposable
     [Fact]
     public void ACell_TakesItsPlaceFromThePluginAsked_NotAnotherOfTheSameName()
     {
-        var types = _index.Records.GetChildRecordTypes(Plugin, ExteriorCell).Value();
+        var types = _index.Queries.GetChildRecordTypes(Plugin, ExteriorCell).Value();
 
         Assert.Contains("Landscape", types?.Select(t => t.DisplayName) ?? []);
     }
@@ -106,6 +106,6 @@ public sealed class ChildRecordTypesQueryTests : IDisposable
     [Fact]
     public void ARecordThePluginDoesNotHold_HasNoAnswer()
     {
-        Assert.Null(_index.Records.GetChildRecordTypes(new PluginAddress("Other.esp", PluginOrigin.DataDirectory), Quest).Value());
+        Assert.Null(_index.Queries.GetChildRecordTypes(new PluginAddress("Other.esp", PluginOrigin.DataDirectory), Quest).Value());
     }
 }

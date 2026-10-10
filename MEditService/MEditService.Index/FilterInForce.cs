@@ -16,14 +16,14 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
         get { lock (_lock) return _current is { } filter ? (filter.Sql, filter.Source) : null; }
     }
 
-    /// <summary>Materializes <paramref name="filter"/> in <paramref name="index"/> and holds it for
+    /// <summary>Materializes <paramref name="filter"/> in <paramref name="store"/> and holds it for
     /// <paramref name="scope"/>; null clears both. Answers why the SQL cannot be a filter, leaving the one in
     /// force.</summary>
-    public string? Set(DuckDbRecordIndex index, IndexScope scope, (string Sql, string Source)? filter)
+    public string? Set(Store store, IndexScope scope, (string Sql, string Source)? filter)
     {
         lock (_lock)
         {
-            if (index.SetFilter(filter?.Sql) is { } rejection) return rejection;
+            if (store.Filter.Set(filter?.Sql) is { } rejection) return rejection;
             _current = filter is { } set ? (set.Sql, set.Source, scope) : null;
             return null;
         }
@@ -46,24 +46,24 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
 
     /// <summary>Materializes the filter in force again after rows moved, or none: a store opened while a
     /// clear waited still holds the cleared one. One that cannot apply again is cleared and published.</summary>
-    public void Reapply(DuckDbRecordIndex index)
+    public void Reapply(Store store)
     {
-        if (ReapplyOrClear(index) is { } cleared) notifications?.Publish(cleared);
+        if (ReapplyOrClear(store) is { } cleared) notifications?.Publish(cleared);
     }
 
-    private RecordFilterClearedNotification? ReapplyOrClear(DuckDbRecordIndex index)
+    private RecordFilterClearedNotification? ReapplyOrClear(Store store)
     {
         lock (_lock)
         {
             if (_current is not { } filter)
             {
-                index.SetFilter(null);
+                store.Filter.Set(null);
                 return null;
             }
-            if (index.SetFilter(filter.Sql) is not { } rejection) return null;
+            if (store.Filter.Set(filter.Sql) is not { } rejection) return null;
             logger.LogWarning(
                 "Could not re-materialize the active filter ({Error}); the filter is cleared", rejection);
-            index.SetFilter(null);
+            store.Filter.Set(null);
             _current = null;
             return new RecordFilterClearedNotification(filter.Source, rejection);
         }

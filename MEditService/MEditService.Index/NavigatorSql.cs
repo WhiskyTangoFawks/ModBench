@@ -1,3 +1,5 @@
+using MEditService.Index.Queries;
+
 namespace MEditService.Index;
 
 /// <summary>How xEdit's navigator nests and orders a plugin's records (plugins.md, The tree,

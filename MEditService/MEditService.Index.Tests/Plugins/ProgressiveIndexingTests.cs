@@ -158,7 +158,7 @@ public sealed class ProgressiveIndexingTests
         await unload;
 
         Assert.Equal(["gate-released", "unload-done"], order);
-        Assert.Equal(IndexRefusal.NoLoadOrder, index.Records.GetPlugins().Refused().Refusal);
+        Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.GetPlugins().Refused().Refusal);
         Assert.Equal(LoadOrderState.None, index.Status.State);
         Assert.DoesNotContain("C.esp", gate.Opened);
     }
@@ -260,7 +260,7 @@ public sealed class ProgressiveIndexingTests
         await gate.WaitUntilParkedAsync();
 
         var patch = fx.Plugins.Single(p => p.Name == "Patch.esp").KeyOf();
-        var listed = index.Records.GetRecords(["acti"], patch, search: null, limit: 10, offset: 0).Value().Items.Select(r => r.EditorId);
+        var listed = index.Queries.GetRecords(["acti"], patch, search: null, limit: 10, offset: 0).Value().Items.Select(r => r.EditorId);
 
         Assert.Equal(["CZuluLever", "BBetaLever", "AAlphaLever"], listed);
 

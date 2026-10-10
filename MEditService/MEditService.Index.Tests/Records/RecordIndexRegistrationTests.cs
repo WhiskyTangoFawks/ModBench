@@ -23,7 +23,7 @@ public sealed class RecordIndexRegistrationTests
 
         var version = holder.Apply(LoadOrderArrival.Snapshot(fixture.DataFolder, null, GameRelease.Fallout4, fixture.Plugins));
 
-        var records = provider.GetRequiredService<IRecordQueryService>();
+        var records = provider.GetRequiredService<IQueries>();
         Waits.Reached(() => records.GetStatus().Version >= version, "the status answering the arrival");
         Assert.Equal(LoadOrderState.Ready, records.GetStatus().State);
     }

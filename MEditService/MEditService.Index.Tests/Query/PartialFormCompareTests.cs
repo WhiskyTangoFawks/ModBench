@@ -67,7 +67,7 @@ public sealed class PartialFormCompareTests : IDisposable
     }
 
     private CompareResult Compare(FormKey record) =>
-        _index.Records.GetCompare(record.ToString()).Value() ?? throw new InvalidOperationException($"Expected {record} to compare.");
+        _index.Queries.GetCompare(record.ToString()).Value() ?? throw new InvalidOperationException($"Expected {record} to compare.");
 
     [Fact]
     public void GetCompare_MasterOverride_IsPartialFormFalse()

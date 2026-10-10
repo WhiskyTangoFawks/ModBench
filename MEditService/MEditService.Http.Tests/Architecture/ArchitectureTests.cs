@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
+using MEditService.Index;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -21,13 +22,13 @@ public sealed class ArchitectureTests
         typeof(LoadOrderSnapshot).Assembly,
         typeof(IPluginAdapter).Assembly,
         typeof(INotificationPublisher).Assembly,
-        typeof(IRecordQueryService).Assembly,
+        typeof(IQueries).Assembly,
         typeof(SourceRepository).Assembly,
     ];
 
     private static readonly (Assembly Assembly, string Namespace)[] ReadModelAndWireRecordNamespaces =
     [
-        (typeof(IRecordQueryService).Assembly, "MEditService.Index.Queries"),
+        (typeof(IQueries).Assembly, "MEditService.Index.Queries"),
         (typeof(Program).Assembly, "MEditService.Http"),
     ];
 
@@ -198,7 +199,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void TheRecordIndexFace_HandsOutNoLoadOrder()
     {
-        var offenders = typeof(IRecordQueryService).Assembly.GetExportedTypes()
+        var offenders = typeof(IQueries).Assembly.GetExportedTypes()
             .SelectMany(type => type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
                 .Select(member => (Type: type, Member: member)))
             .Where(m => m.Member.Name == "LoadOrder" || ReturnsALoadOrder(m.Member))
@@ -208,6 +209,21 @@ public sealed class ArchitectureTests
 
         Assert.True(offenders.Count == 0,
             "The record index hands out a load order:\n" + string.Join("\n", offenders));
+    }
+
+    [Fact]
+    public void TheRecordIndex_ExportsOneFace_ItsAnswers_AndItsRegistration()
+    {
+        var exported = typeof(IQueries).Assembly.GetExportedTypes();
+
+        var notAnAnswer = exported
+            .Where(type => !type.IsEnum && type.GetMethod("<Clone>$") is null)
+            .Select(type => type.FullName)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal([typeof(IQueries).FullName, typeof(RecordIndexServices).FullName], notAnAnswer);
+        Assert.All(exported.Where(type => type != typeof(RecordIndexServices)),
+            type => Assert.Equal(typeof(IQueries).Namespace, type.Namespace));
     }
 
     private static bool ReturnsALoadOrder(MemberInfo member) =>

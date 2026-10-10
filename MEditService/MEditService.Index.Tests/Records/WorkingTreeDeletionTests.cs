@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -59,7 +60,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         index.ResolutionOf(_loneNpcWhoseOneCopyAnswersTheLink, _baseKey, target).State;
 
     private static bool ReferencedFromBase(OpenedIndex index, string target, string formKey) =>
-        index.Records.GetReferences(target).Value().Any(r => r.FormKey == formKey && r.Plugin == "Base.esm");
+        index.Queries.GetReferences(target).Value().Any(r => r.FormKey == formKey && r.Plugin == "Base.esm");
 
     [Fact]
     public void DeletingARecord_RemovesItFromEffective_AndRestoringItsCommittedBytesConvergesToClean()
@@ -71,7 +72,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         index.Delete(_base, committed);
 
         Assert.Null(index.CopyIn(_raceA, _baseKey));
-        Assert.Null(index.Records.GetRecord(_raceA).Value());
+        Assert.Null(index.Queries.GetRecord(_raceA).Value());
 
         index.Create(_base, _raceA, "race", "RaceA", committedBody);
         Assert.Equal(WorkingTreeState.None, index.RowOf(_raceA, _baseKey)?.WorkingTreeState);
@@ -81,11 +82,11 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     public void DeletingTheWinningOverride_PromotesTheNextPluginDown_AtEffective()
     {
         using var index = Indexes.Reconciled(_fixture);
-        Assert.Equal("Winner.esp", index.Records.GetRecord(_npc).Value()?.Plugin);
+        Assert.Equal("Winner.esp", index.Queries.GetRecord(_npc).Value()?.Plugin);
 
         index.Delete(_winner, index.DocumentOf(_npc, _winnerKey));
 
-        var effectiveWinner = index.Records.GetRecord(_npc).Value();
+        var effectiveWinner = index.Queries.GetRecord(_npc).Value();
         Assert.NotNull(effectiveWinner);
         Assert.Equal("Base.esm", effectiveWinner.Plugin);
         Assert.True(effectiveWinner.IsWinner);
@@ -99,13 +100,13 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         var winnersBody = index.BodyOf(_npc, _winnerKey);
 
         index.Delete(_winner, index.DocumentOf(_npc, _winnerKey));
-        Assert.Equal("Base.esm", index.Records.GetRecord(_npc).Value()?.Plugin);
+        Assert.Equal("Base.esm", index.Queries.GetRecord(_npc).Value()?.Plugin);
 
         var edited = winnersBody.Replace("TestNpc", "RestoredByWorkingTree", StringComparison.Ordinal);
         Assert.NotEqual(winnersBody, edited);
         index.Create(_winner, _npc, "npc_", "TestNpc", edited);
 
-        var effectiveWinner = index.Records.GetRecord(_npc).Value();
+        var effectiveWinner = index.Queries.GetRecord(_npc).Value();
         Assert.NotNull(effectiveWinner);
         Assert.Equal("Winner.esp", effectiveWinner.Plugin);
         Assert.True(effectiveWinner.IsWinner);
@@ -131,8 +132,8 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     public void EditingAFormLink_MovesTheRecordInTheReferenceGraph()
     {
         using var index = Indexes.Reconciled(_fixture);
-        Assert.Contains(index.Records.GetReferences(_raceA).Value(), r => r.FormKey == _npc);
-        Assert.DoesNotContain(index.Records.GetReferences(_raceB).Value(), r => r.FormKey == _npc);
+        Assert.Contains(index.Queries.GetReferences(_raceA).Value(), r => r.FormKey == _npc);
+        Assert.DoesNotContain(index.Queries.GetReferences(_raceB).Value(), r => r.FormKey == _npc);
 
         var body = index.BodyOf(_npc, _baseKey);
         Assert.Contains(_raceA, body, StringComparison.Ordinal);

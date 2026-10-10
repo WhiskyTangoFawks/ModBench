@@ -1,35 +1,20 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.RepositoriesLib;
+using Mutagen.Bethesda;
 
 namespace MEditService.Index.Queries;
 
-public interface IWorldspaceQueryService
-{
-    Answer<IReadOnlyList<WorldspaceSummary>, IndexRefused> GetWorldspaces(PluginAddress plugin);
-    Answer<WorldspaceBlocks, IndexRefused> GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey);
-    Answer<CellChildRecords, IndexRefused> GetCellChildRecords(PluginAddress plugin, string cellFormKey);
-    Answer<IReadOnlyList<InteriorCellBlock>, IndexRefused> GetInteriorCells(PluginAddress plugin);
-}
-
 /// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin
 /// winner.</summary>
-internal sealed class WorldspaceQueryService(IQueryIndex index, LoadOrderHolder loadOrder) : IWorldspaceQueryService
+internal static class WorldspaceTree
 {
     private const int WorldspaceListLimit = 5000;
 
-    private readonly IQueryIndex _index = index;
-    private readonly LoadOrderHolder _loadOrder = loadOrder;
-
-    public Answer<IReadOnlyList<WorldspaceSummary>, IndexRefused> GetWorldspaces(PluginAddress plugin) =>
-        IndexAnswer.Of(() => WorldspacesOf(plugin));
-
-    private IReadOnlyList<WorldspaceSummary> WorldspacesOf(PluginAddress plugin)
+    public static IReadOnlyList<WorldspaceSummary> WorldspacesOf(IRecordReads repo, PluginAddress plugin, GameRelease release)
     {
-        var repo = _index.RequireReads();
         // Without an origin filter, two same-filename plugins' worldspace lists silently merge
         // into one under this plugin name.
-        var query = new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [RecordTypes.For(_loadOrder.Require().GameRelease).Worldspace], Plugin: plugin.Name, Origin: plugin.Origin, Limit: WorldspaceListLimit, Offset: 0, GroupOnly: true);
+        var query = new RecordQuery(RecordQueryScope.Navigator, RecordTypes: [RecordTypes.For(release).Worldspace], Plugin: plugin.Name, Origin: plugin.Origin, Limit: WorldspaceListLimit, Offset: 0, GroupOnly: true);
         var holdingCells = repo.GetWorldspacesHoldingCells(plugin);
         return [.. repo.Search(query)
             .Items.Select(r => new WorldspaceSummary(
@@ -37,13 +22,8 @@ internal sealed class WorldspaceQueryService(IQueryIndex index, LoadOrderHolder 
                 holdingCells.Contains(r.FormKey)))];
     }
 
-    public Answer<WorldspaceBlocks, IndexRefused> GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey) =>
-        IndexAnswer.Of(() => BlocksOf(plugin, worldspaceFormKey));
-
-    private WorldspaceBlocks BlocksOf(PluginAddress plugin, string worldspaceFormKey)
+    public static WorldspaceBlocks BlocksOf(IReadOnlyList<CellLocationSummary> cells)
     {
-        var cells = _index.RequireReads().GetWorldspaceCells(plugin, worldspaceFormKey);
-
         // A TopCell has no block coordinates.
         var topCells = cells
             .Where(c => c.BlockX == null)
@@ -76,15 +56,8 @@ internal sealed class WorldspaceQueryService(IQueryIndex index, LoadOrderHolder 
         return new WorldspaceBlocks(blocks, topCells);
     }
 
-    public Answer<CellChildRecords, IndexRefused> GetCellChildRecords(PluginAddress plugin, string cellFormKey) =>
-        IndexAnswer.Of(() => _index.RequireReads().GetCellChildRecords(plugin, cellFormKey));
-
-    public Answer<IReadOnlyList<InteriorCellBlock>, IndexRefused> GetInteriorCells(PluginAddress plugin) =>
-        IndexAnswer.Of(() => InteriorCellsOf(plugin));
-
-    private IReadOnlyList<InteriorCellBlock> InteriorCellsOf(PluginAddress plugin)
-    {
-        return [.. _index.RequireReads().GetInteriorCells(plugin)
+    public static IReadOnlyList<InteriorCellBlock> InteriorBlocksOf(IReadOnlyList<CellLocationSummary> cells) =>
+        [.. cells
             .GroupBy(c => c.BlockX ?? 0)
             .Select(block =>
             {
@@ -95,7 +68,6 @@ internal sealed class WorldspaceQueryService(IQueryIndex index, LoadOrderHolder 
                     .ToList();
                 return new InteriorCellBlock(block.Key, subBlocks, subBlocks.Exists(s => s.HasParseFailure));
             })];
-    }
 
     private static CellSummary CellOf(CellLocationSummary c) =>
         new(c.FormKey, c.EditorId, c.CellX, c.CellY, c.WorkingTreeState,

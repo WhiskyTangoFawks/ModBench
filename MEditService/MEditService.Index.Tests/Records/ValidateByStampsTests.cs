@@ -47,7 +47,7 @@ public sealed class ValidateByStampsTests : IDisposable
         _index.NextSnapshotUntil(() => NpcNamed(editorId), $"the record named {editorId}");
 
     private bool NpcNamed(string editorId) =>
-        _index.Records.GetCompareRecords([new RecordCopy(_npc, _mod.KeyOf())]).Holds(out var compared, out _)
+        _index.Queries.GetCompareRecords([new RecordCopy(_npc, _mod.KeyOf())]).Holds(out var compared, out _)
         && compared.Overrides.Single().EditorId == editorId;
 
     private void ValidateUntilSourceUnreadable() =>
@@ -203,7 +203,7 @@ public sealed class ValidateByStampsTests : IDisposable
         ValidateUntilSourceUnreadable();
 
         Assert.Equal("FixtureNpc", Npc.EditorId);
-        var problems = _index.Problems.GetProblems().Value();
+        var problems = _index.Queries.GetProblems().Value();
         Assert.Equivalent(
             new[] { Path.GetRelativePath(_mod.ModFolderOf(), document), Path.GetRelativePath(_mod.ModFolderOf(), copy) },
             problems.Single(p => PluginAddress.Comparer.Equals(p.Plugin, _mod.KeyOf())).Problems.Select(p => p.SourceRelativePath),

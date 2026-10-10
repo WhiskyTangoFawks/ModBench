@@ -85,7 +85,7 @@ public sealed class WriteRouteHandlerTests
     {
         List<Type> parameters = [];
         if (takesAHandler) parameters.Add(typeof(CopyRecordChangesHandler));
-        if (takesAQueriesService) parameters.Add(typeof(ContainerChildQueryService));
+        if (takesAQueriesService) parameters.Add(typeof(IQueries));
 
         Assert.Equal(write, IsWrite(method, pattern, parameters));
     }

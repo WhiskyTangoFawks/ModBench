@@ -22,7 +22,7 @@ public sealed class CommittedOnlyReadPathTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var compare = index.Records.GetCompare(npc01Key.ToString()).Value();
+        var compare = index.Queries.GetCompare(npc01Key.ToString()).Value();
 
         Assert.NotNull(compare);
         var only = Assert.Single(compare.Overrides);

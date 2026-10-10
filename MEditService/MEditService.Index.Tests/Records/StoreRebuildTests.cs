@@ -36,7 +36,7 @@ public sealed class StoreRebuildTests : IDisposable
     {
         _index.Reconcile(_holder, _fixture.GameDirectory, [], GameRelease.Fallout4);
 
-        Assert.Equal(0, _index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 1, offset: 0).Value().Total);
+        Assert.Equal(0, _index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 1, offset: 0).Value().Total);
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public sealed class StoreRebuildTests : IDisposable
 
     private static void Rebuilt(OpenedIndex index, string instanceRoot)
     {
-        Assert.Null(index.Records.RebuildStore(GameRelease.Fallout4, instanceRoot));
+        Assert.Null(index.Queries.RebuildStore(GameRelease.Fallout4, instanceRoot));
         AwaitRefill(index);
     }
 
@@ -83,7 +83,7 @@ public sealed class StoreRebuildTests : IDisposable
         .Build();
 
     private static string[] ListedNpcs(OpenedIndex index) =>
-        [.. index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items.Select(i => i.EditorId ?? "")];
+        [.. index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items.Select(i => i.EditorId ?? "")];
 
     [Fact]
     public void Rebuild_KeepsTheRecordFilter_AndTheRefilledRowsAnswerThroughIt()
@@ -96,7 +96,7 @@ public sealed class StoreRebuildTests : IDisposable
 
         Rebuilt(index, data.InstanceRoot);
 
-        Assert.Equal((MatchesNpcA, "npc-a.sql"), index.Records.GetFilter().Value());
+        Assert.Equal((MatchesNpcA, "npc-a.sql"), index.Queries.GetFilter().Value());
         Assert.Equal(["NpcA"], ListedNpcs(index));
     }
 
@@ -111,7 +111,7 @@ public sealed class StoreRebuildTests : IDisposable
         index.SetFilter(MatchesNpcA, "npc-a.sql");
         gate.ParkNextOpenOf("B.esp");
 
-        Assert.Null(index.Records.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
+        Assert.Null(index.Queries.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
         await gate.WaitUntilParkedAsync();
         var midRefill = ListedNpcs(index);
         gate.Release();
@@ -131,7 +131,7 @@ public sealed class StoreRebuildTests : IDisposable
         index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         index.SetFilter(MatchesNpcA, "npc-a.sql");
         gate.ParkNextOpenOf("B.esp");
-        Assert.Null(index.Records.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
+        Assert.Null(index.Queries.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
         await gate.WaitUntilParkedAsync();
 
         var clear = Task.Run(index.ClearFilter);
@@ -139,7 +139,7 @@ public sealed class StoreRebuildTests : IDisposable
         await clear.WaitAsync(Waits.Patience);
         AwaitRefill(index);
 
-        Assert.Null(index.Records.GetFilter().Value());
+        Assert.Null(index.Queries.GetFilter().Value());
         Assert.Equal(["NpcA", "NpcB", "NpcOther"], ListedNpcs(index).Order());
     }
 
@@ -153,12 +153,12 @@ public sealed class StoreRebuildTests : IDisposable
         index.SetFilter(MatchesNpcA, "npc-a.sql");
         otherWindow.Armed = true;
 
-        Assert.NotNull(index.Records.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
+        Assert.NotNull(index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
         index.ClearFilter();
         otherWindow.Dispose();
         index.NextSnapshot();
 
-        Assert.Null(index.Records.GetFilter().Value());
+        Assert.Null(index.Queries.GetFilter().Value());
         Assert.Equal(["NpcBeforeRebuild"], ListedNpcs(index));
     }
 
@@ -180,12 +180,12 @@ public sealed class StoreRebuildTests : IDisposable
     [Fact]
     public void Rebuild_WithNoLoadOrderHeld_LeavesTheStoreEmpty_AndReportsNothing()
     {
-        Assert.Null(_index.Records.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
+        Assert.Null(_index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
 
         Assert.Equal(0, _opens.OpenedTotal);
         Assert.Equal(LoadOrderState.None, _index.Status.State);
         Assert.Null(_index.Status.Message);
-        Assert.Equal(IndexRefusal.NoLoadOrder, _index.Records.GetFilter().Refused().Refusal);
+        Assert.Equal(IndexRefusal.NoLoadOrder, _index.Queries.GetFilter().Refused().Refusal);
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public sealed class StoreRebuildTests : IDisposable
         using var index = Indexes.Open(holder, gate);
         index.Reconcile(holder, data.DataFolder, [data.Plugins[0]], GameRelease.Fallout4, data.InstanceRoot);
 
-        Assert.Null(index.Records.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
+        Assert.Null(index.Queries.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
         var version = holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
         await gate.WaitUntilParkedAsync();
         gate.Release();
@@ -231,7 +231,7 @@ public sealed class StoreRebuildTests : IDisposable
         var bytesBeforeHold = File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);
         using var otherWindow = ForeignIndexHolder.Hold(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);
 
-        var refusal = _index.Records.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
+        var refusal = _index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
 
         Assert.Equal(StoreRebuildRefusal.HeldByAnotherWindow, refusal?.Refusal);
         Assert.Contains(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex, refusal?.Message);

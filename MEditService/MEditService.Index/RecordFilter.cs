@@ -41,9 +41,16 @@ internal sealed class RecordFilter(Store store)
         try
         {
             if (!ReturnsFormKey(connection, sql)) return "Filter SQL must return a form_key column";
+        }
+        catch (DuckDBException ex)
+        {
+            return ex.Message;
+        }
+        try
+        {
             DuckDbSql.ExecuteFor(connection, $"CREATE OR REPLACE TABLE {Matches} AS ({sql}\n)");
         }
-        catch (DuckDBException ex) when (IsTheSqlsOwn(ex))
+        catch (DuckDBException ex) when (FailedOnARow(ex))
         {
             return ex.Message;
         }
@@ -63,16 +70,13 @@ internal sealed class RecordFilter(Store store)
         return null;
     }
 
-    // DuckDB reports a binder error as ErrorType.Invalid, so the kind is read from the message's own prefix.
-    private static readonly string[] SqlFaultKinds =
-    [
-        "Parser Error", "Syntax Error", "Binder Error", "Catalog Error", "Conversion Error",
-        "Invalid Input Error", "Invalid Type Error", "Mismatch Type Error", "Out of Range Error",
-    ];
+    // Past the probe, the SQL's own fault is a value a row holds. DuckDB names its kind only in the message's prefix.
+    private static readonly string[] RowFaultKinds = ["Conversion Error", "Out of Range Error", "Invalid Input Error"];
 
-    private static bool IsTheSqlsOwn(DuckDBException ex) =>
-        SqlFaultKinds.Any(kind => ex.Message.StartsWith(kind, StringComparison.Ordinal));
+    private static bool FailedOnARow(DuckDBException ex) =>
+        RowFaultKinds.Any(kind => ex.Message.StartsWith(kind, StringComparison.Ordinal));
 
+    // Parses and binds the filter's SQL and reads no row, so whatever it throws is the SQL's own.
     private static bool ReturnsFormKey(DuckDBConnection connection, string sql)
     {
         using var probeCmd = connection.CreateCommand();

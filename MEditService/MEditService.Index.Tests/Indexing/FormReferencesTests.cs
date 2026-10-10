@@ -9,7 +9,7 @@ namespace MEditService.Index.Tests.Indexing;
 public class FormReferencesTests
 {
     private static List<(string Source, string FieldPath, string RecordType)> ReferencesTo(OpenedIndex index, FormKey target) =>
-        [.. index.Records.GetReferences(target.ToString()).Value().Select(r => (r.FormKey, r.FieldPath, r.RecordType))];
+        [.. index.Queries.GetReferences(target.ToString()).Value().Select(r => (r.FormKey, r.FieldPath, r.RecordType))];
 
     private static (string Source, string FieldPath, string RecordType) TheReferenceTo(OpenedIndex index, FormKey target) =>
         Assert.Single(ReferencesTo(index, target));
@@ -48,7 +48,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        Assert.Empty(index.Records.GetReferences(raceFormKey.ToString()).Value());
+        Assert.Empty(index.Queries.GetReferences(raceFormKey.ToString()).Value());
     }
 
     [Fact]

@@ -65,7 +65,7 @@ public sealed class CompareRecordsTests : IDisposable
         new(record.FormKey.ToString(), plugin, text);
 
     private CompareResult Compare(params RecordCopy[] copies) =>
-        _index.Records.GetCompareRecords(copies).Value();
+        _index.Queries.GetCompareRecords(copies).Value();
 
     private static string Column(CompareResult compare, int index) =>
         compare.Overrides[index].Column ?? throw new InvalidOperationException("Expected the column to be named.");
@@ -146,7 +146,7 @@ public sealed class CompareRecordsTests : IDisposable
     {
         var sword = Copy(_sword, BasePlugin);
         var chestInMod = Copy(_chest, ModPlugin);
-        var message = _index.Records.GetCompareRecords([Copy(_chest, BasePlugin), sword, chestInMod]).Missing().Message;
+        var message = _index.Queries.GetCompareRecords([Copy(_chest, BasePlugin), sword, chestInMod]).Missing().Message;
 
         Assert.Contains($"{sword.FormKey} in {BasePlugin.Name} ({BasePlugin.Origin})", message);
         Assert.Contains($"{chestInMod.FormKey} in {ModPlugin.Name} ({ModPlugin.Origin})", message);
@@ -159,7 +159,7 @@ public sealed class CompareRecordsTests : IDisposable
         var nowhere = new RecordCopy("00DEAD:Nowhere.esp", ModPlugin);
         var swordInBase = Copy(_sword, BasePlugin);
 
-        var refusal = _index.Records.GetCompareRecords([Copy(_chest, BasePlugin), swordInBase, nowhere]).Missing();
+        var refusal = _index.Queries.GetCompareRecords([Copy(_chest, BasePlugin), swordInBase, nowhere]).Missing();
 
         Assert.Equal(
             [(nowhere.FormKey, CopyMissingReason.RecordGone), (swordInBase.FormKey, CopyMissingReason.NotInPlugin)],
@@ -169,7 +169,7 @@ public sealed class CompareRecordsTests : IDisposable
     [Fact]
     public void ARecordOnlyADisabledPluginHolds_IsNotGone()
     {
-        var refusal = _index.Records.GetCompareRecords([Copy(_dagger, BasePlugin)]).Missing();
+        var refusal = _index.Queries.GetCompareRecords([Copy(_dagger, BasePlugin)]).Missing();
 
         Assert.Equal(CopyMissingReason.NotInPlugin, Assert.Single(refusal.Missing).Reason);
     }

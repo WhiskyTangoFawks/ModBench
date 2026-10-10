@@ -29,7 +29,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
         index.Reconcile(index.Holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
     private static string[] IndexedNames(OpenedIndex index) =>
-        [.. index.Records.GetPlugins().Value().Select(row => row.Plugin.Name).Order(StringComparer.Ordinal)];
+        [.. index.Queries.GetPlugins().Value().Select(row => row.Plugin.Name).Order(StringComparer.Ordinal)];
 
     private static string[] FailedNames(OpenedIndex index) =>
         [.. index.Status.Failures.Select(f => f.Name).Order(StringComparer.Ordinal)];
@@ -135,7 +135,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     {
         using var index = Reconciled(Named("Dup.esp"), Twin, Named("Fine.esp"));
 
-        Assert.DoesNotContain(index.Problems.GetProblems().Value(), p => p.Plugin.Name.Equals("Dup.esp", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(index.Queries.GetProblems().Value(), p => p.Plugin.Name.Equals("Dup.esp", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -160,8 +160,8 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
 
         var now = new PluginAddress("fine.esp", Origin.ToLowerInvariant());
         Assert.Equal([now], index.Status.IndexedPlugins);
-        Assert.Equal([now], index.Records.GetPlugins().Value().Select(row => new PluginAddress(row.Plugin.Name, row.Plugin.Origin)));
-        var record = index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items.Single();
+        Assert.Equal([now], index.Queries.GetPlugins().Value().Select(row => new PluginAddress(row.Plugin.Name, row.Plugin.Origin)));
+        var record = index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items.Single();
         Assert.Equal(("fine.esp", "moda"), (record.Plugin, record.Origin));
     }
 
@@ -187,7 +187,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
         Arrive(index, fine with { Name = "fine.esp", Path = renamed });
 
         Assert.Empty(index.Status.Failures);
-        var record = index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items.Single();
+        var record = index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items.Single();
         Assert.Equal(("fine.esp", "FromFine"), (record.Plugin, record.EditorId));
     }
 }

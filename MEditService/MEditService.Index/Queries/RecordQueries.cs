@@ -9,15 +9,17 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Queries;
 
-internal sealed class RecordQueryService(
-    IQueryIndex index,
+/// <summary>The face over the Indexer: a read the Indexer cannot answer for want of a load order or
+/// the whole set is the refusal it answers.</summary>
+internal sealed class RecordQueries(
+    Indexer index,
     LoadOrderHolder loadOrder,
     SchemaReflector schemaReflector,
     ISourceAdapter source,
-    ILogger<RecordQueryService> logger) : IRecordQueryService
+    ILogger<RecordQueries> logger) : IQueries, IDisposable
 {
     private readonly ILogger _logger = logger;
-    private readonly IQueryIndex _index = index;
+    private readonly Indexer _index = index;
     private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
     private const int NotInLoadOrder = int.MaxValue;
@@ -360,6 +362,34 @@ internal sealed class RecordQueryService(
     public Answer<RecordOfFileAnswer, IndexRefused> GetRecordOfFile(string path) =>
         IndexAnswer.Of(() => source.RecordOfFile(_loadOrder.Require(), path));
 
+    public Answer<IReadOnlyList<WorldspaceSummary>, IndexRefused> GetWorldspaces(PluginAddress plugin) =>
+        IndexAnswer.Of(() => WorldspaceTree.WorldspacesOf(RequireReads(), plugin, _loadOrder.Require().GameRelease));
+
+    public Answer<WorldspaceBlocks, IndexRefused> GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey) =>
+        IndexAnswer.Of(() => WorldspaceTree.BlocksOf(RequireReads().GetWorldspaceCells(plugin, worldspaceFormKey)));
+
+    public Answer<CellChildRecords, IndexRefused> GetCellChildRecords(PluginAddress plugin, string cellFormKey) =>
+        IndexAnswer.Of(() => RequireReads().GetCellChildRecords(plugin, cellFormKey));
+
+    public Answer<IReadOnlyList<InteriorCellBlock>, IndexRefused> GetInteriorCells(PluginAddress plugin) =>
+        IndexAnswer.Of(() => WorldspaceTree.InteriorBlocksOf(RequireReads().GetInteriorCells(plugin)));
+
+    public Answer<IReadOnlyList<ContainerChildSummary>, IndexRefused> GetContainerChildren(PluginAddress plugin, string parentFormKey) =>
+        IndexAnswer.Of(() => ContainerChildren.Of(RequireReads(), plugin, parentFormKey, _loadOrder.Require().GameRelease));
+
+    // A plugin the index has not reached holds no rows yet and would read clean.
+    public Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses() =>
+        IndexAnswer.Of(() => LoadOrderDiagnoses.Of(_index.RequireWholeSetReads(), _loadOrder.Require()));
+
+    // A plugin the index has not opened would read as no dependant.
+    public Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin) =>
+        IndexAnswer.Of(() => Dependants.Of(plugin, _loadOrder.Require(), _index.RequireWholeSetReads().OpenedPlugins));
+
+    // A plugin the index has not reached holds no record yet, so every link into it would read as a
+    // missing record.
+    public Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems() =>
+        IndexAnswer.Of(() => ProblemsPanel.Of(_index, _index.RequireWholeSetReads(), _loadOrder.Require(), source));
+
     public LoadOrderStatus GetStatus() => _index.Status;
 
     public long GetSequence() => _index.Sequence;
@@ -400,4 +430,6 @@ internal sealed class RecordQueryService(
 
     private IReadOnlyDictionary<string, RecordTableSchema> RequireSchemas() =>
         _schemaReflector.GetSchemas(_loadOrder.Require().GameRelease);
+
+    public void Dispose() => _index.Dispose();
 }

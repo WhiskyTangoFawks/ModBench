@@ -80,7 +80,7 @@ public class PluginParticipationTests
         using var index = Indexes.Reconciled(fixture);
 
         Assert.Empty(index.StackOf(npcKey.ToString()));
-        Assert.Null(index.Records.GetRecord(npcKey.ToString()).Value());
+        Assert.Null(index.Queries.GetRecord(npcKey.ToString()).Value());
     }
 
     [Fact]

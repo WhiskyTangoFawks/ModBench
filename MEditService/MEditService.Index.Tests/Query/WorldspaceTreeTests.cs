@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Index.Tests.Query;
 
-public sealed class WorldspaceQueryServiceTests : IDisposable
+public sealed class WorldspaceTreeTests : IDisposable
 {
     private const string PluginName = "M.esp";
     private static readonly PluginAddress Plugin = new(PluginName, PluginOrigin.DataDirectory);
@@ -17,7 +17,7 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
     private readonly OpenedIndex _index;
     private readonly Dictionary<string, string> _formKeys = new(StringComparer.Ordinal);
 
-    public WorldspaceQueryServiceTests()
+    public WorldspaceTreeTests()
     {
         _fixture = new PluginFixtureBuilder("worldspace-query")
             .WithPlugin(PluginName, mod =>
@@ -111,7 +111,7 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
     [Fact]
     public void GetCellChildRecords_SplitsThePersistentFromTheTemporary_NamingEachAndItsBase()
     {
-        var result = _index.Worldspaces.GetCellChildRecords(Plugin, FormKeyOf("PlacedIn")).Value();
+        var result = _index.Queries.GetCellChildRecords(Plugin, FormKeyOf("PlacedIn")).Value();
 
         Assert.Equal(
             new ChildRecordSummary(
@@ -128,7 +128,7 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
     [Fact]
     public void GetWorldspaceBlocks_GroupsCellsIntoBlocksAndSubBlocks()
     {
-        var result = _index.Worldspaces.GetWorldspaceBlocks(Plugin, FormKeyOf("Grouped")).Value();
+        var result = _index.Queries.GetWorldspaceBlocks(Plugin, FormKeyOf("Grouped")).Value();
 
         Assert.Empty(result.TopCells);
         Assert.Equal(2, result.Blocks.Count);
@@ -142,7 +142,7 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
     [Fact]
     public void GetWorldspaceBlocks_SortsBlocksAndSubBlocksAscendingByXThenY_KeepingTwoBlocksSharingXApartByY()
     {
-        var result = _index.Worldspaces.GetWorldspaceBlocks(Plugin, FormKeyOf("Scrambled")).Value();
+        var result = _index.Queries.GetWorldspaceBlocks(Plugin, FormKeyOf("Scrambled")).Value();
 
         Assert.Equal([(0, 0), (0, 1), (1, 0)], result.Blocks.Select(b => (b.X, b.Y)));
         Assert.Equal([(0, 0), (0, 2), (1, 1)], result.Blocks[0].SubBlocks.Select(s => (s.X, s.Y)));
@@ -153,13 +153,13 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
     {
         using var index = Indexes.Open(new LoadOrderHolder());
 
-        Assert.Equal(IndexRefusal.NoLoadOrder, index.Worldspaces.GetInteriorCells(Plugin).Refused().Refusal);
+        Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.GetInteriorCells(Plugin).Refused().Refusal);
     }
 
     [Fact]
     public void GetWorldspaces_MapsRecordsToSummaries()
     {
-        var result = _index.Worldspaces.GetWorldspaces(Plugin).Value();
+        var result = _index.Queries.GetWorldspaces(Plugin).Value();
 
         Assert.Equal("Grouped", result.Single(w => w.FormKey == FormKeyOf("Grouped")).EditorId);
         Assert.Null(result.Single(w => w.FormKey == FormKeyOf("Unnamed")).EditorId);
@@ -168,7 +168,7 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
     [Fact]
     public void GetInteriorCells_ReturnsRealContent()
     {
-        var result = _index.Worldspaces.GetInteriorCells(Plugin).Value();
+        var result = _index.Queries.GetInteriorCells(Plugin).Value();
 
         Assert.Equal("IntCell", Assert.Single(Assert.Single(Assert.Single(result).SubBlocks).Cells).EditorId);
     }
@@ -176,7 +176,7 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
     [Fact]
     public void GetWorldspaceBlocks_ATopCell_IsThePersistentWorldspaceCell_BesideTheBlocks()
     {
-        var result = _index.Worldspaces.GetWorldspaceBlocks(Plugin, FormKeyOf("WithTopCell")).Value();
+        var result = _index.Queries.GetWorldspaceBlocks(Plugin, FormKeyOf("WithTopCell")).Value();
 
         var topCell = Assert.Single(result.TopCells);
         Assert.Equal("TopCell", topCell.EditorId);
@@ -187,7 +187,7 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
     [Fact]
     public void GetWorldspaceBlocks_ForwardsFullNameOntoCellSummary_ForTopCellsAndBlockCells()
     {
-        var result = _index.Worldspaces.GetWorldspaceBlocks(Plugin, FormKeyOf("WithTopCell")).Value();
+        var result = _index.Queries.GetWorldspaceBlocks(Plugin, FormKeyOf("WithTopCell")).Value();
 
         Assert.Equal("Sanctuary Hills", result.TopCells[0].FullName);
         Assert.Equal("Concord", result.Blocks[0].SubBlocks[0].Cells[0].FullName);
@@ -215,8 +215,8 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
         using var fixture = TwoOriginsOfOneName();
         using var index = Indexes.Reconciled(fixture);
 
-        Assert.Equal(["InModB"], index.Worldspaces.GetWorldspaces(OtherOrigin).Value().Select(w => w.EditorId));
-        Assert.Empty(index.Worldspaces.GetWorldspaces(Plugin).Value());
+        Assert.Equal(["InModB"], index.Queries.GetWorldspaces(OtherOrigin).Value().Select(w => w.EditorId));
+        Assert.Empty(index.Queries.GetWorldspaces(Plugin).Value());
     }
 
     [Fact]
@@ -225,10 +225,10 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
         using var fixture = TwoOriginsOfOneName();
         using var index = Indexes.Reconciled(fixture);
 
-        var result = index.Worldspaces.GetWorldspaceBlocks(OtherOrigin, "000800:M.esp").Value();
+        var result = index.Queries.GetWorldspaceBlocks(OtherOrigin, "000800:M.esp").Value();
 
         Assert.Equal("InModB", Assert.Single(Assert.Single(Assert.Single(result.Blocks).SubBlocks).Cells).EditorId);
-        Assert.Empty(index.Worldspaces.GetWorldspaceBlocks(Plugin, "000800:M.esp").Value().Blocks);
+        Assert.Empty(index.Queries.GetWorldspaceBlocks(Plugin, "000800:M.esp").Value().Blocks);
     }
 
     [Fact]
@@ -237,10 +237,10 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
         using var fixture = TwoOriginsOfOneName();
         using var index = Indexes.Reconciled(fixture);
 
-        var result = index.Worldspaces.GetInteriorCells(OtherOrigin).Value();
+        var result = index.Queries.GetInteriorCells(OtherOrigin).Value();
 
         Assert.Equal("InModB", Assert.Single(Assert.Single(Assert.Single(result).SubBlocks).Cells).EditorId);
-        Assert.Empty(index.Worldspaces.GetInteriorCells(Plugin).Value());
+        Assert.Empty(index.Queries.GetInteriorCells(Plugin).Value());
     }
 
     [Fact]
@@ -248,7 +248,7 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture, adapter: new DiagnosingAdapter { Unreadable = FormKeyOf("CellA") });
 
-        var result = index.Worldspaces.GetWorldspaceBlocks(Plugin, FormKeyOf("Grouped")).Value();
+        var result = index.Queries.GetWorldspaceBlocks(Plugin, FormKeyOf("Grouped")).Value();
 
         var failing = result.Blocks.Single(b => b is { X: 0, Y: 0 });
         Assert.True(failing.HasParseFailure);
@@ -266,7 +266,7 @@ public sealed class WorldspaceQueryServiceTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture, adapter: new DiagnosingAdapter { Unreadable = FormKeyOf("CellA") });
 
-        var result = index.Worldspaces.GetWorldspaces(Plugin).Value();
+        var result = index.Queries.GetWorldspaces(Plugin).Value();
 
         Assert.True(result.Single(w => w.FormKey == FormKeyOf("Grouped")).HasParseFailure);
         Assert.False(result.Single(w => w.FormKey == FormKeyOf("Scrambled")).HasParseFailure);

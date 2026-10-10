@@ -4,13 +4,14 @@ using System.Text;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Queries;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>The prepare/append/collectors collaborator of <see cref="DuckDbRecordIndex"/>, which
+/// <summary>The prepare/append/collectors collaborator of <see cref="Store"/>, which
 /// owns the transaction. <c>WorkingTreeOverlay</c> reuses the collectors so an edit's derived rows
 /// come from the same code a fresh ingest uses.</summary>
 internal sealed class PluginIngest

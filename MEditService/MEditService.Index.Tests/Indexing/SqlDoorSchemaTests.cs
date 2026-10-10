@@ -40,7 +40,7 @@ public sealed class SqlDoorSchemaTests : IDisposable
     }
 
     private IReadOnlyList<RecordSummary> Listing() =>
-        _index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items;
+        _index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items;
 
     [Fact]
     public void ARecordTypeView_ExposesTheIdentityColumns_AndTheDerivedWinnerAndLoadOrder()
@@ -61,7 +61,7 @@ public sealed class SqlDoorSchemaTests : IDisposable
         _index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'SharedNpc'", "filter.sql");
         Assert.Equal(2, Listing().Count);
 
-        var unbound = _index.Records.SetFilter("SELECT form_key FROM npc_ WHERE \"EditorID\" = 'SharedNpc'", "filter.sql");
+        var unbound = _index.Queries.SetFilter("SELECT form_key FROM npc_ WHERE \"EditorID\" = 'SharedNpc'", "filter.sql");
         Assert.Equal(IndexRefusal.FilterRejected, unbound?.Refusal);
         Assert.Contains("Referenced column \"EditorID\" not found", unbound?.Message, StringComparison.Ordinal);
     }
@@ -81,7 +81,7 @@ public sealed class SqlDoorSchemaTests : IDisposable
         }
         else
         {
-            Assert.Equal(IndexRefusal.FilterRejected, _index.Records.SetFilter(sql, "filter.sql")?.Refusal);
+            Assert.Equal(IndexRefusal.FilterRejected, _index.Queries.SetFilter(sql, "filter.sql")?.Refusal);
         }
     }
 
@@ -102,9 +102,9 @@ public sealed class SqlDoorSchemaTests : IDisposable
 
         Assert.Equal(
             IndexRefusal.FilterRejected,
-            _index.Records.SetFilter("SELECT form_key FROM npc_ WHERE no_such_column = 1", "filter.sql")?.Refusal);
+            _index.Queries.SetFilter("SELECT form_key FROM npc_ WHERE no_such_column = 1", "filter.sql")?.Refusal);
 
-        Assert.Equal("SELECT form_key FROM npc_ WHERE plugin = 'Over.esp'", _index.Records.GetFilter().Value()?.Sql);
+        Assert.Equal("SELECT form_key FROM npc_ WHERE plugin = 'Over.esp'", _index.Queries.GetFilter().Value()?.Sql);
         Assert.Single(Listing(), i => i.Plugin == OverKey.Name);
     }
 }
