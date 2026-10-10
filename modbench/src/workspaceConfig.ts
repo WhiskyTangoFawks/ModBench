@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { GAME_FOLDER_SETTING, type GameDirectoryOverrides } from './instanceAdapter/instanceAdapter';
 
-export const meditConfig = () => vscode.workspace.getConfiguration('modbench');
+const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
 /** Hears the game-folder setting change; the Instance adapter turns it into its own signal. */
 export function onGameDirectoryChange(listener: () => void): vscode.Disposable {
@@ -14,4 +14,8 @@ export function onGameDirectoryChange(listener: () => void): vscode.Disposable {
  *  this does: the Instance adapter decides what it means. */
 export function gameDirectoryOverrides(): GameDirectoryOverrides {
   return { gameDirectory: meditConfig().get<string>('mods.gameDirectory') };
+}
+
+export function attachPort(): number | undefined {
+  return meditConfig().get<number | null>('attachToBackendPort') ?? undefined;
 }

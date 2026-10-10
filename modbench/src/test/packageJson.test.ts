@@ -539,7 +539,7 @@ describe('package.json contributes the conflict table\'s cell value as a setting
 });
 
 describe('package.json contributes the port to attach to a running mEdit as a setting', () => {
-  it('unset by default, so each window starts its own mEdit and never attaches to port 0, VS Code\'s default for a number', () => {
+  it('null by default, not the 0 VS Code gives a number setting with no default', () => {
     expect(pkg.contributes.configuration.properties['modbench.attachToBackendPort']).toMatchObject({
       type: ['number', 'null'], default: null,
     });

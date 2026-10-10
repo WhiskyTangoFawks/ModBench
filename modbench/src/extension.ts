@@ -22,7 +22,7 @@ import { originFiles, NO_ORIGIN_FILES, type OriginFilesOf } from './instanceLoad
 import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import type { InstanceAdapter } from './instanceAdapter/instanceAdapter';
-import { meditConfig, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
+import { attachPort, gameDirectoryOverrides, onGameDirectoryChange } from './workspaceConfig';
 import { createPlugins, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
@@ -207,13 +207,11 @@ function buildViews(opened: Opened, { own, dispose }: ReturnType<typeof ownershi
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  const attachPort = meditConfig().get<number | null>('attachToBackendPort');
-
-  const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
+    const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
   context.subscriptions.push(outputChannel);
 
   // ADR-0002.
-  const meditClient = createMEditClient({ backend: { attachPort }, backendLog: outputChannel, log: outputChannel });
+  const meditClient = createMEditClient({ backend: { attachPort: attachPort() }, backendLog: outputChannel, log: outputChannel });
   const focusedView = createFocusedView();
 
   const ownedByViews = ownership();
