@@ -115,7 +115,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         var renamed = new PluginAddress("Renamed.esp", TestMod.Name);
 
         var changes = Repository.ChangesToRenameSource(Recased, renamed.Name).Value().Require();
-        Assert.Null(SourceTransaction.Atomically(Repository, transaction => transaction.Apply(SourceAnswer.Of(changes))));
+        Repository.SaveChanges(SourceAnswer.Of(changes)).Wrote();
 
         Assert.Equal(2, TreeDocuments.Of(Repository, renamed).Count);
         Assert.False(SourceRepository.SourceReads(Registered(AsTreeNamesIt)));
@@ -146,7 +146,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         var renamed = new PluginAddress("Renamed.esp", TestMod.Name);
         var treeName = Repository.TreeNameOf(Recased);
         var changes = Repository.ChangesToRenameSource(Recased, renamed.Name).Value().Require();
-        Assert.Null(SourceTransaction.Atomically(Repository, transaction => transaction.Apply(SourceAnswer.Of(changes))));
+        Repository.SaveChanges(SourceAnswer.Of(changes)).Wrote();
 
         Assert.Null(Repository.MoveLastWrittenTo(treeName, renamed.Name));
 

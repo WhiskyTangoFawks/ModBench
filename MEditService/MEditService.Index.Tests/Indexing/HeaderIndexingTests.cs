@@ -32,7 +32,7 @@ public class HeaderIndexingTests
         index.DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(name)), new PluginAddress(name, PluginOrigin.DataDirectory));
 
     private static IReadOnlyList<RecordSummary> HeaderRows(OpenedIndex index, PluginAddress? plugin = null, string? search = null) =>
-        index.Records.GetRecords([PluginHeader.RecordType], plugin, search, limit: 10, offset: 0).Items;
+        index.Records.GetRecords([PluginHeader.RecordType], plugin, search, limit: 10, offset: 0).Value().Items;
 
     [Fact]
     public void AFo4Plugin_HasAHeaderDocument_WithSyntheticFormKeyAndHeaderType()

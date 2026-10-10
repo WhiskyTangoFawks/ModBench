@@ -59,16 +59,17 @@ public sealed class SourceRepositoryTreeOfTests : IDisposable
     }
 
     [Fact]
-    public void TreeOf_AfterAPutThroughTheSameRepository_AnswersTheTreeAsItNowStands_NotFromAMemoOfBeforeTheWrite()
+    public void TreeOf_AfterAPutThroughTheSameSession_AnswersTheTreeAsItNowStands_NotFromAMemoOfBeforeTheWrite()
     {
-        var repository = Repository;
+        var session = WriteSession.Over(TestMod.In(_modFolder), GameRelease.Fallout4, []);
+        var repository = session.Repository;
         var before = repository.TreeOf(Plugin).Value().Files.Count;
 
-        repository.Put(
+        session.Atomically(() => session.Apply(repository.ChangesToPut(
             Plugin,
             new SourceDocument(
                 "000950:TreeOf.esp", "npc_", "MemoNpc",
-                "{\n  \"FormKey\": \"000950:TreeOf.esp\",\n  \"EditorID\": \"MemoNpc\"\n}")).Wrote();
+                "{\n  \"FormKey\": \"000950:TreeOf.esp\",\n  \"EditorID\": \"MemoNpc\"\n}")))).Wrote();
 
         Assert.Equal(before + 1, repository.TreeOf(Plugin).Value().Files.Count);
     }

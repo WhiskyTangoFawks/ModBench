@@ -19,7 +19,7 @@ public sealed class WorkingTreeStatesBeneathTests : IDisposable
 
     private OpenedIndex Index => _fixture.Index;
 
-    private WorkingTreeStatesBeneath Beneath() => Index.Records.GetWorkingTreeStatesBeneath(_fixture.Plugin);
+    private WorkingTreeStatesBeneath Beneath() => Index.Records.GetWorkingTreeStatesBeneath(_fixture.Plugin).Value();
 
     private void AddARefToTheTopCellItsWorldspacesDocumentEmbeds()
     {
@@ -90,7 +90,7 @@ public sealed class WorkingTreeStatesBeneathTests : IDisposable
         index.Edit(entry, index.DocumentOf(topic, entry.KeyOf()),
             index.BodyOf(topic, entry.KeyOf()).Replace("HeldTopic", "RenamedTopic", StringComparison.Ordinal));
 
-        var beneath = index.Records.GetWorkingTreeStatesBeneath(entry.KeyOf());
+        var beneath = index.Records.GetWorkingTreeStatesBeneath(entry.KeyOf()).Value();
 
         Assert.Equal([WorkingTreeState.Modified], Assert.Single(beneath.RecordTypes, group => group.Key == "qust").Value);
         Assert.Equal([WorkingTreeState.Modified], Assert.Single(beneath.Records, row => row.Key == quest).Value);
@@ -122,9 +122,9 @@ public sealed class WorkingTreeStatesBeneathTests : IDisposable
         using var index = Indexes.Reconciled(fixture);
         index.Edit(tracked, index.DocumentOf(placed, tracked.KeyOf()),
             index.BodyOf(placed, tracked.KeyOf()).Replace("SharedRef", "RenamedRef", StringComparison.Ordinal));
-        Assert.NotEmpty(index.Records.GetWorkingTreeStatesBeneath(tracked.KeyOf()).Records);
+        Assert.NotEmpty(index.Records.GetWorkingTreeStatesBeneath(tracked.KeyOf()).Value().Records);
 
-        var otherOrigin = index.Records.GetWorkingTreeStatesBeneath(new PluginAddress(sharedName, PluginOrigin.DataDirectory));
+        var otherOrigin = index.Records.GetWorkingTreeStatesBeneath(new PluginAddress(sharedName, PluginOrigin.DataDirectory)).Value();
 
         Assert.Empty(otherOrigin.Plugin);
         Assert.Empty(otherOrigin.Records);

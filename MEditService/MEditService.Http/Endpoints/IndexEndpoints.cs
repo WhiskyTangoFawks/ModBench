@@ -95,16 +95,9 @@ internal static class IndexEndpoints
             return Results.Problem("SQL is required.", statusCode: 400);
         if (string.IsNullOrWhiteSpace(req.Source))
             return Results.Problem("The filter's source is required.", statusCode: 400);
-        try
-        {
-            svc.SetFilter(req.Sql, req.Source);
-            return Results.Ok(new FilterResponse(req.Sql, req.Source));
-        }
-        catch (ArgumentException ex)
-        {
-            logger.LogError(ex, "Invalid filter SQL");
-            return Results.Problem(ex.Message, statusCode: 400);
-        }
+        return svc.SetFilter(req.Sql, req.Source) is { } refused
+            ? QueryEndpointMapping.Refusal(refused)
+            : Results.Ok(new FilterResponse(req.Sql, req.Source));
     }
 
     private static IResult ClearFilter(IRecordQueryService svc, ILoggerFactory loggerFactory)
@@ -119,8 +112,7 @@ internal static class IndexEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received GetFilter");
-        var filter = svc.GetFilter();
-        return Results.Ok(new FilterResponse(filter?.Sql, filter?.Source));
+        return QueryEndpointMapping.Answered(svc.GetFilter(), filter => Results.Ok(new FilterResponse(filter?.Sql, filter?.Source)));
     }
 
     private static IResult PostRebuildIndex(RebuildIndexRequest req, IRecordQueryService svc, ILoggerFactory loggerFactory)

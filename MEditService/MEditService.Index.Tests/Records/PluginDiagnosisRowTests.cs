@@ -53,7 +53,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
         using var index = Indexes.Open(holder);
         index.Reconcile(holder, _gameDirectory, [Entry with { Enabled = false }], GameRelease.Fallout4, _instanceRoot);
 
-        var report = Assert.Single(index.Malformed.GetLoadOrderDiagnoses());
+        var report = Assert.Single(index.Malformed.GetLoadOrderDiagnoses().Value());
         Assert.Equal(Key, new PluginAddress(report.Plugin, report.Origin));
     }
 
@@ -62,7 +62,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
     {
         using var index = Reconciled(new LoadOrderHolder());
 
-        var report = Assert.Single(index.Malformed.GetLoadOrderDiagnoses());
+        var report = Assert.Single(index.Malformed.GetLoadOrderDiagnoses().Value());
 
         Assert.Equal(Key, new PluginAddress(report.Plugin, report.Origin));
         Assert.Equal("fixed-size-subrecord-short", report.DefectClass);
@@ -77,12 +77,12 @@ public sealed class PluginDiagnosisRowTests : IDisposable
     public async Task ARepairedBinary_ReDerived_HasNoDiagnosisRow()
     {
         using var index = Reconciled(new LoadOrderHolder());
-        Assert.Single(index.Malformed.GetLoadOrderDiagnoses());
+        Assert.Single(index.Malformed.GetLoadOrderDiagnoses().Value());
 
         RepairOnDiskAsAnotherToolWouldWithTheSameNameAndCleanBytes();
         index.NextSnapshot();
 
-        Assert.Empty(index.Malformed.GetLoadOrderDiagnoses());
+        Assert.Empty(index.Malformed.GetLoadOrderDiagnoses().Value());
     }
 
     [Fact]
@@ -94,12 +94,12 @@ public sealed class PluginDiagnosisRowTests : IDisposable
         using (var warm = Reconciled(new LoadOrderHolder(), opens))
         {
             Assert.Equal(0, opens.OpenedTotal);
-            Assert.Single(warm.Malformed.GetLoadOrderDiagnoses());
+            Assert.Single(warm.Malformed.GetLoadOrderDiagnoses().Value());
         }
 
         RepairOnDiskAsAnotherToolWouldWithTheSameNameAndCleanBytes();
         using var reopened = Reconciled(new LoadOrderHolder());
-        Assert.Empty(reopened.Malformed.GetLoadOrderDiagnoses());
+        Assert.Empty(reopened.Malformed.GetLoadOrderDiagnoses().Value());
     }
 
     [Fact]
@@ -107,10 +107,10 @@ public sealed class PluginDiagnosisRowTests : IDisposable
     {
         var holder = new LoadOrderHolder();
         using var index = Reconciled(holder);
-        Assert.Single(index.Malformed.GetLoadOrderDiagnoses());
+        Assert.Single(index.Malformed.GetLoadOrderDiagnoses().Value());
 
         index.Reconcile(holder, _gameDirectory, [], GameRelease.Fallout4, _instanceRoot);
 
-        Assert.Empty(index.Malformed.GetLoadOrderDiagnoses());
+        Assert.Empty(index.Malformed.GetLoadOrderDiagnoses().Value());
     }
 }

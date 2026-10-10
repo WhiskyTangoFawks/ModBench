@@ -8,36 +8,37 @@ namespace MEditService.Index.Queries;
 
 public interface IRecordQueryService
 {
-    IReadOnlyList<PluginRow> GetPlugins();
+    Answer<IReadOnlyList<PluginRow>, IndexRefused> GetPlugins();
     // A null plugin browses every plugin.
-    PagedResult<RecordSummary> GetRecords(
+    Answer<PagedResult<RecordSummary>, IndexRefused> GetRecords(
         IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset);
-    RecordDetail? GetRecord(string formKey);
+    Answer<RecordDetail?, IndexRefused> GetRecord(string formKey);
 
-    CompareResult? GetCompare(string formKey, CopyText? text = null);
+    Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text = null);
 
-    CompareResult GetCompareRecords(IReadOnlyList<RecordCopy> copies);
+    Answer<CompareResult, IndexRefused> GetCompareRecords(IReadOnlyList<RecordCopy> copies);
 
-    IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(PluginAddress plugin);
-    WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin);
-    IReadOnlyList<RecordTypeChoice> GetCreatableRecordTypes();
+    Answer<IReadOnlyList<PluginRecordTypeCount>, IndexRefused> GetPluginRecordTypes(PluginAddress plugin);
+    Answer<WorkingTreeStatesBeneath, IndexRefused> GetWorkingTreeStatesBeneath(PluginAddress plugin);
+    Answer<IReadOnlyList<RecordTypeChoice>, IndexRefused> GetCreatableRecordTypes();
     // Null when the plugin holds no such record.
-    IReadOnlyList<RecordTypeChoice>? GetChildRecordTypes(PluginAddress plugin, string formKey);
-    IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
-    IReadOnlyList<ReferenceResult> GetReferencesInActiveOrTrackedPlugins(string targetFormKey);
-    // Null when the plugin holds no such record; a failure when its source tree cannot say.
-    Answer<RenderedDocument?, SourceFailure> GetRenderedDocument(PluginAddress plugin, string formKey);
-    // Null when the plugin holds no such record; a failure when its source tree cannot say.
-    Answer<CopyDocument?, SourceFailure> GetCopyDocument(PluginAddress plugin, string formKey);
-    RecordOfFileAnswer GetRecordOfFile(string path);
+    Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused> GetChildRecordTypes(PluginAddress plugin, string formKey);
+    Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferences(string targetFormKey);
+    Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferencesInActiveOrTrackedPlugins(string targetFormKey);
+    // Null when the plugin holds no such record; a source stop when its source tree cannot say.
+    Answer<RenderedDocument?, IndexRefused> GetRenderedDocument(PluginAddress plugin, string formKey);
+    // Null when the plugin holds no such record; a source stop when its source tree cannot say.
+    Answer<CopyDocument?, IndexRefused> GetCopyDocument(PluginAddress plugin, string formKey);
+    Answer<RecordOfFileAnswer, IndexRefused> GetRecordOfFile(string path);
 
     // Answered in every state, "no load order yet" included (ADR-0013).
     LoadOrderStatus GetStatus();
     long GetSequence();
     Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout);
 
-    (string Sql, string Source)? GetFilter();
-    void SetFilter(string sql, string source);
+    Answer<(string Sql, string Source)?, IndexRefused> GetFilter();
+    // Why the SQL cannot be a filter, or no load order to hold it; null once it is in force.
+    IndexRefused? SetFilter(string sql, string source);
     void ClearFilter();
     StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot);
 }

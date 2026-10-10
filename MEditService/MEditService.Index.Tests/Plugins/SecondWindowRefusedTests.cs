@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
@@ -29,7 +30,7 @@ public sealed class SecondWindowRefusedTests
 
         Assert.Equal(LoadOrderState.HeldElsewhere, index.Status.State);
         Assert.Contains("another Modbench window", index.Status.Message, StringComparison.Ordinal);
-        Assert.Throws<NoLoadOrderException>(() => index.Records.GetPlugins());
+        Assert.Equal(IndexRefusal.NoLoadOrder, index.Records.GetPlugins().Refused().Refusal);
         Assert.Equal(filesWhileHeld, Directory.GetFiles(indexDir).Select(Path.GetFileName).Order().ToList());
 
         otherWindow.Dispose();

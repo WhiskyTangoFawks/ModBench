@@ -58,7 +58,7 @@ public sealed class ContainerChildIndexingTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private static List<(string FormKey, string RecordType)> Children(OpenedIndex index, string parentFormKey) =>
-        [.. index.Containers.GetChildren(Key, parentFormKey).Select(c => (c.FormKey, c.RecordType))];
+        [.. index.Containers.GetChildren(Key, parentFormKey).Value().Select(c => (c.FormKey, c.RecordType))];
 
     [Fact]
     public void AQuestsDialogTopics_AreItsChildren()
@@ -80,7 +80,7 @@ public sealed class ContainerChildIndexingTests : IDisposable
     public void ACellsPlacedRef_IsListedOnce_InItsPlacementGroup()
     {
         using var index = Indexes.Reconciled(_fixture);
-        var children = index.Worldspaces.GetCellChildRecords(Key, _cellFk);
+        var children = index.Worldspaces.GetCellChildRecords(Key, _cellFk).Value();
 
         Assert.Single(children.Persistent.Concat(children.Temporary), c => c.FormKey == _placedFk);
         Assert.Equal("persistent", index.PlacementGroupIn(Key, _cellFk, _placedFk));

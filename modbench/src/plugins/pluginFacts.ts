@@ -2,6 +2,7 @@ import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagn
 import type { UnreadableSource } from '../wire/unreadableSource';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
+import { pluginAddressKey } from '../wire/pluginAddress';
 import { ByPluginAddress } from './pluginAddress';
 
 /** A warning on one plugin's file, as the Problems panel shows it. */
@@ -109,6 +110,7 @@ export class PluginFacts {
   private indexFailure?: string;
   private compilable = false;
   private noMatchAnywhere = false;
+  private laterFailures = new Map<string, string>();
 
   /** A progressive reconcile's tick. */
   indexed(plugins: readonly PluginAddress[], failures: readonly PluginLoadFailure[]): void {
@@ -159,6 +161,10 @@ export class PluginFacts {
     }
     this.reads = reads;
     this.matches = matches;
+    this.laterFailures = new Map(plugins.flatMap((p) => p.laterReadFailure == null ? [] : [[
+      pluginAddressKey(p),
+      `"${p.name}" (${p.origin}): ${p.laterReadFailure.map((f) => `${f.sourceRelativePath}: ${f.message}`).join('; ')}`,
+    ] as const]));
     this.compilable = plugins.some((p) => p.isTracked);
     this.noMatchAnywhere = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
   }
@@ -196,6 +202,18 @@ export class PluginFacts {
     if (failure !== undefined) return { kind: 'error', message: failure };
     if (this.expansionOverride !== undefined) return { kind: 'error', message: this.expansionOverride.message };
     return { kind: 'indexing' };
+  }
+
+  /** Each plugin an unsaved document holds at its last good rows, by plugin key, with the
+   *  reason in words (common.md, States, story 6). */
+  laterReadFailures(): ReadonlyMap<string, string> {
+    return this.laterFailures;
+  }
+
+  /** The message line's part for those failures; undefined when none stands. */
+  laterReadFailureMessage(): string | undefined {
+    return this.laterFailures.size === 0 ? undefined
+      : `Showing the last good read: ${[...this.laterFailures.values()].join('; ')}`;
   }
 
   /** The failed index (plugins.md, States 6). */

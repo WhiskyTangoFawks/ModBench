@@ -23,7 +23,7 @@ public sealed class FilterAfterValidationTests
 
         index.NextSnapshot();
 
-        var listed = index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 100, offset: 0);
+        var listed = index.Records.GetRecords(["npc_"], plugin: null, search: null, limit: 100, offset: 0).Value();
         Assert.Equal([formKey], listed.Items.Select(i => i.FormKey));
     }
 }

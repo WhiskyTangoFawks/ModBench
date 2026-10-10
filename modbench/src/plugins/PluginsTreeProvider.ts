@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { PluginDiagnosisReport, PluginAddress } from '../client';
 import { lastGoodReadMessage, type Instance, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
+import { messageLine } from '../drivingLib/nameFilter';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import type { PluginsDrop } from '../pluginsCommands/plugins';
@@ -165,7 +166,7 @@ export class PluginsTreeProvider
   }
 
   lastGoodReadMessage(): string | undefined {
-    return lastGoodReadMessage(this.instance);
+    return messageLine(lastGoodReadMessage(this.instance), this.facts.rows.laterReadFailureMessage());
   }
 
   // The game folder not found (common.md, States 5), a failed index (plugins.md, States 6), no rows

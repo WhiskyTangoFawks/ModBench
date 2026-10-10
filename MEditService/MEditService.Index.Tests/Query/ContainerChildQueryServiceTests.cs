@@ -1,3 +1,4 @@
+using MEditService.Index.Queries;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -52,7 +53,7 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
     [Fact]
     public void GetChildren_Quest_KeepsTheIndexsOrder_WhateverTheChildrensTypes()
     {
-        var result = _index.Containers.GetChildren(Plugin, Quest);
+        var result = _index.Containers.GetChildren(Plugin, Quest).Value();
 
         Assert.Equal([BranchA, TopicB, SceneA, TopicA], result.Select(r => r.FormKey));
         Assert.Equal(["dlbr", "dial", "scen", "dial"], result.Select(r => r.RecordType));
@@ -61,7 +62,7 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
     [Fact]
     public void GetChildren_SaysWhichChildHoldsChildrenOfItsOwn_ForADialChildIsItselfAContainerThePluginsTreeExpands()
     {
-        var result = _index.Containers.GetChildren(Plugin, Quest);
+        var result = _index.Containers.GetChildren(Plugin, Quest).Value();
 
         Assert.True(result.Single(r => r.FormKey == TopicA).HasContainerChildren);
         Assert.False(result.Single(r => r.FormKey == TopicB).HasContainerChildren);
@@ -70,7 +71,7 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
     [Fact]
     public void GetChildren_SaysWhichChildIsAContainer_AnEmptyTopicIncluded()
     {
-        var result = _index.Containers.GetChildren(Plugin, Quest);
+        var result = _index.Containers.GetChildren(Plugin, Quest).Value();
 
         Assert.True(result.Single(r => r.FormKey == TopicB).IsContainer);
         Assert.False(result.Single(r => r.FormKey == BranchA).IsContainer);
@@ -79,7 +80,7 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
     [Fact]
     public void GetChildren_DialogTopic_ReturnsItsResponses_TaggedInfo()
     {
-        var result = _index.Containers.GetChildren(Plugin, TopicA);
+        var result = _index.Containers.GetChildren(Plugin, TopicA).Value();
 
         Assert.Equal([ResponseA, ResponseB], result.Select(r => r.FormKey));
         Assert.All(result, r => Assert.Equal("info", r.RecordType));
@@ -88,7 +89,7 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
     [Fact]
     public void GetChildren_OfARecordHoldingNone_IsEmpty()
     {
-        Assert.Empty(_index.Containers.GetChildren(Plugin, ChildlessQuest));
+        Assert.Empty(_index.Containers.GetChildren(Plugin, ChildlessQuest).Value());
     }
 
     [Fact]
@@ -111,10 +112,10 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
 
-        var result = index.Containers.GetChildren(modB, Quest);
+        var result = index.Containers.GetChildren(modB, Quest).Value();
 
         Assert.Equal(["FromModB"], result.Select(r => r.EditorId));
-        Assert.Empty(index.Containers.GetChildren(Plugin, Quest));
+        Assert.Empty(index.Containers.GetChildren(Plugin, Quest).Value());
     }
 
     [Fact]
@@ -122,6 +123,6 @@ public sealed class ContainerChildQueryServiceTests : IDisposable
     {
         using var index = Indexes.Open(new LoadOrderHolder());
 
-        Assert.Throws<NoLoadOrderException>(() => index.Containers.GetChildren(Plugin, Quest));
+        Assert.Equal(IndexRefusal.NoLoadOrder, index.Containers.GetChildren(Plugin, Quest).Refused().Refusal);
     }
 }

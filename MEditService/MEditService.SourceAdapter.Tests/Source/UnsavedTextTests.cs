@@ -57,13 +57,13 @@ public sealed class UnsavedTextTests : IDisposable
     }
 
     [Fact]
-    public void GetCellAt_InABatch_IsTheCellWhoseUnsavedTextNamesTheGrid()
+    public void GetCellAt_InASession_IsTheCellWhoseUnsavedTextNamesTheGrid()
     {
         Repository.Put(Plugin, new SourceDocument(Worldspace, "wrld", null, $"{{\n  \"FormKey\": \"{Worldspace}\"\n}}")).Wrote();
         Repository.PutInWorldspace(Plugin, new SourceDocument(Cell, "cell", null, CellBody("9, -9")), Worldspace);
 
-        var batch = SourceBatch.Over(Repository, [new DocumentChange(FileOf(Cell, "cell"), CellBody("10, -9"))]);
+        var session = WriteSession.Over(TestMod.In(_modFolder), Release, [new DocumentChange(FileOf(Cell, "cell"), CellBody("10, -9"))]);
 
-        Assert.Equal(Cell, batch.Repository.GetCellAt(Plugin, Worldspace, 10, -9).Value()?.FormKey);
+        Assert.Equal(Cell, session.Repository.GetCellAt(Plugin, Worldspace, 10, -9).Value()?.FormKey);
     }
 }

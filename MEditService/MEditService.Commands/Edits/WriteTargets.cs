@@ -11,13 +11,13 @@ namespace MEditService.Commands.Edits;
 internal sealed class WriteTargets(
     LoadOrderHolder loadOrder)
 {
-    internal readonly record struct EditTarget(GameRelease Release, RecordIdentity Identity, SourceRepository Repository);
+    internal readonly record struct EditTarget(GameRelease Release, RecordIdentity Identity, WriteSession Session);
 
-    internal RecordEditResult? ResolveEditTarget(PluginAddress plugin, string formKey, UnsavedBatches batches, out EditTarget target)
+    internal RecordEditResult? ResolveEditTarget(PluginAddress plugin, string formKey, WriteSessions sessions, out EditTarget target)
     {
         target = default;
-        if (RefuseUnlessEditable(plugin, out _) is { } blocked) return blocked;
-        return ResolveInTheTree(plugin, formKey, BatchOf(plugin, batches).Repository, loadOrder.Current.GameRelease, out target, out _);
+        if (RefuseUnlessEditable(plugin) is { } blocked) return blocked;
+        return ResolveInTheTree(plugin, formKey, SessionOf(plugin, sessions), loadOrder.Current.GameRelease, out target, out _);
     }
 
     private static RecordEditResult RefuseUnresolved(string formKey, SourceFailure failure) =>
@@ -31,38 +31,36 @@ internal sealed class WriteTargets(
             $"No document in {plugin.Name}'s source tree holds {formKey}, and no record's document carries it.");
 
     internal static RecordEditResult? ResolveInTheTree(
-        PluginAddress plugin, string formKey, SourceRepository repository, GameRelease release, out EditTarget target,
+        PluginAddress plugin, string formKey, WriteSession session, GameRelease release, out EditTarget target,
         out SourceDocument? found)
     {
         target = default;
-        if (!repository.Get(plugin, formKey).Holds(out found, out var failure)) return RefuseUnresolved(formKey, failure);
+        if (!session.Repository.Get(plugin, formKey).Holds(out found, out var failure)) return RefuseUnresolved(formKey, failure);
         if (found is not { } document) return RecordNotFound(plugin, formKey);
 
-        target = new EditTarget(release, document.Identity, repository);
+        target = new EditTarget(release, document.Identity, session);
         return null;
     }
 
-    /// <summary>The batch over the mod folder of <paramref name="plugin"/>, which is editable.</summary>
-    internal SourceBatch BatchOf(PluginAddress plugin, UnsavedBatches batches) =>
-        batches.Over(
+    /// <summary>The session over the mod folder of <paramref name="plugin"/>, which is editable.</summary>
+    internal WriteSession SessionOf(PluginAddress plugin, WriteSessions sessions) =>
+        sessions.Over(
             loadOrder.Current.Plugin(plugin)?.Provider as PluginProvider.FromMod
                 ?? throw new InvalidOperationException($"Expected {plugin.Name}, once editable, to be provided by a mod."),
             loadOrder.Current.GameRelease);
 
     internal readonly record struct CopyTarget(
-        CopySource Source, RecordIdentity Identity, RecordCopy.Destination Destination, SourceBatch Batch, GameRelease Release,
-        string Body);
+        CopySource Source, RecordIdentity Identity, RecordCopy.Destination Destination, GameRelease Release, string Body);
 
     // Asymmetric by construction: the write-path gate checks the destination, the source answers for
     // its own record. The text is read before anything is written, because a record the codec cannot
     // read would land as a stub.
     internal RecordEditResult? ResolveCopySource(
-        PluginAddress destinationPlugin, CopySource source, string formKey, UnsavedBatches batches, out CopyTarget target)
+        PluginAddress destinationPlugin, CopySource source, string formKey, WriteSessions sessions, out CopyTarget target)
     {
         target = default;
 
-        if (RefuseUnlessEditable(destinationPlugin, out _) is { } blocked) return blocked;
-        var batch = BatchOf(destinationPlugin, batches);
+        if (RefuseUnlessEditable(destinationPlugin) is { } blocked) return blocked;
 
         if (!source.Identity(formKey).Holds(out var held, out var why)) return RefuseUnreadableCopySource(formKey, why);
         if (held is not { } identity)
@@ -73,7 +71,8 @@ internal sealed class WriteTargets(
         if (!source.Body(identity).Holds(out var body, out why)) return RefuseUnreadableCopySource(formKey, why);
 
         target = new CopyTarget(
-            source, identity, new RecordCopy.Destination(batch.Repository, destinationPlugin), batch, loadOrder.Current.GameRelease, body);
+            source, identity, new RecordCopy.Destination(SessionOf(destinationPlugin, sessions), destinationPlugin),
+            loadOrder.Current.GameRelease, body);
         return null;
     }
 
@@ -93,10 +92,8 @@ internal sealed class WriteTargets(
         RecordEditResult.Refused(unread.Kind, $"{formKey} cannot be copied: {unread.Why} Nothing was written.");
 
     // The six record gestures enter here first.
-    internal RecordEditResult? RefuseUnlessEditable(PluginAddress plugin, out SourceRepository? repository)
+    internal RecordEditResult? RefuseUnlessEditable(PluginAddress plugin)
     {
-        repository = null;
-
         if (loadOrder.Current.Plugin(plugin) is not { } registered)
         {
             return RecordEditResult.Refused(
@@ -104,13 +101,8 @@ internal sealed class WriteTargets(
                 $"{plugin.Name} from '{plugin.Origin}' is not in the load order, so nothing can be written to it.");
         }
 
-        if (registered.Provider is not PluginProvider.FromMod mod || !SourceRepository.IsTracked(registered))
-            return RefuseUntracked(plugin, registered.Provider);
-
-        if (!SourceRepository.SourceReads(registered)) return RefuseSourceUnreadable(plugin);
-
-        repository = SourceRepository.Over(mod, loadOrder.Current.GameRelease);
-        return null;
+        if (!SourceRepository.IsTracked(registered)) return RefuseUntracked(plugin, registered.Provider);
+        return SourceRepository.SourceReads(registered) ? null : RefuseSourceUnreadable(plugin);
     }
 
     // Two refusals, because there are two different ways out and a message that named neither

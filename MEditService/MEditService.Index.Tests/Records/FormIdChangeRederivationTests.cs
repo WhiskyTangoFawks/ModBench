@@ -19,7 +19,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
 
     private IEnumerable<ChildRecordSummary> ChildrenOf(string cellKey)
     {
-        var children = Index.Worldspaces.GetCellChildRecords(_mod.Plugin, cellKey);
+        var children = Index.Worldspaces.GetCellChildRecords(_mod.Plugin, cellKey).Value();
         return children.Persistent.Concat(children.Temporary);
     }
 
@@ -27,7 +27,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         ChildrenOf(_mod.EmbedCell).Single(c => c.RecordType == "navm").FormKey;
 
     private bool HoldsNavmesh(string cellKey, string navmeshKey) =>
-        Index.Worldspaces.GetCellChildRecords(_mod.Plugin, cellKey).Temporary
+        Index.Worldspaces.GetCellChildRecords(_mod.Plugin, cellKey).Value().Temporary
             .Any(c => c.FormKey == navmeshKey && c.RecordType == "navm");
 
     private void ChangeFormIdWithATwoSidedPutAndRemoveThenNextSnapshot(string oldFormKey, string newFormKey, string newBody)
@@ -95,8 +95,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         var current = fixture.Index.DocumentOf(fixture.Worldspace, fixture.Plugin);
         var repository = TrackedMods.RepositoryOf(fixture.Entry);
         var identity = new RecordIdentity(fixture.Worldspace, current.RecordType, current.EditorId);
-        SourceTransaction.Atomically(repository, transaction => transaction.Apply(
-            repository.ChangesToRekey(fixture.Plugin, identity, newWorldspaceKey))).Wrote();
+        repository.SaveChanges(repository.ChangesToRekey(fixture.Plugin, identity, newWorldspaceKey)).Wrote();
     }
 
     private static void RederiveTheWholePluginBecauseParentWorldspaceIsDerivedByWalkingTheWholeBlockTree(OneExteriorCellWorldspaceFixture fixture)
@@ -167,7 +166,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         }
 
         public IEnumerable<string> CellsOf(string worldspace) =>
-            Index.Worldspaces.GetWorldspaceBlocks(Plugin, worldspace).Blocks
+            Index.Worldspaces.GetWorldspaceBlocks(Plugin, worldspace).Value().Blocks
                 .SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells).Select(c => c.FormKey);
 
         public void Dispose()

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
@@ -98,6 +99,11 @@ internal sealed class Reconciler(
         lock (_lock) return _scope?.Failed.WhyTreeStopped(key);
     }
 
+    public IReadOnlyList<SourceFileFailure>? LaterReadFailure(PluginAddress key)
+    {
+        lock (_lock) return _scope?.Failed.LaterReadFailure(key);
+    }
+
     private OpenScope RequireScope()
     {
         lock (_lock) return _scope ?? throw new NoLoadOrderException();
@@ -105,12 +111,16 @@ internal sealed class Reconciler(
 
     /// <summary>Runs <paramref name="action"/> under the lock that disposing the scope takes, so the
     /// index cannot be closed beneath it. False, having run nothing, with no scope held.</summary>
-    internal bool UnderScope(Action<DuckDbRecordIndex, IndexScope> action)
+    internal bool UnderScope<T>(Func<DuckDbRecordIndex, IndexScope, T> action, [MaybeNullWhen(false)] out T result)
     {
         lock (_lock)
         {
-            if (_scope is not { } scope) return false;
-            action(scope.Index, IndexScope.Of(scope.Held));
+            if (_scope is not { } scope)
+            {
+                result = default;
+                return false;
+            }
+            result = action(scope.Index, IndexScope.Of(scope.Held));
             return true;
         }
     }
@@ -391,7 +401,7 @@ internal sealed class Reconciler(
                 snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
                 () => Status.State == LoadOrderState.Ready, out heldElsewhere);
             if (fresh is null) return null;
-            scope = new OpenScope(held, fresh, new Projector(fresh, held.Find, source, logger), new FailedReads(fresh, source));
+            scope = new OpenScope(held, fresh, new Projector(fresh, held.Find, source, logger), new FailedReads(fresh, source, logger));
             fresh = null;
         }
         finally

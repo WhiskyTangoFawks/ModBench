@@ -24,8 +24,8 @@ public sealed class RenameSourceChangesHandler
         if (!SourceRepository.SourceReads(loaded))
             return RenameSourceResult.Refused(RenameSourceRefusal.NotTracked, RenameSourceTarget.NotTrackedMessage(plugin));
 
-        var batch = SourceBatch.Over(SourceRepository.Over(mod, loadOrder.GameRelease), _unsaved.Current);
-        if (!batch.Repository.ChangesToRenameSource(plugin, newName).Holds(out var changes, out var failure))
+        var session = WriteSession.Over(mod, loadOrder.GameRelease, _unsaved.Current);
+        if (!session.Repository.ChangesToRenameSource(plugin, newName).Holds(out var changes, out var failure))
         {
             return failure switch
             {
@@ -40,7 +40,7 @@ public sealed class RenameSourceChangesHandler
                 $"{mod.Name} already holds a plugin source named {newName}, so {plugin.Name}'s source was not renamed.");
         }
 
-        return RenameSourceResult.Landed(changes.Under(batch.Repository), batch.Repository.TreeNameOf(plugin));
+        return RenameSourceResult.Landed(changes.Under(session.Repository), session.Repository.TreeNameOf(plugin));
     }
 
     private static RenameSourceResult Refused(RenameSourceRefusal refusal, string message) => RenameSourceResult.Refused(refusal, message);

@@ -39,18 +39,18 @@ public sealed class EditRecordChangesHandler
     private Answer<RecordEditChanges, SourceFailure> EditSource(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
         if (ItemWrite.RefuseWithoutGit() is { } gitMissing) return gitMissing;
-        var batches = new UnsavedBatches(_unsaved.Current);
-        if (_targets.ResolveEditTarget(plugin, formKey, batches, out var target) is { } blocked) return blocked;
-        var batch = _targets.BatchOf(plugin, batches);
-        return Edit(plugin, formKey, envelope, target, batches)
-            .Then(outcome => SourceAnswer.Of(new RecordEditChanges(outcome, batch.Changes)));
+        var sessions = new WriteSessions(_unsaved.Current);
+        if (_targets.ResolveEditTarget(plugin, formKey, sessions, out var target) is { } blocked) return blocked;
+        return Edit(plugin, formKey, envelope, target, sessions)
+            .Then(outcome => SourceAnswer.Of(new RecordEditChanges(outcome, target.Session.Changes)));
     }
 
     private Answer<RecordEditResult, SourceFailure> Edit(
         PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteTargets.EditTarget editTarget,
-        UnsavedBatches batches)
+        WriteSessions sessions)
     {
-        var (release, identity, repository) = editTarget;
+        var (release, identity, session) = editTarget;
+        var repository = session.Repository;
         if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, envelope.Value);
         var schemas = _schemaReflector.GetSchemas(release);
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
@@ -71,7 +71,7 @@ public sealed class EditRecordChangesHandler
             : patched => RecordTextCodec.RoundTrip(patched, release, identity.RecordType);
 
         var request = new RecordTextEditRequest(
-            record, held, schema, envelope, release, roundTrip, _resolution.WalkAmongMastersOf(repository, plugin, schemas, batches));
+            record, held, schema, envelope, release, roundTrip, _resolution.WalkAmongMastersOf(repository, plugin, schemas, sessions));
 
         string newText;
         CellGroupMove? move;
@@ -93,13 +93,13 @@ public sealed class EditRecordChangesHandler
         if (refused is { } rejected) return rejected;
 
         var written = new SourceDocument(identity.FormKey, identity.RecordType, DocumentTokens.EditorIdIn(newText).EditorId, newText);
-        if (move is { Into: { } into }) return _cellLanding.Land(plugin, editTarget, move.From, written, into, spelled, batches);
+        if (move is { Into: { } into }) return _cellLanding.Land(plugin, editTarget, move.From, written, into, spelled, sessions);
         if (move is { StaysInItsCell: true })
         {
-            return RecordEditResult.Making(RecordEditResult.Success(), repository, transaction =>
+            return RecordEditResult.Making(RecordEditResult.Success(), session, () =>
             {
-                transaction.Apply(repository.ChangesToRemove(plugin, identity));
-                transaction.Apply(repository.ChangesToPutChild(plugin, move.From.Container.Identity, move.Destination, written));
+                session.Apply(repository.ChangesToRemove(plugin, identity));
+                session.Apply(repository.ChangesToPutChild(plugin, move.From.Container.Identity, move.Destination, written));
             });
         }
 
@@ -107,8 +107,7 @@ public sealed class EditRecordChangesHandler
         // or history entry.
         if (string.Equals(newText, text, StringComparison.Ordinal)) return RecordEditResult.Success();
 
-        return RecordEditResult.Making(
-            RecordEditResult.Success(), repository, transaction => transaction.Apply(repository.ChangesToRewrite(plugin, written)));
+        return RecordEditResult.Making(RecordEditResult.Success(), session, () => session.Apply(repository.ChangesToRewrite(plugin, written)));
     }
 
     private static string? Unreadable(Func<string, string> roundTrip, string text)

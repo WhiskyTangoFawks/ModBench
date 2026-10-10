@@ -14,5 +14,5 @@ internal static class PluginSourceReads
 
     /// <summary>The problems of the one plugin an index over a single tracked plugin holds.</summary>
     internal static IReadOnlyList<SourceProblem> SourceProblems(this OpenedIndex index) =>
-        Assert.Single(index.Problems.GetProblems() ?? throw new InvalidOperationException("Expected a ready index.")).Problems;
+        Assert.Single(index.Problems.GetProblems().Value() ?? throw new InvalidOperationException("Expected a ready index.")).Problems;
 }

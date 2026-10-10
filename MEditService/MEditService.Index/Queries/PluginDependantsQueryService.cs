@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.Index.Queries;
 
@@ -20,7 +21,9 @@ public sealed class PluginDependantsQueryService
     }
 
     /// <summary>A plugin the index has not opened would read as no dependant.</summary>
-    public PluginDependants GetDependants(PluginAddress plugin)
+    public Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin) => IndexAnswer.Of(() => DependantsOf(plugin));
+
+    private PluginDependants DependantsOf(PluginAddress plugin)
     {
         var held = _loadOrder.Require();
         var opened = _index.RequireWholeSetReads().OpenedPlugins;

@@ -17,8 +17,8 @@ public interface INotification;
 public sealed record RowsChangedNotification(PluginAddress Plugin, IReadOnlyList<string> Keys, long Sequence)
     : INotification;
 
-/// <summary>A validation re-derived or removed a whole plugin (ADR-0003) — too many
-/// rows to name, so this names the plugin instead.</summary>
+/// <summary>A validation changed a plugin as a whole (ADR-0003): re-derived or removed it, or its read
+/// failed or recovered while its rows stood. It names the plugin, not rows.</summary>
 public sealed record PluginChangedNotification(PluginAddress Plugin, long Sequence)
     : INotification;
 

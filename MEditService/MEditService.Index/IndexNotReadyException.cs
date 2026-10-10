@@ -1,6 +1,6 @@
 namespace MEditService.Index;
 
-public sealed class IndexNotReadyException : Exception
+internal sealed class IndexNotReadyException : InvalidOperationException
 {
     internal IndexNotReadyException()
     {

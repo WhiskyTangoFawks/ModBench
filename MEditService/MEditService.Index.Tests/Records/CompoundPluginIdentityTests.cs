@@ -72,7 +72,7 @@ public class CompoundPluginIdentityTests
         using var fixture = SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey("identity-list", out var npcKey);
         using var index = Indexes.Reconciled(fixture);
 
-        var modAResult = index.Records.GetRecords(["npc_"], ModA, search: null, limit: 100, offset: 0);
+        var modAResult = index.Records.GetRecords(["npc_"], ModA, search: null, limit: 100, offset: 0).Value();
 
         var item = Assert.Single(modAResult.Items);
         Assert.Equal(npcKey.ToString(), item.FormKey);
@@ -139,7 +139,7 @@ public class CompoundPluginIdentityTests
         using var index = Indexes.Open(_holder);
         var (worldspace, cell, placed) = (worldspaceKey.ToString(), cellKey.ToString(), placedKey.ToString());
 
-        bool CellIsLocatedIn(PluginAddress plugin) => index.Worldspaces.GetWorldspaceBlocks(plugin, worldspace).Blocks
+        bool CellIsLocatedIn(PluginAddress plugin) => index.Worldspaces.GetWorldspaceBlocks(plugin, worldspace).Value().Blocks
             .SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells).Any(c => c.FormKey == cell);
 
         void AssertOnlyTheWinningOriginHoldsTheRows(PluginAddress winner, PluginAddress other)
@@ -149,7 +149,7 @@ public class CompoundPluginIdentityTests
             Assert.NotNull(index.PlacementGroupIn(winner, cell, placed));
             Assert.False(CellIsLocatedIn(other));
             Assert.Null(index.PlacementGroupIn(other, cell, placed));
-            Assert.Single(index.Records.GetReferences(raceKey.ToString()), r => r.FieldPath == "Race");
+            Assert.Single(index.Records.GetReferences(raceKey.ToString()).Value(), r => r.FieldPath == "Race");
         }
 
         AssertOnlyTheWinningOriginHoldsTheRows(winner: ModA, other: ModB);
@@ -164,7 +164,7 @@ public class CompoundPluginIdentityTests
 
         void AssertTheReferenceCarriesTheWinningOrigin(PluginAddress winner)
         {
-            var reference = Assert.Single(WithWinner(index, fixture, winner).Records.GetReferences(raceKey.ToString()));
+            var reference = Assert.Single(WithWinner(index, fixture, winner).Records.GetReferences(raceKey.ToString()).Value());
             Assert.Equal(winner.Origin, reference.Origin);
         }
 

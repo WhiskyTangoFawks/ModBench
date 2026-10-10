@@ -97,7 +97,7 @@ public class ConflictByCompareTests
         var losingCopy = losing ?? throw new InvalidOperationException("The losing plugin was not built.");
         var losingText = new CopyText(new PluginAddress("Shared.esp", losingOrigin), RecordTextCodec.SerializeToText(losingCopy, GameRelease.Fallout4));
 
-        var result = index.Records.GetCompare(losingCopy.FormKey.ToString(), losingText)
+        var result = index.Records.GetCompare(losingCopy.FormKey.ToString(), losingText).Value()
             ?? throw new InvalidOperationException("Expected the record to compare.");
 
         var notes = Row(result, "Notes");

@@ -4,7 +4,6 @@ using MEditService.Index;
 using MEditService.Index.Queries;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
-using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -15,7 +14,7 @@ internal static class PluginEndpoints
     public static IEndpointRouteBuilder MapPluginEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/plugins", (IRecordQueryService svc) =>
-            Results.Ok(svc.GetPlugins().Select(PluginResponse.Of).ToList()))
+            QueryEndpointMapping.Answered(svc.GetPlugins(), plugins => Results.Ok(plugins.Select(PluginResponse.Of).ToList())))
             .WithName("GetPlugins")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>()
@@ -25,14 +24,14 @@ internal static class PluginEndpoints
         // session-load complement of Track's refusal. With no load order applied the refusal is a
         // 503, never an unmapped 500.
         app.MapGet("/plugins/diagnoses", (MalformedPluginQueryService svc) =>
-            Results.Ok(svc.GetLoadOrderDiagnoses()))
+            QueryEndpointMapping.Ok(svc.GetLoadOrderDiagnoses()))
             .WithName("GetPluginDiagnoses")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginDiagnosisReport>>()
             .ProducesProblem(503);
 
         app.MapGet("/plugins/problems", (PluginProblemQueryService svc) =>
-            Results.Ok(svc.GetProblems()))
+            QueryEndpointMapping.Ok(svc.GetProblems()))
             .WithName("GetPluginProblems")
             .WithTags(Tag)
             .WithDescription(
@@ -44,8 +43,9 @@ internal static class PluginEndpoints
         app.MapGet("/plugins/{plugin}/dependants", (string plugin, string? origin, PluginDependantsQueryService svc) =>
         {
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            var dependants = svc.GetDependants(WriteEndpointMapping.PluginAddressOf(plugin, origin));
-            return Results.Ok(new PluginDependantsResponse(dependants.Plugins, dependants.Unreadable));
+            return QueryEndpointMapping.Answered(
+                svc.GetDependants(WriteEndpointMapping.PluginAddressOf(plugin, origin)),
+                dependants => Results.Ok(new PluginDependantsResponse(dependants.Plugins, dependants.Unreadable)));
         })
             .WithName("GetPluginDependants")
             .WithTags(Tag)
@@ -59,7 +59,7 @@ internal static class PluginEndpoints
         app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IRecordQueryService svc) =>
         {
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            return Results.Ok(svc.GetPluginRecordTypes(WriteEndpointMapping.PluginAddressOf(plugin, origin)));
+            return QueryEndpointMapping.Ok(svc.GetPluginRecordTypes(WriteEndpointMapping.PluginAddressOf(plugin, origin)));
         })
             .WithName("GetPluginRecordTypes")
             .WithTags(Tag)
@@ -70,7 +70,7 @@ internal static class PluginEndpoints
         app.MapGet("/plugins/{plugin}/working-tree-states-beneath", (string plugin, string? origin, IRecordQueryService svc) =>
         {
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-            return Results.Ok(svc.GetWorkingTreeStatesBeneath(WriteEndpointMapping.PluginAddressOf(plugin, origin)));
+            return QueryEndpointMapping.Ok(svc.GetWorkingTreeStatesBeneath(WriteEndpointMapping.PluginAddressOf(plugin, origin)));
         })
             .WithName("GetWorkingTreeStatesBeneath")
             .WithTags(Tag)
@@ -79,7 +79,7 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapGet("/record-types/creatable", (IRecordQueryService svc) =>
-            Results.Ok(svc.GetCreatableRecordTypes()))
+            QueryEndpointMapping.Ok(svc.GetCreatableRecordTypes()))
             .WithName("GetCreatableRecordTypes")
             .WithTags(Tag)
             .Produces<IReadOnlyList<RecordTypeChoice>>()
@@ -127,7 +127,7 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapGet("/plugins/creatable-extensions", (PluginExtensionsQueryService svc) =>
-            Results.Ok(svc.GetCreatable()))
+            QueryEndpointMapping.Ok(svc.GetCreatable()))
             .WithName("GetCreatablePluginExtensions")
             .WithTags(Tag)
             .WithDescription("The file extensions a new plugin may take in the held release.")
@@ -372,18 +372,14 @@ internal static class PluginEndpoints
             onApplied: answer => Results.Ok(RecordCreateChangesResponse.Of(WriteEndpointMapping.RequireNewFormKey(answer.Outcome), answer)));
     }
 
-    private static IResult PluginRecordAnswer<T>(
-        string plugin, string formKey, string? origin, Func<PluginAddress, string, T?> answer) where T : class =>
-        PluginRecordAnswer(plugin, formKey, origin, (address, key) => SourceAnswer.Of(answer(address, key)));
-
     // A source tree that cannot say where the copy is answers why.
     private static IResult PluginRecordAnswer<T>(
-        string plugin, string formKey, string? origin, Func<PluginAddress, string, Answer<T?, SourceFailure>> answer) where T : class
+        string plugin, string formKey, string? origin, Func<PluginAddress, string, Answer<T?, IndexRefused>> answer) where T : class
     {
         if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
-        if (!answer(WriteEndpointMapping.PluginAddressOf(plugin, origin), Uri.UnescapeDataString(formKey)).Holds(out var found, out var failure))
-            return Results.Problem(failure.Reason, statusCode: 422);
-        return found is not null ? Results.Ok(found) : Results.Problem("The plugin holds no such record.", statusCode: 404);
+        return QueryEndpointMapping.Answered(
+            answer(WriteEndpointMapping.PluginAddressOf(plugin, origin), Uri.UnescapeDataString(formKey)),
+            found => found is not null ? Results.Ok(found) : Results.Problem("The plugin holds no such record.", statusCode: 404));
     }
 }
 

@@ -37,6 +37,29 @@ public sealed class UnsavedDocumentsApiTests : HostedTests
     }
 
     [Fact]
+    public async Task PuttingADocumentThatDoesNotRead_PushesPluginChanged_AndThePluginSaysWhyItsRowsAreTheLastGoodRead()
+    {
+        using var fx = new PluginFixtureBuilder("unsaved-documents-unread-api")
+            .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
+            .BuildScattered();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
+        await Client.PluginReportsTracked(Plugin);
+        var document = OtherTool.SourceDocumentCarrying(OtherTool.ModFolderOf(fx, Origin), Plugin, Npc);
+        using var stream = await Client.NotificationStream();
+
+        var response = await Client.PutAsJsonAsync("/unsaved-documents", new
+        {
+            documents = new[] { new { path = document, text = File.ReadAllText(document).Replace($"\"{Npc}\"", "\"TypedUnsaved", StringComparison.Ordinal) } },
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        await stream.EventsUntil("plugin-changed", e => e.GetProperty("plugin").GetString() == Plugin);
+        Assert.Contains((await Client.Plugin(Plugin)).GetProperty("laterReadFailure").EnumerateArray(), stop => stop.GetProperty("message").GetString() is { } message && message.Contains("is no record document", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task PuttingADocumentByARelativePath_Is400()
     {
         var response = await Client.PutAsJsonAsync("/unsaved-documents", new
