@@ -42,14 +42,6 @@ internal static class RequiredMasters
         return fields;
     }
 
-    private static List<string> Of(DuckDBConnection connection, PluginAddress plugin)
-    {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = InLoadOrder;
-        DuckDbSql.AddParams(cmd, [plugin.Name, plugin.Origin]);
-        using var reader = cmd.ExecuteReader();
-        var masters = new List<string>();
-        while (reader.Read()) masters.Add(reader.GetString(0));
-        return masters;
-    }
+    private static List<string> Of(DuckDBConnection connection, PluginAddress plugin) =>
+        DuckDbSql.Rows(connection, InLoadOrder, reader => reader.GetString(0), plugin.Name, plugin.Origin);
 }

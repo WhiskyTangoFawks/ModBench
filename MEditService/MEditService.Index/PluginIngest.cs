@@ -211,17 +211,11 @@ internal sealed class PluginIngest
         row.AppendValue(plugin);
         row.AppendValue(origin);
         row.AppendValue(prepared.RecordType);
-        if (prepared.EditorId is { } editorId)
-            row.AppendValue(editorId);
-        else
-            row.AppendNullValue();
+        row.AppendValue(prepared.EditorId);
         row.AppendValue(WorkingTreeState.None.Stored());
         row.AppendValue(Encoding.UTF8.GetString(prepared.Body));
         row.AppendValue(prepared.ContentHash);
-        if (prepared.ParseDiagnosis is { } diagnosis)
-            row.AppendValue(diagnosis);
-        else
-            row.AppendNullValue();
+        row.AppendValue(prepared.ParseDiagnosis);
         row.EndRow();
     }
 
@@ -284,20 +278,17 @@ internal sealed class PluginIngest
         row.AppendValue(r.TargetFormKey);
         row.AppendValue(r.FieldPath);
         row.AppendValue(r.RecordType);
-        if (r.EditorId is { } eid)
-            row.AppendValue(eid);
-        else
-            row.AppendNullValue();
+        row.AppendValue(r.EditorId);
         row.EndRow();
     }
 
     private void DeleteFormReferencesForPlugin(string plugin, string origin) =>
-        DuckDbSql.ExecuteFor(_connection,
+        DuckDbSql.Execute(_connection,
             "DELETE FROM mirror.form_references WHERE source_plugin = $1 AND source_origin = $2", plugin, origin);
 
     // ADR-0012. Every reindexed table goes through this.
     private void DeleteExistingForOrigin(string tableName, string plugin, string origin) =>
-        DuckDbSql.ExecuteFor(_connection, $"DELETE FROM mirror.\"{tableName}\" WHERE plugin = $1 AND origin = $2", plugin, origin);
+        DuckDbSql.Execute(_connection, $"DELETE FROM mirror.\"{tableName}\" WHERE plugin = $1 AND origin = $2", plugin, origin);
 
     internal static void AppendHoldingRow(DuckDBAppender appender, HoldingRow row, string plugin, string origin)
     {
@@ -317,12 +308,12 @@ internal sealed class PluginIngest
         r.AppendValue(row.CellFormKey);
         r.AppendValue(plugin);
         r.AppendValue(origin);
-        DuckDbAppend.Nullable(r, row.BlockX);
-        DuckDbAppend.Nullable(r, row.BlockY);
-        DuckDbAppend.Nullable(r, row.SubX);
-        DuckDbAppend.Nullable(r, row.SubY);
-        DuckDbAppend.Nullable(r, row.GridX);
-        DuckDbAppend.Nullable(r, row.GridY);
+        r.AppendValue(row.BlockX);
+        r.AppendValue(row.BlockY);
+        r.AppendValue(row.SubX);
+        r.AppendValue(row.SubY);
+        r.AppendValue(row.GridX);
+        r.AppendValue(row.GridY);
         r.EndRow();
     }
 }
