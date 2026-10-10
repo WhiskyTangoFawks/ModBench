@@ -13,8 +13,7 @@ namespace MEditService.Http.Endpoints;
 /// of the write handlers takes, and the one place a refusal is logged.</summary>
 internal static class EndpointMapping
 {
-    /// <summary>The plugin a route and its origin name (ADR-0012), or the 400 for an origin that is missing. Only a
-    /// route-bound (URL-encoded) name may pass: a body-sourced one would be double-unescaped on a literal <c>%</c>.</summary>
+    /// <summary>Only a route-bound (URL-encoded) name may pass: a body-sourced one would be double-unescaped on a literal <c>%</c>.</summary>
     internal static bool PluginAt(
         string routePlugin, string? origin, out PluginAddress address, [NotNullWhen(false)] out IResult? refusal)
     {
@@ -40,6 +39,9 @@ internal static class EndpointMapping
 
     /// <summary>A "not right now" the caller can retry, never a bad request.</summary>
     internal static IResult NoLoadOrder() =>
+        new Logged(nameof(IndexRefusal.NoLoadOrder), NoLoadOrderException.DefaultMessage, NoLoadOrderProblem());
+
+    private static IResult NoLoadOrderProblem() =>
         Results.Problem(NoLoadOrderException.DefaultMessage, statusCode: StatusCodes.Status503ServiceUnavailable);
 
     private static IResult Problem<TRefusal>(
@@ -47,7 +49,7 @@ internal static class EndpointMapping
         IReadOnlyDictionary<string, object?>? more = null)
         where TRefusal : struct, Enum
     {
-        if (EqualityComparer<TRefusal>.Default.Equals(refusal, noLoadOrder)) return NoLoadOrder();
+        if (EqualityComparer<TRefusal>.Default.Equals(refusal, noLoadOrder)) return NoLoadOrderProblem();
 
         var extensions = new Dictionary<string, object?> { ["refusal"] = refusal.ToString() };
         foreach (var (key, value) in more ?? new Dictionary<string, object?>()) extensions[key] = value;
@@ -149,7 +151,7 @@ internal static class EndpointMapping
     /// order, or an index not yet ready, is a "not right now", never a bad request.</summary>
     internal static IResult Refusal(IndexRefused refused) => refused is CopiesMissing missing
         ? Results.Ok(new CompareRecordsResponse(null, [.. missing.Missing.Select(RecordEndpoints.Wire)]))
-        : new Logged(refused, Results.Problem(
+        : new Logged(refused.Refusal.ToString(), refused.Message, Results.Problem(
             refused.Message,
             statusCode: refused.Refusal switch
             {
@@ -159,14 +161,14 @@ internal static class EndpointMapping
                 _ => throw new InvalidEnumArgumentException(nameof(refused), (int)refused.Refusal, typeof(IndexRefusal)),
             }));
 
-    private sealed class Logged(IndexRefused refused, IResult problem) : IResult
+    private sealed class Logged(string refusal, string message, IResult problem) : IResult
     {
         public Task ExecuteAsync(HttpContext httpContext)
         {
             httpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(EndpointMapping))
                 .LogWarning(
                     "{Method} {Path} refused: {Refusal} — {Message}",
-                    httpContext.Request.Method, httpContext.Request.Path, refused.Refusal, refused.Message);
+                    httpContext.Request.Method, httpContext.Request.Path, refusal, message);
             return problem.ExecuteAsync(httpContext);
         }
     }
